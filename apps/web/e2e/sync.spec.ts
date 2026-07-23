@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
+import { ADMIN, ensureAccount } from './support'
 
 const NAME = '[data-testid="workspace-name"]'
 const INPUT = '[data-testid="workspace-name-input"]'
@@ -9,10 +10,12 @@ function unique(prefix: string): string {
   return `${prefix} ${Date.now().toString(36)}`
 }
 
+// The rename surface requires an authenticated admin now that routes are gated; the
+// bootstrap admin (pinned by YAPM_BOOTSTRAP_ADMIN_EMAIL in the Playwright env) provides it.
 async function openWorkspace(page: Page): Promise<Locator> {
-  await page.goto('/')
+  await ensureAccount(page, ADMIN)
   const name = page.locator(NAME)
-  await expect(name).toBeVisible()
+  await expect(name).toBeVisible({ timeout: 20_000 })
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected')
   return name
 }

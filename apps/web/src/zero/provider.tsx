@@ -1,7 +1,17 @@
 import type { ZeroOptions } from '@rocicorp/zero'
 import { useConnectionState, ZeroProvider } from '@rocicorp/zero/react'
 import { type AuthContext, mutators, schema, type WorkspaceRole } from '@yapm/schema'
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import { useSession } from '@/auth/client'
 
 const CACHE_URL = import.meta.env.VITE_ZERO_CACHE_URL ?? 'http://localhost:4848'
 const SYNC_TOKEN_URL = '/api/zero/token'
@@ -10,13 +20,24 @@ const SYNC_TOKEN_URL = '/api/zero/token'
 // to being `disconnected` is a minute of a user typing into a surface that cannot save.
 const DISCONNECT_TIMEOUT_MS = 5_000
 
+// `pending` before the first token fetch settles; `logged-out` when the endpoint rejects the
+// caller (no session); `ready` once the server has resolved the caller's authoritative role.
+type SyncStatus = 'pending' | 'logged-out' | 'ready'
+
 interface SyncSession {
+  status: SyncStatus
   userID: string | null
   auth: string | null
   context: AuthContext | undefined
 }
 
-const LOGGED_OUT: SyncSession = { userID: null, auth: null, context: undefined }
+const PENDING: SyncSession = { status: 'pending', userID: null, auth: null, context: undefined }
+const LOGGED_OUT: SyncSession = {
+  status: 'logged-out',
+  userID: null,
+  auth: null,
+  context: undefined,
+}
 
 interface SyncTokenResponse {
   token?: unknown
@@ -30,7 +51,8 @@ function asRole(value: unknown): WorkspaceRole | null {
 
 // zero-cache authenticates the sync socket with a short-lived JWT minted by better-auth.
 // We fetch it (cookie session) and hand Zero the token plus the caller's role for the
-// optimistic client context. A 401 means logged out.
+// optimistic client context. A non-OK response means no session (logged out); a 200 with a
+// null role means an authenticated non-member — the authoritative membership signal.
 async function fetchSyncSession(): Promise<SyncSession> {
   try {
     const response = await fetch(SYNC_TOKEN_URL, { credentials: 'include' })
@@ -38,6 +60,7 @@ async function fetchSyncSession(): Promise<SyncSession> {
     const data = (await response.json()) as SyncTokenResponse
     if (typeof data.token !== 'string' || typeof data.userID !== 'string') return LOGGED_OUT
     return {
+      status: 'ready',
       userID: data.userID,
       auth: data.token,
       context: { userID: data.userID, role: asRole(data.role) },
@@ -45,6 +68,36 @@ async function fetchSyncSession(): Promise<SyncSession> {
   } catch {
     return LOGGED_OUT
   }
+}
+
+interface SyncControl {
+  refresh: () => void
+}
+
+const SyncControlContext = createContext<SyncControl>({ refresh: () => {} })
+
+export interface SyncSessionState {
+  status: SyncStatus
+  userID: string | null
+  role: WorkspaceRole | null
+}
+
+const SyncSessionContext = createContext<SyncSessionState>({
+  status: 'pending',
+  userID: null,
+  role: null,
+})
+
+// Membership changes (accepting an invite, being promoted/removed) do not change the
+// better-auth identity, so the sync token must be re-minted explicitly to pick up the new
+// role. Any surface that mutates membership calls this after the server confirms it.
+export function useSyncControl(): SyncControl {
+  return useContext(SyncControlContext)
+}
+
+// The server-resolved identity and role, authoritative for the access gate.
+export function useSyncSession(): SyncSessionState {
+  return useContext(SyncSessionContext)
 }
 
 // Zero flips to `needs-auth` when the sync endpoints reject the JWT as expired. Re-fetch a
@@ -68,13 +121,18 @@ function SyncAuthRefresher({ onNeedsAuth }: { onNeedsAuth: () => void }): null {
 }
 
 export function ZeroRoot({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<SyncSession>(LOGGED_OUT)
+  const [session, setSession] = useState<SyncSession>(PENDING)
+  const { data: authSession } = useSession()
+  const authUserId = authSession?.user.id ?? null
 
   const refresh = useCallback(() => {
     void fetchSyncSession().then(setSession)
   }, [])
 
-  useEffect(refresh, [refresh])
+  // Re-mint the sync token on mount and whenever the signed-in identity changes.
+  useEffect(() => {
+    refresh()
+  }, [refresh, authUserId])
 
   const options = useMemo(
     () =>
@@ -91,10 +149,24 @@ export function ZeroRoot({ children }: { children: ReactNode }) {
     [session],
   )
 
+  const control = useMemo<SyncControl>(() => ({ refresh }), [refresh])
+  const sessionState = useMemo<SyncSessionState>(
+    () => ({
+      status: session.status,
+      userID: session.userID,
+      role: session.context?.role ?? null,
+    }),
+    [session],
+  )
+
   return (
-    <ZeroProvider {...options}>
-      <SyncAuthRefresher onNeedsAuth={refresh} />
-      {children}
-    </ZeroProvider>
+    <SyncControlContext.Provider value={control}>
+      <SyncSessionContext.Provider value={sessionState}>
+        <ZeroProvider {...options}>
+          <SyncAuthRefresher onNeedsAuth={refresh} />
+          {children}
+        </ZeroProvider>
+      </SyncSessionContext.Provider>
+    </SyncControlContext.Provider>
   )
 }

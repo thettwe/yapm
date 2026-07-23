@@ -13,10 +13,13 @@
     "typecheck": "tsr generate && tsc --noEmit"
   },
   "dependencies": {
+    "@better-auth/sso": "catalog:",
     "@rocicorp/zero": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@yapm/schema": "workspace:*",
     "@yapm/ui": "workspace:*",
+    "better-auth": "catalog:",
+    "lucide-react": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

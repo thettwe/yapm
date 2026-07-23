@@ -45,6 +45,17 @@ export function createAuthRoutes(options: AuthRoutesOptions): Hono {
     await next()
   })
 
+  // The login UI reflects only configured methods (an unconfigured provider is absent, not
+  // paywalled). Report the enabled set from env so the client has a single source of truth.
+  // SSO is always available (the plugin is enabled and free); email/password is always on.
+  app.get('/api/auth-methods', (c) =>
+    c.json({
+      emailPassword: true,
+      github: env.GITHUB_CLIENT_ID !== undefined && env.GITHUB_CLIENT_SECRET !== undefined,
+      sso: true,
+    }),
+  )
+
   app.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw))
 
   const requireSession = createMiddleware(async (c, next) => {

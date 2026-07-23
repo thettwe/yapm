@@ -1,0 +1,90 @@
+name: yapm
+
+services:
+  postgres:
+    image: postgres:18
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=5
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-yapm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yapm}
+      POSTGRES_DB: ${POSTGRES_DB:-yapm}
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-yapm} -d ${POSTGRES_DB:-yapm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  yapm:
+    image: ${YAPM_IMAGE:-yapm:local}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        VITE_ZERO_CACHE_URL: ${VITE_ZERO_CACHE_URL:-http://localhost:4848}
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: postgres://${POSTGRES_USER:-yapm}:${POSTGRES_PASSWORD:-yapm}@postgres:5432/${POSTGRES_DB:-yapm}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      SEED_WORKSPACE_NAME: ${SEED_WORKSPACE_NAME:-yapm}
+      ZERO_QUERY_API_KEY: ${ZERO_QUERY_API_KEY:-yapm-zero-query-key-change-me}
+      ZERO_MUTATE_API_KEY: ${ZERO_MUTATE_API_KEY:-yapm-zero-mutate-key-change-me}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${YAPM_HOST_PORT:-3000}:3000"
+    restart: unless-stopped
+
+  zero-cache:
+    image: ${ZERO_IMAGE:-rocicorp/zero:1.8.0}
+    environment:
+      # Replication upstream. MUST be a direct Postgres connection — never a pooler
+      # (pgbouncer et al.): zero-cache creates a logical replication slot on it.
+      ZERO_UPSTREAM_DB: postgres://${POSTGRES_USER:-yapm}:${POSTGRES_PASSWORD:-yapm}@postgres:5432/${POSTGRES_DB:-yapm}
+      # Client-View-Records and change-log stores. Would use a pooler in a large
+      # multi-node deploy; this single-node stack has no pooler, so both point at
+      # the same direct connection.
+      ZERO_CVR_DB: postgres://${POSTGRES_USER:-yapm}:${POSTGRES_PASSWORD:-yapm}@postgres:5432/${POSTGRES_DB:-yapm}
+      ZERO_CHANGE_DB: postgres://${POSTGRES_USER:-yapm}:${POSTGRES_PASSWORD:-yapm}@postgres:5432/${POSTGRES_DB:-yapm}
+      ZERO_REPLICA_FILE: /data/replica.db
+      ZERO_ADMIN_PASSWORD: ${ZERO_ADMIN_PASSWORD:-change-me-in-production}
+      ZERO_QUERY_URL: http://yapm:3000/api/zero/query
+      ZERO_MUTATE_URL: http://yapm:3000/api/zero/mutate
+      ZERO_QUERY_API_KEY: ${ZERO_QUERY_API_KEY:-yapm-zero-query-key-change-me}
+      ZERO_MUTATE_API_KEY: ${ZERO_MUTATE_API_KEY:-yapm-zero-mutate-key-change-me}
+      ZERO_ENABLE_CRUD_MUTATIONS: "false"
+      ZERO_PORT: 4848
+    depends_on:
+      yapm:
+        condition: service_healthy
+    ports:
+      - "${ZERO_CACHE_HOST_PORT:-4848}:4848"
+    volumes:
+      - zero-replica:/data
+    stop_grace_period: 10m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4848/keepalive"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  zero-replica:

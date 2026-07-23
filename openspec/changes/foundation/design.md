@@ -435,7 +435,90 @@ First change — nothing to migrate. Rollback = delete the repo contents (docs a
     all passed against `postgres:18 -c wal_level=logical` + `zero-cache@1.8.0`. Full misconfiguration
     log is in `openspec/changes/foundation/zero-operations.md` (task 4.5).
 
+### Self-host deployment (tasks 5.1–5.5)
+
+50. **Runtime base is `node:24-slim`, not distroless (open question resolved).** The built image is
+    545 MB (measured with `docker images`); ~170 MB of that is the server's own `node_modules` and the
+    node:24-slim base is ~200 MB, so distroless-nodejs would shave only the base delta (~40–50 MB, under
+    10%) against real costs: distroless ships no shell, so `docker compose exec` debugging and any
+    shell-form healthcheck are impossible, and the forward-looking `sharp` dependency (TECHSTACK.md) needs
+    glibc + occasionally runtime libs that slim provides and distroless does not guarantee. slim is glibc
+    (not musl/alpine), so native prebuilds — including `@rocicorp/zero-sqlite3`, which `pnpm deploy` still
+    builds even though the *app* process never opens a replica — resolve without a source rebuild. The
+    healthcheck is `node -e "fetch('/readyz')…"` (Node 24 ships global `fetch`), so no `curl` is needed in
+    the image regardless.
+
+51. **The image is assembled with `pnpm deploy --prod --legacy`, not a hand-pruned `node_modules`.** The
+    build stage runs `pnpm turbo run build --filter=@yapm/server --filter=@yapm/web` (turbo's `^build`
+    pulls `@yapm/schema` and `@yapm/ui` in as it needs them), then `pnpm deploy --filter=@yapm/server --prod
+    --legacy /app` produces a self-contained directory: `apps/server/dist` plus a flat `node_modules` with
+    `@yapm/schema` (and its `./db` subpath) injected as built `dist`, and dev-only deps (`@yapm/config`,
+    vite, react, playwright) excluded. `--legacy` is required — pnpm ≥10 refuses the default injected-deploy
+    path unless `inject-workspace-packages=true`, which the repo does not set (`ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE`).
+    The built SPA is copied separately (`COPY --from=build /repo/apps/web/dist /app/web`) because it is
+    static files, not a runtime node dependency, and `WEB_DIST_DIR=/app/web` points the server at it.
+    Verified: `node dist/index.js` in the image resolves `@yapm/schema/db` (`migrateToLatest` is a function)
+    and serves `web/index.html`.
+
+52. **`VITE_ZERO_CACHE_URL` is a build ARG, because the browser connects to zero-cache directly.** The web
+    bundle is Vite-built inside the image, and `import.meta.env.VITE_ZERO_CACHE_URL` is frozen at build time.
+    Since the browser — not the server — opens the WebSocket to zero-cache, this must be the
+    browser-reachable origin (`http://localhost:4848` for a localhost deploy; a real host/domain rebuilds the
+    image). It is a Dockerfile `ARG`/`ENV` and a compose `build.args` value defaulting to `http://localhost:4848`.
+    This is the one config that cannot be an env var on the running container.
+
+53. **Three services, single source of truth for credentials, defaults that boot with an empty `.env`.**
+    `docker/docker-compose.yml` defines exactly `postgres`, `yapm`, `zero-cache` — no Redis/MinIO/pooler/proxy
+    (constraint 1, verified by `docker compose config --services`). Operators set `POSTGRES_USER/PASSWORD/DB`
+    once; the app's `DATABASE_URL` and zero-cache's `ZERO_UPSTREAM_DB`/`ZERO_CVR_DB`/`ZERO_CHANGE_DB` are
+    *derived* inside compose (`postgres://…@postgres:5432/…`). Every documented var uses `${VAR:-default}`, so
+    `docker compose up -d` reaches healthy with no `.env` at all (what the task-5.5 smoke test and the
+    future CI compose job need) while staying fully overridable. `ZERO_UPSTREAM_DB` is the direct connection
+    by construction — there is no pooler in this stack, and the requirement to bypass one is encoded as a
+    comment plus the derived-URL pattern so a future pooler addition cannot silently point replication at it.
+
+54. **zero-cache→endpoint auth is ON by default via a shared `X-Api-Key`, because empty strings fail env
+    validation.** `ZERO_QUERY_API_KEY`/`ZERO_MUTATE_API_KEY` are `z.string().min(1).optional()` on the server
+    (decision 47), so passing an *empty* string (what `${VAR:-}` yields when unset) throws at boot rather than
+    disabling the check. Both containers read the same variable, so they can never disagree; the compose
+    default is a non-empty placeholder documented as "change in production". Net effect: the endpoints are
+    protected by default (defense in depth) and the clean-machine deploy still boots. Verified: `POST
+    /api/zero/query` returns 403 without the header and 200 with the matching key.
+
+55. **Boot order is `depends_on: condition: service_healthy`, and `/readyz` is the app's healthcheck (open
+    question resolved).** zero-cache's own healthcheck is `curl -f http://localhost:4848/keepalive` (the
+    endpoint the Zero docs' compose uses, present in the `rocicorp/zero` image), so it *can* be probed
+    cheaply — but it is not on `yapm`'s dependency path; the ordering that matters is the reverse. The app's
+    healthcheck hits `/readyz`, which is 200 before zero-cache exists because a *missing* replication slot is
+    treated as healthy (zero-operations.md) — so `yapm` becomes healthy on `migrate + DB-ready` alone, and
+    `zero-cache depends_on yapm healthy` starts it only after the schema is migrated (Decision 2's boot
+    order, now physical). Verified end-to-end: `postgres healthy → yapm healthy (migration applied, workspace
+    seeded) → zero-cache healthy`, `/readyz` reporting `slots: zero_0_a (pgoutput, active, wal_status=reserved)`.
+
+56. **`PGDATA` is pinned to `/var/lib/postgresql/data` on `postgres:18`.** The PG18 official image moved its
+    default `PGDATA` to `/var/lib/postgresql/18/docker` (verified by inspecting the image); leaving the named
+    volume mounted at the old path would put the volume beside the live data dir and lose durability silently.
+    Setting `PGDATA` explicitly and mounting `pgdata` there keeps the volume authoritative and identical
+    across PG17/18 (≥15 is the requirement).
+
+57. **`pnpm dev` orchestrates through `scripts/dev.mjs`, invoking the turbo binary directly.** The script
+    brings up `docker/docker-compose.dev.yml` (postgres via `up -d --wait`, then zero-cache), injects dev
+    defaults (`DATABASE_URL → localhost:5440`, `VITE_ZERO_CACHE_URL`, `SERVER_ORIGIN`) only when unset, then
+    spawns `node_modules/.bin/turbo run dev` — **not** `pnpm turbo`. Going through the `pnpm` wrapper triggers
+    pnpm 11's `verify-deps-before-run` dep-status check, which in a non-TTY child (or after a Docker
+    cache-mount install perturbs `node_modules` mtimes) tries to purge and reinstall `--production`, aborting
+    with `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` and — worse — would strip devDependencies. Calling the
+    turbo binary sidesteps that entirely. Dev zero-cache runs in a container and reaches the host-run server
+    via `host.docker.internal` (with an `extra_hosts: host-gateway` entry for Linux). Verified from a clean
+    state: both dev containers healthy, server migrated/seeded/listening, replica slot active, Vite on 5173
+    with `/readyz` proxying 200.
+
+58. **The volume-reset command is `pnpm dev:reset` (`docker compose -f docker/docker-compose.dev.yml down
+    -v`).** Named volumes `pgdata` and `zero-replica` are disposable; `dev:reset` removes them so the next
+    `pnpm dev` re-runs migrations and re-seeds the workspace against an empty database (dev-environment
+    spec). `pnpm dev:down` stops the containers while keeping the data. Both are root `package.json` scripts
+    so they are discoverable next to `dev`.
+
 ## Open Questions
 
-- Node base image: `node:24-slim` vs distroless — decide during implementation by image size and sharp compatibility.
-- Whether zero-cache health can be probed cheaply for `depends_on` (it exposes a status endpoint; verify during implementation).
+- (none remaining for this change)

@@ -9,7 +9,9 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:down": "docker compose -f docker/docker-compose.dev.yml down",
+    "dev:reset": "docker compose -f docker/docker-compose.dev.yml down -v",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "e2e": "turbo run e2e",

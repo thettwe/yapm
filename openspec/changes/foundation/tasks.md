@@ -35,11 +35,11 @@
 
 ## 5. Self-host deployment
 
-- [ ] 5.1 docker/Dockerfile: multi-stage build → single app image (server + built SPA), pick node:24-slim vs distroless by size/sharp compatibility
-- [ ] 5.2 docker/docker-compose.yml: postgres (wal_level=logical, healthcheck) → yapm (migrate-then-serve, healthcheck) → zero-cache (depends_on healthy), named volumes, documented env vars only
-- [ ] 5.3 docker/docker-compose.dev.yml: postgres + zero-cache only, for pnpm dev
-- [ ] 5.4 pnpm dev orchestration: compose dev deps up + turbo dev (tsx watch + Vite); documented volume reset command
-- [ ] 5.5 Verify clean-machine deploy: compose up -d with only documented env vars reaches healthy and serves the synced workspace
+- [x] 5.1 docker/Dockerfile: multi-stage build → single app image (server + built SPA), pick node:24-slim vs distroless by size/sharp compatibility
+- [x] 5.2 docker/docker-compose.yml: postgres (wal_level=logical, healthcheck) → yapm (migrate-then-serve, healthcheck) → zero-cache (depends_on healthy), named volumes, documented env vars only
+- [x] 5.3 docker/docker-compose.dev.yml: postgres + zero-cache only, for pnpm dev
+- [x] 5.4 pnpm dev orchestration: compose dev deps up + turbo dev (tsx watch + Vite); documented volume reset command
+- [x] 5.5 Verify clean-machine deploy: compose up -d with only documented env vars reaches healthy and serves the synced workspace
 
 ## 6. CI pipeline
 

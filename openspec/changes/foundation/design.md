@@ -152,6 +152,102 @@ First change — nothing to migrate. Rollback = delete the repo contents (docs a
     what CI runs, so the hook and the pipeline can no longer disagree, and `fail_text` points the
     developer at `pnpm format`. Cost: formatting is no longer fixed silently at commit time.
 
+### Server skeleton and data layer (tasks 2.1–2.5)
+
+16. **Migrations are a hand-maintained static provider, not `FileMigrationProvider`.** `MigrationProvider`
+    is a one-method interface, so `packages/schema/src/migrations/index.ts` imports every migration module
+    with a real `import` statement and exports `{ '0001_workspace': m0001 }`. `FileMigrationProvider` would
+    have to locate a directory at runtime — `import.meta.dirname` points at `src/` under tsx and `dist/`
+    after `tsc`, migration files must then be copied or emitted into the image, and a missing folder fails
+    at boot rather than at build. With the static provider the module graph *is* the migration list: the
+    same code path runs under tsx and from `dist/`, a missing migration is a compile error, and nothing
+    depends on CWD or on which files were copied into the container. Cost: adding a migration means
+    editing two files. **The object keys are the contract** (they are what lands in `kysely_migration`) —
+    never rename or renumber them. Verified both ways: `tsx src/index.ts` from `apps/server` and
+    `node dist/index.js` with CWD `/tmp` each applied `0001_workspace` to a fresh database.
+
+17. **`packages/schema` is a compiled package (`dist/` + `exports` → `dist/index.js`), not raw TS.**
+    The scaffold pointed `exports` at `./src/index.ts`. That cannot work at runtime: pnpm links workspace
+    packages into `node_modules`, and Node refuses to type-strip `.ts` files under `node_modules`. So the
+    package builds with `tsc -p tsconfig.build.json` (TS 7.0.2 emits JS **and** `.d.ts` correctly — verified)
+    and `turbo`'s `dev` task gained `dependsOn: ["^build"]` so `pnpm dev` cannot start `tsx watch` against a
+    missing `dist/`. `packages/schema` also gets a `dev` script (`tsc --watch`) so schema edits propagate
+    during development. `build`/`typecheck`/`test` already depended on `^build`.
+
+18. **Env contract lives in one Zod object with a parallel expected-format table.** `loadEnv()` validates
+    `NODE_ENV`, `HOST`, `PORT`, `LOG_LEVEL`, `DATABASE_URL`, `DATABASE_POOL_MAX`, `WEB_DIST_DIR`,
+    `SEED_WORKSPACE_NAME`, collects *all* failures, and throws `EnvValidationError` whose message names each
+    variable, what was wrong, and the expected format (`DATABASE_URL: is required but not set / expected:
+    postgres://user:password@host:5432/database`). Zod 4's own messages describe types, not formats, which is
+    what the spec scenario asks for — hence the separate `EXPECTED_FORMAT` map. `main()` prints it to stderr
+    and `process.exit(1)` before anything else happens, so a misconfigured process never binds a port.
+    `DATABASE_URL` is checked with `z.string().check(ctx => …)` parsing a real `URL` and requiring the
+    `postgres:`/`postgresql:` scheme (verified against zod 4.4.3; `z.url({protocol})` was not used because the
+    scheme error it produces is less specific).
+
+19. **`WEB_DIST_DIR` defaults relative to the *package* root, not to the source file.** `resolve(import.meta.dirname, '../..')`
+    is `apps/server` from both `src/config/env.ts` and `dist/config/env.js`, so the default `../web/dist`
+    resolves to `apps/web/dist` in dev and in a `dist/` run. A first attempt anchored on the file itself and
+    silently produced `apps/server/web/dist` — caught by running the server, not by types. Container images set
+    the variable explicitly. Relative values are resolved against CWD; absolute values pass through.
+
+20. **`/healthz` is dependency-free, `/readyz` is a list of named checks.** Liveness must not fail because
+    Postgres is down (Kubernetes/compose would restart-loop a healthy process), so `/healthz` returns
+    `{"status":"ok"}` unconditionally. `/readyz` runs `ReadinessCheck[]` and returns
+    `{status, checks:[{name, ok, durationMs, reason?}], reason?}` with 200/503. Task 4.5 adds a `replication`
+    check to that array and gets its reason string in the aggregate for free. Every check is wrapped in a
+    2 s timeout so a hung TCP connection cannot hang the probe.
+
+21. **`pool.on('error')` is mandatory, not defensive.** Discovered by stopping Postgres under a running
+    server: node-postgres emits `error` on an idle client, and with no listener Node terminates the process
+    (`Unhandled 'error' event`) — readiness could never report not-ready because the server was already dead.
+    `createDatabase` now always attaches a listener and forwards it to the optional `onPoolError` callback.
+    Re-verified: DB stopped → `/readyz` 503 with `database: connect ECONNREFUSED …`; DB restarted → 200,
+    with the process alive throughout.
+
+22. **Seeding takes a transaction-scoped advisory lock.** `insert … select … where not exists` is not
+    sufficient on its own: under READ COMMITTED two booting replicas both observe an empty table and both
+    insert. Demonstrated against the live database with two overlapping transactions (two rows). The seed now
+    runs inside `db.transaction()` behind `pg_advisory_xact_lock(4207331001)`; three server processes booted
+    simultaneously against a fresh database produced exactly one migration run and exactly one workspace row.
+    The id is minted by the caller (`newId()` in `apps/server/src/index.ts`) rather than inside the seed
+    function, matching CLAUDE.md constraint 4.
+
+23. **pino gets a custom `err` serializer.** pino's default serializer copies every own enumerable property
+    of an `Error`; a node-postgres `DatabaseError` carries the whole `Client` (connection parameters, type
+    tables, socket state) so one dropped connection logged ~4 KB of driver internals per line. `serializeError`
+    keeps `type`, `message`, `code`, `stack` and flattens `AggregateError.errors`. The readiness reason string
+    unwraps `AggregateError` the same way — otherwise a refused connection reported an empty reason, because
+    the aggregate pg throws has `message === ''`.
+
+24. **Static serving: absolute `root`, `path` relative to it, and an explicit placeholder.**
+    `@hono/node-server`'s `serveStatic` joins `root` with `path`, so the documented
+    `{root:'./public', path:'./public/index.html'}` pairing double-joins; the working form is
+    `{root: <abs dir>, path: 'index.html'}` (verified by request tests over a real directory). Mounting is
+    `app.use('*', serveStatic({root}))` followed by `app.get('*', …index.html)` for client-side routes, both
+    registered *after* the health endpoints so route order — not path exclusion lists — keeps `/healthz` and
+    the future `/api` from being shadowed. When `index.html` is absent (no web build yet, task 3.1) the server
+    logs a warning and serves a 503 text placeholder instead of pretending to be a broken SPA.
+
+25. **`created_at`/`updated_at` carry `default now()`; `id` deliberately does not.** The task list only
+    fixes the id column's lack of a default (client-minted UUIDv7, so `id: string` and not `Generated<string>`
+    in the `DB` interface). Timestamps get server defaults so that seeds and future non-mutator writes cannot
+    produce null audit columns; mutators will still set them explicitly. Both are `Generated<Timestamp>` in the
+    hand-written `DB` interface, which is what the task 4.6 drift test will assert against
+    `hasDefaultValue: true`.
+
+26. **Turborepo's strict env mode hides runtime variables from `dev`.** `pnpm turbo dev` started the server
+    with an empty environment and it exited with `DATABASE_URL: is required but not set` — turbo 2 runs tasks
+    in `envMode: "strict"`, so only declared variables reach the child process. The `dev` task now declares
+    `passThroughEnv` for the server's runtime variables (`DATABASE_URL`, `DATABASE_POOL_MAX`, `HOST`,
+    `LOG_LEVEL`, `PORT`, `SEED_WORKSPACE_NAME`, `WEB_DIST_DIR`); `passThroughEnv` rather than `env` because
+    these are runtime inputs, not cache keys (`dev` is uncached anyway). Task 5.4 must keep this list in sync
+    when it adds Zero's variables.
+
+27. **`esbuild` added to pnpm `allowBuilds`.** `tsx` (server dev watch) pulls in esbuild, whose postinstall
+    unpacks the platform binary; pnpm 11 blocks it by default and `pnpm install` then fails the workspace with
+    `ERR_PNPM_IGNORED_BUILDS`. It joins `lefthook` in the allowlist.
+
 ## Open Questions
 
 - Node base image: `node:24-slim` vs distroless — decide during implementation by image size and sharp compatibility.

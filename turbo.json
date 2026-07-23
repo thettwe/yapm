@@ -19,8 +19,18 @@
       "env": ["VITE_*"]
     },
     "dev": {
+      "dependsOn": ["^build"],
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "DATABASE_POOL_MAX",
+        "HOST",
+        "LOG_LEVEL",
+        "PORT",
+        "SEED_WORKSPACE_NAME",
+        "WEB_DIST_DIR"
+      ]
     },
     "typecheck": {
       "dependsOn": ["^build"],

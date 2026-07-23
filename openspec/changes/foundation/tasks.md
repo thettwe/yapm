@@ -11,11 +11,11 @@
 
 ## 2. Server skeleton
 
-- [ ] 2.1 apps/server: Hono on Node with pino logging and Zod-validated env config module (fail-fast with named variable and expected format)
-- [ ] 2.2 Add /healthz and /readyz endpoints (readyz checks Postgres connectivity; replication-slot check added in task 4)
-- [ ] 2.3 packages/schema: Kysely 0.28.17 setup (PostgresDialect + pg Pool), first migration creating the workspace table (client-supplied uuid PK — no DB default, name, created_at, updated_at), and a hand-written `DB` interface (NOT kysely-codegen — it is broken under TS7)
-- [ ] 2.4 Migration-on-boot runner: Kysely `Migrator` applies pending migrations before listening (must resolve migration files when running compiled from dist/); seed one workspace row if table is empty
-- [ ] 2.5 Static file serving of the built SPA from the app process
+- [x] 2.1 apps/server: Hono on Node with pino logging and Zod-validated env config module (fail-fast with named variable and expected format)
+- [x] 2.2 Add /healthz and /readyz endpoints (readyz checks Postgres connectivity; replication-slot check added in task 4)
+- [x] 2.3 packages/schema: Kysely 0.28.17 setup (PostgresDialect + pg Pool), first migration creating the workspace table (client-supplied uuid PK — no DB default, name, created_at, updated_at), and a hand-written `DB` interface (NOT kysely-codegen — it is broken under TS7)
+- [x] 2.4 Migration-on-boot runner: Kysely `Migrator` applies pending migrations before listening (must resolve migration files when running compiled from dist/); seed one workspace row if table is empty
+- [x] 2.5 Static file serving of the built SPA from the app process
 
 ## 3. Web skeleton
 

@@ -13,7 +13,7 @@ docker-compose.yml
 ≈ 3 containers, ~1GB RAM   (Plane: 13 containers / 4–8GB · Huly: 14 services)
 ```
 
-Client reads run as ZQL queries against a local IndexedDB replica — instant, offline-capable. Writes are optimistic custom mutators validated server-side, rebased on the server-ordered log. This is Linear's architecture shape (local object graph + server-authoritative delta log + LWW) without building Linear's engine (6–12+ engineer-months to harden).
+Client reads run as ZQL queries against a local IndexedDB replica — instant, and they keep working while disconnected. Writes are optimistic custom mutators validated server-side, rebased on the server-ordered log; Zero rejects writes while offline, so disconnection must be visible in the UI rather than silently queued. This is Linear's architecture shape (local object graph + server-authoritative delta log + LWW) without building Linear's engine (6–12+ engineer-months to harden).
 
 ## Core decisions
 

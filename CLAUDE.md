@@ -24,6 +24,13 @@ cutoff.** Writing these APIs from memory produces confident, fluent, wrong code.
 - Rocicorp's `zbugs` app is a bug tracker built on Zero by Zero's authors — the closest
   reference implementation to yapm that exists.
 
+**Concrete example of the trap:** Zero 1.x's API is `defineQuery` / `defineQueries` /
+`defineMutator` / `defineMutators` / `createBuilder` / `handleQueryRequest` /
+`handleMutateRequest`. A model working from memory will instead emit `syncedQuery`,
+`PushProcessor`, and `definePermissions` — the 0.x names. That code is fluent, plausible,
+and completely non-functional. See [`reference/zero.md`](reference/zero.md) §"Correctness
+gotchas" before writing any sync code.
+
 ## Non-negotiable constraints
 
 These come from VISION.md and are enforced in CI. A change that violates one is wrong even
@@ -34,7 +41,9 @@ if it works:
 2. **All ZQL and all mutators live in `packages/schema`.** Client and server import the
    same mutator function. This keeps the sync layer swappable.
 3. **Packages never import apps.** `packages/schema` has no UI dependencies.
-4. **Client-generated UUIDv7 primary keys** — optimistic mutations mint IDs client-side.
+4. **Client-generated UUIDv7 primary keys, minted at the mutator call site** — never inside
+   a mutator body. Mutators re-run during rebase, so an ID generated inside one changes
+   between runs and corrupts the optimistic result.
 5. **Dependency versions only in the pnpm catalog** (`pnpm-workspace.yaml`), referenced as
    `catalog:`.
 6. **No tools that import the TypeScript Compiler API** — it doesn't exist in TS7's Go

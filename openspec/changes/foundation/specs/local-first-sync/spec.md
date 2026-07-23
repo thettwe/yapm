@@ -30,9 +30,17 @@ All writes SHALL go through custom mutators defined once in `packages/schema` an
 - **WHEN** a user reaches the workspace name via Tab/focus navigation, edits it, and confirms with Enter
 - **THEN** the rename completes without any pointer interaction
 
-### Requirement: Offline tolerance and recovery
-The client SHALL keep rendering local data when the network drops, queue local mutations, and reconcile automatically on reconnect.
+### Requirement: Disconnection is visible and lossless
+Reads SHALL continue to resolve from the local replica while disconnected. Writes are NOT supported offline (Zero rejects them), so the UI SHALL surface connection state and prevent write attempts that would silently lose user input. On reconnect, syncing resumes automatically.
 
-#### Scenario: Reconnect reconciliation
-- **WHEN** a client goes offline, performs a rename, and later reconnects
-- **THEN** the queued mutation is pushed, executed authoritatively, and both clients converge on the same state
+#### Scenario: Reading while disconnected
+- **WHEN** the network drops
+- **THEN** already-synced data continues to render and navigate without errors
+
+#### Scenario: Writes are blocked, not lost
+- **WHEN** a user attempts an edit while disconnected
+- **THEN** connection state is visible and the edit is prevented or held in the editing surface — never accepted and silently dropped
+
+#### Scenario: Reconnect resumes sync
+- **WHEN** connectivity returns
+- **THEN** the client resumes syncing and converges with server state without a page reload

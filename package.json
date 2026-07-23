@@ -13,6 +13,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "e2e": "turbo run e2e",
+    "workbench": "pnpm --filter @yapm/ui workbench",
     "lint": "biome ci .",
     "format": "biome check --write .",
     "check:catalog": "node scripts/check-catalog.mjs",

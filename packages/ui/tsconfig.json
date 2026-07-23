@@ -1,4 +1,7 @@
 {
   "extends": "@yapm/config/tsconfig/vite",
-  "include": ["src"]
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src", ".ladle"]
 }

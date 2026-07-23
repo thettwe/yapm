@@ -29,6 +29,7 @@
         "LOG_LEVEL",
         "PORT",
         "SEED_WORKSPACE_NAME",
+        "SERVER_ORIGIN",
         "WEB_DIST_DIR"
       ]
     },

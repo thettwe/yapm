@@ -19,9 +19,9 @@
 
 ## 3. Web skeleton
 
-- [ ] 3.1 apps/web: Vite 8 + React 19 + TanStack Router skeleton with a single index route
-- [ ] 3.2 packages/ui: Tailwind v4 + shadcn/ui init on the **default Base UI base** (irreversible choice — see TECHSTACK.md), theme tokens file, one Button as proof; wire into apps/web. Do NOT add `baseUrl` to tsconfig even though shadcn's Vite guide says to — it is a hard TS7 error; use `paths` only
-- [ ] 3.3 Ladle workbench running against packages/ui
+- [x] 3.1 apps/web: Vite 8 + React 19 + TanStack Router skeleton with a single index route
+- [x] 3.2 packages/ui: Tailwind v4 + shadcn/ui init on the **default Base UI base** (irreversible choice — see TECHSTACK.md), theme tokens file, one Button as proof; wire into apps/web. Do NOT add `baseUrl` to tsconfig even though shadcn's Vite guide says to — it is a hard TS7 error; use `paths` only
+- [x] 3.3 Ladle workbench running against packages/ui
 
 ## 4. Local-first sync walking skeleton
 

@@ -13,14 +13,14 @@
 
 - [ ] 2.1 apps/server: Hono on Node with pino logging and Zod-validated env config module (fail-fast with named variable and expected format)
 - [ ] 2.2 Add /healthz and /readyz endpoints (readyz checks Postgres connectivity; replication-slot check added in task 4)
-- [ ] 2.3 packages/schema: Kysely setup (PostgresDialect + pg Pool), first migration creating the workspace table (client-supplied uuid PK — no DB default, name, created_at, updated_at), and kysely-codegen wired as a package script producing the `DB` types
+- [ ] 2.3 packages/schema: Kysely 0.28.17 setup (PostgresDialect + pg Pool), first migration creating the workspace table (client-supplied uuid PK — no DB default, name, created_at, updated_at), and a hand-written `DB` interface (NOT kysely-codegen — it is broken under TS7)
 - [ ] 2.4 Migration-on-boot runner: Kysely `Migrator` applies pending migrations before listening (must resolve migration files when running compiled from dist/); seed one workspace row if table is empty
 - [ ] 2.5 Static file serving of the built SPA from the app process
 
 ## 3. Web skeleton
 
 - [ ] 3.1 apps/web: Vite 8 + React 19 + TanStack Router skeleton with a single index route
-- [ ] 3.2 packages/ui: Tailwind v4 + shadcn/ui init with `--base radix` (irreversible choice — see TECHSTACK.md), theme tokens file, one Button as proof; wire into apps/web. Do NOT add `baseUrl` to tsconfig even though shadcn's Vite guide says to — it is a hard TS7 error; use `paths` only
+- [ ] 3.2 packages/ui: Tailwind v4 + shadcn/ui init on the **default Base UI base** (irreversible choice — see TECHSTACK.md), theme tokens file, one Button as proof; wire into apps/web. Do NOT add `baseUrl` to tsconfig even though shadcn's Vite guide says to — it is a hard TS7 error; use `paths` only
 - [ ] 3.3 Ladle workbench running against packages/ui
 
 ## 4. Local-first sync walking skeleton
@@ -30,7 +30,7 @@
 - [ ] 4.3 Shared mutator renameWorkspace in packages/schema with validation (non-empty name), imported by client and server
 - [ ] 4.4 Web: Zero client setup (IndexedDB), workspace name rendered from synced query, inline rename via shared mutator, keyboard-only path (focus, edit, Enter)
 - [ ] 4.5 /readyz replication-slot health check; document the common Zero misconfig errors encountered
-- [ ] 4.6 Schema-drift test: introspect live Postgres via `db.introspection.getTables()` and assert the hand-written Zero schema matches (tables, columns, nullability, types) — fails CI on drift
+- [ ] 4.6 Schema-drift test: introspect live Postgres via `db.introspection.getTables()` and assert BOTH the hand-written Kysely `DB` interface and the Zero schema match it (tables, columns, nullability, types) — fails CI on drift
 - [ ] 4.7 Vitest coverage: mutator validation (shared), query authorization; Playwright: rename round-trip, rejected-write rollback, two-client propagation, and reads continuing to work while disconnected
 
 ## 5. Self-host deployment

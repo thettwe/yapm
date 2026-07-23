@@ -45,7 +45,10 @@ if it works:
    a mutator body. Mutators re-run during rebase, so an ID generated inside one changes
    between runs and corrupts the optimistic result.
 5. **Dependency versions only in the pnpm catalog** (`pnpm-workspace.yaml`), referenced as
-   `catalog:`.
+   `catalog:`. Three pins are load-bearing: **kysely stays on 0.28.17** (Zero's peer range;
+   0.29 is breaking), **no `kysely-codegen`** (silently emits uncompilable output under
+   TS7 — the `DB` interface is hand-written), and watch for the **`jose` collision** where
+   Zero wants v5 and better-auth wants v6.
 6. **No tools that import the TypeScript Compiler API** — it doesn't exist in TS7's Go
    build. That rules out typescript-eslint, ts-morph, vite-plugin-dts, knip. Biome only.
 7. **Free means free.** No seat caps, no SSO tax, no license-key gates, no upsell UI.

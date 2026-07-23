@@ -10,10 +10,10 @@ context: |
   Tech stack: TypeScript 7 (native tsc) on Node 24 LTS; Zero (Rocicorp) sync engine;
   Postgres ≥15 (only database — also jobs via pg-boss and FTS search); React 19 +
   Vite 8 SPA (never Next.js — Zero has no SSR); TanStack Router; Tailwind v4 + Radix
-  scaffolded with shadcn/ui (init with `--base radix`); Hono; Kysely (query builder —
-  migrations via Kysely Migrator at boot, DB types via kysely-codegen, Zero schema
-  hand-written and CI drift-tested); better-auth on its native Kysely layer (SSO free,
-  never paywalled); TipTap v3.
+  scaffolded with shadcn/ui on its default Base UI base; Hono; Kysely 0.28.17 pinned
+  (query builder — migrations via Kysely Migrator at boot, `DB` interface AND Zero schema
+  both hand-written and CI drift-tested; no kysely-codegen, it breaks under TS7);
+  better-auth on its native Kysely layer (SSO free, never paywalled); TipTap v3.
   Monorepo: pnpm 11 workspaces + catalogs, Turborepo; apps/{web,server,docs},
   packages/{schema,ui,api,config}.
 

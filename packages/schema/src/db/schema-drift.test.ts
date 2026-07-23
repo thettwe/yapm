@@ -15,6 +15,71 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },
+  workspace_member: {
+    id: { nullable: false, hasDefault: false },
+    workspace_id: { nullable: false, hasDefault: false },
+    user_id: { nullable: false, hasDefault: false },
+    role: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  team: {
+    id: { nullable: false, hasDefault: false },
+    workspace_id: { nullable: false, hasDefault: false },
+    name: { nullable: false, hasDefault: false },
+    key: { nullable: false, hasDefault: false },
+    archived_at: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  team_membership: {
+    id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    user_id: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+  },
+  invite: {
+    id: { nullable: false, hasDefault: false },
+    workspace_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: true, hasDefault: false },
+    email: { nullable: true, hasDefault: false },
+    role: { nullable: false, hasDefault: false },
+    token: { nullable: false, hasDefault: false },
+    created_by: { nullable: false, hasDefault: false },
+    expires_at: { nullable: false, hasDefault: false },
+    revoked_at: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+  },
+  // better-auth owns this table; the drift test provisions it (see `createAuthUserTable`)
+  // so the read-surface interface and Zero schema are still checked against its real shape
+  // (reference/kysely-stack.md §5.4).
+  user: {
+    id: { nullable: false, hasDefault: false },
+    name: { nullable: false, hasDefault: false },
+    email: { nullable: false, hasDefault: false },
+    emailVerified: { nullable: false, hasDefault: false },
+    image: { nullable: true, hasDefault: false },
+    createdAt: { nullable: false, hasDefault: true },
+    updatedAt: { nullable: false, hasDefault: true },
+  },
+}
+
+// The `user` table is created at boot by better-auth's `getMigrations()`, not by our
+// Kysely migrations. reference/kysely-stack.md §5.4 has the verified DDL it emits; we
+// reproduce it here so the drift test can assert our read surface matches it without
+// pulling in the server's better-auth config (packages never import apps).
+async function createAuthUserTable(db: Kysely<DB>): Promise<void> {
+  await sql`
+    create table if not exists "user" (
+      "id" text not null primary key,
+      "name" text not null,
+      "email" text not null unique,
+      "emailVerified" boolean not null,
+      "image" text,
+      "createdAt" timestamptz default current_timestamp not null,
+      "updatedAt" timestamptz default current_timestamp not null
+    )
+  `.execute(db)
 }
 
 const DATABASE_URL = process.env.DATABASE_URL
@@ -52,6 +117,7 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
 
   beforeAll(async () => {
     await migrateToLatest(database.db)
+    await createAuthUserTable(database.db)
     tables = (await database.db.introspection.getTables()).filter(
       (table) => table.schema === 'public' && !table.isView,
     )

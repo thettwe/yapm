@@ -9,7 +9,7 @@ import {
   WORKSPACE_NAME_MAX_LENGTH,
 } from './mutators.js'
 
-const OWNER: AuthContext = { userID: 'user-1', role: 'owner' }
+const ADMIN: AuthContext = { userID: 'user-1', role: 'admin' }
 const MEMBER: AuthContext = { userID: 'user-2', role: 'member' }
 const VIEWER: AuthContext = { userID: 'user-3', role: 'viewer' }
 
@@ -54,7 +54,7 @@ describe('normalizeWorkspaceName', () => {
 
 describe('assertRenameWorkspaceAllowed', () => {
   it('returns the normalized name for a writer', () => {
-    expect(assertRenameWorkspaceAllowed(args('  Platform  Team '), OWNER)).toBe('Platform Team')
+    expect(assertRenameWorkspaceAllowed(args('  Platform  Team '), ADMIN)).toBe('Platform Team')
     expect(assertRenameWorkspaceAllowed(args('yapm'), MEMBER)).toBe('yapm')
   })
 

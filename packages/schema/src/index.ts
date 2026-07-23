@@ -1,6 +1,6 @@
 export { newId } from './id.js'
 export type { AuthContext, WorkspaceRole } from './zero/context.js'
-export { canRead, canWrite, WORKSPACE_ROLES } from './zero/context.js'
+export { canManage, canRead, canWrite, WORKSPACE_ROLES } from './zero/context.js'
 export type { MutationErrorDetails } from './zero/errors.js'
 export { isMutationErrorDetails, MutationError, MutationErrorCode } from './zero/errors.js'
 export type { RenameWorkspaceArgs } from './zero/mutators.js'

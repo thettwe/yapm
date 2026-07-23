@@ -1,0 +1,91 @@
+# workspace-auth — design
+
+## Context
+
+foundation shipped a running Zero pipeline over a single `workspace` row with `AuthContext = {userID:'anonymous', role:'member'}` hard-coded by `resolveAnonymousContext`, and query/mutator authorization already filter-based (`denyAll` = empty `or()`) and driven by `ctx` rather than args. Every seam this change needs is already physical: `packages/schema/src/zero/context.ts` owns the role model and the `DefaultTypes` context, `apps/server/src/zero/context.ts` owns the `ResolveAuthContext` function foundation explicitly left for us to replace, and the routes already pass a verified `userID` to `handleQueryRequest`/`handleMutateRequest`.
+
+The stack is fixed by TECHSTACK.md and the reference notes: better-auth 1.6 on its **native Kysely layer** (the only layer where `getMigrations()` runs from app code at boot — `reference/kysely-stack.md` §5.4), sharing the one `pg.Pool`; Zero 1.8 synced queries with the multi-tenant membership pattern (`reference/zero.md` §4.5); Kysely 0.28.17 pinned with a hand-written `DB` interface and a CI drift test. This change must not add a container, must keep the viewer role free/unlimited, and must keep all ZQL and mutators inside `packages/schema`.
+
+## Goals / Non-Goals
+
+**Goals:**
+- Real identity (better-auth) and real authorization (workspace role + team membership) replacing the anonymous placeholder.
+- A user syncs only rows they can see; permissions live in the synced-query definitions, expressed with joins, denied by empty result.
+- Email/password + GitHub OAuth + OIDC/SSO all work and are all free; viewer is free and unlimited.
+- A fresh instance is usable in minutes with no SMTP and no manual admin creation.
+- The three-container contract and the sub-100ms local-read budget are preserved.
+
+**Non-Goals:**
+- Issues / work entities (issue-core), GitHub data sync (github-sync), billing, multiple workspaces, per-team roles, SCIM, audit logs.
+
+## Decisions
+
+1. **Identity (better-auth `user`) is separate from authorization (`workspace_member`).** better-auth owns `user`/`session`/`account`/`verification`/`jwks` (camelCase, `text` PKs, singular names — §5.4). We add `workspace_member(workspace_id, user_id, role, …)` as the access edge: presence of a row = access to the instance; `role` = capability. Signing up creates a `user` but **not** membership. *Alternative rejected:* better-auth's `organization` plugin — it models many orgs/teams with its own role tables, duplicating our single-workspace graph and pulling role logic out of `packages/schema` where the mutators must live.
+
+2. **Workspace-level roles, team membership orthogonal.** `workspace_member.role ∈ {admin, member, viewer}` is the single source of capability; `team_membership(team_id, user_id)` is a plain edge with no per-team role. Role gates *what you can do*; team membership gates *which teams' work data you sync*. This keeps the permission model two-axis and simple, and matches the roadmap's flat role list. *Alternative rejected:* per-team roles (Jira-style scheme labyrinth — VISION "not a config sandbox").
+
+3. **`ctx = {userID, role}` where `role` is the workspace role or `null` for an authenticated non-member.** The server resolves it once per request by verifying the session/JWT to a `userID`, then looking up `workspace_member.role`. Team membership is *not* precomputed into `ctx` (it is multi-valued) — queries check it with a `whereExists('team' → 'members', m => m.where('userID', ctx.userID))` subquery keyed off `ctx`, never off args (§4.5). `role: null` ⇒ every query `denyAll`s and every mutator throws `not_authorized`.
+
+4. **Row-level read permissions, per entity:**
+   | Entity | Who reads which rows | Who writes |
+   |---|---|---|
+   | `workspace` (1 row) | any member (role ≠ null) | admin (rename, settings) |
+   | `user` profile | any member reads all member profiles (assignee/mention pickers need them) | a user edits only their own |
+   | `workspace_member` | any member reads all (see the roster) | admin (invite/role/remove); a member may remove *itself* (leave) |
+   | `team` | any member reads all teams | admin (create/rename/archive) |
+   | `team_membership` | any member reads all | admin manages any; a member may add/remove *itself* on any team it can see (self-serve join/leave) |
+   | `invite` | **admin only** | admin (create/revoke); accept is token-driven, not a synced write |
+   Denials are empty queries; mutators check auth **before** existence so a private row's existence never leaks (§5.4).
+
+5. **First-admin bootstrap is first-user-wins, advisory-locked, with an env override.** On completed sign-in, if `workspace_member` has zero rows the caller is inserted as `admin` under `pg_advisory_xact_lock` (same pattern foundation used for seeding — design decision 22). If `YAPM_BOOTSTRAP_ADMIN_EMAIL` is set, only a caller whose verified email matches becomes the bootstrap admin; others wait for an invite. Default is zero-config (first user becomes admin) to honor the "under 5 minutes" north star. *Alternative rejected:* a CLI/env-only admin seed (extra step, breaks minutes-to-first-team).
+
+6. **Membership is invite-gated after bootstrap; registration stays open.** An authenticated user with no membership and no accepted invite is a non-member: they see nothing (denyAll) and land on an access-gate screen. Access is granted only by accepting an invite (email or link) or by an admin adding them. "Open join" is expressed as a shareable link an admin chooses to distribute — not a separate global toggle. *Alternative rejected:* auto-membership for anyone who can authenticate (unsafe for an internet-reachable private instance).
+
+7. **Invites: one `invite` table, two shapes.** `invite(id, workspace_id, team_id?, email?, role, token, created_by, expires_at, revoked_at?, created_at)`. `email = null` ⇒ reusable shareable link (valid until expiry/revoke); `email` present ⇒ single-use, bound to that email, revoked on accept. Accepting inserts `workspace_member` (and `team_membership` if `team_id` set). The token link works without SMTP (always copyable); SMTP, when configured, additionally emails it. *Alternative rejected:* separate `invite` and `invite_link` tables (duplicated accept logic).
+
+8. **Email verification off by default.** `emailAndPassword.requireEmailVerification = false`; a fresh self-host needs no SMTP to onboard. When SMTP env is present an admin can require it. Bias-to-off is the documented default per the assignment.
+
+9. **Session 30 days rolling; Zero JWT 1 hour with refresh.** better-auth session `expiresIn: 30d, updateAge: 1d` (self-host convenience — long-lived, refreshed on use). The `jwt()` plugin issues a 1-hour token for zero-cache (its 15-minute default is too short for a long-lived sync socket — §5.5); the web client fetches it from `/api/zero/token` and re-fetches on a 401/403 from the sync endpoints, calling `zero.connection.connect({auth})`. `bearer()` + `jwt()` both enabled: bearer for our own API, JWT for zero-cache.
+
+10. **Server derives `ctx` by verifying the JWT locally against the JWKS.** The `/query` and `/mutate` routes read the bearer JWT zero-cache forwards, verify it against better-auth's `jwks` table (issuer/audience), extract `sub` as `userID`, then look up the role. The `X-Api-Key` gate between zero-cache and the endpoints (foundation decision 47/54) stays as defense-in-depth. *Alternative rejected:* calling `auth.api.getSession` on every sync request (a DB round-trip per query batch; JWKS verification is local and cache-friendly).
+
+11. **`WORKSPACE_ROLES` becomes `['admin','member','viewer']`.** foundation used `owner`; the roadmap and this change standardize on `admin`. `canWrite` stays `role !== 'viewer'` (and non-null); `canManage` (new) is `role === 'admin'`. This is a one-line enum change plus the migration mapping any existing `owner` seed to `admin`.
+
+## Risks / Trade-offs
+
+- **`jose` v5/v6 collision** (Zero wants 5, better-auth wants 6 — §0/§9) → pnpm's isolated store keeps both side by side (foundation verified `jose@5` and `jose@6` coexisting once better-auth lands); pin via catalog and `pnpm peers check` in CI. Never hoist a single jose to the root.
+- **Bootstrap race across replicas** → the first-admin insert is wrapped in `pg_advisory_xact_lock` + `where not exists`, the exact pattern foundation proved with three concurrent booters producing one row.
+- **better-auth `getMigrations()` is unguarded (no advisory lock, not transactional — §5.4)** → run it from the single app boot path after the Kysely `Migrator` (which *is* advisory-locked); accept "relation already exists" as idempotent on concurrent boots, or gate it behind the same lock. Document in tasks.
+- **JWT expiry mid-sync stalls writes** → 1-hour token + client refresh on 401/403; the connection indicator (foundation) already surfaces `needs-auth`.
+- **Non-member confusion ("I signed in but see nothing")** → an explicit access-gate screen, not a blank/denied app, telling the user they need an invite.
+- **Drift test surface grows** → the §8 drift test now covers five new tables plus better-auth's tables; better-auth tables are excluded from the Zero-schema half (Zero does not replicate them for clients) but the `user` table *is* in the Zero schema (read-only for members), so its columns are drift-checked.
+
+## Migration Plan
+
+Forward-only Kysely migration `0002_workspace_auth` (or split per entity) adds `workspace_member`, `team`, `team_membership`, `invite`, extends `workspace`, and remaps role `owner`→`admin` in any seeded data. better-auth tables are created by `getMigrations()` at first boot. Rollback within v1 pre-release is a DB reset (`pnpm dev:reset`); no production data exists yet. Boot order: Kysely `Migrator` → better-auth `getMigrations()` → seed workspace → serve; zero-cache starts after the app is healthy (unchanged).
+
+## Open Questions
+
+- (none blocking — all product ambiguities resolved and logged below)
+
+## Decisions made during implementation
+
+<!-- Populated during the apply phase per CLAUDE.md's decide-log-continue policy.
+     The product decisions the Propose phase was asked to make and log up front: -->
+
+- **Entity/membership/role model**: workspace-level roles (`workspace_member.role ∈ admin/member/viewer`) with an orthogonal `team_membership` edge (no per-team role). Rationale in Decisions #1–#2.
+- **Email verification default**: OFF (`requireEmailVerification: false`) so self-host needs no SMTP. Decision #8.
+- **Invite mechanism**: BOTH single-use email invites and reusable shareable links, one `invite` table. Decision #7.
+- **First-admin bootstrap**: first authenticated user becomes admin (advisory-locked), optional `YAPM_BOOTSTRAP_ADMIN_EMAIL` override. Decision #5.
+- **Session/JWT lifetimes**: session 30d rolling (updateAge 1d); Zero JWT 1h with client refresh on 401/403. Decision #9.
+- **OIDC/SSO**: kept in this change and free/ungated (`@better-auth/sso`). Proposal + authentication spec.
+
+### Schema phase (data model in `packages/schema`)
+
+- **No app-level FK to better-auth's `user`.** Boot order is Kysely `Migrator` → better-auth `getMigrations()` (Migration Plan above), so at the moment migration `0002_workspace_auth` runs the `user` table does not exist yet. A DB-level `references "user"(id)` would fail. `workspace_member.user_id`, `team_membership.user_id`, and `invite.created_by` are therefore plain `text` columns with no hard FK; referential integrity to identity is enforced at the mutator/app layer. FKs among our own tables (member/team/team_membership/invite → workspace/team) are kept, since those are all created inside `0002`. This makes the migration order-independent from better-auth.
+- **`workspace` table left unchanged.** Task 2.2 says "extending `workspace`," but neither the proposal nor any spec names a new `workspace` column, and VISION forbids a config sandbox. `workspace` keeps its foundation shape (`id, name, created_at, updated_at`) and satisfies "extend" by being the instance root the new FKs hang off. A future change can add columns when a concrete need appears.
+- **Roles are `text` + `CHECK (role in ('admin','member','viewer'))`, not a Postgres `enum` type.** The Zero column is `enumeration<WorkspaceRole>()` (whose runtime `type` is `"string"`, verified from the 1.8 `.d.ts`), so it maps cleanly through the drift test's `text → string` rule. A real Postgres enum type would surface as an unmapped `dataType` in the drift guard and add a migration-fragile type. Client typing is preserved via the Zero enumeration; validity is enforced by the CHECK and by mutator-side Zod (later phase).
+- **`owner → admin` remap is a no-op.** Foundation persisted no role data — `owner` existed only in `WORKSPACE_ROLES` and tests. `workspace_member` is created fresh in `0002`, so there is nothing to remap; the enum change is code-only (`WORKSPACE_ROLES`, updated tests). The CHECK constraint enforces the new set going forward.
+- **The drift test provisions better-auth's `user` table itself.** `packages/schema` must not import the server's better-auth config (packages never import apps). To still drift-check the read-surface `user` interface and Zero table, the test creates `"user"` from the verified `getMigrations()` DDL (reference/kysely-stack.md §5.4) in `beforeAll`, then asserts the hand-written shapes match it. The full `user` column set is included in the Zero schema so the drift guard's bidirectional check (no DB column missing from the Zero schema) stays intact.
+- **`bootstrapFirstAdmin` is a data-layer primitive in `db/seed.ts`.** First-admin promotion is a Postgres operation (advisory-locked insert-if-no-members honoring `requiredEmail`), so it lives beside `seedWorkspace` and is unit-testable without the server. The server phase (task 4.5) calls it from the completed-sign-in hook, minting the `workspace_member` id via `newId()` at that call site (constraint #4). Verified against real Postgres: concurrent first sign-ins yield exactly one `admin`, and the `requiredEmail` gate rejects non-matching callers.
+- **`team_membership` has a client-minted `id` PK plus a `unique(team_id, user_id)`,** rather than a compound PK. This matches constraint #4 (client-minted UUIDv7 PKs at the call site) and the repo's single-`id` convention, while the unique constraint still guarantees one membership row per (team, user).

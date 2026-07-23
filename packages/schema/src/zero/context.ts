@@ -7,8 +7,12 @@ export interface AuthContext {
   readonly role: WorkspaceRole | null
 }
 
+export function isMember(ctx: AuthContext | undefined): ctx is AuthContext {
+  return ctx !== undefined && ctx.role !== null
+}
+
 export function canRead(ctx: AuthContext | undefined): ctx is AuthContext {
-  return ctx !== undefined
+  return isMember(ctx)
 }
 
 export function canWrite(ctx: AuthContext | undefined): ctx is AuthContext {

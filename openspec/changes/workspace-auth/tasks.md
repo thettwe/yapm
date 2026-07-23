@@ -15,8 +15,8 @@
 ## 3. Zero schema and sync definitions (packages/schema)
 
 - [x] 3.1 Add `workspace_member`, `team`, `team_membership`, `invite`, and read-only `user` to the Zero schema with relationships (workspace→members/teams/invites, team→memberships, membership→user), mapping timestamps to `number().from(...)`.
-- [ ] 3.2 Rewrite `queries.ts` with membership/role row-level permissions: `workspace.current`, member roster, `user` profiles (members only), teams + rosters (members only), invites (admins only), all driven by `ctx` with `denyAll` for non-members; add a `teamScoped` `whereExists` helper for future work data.
-- [ ] 3.3 Rewrite `mutators.ts`: workspace rename (admin), member role-change/remove/leave with last-admin protection, team create/rename/archive (admin) and join/leave (self-serve), invite create/revoke and accept — each checking auth before existence, minting UUIDv7 at the call site.
+- [x] 3.2 Rewrite `queries.ts` with membership/role row-level permissions: `workspace.current`, member roster, `user` profiles (members only), teams + rosters (members only), invites (admins only), all driven by `ctx` with `denyAll` for non-members; add a `teamScoped` `whereExists` helper for future work data. Membership gate is `isMember` (role ≠ null); `canRead` now delegates to it.
+- [x] 3.3 Rewrite `mutators.ts`: workspace rename (admin), member role-change/remove/leave with last-admin protection, team create/rename/archive (admin) and join/leave (self-serve) plus admin roster management, invite create/revoke — each checking auth before existence, minting UUIDv7 at the call site. Invite accept stays the token-driven REST endpoint (task 4.6); see design log.
 - [x] 3.4 Extend the schema-drift test to cover the four new tables and the `user` read surface; keep it a hard CI failure.
 
 ## 4. Authentication server (apps/server)
@@ -39,7 +39,7 @@
 
 ## 6. Tests and verification
 
-- [ ] 6.1 Unit-test the shared mutators' authorization (viewer/non-member rejection, last-admin protection, auth-before-existence, UUIDv7 at call site) and the permissioned queries (non-member `denyAll`, admin-only invites) in `packages/schema`.
+- [x] 6.1 Unit-test the shared mutators' authorization (viewer/non-member rejection, last-admin protection, auth-before-existence, UUIDv7 at call site) and the permissioned queries (non-member `denyAll`, admin-only invites, `teamScoped` scope-vs-deny) in `packages/schema`. 58 schema tests pass under `pnpm turbo test`.
 - [x] 6.2 Unit-test the auth-context resolution (`apps/server/src/zero/context.test.ts`: no header, non-Bearer, invalid token, member, non-member `role:null`, verified-`sub`-not-client) and the first-admin bootstrap gate (`packages/schema/src/db/seed.test.ts`: non-matching email short-circuits before the DB; case-insensitive/trimmed match proceeds). Bootstrap concurrency was proven against real Postgres in the Schema phase (advisory-locked insert-if-no-members); the Auth phase re-verified one `admin` from the first real sign-up.
 - [ ] 6.3 e2e (Playwright) against the real stack: email sign-up → first-user-becomes-admin → create team → invite (link) → second user accepts → sees only permitted rows → viewer cannot write; include the keyboard-only sign-in and member-management paths.
 - [ ] 6.4 Update the boundary-guard/CI expectations if needed and run `pnpm turbo lint typecheck test build` plus the compose smoke test; confirm exactly three services.

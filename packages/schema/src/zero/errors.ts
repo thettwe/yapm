@@ -2,7 +2,10 @@ import { ApplicationError } from '@rocicorp/zero'
 
 export const MutationErrorCode = {
   invalidName: 'invalid_name',
+  invalidKey: 'invalid_key',
+  duplicateKey: 'duplicate_key',
   notAuthorized: 'not_authorized',
+  lastAdmin: 'last_admin',
 } as const
 
 export type MutationErrorCode = (typeof MutationErrorCode)[keyof typeof MutationErrorCode]

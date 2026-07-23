@@ -1,5 +1,5 @@
 import { defineQueries, defineQuery, type Query, type Schema } from '@rocicorp/zero'
-import { canRead } from './context.js'
+import { type AuthContext, canManage, isMember } from './context.js'
 import { zql } from './schema.js'
 
 export function denyAll<
@@ -10,13 +10,55 @@ export function denyAll<
   return q.where(({ or }) => or())
 }
 
+export function teamScoped<TTable extends keyof Schema['tables'] & string, TReturn>(
+  q: Query<TTable, Schema, TReturn>,
+  ctx: AuthContext | undefined,
+): Query<TTable, Schema, TReturn> {
+  if (!isMember(ctx)) return denyAll(q)
+  const scoped = (q as Query<'team_membership', Schema>).whereExists('team', (team) =>
+    team.whereExists('members', (m) => m.where('userId', ctx.userID)),
+  )
+  return scoped as unknown as Query<TTable, Schema, TReturn>
+}
+
 export const queries = defineQueries({
   workspace: {
     current: defineQuery(({ ctx }) => {
       const q = zql.workspace.orderBy('createdAt', 'asc')
-      return (canRead(ctx) ? q : denyAll(q)).one()
+      return (isMember(ctx) ? q : denyAll(q)).one()
+    }),
+  },
+  members: {
+    all: defineQuery(({ ctx }) => {
+      const q = zql.workspace_member.related('user').orderBy('createdAt', 'asc')
+      return isMember(ctx) ? q : denyAll(q)
+    }),
+  },
+  users: {
+    all: defineQuery(({ ctx }) => {
+      const q = zql.user.orderBy('createdAt', 'asc')
+      return isMember(ctx) ? q : denyAll(q)
+    }),
+  },
+  teams: {
+    all: defineQuery(({ ctx }) => {
+      const q = zql.team
+        .where('archivedAt', 'IS', null)
+        .related('members')
+        .orderBy('createdAt', 'asc')
+      return isMember(ctx) ? q : denyAll(q)
+    }),
+  },
+  invites: {
+    all: defineQuery(({ ctx }) => {
+      const q = zql.invite.orderBy('createdAt', 'desc')
+      return canManage(ctx) ? q : denyAll(q)
     }),
   },
 })
 
 export const WORKSPACE_CURRENT_QUERY_NAME = 'workspace.current'
+export const MEMBERS_ALL_QUERY_NAME = 'members.all'
+export const USERS_ALL_QUERY_NAME = 'users.all'
+export const TEAMS_ALL_QUERY_NAME = 'teams.all'
+export const INVITES_ALL_QUERY_NAME = 'invites.all'

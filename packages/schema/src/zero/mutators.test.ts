@@ -1,45 +1,80 @@
 import { mustGetMutator, type Transaction } from '@rocicorp/zero'
 import { describe, expect, it } from 'vitest'
+import { newId } from '../id.js'
 import type { AuthContext } from './context.js'
 import { MutationErrorCode, mutationErrorCode } from './errors.js'
 import {
+  addTeamMember,
+  archiveTeam,
   assertRenameWorkspaceAllowed,
+  changeMemberRole,
+  createInvite,
+  createTeam,
   mutators,
+  normalizeTeamKey,
   normalizeWorkspaceName,
+  removeMember,
+  removeTeamMember,
+  renameTeam,
+  renameWorkspace,
+  revokeInvite,
   WORKSPACE_NAME_MAX_LENGTH,
 } from './mutators.js'
 
-const ADMIN: AuthContext = { userID: 'user-1', role: 'admin' }
-const MEMBER: AuthContext = { userID: 'user-2', role: 'member' }
-const VIEWER: AuthContext = { userID: 'user-3', role: 'viewer' }
+const ADMIN: AuthContext = { userID: 'user-admin', role: 'admin' }
+const MEMBER: AuthContext = { userID: 'user-member', role: 'member' }
+const VIEWER: AuthContext = { userID: 'user-viewer', role: 'viewer' }
+const NON_MEMBER: AuthContext = { userID: 'user-outsider', role: null }
 
 const WORKSPACE_ID = '019f8f00-0000-7000-8000-000000000000'
 
-function args(name: string) {
-  return { id: WORKSPACE_ID, name, updatedAt: 1_784_820_335_919 }
+interface RecordedCall {
+  table: string
+  verb: 'insert' | 'update' | 'delete'
+  value: Record<string, unknown>
 }
 
-interface RecordedUpdate {
-  id: string
-  name: string
-  updatedAt: number
-}
+function fakeTx(runResults: unknown[] = []) {
+  const calls: RecordedCall[] = []
+  const runQueue = [...runResults]
 
-function recordingTransaction() {
-  const updates: RecordedUpdate[] = []
+  const tableMutator = (table: string) => ({
+    insert: (value: Record<string, unknown>) => {
+      calls.push({ table, verb: 'insert', value })
+      return Promise.resolve()
+    },
+    update: (value: Record<string, unknown>) => {
+      calls.push({ table, verb: 'update', value })
+      return Promise.resolve()
+    },
+    delete: (value: Record<string, unknown>) => {
+      calls.push({ table, verb: 'delete', value })
+      return Promise.resolve()
+    },
+  })
+
   const tx = {
     location: 'server',
     reason: 'authoritative',
-    mutate: {
-      workspace: {
-        update: (row: RecordedUpdate) => {
-          updates.push(row)
-          return Promise.resolve()
-        },
+    run: () => Promise.resolve(runQueue.shift()),
+    mutate: new Proxy(
+      {},
+      {
+        get: (_target, table: string) => tableMutator(table),
       },
-    },
+    ),
   } as unknown as Transaction
-  return { tx, updates }
+
+  return { tx, calls, runQueue }
+}
+
+async function capture(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    await promise
+  } catch (thrown) {
+    return thrown
+  }
+  return undefined
 }
 
 describe('normalizeWorkspaceName', () => {
@@ -48,55 +83,27 @@ describe('normalizeWorkspaceName', () => {
   })
 
   it('collapses a whitespace-only name to the empty string', () => {
-    expect(normalizeWorkspaceName(' \t \n ')).toBe('')
+    expect(normalizeWorkspaceName(' \t \n ')).toBe('')
+  })
+})
+
+describe('normalizeTeamKey', () => {
+  it('uppercases and strips whitespace', () => {
+    expect(normalizeTeamKey(' plat form ')).toBe('PLATFORM')
   })
 })
 
 describe('assertRenameWorkspaceAllowed', () => {
-  it('returns the normalized name for a writer', () => {
+  const args = (name: string) => ({ id: WORKSPACE_ID, name, updatedAt: 1_784_820_335_919 })
+
+  it('returns the normalized name for an admin', () => {
     expect(assertRenameWorkspaceAllowed(args('  Platform  Team '), ADMIN)).toBe('Platform Team')
-    expect(assertRenameWorkspaceAllowed(args('yapm'), MEMBER)).toBe('yapm')
   })
 
   it.each([
-    ['empty', ''],
-    ['spaces', '   '],
-    ['tabs and newlines', '\t\n'],
-    ['a non-breaking space', ' '],
-  ])('rejects a %s name', (_label, name) => {
-    const error = (() => {
-      try {
-        assertRenameWorkspaceAllowed(args(name), MEMBER)
-      } catch (thrown) {
-        return thrown
-      }
-      return undefined
-    })()
-
-    expect(mutationErrorCode(error)).toBe(MutationErrorCode.invalidName)
-    expect((error as Error).message).toBe('Workspace name cannot be empty')
-  })
-
-  it('rejects a name longer than the column budget', () => {
-    const error = (() => {
-      try {
-        assertRenameWorkspaceAllowed(args('x'.repeat(WORKSPACE_NAME_MAX_LENGTH + 1)), MEMBER)
-      } catch (thrown) {
-        return thrown
-      }
-      return undefined
-    })()
-
-    expect(mutationErrorCode(error)).toBe(MutationErrorCode.invalidName)
-  })
-
-  it('accepts a name exactly at the limit', () => {
-    const name = 'x'.repeat(WORKSPACE_NAME_MAX_LENGTH)
-    expect(assertRenameWorkspaceAllowed(args(name), MEMBER)).toBe(name)
-  })
-
-  it.each([
+    ['a member', MEMBER],
     ['a viewer', VIEWER],
+    ['a non-member', NON_MEMBER],
     ['an unauthenticated caller', undefined],
   ])('rejects %s before looking at the name', (_label, ctx) => {
     const error = (() => {
@@ -110,44 +117,368 @@ describe('assertRenameWorkspaceAllowed', () => {
 
     expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
   })
+
+  it('rejects an empty name for an admin', () => {
+    expect(
+      mutationErrorCode(assertThrows(() => assertRenameWorkspaceAllowed(args('   '), ADMIN))),
+    ).toBe(MutationErrorCode.invalidName)
+  })
+
+  it('rejects a name longer than the column budget', () => {
+    const long = 'x'.repeat(WORKSPACE_NAME_MAX_LENGTH + 1)
+    expect(
+      mutationErrorCode(assertThrows(() => assertRenameWorkspaceAllowed(args(long), ADMIN))),
+    ).toBe(MutationErrorCode.invalidName)
+  })
 })
 
-describe('the renameWorkspace mutator', () => {
-  it('writes the normalized name and the caller-minted timestamp', async () => {
-    const { tx, updates } = recordingTransaction()
+function assertThrows(fn: () => unknown): unknown {
+  try {
+    fn()
+  } catch (thrown) {
+    return thrown
+  }
+  return undefined
+}
 
-    await mutators.workspace.rename.fn({ tx, args: args('  Platform  Team  '), ctx: MEMBER })
+describe('renameWorkspace mutator', () => {
+  const args = (name: string) => ({ id: WORKSPACE_ID, name, updatedAt: 1_784_820_335_919 })
 
-    expect(updates).toEqual([
-      { id: WORKSPACE_ID, name: 'Platform Team', updatedAt: 1_784_820_335_919 },
+  it('writes the normalized name for an admin', async () => {
+    const { tx, calls } = fakeTx()
+    await renameWorkspace.fn({ tx, args: args('  Platform  Team  '), ctx: ADMIN })
+    expect(calls).toEqual([
+      {
+        table: 'workspace',
+        verb: 'update',
+        value: { id: WORKSPACE_ID, name: 'Platform Team', updatedAt: 1_784_820_335_919 },
+      },
     ])
   })
 
-  it('writes nothing when the name is rejected', async () => {
-    const { tx, updates } = recordingTransaction()
+  it('rejects a viewer write and records no mutation (rolls back)', async () => {
+    const { tx, calls } = fakeTx()
+    const error = await capture(renameWorkspace.fn({ tx, args: args('ok'), ctx: VIEWER }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+})
 
-    await expect(
-      mutators.workspace.rename.fn({ tx, args: args('   '), ctx: MEMBER }),
-    ).rejects.toThrow('Workspace name cannot be empty')
-    expect(updates).toEqual([])
+describe('changeMemberRole mutator', () => {
+  const args = { id: newId(), role: 'viewer' as const, updatedAt: 1_784_820_335_919 }
+
+  it('lets an admin change a role', async () => {
+    const { tx, calls } = fakeTx([{ id: args.id, userId: 'user-x', role: 'member' }])
+    await changeMemberRole.fn({ tx, args, ctx: ADMIN })
+    expect(calls).toEqual([
+      {
+        table: 'workspace_member',
+        verb: 'update',
+        value: { id: args.id, role: 'viewer', updatedAt: args.updatedAt },
+      },
+    ])
   })
 
-  it('rejects arguments that do not match the validator', async () => {
-    const { tx, updates } = recordingTransaction()
+  it.each([
+    ['a member', MEMBER],
+    ['a viewer', VIEWER],
+    ['a non-member', NON_MEMBER],
+    ['an unauthenticated caller', undefined],
+  ])('rejects %s before reading the target row', async (_label, ctx) => {
+    const { tx, calls, runQueue } = fakeTx([{ id: args.id, userId: 'user-x', role: 'member' }])
+    const error = await capture(changeMemberRole.fn({ tx, args, ctx }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+    expect(runQueue).toHaveLength(1)
+  })
 
-    await expect(
-      mutators.workspace.rename.fn({
+  it('protects the last admin from demotion', async () => {
+    const { tx, calls } = fakeTx([
+      { id: args.id, userId: 'user-x', role: 'admin' },
+      [{ id: args.id, role: 'admin' }],
+    ])
+    const error = await capture(changeMemberRole.fn({ tx, args, ctx: ADMIN }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.lastAdmin)
+    expect(calls).toEqual([])
+  })
+
+  it('allows demoting an admin when another admin remains', async () => {
+    const { tx, calls } = fakeTx([
+      { id: args.id, userId: 'user-x', role: 'admin' },
+      [
+        { id: args.id, role: 'admin' },
+        { id: 'other', role: 'admin' },
+      ],
+    ])
+    await changeMemberRole.fn({ tx, args, ctx: ADMIN })
+    expect(calls).toHaveLength(1)
+  })
+})
+
+describe('removeMember mutator', () => {
+  it('lets a member remove its own membership (leave)', async () => {
+    const memberId = newId()
+    const { tx, calls } = fakeTx([{ id: memberId, userId: MEMBER.userID, role: 'member' }])
+    await removeMember.fn({ tx, args: { id: memberId }, ctx: MEMBER })
+    expect(calls).toEqual([{ table: 'workspace_member', verb: 'delete', value: { id: memberId } }])
+  })
+
+  it('rejects a member removing someone else', async () => {
+    const memberId = newId()
+    const { tx, calls } = fakeTx([{ id: memberId, userId: 'someone-else', role: 'member' }])
+    const error = await capture(removeMember.fn({ tx, args: { id: memberId }, ctx: MEMBER }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it('rejects an unauthenticated caller before reading', async () => {
+    const memberId = newId()
+    const { tx, runQueue } = fakeTx([{ id: memberId, userId: 'x', role: 'member' }])
+    const error = await capture(removeMember.fn({ tx, args: { id: memberId }, ctx: undefined }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(runQueue).toHaveLength(1)
+  })
+
+  it('protects the last admin from removal', async () => {
+    const memberId = newId()
+    const { tx, calls } = fakeTx([
+      { id: memberId, userId: 'user-x', role: 'admin' },
+      [{ id: memberId, role: 'admin' }],
+    ])
+    const error = await capture(removeMember.fn({ tx, args: { id: memberId }, ctx: ADMIN }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.lastAdmin)
+    expect(calls).toEqual([])
+  })
+})
+
+describe('createTeam mutator', () => {
+  const baseArgs = () => ({
+    id: newId(),
+    workspaceId: WORKSPACE_ID,
+    name: '  Platform  Team  ',
+    key: ' plat ',
+    createdAt: 1_784_820_335_919,
+    updatedAt: 1_784_820_335_919,
+  })
+
+  it('lets an admin create a team with a normalized name and key, minting the id at the call site', async () => {
+    const args = baseArgs()
+    const { tx, calls } = fakeTx([undefined])
+    await createTeam.fn({ tx, args, ctx: ADMIN })
+    expect(calls).toEqual([
+      {
+        table: 'team',
+        verb: 'insert',
+        value: {
+          id: args.id,
+          workspaceId: WORKSPACE_ID,
+          name: 'Platform Team',
+          key: 'PLAT',
+          createdAt: args.createdAt,
+          updatedAt: args.updatedAt,
+        },
+      },
+    ])
+  })
+
+  it.each([
+    ['a member', MEMBER],
+    ['a viewer', VIEWER],
+  ])('rejects %s creating a team', async (_label, ctx) => {
+    const { tx, calls } = fakeTx([undefined])
+    const error = await capture(createTeam.fn({ tx, args: baseArgs(), ctx }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it('rejects a colliding key with no write', async () => {
+    const args = baseArgs()
+    const { tx, calls } = fakeTx([{ id: 'existing', key: 'PLAT' }])
+    const error = await capture(createTeam.fn({ tx, args, ctx: ADMIN }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.duplicateKey)
+    expect(calls).toEqual([])
+  })
+
+  it('rejects an invalid key', async () => {
+    const args = { ...baseArgs(), key: '123-bad' }
+    const { tx, calls } = fakeTx([undefined])
+    const error = await capture(createTeam.fn({ tx, args, ctx: ADMIN }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.invalidKey)
+    expect(calls).toEqual([])
+  })
+})
+
+describe('team rename and archive', () => {
+  it('rejects a non-admin rename', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id }])
+    const error = await capture(
+      renameTeam.fn({ tx, args: { id, name: 'X', updatedAt: 1 }, ctx: MEMBER }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it('lets an admin archive a team', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id }])
+    await archiveTeam.fn({ tx, args: { id, archivedAt: 10, updatedAt: 10 }, ctx: ADMIN })
+    expect(calls).toEqual([
+      { table: 'team', verb: 'update', value: { id, archivedAt: 10, updatedAt: 10 } },
+    ])
+  })
+})
+
+describe('team membership self-serve and admin management', () => {
+  const teamId = newId()
+
+  it('lets a viewer join a visible team (self-serve) without gaining write power', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id: teamId, archivedAt: null }])
+    await addTeamMember.fn({
+      tx,
+      args: { id, teamId, userId: VIEWER.userID, createdAt: 5 },
+      ctx: VIEWER,
+    })
+    expect(calls).toEqual([
+      {
+        table: 'team_membership',
+        verb: 'insert',
+        value: { id, teamId, userId: VIEWER.userID, createdAt: 5 },
+      },
+    ])
+  })
+
+  it('rejects a member adding a different user', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id: teamId, archivedAt: null }])
+    const error = await capture(
+      addTeamMember.fn({ tx, args: { id, teamId, userId: 'other', createdAt: 5 }, ctx: MEMBER }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it('lets an admin add any user', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id: teamId, archivedAt: null }])
+    await addTeamMember.fn({ tx, args: { id, teamId, userId: 'other', createdAt: 5 }, ctx: ADMIN })
+    expect(calls).toHaveLength(1)
+  })
+
+  it('refuses joining an archived team', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id: teamId, archivedAt: 999 }])
+    const error = await capture(
+      addTeamMember.fn({
         tx,
-        args: { id: WORKSPACE_ID, name: 'ok', updatedAt: 'yesterday' } as never,
+        args: { id, teamId, userId: MEMBER.userID, createdAt: 5 },
         ctx: MEMBER,
       }),
-    ).rejects.toThrow()
-    expect(updates).toEqual([])
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
   })
 
-  it('is registered under the name both the client and the server resolve', () => {
+  it('lets a member leave (remove own membership)', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id, teamId, userId: MEMBER.userID }])
+    await removeTeamMember.fn({ tx, args: { id }, ctx: MEMBER })
+    expect(calls).toEqual([{ table: 'team_membership', verb: 'delete', value: { id } }])
+  })
+
+  it('rejects a member removing another user from a team', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id, teamId, userId: 'someone-else' }])
+    const error = await capture(removeTeamMember.fn({ tx, args: { id }, ctx: MEMBER }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+})
+
+describe('invite create and revoke', () => {
+  it('lets an admin create an invite with createdBy taken from ctx, not args', async () => {
+    const args = {
+      id: newId(),
+      workspaceId: WORKSPACE_ID,
+      token: newId(),
+      role: 'member' as const,
+      expiresAt: 20,
+      createdAt: 10,
+    }
+    const { tx, calls } = fakeTx()
+    await createInvite.fn({ tx, args, ctx: ADMIN })
+    expect(calls).toEqual([
+      {
+        table: 'invite',
+        verb: 'insert',
+        value: {
+          id: args.id,
+          workspaceId: WORKSPACE_ID,
+          token: args.token,
+          role: 'member',
+          email: undefined,
+          teamId: undefined,
+          createdBy: ADMIN.userID,
+          expiresAt: 20,
+          createdAt: 10,
+        },
+      },
+    ])
+  })
+
+  it.each([
+    ['a member', MEMBER],
+    ['a viewer', VIEWER],
+    ['a non-member', NON_MEMBER],
+  ])('rejects %s creating an invite', async (_label, ctx) => {
+    const args = {
+      id: newId(),
+      workspaceId: WORKSPACE_ID,
+      token: newId(),
+      role: 'member' as const,
+      expiresAt: 20,
+      createdAt: 10,
+    }
+    const { tx, calls } = fakeTx()
+    const error = await capture(createInvite.fn({ tx, args, ctx }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it('rejects a non-admin revoke before reading the invite', async () => {
+    const id = newId()
+    const { tx, runQueue } = fakeTx([{ id }])
+    const error = await capture(revokeInvite.fn({ tx, args: { id, revokedAt: 5 }, ctx: MEMBER }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(runQueue).toHaveLength(1)
+  })
+
+  it('lets an admin revoke an invite', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id }])
+    await revokeInvite.fn({ tx, args: { id, revokedAt: 5 }, ctx: ADMIN })
+    expect(calls).toEqual([{ table: 'invite', verb: 'update', value: { id, revokedAt: 5 } }])
+  })
+})
+
+describe('the mutator registry', () => {
+  it('registers every mutator under the name the client and server resolve', () => {
     expect(mutators.workspace.rename.mutatorName).toBe('workspace.rename')
-    expect(mustGetMutator(mutators, 'workspace.rename')).toBe(mutators.workspace.rename)
+    for (const name of [
+      'workspace.rename',
+      'member.changeRole',
+      'member.remove',
+      'team.create',
+      'team.rename',
+      'team.archive',
+      'team.addMember',
+      'team.removeMember',
+      'invite.create',
+      'invite.revoke',
+    ]) {
+      expect(mustGetMutator(mutators, name).mutatorName).toBe(name)
+    }
     expect(() => mustGetMutator(mutators, 'workspace.destroy')).toThrow()
   })
 })

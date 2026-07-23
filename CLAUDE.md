@@ -15,7 +15,7 @@ Read before writing code. Keep this file short; details live in the linked docs.
 ## Critical: the stack postdates your training data
 
 Zero 1.0 (June 2026), TypeScript 7 (July 2026), Vite 8, pnpm 11, Tailwind 4.3,
-better-auth 1.6, Drizzle 0.45, TanStack Router 1.170 — **all newer than your training
+better-auth 1.6, Kysely 0.28, TanStack Router 1.170 — **all newer than your training
 cutoff.** Writing these APIs from memory produces confident, fluent, wrong code.
 
 - Consult `reference/*.md` for real signatures before using any of these libraries.
@@ -58,7 +58,9 @@ if it works:
 ## Conventions
 
 - Conventional Commits with DCO sign-off: `git commit -s -m "feat: ..."`
-- Forward-only Drizzle migrations, applied automatically at boot.
+- Forward-only Kysely migrations, applied automatically at boot (plus better-auth's
+  `getMigrations()` for auth tables). The Zero schema is hand-written and guarded by a CI
+  drift test against the live Postgres schema.
 - Env-only configuration, validated with Zod at startup, failing fast with the variable name.
 - Public REST API under `/api/v1`, additive-only within a major.
 - Match surrounding code style; Biome decides formatting. No comments explaining what a

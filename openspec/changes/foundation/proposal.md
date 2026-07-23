@@ -13,7 +13,7 @@ Serves vision principles: **#6 Deployable in minutes** (the 3-container promise 
 - `apps/server`: Hono skeleton with Zod-validated env config, `/healthz` + `/readyz`, pino logging, static SPA serving.
 - `apps/web`: Vite 8 + React 19 + TanStack Router skeleton; Tailwind v4 + shadcn/ui initialized in `packages/ui`.
 - **Walking skeleton for local-first sync**: one trivial synced entity (workspace name is enough) flowing Postgres → zero-cache → ZQL query in the web app, plus one optimistic custom mutator writing back through the server. Proves the whole pipeline before features depend on it.
-- `docker/`: Dockerfile (single app image) + `docker-compose.yml` with exactly 3 containers (app, zero-cache, postgres with `wal_level=logical`); Drizzle auto-migration on boot.
+- `docker/`: Dockerfile (single app image) + `docker-compose.yml` with exactly 3 containers (app, zero-cache, postgres with `wal_level=logical`); Kysely auto-migration on boot.
 - CI: GitHub Actions — lint → typecheck → test → build (+ compose smoke test); release-please wiring for later.
 - One-command dev loop: `pnpm dev` starts Postgres + zero-cache (compose) and server + web in watch mode.
 
@@ -40,6 +40,6 @@ Serves vision principles: **#6 Deployable in minutes** (the 3-container promise 
 ## Impact
 
 - Creates the entire repo structure; every subsequent change builds inside it.
-- New external dependencies: everything in the TECHSTACK.md version baseline (Zero 1.8, Vite 8, Hono 4.12, Drizzle 0.45, etc.).
+- New external dependencies: everything in the TECHSTACK.md version baseline (Zero 1.8, Vite 8, Hono 4.12, Kysely 0.28, etc.).
 - Establishes the boundary rules later changes must obey (mutators/ZQL confined to `packages/schema`; packages never import apps).
 - `local-first-sync` becomes the capability every feature change extends via delta specs.

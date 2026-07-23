@@ -24,9 +24,10 @@ Client reads run as ZQL queries against a local IndexedDB replica — instant, a
 | **Database** | Postgres ≥15, only | Required by Zero (logical replication); also the job queue and search — one stateful service to back up. *Rejected: SQLite default* — beloved for solo self-host, but single-writer limits at team scale and incompatible with the sync engine. A ~1GB VPS still runs the whole stack. |
 | **Frontend** | React 19 + **Vite SPA** | First-class Zero bindings; what Linear uses; largest component ecosystem and contributor pool. **Deliberately not Next.js**: Zero needs no SSR, and Next.js self-host build pain (OOM under 4GB on Cal.com/Documenso threads) is a documented complaint in exactly our audience. *Rejected: Solid* (faster fine-grained reactivity, smaller funnel), *Svelte 5* (community-maintained Zero glue). |
 | **Routing** | TanStack Router | Type-safe, SPA-first, pairs naturally with query-driven UI. |
-| **UI system** | Tailwind CSS v4 + Radix, scaffolded with **shadcn/ui** | shadcn CLI bootstraps `packages/ui` (MIT, copied-in, zero lock-in; its command component is cmdk) for the boring 80% — dialogs, dropdowns, forms, toasts. Guardrail: stock shadcn look is instantly recognizable; the signature surfaces (issue list, board, command palette, keyboard flows, density/typography) get a bespoke theme and custom components — Linear-grade polish is the bar, scaffold the plumbing, design the soul. |
+| **UI system** | Tailwind CSS v4 + Radix, scaffolded with **shadcn/ui** (`init --base radix`) | shadcn 4.x defaults to Base UI; we pass `--base radix` because Radix is the more battle-tested primitive set and interaction/accessibility quality is a stated differentiator. This is **irreversible after init** (changing it means reinstalling components), so it is cheap to revisit only while the component count is near zero. shadcn CLI bootstraps `packages/ui` (MIT, copied-in, zero lock-in; its command component is cmdk) for the boring 80% — dialogs, dropdowns, forms, toasts. Guardrail: stock shadcn look is instantly recognizable; the signature surfaces (issue list, board, command palette, keyboard flows, density/typography) get a bespoke theme and custom components — Linear-grade polish is the bar, scaffold the plumbing, design the soul. |
 | **Backend HTTP** | Hono on Node | Lightweight, TS-first, no framework lock-in. Serves: Zero's query/mutate endpoints, auth, GitHub webhooks, public REST API, static SPA. *Rejected: NestJS* (ceremony without payoff at this size). |
-| **ORM / schema** | Drizzle | TS-first schema as single source of truth; community `drizzle-zero` converter generates Zero schemas from it. Migrations via drizzle-kit. |
+| **Data layer** | **Kysely** (query builder, not an ORM) | First-class across the whole stack: Zero ships `zeroKysely`, pg-boss ships `fromKysely`, and better-auth *is* Kysely internally — the only adapter where its automatic and programmatic migrations work. Type-safe SQL without an ORM abstraction, and window functions/percentiles for Phase 2 metrics read naturally. Migrations via Kysely's `Migrator`, applied at boot; `DB` types via kysely-codegen from the live schema. *Rejected: Drizzle* — its one real advantage was `drizzle-zero` generating the Zero schema, but Rocicorp's own zbugs hand-writes that schema, and drift is catchable with a CI test (below). |
+| **Zero schema** | Hand-written, drift-tested in CI | The zbugs pattern. A CI test introspects Postgres (`db.introspection.getTables()`) and asserts the hand-written Zero schema matches — mechanical protection for the one thing Kysely doesn't generate. |
 | **Jobs / queue** | **pg-boss** (Postgres-backed) | Keeps the container count at 3 — no Redis. Handles webhook processing, reconciliation syncs, digests. Per-installation serialized processing (the Mergify lesson: GitHub secondary rate limits punish concurrency per install). *Redis only if/when scale demands.* |
 | **Auth** | better-auth | Open-source TS auth: email/password, OAuth, and **OIDC/SAML SSO free** — the SSO tax is a vision-level refusal, so SSO cannot live in a paid tier or a second service. |
 | **GitHub integration** | GitHub App + webhooks (octokit) | Never polling. Webhook → pg-boss queue (serialized per installation) → work-graph edges. Periodic reconciliation with conditional requests (free 304s) to catch missed events. GitLab later via the same ingestion interface. |
@@ -58,7 +59,7 @@ Client reads run as ZQL queries against a local IndexedDB replica — instant, a
 | TanStack Router | 1.170.x | SPA only — no TanStack Start (no SSR by design) |
 | Tailwind CSS | 4.3.x | `tailwindcss` + `@tailwindcss/vite` on the same minor |
 | Hono | 4.12.x | `@hono/zod-openapi` 1.x (Zod 4 line) |
-| Drizzle | orm 0.45.x / kit 0.31.x | **Pin stable — do not install 1.0.0-beta dist-tags** |
+| Kysely | 0.28.x | + kysely-codegen for `DB` types; `pg` 8.x driver |
 | @rocicorp/zero | 1.8.x | |
 | Zod | 4.4.x | Real v4 package — no `zod/v4` compat-shim imports |
 | pnpm / Turborepo | 11.x / 2.10.x | |
@@ -70,9 +71,9 @@ Client reads run as ZQL queries against a local IndexedDB replica — instant, a
 | Others | latest stable | react-email 1.x, octokit 5.x, pino 10.x, sharp 0.35.x, zustand 5.x, cmdk 1.1.x |
 
 **TypeScript 7 adoption notes** (why it's a clean win for this stack):
-- Vite/Rolldown and Vitest strip types themselves — TS7 touches only `tsc --noEmit` type-checks and the editor LSP, not the build pipeline. Biome has its own parser; Drizzle/Zod/Hono/TanStack Router ship plain `.d.ts` — all unaffected.
-- The Go build has **no JS Compiler API** — so never add tools that import `typescript` programmatically (vite-plugin-dts, ts-morph, knip, typescript-eslint). Biome covers lint; if such a tool ever becomes necessary, alias it to `npm:typescript@^6`.
-- tsconfig hygiene from day one: no `baseUrl` (use `paths`), `moduleResolution: "bundler"`, no `target: es5`, `esModuleInterop` stays true. Fresh TS7 codebase = zero migration debt.
+- Vite/Rolldown and Vitest strip types themselves — TS7 touches only `tsc --noEmit` type-checks and the editor LSP, not the build pipeline. Biome has its own parser; Kysely/Zod/Hono/TanStack Router ship plain `.d.ts` — all unaffected.
+- The Go build has **no JS Compiler API** — `require('typescript')` returns only `{version, versionMajorMinor}`. Never add tools that import `typescript` programmatically (vite-plugin-dts, ts-morph, knip, typescript-eslint). Biome covers lint; if such a tool becomes unavoidable, alias it to the `@typescript/typescript6` package.
+- tsconfig hygiene from day one: no `baseUrl` (use `paths` — note shadcn's own Vite guide tells you to add `baseUrl`, which is a hard TS7 error), `moduleResolution: "bundler"`, no `target: es5`, no `outFile`, `esModuleInterop` stays true. (`preserveConstEnums` survives — it was *not* removed, contrary to common claims.) Fresh TS7 codebase = zero migration debt.
 - VS Code: TS7 language server via the "TypeScript (Native Preview)" extension until built-in support lands (announced "coming weeks" at GA).
 
 ## Repository structure & engineering workflow
@@ -85,8 +86,8 @@ yapm/
 │  │                #   pg-boss workers, public REST API; serves built SPA in prod
 │  └─ docs/         # Astro Starlight
 ├─ packages/
-│  ├─ schema/       # THE source of truth: Drizzle tables → Zero schema (drizzle-zero),
-│  │                #   Zod validators, shared mutators, shared domain types
+│  ├─ schema/       # THE data layer: Kysely migrations + generated DB types,
+│  │                #   hand-written Zero schema, Zod validators, shared mutators
 │  ├─ ui/           # design-system components (Radix + Tailwind), keyboard primitives
 │  ├─ api/          # OpenAPI spec + typed client, generated from server routes
 │  └─ config/       # shared tsconfig, Biome config, Tailwind preset
@@ -118,7 +119,7 @@ yapm/
 ## Self-host operations — the reputation layer
 
 **Upgrades are a feature.** Plane's worst reviews are broken minor-version upgrades. Commitments:
-- Auto-migrations on boot (drizzle-kit, forward-only, transactional) — `docker compose pull && up -d` is the entire upgrade.
+- Auto-migrations on boot (Kysely `Migrator` for app tables, better-auth `getMigrations()` for auth tables; forward-only, transactional) — `docker compose pull && up -d` is the entire upgrade.
 - Strict semver; breaking config changes only in majors, announced loudly in the changelog.
 - Image channels: `stable` and `edge`, plus version-pinned tags.
 - One-command backup/restore (`yapm backup` → pg_dump + attachments tarball), documented from day one.

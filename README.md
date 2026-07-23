@@ -51,7 +51,7 @@ individual scorecards.
 ## Built with
 
 TypeScript 7 · [Zero](https://zero.rocicorp.dev) sync engine · Postgres · React 19 + Vite ·
-Hono · Drizzle. See [TECHSTACK.md](TECHSTACK.md) for the reasoning behind each choice.
+Hono · Kysely. See [TECHSTACK.md](TECHSTACK.md) for the reasoning behind each choice.
 
 ## Contributing
 

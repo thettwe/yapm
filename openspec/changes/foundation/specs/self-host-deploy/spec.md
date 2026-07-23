@@ -14,7 +14,7 @@ Production self-hosting SHALL consist of exactly three containers — `yapm` (ap
 - **THEN** it defines exactly three services, and no Redis, Elasticsearch, MinIO, or reverse proxy is required
 
 ### Requirement: Migrations run automatically on boot
-The app container SHALL apply pending Drizzle migrations (forward-only, transactional) before accepting traffic, and zero-cache SHALL start only after the app is healthy so the replicated schema always exists.
+The app container SHALL apply pending Kysely migrations (forward-only, transactional) before accepting traffic, and zero-cache SHALL start only after the app is healthy so the replicated schema always exists.
 
 #### Scenario: Upgrade is pull-and-up
 - **WHEN** an operator pulls a newer image tag and runs `docker compose up -d`

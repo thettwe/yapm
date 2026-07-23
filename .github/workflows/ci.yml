@@ -30,6 +30,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node scripts/check-catalog.mjs
 
+  boundary-guard:
+    name: Package boundaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+      - run: node scripts/check-boundaries.mjs
+
   commit-check:
     name: Commit hygiene
     if: github.event_name == 'pull_request'

@@ -49,6 +49,6 @@
 
 ## 7. Verification
 
-- [ ] 7.1 Fresh-clone test on a second machine/VM: pnpm install && pnpm dev works with zero tokens; record time-to-running-app
-- [ ] 7.2 Run full spec scenario pass (all five capability specs) and check off against implementation; fix gaps
-- [ ] 7.3 README quickstart: the 3-container deploy and the dev loop, honestly measured (containers, RAM, minutes)
+- [x] 7.1 Fresh-clone test on a second machine/VM: pnpm install && pnpm dev works with zero tokens; record time-to-running-app
+- [x] 7.2 Run full spec scenario pass (all five capability specs) and check off against implementation; fix gaps
+- [x] 7.3 README quickstart: the 3-container deploy and the dev loop, honestly measured (containers, RAM, minutes)

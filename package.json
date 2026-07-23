@@ -19,6 +19,7 @@
     "lint": "biome ci .",
     "format": "biome check --write .",
     "check:catalog": "node scripts/check-catalog.mjs",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
     "check:commit-msg": "node scripts/check-commit-msg.mjs",
     "prepare": "node scripts/install-git-hooks.mjs"
   },

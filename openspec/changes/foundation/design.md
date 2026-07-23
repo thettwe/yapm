@@ -564,6 +564,44 @@ First change — nothing to migrate. Rollback = delete the repo contents (docs a
     uses `release-type: node` on `.` (bumps the private root `package.json` + `CHANGELOG.md`),
     `bump-minor-pre-major` so pre-1.0 stays on 0.x, and the manifest starts at `0.0.0`.
 
+### Final verification (tasks 7.1–7.3)
+
+63. **The package-boundary scenario needed a guard script; the dependency graph only enforced
+    half of it.** The `monorepo-workspace` "Boundary violation is rejected" scenario requires the
+    pipeline to fail both when a package imports an app *and* when ZQL/mutator code is added
+    outside `packages/schema`. Walking it during closeout showed only the first half was
+    mechanically caught: pnpm never links an undeclared workspace dependency, so a package
+    importing `@yapm/web` fails `tsc`/build with "cannot find module", and `packages/ui|api|config`
+    do not depend on `@rocicorp/zero` at all, so ZQL cannot resolve there. But `apps/web` and
+    `apps/server` *must* import Zero's runtime bindings (`@rocicorp/zero/react`, `@rocicorp/zero/server`)
+    and its types from `@rocicorp/zero`, so nothing stopped a query or mutator being *defined*
+    inline in an app — the exact swappability constraint CLAUDE.md #2 protects. Chosen:
+    `scripts/check-boundaries.mjs`, matching the existing guard-script convention (decisions 3, 4,
+    60), run as its own CI job (`boundary-guard`, no install — pure `node:*`). It fails when any
+    file under `packages/**` imports `@yapm/web|server|docs`, and when any file outside
+    `packages/schema/` imports a Zero *definition* symbol (`createSchema`, `createBuilder`, `table`,
+    `defineQuery`, `defineQueries`, `defineMutator`, `defineMutators`) from `@rocicorp/zero`. The
+    ban is scoped to the definition surface only — `mustGetMutator`/`mustGetQuery` (used in
+    `apps/server/src/zero/routes.ts` to *look up* schema-defined mutators/queries) and all type-only
+    and `/react`/`/server` subpath imports stay allowed. Verified: current tree passes; a probe
+    package importing `@yapm/server` and a probe app importing `defineMutator` each fail with a
+    boundary-named message.
+
+64. **Honest fresh-contributor and self-host numbers (measured, not estimated).** A fresh
+    `git clone` + `pnpm install` completed in ~6 s against a warm pnpm store (1054 packages, 0
+    downloaded); `pnpm dev` reached a reachable, sync-connected app in ~14 s (Docker deps up →
+    migrate → seed → Vite), with the browser smoke asserting the seeded workspace rendered and
+    `data-connection="connected"`. The production `docker compose up -d --build --wait` reached all
+    three healthy in ~20 s with a build cache (~23 s cold-build with a warm BuildKit pnpm cache
+    mount). `yapm` image is 545 MB; idle RAM across the stack is ~0.85 GiB (postgres ~97 MiB, app
+    ~59 MiB, zero-cache ~700 MiB — zero-cache is the floor); the three images total ~1.8 GB on disk
+    (`yapm` 545 MB + `postgres:18` 665 MB + `rocicorp/zero:1.8.0` 625 MB). **These numbers exclude
+    the first-run costs a genuinely cold machine pays**: base images were already pulled (~1.8 GB of
+    network) and the pnpm/BuildKit stores were warm; the README states this explicitly rather than
+    quoting the warm-cache figures as if they were cold-start. The dev and prod runs both used host
+    port overrides (`PORT`/`YAPM_HOST_PORT=3011`) because 3000 was occupied by an unrelated
+    container on the test machine — the stack itself is unmodified and defaults to 3000.
+
 ## Open Questions
 
 - (none remaining for this change)

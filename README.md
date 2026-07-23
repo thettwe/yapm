@@ -12,9 +12,55 @@ code-review health are just views, not a $30/developer/month add-on.
 
 ---
 
-> **Status: pre-alpha, under active construction.**
-> The product direction and architecture are settled ([VISION.md](VISION.md), [TECHSTACK.md](TECHSTACK.md), [ROADMAP.md](ROADMAP.md)) and implementation is starting.
-> There is nothing to install yet. Watch the repo if you want to know when there is.
+> **Status: pre-alpha.** The walking skeleton runs end-to-end — a synced `workspace` entity
+> round-trips Postgres → zero-cache → browser and back through an optimistic shared mutator —
+> but there are no product features yet. Architecture and direction are settled
+> ([VISION.md](VISION.md), [TECHSTACK.md](TECHSTACK.md), [ROADMAP.md](ROADMAP.md)).
+
+## Quickstart
+
+You need **Docker** and **Node 24** with Corepack enabled. Nothing else — no accounts, no
+tokens, no cloud services.
+
+### Run it (self-host)
+
+```bash
+git clone https://github.com/thettwe/yapm.git && cd yapm
+docker compose -f docker/docker-compose.yml up -d --build --wait
+```
+
+Open <http://localhost:3000>. This is the whole production deployment: **exactly three
+containers** — the app (API + Zero endpoints + static SPA in one process), `zero-cache`, and
+Postgres. No Redis, no reverse proxy, no object store.
+
+### Hack on it (dev loop)
+
+```bash
+pnpm install
+pnpm dev        # Postgres + zero-cache in Docker, server + Vite on the host, one command
+```
+
+Open the URL Vite prints (default <http://localhost:5173>). Edits to `apps/web` or
+`apps/server` hot-reload. `pnpm dev:reset` wipes the dev database volumes.
+
+### Honest numbers
+
+Measured on this repo, Apple Silicon / Docker Desktop (Docker VM capped at ~7.6 GiB), with
+base images already pulled. Not rounded in our favour.
+
+| | Measurement |
+|---|---|
+| Containers (production) | 3 — `yapm`, `zero-cache`, `postgres` |
+| `yapm` image size | 545 MB |
+| Idle RAM, all three | ~0.85 GiB total (postgres ~97 MiB · app ~59 MiB · zero-cache ~700 MiB) |
+| Disk for all three images | ~1.8 GB (`yapm` 545 MB + `postgres:18` 665 MB + `rocicorp/zero` 625 MB) |
+| `pnpm install` | ~6 s with a warm pnpm store |
+| `pnpm dev` → app reachable | ~14 s (Docker deps up, migrate, seed, Vite ready) |
+| `docker compose up --build --wait` → all healthy | ~20 s with build cache; ~23 s cold-build with a warm BuildKit pnpm cache |
+
+**First run on a genuinely cold machine is slower**: Docker pulls ~1.8 GB of base images and
+pnpm downloads its store over the network before any of the times above apply. `zero-cache`
+is the RAM floor of the stack (~700 MiB idle); the app process itself is ~60 MiB.
 
 ## Why another one
 

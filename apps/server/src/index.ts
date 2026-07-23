@@ -1,9 +1,19 @@
 import { serve } from '@hono/node-server'
-import { createDatabase, migrateToLatest, newId, pingDatabase, seedWorkspace } from '@yapm/schema'
+import { newId } from '@yapm/schema'
+import {
+  assertReplicationHealthy,
+  createDatabase,
+  migrateToLatest,
+  pingDatabase,
+  readReplicationStatus,
+  seedWorkspace,
+} from '@yapm/schema/db'
 import { createApp } from './app.js'
 import { type Env, EnvValidationError, loadEnv } from './config/env.js'
-import { databaseCheck } from './health.js'
+import { databaseCheck, replicationCheck } from './health.js'
 import { createLogger, type Logger } from './logger.js'
+import { resolveAnonymousContext } from './zero/context.js'
+import { createZeroDatabase } from './zero/db-provider.js'
 
 function readEnvOrExit(): Env {
   try {
@@ -55,8 +65,20 @@ async function main(): Promise<void> {
 
   const app = createApp({
     logger,
-    readinessChecks: [databaseCheck(() => pingDatabase(database.db))],
+    readinessChecks: [
+      databaseCheck(() => pingDatabase(database.db)),
+      replicationCheck(async () =>
+        assertReplicationHealthy(await readReplicationStatus(database.db)),
+      ),
+    ],
     webDistDir: env.WEB_DIST_DIR,
+    zero: {
+      dbProvider: createZeroDatabase(database.db),
+      resolveContext: resolveAnonymousContext,
+      logger,
+      queryApiKey: env.ZERO_QUERY_API_KEY,
+      mutateApiKey: env.ZERO_MUTATE_API_KEY,
+    },
   })
 
   const server = serve({ fetch: app.fetch, hostname: env.HOST, port: env.PORT }, (info) => {

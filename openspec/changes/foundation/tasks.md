@@ -25,13 +25,13 @@
 
 ## 4. Local-first sync walking skeleton
 
-- [ ] 4.1 packages/schema: hand-written Zero schema for workspace (zbugs pattern, `createSchema`/`table`), `createBuilder` export, and a named synced query via `defineQuery`/`defineQueries`
-- [ ] 4.2 Server: Zero query endpoint (validates/authorizes named queries) and mutate endpoint wired to shared mutators
-- [ ] 4.3 Shared mutator renameWorkspace in packages/schema with validation (non-empty name), imported by client and server
-- [ ] 4.4 Web: Zero client setup (IndexedDB), workspace name rendered from synced query, inline rename via shared mutator, keyboard-only path (focus, edit, Enter)
-- [ ] 4.5 /readyz replication-slot health check; document the common Zero misconfig errors encountered
-- [ ] 4.6 Schema-drift test: introspect live Postgres via `db.introspection.getTables()` and assert BOTH the hand-written Kysely `DB` interface and the Zero schema match it (tables, columns, nullability, types) — fails CI on drift
-- [ ] 4.7 Vitest coverage: mutator validation (shared), query authorization; Playwright: rename round-trip, rejected-write rollback, two-client propagation, and reads continuing to work while disconnected
+- [x] 4.1 packages/schema: hand-written Zero schema for workspace (zbugs pattern, `createSchema`/`table`), `createBuilder` export, and a named synced query via `defineQuery`/`defineQueries`
+- [x] 4.2 Server: Zero query endpoint (validates/authorizes named queries) and mutate endpoint wired to shared mutators
+- [x] 4.3 Shared mutator renameWorkspace in packages/schema with validation (non-empty name), imported by client and server
+- [x] 4.4 Web: Zero client setup (IndexedDB), workspace name rendered from synced query, inline rename via shared mutator, keyboard-only path (focus, edit, Enter)
+- [x] 4.5 /readyz replication-slot health check; document the common Zero misconfig errors encountered
+- [x] 4.6 Schema-drift test: introspect live Postgres via `db.introspection.getTables()` and assert BOTH the hand-written Kysely `DB` interface and the Zero schema match it (tables, columns, nullability, types) — fails CI on drift
+- [x] 4.7 Vitest coverage: mutator validation (shared), query authorization; Playwright: rename round-trip, rejected-write rollback, two-client propagation, and reads continuing to work while disconnected
 
 ## 5. Self-host deployment
 

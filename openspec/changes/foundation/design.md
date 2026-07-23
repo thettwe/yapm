@@ -338,6 +338,103 @@ First change — nothing to migrate. Rollback = delete the repo contents (docs a
     `baseUrl`; no tsconfig in the repo declares `baseUrl`, and `apps/web` keeps only `paths: {"@/*": ["./src/*"]}`
     mirrored by `resolve.alias` in `vite.config.ts`. A barrel would also defeat per-component code splitting.
 
+### Local-first sync walking skeleton (tasks 4.1–4.7)
+
+39. **The Zero schema and all sync code live in `packages/schema/src/zero/`, and the Kysely `DB`
+    interface stays in `packages/schema/src/db/`.** Both hand-written, in the same package, so a
+    migration touches the migration, the `DB` interface and the Zero schema in one commit — the
+    coupling the drift test (task 4.6) then enforces. The Zero schema maps `createdAt`/`updatedAt`
+    to `number().from('created_at'|'updated_at')` (Zero has no timestamp helper; `timestamptz`
+    replicates as epoch-millis `number`, reference §9.1) while the `DB` interface keeps the raw
+    snake_case names. `createSchema` is called with `relationships: []` — omitting it made `tsc`
+    fail *TS2883 "inferred type cannot be named without a reference to `Relationship`"* because
+    the emitted `.d.ts` referenced a non-exported type; the explicit empty array pins it.
+
+40. **`packages/schema` gained a `./db` subpath export.** The server needs the runtime data layer
+    (`createDatabase`, `migrateToLatest`, `readReplicationStatus`, the `DB` type) *and* the Zero
+    schema/queries/mutators, but the two must not force each other's dependencies onto every
+    importer — the browser bundle imports `@yapm/schema` (schema, queries, mutators) and must not
+    pull `pg`/`kysely`. Root `@yapm/schema` re-exports the sync surface plus `newId`; `@yapm/schema/db`
+    re-exports the Postgres surface. The web app imports only the root; the server imports both.
+
+41. **Query authorization is filter-based, driven by `ctx`, never by args.** `queries.workspace.current`
+    returns `zql.workspace.orderBy('createdAt','asc').one()` for a caller with a context and
+    `denyAll(q)` (`q.where(({or}) => or())`, the zbugs empty-`or` deny) for an anonymous one. This
+    change is single-tenant (all rows visible to any authenticated client), so there is no per-row
+    predicate yet, but the deny path and the `ctx`-not-args rule are physical from day one — real
+    row permissions in `workspace-auth` slot into this same function. The endpoint re-evaluates the
+    named query server-side, so a client cannot widen it: the routes test asserts that passing
+    `args` to an argument-less query does not change the emitted AST, and that an unknown query name
+    is refused as a structured `app` error rather than executed.
+
+42. **The server derives `ctx` from a `ResolveAuthContext` seam, currently a constant.**
+    `apps/server/src/zero/context.ts` exports `resolveAnonymousContext` returning a fixed
+    `{userID:'anonymous', role:'member'}`. `workspace-auth` replaces this one function with real
+    session/JWT verification (reference §10) without touching the routes. `userID` passed to
+    `handleQueryRequest`/`handleMutateRequest` is the same verified id (client-group binding).
+
+43. **The rename mutator normalizes then validates, and the roles model is three-valued.**
+    `renameWorkspace` (shared, in `packages/schema`) collapses internal whitespace and trims, rejects
+    empty/whitespace-only names *and* names over 200 chars with a `MutationError` (an `ApplicationError`
+    subclass carrying `{code, id}` so the client can branch), and rejects `viewer`/absent context with
+    `not_authorized` **before** looking at the name (auth-before-existence, reference §5.4). Auth is
+    checked before validation so an unauthorized caller never learns whether their input was valid.
+    `MutationErrorDetails` is a `type`, not an `interface` — `ApplicationError<T>` constrains `T` to
+    `ReadonlyJSONValue`, which an `interface` (no implicit index signature) does not satisfy under TS7.
+
+44. **The editor never disables its input, and rolls back only on an `app` error.** First attempt
+    gated the input with a `saving` state and rolled back whenever `write.server` rejected. Both were
+    wrong: (a) disabling the input mid-submit blurs it, so the next keystroke/Escape lands on
+    `document.body` and the keyboard-only path breaks — the Playwright rename and rejected-write tests
+    caught this. `saving` is now a `useRef` re-entrancy guard released the instant the optimistic
+    client result resolves, and focus is driven by a ref + `useEffect(…, [editing])`, not `autoFocus`
+    (Biome bans it). (b) `write.server` rejecting with `error.type === 'zero'` is a *transport*
+    failure — the mutation stays queued and retries on reconnect — so treating it as an authoritative
+    rejection reverted an already-applied edit when the socket dropped. The UI rolls back only on
+    `error.type === 'app'` (a real server rejection); `zero` errors are surfaced by the connection
+    indicator. This is exactly the "disconnection visible, never silently dropped" spec requirement:
+    an offline write attempt is blocked at submit (`connection.writable === false`) with the typed
+    value **held in the editing surface**, and re-submitting after reconnect succeeds.
+
+45. **Client `disconnectTimeoutMs` is lowered to 5s.** Zero defaults to a full minute in `connecting`
+    before admitting `disconnected`, during which writes queue silently. The spec requires
+    disconnection to be *visible*; 5s keeps the connection indicator honest without flapping on a
+    normal reconnect. The e2e "reads while disconnected" test relies on this to observe the
+    `disconnected` state within its window.
+
+46. **The schema-drift test asserts BOTH hand-written descriptions against live Postgres, and is a
+    hard failure in CI.** `db.introspection.getTables()` gives columns + nullability + defaults but
+    *not* primary keys (reference §8.1), so the test also runs the `pg_index` catalog query for PKs.
+    It checks the Kysely `DB` interface (nullability **and** `hasDefaultValue`, so a dropped
+    `default now()` or a mis-typed `Generated<>` is caught) and the Zero schema (nullability ↔
+    `optional`, PK, and Postgres-type→Zero-type via the reference §9.1 map, keyed off `serverName ?? key`).
+    Extra database columns are reported in both directions because Zero replicates whole rows. The
+    test `skipIf(DATABASE_URL === undefined)` locally but **throws if `DATABASE_URL` is unset under
+    `CI`**, so it can never pass vacuously in the pipeline. `serverName` is read through a structural
+    `tableShapes()` helper (`packages/schema/src/zero/introspect.ts`) because `createSchema`'s emitted
+    types only expose `serverName` on columns that used `.from()`, defeating a typed walk.
+
+47. **Endpoint→zero-cache auth is an optional `X-Api-Key` check, off by default in dev.**
+    `ZERO_QUERY_API_KEY`/`ZERO_MUTATE_API_KEY` are validated env (optional). When set, the route
+    returns 403 unless zero-cache presents the matching `X-Api-Key` (reference §10.5). The compose
+    stack (task 5.2) will set them; dev omits them so `zero-cache-dev` works with no extra config.
+
+48. **Native/postinstall builds: `@rocicorp/zero-sqlite3: true`, `protobufjs: false` in `allowBuilds`.**
+    Zero's native SQLite replica module needs its postinstall to unpack the platform binary (reference
+    §1), so pnpm 11 must be told to allow it. `protobufjs` arrives transitively and its postinstall
+    only prints a version-scheme warning — blocking it (`false`) is correct and silences the
+    `ERR_PNPM_IGNORED_BUILDS` failure. The jose collision (Zero wants 5, better-auth wants 6) is a
+    non-issue here: `pnpm peers check` is clean and pnpm's isolated store keeps `jose@5.10.0` and
+    `jose@6.2.4` side by side; better-auth is not yet installed.
+
+49. **e2e runs Playwright against the real three-part stack; the config fails fast without a database.**
+    `apps/web/playwright.config.ts` starts the yapm server (tsx) and Vite via `webServer`, but Postgres
+    and zero-cache must be up already (the sync path needs them) — so it throws a pointed error if
+    `DATABASE_URL` is unset rather than launching a suite that would hang on the WebSocket. The four
+    specs (round-trip, rejected-write rollback, two-client propagation, offline reads/blocked writes)
+    all passed against `postgres:18 -c wal_level=logical` + `zero-cache@1.8.0`. Full misconfiguration
+    log is in `openspec/changes/foundation/zero-operations.md` (task 4.5).
+
 ## Open Questions
 
 - Node base image: `node:24-slim` vs distroless — decide during implementation by image size and sharp compatibility.

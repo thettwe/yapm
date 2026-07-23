@@ -3,10 +3,12 @@ packages:
   - 'packages/*'
 
 allowBuilds:
+  '@rocicorp/zero-sqlite3': true
   '@swc/core': true
   esbuild: true
   lefthook: true
   msw: false
+  protobufjs: false
 
 catalog:
   '@astrojs/starlight': ^0.41.4

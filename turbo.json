@@ -30,7 +30,10 @@
         "PORT",
         "SEED_WORKSPACE_NAME",
         "SERVER_ORIGIN",
-        "WEB_DIST_DIR"
+        "VITE_ZERO_CACHE_URL",
+        "WEB_DIST_DIR",
+        "ZERO_MUTATE_API_KEY",
+        "ZERO_QUERY_API_KEY"
       ]
     },
     "typecheck": {
@@ -42,12 +45,20 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": ["coverage/**"],
+      "passThroughEnv": ["DATABASE_URL", "CI"]
     },
     "e2e": {
       "dependsOn": ["^build"],
       "cache": false,
-      "outputs": ["playwright-report/**"]
+      "outputs": ["playwright-report/**"],
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "CI",
+        "E2E_SERVER_PORT",
+        "E2E_WEB_PORT",
+        "E2E_ZERO_CACHE_URL"
+      ]
     }
   }
 }

@@ -36,6 +36,8 @@ export const envSchema = z.object({
   DATABASE_POOL_MAX: poolSize.default(10),
   WEB_DIST_DIR: z.string().min(1).optional(),
   SEED_WORKSPACE_NAME: z.string().min(1).default('yapm'),
+  ZERO_QUERY_API_KEY: z.string().min(1).optional(),
+  ZERO_MUTATE_API_KEY: z.string().min(1).optional(),
 })
 
 export type Env = Omit<z.infer<typeof envSchema>, 'WEB_DIST_DIR'> & {
@@ -51,6 +53,8 @@ export const EXPECTED_FORMAT: Record<string, string> = {
   DATABASE_POOL_MAX: 'an integer between 1 and 1000, e.g. 10',
   WEB_DIST_DIR: 'a path to the built SPA directory containing index.html',
   SEED_WORKSPACE_NAME: 'a non-empty string',
+  ZERO_QUERY_API_KEY: 'the shared secret zero-cache sends as X-Api-Key to /api/zero/query',
+  ZERO_MUTATE_API_KEY: 'the shared secret zero-cache sends as X-Api-Key to /api/zero/mutate',
 }
 
 export interface EnvIssue {

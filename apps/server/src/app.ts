@@ -3,11 +3,13 @@ import { HTTPException } from 'hono/http-exception'
 import { type ReadinessCheck, runReadinessChecks } from './health.js'
 import type { Logger } from './logger.js'
 import { mountSpa } from './static.js'
+import { createZeroRoutes, type ZeroRoutesOptions } from './zero/routes.js'
 
 export interface AppOptions {
   logger: Logger
   readinessChecks: ReadinessCheck[]
   webDistDir?: string
+  zero?: ZeroRoutesOptions
 }
 
 const QUIET_PATHS = new Set(['/healthz', '/readyz'])
@@ -43,6 +45,10 @@ export function createApp(options: AppOptions): Hono {
     const report = await runReadinessChecks(options.readinessChecks)
     return c.json(report, report.status === 'ready' ? 200 : 503, { 'Cache-Control': 'no-store' })
   })
+
+  if (options.zero) {
+    app.route('/api/zero', createZeroRoutes(options.zero))
+  }
 
   if (options.webDistDir) {
     mountSpa(app, { dir: options.webDistDir, logger })

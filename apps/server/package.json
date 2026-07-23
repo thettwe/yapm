@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@hono/node-server": "catalog:",
+    "@rocicorp/zero": "catalog:",
     "@yapm/schema": "workspace:*",
     "hono": "catalog:",
+    "kysely": "catalog:",
     "pino": "catalog:",
     "zod": "catalog:"
   },

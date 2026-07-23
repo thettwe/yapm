@@ -1,15 +1,18 @@
-export type { Database, DatabaseOptions } from './db/client.js'
-export { createDatabase, pingDatabase } from './db/client.js'
-export type { MigrationOutcome } from './db/migrate.js'
-export { createMigrator, migrateToLatest } from './db/migrate.js'
-export type { SeedWorkspaceOptions } from './db/seed.js'
-export { DEFAULT_WORKSPACE_NAME, seedWorkspace } from './db/seed.js'
-export type {
-  DB,
-  NewWorkspace,
-  Timestamp,
-  Workspace,
-  WorkspaceTable,
-  WorkspaceUpdate,
-} from './db/types.js'
 export { newId } from './id.js'
+export type { AuthContext, WorkspaceRole } from './zero/context.js'
+export { canRead, canWrite, WORKSPACE_ROLES } from './zero/context.js'
+export type { MutationErrorDetails } from './zero/errors.js'
+export { isMutationErrorDetails, MutationError, MutationErrorCode } from './zero/errors.js'
+export type { RenameWorkspaceArgs } from './zero/mutators.js'
+export {
+  assertRenameWorkspaceAllowed,
+  mutators,
+  normalizeWorkspaceName,
+  RENAME_WORKSPACE_MUTATOR_NAME,
+  renameWorkspace,
+  renameWorkspaceArgs,
+  WORKSPACE_NAME_MAX_LENGTH,
+} from './zero/mutators.js'
+export { denyAll, queries, WORKSPACE_CURRENT_QUERY_NAME } from './zero/queries.js'
+export type { Schema } from './zero/schema.js'
+export { schema, zql } from './zero/schema.js'

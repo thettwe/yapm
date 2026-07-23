@@ -1,16 +1,43 @@
+import { Zero } from '@rocicorp/zero'
+import { ZeroProvider } from '@rocicorp/zero/react'
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router'
 import { render, screen } from '@testing-library/react'
-import { expect, test } from 'vitest'
+import { mutators, schema } from '@yapm/schema'
+import { afterEach, expect, test } from 'vitest'
+import { ANONYMOUS_CONTEXT } from '@/zero/provider'
 import { routeTree } from './routeTree.gen'
 
-test('the index route renders the shared Button from @yapm/ui', async () => {
+const opened: { close: () => Promise<void> }[] = []
+
+function offlineZero() {
+  const zero = new Zero({
+    schema,
+    mutators,
+    context: ANONYMOUS_CONTEXT,
+    userID: ANONYMOUS_CONTEXT.userID,
+    cacheURL: null,
+    kvStore: 'mem',
+  })
+  opened.push(zero)
+  return zero
+}
+
+afterEach(async () => {
+  await Promise.all(opened.splice(0).map((zero) => zero.close()))
+})
+
+test('the index route renders the workspace panel and the connection state', async () => {
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: ['/'] }),
   })
 
-  render(<RouterProvider router={router} />)
+  render(
+    <ZeroProvider zero={offlineZero()}>
+      <RouterProvider router={router} />
+    </ZeroProvider>,
+  )
 
-  expect(await screen.findByRole('heading', { name: 'yapm' })).toBeInTheDocument()
-  expect(await screen.findByRole('button', { name: 'Primary action' })).toBeInTheDocument()
+  expect(await screen.findByTestId('workspace-placeholder')).toBeInTheDocument()
+  expect(await screen.findByTestId('connection-status')).toBeInTheDocument()
 })

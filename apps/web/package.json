@@ -6,18 +6,22 @@
   "scripts": {
     "build": "tsr generate && vite build",
     "dev": "vite dev",
+    "e2e": "playwright test",
     "generate:routes": "tsr generate",
     "preview": "vite preview",
     "test": "tsr generate && vitest run",
     "typecheck": "tsr generate && tsc --noEmit"
   },
   "dependencies": {
+    "@rocicorp/zero": "catalog:",
     "@tanstack/react-router": "catalog:",
+    "@yapm/schema": "workspace:*",
     "@yapm/ui": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/router-cli": "catalog:",
     "@tanstack/router-plugin": "catalog:",

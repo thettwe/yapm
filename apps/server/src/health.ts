@@ -1,12 +1,13 @@
 export interface ReadinessCheck {
   name: string
-  run: () => Promise<void>
+  run: () => Promise<string | undefined>
 }
 
 export interface ReadinessCheckResult {
   name: string
   ok: boolean
   durationMs: number
+  detail?: string
   reason?: string
 }
 
@@ -35,8 +36,13 @@ export async function runReadinessChecks(checks: ReadinessCheck[]): Promise<Read
   for (const check of checks) {
     const started = performance.now()
     try {
-      await check.run()
-      results.push({ name: check.name, ok: true, durationMs: round(performance.now() - started) })
+      const detail = await check.run()
+      results.push({
+        name: check.name,
+        ok: true,
+        durationMs: round(performance.now() - started),
+        ...(typeof detail === 'string' ? { detail } : {}),
+      })
     } catch (error) {
       results.push({
         name: check.name,
@@ -67,7 +73,15 @@ export function databaseCheck(ping: () => Promise<void>, timeoutMs = 2000): Read
     name: 'database',
     run: async () => {
       await withTimeout(ping(), timeoutMs, `no response within ${timeoutMs}ms`)
+      return undefined
     },
+  }
+}
+
+export function replicationCheck(probe: () => Promise<string>, timeoutMs = 2000): ReadinessCheck {
+  return {
+    name: 'replication',
+    run: () => withTimeout(probe(), timeoutMs, `no response within ${timeoutMs}ms`),
   }
 }
 

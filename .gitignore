@@ -2,6 +2,9 @@
 node_modules/
 .pnpm-store/
 
+# Local hook overrides
+lefthook-local.yml
+
 # Build output
 dist/
 build/

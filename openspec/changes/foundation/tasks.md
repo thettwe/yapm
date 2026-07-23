@@ -2,12 +2,12 @@
 
 ## 1. Monorepo scaffold
 
-- [ ] 1.1 Init pnpm workspace: root package.json (packageManager, engines), pnpm-workspace.yaml with catalog holding the full TECHSTACK.md version baseline, .node-version, .gitignore, .editorconfig
-- [ ] 1.2 Add Turborepo with build/dev/typecheck/lint/test/e2e task graph in turbo.json
-- [ ] 1.3 Create packages/config: shared tsconfig (TS7, moduleResolution bundler, strict, no baseUrl), Biome config, Tailwind preset stub
-- [ ] 1.4 Create empty workspace packages (apps/web, apps/server, apps/docs, packages/schema, packages/ui, packages/api) each with package.json using catalog: refs and passing typecheck
-- [ ] 1.5 Add lefthook: pre-commit Biome on staged files, commit-msg Conventional Commits + DCO check
-- [ ] 1.6 Add catalog-bypass CI guard script (fails on literal versions for cataloged deps)
+- [x] 1.1 Init pnpm workspace: root package.json (packageManager, engines), pnpm-workspace.yaml with catalog holding the full TECHSTACK.md version baseline, .node-version, .gitignore, .editorconfig
+- [x] 1.2 Add Turborepo with build/dev/typecheck/lint/test/e2e task graph in turbo.json
+- [x] 1.3 Create packages/config: shared tsconfig (TS7, moduleResolution bundler, strict, no baseUrl), Biome config, Tailwind preset stub
+- [x] 1.4 Create empty workspace packages (apps/web, apps/server, apps/docs, packages/schema, packages/ui, packages/api) each with package.json using catalog: refs and passing typecheck
+- [x] 1.5 Add lefthook: pre-commit Biome on staged files, commit-msg Conventional Commits + DCO check
+- [x] 1.6 Add catalog-bypass CI guard script (fails on literal versions for cataloged deps)
 
 ## 2. Server skeleton
 

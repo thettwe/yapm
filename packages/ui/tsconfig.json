@@ -1,0 +1,4 @@
+{
+  "extends": "@yapm/config/tsconfig/vite",
+  "include": ["src"]
+}

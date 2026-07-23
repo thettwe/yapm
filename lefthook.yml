@@ -1,0 +1,12 @@
+pre-commit:
+  parallel: false
+  jobs:
+    - name: biome
+      run: pnpm exec biome ci --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      glob: '*.{js,jsx,ts,tsx,mjs,cjs,json,jsonc,css}'
+      fail_text: 'Biome rejected staged files. Run `pnpm format`, restage, and commit again.'
+
+commit-msg:
+  jobs:
+    - name: commit-message
+      run: node scripts/check-commit-msg.mjs {1}

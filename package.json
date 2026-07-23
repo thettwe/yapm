@@ -1,0 +1,29 @@
+{
+  "name": "yapm",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.16.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "e2e": "turbo run e2e",
+    "lint": "biome ci .",
+    "format": "biome check --write .",
+    "check:catalog": "node scripts/check-catalog.mjs",
+    "check:commit-msg": "node scripts/check-commit-msg.mjs",
+    "prepare": "node scripts/install-git-hooks.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "lefthook": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:",
+    "yaml": "catalog:"
+  }
+}

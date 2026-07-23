@@ -1,0 +1,13 @@
+{
+  "name": "@yapm/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./biome": "./biome.base.json",
+    "./tsconfig/base": "./tsconfig/base.json",
+    "./tsconfig/node": "./tsconfig/node.json",
+    "./tsconfig/vite": "./tsconfig/vite.json",
+    "./tailwind/preset.css": "./tailwind/preset.css"
+  }
+}

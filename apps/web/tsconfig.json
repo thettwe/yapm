@@ -1,0 +1,9 @@
+{
+  "extends": "@yapm/config/tsconfig/vite",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src"]
+}

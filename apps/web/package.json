@@ -1,0 +1,13 @@
+{
+  "name": "@yapm/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@yapm/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

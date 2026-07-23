@@ -140,6 +140,9 @@ importers:
       '@biomejs/biome':
         specifier: 'catalog:'
         version: 2.5.5
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.61.1
       lefthook:
         specifier: 'catalog:'
         version: 2.1.10

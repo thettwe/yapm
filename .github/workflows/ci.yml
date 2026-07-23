@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+  DO_NOT_TRACK: '1'
+
+jobs:
+  catalog-guard:
+    name: Catalog guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/check-catalog.mjs
+
+  commit-check:
+    name: Commit hygiene
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+      - name: Conventional Commits + DCO sign-off
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          failed=0
+          for sha in $(git rev-list "$BASE_SHA..$HEAD_SHA"); do
+            git log -1 --format=%B "$sha" > "$RUNNER_TEMP/commit-msg.txt"
+            if ! node scripts/check-commit-msg.mjs "$RUNNER_TEMP/commit-msg.txt"; then
+              echo "::error::Commit $sha failed the commit message check"
+              failed=1
+            fi
+          done
+          exit $failed
+
+  quality:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: yapm
+          POSTGRES_PASSWORD: yapm
+          POSTGRES_DB: yapm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U yapm -d yapm"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://yapm:yapm@localhost:5432/yapm
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Restore Turborepo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+      - name: Lint
+        run: pnpm turbo run lint
+      - name: Typecheck
+        run: pnpm turbo run typecheck
+      - name: Test
+        run: pnpm turbo run test
+      - name: Build
+        run: pnpm turbo run build
+
+  smoke:
+    name: Compose smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install smoke browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build and start the three-container stack
+        run: docker compose -f docker/docker-compose.yml up -d --build --wait --wait-timeout 300
+      - name: Wait for /readyz
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3000/readyz > /dev/null; then
+              echo "ready after ${i} attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::/readyz never became ready"
+          exit 1
+      - name: Assert the synced workspace renders
+        env:
+          SMOKE_URL: http://localhost:3000
+          SMOKE_WORKSPACE_NAME: yapm
+        run: node scripts/smoke.mjs
+      - name: Compose logs
+        if: always()
+        run: docker compose -f docker/docker-compose.yml logs --no-color
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/docker-compose.yml down -v

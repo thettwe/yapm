@@ -519,6 +519,51 @@ First change — nothing to migrate. Rollback = delete the repo contents (docs a
     spec). `pnpm dev:down` stops the containers while keeping the data. Both are root `package.json` scripts
     so they are discoverable next to `dev`.
 
+### CI pipeline (tasks 6.1–6.3)
+
+59. **The three quality gates run as one `quality` job, one `turbo run <task>` step each, behind a
+    Postgres service container.** lint → typecheck → test → build are separate steps so a failing
+    required check names the failing task (the spec scenario), while Turborepo caching is preserved
+    across steps via `actions/cache` on `.turbo` (keyed by commit sha, `restore-keys` on the os
+    prefix — the GitHub Actions cache, no hosted remote cache, so a contributor's clone builds with
+    zero tokens; `remoteCache.enabled` is already `false` in `turbo.json`). The `test` step needs a
+    live database because the schema-drift test *throws* when `DATABASE_URL` is unset under `CI`
+    (decision 46) — a plain `postgres:18` service (no `wal_level=logical`; the drift test only
+    introspects, it creates no replication slot) with `DATABASE_URL` at the job level, forwarded to
+    vitest by the `test` task's existing `passThroughEnv`.
+
+60. **`catalog-guard` and `commit-check` are separate jobs so each is its own required status.**
+    `catalog-guard` must `pnpm install` first because `scripts/check-catalog.mjs` imports the `yaml`
+    package; `commit-check` needs no install (its script imports only `node:*`). The commit check
+    reuses `scripts/check-commit-msg.mjs` unchanged (design decision 4's intent): the workflow loops
+    `git rev-list base..head`, writes each message to a temp file, and runs the script per commit —
+    which requires `fetch-depth: 0` and only runs on `pull_request`.
+
+61. **The compose smoke test drives a real headless Chromium, not an HTTP request (deviation from
+    the "Playwright request" wording).** The workspace name renders client-side from a ZQL query over
+    the zero-cache WebSocket, so a bare GET of `/` returns only the SPA shell and proves nothing about
+    sync. `scripts/smoke.mjs` (Playwright `chromium`) navigates the running app, waits for
+    `[data-testid="workspace-name"]` to render the seeded name **and** for
+    `[data-connection="connected"]`, and fails on any console error — the same three signals the
+    manual task-5.5 verification used, now executable. `@playwright/test` was added as a *root*
+    devDependency (`catalog:`) because ESM bare-specifier resolution for a repo-root script walks up
+    from `scripts/` to the root `node_modules`, not from the invoking package; this also makes
+    `pnpm exec playwright install` resolvable at the root. The job runs the real
+    `docker/docker-compose.yml` with `up -d --build --wait`, polls `/readyz`, then asserts render, and
+    always tears down with `down -v` after dumping compose logs.
+
+62. **Release is one workflow on push to `main`: `release-please` then `publish`.** `publish` has no
+    `if` gate, so `edge` (and a `sha-<short>` tag) publish on every main commit; when a release-please
+    PR merge sets `release_created`, the same build additionally tags `X.Y.Z`, `X.Y`, `X`, `stable`
+    and `latest`. Tags are assembled in a shell step from the action's `major/minor/patch` outputs
+    (lowercasing `${GITHUB_REPOSITORY}` for GHCR) rather than `docker/metadata-action`, because the
+    version comes from release-please outputs on a branch push, not from a git tag ref. Images are
+    multi-arch (`linux/amd64,linux/arm64` via QEMU + buildx) with GHA build cache. `VITE_ZERO_CACHE_URL`
+    is baked as the documented `http://localhost:4848` default (decision 52 — a real host rebuilds);
+    per-host multi-arch/release polish is deferred as the task states. `release-please-config.json`
+    uses `release-type: node` on `.` (bumps the private root `package.json` + `CHANGELOG.md`),
+    `bump-minor-pre-major` so pre-1.0 stays on 0.x, and the manifest starts at `0.0.0`.
+
 ## Open Questions
 
 - (none remaining for this change)

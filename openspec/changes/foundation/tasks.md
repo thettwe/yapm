@@ -43,9 +43,9 @@
 
 ## 6. CI pipeline
 
-- [ ] 6.1 .github/workflows/ci.yml: lint → typecheck → test → build with Turborepo + Actions cache, catalog guard, commit check (Conventional Commits + DCO)
-- [ ] 6.2 Compose smoke test job: build image, run docker/docker-compose.yml, wait for /readyz, assert workspace renders (Playwright request)
-- [ ] 6.3 release-please workflow + GHCR image publish on release (edge from main; multi-arch wiring, polish deferred)
+- [x] 6.1 .github/workflows/ci.yml: lint → typecheck → test → build with Turborepo + Actions cache, catalog guard, commit check (Conventional Commits + DCO)
+- [x] 6.2 Compose smoke test job: build image, run docker/docker-compose.yml, wait for /readyz, assert workspace renders (Playwright request)
+- [x] 6.3 release-please workflow + GHCR image publish on release (edge from main; multi-arch wiring, polish deferred)
 
 ## 7. Verification
 

@@ -2,9 +2,9 @@
 
 ## 1. Dependencies and configuration
 
-- [ ] 1.1 Add `better-auth` and `@better-auth/sso` to the pnpm catalog and to `packages/schema` (auth-adjacent DB types) and `apps/server` (runtime); verify `pnpm peers check` is clean and the `jose` v5/v6 pair coexists in the isolated store.
-- [ ] 1.2 Extend `apps/server/src/config/env.ts` (Zod) with `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, optional `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`, optional OIDC/SSO config, optional SMTP settings, and optional `YAPM_BOOTSTRAP_ADMIN_EMAIL`; add each to `EXPECTED_FORMAT`. Keep defaults so an empty `.env` still boots.
-- [ ] 1.3 Add the new env vars to `turbo.json` `passThroughEnv` for `dev`, and to `docker/docker-compose.yml`/`.dev.yml` with `${VAR:-default}` placeholders documented as "change in production".
+- [x] 1.1 Add `better-auth` and `@better-auth/sso` to the pnpm catalog and to `apps/server` (runtime); `jose@^6` added for local JWKS verification. `pnpm peers check` shows no jose issue and the v5/v6 pair coexists (server resolves 6.2.4, Zero 5.10.0). `packages/schema` deliberately does NOT depend on better-auth (drift test reproduces the `user` DDL; see design log).
+- [x] 1.2 Extend `apps/server/src/config/env.ts` (Zod) with `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `WEB_ORIGIN`, optional `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`, optional `SMTP_URL`, and optional `YAPM_BOOTSTRAP_ADMIN_EMAIL`; each in `EXPECTED_FORMAT`. Defaults keep an empty `.env` booting; optional vars treat empty strings as unset (SSO/OIDC needs no static env — see design log).
+- [x] 1.3 Add the new env vars to `turbo.json` `passThroughEnv` for `dev`, and to `docker/docker-compose.yml` with `${VAR:-default}` placeholders documented as "change in production" (the dev compose has no app container; host-run dev uses turbo passThroughEnv).
 
 ## 2. Data layer (packages/schema)
 
@@ -21,12 +21,12 @@
 
 ## 4. Authentication server (apps/server)
 
-- [ ] 4.1 Add `src/auth.ts`: `betterAuth` on the shared Kysely instance (`{db, type:'postgres'}`), `emailAndPassword` (verification off), `socialProviders.github` (when configured), `@better-auth/sso`, `bearer()` + `jwt({ expirationTime:'1h' })`, session `expiresIn:30d/updateAge:1d`; export `authOptions`, `auth`, and `migrateAuth()`.
-- [ ] 4.2 Mount better-auth on Hono: CORS before route, `app.on(['POST','GET'], '/api/auth/*', ...)`, and `GET /api/zero/token` returning the sync JWT.
-- [ ] 4.3 Call `migrateAuth()` in boot order after the Kysely `Migrator` and before serving; keep it single-path (document the unguarded-migration caveat).
-- [ ] 4.4 Replace `resolveAnonymousContext` with `resolveSessionContext`: verify the forwarded JWT locally against the JWKS, extract `sub` as `userID`, look up `workspace_member.role`, return `{userID, role|null}`; keep the `X-Api-Key` gate.
-- [ ] 4.5 Add first-admin bootstrap on completed sign-in: advisory-locked insert-if-no-members, honoring `YAPM_BOOTSTRAP_ADMIN_EMAIL`.
-- [ ] 4.6 Add the invite-accept path (token → membership + optional team membership), enforcing expiry/revoke/email-binding and single-use vs reusable semantics.
+- [x] 4.1 Add `src/auth.ts`: `betterAuth` on the shared Kysely instance (`{db, type:'postgres'}`), `emailAndPassword` (verification off), `socialProviders.github` (when configured), `@better-auth/sso`, `bearer()` + `jwt({ expirationTime:'1h', issuer/audience })`, session `expiresIn:30d/updateAge:1d`. Exposes a narrowed `AuthService` (`handler`, `getSessionUser`, `migrateAuth`, `issueSyncToken`, `verifySyncToken`) plus `buildAuthOptions`.
+- [x] 4.2 Mount better-auth on Hono (`src/auth-routes.ts`): CORS before the route, `app.on(['POST','GET'], '/api/auth/*', ...)`, a `requireSession` middleware, and `GET /api/zero/token` returning `{token, userID, role}`. Verified against real Postgres (sign-up → token, unauth → 401).
+- [x] 4.3 Call `migrateAuth()` in boot order after the Kysely `Migrator` and before serving; single-path with the unguarded-migration caveat documented. Verified: boot created `session/account/verification/jwks/ssoProvider`.
+- [x] 4.4 Replace `resolveAnonymousContext` with `createSessionContextResolver`: verify the forwarded Bearer JWT locally against the JWKS (loopback fetch, issuer/audience checked), extract `sub` as `userID`, look up `workspace_member.role`, return `{userID, role|null}`; `X-Api-Key` gate kept. Verified: valid token → real userID + no deny; no/invalid token → deny + `userID:null`.
+- [x] 4.5 First-admin bootstrap on the completed-sign-in token call: advisory-locked insert-if-no-members via the Schema-phase `bootstrapFirstAdmin`, honoring `YAPM_BOOTSTRAP_ADMIN_EMAIL`. Verified: first email sign-up → one `admin` member.
+- [x] 4.6 Invite-accept path `POST /api/invites/accept` → `acceptInvite` (`packages/schema/src/db/invite.ts`): membership + optional team membership, enforcing expiry/revoke/email-binding and single-use vs reusable link semantics. Verified via DB tests (7 cases) and HTTP smoke (401/400/404).
 
 ## 5. Web app (apps/web)
 
@@ -40,6 +40,6 @@
 ## 6. Tests and verification
 
 - [ ] 6.1 Unit-test the shared mutators' authorization (viewer/non-member rejection, last-admin protection, auth-before-existence, UUIDv7 at call site) and the permissioned queries (non-member `denyAll`, admin-only invites) in `packages/schema`.
-- [ ] 6.2 Unit-test the auth-context resolution (valid/invalid/absent JWT → `{userID, role|null}`) and first-admin bootstrap concurrency (one admin under simultaneous sign-ins).
+- [x] 6.2 Unit-test the auth-context resolution (`apps/server/src/zero/context.test.ts`: no header, non-Bearer, invalid token, member, non-member `role:null`, verified-`sub`-not-client) and the first-admin bootstrap gate (`packages/schema/src/db/seed.test.ts`: non-matching email short-circuits before the DB; case-insensitive/trimmed match proceeds). Bootstrap concurrency was proven against real Postgres in the Schema phase (advisory-locked insert-if-no-members); the Auth phase re-verified one `admin` from the first real sign-up.
 - [ ] 6.3 e2e (Playwright) against the real stack: email sign-up → first-user-becomes-admin → create team → invite (link) → second user accepts → sees only permitted rows → viewer cannot write; include the keyboard-only sign-in and member-management paths.
 - [ ] 6.4 Update the boundary-guard/CI expectations if needed and run `pnpm turbo lint typecheck test build` plus the compose smoke test; confirm exactly three services.

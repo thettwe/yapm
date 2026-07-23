@@ -12,10 +12,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@better-auth/sso": "catalog:",
     "@hono/node-server": "catalog:",
     "@rocicorp/zero": "catalog:",
     "@yapm/schema": "workspace:*",
+    "better-auth": "catalog:",
     "hono": "catalog:",
+    "jose": "catalog:",
     "kysely": "catalog:",
     "pino": "catalog:",
     "zod": "catalog:"

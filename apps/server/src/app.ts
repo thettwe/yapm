@@ -10,6 +10,7 @@ export interface AppOptions {
   readinessChecks: ReadinessCheck[]
   webDistDir?: string
   zero?: ZeroRoutesOptions
+  authRoutes?: Hono
 }
 
 const QUIET_PATHS = new Set(['/healthz', '/readyz'])
@@ -45,6 +46,10 @@ export function createApp(options: AppOptions): Hono {
     const report = await runReadinessChecks(options.readinessChecks)
     return c.json(report, report.status === 'ready' ? 200 : 503, { 'Cache-Control': 'no-store' })
   })
+
+  if (options.authRoutes) {
+    app.route('/', options.authRoutes)
+  }
 
   if (options.zero) {
     app.route('/api/zero', createZeroRoutes(options.zero))

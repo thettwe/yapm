@@ -23,15 +23,22 @@
       "cache": false,
       "persistent": true,
       "passThroughEnv": [
+        "BETTER_AUTH_SECRET",
+        "BETTER_AUTH_URL",
         "DATABASE_URL",
         "DATABASE_POOL_MAX",
+        "GITHUB_CLIENT_ID",
+        "GITHUB_CLIENT_SECRET",
         "HOST",
         "LOG_LEVEL",
         "PORT",
         "SEED_WORKSPACE_NAME",
         "SERVER_ORIGIN",
+        "SMTP_URL",
         "VITE_ZERO_CACHE_URL",
         "WEB_DIST_DIR",
+        "WEB_ORIGIN",
+        "YAPM_BOOTSTRAP_ADMIN_EMAIL",
         "ZERO_MUTATE_API_KEY",
         "ZERO_QUERY_API_KEY"
       ]

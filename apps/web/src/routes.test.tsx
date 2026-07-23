@@ -2,10 +2,11 @@ import { Zero } from '@rocicorp/zero'
 import { ZeroProvider } from '@rocicorp/zero/react'
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router'
 import { render, screen } from '@testing-library/react'
-import { mutators, schema } from '@yapm/schema'
+import { type AuthContext, mutators, schema } from '@yapm/schema'
 import { afterEach, expect, test } from 'vitest'
-import { ANONYMOUS_CONTEXT } from '@/zero/provider'
 import { routeTree } from './routeTree.gen'
+
+const TEST_CONTEXT: AuthContext = { userID: 'test-user', role: 'admin' }
 
 const opened: { close: () => Promise<void> }[] = []
 
@@ -13,8 +14,8 @@ function offlineZero() {
   const zero = new Zero({
     schema,
     mutators,
-    context: ANONYMOUS_CONTEXT,
-    userID: ANONYMOUS_CONTEXT.userID,
+    context: TEST_CONTEXT,
+    userID: TEST_CONTEXT.userID,
     cacheURL: null,
     kvStore: 'mem',
   })

@@ -26,6 +26,12 @@ const postgresUrl = z.string().check((ctx) => {
 
 const port = z.coerce.number().int().min(1).max(65535)
 const poolSize = z.coerce.number().int().min(1).max(1000)
+// Treat empty/whitespace (e.g. an unset `${VAR:-}` in docker-compose) as absent, so an
+// unconfigured optional provider disables it rather than crashing boot.
+const optionalString = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined),
+  z.string().optional(),
+)
 
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -38,6 +44,18 @@ export const envSchema = z.object({
   SEED_WORKSPACE_NAME: z.string().min(1).default('yapm'),
   ZERO_QUERY_API_KEY: z.string().min(1).optional(),
   ZERO_MUTATE_API_KEY: z.string().min(1).optional(),
+  // Auth (better-auth, in-process). Defaults let an empty .env boot for local dev;
+  // BETTER_AUTH_SECRET MUST be changed in production.
+  BETTER_AUTH_SECRET: z.string().min(1).default('yapm-dev-secret-change-me-in-production'),
+  BETTER_AUTH_URL: z.string().url().default('http://localhost:3000'),
+  WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
+  // Optional providers — absent credentials simply disable the provider, never crash boot.
+  GITHUB_CLIENT_ID: optionalString,
+  GITHUB_CLIENT_SECRET: optionalString,
+  // First authenticated user becomes admin; set to bind that to a specific verified email.
+  YAPM_BOOTSTRAP_ADMIN_EMAIL: optionalString,
+  // Reserved for outbound email (verification, invite delivery); unset disables email.
+  SMTP_URL: optionalString,
 })
 
 export type Env = Omit<z.infer<typeof envSchema>, 'WEB_DIST_DIR'> & {
@@ -55,6 +73,15 @@ export const EXPECTED_FORMAT: Record<string, string> = {
   SEED_WORKSPACE_NAME: 'a non-empty string',
   ZERO_QUERY_API_KEY: 'the shared secret zero-cache sends as X-Api-Key to /api/zero/query',
   ZERO_MUTATE_API_KEY: 'the shared secret zero-cache sends as X-Api-Key to /api/zero/mutate',
+  BETTER_AUTH_SECRET: 'a random string (openssl rand -base64 32); change in production',
+  BETTER_AUTH_URL:
+    'the server base URL better-auth signs/verifies against, e.g. http://localhost:3000',
+  WEB_ORIGIN: 'the browser origin of the SPA, e.g. http://localhost:5173 in dev',
+  GITHUB_CLIENT_ID: 'a GitHub OAuth/App client id, or unset to disable GitHub sign-in',
+  GITHUB_CLIENT_SECRET: 'the matching GitHub client secret, or unset to disable GitHub sign-in',
+  YAPM_BOOTSTRAP_ADMIN_EMAIL:
+    'the email that becomes the first admin, or unset for first-user-wins',
+  SMTP_URL: 'smtp://user:pass@host:port for outbound email, or unset to disable email',
 }
 
 export interface EnvIssue {

@@ -43,6 +43,17 @@ services:
       SEED_WORKSPACE_NAME: ${SEED_WORKSPACE_NAME:-yapm}
       ZERO_QUERY_API_KEY: ${ZERO_QUERY_API_KEY:-yapm-zero-query-key-change-me}
       ZERO_MUTATE_API_KEY: ${ZERO_MUTATE_API_KEY:-yapm-zero-mutate-key-change-me}
+      # better-auth runs in-process (no extra container). CHANGE the secret in production.
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-yapm-dev-secret-change-me-in-production}
+      # The browser-facing URL of this app; OAuth callbacks and token issuer/audience use it.
+      # Set both to your real origin (and rebuild) when serving from a domain or a non-3000 port.
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      # Optional providers / settings — empty means disabled, never a boot failure.
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      YAPM_BOOTSTRAP_ADMIN_EMAIL: ${YAPM_BOOTSTRAP_ADMIN_EMAIL:-}
+      SMTP_URL: ${SMTP_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

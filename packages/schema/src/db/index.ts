@@ -1,5 +1,8 @@
 export type { Database, DatabaseOptions } from './client.js'
 export { createDatabase, pingDatabase } from './client.js'
+export type { AcceptInviteOptions, AcceptInviteRefusal, AcceptInviteResult } from './invite.js'
+export { acceptInvite } from './invite.js'
+export { lookupWorkspaceRole } from './membership.js'
 export type { MigrationOutcome } from './migrate.js'
 export { createMigrator, migrateToLatest } from './migrate.js'
 export type { ReplicationSlot, ReplicationStatus } from './replication.js'

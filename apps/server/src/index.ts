@@ -3,16 +3,19 @@ import { newId } from '@yapm/schema'
 import {
   assertReplicationHealthy,
   createDatabase,
+  lookupWorkspaceRole,
   migrateToLatest,
   pingDatabase,
   readReplicationStatus,
   seedWorkspace,
 } from '@yapm/schema/db'
 import { createApp } from './app.js'
+import { createAuth } from './auth.js'
+import { createAuthRoutes } from './auth-routes.js'
 import { type Env, EnvValidationError, loadEnv } from './config/env.js'
 import { databaseCheck, replicationCheck } from './health.js'
 import { createLogger, type Logger } from './logger.js'
-import { resolveAnonymousContext } from './zero/context.js'
+import { createSessionContextResolver } from './zero/context.js'
 import { createZeroDatabase } from './zero/db-provider.js'
 
 function readEnvOrExit(): Env {
@@ -41,6 +44,8 @@ async function main(): Promise<void> {
     onPoolError: (error) => logger.error({ err: error }, 'database pool error'),
   })
 
+  const auth = createAuth(database.db, env)
+
   try {
     const applied = await migrateToLatest(database.db)
     for (const outcome of applied) {
@@ -48,6 +53,18 @@ async function main(): Promise<void> {
     }
     if (applied.length === 0) {
       logger.info('database schema already up to date')
+    }
+
+    // better-auth owns user/session/account/verification/jwks. Its getMigrations() is not
+    // advisory-locked, so it only runs from this single boot path, after the Kysely Migrator.
+    const authMigration = await auth.migrateAuth()
+    if (authMigration.created.length > 0 || authMigration.altered.length > 0) {
+      logger.info(
+        { created: authMigration.created, altered: authMigration.altered },
+        'auth schema migrated',
+      )
+    } else {
+      logger.info('auth schema already up to date')
     }
 
     const seeded = await seedWorkspace(database.db, {
@@ -72,9 +89,13 @@ async function main(): Promise<void> {
       ),
     ],
     webDistDir: env.WEB_DIST_DIR,
+    authRoutes: createAuthRoutes({ auth, db: database.db, env, logger }),
     zero: {
       dbProvider: createZeroDatabase(database.db),
-      resolveContext: resolveAnonymousContext,
+      resolveContext: createSessionContextResolver({
+        verifyToken: auth.verifySyncToken,
+        lookupRole: (userID) => lookupWorkspaceRole(database.db, userID),
+      }),
       logger,
       queryApiKey: env.ZERO_QUERY_API_KEY,
       mutateApiKey: env.ZERO_MUTATE_API_KEY,

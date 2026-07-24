@@ -15,6 +15,7 @@ import {
   type IssueStatus,
   isAuthenticated,
   isMember,
+  PROJECT_STATUSES,
   THEME_PRESETS,
 } from './context.js'
 import { type CycleOrderRow, isUnfinished, nextCycleId } from './cycles.js'
@@ -27,6 +28,7 @@ export const TEAM_NAME_MAX_LENGTH = 200
 export const TEAM_KEY_MAX_LENGTH = 16
 export const ISSUE_TITLE_MAX_LENGTH = 300
 export const CYCLE_NAME_MAX_LENGTH = 200
+export const PROJECT_NAME_MAX_LENGTH = 200
 export const LABEL_NAME_MAX_LENGTH = 60
 export const SAVED_VIEW_NAME_MAX_LENGTH = 100
 
@@ -47,6 +49,7 @@ const roleSchema = z.enum(['admin', 'member', 'viewer'])
 const timestamp = z.number().int().positive()
 const issueStatusSchema = z.enum(ISSUE_STATUSES)
 const issuePrioritySchema = z.enum(ISSUE_PRIORITIES)
+const projectStatusSchema = z.enum(PROJECT_STATUSES)
 
 // Runtime-validated by the real filter/sort schemas, but typed as JSON so the mutator arg
 // validators satisfy Zero's `ReadonlyJSONValue` input/output constraint (a structured filter
@@ -808,6 +811,139 @@ export const setIssueCycle = defineMutator(setIssueCycleArgs, async ({ tx, args,
   })
 })
 
+async function assertWorkspaceMember(tx: Transaction, userId: string, id: string): Promise<void> {
+  const member = await tx.run(zql.workspace_member.where('userId', userId).one())
+  if (!member) {
+    throw new MutationError(
+      'Project lead must be a workspace member',
+      MutationErrorCode.crossTeam,
+      id,
+    )
+  }
+}
+
+interface ProjectRow {
+  id: string
+  workspaceId: string
+}
+
+// Load an existing project for a write. Projects are workspace-level: `canWrite` (member,
+// non-viewer) is the whole gate — any writer may edit any project, mirroring the roadmap being
+// a cross-team overview. `canWrite` runs in the caller before this; a generic not-authorized is
+// thrown for a missing row so a project's existence never leaks to a viewer/non-member.
+async function loadProjectForWrite(tx: Transaction, id: string): Promise<ProjectRow> {
+  const project = (await tx.run(zql.project.where('id', id).one())) as ProjectRow | undefined
+  if (!project) throw notAuthorized(id)
+  return project
+}
+
+export const createProjectArgs = z.object({
+  id: z.string().min(1),
+  workspaceId: z.string().min(1),
+  name: z.string(),
+  leadId: z.string().min(1).nullable().optional(),
+  status: projectStatusSchema.optional(),
+  targetDate: timestamp.nullable().optional(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+})
+
+export type CreateProjectArgs = z.infer<typeof createProjectArgs>
+
+// Workspace-level create, gated by `canWrite` (viewers rejected). The id is minted at the call
+// site. A project defaults to `planned`; an optional lead is validated to be a workspace member
+// (the lead is a workspace user, and a project can span teams so no team check applies).
+export const createProject = defineMutator(createProjectArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+
+  const name = assertValidName(args.name, args.id, PROJECT_NAME_MAX_LENGTH)
+  if (args.leadId != null) {
+    await assertWorkspaceMember(tx, args.leadId, args.id)
+  }
+
+  await tx.mutate.project.insert({
+    id: args.id,
+    workspaceId: args.workspaceId,
+    name,
+    leadId: args.leadId ?? null,
+    status: args.status ?? 'planned',
+    targetDate: args.targetDate ?? null,
+    createdAt: args.createdAt,
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const updateProjectArgs = z.object({
+  id: z.string().min(1),
+  name: z.string().optional(),
+  leadId: z.string().min(1).nullable().optional(),
+  status: projectStatusSchema.optional(),
+  targetDate: timestamp.nullable().optional(),
+  updatedAt: timestamp,
+})
+
+export const updateProject = defineMutator(updateProjectArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadProjectForWrite(tx, args.id)
+
+  const name =
+    args.name === undefined
+      ? undefined
+      : assertValidName(args.name, args.id, PROJECT_NAME_MAX_LENGTH)
+
+  if (args.leadId != null) {
+    await assertWorkspaceMember(tx, args.leadId, args.id)
+  }
+
+  await tx.mutate.project.update({
+    id: args.id,
+    ...(name === undefined ? {} : { name }),
+    ...(args.leadId === undefined ? {} : { leadId: args.leadId }),
+    ...(args.status === undefined ? {} : { status: args.status }),
+    ...(args.targetDate === undefined ? {} : { targetDate: args.targetDate }),
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const deleteProjectArgs = z.object({ id: z.string().min(1) })
+
+// Deleting a project unassigns its issues via the `ON DELETE SET NULL` FK — no issue is lost.
+export const deleteProject = defineMutator(deleteProjectArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadProjectForWrite(tx, args.id)
+  await tx.mutate.project.delete({ id: args.id })
+})
+
+export const setIssueProjectArgs = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1).nullable(),
+  updatedAt: timestamp,
+})
+
+// Assigning an issue to a (workspace-level) project respects the ISSUE's team-scoped write
+// permission: `loadIssueForWrite` runs the same auth-before-existence, team-scoped gate as every
+// other issue write. The project only needs to exist in the workspace — a project spans teams,
+// so any team's issue may join any project (no cross-team rejection here).
+export const setIssueProject = defineMutator(setIssueProjectArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadIssueForWrite(tx, ctx, args.id)
+
+  if (args.projectId !== null) {
+    const project = (await tx.run(zql.project.where('id', args.projectId).one())) as
+      | ProjectRow
+      | undefined
+    if (!project) {
+      throw new MutationError('Project not found', MutationErrorCode.crossTeam, args.id)
+    }
+  }
+
+  await tx.mutate.issue.update({
+    id: args.id,
+    projectId: args.projectId,
+    updatedAt: args.updatedAt,
+  })
+})
+
 // Triage is an orthogonal boolean on an issue (`needs_triage`), never a seventh status. An
 // issue enters the inbox here (flag set) and leaves it via accept/decline/route (flag cleared).
 export const flagTriageArgs = z.object({
@@ -1190,6 +1326,7 @@ export const mutators = defineMutators({
     assign: assignIssue,
     move: moveIssue,
     setCycle: setIssueCycle,
+    setProject: setIssueProject,
     addLabel: addIssueLabel,
     removeLabel: removeIssueLabel,
     flagTriage,
@@ -1202,6 +1339,11 @@ export const mutators = defineMutators({
     update: updateCycle,
     activate: activateCycle,
     complete: completeCycle,
+  },
+  project: {
+    create: createProject,
+    update: updateProject,
+    delete: deleteProject,
   },
   label: {
     create: createLabel,
@@ -1229,6 +1371,10 @@ export const SET_ISSUE_PRIORITY_MUTATOR_NAME = 'issue.setPriority'
 export const ASSIGN_ISSUE_MUTATOR_NAME = 'issue.assign'
 export const MOVE_ISSUE_MUTATOR_NAME = 'issue.move'
 export const SET_ISSUE_CYCLE_MUTATOR_NAME = 'issue.setCycle'
+export const SET_ISSUE_PROJECT_MUTATOR_NAME = 'issue.setProject'
+export const CREATE_PROJECT_MUTATOR_NAME = 'project.create'
+export const UPDATE_PROJECT_MUTATOR_NAME = 'project.update'
+export const DELETE_PROJECT_MUTATOR_NAME = 'project.delete'
 export const FLAG_TRIAGE_MUTATOR_NAME = 'issue.flagTriage'
 export const ACCEPT_TRIAGE_MUTATOR_NAME = 'issue.acceptTriage'
 export const DECLINE_TRIAGE_MUTATOR_NAME = 'issue.declineTriage'

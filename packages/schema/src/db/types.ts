@@ -4,6 +4,7 @@ import type {
   IssueGrouping,
   IssuePriority,
   IssueStatus,
+  ProjectStatus,
   RichTextDoc,
   ThemePreset,
   WorkspaceRole,
@@ -94,6 +95,7 @@ export interface IssueTable {
   creator_id: string
   rank: Nullable<string>
   cycle_id: Nullable<string>
+  project_id: Nullable<string>
   needs_triage: Generated<boolean>
   created_at: Generated<Timestamp>
   updated_at: Generated<Timestamp>
@@ -120,6 +122,22 @@ export interface CycleTable {
 export interface CycleSequenceTable {
   team_id: string
   next_number: Generated<number>
+}
+
+// A workspace-level, lightweight project: a stakeholder-facing grouping of issues that can
+// span teams. `lead_id` is a plain text column with no hard FK to better-auth's `user`,
+// mirroring `issue.assignee_id`. `target_date` and `lead_id` are optional; `status` transitions
+// planned -> active -> completed/cancelled. Progress (share of its issues Done) is COMPUTED, not
+// stored. Issues reference it via the nullable `issue.project_id` (ON DELETE SET NULL).
+export interface ProjectTable {
+  id: string
+  workspace_id: string
+  name: string
+  lead_id: Nullable<string>
+  status: ProjectStatus
+  target_date: TimestampOrNull
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
 }
 
 export interface LabelTable {
@@ -192,6 +210,7 @@ export interface DB {
   user_preference: UserPreferenceTable
   issue: IssueTable
   cycle: CycleTable
+  project: ProjectTable
   label: LabelTable
   issue_label: IssueLabelTable
   comment: CommentTable
@@ -231,6 +250,10 @@ export type IssueUpdate = Updateable<IssueTable>
 export type Cycle = Selectable<CycleTable>
 export type NewCycle = Insertable<CycleTable>
 export type CycleUpdate = Updateable<CycleTable>
+
+export type Project = Selectable<ProjectTable>
+export type NewProject = Insertable<ProjectTable>
+export type ProjectUpdate = Updateable<ProjectTable>
 
 export type CycleSequence = Selectable<CycleSequenceTable>
 

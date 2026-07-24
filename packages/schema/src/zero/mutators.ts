@@ -487,6 +487,13 @@ export const createIssueArgs = z.object({
   priority: issuePrioritySchema,
   assigneeId: z.string().min(1).nullable().optional(),
   description: richTextSchema.nullable().optional(),
+  rank: z
+    .string()
+    .min(1)
+    .max(256)
+    .regex(/^[0-9A-Za-z]+$/u)
+    .nullable()
+    .optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
 })
@@ -495,8 +502,11 @@ export type CreateIssueArgs = z.infer<typeof createIssueArgs>
 
 // Shared client + server create. Leaves `number` unset (Postgres default NULL); the
 // per-team number is claimed only in the server-authoritative override (server-mutators.ts).
-// `creator` is taken from the verified ctx, never args; the UUIDv7 id is minted at the call
-// site, never here (mutators re-run during rebase).
+// `creator` is taken from the verified ctx, never args; both the UUIDv7 id and the fractional
+// `rank` are minted at the call site, never here (mutators re-run during rebase, so an id or
+// rank computed inside would change between the optimistic and authoritative runs). `rank`
+// densely ranks the destination column from creation so a board move always lands
+// position-faithfully; null is tolerated only as a transient pre-sync value.
 export const createIssue = defineMutator(createIssueArgs, async ({ tx, args, ctx }) => {
   if (!canWrite(ctx)) throw notAuthorized(args.id)
   await assertTeamAccess(tx, ctx, args.teamId, args.id)
@@ -514,6 +524,7 @@ export const createIssue = defineMutator(createIssueArgs, async ({ tx, args, ctx
     status: args.status,
     priority: args.priority,
     assigneeId: args.assigneeId ?? null,
+    rank: args.rank ?? null,
     creatorId: ctx.userID,
     createdAt: args.createdAt,
     updatedAt: args.updatedAt,
@@ -585,6 +596,33 @@ export const assignIssue = defineMutator(assignIssueArgs, async ({ tx, args, ctx
   await tx.mutate.issue.update({
     id: args.id,
     assigneeId: args.assigneeId,
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const moveIssueArgs = z.object({
+  id: z.string().min(1),
+  status: issueStatusSchema,
+  rank: z
+    .string()
+    .min(1)
+    .max(256)
+    .regex(/^[0-9A-Za-z]+$/u),
+  updatedAt: timestamp,
+})
+
+// The board's single-write move: set the card's fractional `rank` (and `status` when it
+// changed columns) in one row update, never renumbering siblings. The `rank` is computed at
+// the call site (the client mints the fractional index between the destination neighbours and
+// passes it in) — never here, because a mutator re-runs during rebase and recomputing from
+// shifted neighbours would jump the card, mirroring the client-minted-UUID rule.
+export const moveIssue = defineMutator(moveIssueArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadIssueForWrite(tx, ctx, args.id)
+  await tx.mutate.issue.update({
+    id: args.id,
+    status: args.status,
+    rank: args.rank,
     updatedAt: args.updatedAt,
   })
 })
@@ -859,6 +897,7 @@ export const mutators = defineMutators({
     setStatus: setIssueStatus,
     setPriority: setIssuePriority,
     assign: assignIssue,
+    move: moveIssue,
     addLabel: addIssueLabel,
     removeLabel: removeIssueLabel,
   },
@@ -886,6 +925,7 @@ export const UPDATE_ISSUE_MUTATOR_NAME = 'issue.update'
 export const SET_ISSUE_STATUS_MUTATOR_NAME = 'issue.setStatus'
 export const SET_ISSUE_PRIORITY_MUTATOR_NAME = 'issue.setPriority'
 export const ASSIGN_ISSUE_MUTATOR_NAME = 'issue.assign'
+export const MOVE_ISSUE_MUTATOR_NAME = 'issue.move'
 export const ADD_ISSUE_LABEL_MUTATOR_NAME = 'issue.addLabel'
 export const REMOVE_ISSUE_LABEL_MUTATOR_NAME = 'issue.removeLabel'
 export const CREATE_LABEL_MUTATOR_NAME = 'label.create'

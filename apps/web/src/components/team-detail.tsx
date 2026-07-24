@@ -64,6 +64,15 @@ export function TeamDetail({ teamId }: { teamId: string }) {
             </Link>
           }
         />
+        <Button
+          variant="outline"
+          size="sm"
+          render={
+            <Link to="/teams/$teamId/board" params={{ teamId: team.id }}>
+              Board
+            </Link>
+          }
+        />
         <TeamMembershipButton teamId={team.id} memberships={memberships} />
         {canManage ? (
           <>

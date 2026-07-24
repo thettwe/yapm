@@ -95,6 +95,9 @@ export {
   ISSUE_TITLE_MAX_LENGTH,
   isParseableColor,
   LABEL_NAME_MAX_LENGTH,
+  MOVE_ISSUE_MUTATOR_NAME,
+  moveIssue,
+  moveIssueArgs,
   mutators,
   normalizeName,
   normalizeTeamKey,
@@ -150,5 +153,6 @@ export {
   USERS_ALL_QUERY_NAME,
   WORKSPACE_CURRENT_QUERY_NAME,
 } from './zero/queries.js'
+export { initialRanks, rankBetween } from './zero/rank.js'
 export type { Schema } from './zero/schema.js'
 export { schema, zql } from './zero/schema.js'

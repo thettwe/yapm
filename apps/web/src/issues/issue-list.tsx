@@ -118,6 +118,7 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
         status: issue.status,
         priority: issue.priority,
         assigneeId: issue.assigneeId ?? null,
+        rank: issue.rank ?? null,
         updatedAt: issue.updatedAt,
         createdAt: issue.createdAt,
         labels: (

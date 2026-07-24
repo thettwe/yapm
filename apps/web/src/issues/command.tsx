@@ -1,6 +1,13 @@
 import { useQuery, useZero } from '@rocicorp/zero/react'
 import { useNavigate } from '@tanstack/react-router'
-import { ISSUE_STATUSES, type IssueStatus, mutators, newId, queries } from '@yapm/schema'
+import {
+  ISSUE_STATUSES,
+  type IssueStatus,
+  mutators,
+  newId,
+  queries,
+  rankBetween,
+} from '@yapm/schema'
 import { Avatar, AvatarFallback, AvatarImage } from '@yapm/ui/components/avatar'
 import {
   CommandDialog,
@@ -186,6 +193,18 @@ export function CommandProvider({
   const createIssue = useCallback(
     (title: string) => {
       const now = Date.now()
+      // Mint the rank at the call site (constraint #4, extended to rank): append after the
+      // current maximum rank of the destination Todo column so the new card lands last and the
+      // column stays densely ranked. Client-computed and passed in, never inside the mutator.
+      const maxRank = issues.reduce<string | null>(
+        (max, issue) =>
+          issue.status === 'todo' &&
+          typeof issue.rank === 'string' &&
+          (max === null || issue.rank > max)
+            ? issue.rank
+            : max,
+        null,
+      )
       void runAll([
         zero.mutate(
           mutators.issue.create({
@@ -194,13 +213,14 @@ export function CommandProvider({
             title,
             status: 'todo',
             priority: 'no_priority',
+            rank: rankBetween(maxRank, null),
             createdAt: now,
             updatedAt: now,
           }),
         ),
       ])
     },
-    [runAll, teamId, zero],
+    [issues, runAll, teamId, zero],
   )
 
   const hasTarget = targetIds.length > 0

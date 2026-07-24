@@ -181,6 +181,54 @@ describe('issue.setStatus / setPriority / assign', () => {
   })
 })
 
+describe('issue.move', () => {
+  it('writes a single row update of status and rank for a member', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id, teamId: TEAM_ID }, membershipRow(MEMBER.userID)])
+    await mutators.issue.move.fn({
+      tx,
+      args: { id, status: 'in_review', rank: 'a1', updatedAt: 7 },
+      ctx: MEMBER,
+    })
+    expect(calls).toEqual([
+      {
+        table: 'issue',
+        verb: 'update',
+        value: { id, status: 'in_review', rank: 'a1', updatedAt: 7 },
+      },
+    ])
+  })
+
+  it.each([
+    ['a viewer', VIEWER],
+    ['a non-member', NON_MEMBER],
+    ['an unauthenticated caller', undefined],
+  ])('rejects %s before any existence read', async (_label, ctx) => {
+    const id = newId()
+    const { tx, calls, runQueue } = fakeTx([{ id, teamId: TEAM_ID }])
+    const error = await capture(
+      mutators.issue.move.fn({ tx, args: { id, status: 'done', rank: 'a1', updatedAt: 7 }, ctx }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+    expect(runQueue).toHaveLength(1)
+  })
+
+  it('rejects a member not on the target team before writing', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id, teamId: TEAM_ID }, undefined])
+    const error = await capture(
+      mutators.issue.move.fn({
+        tx,
+        args: { id, status: 'todo', rank: 'a1', updatedAt: 7 },
+        ctx: MEMBER,
+      }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+})
+
 describe('issue labels', () => {
   it('adds a same-team label as an issue_label edge carrying the team id', async () => {
     const issueId = newId()
@@ -403,6 +451,7 @@ describe('the extended mutator registry', () => {
       'issue.setStatus',
       'issue.setPriority',
       'issue.assign',
+      'issue.move',
       'issue.addLabel',
       'issue.removeLabel',
       'label.create',

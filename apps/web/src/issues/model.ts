@@ -84,6 +84,7 @@ export interface IssueRowData {
   readonly status: IssueStatus
   readonly priority: IssuePriority
   readonly assigneeId: string | null
+  readonly rank?: string | null
   readonly updatedAt: number
   readonly createdAt: number
   readonly labels?: readonly IssueLabelRow[]

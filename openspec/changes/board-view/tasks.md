@@ -39,4 +39,4 @@
 
 ## Documentation
 
-- [x] 8.1 The docs site (`apps/docs`) is a pre-Starlight stub as of issue-core; behavior is captured in `openspec/specs/board`. No user doc pages are added until the docs app is stood up (tracked with issue-core's deferral).
+- [x] 8.1 Stand up the minimum Astro Starlight setup in `apps/docs` (catalog `astro` + `@astrojs/starlight`, `astro.config.mjs`, `src/content.config.ts`, docs `build` script) and add the user-facing **Board** page (`src/content/docs/features/board.md`: what it is, drag + full keyboard move, the command-palette "Move to status…" action, viewer read-only) with a home page linking a Features index; `pnpm --filter @yapm/docs build` passes and the full `turbo typecheck lint build test` stays green.

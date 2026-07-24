@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
   },
-  "devDependencies": {
-    "@types/node": "catalog:",
-    "@yapm/config": "workspace:*",
-    "typescript": "catalog:"
+  "dependencies": {
+    "@astrojs/starlight": "catalog:",
+    "astro": "catalog:",
+    "sharp": "catalog:"
   }
 }

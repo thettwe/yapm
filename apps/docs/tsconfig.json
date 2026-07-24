@@ -1,4 +1,5 @@
 {
-  "extends": "@yapm/config/tsconfig/node",
-  "include": ["src"]
+  "extends": "astro/tsconfigs/base",
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist"]
 }

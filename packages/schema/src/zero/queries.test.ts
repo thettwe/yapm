@@ -195,6 +195,27 @@ describe('team-scoped work-data queries', () => {
     expect(JSON.stringify(where)).not.toContain(NON_MEMBER.userID)
   })
 
+  it('filters triage.inbox to issues awaiting triage (needsTriage = true)', () => {
+    const inbox = JSON.stringify(astOfArgs(queries.triage.inbox, { teamId: TEAM_ID }, MEMBER).where)
+    expect(inbox).toContain('needsTriage')
+    expect(inbox).toMatch(/needsTriage[\s\S]*true/)
+    expect(inbox).not.toMatch(/needsTriage[\s\S]*false/)
+  })
+
+  it('holds triaged issues out of issues.byTeam and issues.mine (needsTriage = false)', () => {
+    const byTeam = JSON.stringify(
+      astOfArgs(queries.issues.byTeam, { teamId: TEAM_ID }, MEMBER).where,
+    )
+    expect(byTeam).toContain('needsTriage')
+    expect(byTeam).toMatch(/needsTriage[\s\S]*false/)
+    expect(byTeam).not.toMatch(/needsTriage[\s\S]*true/)
+
+    const mine = JSON.stringify(astOfArgs(queries.issues.mine, undefined, MEMBER).where)
+    expect(mine).toContain('needsTriage')
+    expect(mine).toMatch(/needsTriage[\s\S]*false/)
+    expect(mine).not.toMatch(/needsTriage[\s\S]*true/)
+  })
+
   it('scopes issues.mine, labels.byTeam and savedViews.byTeam, denying non-members', () => {
     expect(astOfArgs(queries.issues.mine, undefined, MEMBER).where).not.toEqual(DENY_ALL_WHERE)
     expect(astOfArgs(queries.issues.mine, undefined, NON_MEMBER).where).toEqual(DENY_ALL_WHERE)

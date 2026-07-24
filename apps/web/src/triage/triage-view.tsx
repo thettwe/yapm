@@ -273,11 +273,11 @@ export function TriageView({ teamId }: { teamId: string }) {
             )
             if (failure !== undefined) {
               setError(failure)
-              return false
+              return failure
             }
             setError(undefined)
             setRoutingId(null)
-            return true
+            return undefined
           }}
         />
       ) : null}
@@ -373,7 +373,7 @@ function RouteDialog({
   labelOptions: readonly { id: string; name: string; color: string }[]
   cycleOptions: readonly { id: string; name: string; number: number | null }[]
   onClose: () => void
-  onSubmit: (target: RouteTarget) => Promise<boolean>
+  onSubmit: (target: RouteTarget) => Promise<string | undefined>
 }) {
   const statusId = useId()
   const assigneeId = useId()
@@ -383,6 +383,7 @@ function RouteDialog({
   const [cycle, setCycle] = useState<string>(issue.cycleId ?? '')
   const [selectedLabels, setSelectedLabels] = useState<ReadonlySet<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | undefined>(undefined)
 
   // Routing is add-only (routeIssue has no removal path), so labels already on the issue are
   // shown as read-only chips and only not-yet-applied labels are toggleable.
@@ -401,13 +402,14 @@ function RouteDialog({
   async function submit() {
     if (busy) return
     setBusy(true)
-    await onSubmit({
+    const failure = await onSubmit({
       status,
       assigneeId: assignee === '' ? null : assignee,
       cycleId: cycle === '' ? null : cycle,
       labelIds: [...selectedLabels],
     })
     setBusy(false)
+    if (failure !== undefined) setError(failure)
   }
 
   return (
@@ -495,6 +497,11 @@ function RouteDialog({
                 ))}
               </div>
             </fieldset>
+          ) : null}
+          {error !== undefined ? (
+            <p className="text-xs text-status-urgent" role="alert">
+              {error}
+            </p>
           ) : null}
           <div className="flex justify-end gap-2">
             <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>

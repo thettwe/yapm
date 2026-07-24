@@ -88,6 +88,19 @@ describe('issue.create', () => {
     expect(insert?.value).not.toHaveProperty('number')
   })
 
+  it('records needsTriage when created directly into triage', async () => {
+    const args = { ...baseArgs(), needsTriage: true }
+    const { tx, calls } = fakeTx([membershipRow(MEMBER.userID)])
+    await mutators.issue.create.fn({ tx, args, ctx: MEMBER })
+    expect(calls[0]?.value.needsTriage).toBe(true)
+  })
+
+  it('defaults needsTriage to false when the arg is omitted', async () => {
+    const { tx, calls } = fakeTx([membershipRow(MEMBER.userID)])
+    await mutators.issue.create.fn({ tx, args: baseArgs(), ctx: MEMBER })
+    expect(calls[0]?.value.needsTriage).toBe(false)
+  })
+
   it('lets a workspace admin create without a team-membership read', async () => {
     const { tx, calls, runQueue } = fakeTx([])
     await mutators.issue.create.fn({ tx, args: baseArgs(), ctx: ADMIN })

@@ -20,6 +20,7 @@
     "hono": "catalog:",
     "jose": "catalog:",
     "kysely": "catalog:",
+    "pg-boss": "catalog:",
     "pino": "catalog:",
     "zod": "catalog:"
   },

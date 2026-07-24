@@ -27,7 +27,15 @@ import {
 } from '@yapm/ui/components/rich-text'
 import { Sheet } from '@yapm/ui/components/sheet'
 import { StatusGlyph } from '@yapm/ui/components/status-glyph'
-import { CheckIcon, ExternalLinkIcon, TagIcon, UserIcon, UserXIcon, XIcon } from 'lucide-react'
+import {
+  CheckIcon,
+  ExternalLinkIcon,
+  RefreshCwIcon,
+  TagIcon,
+  UserIcon,
+  UserXIcon,
+  XIcon,
+} from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import {
@@ -108,6 +116,7 @@ export function IssueDetail({
   const [teams] = useQuery(queries.teams.all())
   const [users] = useQuery(queries.users.all())
   const [labels] = useQuery(queries.labels.byTeam({ teamId }))
+  const [cycles] = useQuery(queries.cycles.byTeam({ teamId }))
   const { canWrite } = useMembership()
 
   const team = teams.find((candidate) => candidate.id === teamId)
@@ -149,6 +158,11 @@ export function IssueDetail({
         name: label.name,
         color: label.color,
       }))}
+      cycleOptions={cycles.map((cycle) => ({
+        id: cycle.id,
+        name: cycle.name,
+        number: cycle.number ?? null,
+      }))}
       canWrite={canWrite}
       onClose={onClose}
     />
@@ -163,6 +177,7 @@ interface IssueRecord {
   status: IssueStatus
   priority: IssuePriority
   assigneeId: string | null
+  cycleId: string | null
   createdAt: number
   updatedAt: number
   assignee?: {
@@ -195,12 +210,19 @@ function DetailToolbar({ onClose, title }: { onClose?: () => void; title: string
   )
 }
 
+interface CycleOption {
+  id: string
+  name: string
+  number: number | null
+}
+
 function IssueDetailBody({
   issue,
   teamId,
   teamKey,
   members,
   labelOptions,
+  cycleOptions,
   canWrite,
   onClose,
 }: {
@@ -209,6 +231,7 @@ function IssueDetailBody({
   teamKey: string
   members: readonly MemberOption[]
   labelOptions: readonly LabelRow[]
+  cycleOptions: readonly CycleOption[]
   canWrite: boolean
   onClose?: () => void
 }) {
@@ -237,6 +260,11 @@ function IssueDetailBody({
     void run(
       zero.mutate(mutators.issue.assign({ id: issue.id, assigneeId, updatedAt: Date.now() })),
     )
+  const setCycle = (cycleId: string | null) =>
+    void run(zero.mutate(mutators.issue.setCycle({ id: issue.id, cycleId, updatedAt: Date.now() })))
+  const currentCycleName =
+    cycleOptions.find((cycle) => cycle.id === issue.cycleId)?.name ??
+    (issue.cycleId ? 'Unknown' : 'No cycle')
   const toggleLabel = (labelId: string) => {
     if (currentLabelIds.has(labelId)) {
       void run(zero.mutate(mutators.issue.removeLabel({ issueId: issue.id, labelId })))
@@ -457,6 +485,36 @@ function IssueDetailBody({
                       {member.name}
                     </span>
                     {member.id === issue.assigneeId ? (
+                      <CheckIcon className="size-3.5 text-accent-strong" />
+                    ) : null}
+                  </MenuItem>
+                ))}
+              </MetaMenu>
+            </DetailField>
+
+            <DetailField label="Cycle">
+              <MetaMenu
+                disabled={!canWrite || cycleOptions.length === 0}
+                ariaLabel={`Cycle: ${currentCycleName}`}
+                trigger={
+                  <>
+                    <RefreshCwIcon className="size-4 text-text-3" />
+                    {currentCycleName}
+                  </>
+                }
+              >
+                <MenuItem onClick={() => setCycle(null)}>No cycle</MenuItem>
+                {cycleOptions.map((cycle) => (
+                  <MenuItem
+                    key={cycle.id}
+                    className="justify-between"
+                    onClick={() => setCycle(cycle.id)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <RefreshCwIcon className="size-3.5 text-text-3" />
+                      {cycle.name}
+                    </span>
+                    {cycle.id === issue.cycleId ? (
                       <CheckIcon className="size-3.5 text-accent-strong" />
                     ) : null}
                   </MenuItem>

@@ -52,6 +52,16 @@ export const envSchema = z.object({
     .default('false'),
   ZERO_QUERY_API_KEY: z.string().min(1).optional(),
   ZERO_MUTATE_API_KEY: z.string().min(1).optional(),
+  // Cycle auto-rollover scheduler (pg-boss on the existing Postgres). Enabled by default;
+  // disable it in tests/e2e for deterministic timing. The cron controls how often the
+  // idempotent maintenance pass (activate due cycles, complete ended ones) runs.
+  CYCLE_MAINTENANCE: z
+    .preprocess(
+      (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+      z.enum(['true', 'false']),
+    )
+    .default('true'),
+  CYCLE_MAINTENANCE_CRON: z.string().min(1).default('* * * * *'),
   // Auth (better-auth, in-process). Defaults let an empty .env boot for local dev;
   // BETTER_AUTH_SECRET MUST be changed in production.
   BETTER_AUTH_SECRET: z.string().min(1).default('yapm-dev-secret-change-me-in-production'),
@@ -82,6 +92,8 @@ export const EXPECTED_FORMAT: Record<string, string> = {
   SEED_DEMO_CONTENT: "'true' to seed demo issues on a fresh instance, or 'false'",
   ZERO_QUERY_API_KEY: 'the shared secret zero-cache sends as X-Api-Key to /api/zero/query',
   ZERO_MUTATE_API_KEY: 'the shared secret zero-cache sends as X-Api-Key to /api/zero/mutate',
+  CYCLE_MAINTENANCE: "'true' to run the cycle auto-rollover scheduler, or 'false' to disable it",
+  CYCLE_MAINTENANCE_CRON: "a cron expression, e.g. '* * * * *' for every minute",
   BETTER_AUTH_SECRET: 'a random string (openssl rand -base64 32); change in production',
   BETTER_AUTH_URL:
     'the server base URL better-auth signs/verifies against, e.g. http://localhost:3000',

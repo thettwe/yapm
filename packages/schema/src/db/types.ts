@@ -1,5 +1,6 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely'
 import type {
+  CycleStatus,
   IssueGrouping,
   IssuePriority,
   IssueStatus,
@@ -92,8 +93,32 @@ export interface IssueTable {
   assignee_id: Nullable<string>
   creator_id: string
   rank: Nullable<string>
+  cycle_id: Nullable<string>
   created_at: Generated<Timestamp>
   updated_at: Generated<Timestamp>
+}
+
+// A time-boxed iteration owned by a team. `number` is the per-team human sequence, claimed
+// server-authoritatively (like the issue number) so it is nullable in the interface and
+// absent from the Zero-optimistic insert. `status` transitions upcoming -> active ->
+// completed; the completion transition auto-rolls unfinished issues to the next cycle.
+export interface CycleTable {
+  id: string
+  team_id: string
+  number: Nullable<number>
+  name: string
+  status: CycleStatus
+  start_date: Timestamp
+  end_date: Timestamp
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// Server-only per-team cycle counter, mirroring issue_sequence: present in the Kysely DB
+// interface and migrations, deliberately absent from the Zero schema so its churn never syncs.
+export interface CycleSequenceTable {
+  team_id: string
+  next_number: Generated<number>
 }
 
 export interface LabelTable {
@@ -165,11 +190,13 @@ export interface DB {
   invite: InviteTable
   user_preference: UserPreferenceTable
   issue: IssueTable
+  cycle: CycleTable
   label: LabelTable
   issue_label: IssueLabelTable
   comment: CommentTable
   saved_view: SavedViewTable
   issue_sequence: IssueSequenceTable
+  cycle_sequence: CycleSequenceTable
   user: UserTable
 }
 
@@ -199,6 +226,12 @@ export type UserPreferenceUpdate = Updateable<UserPreferenceTable>
 export type Issue = Selectable<IssueTable>
 export type NewIssue = Insertable<IssueTable>
 export type IssueUpdate = Updateable<IssueTable>
+
+export type Cycle = Selectable<CycleTable>
+export type NewCycle = Insertable<CycleTable>
+export type CycleUpdate = Updateable<CycleTable>
+
+export type CycleSequence = Selectable<CycleSequenceTable>
 
 export type Label = Selectable<LabelTable>
 export type NewLabel = Insertable<LabelTable>

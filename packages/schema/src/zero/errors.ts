@@ -4,6 +4,7 @@ export const MutationErrorCode = {
   invalidName: 'invalid_name',
   invalidKey: 'invalid_key',
   invalidColor: 'invalid_color',
+  invalidDate: 'invalid_date',
   duplicateKey: 'duplicate_key',
   notAuthorized: 'not_authorized',
   lastAdmin: 'last_admin',

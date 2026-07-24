@@ -1,6 +1,7 @@
 export { newId } from './id.js'
 export type {
   AuthContext,
+  CycleStatus,
   IssueGrouping,
   IssuePriority,
   IssueSortKey,
@@ -11,6 +12,7 @@ export type {
   WorkspaceRole,
 } from './zero/context.js'
 export {
+  CYCLE_STATUSES,
   canManage,
   canRead,
   canWrite,
@@ -23,6 +25,13 @@ export {
   THEME_PRESETS,
   WORKSPACE_ROLES,
 } from './zero/context.js'
+export type { CycleOrderRow } from './zero/cycles.js'
+export {
+  compareCycles,
+  FINISHED_ISSUE_STATUSES,
+  isUnfinished,
+  nextCycleId,
+} from './zero/cycles.js'
 export type {
   CiHealth,
   DeliverySignal,
@@ -49,13 +58,17 @@ export {
   matchesFilter,
 } from './zero/filter.js'
 export type {
+  CreateCycleArgs,
   CreateIssueArgs,
   RenameWorkspaceArgs,
   SetPreferenceArgs,
 } from './zero/mutators.js'
 export {
+  ACTIVATE_CYCLE_MUTATOR_NAME,
   ADD_ISSUE_LABEL_MUTATOR_NAME,
   ASSIGN_ISSUE_MUTATOR_NAME,
+  activateCycle,
+  activateCycleArgs,
   addIssueLabel,
   addIssueLabelArgs,
   addTeamMember,
@@ -66,14 +79,21 @@ export {
   assertValidTeamKey,
   assignIssue,
   assignIssueArgs,
+  COMPLETE_CYCLE_MUTATOR_NAME,
   CREATE_COMMENT_MUTATOR_NAME,
+  CREATE_CYCLE_MUTATOR_NAME,
   CREATE_ISSUE_MUTATOR_NAME,
   CREATE_LABEL_MUTATOR_NAME,
   CREATE_SAVED_VIEW_MUTATOR_NAME,
+  CYCLE_NAME_MAX_LENGTH,
   changeMemberRole,
   changeMemberRoleArgs,
+  completeCycle,
+  completeCycleArgs,
   createComment,
   createCommentArgs,
+  createCycle,
+  createCycleArgs,
   createInvite,
   createInviteArgs,
   createIssue,
@@ -119,9 +139,12 @@ export {
   revokeInvite,
   revokeInviteArgs,
   SAVED_VIEW_NAME_MAX_LENGTH,
+  SET_ISSUE_CYCLE_MUTATOR_NAME,
   SET_ISSUE_PRIORITY_MUTATOR_NAME,
   SET_ISSUE_STATUS_MUTATOR_NAME,
   SET_PREFERENCE_MUTATOR_NAME,
+  setIssueCycle,
+  setIssueCycleArgs,
   setIssuePriority,
   setIssuePriorityArgs,
   setIssueStatus,
@@ -130,7 +153,10 @@ export {
   setPreferenceArgs,
   TEAM_KEY_MAX_LENGTH,
   TEAM_NAME_MAX_LENGTH,
+  UPDATE_CYCLE_MUTATOR_NAME,
   UPDATE_ISSUE_MUTATOR_NAME,
+  updateCycle,
+  updateCycleArgs,
   updateIssue,
   updateIssueArgs,
   updateSavedView,
@@ -138,6 +164,7 @@ export {
   WORKSPACE_NAME_MAX_LENGTH,
 } from './zero/mutators.js'
 export {
+  CYCLES_BY_TEAM_QUERY_NAME,
   denyAll,
   INVITES_ALL_QUERY_NAME,
   ISSUE_DETAIL_QUERY_NAME,

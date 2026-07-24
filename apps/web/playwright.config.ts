@@ -42,6 +42,7 @@ export default defineConfig({
         DATABASE_URL,
         PORT: String(SERVER_PORT),
         LOG_LEVEL: 'warn',
+        CYCLE_MAINTENANCE: 'false',
         BETTER_AUTH_SECRET: process.env.E2E_BETTER_AUTH_SECRET ?? 'e2e-development-secret-value',
         BETTER_AUTH_URL: SERVER_ORIGIN,
         WEB_ORIGIN: `http://localhost:${WEB_PORT}`,

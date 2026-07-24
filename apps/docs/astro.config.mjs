@@ -10,7 +10,10 @@ export default defineConfig({
       sidebar: [
         {
           label: 'Features',
-          items: [{ label: 'Board', slug: 'features/board' }],
+          items: [
+            { label: 'Board', slug: 'features/board' },
+            { label: 'Cycles', slug: 'features/cycles' },
+          ],
         },
         {
           label: 'Self-hosting',

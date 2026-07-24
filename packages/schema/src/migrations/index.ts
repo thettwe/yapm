@@ -4,6 +4,7 @@ import * as m0002 from './0002_workspace_auth.js'
 import * as m0003 from './0003_user_preference.js'
 import * as m0004 from './0004_issue_core.js'
 import * as m0005 from './0005_board_rank.js'
+import * as m0006 from './0006_cycles.js'
 
 export const migrations: Record<string, Migration> = {
   '0001_workspace': m0001,
@@ -11,6 +12,7 @@ export const migrations: Record<string, Migration> = {
   '0003_user_preference': m0003,
   '0004_issue_core': m0004,
   '0005_board_rank': m0005,
+  '0006_cycles': m0006,
 }
 
 export const migrationProvider: MigrationProvider = {

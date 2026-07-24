@@ -33,7 +33,14 @@ import {
   CommandList,
 } from '@yapm/ui/components/command-palette'
 import { StatusGlyph } from '@yapm/ui/components/status-glyph'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useMembership } from '@/auth/use-membership'
 import {
   appendRank,
@@ -41,7 +48,9 @@ import {
   type BoardColumn,
   buildColumns,
   columnDroppableId,
+  FOCUS_RESTORE_FRAMES,
   rankForSlot,
+  shouldVirtualize,
 } from '@/board/model'
 import {
   type IssueRowData,
@@ -53,8 +62,6 @@ import {
 } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
 import { VirtualColumnList } from './virtual-column'
-
-const VIRTUALIZE_THRESHOLD = 100
 
 function toCardData(issue: {
   id: string
@@ -177,20 +184,34 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
   )
 
   // Restore focus to a moved card after its optimistic row lands and it remounts in the new
-  // column (a keyboard move would otherwise drop focus to <body>). A card that lands in a
-  // virtualized column outside the rendered window is scrolled into view and focused by its
-  // VirtualColumnList; here the retries are bounded so a genuinely unreachable target is
-  // dropped rather than left pending, where a late remount could abruptly steal focus.
+  // column (a keyboard move would otherwise drop focus to <body>). The restore must outlast the
+  // competing focus handoffs that fire in the same tick: Radix returns focus to the (now stale)
+  // trigger when the move palette closes, and dnd-kit's KeyboardSensor refocuses the activator
+  // after a drop. So focus is (re)asserted across a bounded run of animation frames and only
+  // settled once it has actually stuck (activeElement is the card). A card that lands in a
+  // virtualized column outside the rendered window is never found here; those frames elapse
+  // harmlessly while its VirtualColumnList scrolls it into view and focuses it instead.
   useEffect(() => {
     if (pendingFocus === null) return
-    const el = containerRef.current?.querySelector<HTMLElement>(`[data-card-id="${pendingFocus}"]`)
-    if (el) {
-      el.focus()
-      setPendingFocus(null)
-      return
+    let frame = 0
+    const step = () => {
+      const el = containerRef.current?.querySelector<HTMLElement>(
+        `[data-card-id="${pendingFocus}"]`,
+      )
+      if (el && document.activeElement === el) {
+        setPendingFocus(null)
+        return
+      }
+      el?.focus()
+      pendingAttemptsRef.current += 1
+      if (pendingAttemptsRef.current >= FOCUS_RESTORE_FRAMES) {
+        setPendingFocus(null)
+        return
+      }
+      frame = requestAnimationFrame(step)
     }
-    pendingAttemptsRef.current += 1
-    if (pendingAttemptsRef.current >= 3) setPendingFocus(null)
+    frame = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(frame)
   }, [cards, pendingFocus])
 
   const onDragStart = useCallback((event: DragStartEvent) => {
@@ -404,7 +425,7 @@ function Column({
     data: { status: column.status, type: 'column' },
   })
   const ids = column.cards.map((card) => card.id)
-  const virtualize = column.cards.length > VIRTUALIZE_THRESHOLD
+  const virtualize = shouldVirtualize(column.cards.length)
 
   return (
     <section
@@ -478,10 +499,30 @@ export function SortableCard({
 
   // dnd-kit reports a read-only card as aria-disabled/draggable because dragging is off, but the
   // card is still an operable button (click and the `o` shortcut open the issue). Strip those
-  // states for viewers so AT announces an actionable button rather than a dead/dimmed one.
+  // states for viewers so AT announces an actionable button rather than a dead/dimmed one — and
+  // drop the pick-up instructions (aria-describedby), which cannot apply when dragging is off.
   const dragA11y = readOnly
-    ? { ...attributes, 'aria-disabled': undefined, 'aria-roledescription': undefined }
+    ? {
+        ...attributes,
+        'aria-disabled': undefined,
+        'aria-roledescription': undefined,
+        'aria-describedby': undefined,
+      }
     : attributes
+
+  // For viewers dnd-kit's listeners are absent, so the role=button card would be keyboard-dead.
+  // Give it a real Enter/Space activation that opens the issue. Writers keep Enter/Space owned by
+  // dnd-kit's KeyboardSensor for pick-up/drop, so this handler is attached only when read-only.
+  const keyboardOpen = readOnly
+    ? {
+        onKeyDown: (event: ReactKeyboardEvent) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            onOpenCard(card.id)
+          }
+        },
+      }
+    : undefined
 
   return (
     <BoardCard
@@ -500,9 +541,11 @@ export function SortableCard({
       priority={PRIORITY_TO_KIND[card.priority]}
       labels={(card.labels ?? []).map((l) => ({ name: l.name, color: l.color }))}
       {...assigneeProps(card)}
+      aria-keyshortcuts="o"
       onClick={() => onOpenCard(card.id)}
       {...dragA11y}
       {...listeners}
+      {...keyboardOpen}
     />
   )
 }

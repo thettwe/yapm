@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useEffect, useRef } from 'react'
-import type { BoardCardData } from '@/board/model'
+import { type BoardCardData, FOCUS_RESTORE_FRAMES } from '@/board/model'
 import { SortableCard } from './board'
 
 const ESTIMATED_CARD_HEIGHT = 96
@@ -41,21 +41,29 @@ export function VirtualColumnList({
   })
 
   // A card moved into this virtualized column may land outside the rendered window, so the
-  // board-level focus-restore cannot reach it. When it belongs here, scroll it into view, then
-  // focus it on the next frame once its row has mounted and clear the pending-focus state — so
-  // "focus returns to the moved card" holds even for appended-to-a-large-column moves.
+  // board-level focus-restore cannot reach it. When it belongs here, scroll it into view and
+  // focus it. Scrolling only mounts the target row on a following frame, and the focus can then
+  // be stolen by the same competing handoffs the board contends with, so the scroll+focus is
+  // (re)asserted across a bounded run of frames and settled only once focus has actually stuck —
+  // so "focus returns to the moved card" holds even for appended-to-a-large-column moves.
   useEffect(() => {
     if (pendingFocusId === null) return
     const index = cards.findIndex((card) => card.id === pendingFocusId)
     if (index === -1) return
-    virtualizer.scrollToIndex(index, { align: 'auto' })
-    const frame = requestAnimationFrame(() => {
+    let frame = 0
+    let attempts = 0
+    const step = () => {
+      virtualizer.scrollToIndex(index, { align: 'auto' })
       const el = scrollRef.current?.querySelector<HTMLElement>(`[data-card-id="${pendingFocusId}"]`)
-      if (el) {
-        el.focus()
+      el?.focus()
+      attempts += 1
+      if ((el && document.activeElement === el) || attempts >= FOCUS_RESTORE_FRAMES) {
         onFocusRestored()
+        return
       }
-    })
+      frame = requestAnimationFrame(step)
+    }
+    frame = requestAnimationFrame(step)
     return () => cancelAnimationFrame(frame)
   }, [cards, pendingFocusId, virtualizer, onFocusRestored])
 

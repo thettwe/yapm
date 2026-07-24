@@ -40,6 +40,18 @@ export function columnDroppableId(status: IssueStatus): string {
   return `${COLUMN_DROPPABLE_PREFIX}${status}`
 }
 
+// A column virtualizes its cards lazily once it grows past this many; at or below it stays plain.
+export const VIRTUALIZE_THRESHOLD = 100
+
+export function shouldVirtualize(count: number): boolean {
+  return count > VIRTUALIZE_THRESHOLD
+}
+
+// Frames over which focus restoration is (re)asserted before giving up — long enough to outlast
+// the same-tick focus handoffs from Radix (palette close) and dnd-kit (post-drop) and a
+// virtualizer's scroll-then-mount, short enough that an unreachable target never lingers.
+export const FOCUS_RESTORE_FRAMES = 12
+
 // The nearest real (non-null) rank scanning outward from a slot. Cards are densely ranked from
 // creation, so real ranks are contiguous at the front of a column's display order and the value
 // found scanning back normally precedes the one found scanning forward. It is not guaranteed

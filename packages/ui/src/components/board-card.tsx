@@ -63,11 +63,15 @@ function BoardCard({
     >
       <span
         aria-hidden="true"
-        className={cn(
-          'absolute top-0 left-0 h-full w-0.5 rounded-r-full bg-accent transition-opacity',
-          selected ? 'opacity-100' : 'opacity-0 group-focus-visible/board-card:opacity-100',
-        )}
-      />
+        className="pointer-events-none absolute inset-0 overflow-hidden rounded-card"
+      >
+        <span
+          className={cn(
+            'absolute top-0 left-0 h-full w-0.5 rounded-r-full bg-accent transition-opacity',
+            selected ? 'opacity-100' : 'opacity-0 group-focus-visible/board-card:opacity-100',
+          )}
+        />
+      </span>
 
       <div className="flex items-center gap-2">
         <StatusGlyph status={status} />

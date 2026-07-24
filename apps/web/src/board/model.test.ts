@@ -1,6 +1,14 @@
 import { initialRanks } from '@yapm/schema'
 import { describe, expect, it } from 'vitest'
-import { appendRank, type BoardCardData, buildColumns, compareCards, rankForSlot } from './model'
+import {
+  appendRank,
+  type BoardCardData,
+  buildColumns,
+  compareCards,
+  rankForSlot,
+  shouldVirtualize,
+  VIRTUALIZE_THRESHOLD,
+} from './model'
 
 // Mint n ranks and hand them back as definitely-present values (the board never reads a
 // missing rank; the test asserts against concrete keys).
@@ -116,6 +124,20 @@ describe('rankForSlot', () => {
     }).not.toThrow()
     expect(typeof rank).toBe('string')
     expect(collided < rank).toBe(true)
+  })
+})
+
+describe('shouldVirtualize', () => {
+  it('stays plain at the threshold and virtualizes just past it', () => {
+    expect(shouldVirtualize(VIRTUALIZE_THRESHOLD)).toBe(false)
+    expect(shouldVirtualize(VIRTUALIZE_THRESHOLD + 1)).toBe(true)
+    expect(shouldVirtualize(100)).toBe(false)
+    expect(shouldVirtualize(101)).toBe(true)
+  })
+
+  it('stays plain for empty and small columns', () => {
+    expect(shouldVirtualize(0)).toBe(false)
+    expect(shouldVirtualize(1)).toBe(false)
   })
 })
 

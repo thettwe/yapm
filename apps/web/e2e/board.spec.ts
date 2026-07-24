@@ -111,6 +111,8 @@ test('the command palette moves a focused card to another column and it persists
   await palette.getByRole('option', { name: 'Move to In Review' }).click()
 
   await expect(card(column(page, 'In Review'), title)).toBeVisible({ timeout: 20_000 })
+  // Focus returns to the moved card in its destination column (the pendingFocus restore path).
+  await expect(card(column(page, 'In Review'), title)).toBeFocused()
 
   await page.reload()
   await expect(card(column(page, 'In Review'), title)).toBeVisible({ timeout: 20_000 })
@@ -137,9 +139,80 @@ test('a card can be picked up and moved across columns with the keyboard', async
   // The card leaves the Todo column and its status changes to the next column (In Progress).
   await expect(card(column(page, 'Todo'), title)).toHaveCount(0, { timeout: 20_000 })
   await expect(card(column(page, 'In Progress'), title)).toBeVisible({ timeout: 20_000 })
+  // Focus returns to the moved card in its new location (the pendingFocus restore path).
+  await expect(card(column(page, 'In Progress'), title)).toBeFocused()
 
   await page.reload()
   await expect(card(column(page, 'In Progress'), title)).toBeVisible({ timeout: 20_000 })
+})
+
+// Seed a batch of issues from the list, each landing in Todo. Waits for the composer to close
+// (the create's server ack) before the next, so the loop stays reliable across many issues.
+async function seedIssues(page: Page, titles: string[]): Promise<void> {
+  for (const title of titles) {
+    await page.getByTestId('new-issue').click()
+    const input = page.getByLabel('New issue title')
+    await expect(input).toBeFocused()
+    await input.fill(title)
+    await page.keyboard.press('Enter')
+    await expect(input).toBeHidden({ timeout: 20_000 })
+  }
+}
+
+test('a large column virtualizes yet a card moved into it is scrolled to and focused', async ({
+  page,
+}) => {
+  test.slow()
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  // The mover is created first so it holds the lowest rank and sits at the top of Todo, where it
+  // is inside the rendered virtual window and can be focused directly.
+  const mover = unique('Mover')
+  const fillers = Array.from({ length: 101 }, (_, i) => unique(`Filler ${i}`))
+  await seedIssues(page, [mover, ...fillers])
+
+  await page.getByRole('link', { name: 'Board' }).click()
+  const todo = column(page, 'Todo')
+  await expect(todo).toBeVisible({ timeout: 20_000 })
+  // Todo now holds 102 cards (>100), so it virtualizes: its accessible name reflects the full
+  // count while far fewer cards are actually mounted in the DOM.
+  await expect(todo).toHaveAccessibleName(/^Todo, 102 issues/)
+  await expect(card(todo, mover).first()).toBeVisible({ timeout: 20_000 })
+  const mounted = await todo.locator(CARD).count()
+  expect(mounted).toBeLessThan(102)
+
+  // Move the top card out to In Progress, then back into the virtualized Todo column via the
+  // palette. It appends at the bottom — outside the rendered window — so VirtualColumnList must
+  // scroll it into view and restore focus to it.
+  await card(todo, mover).first().focus()
+  await page.keyboard.press('m')
+  const toProgress = page.getByRole('dialog', { name: 'Move issue' })
+  await expect(toProgress).toBeVisible()
+  await toProgress.getByPlaceholder(/Move .* to/).fill('In Progress')
+  await toProgress.getByRole('option', { name: 'Move to In Progress' }).click()
+  await expect(card(column(page, 'In Progress'), mover)).toBeVisible({ timeout: 20_000 })
+
+  await card(column(page, 'In Progress'), mover).first().focus()
+  await page.keyboard.press('m')
+  const toTodo = page.getByRole('dialog', { name: 'Move issue' })
+  await expect(toTodo).toBeVisible()
+  await toTodo.getByPlaceholder(/Move .* to/).fill('Todo')
+  await toTodo.getByRole('option', { name: 'Move to Todo' }).click()
+
+  // The card lands back in the virtualized Todo column, is scrolled into view, and receives
+  // focus in its new location (the VirtualColumnList scroll-and-focus path).
+  await expect(card(column(page, 'Todo'), mover).first()).toBeVisible({ timeout: 20_000 })
+  await expect(card(column(page, 'Todo'), mover).first()).toBeFocused()
+
+  // Still keyboard-movable from within the virtualized column: pick it up and drop it one column
+  // over, and it changes status.
+  await page.keyboard.press('Space')
+  await page.waitForTimeout(300)
+  await page.keyboard.press('ArrowRight')
+  await page.waitForTimeout(300)
+  await page.keyboard.press('Space')
+  await expect(card(column(page, 'In Progress'), mover)).toBeVisible({ timeout: 20_000 })
 })
 
 test('Escape cancels a pick-up and writes no change', async ({ page }) => {

@@ -1,12 +1,30 @@
-import { defineMutator, defineMutators, type Transaction } from '@rocicorp/zero'
+import {
+  defineMutator,
+  defineMutators,
+  type ReadonlyJSONValue,
+  type Transaction,
+} from '@rocicorp/zero'
 import * as z from 'zod'
-import { type AuthContext, canManage, isAuthenticated, isMember, THEME_PRESETS } from './context.js'
+import {
+  type AuthContext,
+  canManage,
+  canWrite,
+  ISSUE_PRIORITIES,
+  ISSUE_STATUSES,
+  isAuthenticated,
+  isMember,
+  THEME_PRESETS,
+} from './context.js'
 import { MutationError, MutationErrorCode } from './errors.js'
+import { issueFilterSchema, issueGroupingSchema, issueSortSchema } from './filter.js'
 import { zql } from './schema.js'
 
 export const WORKSPACE_NAME_MAX_LENGTH = 200
 export const TEAM_NAME_MAX_LENGTH = 200
 export const TEAM_KEY_MAX_LENGTH = 16
+export const ISSUE_TITLE_MAX_LENGTH = 300
+export const LABEL_NAME_MAX_LENGTH = 60
+export const SAVED_VIEW_NAME_MAX_LENGTH = 100
 
 const TEAM_KEY_PATTERN = /^[A-Z][A-Z0-9]*$/u
 
@@ -23,6 +41,27 @@ export function isParseableColor(value: string): boolean {
 
 const roleSchema = z.enum(['admin', 'member', 'viewer'])
 const timestamp = z.number().int().positive()
+const issueStatusSchema = z.enum(ISSUE_STATUSES)
+const issuePrioritySchema = z.enum(ISSUE_PRIORITIES)
+
+// Runtime-validated by the real filter/sort schemas, but typed as JSON so the mutator arg
+// validators satisfy Zero's `ReadonlyJSONValue` input/output constraint (a structured filter
+// is JSON, TS just can't prove the index signature).
+function jsonArg<T>(schema: z.ZodType<T>) {
+  return z.custom<ReadonlyJSONValue>((value) => schema.safeParse(value).success, {
+    message: 'invalid structured value',
+  })
+}
+const filterArg = jsonArg(issueFilterSchema)
+const sortArg = jsonArg(issueSortSchema)
+
+// A TipTap document, validated structurally without stripping its nodes (z.custom passes the
+// value through untouched, unlike z.object which would drop unknown content keys).
+const richTextSchema = z.custom<ReadonlyJSONValue>(
+  (value) =>
+    typeof value === 'object' && value !== null && (value as { type?: unknown }).type === 'doc',
+  { message: 'must be a TipTap document' },
+)
 
 export function normalizeName(name: string): string {
   return name.replace(/\s+/gu, ' ').trim()
@@ -71,6 +110,64 @@ async function assertNotLastAdmin(tx: Transaction, id: string): Promise<void> {
       id,
     )
   }
+}
+
+// Team-scoped write gate. A workspace admin may write to any team; otherwise the caller
+// must be a member of the target team. The caller's own membership is read, never the
+// target row, so this leaks nothing about the target's existence.
+async function assertTeamAccess(
+  tx: Transaction,
+  ctx: AuthContext,
+  teamId: string,
+  id: string,
+): Promise<void> {
+  if (ctx.role === 'admin') return
+  const membership = await tx.run(
+    zql.team_membership.where('teamId', teamId).where('userId', ctx.userID).one(),
+  )
+  if (!membership) throw notAuthorized(id)
+}
+
+async function assertTeamMember(
+  tx: Transaction,
+  teamId: string,
+  userId: string,
+  id: string,
+): Promise<void> {
+  const membership = await tx.run(
+    zql.team_membership.where('teamId', teamId).where('userId', userId).one(),
+  )
+  if (!membership) {
+    throw new MutationError('User is not a member of the team', MutationErrorCode.crossTeam, id)
+  }
+}
+
+interface IssueRow {
+  id: string
+  teamId: string
+}
+
+// Load an existing issue for a write. The role-capability gate (`canWrite`) must run in the
+// caller before this so a viewer/non-member is rejected before any existence check; here the
+// row is read and a generic not-authorized is thrown for both "missing" and "wrong team" so
+// a private issue's existence never leaks.
+async function loadIssueForWrite(
+  tx: Transaction,
+  ctx: AuthContext,
+  issueId: string,
+): Promise<IssueRow> {
+  const issue = (await tx.run(zql.issue.where('id', issueId).one())) as IssueRow | undefined
+  if (!issue) throw notAuthorized(issueId)
+  await assertTeamAccess(tx, ctx, issue.teamId, issueId)
+  return issue
+}
+
+function assertParseableColor(color: string, id: string): string {
+  const value = color.trim()
+  if (!isParseableColor(value)) {
+    throw new MutationError('Color must be a parseable color', MutationErrorCode.invalidColor, id)
+  }
+  return value
 }
 
 export const renameWorkspaceArgs = z.object({
@@ -382,6 +479,358 @@ export const setPreference = defineMutator(setPreferenceArgs, async ({ tx, args,
   })
 })
 
+export const createIssueArgs = z.object({
+  id: z.string().min(1),
+  teamId: z.string().min(1),
+  title: z.string(),
+  status: issueStatusSchema,
+  priority: issuePrioritySchema,
+  assigneeId: z.string().min(1).nullable().optional(),
+  description: richTextSchema.nullable().optional(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+})
+
+export type CreateIssueArgs = z.infer<typeof createIssueArgs>
+
+// Shared client + server create. Leaves `number` unset (Postgres default NULL); the
+// per-team number is claimed only in the server-authoritative override (server-mutators.ts).
+// `creator` is taken from the verified ctx, never args; the UUIDv7 id is minted at the call
+// site, never here (mutators re-run during rebase).
+export const createIssue = defineMutator(createIssueArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await assertTeamAccess(tx, ctx, args.teamId, args.id)
+
+  const title = assertValidName(args.title, args.id, ISSUE_TITLE_MAX_LENGTH)
+  if (args.assigneeId != null) {
+    await assertTeamMember(tx, args.teamId, args.assigneeId, args.id)
+  }
+
+  await tx.mutate.issue.insert({
+    id: args.id,
+    teamId: args.teamId,
+    title,
+    description: args.description ?? null,
+    status: args.status,
+    priority: args.priority,
+    assigneeId: args.assigneeId ?? null,
+    creatorId: ctx.userID,
+    createdAt: args.createdAt,
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const updateIssueArgs = z.object({
+  id: z.string().min(1),
+  title: z.string().optional(),
+  description: richTextSchema.nullable().optional(),
+  updatedAt: timestamp,
+})
+
+export const updateIssue = defineMutator(updateIssueArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadIssueForWrite(tx, ctx, args.id)
+
+  const title =
+    args.title === undefined
+      ? undefined
+      : assertValidName(args.title, args.id, ISSUE_TITLE_MAX_LENGTH)
+
+  await tx.mutate.issue.update({
+    id: args.id,
+    ...(title === undefined ? {} : { title }),
+    ...(args.description === undefined ? {} : { description: args.description }),
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const setIssueStatusArgs = z.object({
+  id: z.string().min(1),
+  status: issueStatusSchema,
+  updatedAt: timestamp,
+})
+
+export const setIssueStatus = defineMutator(setIssueStatusArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadIssueForWrite(tx, ctx, args.id)
+  await tx.mutate.issue.update({ id: args.id, status: args.status, updatedAt: args.updatedAt })
+})
+
+export const setIssuePriorityArgs = z.object({
+  id: z.string().min(1),
+  priority: issuePrioritySchema,
+  updatedAt: timestamp,
+})
+
+export const setIssuePriority = defineMutator(setIssuePriorityArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadIssueForWrite(tx, ctx, args.id)
+  await tx.mutate.issue.update({ id: args.id, priority: args.priority, updatedAt: args.updatedAt })
+})
+
+export const assignIssueArgs = z.object({
+  id: z.string().min(1),
+  assigneeId: z.string().min(1).nullable(),
+  updatedAt: timestamp,
+})
+
+export const assignIssue = defineMutator(assignIssueArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const issue = await loadIssueForWrite(tx, ctx, args.id)
+
+  if (args.assigneeId !== null) {
+    await assertTeamMember(tx, issue.teamId, args.assigneeId, args.id)
+  }
+
+  await tx.mutate.issue.update({
+    id: args.id,
+    assigneeId: args.assigneeId,
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const addIssueLabelArgs = z.object({
+  issueId: z.string().min(1),
+  labelId: z.string().min(1),
+  createdAt: timestamp,
+})
+
+export const addIssueLabel = defineMutator(addIssueLabelArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.issueId)
+  const issue = await loadIssueForWrite(tx, ctx, args.issueId)
+
+  const label = (await tx.run(zql.label.where('id', args.labelId).one())) as
+    | { id: string; teamId: string }
+    | undefined
+  if (!label || label.teamId !== issue.teamId) {
+    throw new MutationError(
+      'Label and issue must belong to the same team',
+      MutationErrorCode.crossTeam,
+      args.issueId,
+    )
+  }
+
+  await tx.mutate.issue_label.upsert({
+    issueId: args.issueId,
+    labelId: args.labelId,
+    teamId: issue.teamId,
+    createdAt: args.createdAt,
+  })
+})
+
+export const removeIssueLabelArgs = z.object({
+  issueId: z.string().min(1),
+  labelId: z.string().min(1),
+})
+
+export const removeIssueLabel = defineMutator(removeIssueLabelArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.issueId)
+  await loadIssueForWrite(tx, ctx, args.issueId)
+  await tx.mutate.issue_label.delete({ issueId: args.issueId, labelId: args.labelId })
+})
+
+export const createLabelArgs = z.object({
+  id: z.string().min(1),
+  teamId: z.string().min(1),
+  name: z.string(),
+  color: z.string(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+})
+
+export const createLabel = defineMutator(createLabelArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await assertTeamAccess(tx, ctx, args.teamId, args.id)
+
+  const name = assertValidName(args.name, args.id, LABEL_NAME_MAX_LENGTH)
+  const color = assertParseableColor(args.color, args.id)
+
+  await tx.mutate.label.insert({
+    id: args.id,
+    teamId: args.teamId,
+    name,
+    color,
+    createdAt: args.createdAt,
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const renameLabelArgs = z.object({
+  id: z.string().min(1),
+  name: z.string().optional(),
+  color: z.string().optional(),
+  updatedAt: timestamp,
+})
+
+export const renameLabel = defineMutator(renameLabelArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const label = (await tx.run(zql.label.where('id', args.id).one())) as
+    | { id: string; teamId: string }
+    | undefined
+  if (!label) throw notAuthorized(args.id)
+  await assertTeamAccess(tx, ctx, label.teamId, args.id)
+
+  const name =
+    args.name === undefined ? undefined : assertValidName(args.name, args.id, LABEL_NAME_MAX_LENGTH)
+  const color = args.color === undefined ? undefined : assertParseableColor(args.color, args.id)
+
+  await tx.mutate.label.update({
+    id: args.id,
+    ...(name === undefined ? {} : { name }),
+    ...(color === undefined ? {} : { color }),
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const deleteLabelArgs = z.object({ id: z.string().min(1) })
+
+export const deleteLabel = defineMutator(deleteLabelArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const label = (await tx.run(zql.label.where('id', args.id).one())) as
+    | { id: string; teamId: string }
+    | undefined
+  if (!label) throw notAuthorized(args.id)
+  await assertTeamAccess(tx, ctx, label.teamId, args.id)
+  await tx.mutate.label.delete({ id: args.id })
+})
+
+export const createCommentArgs = z.object({
+  id: z.string().min(1),
+  issueId: z.string().min(1),
+  body: richTextSchema,
+  createdAt: timestamp,
+  updatedAt: timestamp,
+})
+
+// `author` from ctx, never args; team-scoped canWrite (viewers rejected). The comment's
+// `team_id` is copied off its issue so it inherits the same two-hop sync scope.
+export const createComment = defineMutator(createCommentArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const issue = await loadIssueForWrite(tx, ctx, args.issueId)
+
+  await tx.mutate.comment.insert({
+    id: args.id,
+    issueId: args.issueId,
+    teamId: issue.teamId,
+    authorId: ctx.userID,
+    body: args.body,
+    createdAt: args.createdAt,
+    updatedAt: args.updatedAt,
+  })
+})
+
+interface CommentRow {
+  id: string
+  authorId: string
+}
+
+async function loadCommentForAuthor(
+  tx: Transaction,
+  ctx: AuthContext,
+  id: string,
+): Promise<CommentRow> {
+  const comment = (await tx.run(zql.comment.where('id', id).one())) as CommentRow | undefined
+  if (!comment) throw notAuthorized(id)
+  if (comment.authorId !== ctx.userID && ctx.role !== 'admin') throw notAuthorized(id)
+  return comment
+}
+
+export const editCommentArgs = z.object({
+  id: z.string().min(1),
+  body: richTextSchema,
+  updatedAt: timestamp,
+})
+
+export const editComment = defineMutator(editCommentArgs, async ({ tx, args, ctx }) => {
+  if (!isMember(ctx)) throw notAuthorized(args.id)
+  await loadCommentForAuthor(tx, ctx, args.id)
+  await tx.mutate.comment.update({ id: args.id, body: args.body, updatedAt: args.updatedAt })
+})
+
+export const deleteCommentArgs = z.object({ id: z.string().min(1) })
+
+export const deleteComment = defineMutator(deleteCommentArgs, async ({ tx, args, ctx }) => {
+  if (!isMember(ctx)) throw notAuthorized(args.id)
+  await loadCommentForAuthor(tx, ctx, args.id)
+  await tx.mutate.comment.delete({ id: args.id })
+})
+
+export const createSavedViewArgs = z.object({
+  id: z.string().min(1),
+  teamId: z.string().min(1),
+  name: z.string(),
+  filter: filterArg,
+  grouping: issueGroupingSchema,
+  sort: sortArg,
+  createdAt: timestamp,
+  updatedAt: timestamp,
+})
+
+export const createSavedView = defineMutator(createSavedViewArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await assertTeamAccess(tx, ctx, args.teamId, args.id)
+
+  const name = assertValidName(args.name, args.id, SAVED_VIEW_NAME_MAX_LENGTH)
+
+  await tx.mutate.saved_view.insert({
+    id: args.id,
+    teamId: args.teamId,
+    name,
+    filter: args.filter,
+    grouping: args.grouping,
+    sort: args.sort,
+    createdBy: ctx.userID,
+    createdAt: args.createdAt,
+    updatedAt: args.updatedAt,
+  })
+})
+
+interface SavedViewRow {
+  id: string
+  teamId: string
+  createdBy: string
+}
+
+export const updateSavedViewArgs = z.object({
+  id: z.string().min(1),
+  name: z.string().optional(),
+  filter: filterArg.optional(),
+  grouping: issueGroupingSchema.optional(),
+  sort: sortArg.optional(),
+  updatedAt: timestamp,
+})
+
+export const updateSavedView = defineMutator(updateSavedViewArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const view = (await tx.run(zql.saved_view.where('id', args.id).one())) as SavedViewRow | undefined
+  if (!view) throw notAuthorized(args.id)
+  await assertTeamAccess(tx, ctx, view.teamId, args.id)
+
+  const name =
+    args.name === undefined
+      ? undefined
+      : assertValidName(args.name, args.id, SAVED_VIEW_NAME_MAX_LENGTH)
+
+  await tx.mutate.saved_view.update({
+    id: args.id,
+    ...(name === undefined ? {} : { name }),
+    ...(args.filter === undefined ? {} : { filter: args.filter }),
+    ...(args.grouping === undefined ? {} : { grouping: args.grouping }),
+    ...(args.sort === undefined ? {} : { sort: args.sort }),
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const deleteSavedViewArgs = z.object({ id: z.string().min(1) })
+
+export const deleteSavedView = defineMutator(deleteSavedViewArgs, async ({ tx, args, ctx }) => {
+  if (!isMember(ctx)) throw notAuthorized(args.id)
+  const view = (await tx.run(zql.saved_view.where('id', args.id).one())) as SavedViewRow | undefined
+  if (!view) throw notAuthorized(args.id)
+  if (view.createdBy !== ctx.userID && ctx.role !== 'admin') throw notAuthorized(args.id)
+  await tx.mutate.saved_view.delete({ id: args.id })
+})
+
 export const mutators = defineMutators({
   workspace: {
     rename: renameWorkspace,
@@ -404,7 +853,41 @@ export const mutators = defineMutators({
     create: createInvite,
     revoke: revokeInvite,
   },
+  issue: {
+    create: createIssue,
+    update: updateIssue,
+    setStatus: setIssueStatus,
+    setPriority: setIssuePriority,
+    assign: assignIssue,
+    addLabel: addIssueLabel,
+    removeLabel: removeIssueLabel,
+  },
+  label: {
+    create: createLabel,
+    rename: renameLabel,
+    delete: deleteLabel,
+  },
+  comment: {
+    create: createComment,
+    edit: editComment,
+    delete: deleteComment,
+  },
+  savedView: {
+    create: createSavedView,
+    update: updateSavedView,
+    delete: deleteSavedView,
+  },
 })
 
 export const RENAME_WORKSPACE_MUTATOR_NAME = 'workspace.rename'
 export const SET_PREFERENCE_MUTATOR_NAME = 'preference.set'
+export const CREATE_ISSUE_MUTATOR_NAME = 'issue.create'
+export const UPDATE_ISSUE_MUTATOR_NAME = 'issue.update'
+export const SET_ISSUE_STATUS_MUTATOR_NAME = 'issue.setStatus'
+export const SET_ISSUE_PRIORITY_MUTATOR_NAME = 'issue.setPriority'
+export const ASSIGN_ISSUE_MUTATOR_NAME = 'issue.assign'
+export const ADD_ISSUE_LABEL_MUTATOR_NAME = 'issue.addLabel'
+export const REMOVE_ISSUE_LABEL_MUTATOR_NAME = 'issue.removeLabel'
+export const CREATE_LABEL_MUTATOR_NAME = 'label.create'
+export const CREATE_COMMENT_MUTATOR_NAME = 'comment.create'
+export const CREATE_SAVED_VIEW_MUTATOR_NAME = 'savedView.create'

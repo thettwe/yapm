@@ -7,6 +7,7 @@ export const MutationErrorCode = {
   duplicateKey: 'duplicate_key',
   notAuthorized: 'not_authorized',
   lastAdmin: 'last_admin',
+  crossTeam: 'cross_team',
 } as const
 
 export type MutationErrorCode = (typeof MutationErrorCode)[keyof typeof MutationErrorCode]

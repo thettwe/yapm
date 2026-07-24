@@ -58,6 +58,59 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },
+  issue: {
+    id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    number: { nullable: true, hasDefault: false },
+    title: { nullable: false, hasDefault: false },
+    description: { nullable: true, hasDefault: false },
+    status: { nullable: false, hasDefault: false },
+    priority: { nullable: false, hasDefault: false },
+    assignee_id: { nullable: true, hasDefault: false },
+    creator_id: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  label: {
+    id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    name: { nullable: false, hasDefault: false },
+    color: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  issue_label: {
+    issue_id: { nullable: false, hasDefault: false },
+    label_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+  },
+  comment: {
+    id: { nullable: false, hasDefault: false },
+    issue_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    author_id: { nullable: false, hasDefault: false },
+    body: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  saved_view: {
+    id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    name: { nullable: false, hasDefault: false },
+    filter: { nullable: false, hasDefault: false },
+    grouping: { nullable: false, hasDefault: false },
+    sort: { nullable: false, hasDefault: false },
+    created_by: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  // Server-only per-team counter: present in the Kysely DB interface and migrations, and
+  // deliberately absent from the Zero schema (asserted below) so its churn never syncs.
+  issue_sequence: {
+    team_id: { nullable: false, hasDefault: false },
+    next_number: { nullable: false, hasDefault: true },
+  },
   // better-auth owns this table; the drift test provisions it (see `createAuthUserTable`)
   // so the read-surface interface and Zero schema are still checked against its real shape
   // (reference/kysely-stack.md §5.4).
@@ -116,6 +169,14 @@ async function primaryKeys(db: Kysely<DB>): Promise<Map<string, string[]>> {
 
   return new Map(rows.map((row) => [row.table_name, row.columns]))
 }
+
+describe('issue_sequence is excluded from the Zero schema', () => {
+  it('appears in the Kysely DB map but never in the Zero introspection', () => {
+    expect(Object.keys(KYSELY_DB)).toContain('issue_sequence')
+    const zeroTables = tableShapes().map((table) => table.serverName)
+    expect(zeroTables).not.toContain('issue_sequence')
+  })
+})
 
 describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
   const database = createDatabase({ connectionString: DATABASE_URL ?? '' })

@@ -1,4 +1,5 @@
 import { defineQueries, defineQuery, type Query, type Schema } from '@rocicorp/zero'
+import * as z from 'zod'
 import { type AuthContext, canManage, isAuthenticated, isMember } from './context.js'
 import { zql } from './schema.js'
 
@@ -63,6 +64,57 @@ export const queries = defineQueries({
       return zql.user_preference.where('userId', ctx.userID).one()
     }),
   },
+  issues: {
+    // Team-scoped: only issues in teams the ctx user belongs to, narrowed to one team.
+    // The membership predicate is re-evaluated server-side, so the teamId arg can never
+    // widen the result beyond the caller's teams.
+    byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
+      teamScoped(
+        zql.issue
+          .where('teamId', args.teamId)
+          .related('assignee')
+          .related('labels')
+          .related('creator')
+          .orderBy('createdAt', 'desc'),
+        ctx,
+      ),
+    ),
+    // Every issue assigned to the caller across all of their teams.
+    mine: defineQuery(({ ctx }) => {
+      if (!isMember(ctx)) return denyAll(zql.issue)
+      return teamScoped(
+        zql.issue
+          .where('assigneeId', ctx.userID)
+          .related('assignee')
+          .related('labels')
+          .related('creator')
+          .orderBy('updatedAt', 'desc'),
+        ctx,
+      )
+    }),
+    detail: defineQuery(z.object({ id: z.string() }), ({ args, ctx }) =>
+      teamScoped(
+        zql.issue
+          .where('id', args.id)
+          .related('assignee')
+          .related('creator')
+          .related('labels')
+          .related('comments', (comments) => comments.related('author').orderBy('createdAt', 'asc'))
+          .one(),
+        ctx,
+      ),
+    ),
+  },
+  labels: {
+    byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
+      teamScoped(zql.label.where('teamId', args.teamId).orderBy('name', 'asc'), ctx),
+    ),
+  },
+  savedViews: {
+    byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
+      teamScoped(zql.saved_view.where('teamId', args.teamId).orderBy('createdAt', 'asc'), ctx),
+    ),
+  },
 })
 
 export const WORKSPACE_CURRENT_QUERY_NAME = 'workspace.current'
@@ -71,3 +123,8 @@ export const USERS_ALL_QUERY_NAME = 'users.all'
 export const TEAMS_ALL_QUERY_NAME = 'teams.all'
 export const INVITES_ALL_QUERY_NAME = 'invites.all'
 export const PREFERENCES_MINE_QUERY_NAME = 'preferences.mine'
+export const ISSUES_BY_TEAM_QUERY_NAME = 'issues.byTeam'
+export const ISSUES_MINE_QUERY_NAME = 'issues.mine'
+export const ISSUE_DETAIL_QUERY_NAME = 'issues.detail'
+export const LABELS_BY_TEAM_QUERY_NAME = 'labels.byTeam'
+export const SAVED_VIEWS_BY_TEAM_QUERY_NAME = 'savedViews.byTeam'

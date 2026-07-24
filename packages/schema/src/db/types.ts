@@ -1,5 +1,13 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely'
-import type { ThemePreset, WorkspaceRole } from '../zero/context.js'
+import type {
+  IssueGrouping,
+  IssuePriority,
+  IssueStatus,
+  RichTextDoc,
+  ThemePreset,
+  WorkspaceRole,
+} from '../zero/context.js'
+import type { IssueFilter, IssueSort } from '../zero/filter.js'
 
 export type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>
 export type TimestampOrNull = ColumnType<
@@ -8,6 +16,11 @@ export type TimestampOrNull = ColumnType<
   Date | string | null
 >
 type Nullable<T> = ColumnType<T | null, T | null | undefined, T | null>
+
+// jsonb column: reads back the parsed value, accepts either the value or a serialized
+// string on write (node-postgres serializes a plain object to json for us).
+type Json<T> = ColumnType<T, T | string, T | string>
+type JsonOrNull<T> = ColumnType<T | null, T | string | null | undefined, T | string | null>
 
 export interface WorkspaceTable {
   id: string
@@ -68,6 +81,68 @@ export interface UserPreferenceTable {
   updated_at: Generated<Timestamp>
 }
 
+export interface IssueTable {
+  id: string
+  team_id: string
+  number: Nullable<number>
+  title: string
+  description: JsonOrNull<RichTextDoc>
+  status: IssueStatus
+  priority: IssuePriority
+  assignee_id: Nullable<string>
+  creator_id: string
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+export interface LabelTable {
+  id: string
+  team_id: string
+  name: string
+  color: string
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// `team_id` is denormalized off the parent issue so every work-data table carries a direct
+// `team` relationship and the team-scoped sync predicate stays a two-hop `whereExists`
+// (issue↔label edge, mirroring zbugs' `projectID` on `issueLabel`).
+export interface IssueLabelTable {
+  issue_id: string
+  label_id: string
+  team_id: string
+  created_at: Generated<Timestamp>
+}
+
+export interface CommentTable {
+  id: string
+  issue_id: string
+  team_id: string
+  author_id: string
+  body: Json<RichTextDoc>
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+export interface SavedViewTable {
+  id: string
+  team_id: string
+  name: string
+  filter: Json<IssueFilter>
+  grouping: IssueGrouping
+  sort: Json<IssueSort>
+  created_by: string
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// Server-only per-team counter for the human issue number. In the Kysely `DB` interface and
+// migrations but NOT the Zero schema, so its churn never replicates to clients.
+export interface IssueSequenceTable {
+  team_id: string
+  next_number: Generated<number>
+}
+
 // Owned by better-auth (created by its `getMigrations()` at boot), read-only here so
 // mutators/queries can join member profiles. camelCase columns and a `text` id are
 // better-auth's shape (reference/kysely-stack.md §5.4), not ours to change.
@@ -88,6 +163,12 @@ export interface DB {
   team_membership: TeamMembershipTable
   invite: InviteTable
   user_preference: UserPreferenceTable
+  issue: IssueTable
+  label: LabelTable
+  issue_label: IssueLabelTable
+  comment: CommentTable
+  saved_view: SavedViewTable
+  issue_sequence: IssueSequenceTable
   user: UserTable
 }
 
@@ -113,5 +194,26 @@ export type InviteUpdate = Updateable<InviteTable>
 export type UserPreference = Selectable<UserPreferenceTable>
 export type NewUserPreference = Insertable<UserPreferenceTable>
 export type UserPreferenceUpdate = Updateable<UserPreferenceTable>
+
+export type Issue = Selectable<IssueTable>
+export type NewIssue = Insertable<IssueTable>
+export type IssueUpdate = Updateable<IssueTable>
+
+export type Label = Selectable<LabelTable>
+export type NewLabel = Insertable<LabelTable>
+export type LabelUpdate = Updateable<LabelTable>
+
+export type IssueLabel = Selectable<IssueLabelTable>
+export type NewIssueLabel = Insertable<IssueLabelTable>
+
+export type Comment = Selectable<CommentTable>
+export type NewComment = Insertable<CommentTable>
+export type CommentUpdate = Updateable<CommentTable>
+
+export type SavedView = Selectable<SavedViewTable>
+export type NewSavedView = Insertable<SavedViewTable>
+export type SavedViewUpdate = Updateable<SavedViewTable>
+
+export type IssueSequence = Selectable<IssueSequenceTable>
 
 export type User = Selectable<UserTable>

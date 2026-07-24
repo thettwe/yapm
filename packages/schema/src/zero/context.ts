@@ -6,6 +6,45 @@ export const THEME_PRESETS = ['warm', 'focused', 'editorial'] as const
 
 export type ThemePreset = (typeof THEME_PRESETS)[number]
 
+export const ISSUE_STATUSES = [
+  'backlog',
+  'todo',
+  'in_progress',
+  'in_review',
+  'done',
+  'canceled',
+] as const
+
+export type IssueStatus = (typeof ISSUE_STATUSES)[number]
+
+export const ISSUE_PRIORITIES = ['no_priority', 'low', 'medium', 'high', 'urgent'] as const
+
+export type IssuePriority = (typeof ISSUE_PRIORITIES)[number]
+
+export const ISSUE_GROUPINGS = ['status', 'assignee', 'priority', 'label', 'none'] as const
+
+export type IssueGrouping = (typeof ISSUE_GROUPINGS)[number]
+
+export const ISSUE_SORT_KEYS = [
+  'status',
+  'priority',
+  'assignee',
+  'updated',
+  'created',
+  'number',
+] as const
+
+export type IssueSortKey = (typeof ISSUE_SORT_KEYS)[number]
+
+export type SortDirection = 'asc' | 'desc'
+
+// A TipTap-v3 document, stored verbatim as jsonb. The schema layer treats it as opaque
+// structured JSON; the editor/renderer in packages/ui owns the node shape.
+export interface RichTextDoc {
+  readonly type: 'doc'
+  readonly content?: readonly unknown[]
+}
+
 export interface AuthContext {
   readonly userID: string
   readonly role: WorkspaceRole | null

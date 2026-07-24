@@ -1,6 +1,11 @@
 import { newId } from '@yapm/schema'
 import type { DB } from '@yapm/schema/db'
-import { acceptInvite, bootstrapFirstAdmin, lookupWorkspaceRole } from '@yapm/schema/db'
+import {
+  acceptInvite,
+  bootstrapFirstAdmin,
+  lookupWorkspaceRole,
+  seedDemoContent,
+} from '@yapm/schema/db'
 import { Hono } from 'hono'
 import { createMiddleware } from 'hono/factory'
 import { HTTPException } from 'hono/http-exception'
@@ -82,6 +87,16 @@ export function createAuthRoutes(options: AuthRoutesOptions): Hono {
     })
     if (promoted) {
       logger.info({ userId: user.id }, 'bootstrapped first workspace admin')
+
+      if (env.SEED_DEMO_CONTENT === 'true') {
+        const demo = await seedDemoContent(db, { userId: user.id })
+        if (demo) {
+          logger.info(
+            { teamId: demo.teamId, teamKey: demo.teamKey, issues: demo.issueCount },
+            'seeded demo content',
+          )
+        }
+      }
     }
 
     // Return the role alongside the token so the client can build its optimistic auth

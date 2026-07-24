@@ -4,9 +4,14 @@ import type { AuthContext } from './context.js'
 import { tableShapes } from './introspect.js'
 import {
   INVITES_ALL_QUERY_NAME,
+  ISSUE_DETAIL_QUERY_NAME,
+  ISSUES_BY_TEAM_QUERY_NAME,
+  ISSUES_MINE_QUERY_NAME,
+  LABELS_BY_TEAM_QUERY_NAME,
   MEMBERS_ALL_QUERY_NAME,
   PREFERENCES_MINE_QUERY_NAME,
   queries,
+  SAVED_VIEWS_BY_TEAM_QUERY_NAME,
   TEAMS_ALL_QUERY_NAME,
   teamScoped,
   USERS_ALL_QUERY_NAME,
@@ -34,6 +39,17 @@ function astOf(
   return built.ast
 }
 
+function astOfArgs<A>(
+  query: { fn: (input: { args: A; ctx: AuthContext | undefined }) => unknown },
+  args: A,
+  ctx: AuthContext | undefined,
+): QueryAst {
+  const built = query.fn({ args, ctx }) as unknown as { ast: QueryAst }
+  return built.ast
+}
+
+const TEAM_ID = '019f8f00-0000-7000-8000-0000000000aa'
+
 describe('the synced query registry', () => {
   it('names every query the way the server resolves it', () => {
     for (const [name, query] of [
@@ -43,6 +59,11 @@ describe('the synced query registry', () => {
       [TEAMS_ALL_QUERY_NAME, queries.teams.all],
       [INVITES_ALL_QUERY_NAME, queries.invites.all],
       [PREFERENCES_MINE_QUERY_NAME, queries.preferences.mine],
+      [ISSUES_BY_TEAM_QUERY_NAME, queries.issues.byTeam],
+      [ISSUES_MINE_QUERY_NAME, queries.issues.mine],
+      [ISSUE_DETAIL_QUERY_NAME, queries.issues.detail],
+      [LABELS_BY_TEAM_QUERY_NAME, queries.labels.byTeam],
+      [SAVED_VIEWS_BY_TEAM_QUERY_NAME, queries.savedViews.byTeam],
     ] as const) {
       expect(query.queryName).toBe(name)
       expect(mustGetQuery(queries, name)).toBe(query)
@@ -95,6 +116,45 @@ describe('preferences.mine is user-scoped and owner-only', () => {
   it('never widens to another user, even given a foreign userID in args', () => {
     const where = astOf(queries.preferences.mine, MEMBER).where
     expect(JSON.stringify(where)).not.toContain(NON_MEMBER.userID)
+  })
+})
+
+describe('team-scoped work-data queries', () => {
+  it('scope issues.byTeam to the caller teams and deny non-members', () => {
+    for (const ctx of [ADMIN, MEMBER, VIEWER]) {
+      const where = astOfArgs(queries.issues.byTeam, { teamId: TEAM_ID }, ctx).where
+      expect(where).not.toEqual(DENY_ALL_WHERE)
+      expect(JSON.stringify(where)).toContain(ctx.userID)
+    }
+    for (const ctx of [NON_MEMBER, undefined]) {
+      expect(astOfArgs(queries.issues.byTeam, { teamId: TEAM_ID }, ctx).where).toEqual(
+        DENY_ALL_WHERE,
+      )
+    }
+  })
+
+  it('never widens beyond the caller memberships even given a foreign teamId arg', () => {
+    const where = astOfArgs(queries.issues.byTeam, { teamId: TEAM_ID }, MEMBER).where
+    // the membership predicate is driven by ctx.userID, not the teamId arg
+    expect(JSON.stringify(where)).toContain(MEMBER.userID)
+    expect(JSON.stringify(where)).not.toContain(NON_MEMBER.userID)
+  })
+
+  it('scopes issues.mine, labels.byTeam and savedViews.byTeam, denying non-members', () => {
+    expect(astOfArgs(queries.issues.mine, undefined, MEMBER).where).not.toEqual(DENY_ALL_WHERE)
+    expect(astOfArgs(queries.issues.mine, undefined, NON_MEMBER).where).toEqual(DENY_ALL_WHERE)
+    expect(astOfArgs(queries.labels.byTeam, { teamId: TEAM_ID }, VIEWER).where).not.toEqual(
+      DENY_ALL_WHERE,
+    )
+    expect(astOfArgs(queries.labels.byTeam, { teamId: TEAM_ID }, undefined).where).toEqual(
+      DENY_ALL_WHERE,
+    )
+    expect(astOfArgs(queries.savedViews.byTeam, { teamId: TEAM_ID }, MEMBER).where).not.toEqual(
+      DENY_ALL_WHERE,
+    )
+    expect(astOfArgs(queries.savedViews.byTeam, { teamId: TEAM_ID }, NON_MEMBER).where).toEqual(
+      DENY_ALL_WHERE,
+    )
   })
 })
 

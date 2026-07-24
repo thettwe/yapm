@@ -1,6 +1,7 @@
 import { mustGetMutator, mustGetQuery } from '@rocicorp/zero'
 import { handleMutateRequest, handleQueryRequest } from '@rocicorp/zero/server'
-import { mutators, queries, schema } from '@yapm/schema'
+import { queries, schema } from '@yapm/schema'
+import { createServerMutators } from '@yapm/schema/server'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import type { Logger } from '../logger.js'
@@ -25,6 +26,10 @@ function requireApiKey(request: Request, expected: string | undefined): void {
 export function createZeroRoutes(options: ZeroRoutesOptions): Hono {
   const app = new Hono()
 
+  // The authoritative pass runs the server mutators (base shared mutators plus the
+  // server-only `issue.create` override that assigns the per-team number).
+  const serverMutators = createServerMutators()
+
   app.post('/query', async (c) => {
     requireApiKey(c.req.raw, options.queryApiKey)
     const ctx = await options.resolveContext(c.req.raw)
@@ -46,7 +51,7 @@ export function createZeroRoutes(options: ZeroRoutesOptions): Hono {
     const response = await handleMutateRequest({
       dbProvider: options.dbProvider,
       handler: (transact) =>
-        transact((tx, name, args) => mustGetMutator(mutators, name).fn({ tx, args, ctx })),
+        transact((tx, name, args) => mustGetMutator(serverMutators, name).fn({ tx, args, ctx })),
       request: c.req.raw,
       userID: ctx?.userID ?? null,
     })

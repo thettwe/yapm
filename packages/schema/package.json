@@ -12,6 +12,10 @@
       "types": "./dist/db/index.d.ts",
       "default": "./dist/db/index.js"
     },
+    "./server": {
+      "types": "./dist/zero/server-mutators.d.ts",
+      "default": "./dist/zero/server-mutators.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

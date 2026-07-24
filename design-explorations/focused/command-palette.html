@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>yapm — Command palette</title>
+<style>
+/* ============================================================
+   yapm · design direction "Focused" — command palette
+   ============================================================ */
+:root{
+  --font: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --st-backlog:#6b7078; --st-todo:#8a8f97; --st-prog:#e0a63c; --st-rev:#3f9e7c; --pr-urgent:#e2593f;
+  --h-violet:#8b7ff0; --h-slate:#7f96b8; --h-amber:#e0a63c; --h-red:#e2593f;
+  --h-teal:#3f9e7c;  --h-blue:#4f8fd6;  --h-pink:#d06fa0;  --h-green:#4f9d5b;
+  --h-cyan:#3fb0c2;  --h-iris:#6e79f0;
+}
+html[data-theme="dark"]{
+  --bg:#0b0c0e; --bg-sidebar:#0a0b0d; --bg-content:#0d0e11; --bg-elevated:#17181c;
+  --bg-hover:rgba(255,255,255,.035); --bg-selected:rgba(255,255,255,.055);
+  --bg-grp:rgba(255,255,255,.022); --bg-kbd:rgba(255,255,255,.05);
+  --border:rgba(255,255,255,.07); --border-strong:rgba(255,255,255,.11);
+  --text-1:#e9eaec; --text-2:#9a9ea6; --text-3:#676c74; --text-4:#474b52;
+  --accent:#6e79f0; --accent-2:#8189f4; --accent-muted:rgba(110,121,240,.15); --accent-border:rgba(110,121,240,.4);
+  --av-fg:#f4f5f7;
+  --scrim-bg:rgba(6,7,9,.58);
+  --cmd-shadow:0 40px 90px -20px rgba(0,0,0,.75), 0 0 0 1px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.045);
+  color-scheme:dark;
+}
+html[data-theme="light"]{
+  --bg:#ffffff; --bg-sidebar:#fbfbfa; --bg-content:#ffffff; --bg-elevated:#ffffff;
+  --bg-hover:rgba(0,0,0,.038); --bg-selected:rgba(0,0,0,.05);
+  --bg-grp:rgba(0,0,0,.022); --bg-kbd:#f3f3f1;
+  --border:rgba(0,0,0,.09); --border-strong:rgba(0,0,0,.14);
+  --text-1:#17181a; --text-2:#5f636b; --text-3:#898e96; --text-4:#b6bac0;
+  --accent:#5b63d6; --accent-2:#4c54cc; --accent-muted:rgba(91,99,214,.1); --accent-border:rgba(91,99,214,.35);
+  --av-fg:#ffffff; --st-todo:#9096a0;
+  --scrim-bg:rgba(28,30,38,.26);
+  --cmd-shadow:0 40px 80px -22px rgba(22,24,32,.32), 0 6px 18px -8px rgba(22,24,32,.18);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:var(--font);background:var(--bg);color:var(--text-1);font-size:13px;line-height:1.35;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+svg{display:block}
+.tnum{font-variant-numeric:tabular-nums}
+
+.app{display:grid;grid-template-columns:236px 1fr;height:100vh;overflow:hidden}
+
+/* ---- sidebar ---- */
+.sb{background:var(--bg-sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0}
+.sb-top{display:flex;align-items:center;gap:8px;height:48px;padding:0 8px 0 12px}
+.ws{display:flex;align-items:center;gap:8px;flex:1;min-width:0;height:30px;padding:0 6px;border-radius:7px}
+.ws-mark{width:20px;height:20px;border-radius:6px;background:linear-gradient(150deg,var(--accent-2),var(--accent));color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 20px;box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
+.ws-name{font-size:13.5px;font-weight:600;color:var(--text-1)}
+.ws .chev{color:var(--text-3);margin-left:-2px}
+.icobtn{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-3);flex:0 0 26px}
+.sb-scroll{flex:1;min-height:0;overflow:hidden;padding:4px 8px}
+.search{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border-radius:7px;color:var(--text-3);margin-bottom:6px}
+.search .txt{flex:1;font-size:13px}
+.search .k{display:flex;gap:3px}
+.nav{display:flex;flex-direction:column;gap:1px}
+.nav-item{display:flex;align-items:center;gap:9px;height:29px;padding:0 8px;border-radius:7px;color:var(--text-2)}
+.nav-item .ic{width:16px;height:16px;flex:0 0 16px;color:var(--text-3);display:flex;align-items:center;justify-content:center}
+.nav-item .nm{flex:1;font-size:13px}
+.nav-item .badge{font-size:11px;color:var(--text-3);background:var(--bg-hover);min-width:18px;height:17px;padding:0 5px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.nav-item.active{background:var(--accent-muted);color:var(--text-1)}
+.nav-item.active .ic{color:var(--accent)}
+.nav-item.active .nm{font-weight:500}
+.sb-sec{display:flex;align-items:center;gap:6px;padding:16px 8px 5px;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3)}
+.sb-sec .plus{margin-left:auto;color:var(--text-3);opacity:.6}
+.team{display:flex;align-items:center;gap:9px;height:29px;padding:0 8px;border-radius:7px;color:var(--text-2)}
+.team .glyph{width:16px;height:16px;border-radius:5px;font-size:9.5px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;flex:0 0 16px}
+.team .nm{flex:1;font-size:13px}
+.team .chev{color:var(--text-4)}
+.team .chev.open{transform:rotate(90deg)}
+.subnav{display:flex;flex-direction:column;gap:1px;margin:1px 0 2px}
+.sub-item{display:flex;align-items:center;gap:9px;height:27px;padding:0 8px 0 30px;border-radius:7px;color:var(--text-2);font-size:13px}
+.sub-item .dotm{width:5px;height:5px;border-radius:50%;background:var(--text-4)}
+.sb-foot{border-top:1px solid var(--border);padding:8px;display:flex;align-items:center;gap:8px}
+.me{display:flex;align-items:center;gap:8px;flex:1;height:32px;padding:0 6px;border-radius:7px;min-width:0}
+.me .nm{font-size:12.5px;color:var(--text-2)}
+
+/* ---- main ---- */
+.main{background:var(--bg-content);display:flex;flex-direction:column;min-width:0;min-height:0}
+.hdr{display:flex;align-items:center;gap:10px;height:48px;padding:0 16px;border-bottom:1px solid var(--border);flex:0 0 48px}
+.hdr-title{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:var(--text-1)}
+.hdr-count{font-size:12px;font-weight:500;color:var(--text-3);background:var(--bg-hover);padding:1px 7px;border-radius:6px}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:4px}
+.hbtn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 9px;border-radius:7px;color:var(--text-2);font-size:12.5px}
+.hbtn .ic{width:15px;height:15px;color:var(--text-3)}
+.hsep{width:1px;height:18px;background:var(--border);margin:0 4px}
+.sync{display:inline-flex;align-items:center;gap:7px;height:27px;padding:0 11px 0 9px;border:1px solid var(--border);border-radius:20px;font-size:12px;color:var(--text-2)}
+.sync .pulse{width:7px;height:7px;border-radius:50%;background:var(--st-rev);box-shadow:0 0 0 3px rgba(63,158,124,.16)}
+.sync b{font-weight:500;color:var(--text-2)}
+.sync .dim{color:var(--text-3)}
+.subbar{display:flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-bottom:1px solid var(--border);flex:0 0 38px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border:1px solid var(--border);border-radius:7px;font-size:12px;color:var(--text-2)}
+.chip .lead{color:var(--text-3)}
+.chip b{font-weight:500;color:var(--text-1)}
+.chip .x{color:var(--text-3)}
+.chip.dashed{border-style:dashed;color:var(--text-3)}
+.subbar .right{margin-left:auto;display:flex;align-items:center;gap:2px}
+
+.list{flex:1;min-height:0;overflow:hidden}
+.grp{display:flex;align-items:center;gap:9px;height:34px;padding:0 16px 0 15px;background:var(--bg-grp);border-bottom:1px solid var(--border)}
+.grp-name{font-size:13px;font-weight:500;color:var(--text-1)}
+.grp-count{font-size:12px;color:var(--text-3)}
+.grp .add{margin-left:auto;color:var(--text-3);opacity:.55;width:16px;height:16px}
+.row{display:flex;align-items:center;gap:9px;height:36px;padding:0 16px 0 15px;position:relative}
+html[data-theme="light"] .row{border-bottom:1px solid rgba(0,0,0,.035)}
+html[data-theme="dark"] .row{border-bottom:1px solid rgba(255,255,255,.028)}
+.cbx{width:14px;height:14px;border:1.5px solid var(--text-3);border-radius:4px;flex:0 0 14px;opacity:0}
+.key{width:58px;flex:0 0 58px;color:var(--text-3);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.title{flex:1;min-width:0;color:var(--text-1);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta{display:flex;align-items:center;gap:10px;flex:0 0 auto;margin-left:6px}
+.labels{display:flex;align-items:center;gap:6px}
+.lbl{display:inline-flex;align-items:center;gap:5px;height:19px;padding:0 8px;border:1px solid var(--border);border-radius:10px;font-size:11px;color:var(--text-2);white-space:nowrap}
+.lbl .dot{width:6px;height:6px;border-radius:50%;background:var(--d,var(--text-3))}
+.cyc{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-3)}
+.cyc svg{width:12px;height:12px;color:var(--text-4)}
+.age{width:34px;text-align:right;font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.av{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:var(--av-fg);letter-spacing:.02em;flex:0 0 20px}
+.st{width:14px;height:14px;flex:0 0 14px;position:relative;border-radius:50%;box-sizing:border-box}
+.st.ring{border:1.5px solid var(--c)}
+.st.ring.dash{border-style:dashed}
+.st.pie{border:1.5px solid var(--c)}
+.st.pie::after{content:"";position:absolute;inset:2px;border-radius:50%;background:conic-gradient(var(--c) var(--p),transparent 0)}
+.st.done{border:none;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff}
+.st.done svg{width:9px;height:9px}
+.pr{width:14px;height:14px;flex:0 0 14px;display:inline-flex;align-items:flex-end;justify-content:center;gap:1.5px}
+.pr i{width:2.5px;background:var(--text-4);border-radius:.5px}
+.pr i:nth-child(1){height:5px}.pr i:nth-child(2){height:8px}.pr i:nth-child(3){height:11px}
+.pr.low i:nth-child(1){background:var(--text-2)}
+.pr.med i:nth-child(1),.pr.med i:nth-child(2){background:var(--text-2)}
+.pr.high i{background:var(--text-1)}
+.pr.none{align-items:center;gap:2px}
+.pr.none b{width:2px;height:2px;border-radius:50%;background:var(--text-4)}
+.pr.urg{border-radius:3.5px;background:var(--pr-urgent);color:#fff;font-size:10px;font-weight:800;align-items:center;line-height:1;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+.kbd{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;border:1px solid var(--border-strong);border-bottom-width:1.5px;border-radius:5px;font-size:10.5px;color:var(--text-3);background:var(--bg-kbd);font-family:var(--font)}
+
+/* ===================== COMMAND PALETTE ===================== */
+.scrim{position:fixed;inset:0;z-index:50;background:var(--scrim-bg);backdrop-filter:blur(3px) saturate(.85);-webkit-backdrop-filter:blur(3px) saturate(.85)}
+.cmd{position:fixed;left:50%;top:78px;transform:translateX(-50%);width:650px;z-index:60;background:var(--bg-elevated);border:1px solid var(--border-strong);border-radius:14px;overflow:hidden;box-shadow:var(--cmd-shadow)}
+.cmd-search{display:flex;align-items:center;gap:12px;height:54px;padding:0 16px;border-bottom:1px solid var(--border)}
+.cmd-search .sic{color:var(--text-3);width:18px;height:18px;flex:0 0 18px}
+.cmd-inp{flex:1;display:flex;align-items:center;font-size:15px;color:var(--text-1);min-width:0}
+.cmd-inp .ph{color:var(--text-3)}
+.caret{display:inline-block;width:1.5px;height:19px;background:var(--accent);margin-left:1px;border-radius:1px}
+.cmd-esc{color:var(--text-3);flex:0 0 auto}
+.cmd-ctx{display:flex;align-items:center;gap:9px;height:31px;padding:0 16px;border-bottom:1px solid var(--border);font-size:11.5px;color:var(--text-3);background:var(--bg-grp)}
+.cmd-ctx .scope{display:inline-flex;align-items:center;gap:6px}
+.cmd-ctx .kchip{color:var(--text-2);font-weight:500;font-variant-numeric:tabular-nums}
+.cmd-ctx .ttl{color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cmd-list{padding:6px}
+.cmd-gh{font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--text-3);padding:9px 10px 4px}
+.cmd-row{display:flex;align-items:center;gap:11px;height:38px;padding:0 10px;border-radius:8px;color:var(--text-1);font-size:13.5px}
+.cmd-row .ic{width:17px;height:17px;flex:0 0 17px;color:var(--text-2);display:flex;align-items:center;justify-content:center}
+.cmd-row .av{width:18px;height:18px;font-size:8.5px;flex:0 0 18px}
+.cmd-row .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmd-row .sub{color:var(--text-3);font-size:12.5px;font-weight:400}
+.cmd-row .hint{margin-left:auto;display:flex;align-items:center;gap:4px;color:var(--text-3);font-size:11.5px}
+.cmd-row.is-active{background:var(--accent-muted);box-shadow:inset 0 0 0 1px var(--accent-border)}
+.cmd-row.is-active .ic{color:var(--accent)}
+.cmd-row.is-active .nm{font-weight:500}
+.cmd-ftr{display:flex;align-items:center;height:42px;padding:0 14px;border-top:1px solid var(--border);gap:16px}
+.cmd-ftr .brand{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3)}
+.cmd-ftr .brand .m{width:15px;height:15px;border-radius:4px;background:linear-gradient(150deg,var(--accent-2),var(--accent));color:#fff;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
+.cmd-ftr .hints{margin-left:auto;display:flex;align-items:center;gap:15px}
+.cmd-ftr .hint{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- sidebar -->
+  <aside class="sb">
+    <div class="sb-top">
+      <div class="ws">
+        <div class="ws-mark">A</div>
+        <div class="ws-name">Acme</div>
+        <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <div class="icobtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></div>
+    </div>
+    <div class="sb-scroll">
+      <div class="search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <span class="txt">Search</span>
+        <span class="k"><span class="kbd">⌘</span><span class="kbd">K</span></span>
+      </div>
+      <nav class="nav">
+        <div class="nav-item">
+          <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z"/></svg></span>
+          <span class="nm">Inbox</span><span class="badge">3</span>
+        </div>
+        <div class="nav-item">
+          <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg></span>
+          <span class="nm">My Issues</span>
+        </div>
+        <div class="nav-item active">
+          <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor" stroke="none"/></svg></span>
+          <span class="nm">Active</span>
+        </div>
+        <div class="nav-item">
+          <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/></svg></span>
+          <span class="nm">Backlog</span>
+        </div>
+      </nav>
+      <div class="sb-sec">Your teams <span class="plus"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></div>
+      <div class="team"><span class="glyph" style="background:#4f57c4">E</span><span class="nm">Engineering</span><svg class="chev open" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
+      <div class="subnav">
+        <div class="sub-item"><span class="dotm"></span>Issues</div>
+        <div class="sub-item"><span class="dotm"></span>Cycles</div>
+        <div class="sub-item"><span class="dotm"></span>Projects</div>
+      </div>
+      <div class="team"><span class="glyph" style="background:#b0577f">D</span><span class="nm">Design</span><svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
+      <div class="team"><span class="glyph" style="background:#2f8d7c">P</span><span class="nm">Platform</span><svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
+    </div>
+    <div class="sb-foot">
+      <div class="me"><span class="av" style="background:var(--h-iris)">TW</span><span class="nm">Thet W.</span></div>
+      <div class="icobtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg></div>
+    </div>
+  </aside>
+
+  <!-- main -->
+  <main class="main">
+    <header class="hdr">
+      <div class="hdr-title">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.9"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="var(--accent)" stroke="none"/></svg>
+        Active<span class="hdr-count tnum">13</span>
+      </div>
+      <div class="hdr-right">
+        <div class="hbtn"><span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8v6l-4 2v-8Z"/></svg></span>Filter</div>
+        <div class="hbtn"><span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11M4 12h7M4 17h4"/><path d="M17 5v10M17 15l-2.5-2.5M17 15l2.5-2.5"/></svg></span>Sort</div>
+        <div class="hbtn"><span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></span>Display</div>
+        <div class="hsep"></div>
+        <div class="sync"><span class="pulse"></span><b>Synced</b><span class="dim">· just now</span></div>
+      </div>
+    </header>
+    <div class="subbar">
+      <div class="chip"><span class="lead">Priority</span><b>High, Urgent</b><span class="x"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+      <div class="chip dashed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add filter</div>
+      <div class="right"><div class="hbtn"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11M4 12h7M4 17h4"/></svg></span>Grouped by status</div></div>
+    </div>
+    <div class="list">
+      <div class="grp"><span class="st pie" style="--c:var(--st-prog);--p:45%"></span><span class="grp-name">In Progress</span><span class="grp-count tnum">3</span></div>
+      <div class="row"><span class="cbx"></span><span class="pr high"><i></i><i></i><i></i></span><span class="st pie" style="--c:var(--st-prog);--p:45%"></span><span class="key tnum">ENG-142</span><span class="title">Derive issue status from linked PR merge events</span><div class="meta"><div class="labels"><span class="lbl"><span class="dot" style="--d:var(--h-violet)"></span>graph</span><span class="lbl"><span class="dot" style="--d:var(--h-slate)"></span>github-sync</span></div><span class="age">5h</span><span class="av" style="background:var(--h-teal)">JM</span></div></div>
+      <div class="row"><span class="cbx"></span><span class="pr urg">!</span><span class="st pie" style="--c:var(--st-prog);--p:45%"></span><span class="key tnum">ENG-138</span><span class="title">Command palette drops keystrokes above 8k issues</span><div class="meta"><div class="labels"><span class="lbl"><span class="dot" style="--d:var(--h-amber)"></span>perf</span><span class="lbl"><span class="dot" style="--d:var(--h-red)"></span>regression</span></div><span class="age">2h</span><span class="av" style="background:var(--h-amber)">KP</span></div></div>
+      <div class="row"><span class="cbx"></span><span class="pr med"><i></i><i></i><i></i></span><span class="st pie" style="--c:var(--st-prog);--p:45%"></span><span class="key tnum">ENG-131</span><span class="title">Persist optimistic mutations across reconnect</span><div class="meta"><div class="labels"><span class="lbl"><span class="dot" style="--d:var(--h-iris)"></span>sync-engine</span></div><span class="age">1d</span><span class="av" style="background:var(--h-iris)">TW</span></div></div>
+      <div class="grp"><span class="st pie" style="--c:var(--st-rev);--p:75%"></span><span class="grp-name">In Review</span><span class="grp-count tnum">2</span></div>
+      <div class="row"><span class="cbx"></span><span class="pr high"><i></i><i></i><i></i></span><span class="st pie" style="--c:var(--st-rev);--p:75%"></span><span class="key tnum">PLA-64</span><span class="title">Ingest GitHub check-run webhooks into the CI timeline</span><div class="meta"><div class="labels"><span class="lbl"><span class="dot" style="--d:var(--h-teal)"></span>ci</span><span class="lbl"><span class="dot" style="--d:var(--h-blue)"></span>webhooks</span></div><span class="age">6h</span><span class="av" style="background:var(--h-blue)">RS</span></div></div>
+      <div class="row"><span class="cbx"></span><span class="pr med"><i></i><i></i><i></i></span><span class="st pie" style="--c:var(--st-rev);--p:75%"></span><span class="key tnum">ENG-127</span><span class="title">Virtualize the issue list to hold sub-100ms scroll</span><div class="meta"><div class="labels"><span class="lbl"><span class="dot" style="--d:var(--h-amber)"></span>perf</span></div><span class="age">1d</span><span class="av" style="background:var(--h-green)">AL</span></div></div>
+      <div class="grp"><span class="st ring" style="--c:var(--st-todo)"></span><span class="grp-name">Todo</span><span class="grp-count tnum">4</span></div>
+      <div class="row"><span class="cbx"></span><span class="pr high"><i></i><i></i><i></i></span><span class="st ring" style="--c:var(--st-todo)"></span><span class="key tnum">ENG-119</span><span class="title">Keyboard-navigable group headers (collapse / expand)</span><div class="meta"><div class="labels"><span class="lbl"><span class="dot" style="--d:var(--h-green)"></span>a11y</span><span class="lbl"><span class="dot" style="--d:var(--h-green)"></span>keyboard</span></div><span class="age">3d</span><span class="av" style="background:var(--h-iris)">TW</span></div></div>
+      <div class="row"><span class="cbx"></span><span class="pr med"><i></i><i></i><i></i></span><span class="st ring" style="--c:var(--st-todo)"></span><span class="key tnum">DES-40</span><span class="title">Redesign the priority indicator to read at 13px</span><div class="meta"><div class="labels"><span class="lbl"><span class="dot" style="--d:var(--h-pink)"></span>design-system</span></div><span class="age">4d</span><span class="av" style="background:var(--h-pink)">MG</span></div></div>
+    </div>
+  </main>
+</div>
+
+<!-- ===================== PALETTE OVERLAY ===================== -->
+<div class="scrim"></div>
+<div class="cmd" role="dialog" aria-label="Command palette">
+  <div class="cmd-search">
+    <svg class="sic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <div class="cmd-inp"><span class="ph">Type a command or search…</span><span class="caret"></span></div>
+    <span class="cmd-esc"><span class="kbd">esc</span></span>
+  </div>
+
+  <div class="cmd-ctx">
+    <span class="scope">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+      Acting on
+    </span>
+    <span class="kchip tnum">ENG-138</span>
+    <span class="ttl">Command palette drops keystrokes above 8k issues</span>
+  </div>
+
+  <div class="cmd-list">
+    <div class="cmd-gh">Navigate</div>
+    <div class="cmd-row">
+      <span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg></span>
+      <span class="nm">Go to My Issues</span>
+      <span class="hint"><span class="kbd">G</span><span>then</span><span class="kbd">I</span></span>
+    </div>
+    <div class="cmd-row">
+      <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor" stroke="none"/></svg></span>
+      <span class="nm">Go to Active</span>
+      <span class="hint"><span class="kbd">G</span><span>then</span><span class="kbd">A</span></span>
+    </div>
+    <div class="cmd-row">
+      <span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z"/></svg></span>
+      <span class="nm">Go to Inbox</span>
+      <span class="hint"><span class="kbd">G</span><span>then</span><span class="kbd">N</span></span>
+    </div>
+
+    <div class="cmd-gh">Create</div>
+    <div class="cmd-row">
+      <span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+      <span class="nm">New issue</span>
+      <span class="hint"><span class="kbd">C</span></span>
+    </div>
+    <div class="cmd-row">
+      <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 5.5a6.5 6.5 0 0 1 5.7 3.4" stroke-linecap="round"/></svg></span>
+      <span class="nm">New cycle</span>
+      <span class="hint"></span>
+    </div>
+
+    <div class="cmd-gh">Change status</div>
+    <div class="cmd-row">
+      <span class="ic"><span class="st ring" style="--c:var(--st-todo)"></span></span>
+      <span class="nm">Todo</span>
+      <span class="hint"><span class="kbd">1</span></span>
+    </div>
+    <div class="cmd-row">
+      <span class="ic"><span class="st pie" style="--c:var(--st-prog);--p:45%"></span></span>
+      <span class="nm">In Progress</span>
+      <span class="hint"><span class="kbd">2</span></span>
+    </div>
+    <div class="cmd-row is-active">
+      <span class="ic"><span class="st pie" style="--c:var(--st-rev);--p:75%"></span></span>
+      <span class="nm">In Review</span>
+      <span class="hint"><span class="kbd">3</span></span>
+    </div>
+    <div class="cmd-row">
+      <span class="ic"><span class="st done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></span>
+      <span class="nm">Done</span>
+      <span class="hint"><span class="kbd">4</span></span>
+    </div>
+
+    <div class="cmd-gh">Assign</div>
+    <div class="cmd-row">
+      <span class="av" style="background:var(--h-iris)">TW</span>
+      <span class="nm">Assign to me <span class="sub">· Thet W.</span></span>
+      <span class="hint"><span class="kbd">I</span></span>
+    </div>
+    <div class="cmd-row">
+      <span class="av" style="background:var(--h-amber)">KP</span>
+      <span class="nm">Kavya Patel <span class="sub">· current assignee</span></span>
+      <span class="hint"></span>
+    </div>
+    <div class="cmd-row">
+      <span class="av" style="background:var(--h-blue)">RS</span>
+      <span class="nm">Rui Silva</span>
+      <span class="hint"></span>
+    </div>
+  </div>
+
+  <div class="cmd-ftr">
+    <div class="brand"><span class="m">y</span>yapm</div>
+    <div class="hints">
+      <span class="hint"><span class="kbd">↑</span><span class="kbd">↓</span>Navigate</span>
+      <span class="hint"><span class="kbd">↵</span>Select</span>
+      <span class="hint"><span class="kbd">esc</span>Close</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>yapm — Active · Editorial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============ EDITORIAL — design tokens ============ */
+:root[data-theme="dark"]{
+  --bg:#0B0B0C; --bg-side:#0D0D0F; --bg-elev:#161618;
+  --row-hover:#151517; --row-focus:rgba(255,90,60,.085);
+  --txt:#F1EFEA; --txt-2:#9A988F; --txt-3:#67655E;
+  --line:#1F1F21; --line-2:#2B2B2E; --field:#141416;
+  --accent:#FF5A3C; --accent-ink:#120806;
+  --st-muted:#6E6C66; --st-progress:#E7A93A; --st-review:#9B8CF5; --st-done:#4FAE83;
+  --prio-urgent:#F0872E;
+  --shadow:0 24px 70px -18px rgba(0,0,0,.72),0 4px 14px -6px rgba(0,0,0,.6);
+}
+:root[data-theme="light"]{
+  --bg:#FCFCFB; --bg-side:#F6F5F2; --bg-elev:#FFFFFF;
+  --row-hover:#F2F0EB; --row-focus:rgba(229,54,27,.055);
+  --txt:#14130F; --txt-2:#6B6860; --txt-3:#9C988E;
+  --line:#E9E7E1; --line-2:#DDDACF; --field:#FFFFFF;
+  --accent:#E5361B; --accent-ink:#FFFFFF;
+  --st-muted:#A19E95; --st-progress:#C98A15; --st-review:#6D5FE0; --st-done:#2F9068;
+  --prio-urgent:#D9741C;
+  --shadow:0 30px 70px -20px rgba(30,22,16,.28),0 4px 14px -8px rgba(30,22,16,.18);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:var(--bg); color:var(--txt);
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  font-size:13px; line-height:1.45; letter-spacing:-0.006em;
+  overflow:hidden;
+}
+.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace}
+.serif{font-family:"Fraunces",Georgia,serif}
+.app{display:grid; grid-template-columns:248px 1fr; height:100vh; width:100vw}
+
+/* ============ SIDEBAR ============ */
+.side{
+  background:var(--bg-side); border-right:1px solid var(--line);
+  display:flex; flex-direction:column; min-height:0;
+}
+.ws{display:flex; align-items:center; gap:10px; padding:15px 16px 14px; cursor:pointer}
+.ws-mark{
+  width:26px; height:26px; border-radius:7px; background:var(--accent); color:var(--accent-ink);
+  display:grid; place-items:center; font-family:"Fraunces",serif; font-weight:600; font-size:16px;
+  flex:none; box-shadow:0 1px 0 rgba(0,0,0,.15) inset;
+}
+.ws-name{font-family:"Fraunces",serif; font-weight:600; font-size:16px; letter-spacing:-.01em; line-height:1.05}
+.ws-sub{font-size:9.5px; letter-spacing:.13em; color:var(--txt-3); margin-top:2px; text-transform:uppercase}
+.ws-cx{margin-left:auto; color:var(--txt-3)}
+.search{
+  margin:0 12px 6px; height:31px; border-radius:8px; background:var(--field);
+  border:1px solid var(--line); display:flex; align-items:center; gap:8px; padding:0 9px; cursor:text;
+}
+.search span{color:var(--txt-3); font-size:12.5px}
+.search .kbd{margin-left:auto}
+.kbd{
+  font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--txt-3);
+  border:1px solid var(--line-2); border-radius:5px; padding:1px 5px; line-height:1.4; background:transparent;
+}
+.nav{padding:10px 8px 4px; overflow-y:auto; flex:1; min-height:0}
+.nav::-webkit-scrollbar{width:8px}
+.nav::-webkit-scrollbar-thumb{background:var(--line-2); border-radius:8px}
+.sec-label{
+  font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--txt-3); padding:12px 10px 6px; display:flex; align-items:center; gap:8px;
+}
+.sec-label::after{content:""; flex:1; height:1px; background:var(--line)}
+.item{
+  height:29px; border-radius:7px; display:flex; align-items:center; gap:9px; padding:0 9px;
+  color:var(--txt-2); cursor:pointer; position:relative; font-weight:500; font-size:12.5px;
+}
+.item:hover{background:var(--row-hover); color:var(--txt)}
+.item .ico{width:15px; height:15px; flex:none; display:grid; place-items:center; color:var(--txt-3)}
+.item:hover .ico{color:var(--txt-2)}
+.item .ct{margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--txt-3)}
+.item.on{color:var(--txt); background:color-mix(in srgb, var(--accent) 9%, transparent); font-weight:600}
+.item.on .ico{color:var(--accent)}
+.item.on::before{content:""; position:absolute; left:-8px; top:6px; bottom:6px; width:3px; border-radius:0 3px 3px 0; background:var(--accent)}
+.item.on .ct{color:var(--txt-2)}
+.team-badge{
+  width:17px; height:17px; border-radius:5px; display:grid; place-items:center; flex:none;
+  font-family:"JetBrains Mono",monospace; font-size:8.5px; font-weight:700; color:#fff; letter-spacing:.02em;
+}
+.sub{margin:1px 0 4px 20px; padding-left:9px; border-left:1px solid var(--line)}
+.sub .item{height:26px; font-size:12px; font-weight:500}
+.side-foot{border-top:1px solid var(--line); padding:9px 12px; display:flex; align-items:center; gap:9px}
+.avatar{
+  border-radius:6px; display:grid; place-items:center; color:#fff; flex:none;
+  font-family:"JetBrains Mono",monospace; font-weight:600; letter-spacing:.01em;
+}
+.side-foot .avatar{width:24px; height:24px; font-size:10px}
+.side-foot .who{font-size:12px; font-weight:600; line-height:1.1}
+.side-foot .role{font-size:10px; color:var(--txt-3)}
+.side-foot .ver{margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:10px; color:var(--txt-3)}
+
+/* ============ MAIN ============ */
+.main{display:flex; flex-direction:column; min-width:0; background:var(--bg)}
+.head{padding:16px 22px 0}
+.head-top{display:flex; align-items:flex-start; gap:16px}
+.view-title{font-family:"Fraunces",serif; font-weight:600; font-size:29px; letter-spacing:-.02em; line-height:1}
+.view-meta{
+  font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--txt-3); margin-top:8px;
+}
+.view-meta b{color:var(--txt-2); font-weight:500}
+.head-actions{margin-left:auto; display:flex; align-items:center; gap:9px}
+.sync{
+  display:flex; align-items:center; gap:7px; font-family:"JetBrains Mono",monospace; font-size:10.5px;
+  letter-spacing:.06em; color:var(--txt-2); padding:5px 10px 5px 8px; border:1px solid var(--line);
+  border-radius:20px; text-transform:uppercase;
+}
+.dot{width:6px; height:6px; border-radius:50%; background:var(--st-done); box-shadow:0 0 0 3px color-mix(in srgb,var(--st-done) 22%,transparent)}
+.sync .muted{color:var(--txt-3); text-transform:none; letter-spacing:0}
+.ibtn{
+  height:31px; width:31px; border-radius:8px; border:1px solid var(--line); background:transparent;
+  color:var(--txt-2); display:grid; place-items:center; cursor:pointer;
+}
+.ibtn:hover{color:var(--txt); border-color:var(--line-2)}
+.new-btn{
+  height:31px; border-radius:8px; background:var(--accent); color:var(--accent-ink); border:none;
+  display:flex; align-items:center; gap:8px; padding:0 11px; font-weight:600; font-size:12.5px; cursor:pointer;
+}
+.new-btn .kbd{border-color:color-mix(in srgb,var(--accent-ink) 30%,transparent); color:var(--accent-ink); opacity:.85}
+.head-rule{height:1px; background:var(--line); margin:15px 0 0}
+.ctrls{display:flex; align-items:center; gap:6px; padding:9px 22px; border-bottom:1px solid var(--line)}
+.count{font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--txt-2); margin-right:6px}
+.count b{color:var(--txt); font-weight:600}
+.chip{
+  display:flex; align-items:center; gap:6px; height:26px; padding:0 9px; border-radius:7px;
+  border:1px solid var(--line); color:var(--txt-2); font-size:11.5px; font-weight:500; cursor:pointer; background:transparent;
+}
+.chip:hover{border-color:var(--line-2); color:var(--txt)}
+.chip .lbl{font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--txt-3)}
+.chip b{color:var(--txt); font-weight:600}
+.ctrls .right{margin-left:auto; display:flex; gap:6px}
+
+/* ============ LIST ============ */
+.list{overflow-y:auto; flex:1; min-height:0}
+.list::-webkit-scrollbar{width:10px}
+.list::-webkit-scrollbar-thumb{background:var(--line-2); border-radius:8px}
+.group-head{
+  display:flex; align-items:center; gap:10px; padding:0 22px; height:33px;
+  background:var(--bg-side); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:2;
+}
+.group-head .st-ico{display:grid; place-items:center; width:16px; height:16px}
+.group-head .g-name{font-weight:600; font-size:12px; letter-spacing:-.01em}
+.group-head .g-ct{font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--txt-3)}
+.group-head .g-rule{flex:1; height:1px; background:var(--line)}
+.group-head .g-add{color:var(--txt-3); cursor:pointer; display:grid; place-items:center}
+.group-head .g-add:hover{color:var(--txt)}
+
+.row{
+  display:flex; align-items:center; gap:11px; height:42px; padding:0 22px 0 22px;
+  border-bottom:1px solid var(--line); cursor:pointer; position:relative; color:var(--txt);
+}
+.row:hover, .row.is-hover{background:var(--row-hover)}
+.row.is-focus{background:var(--row-focus)}
+.row.is-focus::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent)}
+.r-check{
+  width:14px; height:14px; border-radius:4px; border:1.5px solid var(--line-2); flex:none;
+  opacity:0; transition:none;
+}
+.row:hover .r-check, .row.is-hover .r-check{opacity:1}
+.row.is-focus .r-check{opacity:1; border-color:var(--accent); background:var(--accent); position:relative}
+.row.is-focus .r-check::after{content:""; position:absolute; inset:0; margin:auto; width:6px; height:3px; border-left:1.5px solid var(--accent-ink); border-bottom:1.5px solid var(--accent-ink); transform:translateY(-1px) rotate(-45deg)}
+.c-prio{width:15px; display:grid; place-items:center; flex:none}
+.c-status{width:16px; display:grid; place-items:center; flex:none}
+.c-key{
+  font-family:"JetBrains Mono",monospace; font-size:11.5px; color:var(--txt-2); width:62px; flex:none;
+  letter-spacing:-.01em;
+}
+.row.is-focus .c-key{color:var(--accent); font-weight:600}
+.c-title{
+  flex:1; min-width:0; font-size:13px; font-weight:500; letter-spacing:-.008em;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--txt);
+}
+.row .c-title{color:var(--txt)}
+.labels{display:flex; gap:6px; flex:none; align-items:center}
+.tag{
+  display:inline-flex; align-items:center; gap:5px; font-family:"JetBrains Mono",monospace;
+  font-size:10px; color:var(--txt-2); border:1px solid var(--line-2); border-radius:20px; padding:2px 8px 2px 7px;
+  letter-spacing:.01em;
+}
+.tag i{width:6px; height:6px; border-radius:50%; display:inline-block}
+.c-cycle{
+  display:flex; align-items:center; gap:5px; flex:none; width:44px; justify-content:flex-end;
+  font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--txt-3);
+}
+.c-date{font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--txt-3); width:46px; text-align:right; flex:none}
+.c-assignee{flex:none}
+.c-assignee .avatar{width:21px; height:21px; font-size:9px; box-shadow:0 0 0 1.5px var(--bg)}
+.row.is-focus .c-assignee .avatar{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--accent) 12%,var(--bg))}
+svg{display:block}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="side">
+    <div class="ws">
+      <div class="ws-mark serif">A</div>
+      <div>
+        <div class="ws-name">Acme</div>
+        <div class="ws-sub">Free · Self-hosted</div>
+      </div>
+      <svg class="ws-cx" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M5 6.5 8 9.5 11 6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <div class="search">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.4" stroke="currentColor" stroke-width="1.4"/><path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <span>Search</span>
+      <span class="kbd">⌘K</span>
+    </div>
+
+    <nav class="nav" id="nav"></nav>
+
+    <div class="side-foot">
+      <div class="avatar" style="background:#A9822F">TL</div>
+      <div>
+        <div class="who">Théo Lambert</div>
+        <div class="role">Tech Lead · Engineering</div>
+      </div>
+      <div class="ver">v0.4.1</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="head">
+      <div class="head-top">
+        <div>
+          <div class="view-title serif">Active</div>
+          <div class="view-meta"><b>Engineering</b> &nbsp;·&nbsp; Cycle 24 &nbsp;·&nbsp; Jul 15 – Jul 28</div>
+        </div>
+        <div class="head-actions">
+          <div class="sync"><span class="dot"></span>Synced <span class="muted">· 2s ago · GitHub</span></div>
+          <button class="ibtn" title="Filter">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M2.5 4h11M4.5 8h7M6.5 12h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </button>
+          <button class="new-btn">New issue <span class="kbd">C</span></button>
+        </div>
+      </div>
+      <div class="head-rule"></div>
+    </div>
+
+    <div class="ctrls">
+      <span class="count"><b>12</b> issues</span>
+      <button class="chip"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Filter</button>
+      <button class="chip"><span class="lbl">Group</span> <b>Status</b></button>
+      <button class="chip"><span class="lbl">Sort</span> <b>Priority</b></button>
+      <div class="right">
+        <button class="chip"><span class="lbl">Display</span></button>
+      </div>
+    </div>
+
+    <div class="list" id="list"></div>
+  </main>
+</div>
+
+<script>
+/* ---------- theme via hash (#light / #dark) ---------- */
+function applyTheme(){ const t=(location.hash.replace('#','')||'dark'); document.documentElement.setAttribute('data-theme', t==='light'?'light':'dark'); }
+applyTheme(); addEventListener('hashchange', applyTheme);
+
+/* ---------- glyphs ---------- */
+function statusSVG(s){
+  const c={backlog:'--st-muted',todo:'--st-muted',progress:'--st-progress',review:'--st-review',done:'--st-done'}[s];
+  const col=`style="color:var(${c})"`;
+  if(s==='backlog') return `<svg width="16" height="16" viewBox="0 0 16 16" ${col}><circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="1.7 1.9"/></svg>`;
+  if(s==='todo')    return `<svg width="16" height="16" viewBox="0 0 16 16" ${col}><circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>`;
+  if(s==='progress')return `<svg width="16" height="16" viewBox="0 0 16 16" ${col}><circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 8 L8 4.6 A3.4 3.4 0 0 1 8 11.4 Z" fill="currentColor"/></svg>`;
+  if(s==='review')  return `<svg width="16" height="16" viewBox="0 0 16 16" ${col}><circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 8 L8 4.6 A3.4 3.4 0 1 1 4.6 8 Z" fill="currentColor"/></svg>`;
+  if(s==='done')    return `<svg width="16" height="16" viewBox="0 0 16 16" ${col}><circle cx="8" cy="8" r="6" fill="currentColor"/><path d="M5.3 8.2 7 9.9 10.8 6.1" fill="none" stroke="var(--bg)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function prioSVG(p){
+  if(p==='urgent') return `<svg width="15" height="15" viewBox="0 0 16 16" style="color:var(--prio-urgent)"><rect x="1.5" y="1.5" width="13" height="13" rx="3.4" fill="currentColor"/><rect x="7.1" y="4" width="1.8" height="5" rx=".9" fill="var(--bg)"/><rect x="7.1" y="10.4" width="1.8" height="1.8" rx=".9" fill="var(--bg)"/></svg>`;
+  const n={none:0,low:1,medium:2,high:3}[p];
+  const bar=(x,h,y,on)=>`<rect x="${x}" y="${y}" width="3" height="${h}" rx="1" fill="currentColor" opacity="${on?1:.24}"/>`;
+  return `<svg width="15" height="15" viewBox="0 0 16 16" style="color:var(--txt-2)">${bar(2,5,9,n>=1)}${bar(6.5,8,6,n>=2)}${bar(11,11,3,n>=3)}</svg>`;
+}
+function cycleSVG(){
+  return `<svg width="12" height="12" viewBox="0 0 16 16" style="color:var(--txt-3)"><circle cx="8" cy="8" r="5.6" fill="none" stroke="var(--line-2)" stroke-width="1.6"/><path d="M8 2.4 A5.6 5.6 0 0 1 13.2 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+}
+function icon(name){
+  const p={
+    inbox:'M2 4.5h12v7H2z M2 8.5h3.2l1 1.6h3.6l1-1.6H14',
+    my:'M8 8.4a2.4 2.4 0 1 0 0-4.8 2.4 2.4 0 0 0 0 4.8ZM3.4 13c.4-2.1 2.3-3.4 4.6-3.4s4.2 1.3 4.6 3.4',
+    active:'M8 2.2v3.1 M8 10.7v3.1 M13.8 8h-3.1 M5.3 8H2.2 M8 8m-2.1 0a2.1 2.1 0 1 0 4.2 0 2.1 2.1 0 1 0-4.2 0',
+    backlog:'M8 8m-5.4 0a5.4 5.4 0 1 0 10.8 0 5.4 5.4 0 1 0-10.8 0'
+  }[name];
+  const extra = name==='backlog' ? 'stroke-dasharray="1.7 1.9"' : '';
+  return `<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="${p}" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" ${extra}/></svg>`;
+}
+function avatar(a){return `<div class="avatar" style="background:${a.c}">${a.i}</div>`;}
+
+/* ---------- data ---------- */
+const P={terra:'#C2603F',sage:'#4F7A6B',peri:'#6A6DB0',ochre:'#A9822F',plum:'#9C5A7A',steel:'#3F6E9E'};
+const MK={i:'MK',c:P.terra}, DR={i:'DR',c:P.sage}, SP={i:'SP',c:P.peri}, JW={i:'JW',c:P.steel}, IN={i:'IN',c:P.plum}, TL={i:'TL',c:P.ochre};
+const L={perf:{t:'perf',c:'#E0794B'},graph:{t:'graph',c:'#7C6FE0'},github:{t:'github',c:'#8B8987'},docker:{t:'docker',c:'#3F9EC0'},dx:{t:'dx',c:'#B99133'},design:{t:'design',c:'#C77BAE'},metrics:{t:'metrics',c:'#C2603F'},realtime:{t:'realtime',c:'#4FAE83'}};
+
+const GROUPS=[
+ {status:'progress', name:'In Progress', items:[
+   {key:'ENG-138', title:'Sub-100ms command-palette open on a 10k-issue workspace', prio:'urgent', who:MK, tags:[L.perf], cycle:24, date:'Jul 22'},
+   {key:'ENG-142', title:'Derive issue status from merged PR events', prio:'high', who:DR, tags:[L.graph,L.github], cycle:24, date:'Jul 22', focus:true},
+   {key:'PLT-91', title:'docker compose up: cold start under 60 seconds', prio:'high', who:JW, tags:[L.docker], cycle:24, date:'Jul 21', hover:true},
+ ]},
+ {status:'review', name:'In Review', items:[
+   {key:'ENG-140', title:'Optimistic updates for keyboard-driven status changes', prio:'high', who:SP, tags:[L.dx], cycle:24, date:'Jul 21'},
+   {key:'DES-57', title:'Focused-row and hover states for the dense issue list', prio:'medium', who:IN, tags:[L.design], cycle:24, date:'Jul 20'},
+ ]},
+ {status:'todo', name:'Todo', items:[
+   {key:'ENG-131', title:'GitHub App — branch ↔ issue auto-linking', prio:'high', who:DR, tags:[L.github], cycle:24, date:'Jul 19'},
+   {key:'PLT-88', title:'DORA change-failure-rate view over native deploy data', prio:'medium', who:JW, tags:[L.metrics], cycle:25, date:'Jul 18'},
+   {key:'ENG-129', title:'Full workspace export in a single command', prio:'medium', who:MK, tags:[L.dx], cycle:null, date:'Jul 18'},
+   {key:'DES-52', title:'Command palette — grouped results and keyboard hints', prio:'low', who:IN, tags:[L.design], cycle:25, date:'Jul 17'},
+ ]},
+ {status:'backlog', name:'Backlog', items:[
+   {key:'ENG-118', title:'Model the incident ↔ deploy edge in the work graph schema', prio:'medium', who:SP, tags:[L.graph], cycle:null, date:'Jul 15'},
+   {key:'PLT-80', title:'Realtime sync fan-out via Postgres LISTEN / NOTIFY', prio:'low', who:JW, tags:[L.realtime], cycle:null, date:'Jul 14'},
+ ]},
+ {status:'done', name:'Done', items:[
+   {key:'ENG-110', title:'Team-level review-turnaround metric (no individual leaderboards)', prio:'medium', who:TL, tags:[L.metrics], cycle:23, date:'Jul 11'},
+ ]},
+];
+
+/* ---------- render list ---------- */
+function rowHTML(it){
+  const cls=['row']; if(it.focus)cls.push('is-focus'); if(it.hover)cls.push('is-hover');
+  const tags=(it.tags||[]).map(t=>`<span class="tag"><i style="background:${t.c}"></i>${t.t}</span>`).join('');
+  const cycle=it.cycle?`<div class="c-cycle">${cycleSVG()}${it.cycle}</div>`:`<div class="c-cycle" style="color:var(--txt-3);opacity:.5">—</div>`;
+  return `<div class="${cls.join(' ')}">
+    <div class="r-check"></div>
+    <div class="c-prio">${prioSVG(it.prio)}</div>
+    <div class="c-status">${statusSVG(GROUPS.find(g=>g.items.includes(it)).status)}</div>
+    <div class="c-key mono">${it.key}</div>
+    <div class="c-title">${it.title}</div>
+    <div class="labels">${tags}</div>
+    ${cycle}
+    <div class="c-date">${it.date}</div>
+    <div class="c-assignee">${avatar(it.who)}</div>
+  </div>`;
+}
+function groupHTML(g){
+  const head=`<div class="group-head">
+     <div class="st-ico">${statusSVG(g.status)}</div>
+     <span class="g-name">${g.name}</span>
+     <span class="g-ct">${g.items.length}</span>
+     <span class="g-rule"></span>
+     <span class="g-add"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+   </div>`;
+  return head + g.items.map(rowHTML).join('');
+}
+document.getElementById('list').innerHTML = GROUPS.map(groupHTML).join('');
+
+/* ---------- render sidebar nav ---------- */
+const NAV=`
+ <div class="sec-label">Views</div>
+ <div class="item"><span class="ico">${icon('inbox')}</span>Inbox<span class="ct">3</span></div>
+ <div class="item"><span class="ico">${icon('my')}</span>My Issues<span class="ct">7</span></div>
+ <div class="item on"><span class="ico">${icon('active')}</span>Active<span class="ct">12</span></div>
+ <div class="item"><span class="ico">${icon('backlog')}</span>Backlog<span class="ct">28</span></div>
+
+ <div class="sec-label">Teams</div>
+ <div class="item"><span class="team-badge" style="background:#C2603F">EN</span>Engineering
+   <svg style="margin-left:auto;color:var(--txt-3)" width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M5.5 4 9.5 8 5.5 12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" transform="rotate(90 8 8)"/></svg>
+ </div>
+ <div class="sub">
+   <div class="item" style="color:var(--txt);font-weight:600"><span style="color:var(--accent);font-weight:800;margin:0 3px 0 -1px;font-size:15px;line-height:0">·</span>Issues<span class="ct">40</span></div>
+   <div class="item">Cycles<span class="ct">C24</span></div>
+   <div class="item">Projects<span class="ct">4</span></div>
+ </div>
+ <div class="item"><span class="team-badge" style="background:#6A6DB0">DE</span>Design
+   <svg style="margin-left:auto;color:var(--txt-3)" width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M5 6.5 8 9.5 11 6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+ </div>
+ <div class="item"><span class="team-badge" style="background:#3F6E9E">PL</span>Platform
+   <svg style="margin-left:auto;color:var(--txt-3)" width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M5 6.5 8 9.5 11 6.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+ </div>`;
+document.getElementById('nav').innerHTML = NAV;
+</script>
+</body>
+</html>

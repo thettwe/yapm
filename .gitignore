@@ -44,3 +44,6 @@ blob-report/
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Design exploration screenshots (kept as design history; not part of the build)
+design-explorations/**/*.png

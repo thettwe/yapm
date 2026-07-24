@@ -89,24 +89,25 @@ export function RoadmapView({ teamId }: { teamId: string }) {
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       if (ordered.length === 0) return
       switch (event.key) {
+        // Compute the next index from the closed-over focusIndex and move focus as an explicit
+        // side effect — never inside the setState updater, which React StrictMode double-invokes
+        // (that would advance the roving focus by two rows per keypress).
         case 'j':
-        case 'ArrowDown':
+        case 'ArrowDown': {
           event.preventDefault()
-          setFocusIndex((prev) => {
-            const next = Math.min(ordered.length - 1, prev + 1)
-            focusRow(next)
-            return next
-          })
+          const next = Math.min(ordered.length - 1, focusIndex + 1)
+          setFocusIndex(next)
+          focusRow(next)
           break
+        }
         case 'k':
-        case 'ArrowUp':
+        case 'ArrowUp': {
           event.preventDefault()
-          setFocusIndex((prev) => {
-            const next = Math.max(0, prev - 1)
-            focusRow(next)
-            return next
-          })
+          const next = Math.max(0, focusIndex - 1)
+          setFocusIndex(next)
+          focusRow(next)
           break
+        }
         case 'Enter': {
           const project = ordered[focusIndex]
           if (project) {

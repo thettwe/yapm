@@ -113,19 +113,47 @@ test('the roadmap places a dated project and is keyboard-navigable', async ({ pa
   await openTeam(page)
 
   await openProjects(page)
-  const projectName = unique('Roadmap project')
-  await createProject(page, projectName, 21)
+  // Two dated projects: the near one (14d) is the row we open; the far one (40d) guarantees at
+  // least one roadmap row sorts below it, so ArrowDown always has somewhere to move. Projects are
+  // workspace-level, so the roadmap also holds rows from earlier runs — hence we navigate by the
+  // focused row's own roving index rather than assuming our two projects are adjacent.
+  const nearName = unique('Roadmap near')
+  const farName = unique('Roadmap far')
+  await createProject(page, nearName, 14)
+  await createProject(page, farName, 40)
 
   await page.getByRole('link', { name: 'Roadmap' }).click()
-  const row = page.locator(ROADMAP_ROW).filter({ hasText: projectName })
-  await expect(row).toBeVisible({ timeout: 20_000 })
+  const nearRow = page.locator(ROADMAP_ROW).filter({ hasText: nearName })
+  await expect(nearRow).toBeVisible({ timeout: 20_000 })
 
-  // Keyboard-open the project from the roadmap: focus the row and press Enter.
-  await row.focus()
+  // Roving focus moves between project rows. Focus the near row, then drive the roadmap's own
+  // onKeyDown handler (not Playwright's row.focus()) with ArrowDown/'k' to move focus and confirm
+  // the roving tabindex follows.
+  await nearRow.focus()
+  await expect(nearRow).toBeFocused()
+  // Wait for the roving tabindex to commit onto the near row (its onFocus sets focusIndex) before
+  // driving ArrowDown — otherwise the handler reads a stale focusIndex and moves the wrong row.
+  await expect(nearRow).toHaveAttribute('tabindex', '0')
+  const startIndex = Number(await nearRow.getAttribute('data-roadmap-index'))
+  const nextRow = page.locator(`${ROADMAP_ROW}[data-roadmap-index="${startIndex + 1}"]`)
+
+  await page.keyboard.press('ArrowDown')
+  await expect(nextRow).toBeFocused()
+  await expect(nextRow).toHaveAttribute('tabindex', '0')
+  await expect(nearRow).toHaveAttribute('tabindex', '-1')
+
+  // 'k' rolls roving focus back up to the near row, which is now the tabbable one.
+  await page.keyboard.press('k')
+  await expect(nearRow).toBeFocused()
+  await expect(nearRow).toHaveAttribute('tabindex', '0')
+
+  // Enter keyboard-opens the focused (near) project from the roadmap.
   await page.keyboard.press('Enter')
-  await expect(
-    page.getByTestId('project-rail-item').filter({ hasText: projectName }),
-  ).toHaveAttribute('aria-current', 'true', { timeout: 20_000 })
+  await expect(page.getByTestId('project-rail-item').filter({ hasText: nearName })).toHaveAttribute(
+    'aria-current',
+    'true',
+    { timeout: 20_000 },
+  )
 })
 
 test('the projects view is correct across every preset in light and dark', async ({ page }) => {

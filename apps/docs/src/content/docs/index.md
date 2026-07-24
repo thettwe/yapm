@@ -13,3 +13,5 @@ runs as three containers you own.
   the six fixed status columns, at `/teams/<teamId>/board`.
 - [Cycles](/features/cycles/) — time-boxed iterations for a team, with automatic rollover of
   unfinished work when a cycle ends, at `/teams/<teamId>/cycles`.
+- [Triage](/features/triage/) — an inbox for incoming, unsorted issues with keyboard-first
+  accept, decline, and route, at `/teams/<teamId>/triage`.

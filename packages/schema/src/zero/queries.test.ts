@@ -14,6 +14,7 @@ import {
   queries,
   SAVED_VIEWS_BY_TEAM_QUERY_NAME,
   TEAMS_ALL_QUERY_NAME,
+  TRIAGE_INBOX_QUERY_NAME,
   teamScoped,
   USERS_ALL_QUERY_NAME,
   WORKSPACE_CURRENT_QUERY_NAME,
@@ -64,6 +65,7 @@ describe('the synced query registry', () => {
       [ISSUES_MINE_QUERY_NAME, queries.issues.mine],
       [ISSUE_DETAIL_QUERY_NAME, queries.issues.detail],
       [CYCLES_BY_TEAM_QUERY_NAME, queries.cycles.byTeam],
+      [TRIAGE_INBOX_QUERY_NAME, queries.triage.inbox],
       [LABELS_BY_TEAM_QUERY_NAME, queries.labels.byTeam],
       [SAVED_VIEWS_BY_TEAM_QUERY_NAME, queries.savedViews.byTeam],
     ] as const) {
@@ -169,6 +171,49 @@ describe('team-scoped work-data queries', () => {
     const where = astOfArgs(queries.cycles.byTeam, { teamId: TEAM_ID }, MEMBER).where
     expect(JSON.stringify(where)).toContain(MEMBER.userID)
     expect(JSON.stringify(where)).not.toContain(NON_MEMBER.userID)
+  })
+
+  it('scope triage.inbox to the caller teams and deny non-members', () => {
+    for (const ctx of [MEMBER, VIEWER]) {
+      const where = astOfArgs(queries.triage.inbox, { teamId: TEAM_ID }, ctx).where
+      expect(where).not.toEqual(DENY_ALL_WHERE)
+      expect(JSON.stringify(where)).toContain(ctx.userID)
+    }
+    const adminWhere = astOfArgs(queries.triage.inbox, { teamId: TEAM_ID }, ADMIN).where
+    expect(adminWhere).not.toEqual(DENY_ALL_WHERE)
+    expect(JSON.stringify(adminWhere)).not.toContain(ADMIN.userID)
+    for (const ctx of [NON_MEMBER, undefined]) {
+      expect(astOfArgs(queries.triage.inbox, { teamId: TEAM_ID }, ctx).where).toEqual(
+        DENY_ALL_WHERE,
+      )
+    }
+  })
+
+  it('never widens triage.inbox beyond caller memberships given a foreign teamId arg', () => {
+    const where = astOfArgs(queries.triage.inbox, { teamId: TEAM_ID }, MEMBER).where
+    expect(JSON.stringify(where)).toContain(MEMBER.userID)
+    expect(JSON.stringify(where)).not.toContain(NON_MEMBER.userID)
+  })
+
+  it('filters triage.inbox to issues awaiting triage (needsTriage = true)', () => {
+    const inbox = JSON.stringify(astOfArgs(queries.triage.inbox, { teamId: TEAM_ID }, MEMBER).where)
+    expect(inbox).toContain('needsTriage')
+    expect(inbox).toMatch(/needsTriage[\s\S]*true/)
+    expect(inbox).not.toMatch(/needsTriage[\s\S]*false/)
+  })
+
+  it('holds triaged issues out of issues.byTeam and issues.mine (needsTriage = false)', () => {
+    const byTeam = JSON.stringify(
+      astOfArgs(queries.issues.byTeam, { teamId: TEAM_ID }, MEMBER).where,
+    )
+    expect(byTeam).toContain('needsTriage')
+    expect(byTeam).toMatch(/needsTriage[\s\S]*false/)
+    expect(byTeam).not.toMatch(/needsTriage[\s\S]*true/)
+
+    const mine = JSON.stringify(astOfArgs(queries.issues.mine, undefined, MEMBER).where)
+    expect(mine).toContain('needsTriage')
+    expect(mine).toMatch(/needsTriage[\s\S]*false/)
+    expect(mine).not.toMatch(/needsTriage[\s\S]*true/)
   })
 
   it('scopes issues.mine, labels.byTeam and savedViews.byTeam, denying non-members', () => {

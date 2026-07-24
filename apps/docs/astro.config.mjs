@@ -13,6 +13,7 @@ export default defineConfig({
           items: [
             { label: 'Board', slug: 'features/board' },
             { label: 'Cycles', slug: 'features/cycles' },
+            { label: 'Triage', slug: 'features/triage' },
           ],
         },
         {

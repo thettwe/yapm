@@ -498,6 +498,7 @@ export const createIssueArgs = z.object({
     .regex(/^[0-9A-Za-z]+$/u)
     .nullable()
     .optional(),
+  needsTriage: z.boolean().optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
 })
@@ -529,6 +530,7 @@ export const createIssue = defineMutator(createIssueArgs, async ({ tx, args, ctx
     priority: args.priority,
     assigneeId: args.assigneeId ?? null,
     rank: args.rank ?? null,
+    needsTriage: args.needsTriage ?? false,
     creatorId: ctx.userID,
     createdAt: args.createdAt,
     updatedAt: args.updatedAt,
@@ -806,6 +808,116 @@ export const setIssueCycle = defineMutator(setIssueCycleArgs, async ({ tx, args,
   })
 })
 
+// Triage is an orthogonal boolean on an issue (`needs_triage`), never a seventh status. An
+// issue enters the inbox here (flag set) and leaves it via accept/decline/route (flag cleared).
+export const flagTriageArgs = z.object({
+  id: z.string().min(1),
+  updatedAt: timestamp,
+})
+
+export const flagTriage = defineMutator(flagTriageArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadIssueForWrite(tx, ctx, args.id)
+  await tx.mutate.issue.update({ id: args.id, needsTriage: true, updatedAt: args.updatedAt })
+})
+
+export const acceptTriageArgs = z.object({
+  id: z.string().min(1),
+  updatedAt: timestamp,
+})
+
+// Accept clears the flag and leaves the status untouched: the issue becomes a normal issue at
+// its current status and reappears in the list/board.
+export const acceptTriage = defineMutator(acceptTriageArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadIssueForWrite(tx, ctx, args.id)
+  await tx.mutate.issue.update({ id: args.id, needsTriage: false, updatedAt: args.updatedAt })
+})
+
+export const declineTriageArgs = z.object({
+  id: z.string().min(1),
+  updatedAt: timestamp,
+})
+
+// Decline clears the flag and cancels the issue, so a rejected incoming issue leaves the inbox
+// as a canceled record rather than being deleted.
+export const declineTriage = defineMutator(declineTriageArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadIssueForWrite(tx, ctx, args.id)
+  await tx.mutate.issue.update({
+    id: args.id,
+    needsTriage: false,
+    status: 'canceled',
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const routeIssueArgs = z.object({
+  id: z.string().min(1),
+  status: issueStatusSchema.optional(),
+  assigneeId: z.string().min(1).nullable().optional(),
+  cycleId: z.string().min(1).nullable().optional(),
+  addLabelIds: z.array(z.string().min(1)).optional(),
+  updatedAt: timestamp,
+})
+
+// Route is accept-with-routing: clear the flag and, in one atomic write, apply a status, an
+// assignee, a cycle, and/or labels — each validated to the issue's team (cross-team rejected).
+// Team reassignment is deliberately not routable (it collides with the per-team number and the
+// team-scoped sync scope); that is reserved for the connectors work.
+export const routeIssue = defineMutator(routeIssueArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const issue = await loadIssueForWrite(tx, ctx, args.id)
+
+  if (args.assigneeId != null) {
+    await assertTeamMember(tx, issue.teamId, args.assigneeId, args.id)
+  }
+
+  if (args.cycleId != null) {
+    const cycle = (await tx.run(zql.cycle.where('id', args.cycleId).one())) as
+      | { id: string; teamId: string }
+      | undefined
+    if (!cycle || cycle.teamId !== issue.teamId) {
+      throw new MutationError(
+        'Cycle and issue must belong to the same team',
+        MutationErrorCode.crossTeam,
+        args.id,
+      )
+    }
+  }
+
+  for (const labelId of args.addLabelIds ?? []) {
+    const label = (await tx.run(zql.label.where('id', labelId).one())) as
+      | { id: string; teamId: string }
+      | undefined
+    if (!label || label.teamId !== issue.teamId) {
+      throw new MutationError(
+        'Label and issue must belong to the same team',
+        MutationErrorCode.crossTeam,
+        args.id,
+      )
+    }
+  }
+
+  await tx.mutate.issue.update({
+    id: args.id,
+    needsTriage: false,
+    ...(args.status === undefined ? {} : { status: args.status }),
+    ...(args.assigneeId === undefined ? {} : { assigneeId: args.assigneeId }),
+    ...(args.cycleId === undefined ? {} : { cycleId: args.cycleId }),
+    updatedAt: args.updatedAt,
+  })
+
+  for (const labelId of args.addLabelIds ?? []) {
+    await tx.mutate.issue_label.upsert({
+      issueId: args.id,
+      labelId,
+      teamId: issue.teamId,
+      createdAt: args.updatedAt,
+    })
+  }
+})
+
 export const addIssueLabelArgs = z.object({
   issueId: z.string().min(1),
   labelId: z.string().min(1),
@@ -1080,6 +1192,10 @@ export const mutators = defineMutators({
     setCycle: setIssueCycle,
     addLabel: addIssueLabel,
     removeLabel: removeIssueLabel,
+    flagTriage,
+    acceptTriage,
+    declineTriage,
+    routeIssue,
   },
   cycle: {
     create: createCycle,
@@ -1113,6 +1229,10 @@ export const SET_ISSUE_PRIORITY_MUTATOR_NAME = 'issue.setPriority'
 export const ASSIGN_ISSUE_MUTATOR_NAME = 'issue.assign'
 export const MOVE_ISSUE_MUTATOR_NAME = 'issue.move'
 export const SET_ISSUE_CYCLE_MUTATOR_NAME = 'issue.setCycle'
+export const FLAG_TRIAGE_MUTATOR_NAME = 'issue.flagTriage'
+export const ACCEPT_TRIAGE_MUTATOR_NAME = 'issue.acceptTriage'
+export const DECLINE_TRIAGE_MUTATOR_NAME = 'issue.declineTriage'
+export const ROUTE_ISSUE_MUTATOR_NAME = 'issue.routeIssue'
 export const CREATE_CYCLE_MUTATOR_NAME = 'cycle.create'
 export const UPDATE_CYCLE_MUTATOR_NAME = 'cycle.update'
 export const ACTIVATE_CYCLE_MUTATOR_NAME = 'cycle.activate'

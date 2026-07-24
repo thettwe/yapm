@@ -71,10 +71,13 @@ export const queries = defineQueries({
     // Team-scoped: only issues in teams the ctx user belongs to, narrowed to one team.
     // The membership predicate is re-evaluated server-side, so the teamId arg can never
     // widen the result beyond the caller's teams.
+    // Issues awaiting triage (`needsTriage`) are held out of the normal list/board — they live
+    // only in `triage.inbox` until accepted.
     byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
       teamScoped(
         zql.issue
           .where('teamId', args.teamId)
+          .where('needsTriage', false)
           .related('assignee')
           .related('labels')
           .related('creator')
@@ -82,12 +85,13 @@ export const queries = defineQueries({
         ctx,
       ),
     ),
-    // Every issue assigned to the caller across all of their teams.
+    // Every issue assigned to the caller across all of their teams, excluding the triage inbox.
     mine: defineQuery(({ ctx }) => {
       if (!isMember(ctx)) return denyAll(zql.issue)
       return teamScoped(
         zql.issue
           .where('assigneeId', ctx.userID)
+          .where('needsTriage', false)
           .related('assignee')
           .related('labels')
           .related('creator')
@@ -114,6 +118,22 @@ export const queries = defineQueries({
       teamScoped(zql.cycle.where('teamId', args.teamId).orderBy('startDate', 'asc'), ctx),
     ),
   },
+  triage: {
+    // Team-scoped triage inbox: exactly the issues awaiting triage in one team, oldest first
+    // (FIFO). Same predicate as `issues.byTeam`; a non-member gets an empty result.
+    inbox: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
+      teamScoped(
+        zql.issue
+          .where('teamId', args.teamId)
+          .where('needsTriage', true)
+          .related('assignee')
+          .related('labels')
+          .related('creator')
+          .orderBy('createdAt', 'asc'),
+        ctx,
+      ),
+    ),
+  },
   labels: {
     byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
       teamScoped(zql.label.where('teamId', args.teamId).orderBy('name', 'asc'), ctx),
@@ -136,5 +156,6 @@ export const ISSUES_BY_TEAM_QUERY_NAME = 'issues.byTeam'
 export const ISSUES_MINE_QUERY_NAME = 'issues.mine'
 export const ISSUE_DETAIL_QUERY_NAME = 'issues.detail'
 export const CYCLES_BY_TEAM_QUERY_NAME = 'cycles.byTeam'
+export const TRIAGE_INBOX_QUERY_NAME = 'triage.inbox'
 export const LABELS_BY_TEAM_QUERY_NAME = 'labels.byTeam'
 export const SAVED_VIEWS_BY_TEAM_QUERY_NAME = 'savedViews.byTeam'

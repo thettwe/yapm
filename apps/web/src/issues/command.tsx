@@ -20,7 +20,18 @@ import {
   CommandShortcut,
 } from '@yapm/ui/components/command-palette'
 import { StatusGlyph } from '@yapm/ui/components/status-glyph'
-import { ArrowRightIcon, CircleDotIcon, PlusIcon, TagIcon, UserIcon, UserXIcon } from 'lucide-react'
+import {
+  ArrowRightIcon,
+  CheckIcon,
+  CircleDotIcon,
+  InboxIcon,
+  PlusIcon,
+  RouteIcon,
+  TagIcon,
+  UserIcon,
+  UserXIcon,
+  XIcon,
+} from 'lucide-react'
 import {
   createContext,
   type FormEvent,
@@ -190,6 +201,19 @@ export function CommandProvider({
     [runAll, targetIds, zero],
   )
 
+  const applyTriage = useCallback(
+    (kind: 'flag' | 'accept' | 'decline') => {
+      const now = Date.now()
+      const build = (id: string) => {
+        if (kind === 'flag') return mutators.issue.flagTriage({ id, updatedAt: now })
+        if (kind === 'accept') return mutators.issue.acceptTriage({ id, updatedAt: now })
+        return mutators.issue.declineTriage({ id, updatedAt: now })
+      }
+      void runAll(targetIds.map((id) => zero.mutate(build(id))))
+    },
+    [runAll, targetIds, zero],
+  )
+
   const createIssue = useCallback(
     (title: string) => {
       const now = Date.now()
@@ -267,6 +291,13 @@ export function CommandProvider({
                   onStatus={() => start('status', targetIds)}
                   onAssign={() => start('assign', targetIds)}
                   onLabel={() => start('label', targetIds)}
+                  onAcceptTriage={() => applyTriage('accept')}
+                  onDeclineTriage={() => applyTriage('decline')}
+                  onFlagTriage={() => applyTriage('flag')}
+                  onRouteTriage={() => {
+                    void navigate({ to: '/teams/$teamId/triage', params: { teamId } })
+                    close()
+                  }}
                 />
               ) : null}
               {page === 'status' ? <StatusPage onPick={applyStatus} /> : null}
@@ -322,6 +353,10 @@ function RootPage({
   onStatus,
   onAssign,
   onLabel,
+  onAcceptTriage,
+  onDeclineTriage,
+  onFlagTriage,
+  onRouteTriage,
 }: {
   issues: readonly IssueRowData[]
   teamKey: string
@@ -335,6 +370,10 @@ function RootPage({
   onStatus: () => void
   onAssign: () => void
   onLabel: () => void
+  onAcceptTriage: () => void
+  onDeclineTriage: () => void
+  onFlagTriage: () => void
+  onRouteTriage: () => void
 }) {
   return (
     <>
@@ -361,6 +400,26 @@ function RootPage({
             <TagIcon />
             Add label…
             <CommandShortcut>L</CommandShortcut>
+          </CommandItem>
+        </CommandGroup>
+      ) : null}
+      {hasTarget && canWrite ? (
+        <CommandGroup heading="Triage">
+          <CommandItem value="accept from triage" onSelect={onAcceptTriage}>
+            <CheckIcon />
+            Accept from triage
+          </CommandItem>
+          <CommandItem value="route issue triage" onSelect={onRouteTriage}>
+            <RouteIcon />
+            Route…
+          </CommandItem>
+          <CommandItem value="decline triage cancel" onSelect={onDeclineTriage}>
+            <XIcon />
+            Decline (cancel)
+          </CommandItem>
+          <CommandItem value="send to triage" onSelect={onFlagTriage}>
+            <InboxIcon />
+            Send to triage
           </CommandItem>
         </CommandGroup>
       ) : null}

@@ -97,6 +97,7 @@ interface DemoIssueSpec {
   labels: string[]
   description?: string
   inActiveCycle?: boolean
+  needsTriage?: boolean
 }
 
 const DEMO_LABELS: { name: string; color: string }[] = [
@@ -167,6 +168,22 @@ const DEMO_ISSUES: DemoIssueSpec[] = [
     assigned: false,
     labels: ['chore'],
   },
+  {
+    title: 'Incoming: dark mode contrast looks off on the login screen',
+    status: 'backlog',
+    priority: 'no_priority',
+    assigned: false,
+    labels: ['bug'],
+    needsTriage: true,
+  },
+  {
+    title: 'Incoming: can we add CSV export for the issue list?',
+    status: 'backlog',
+    priority: 'no_priority',
+    assigned: false,
+    labels: [],
+    needsTriage: true,
+  },
 ]
 
 const demoDoc = (text: string): string =>
@@ -236,9 +253,10 @@ export async function seedDemoContent(
       const assigneeId = spec.assigned ? options.userId : null
       const description = spec.description ? sql`${demoDoc(spec.description)}::jsonb` : sql`null`
       const cycleId = spec.inActiveCycle ? activeCycleId : null
+      const needsTriage = spec.needsTriage ?? false
       await sql`
-        insert into issue (id, team_id, number, title, description, status, priority, assignee_id, creator_id, cycle_id)
-        values (${issueId}, ${teamId}, ${number}, ${spec.title}, ${description}, ${spec.status}, ${spec.priority}, ${assigneeId}, ${options.userId}, ${cycleId})
+        insert into issue (id, team_id, number, title, description, status, priority, assignee_id, creator_id, cycle_id, needs_triage)
+        values (${issueId}, ${teamId}, ${number}, ${spec.title}, ${description}, ${spec.status}, ${spec.priority}, ${assigneeId}, ${options.userId}, ${cycleId}, ${needsTriage})
       `.execute(trx)
 
       for (const labelName of spec.labels) {

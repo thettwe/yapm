@@ -381,10 +381,14 @@ function RouteDialog({
   const [status, setStatus] = useState<IssueStatus>(issue.status)
   const [assignee, setAssignee] = useState<string>(issue.assigneeId ?? '')
   const [cycle, setCycle] = useState<string>(issue.cycleId ?? '')
-  const [selectedLabels, setSelectedLabels] = useState<ReadonlySet<string>>(
-    () => new Set((issue.labels ?? []).map((label) => label.id)),
-  )
+  const [selectedLabels, setSelectedLabels] = useState<ReadonlySet<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
+
+  // Routing is add-only (routeIssue has no removal path), so labels already on the issue are
+  // shown as read-only chips and only not-yet-applied labels are toggleable.
+  const appliedIds = new Set((issue.labels ?? []).map((label) => label.id))
+  const appliedLabels = issue.labels ?? []
+  const addableLabels = labelOptions.filter((label) => !appliedIds.has(label.id))
 
   const toggleLabel = (id: string) =>
     setSelectedLabels((prev) => {
@@ -397,13 +401,11 @@ function RouteDialog({
   async function submit() {
     if (busy) return
     setBusy(true)
-    const existing = new Set((issue.labels ?? []).map((label) => label.id))
-    const addLabelIds = [...selectedLabels].filter((id) => !existing.has(id))
     await onSubmit({
       status,
       assigneeId: assignee === '' ? null : assignee,
       cycleId: cycle === '' ? null : cycle,
-      labelIds: addLabelIds,
+      labelIds: [...selectedLabels],
     })
     setBusy(false)
   }
@@ -456,11 +458,26 @@ function RouteDialog({
               ))}
             </Select>
           </div>
-          {labelOptions.length > 0 ? (
+          {appliedLabels.length > 0 || addableLabels.length > 0 ? (
             <fieldset className="flex flex-col gap-1.5">
               <legend className="text-sm font-medium text-text-2">Labels</legend>
               <div className="flex flex-wrap gap-2">
-                {labelOptions.map((label) => (
+                {appliedLabels.map((label) => (
+                  <span
+                    key={label.id}
+                    aria-disabled="true"
+                    title="Already applied"
+                    className="flex items-center gap-1.5 rounded-control border border-accent px-2 py-1 text-xs text-text-1"
+                  >
+                    <span
+                      className="size-2.5 rounded-full"
+                      style={{ backgroundColor: label.color }}
+                    />
+                    {label.name}
+                    <CheckIcon className="size-3" />
+                  </span>
+                ))}
+                {addableLabels.map((label) => (
                   <button
                     key={label.id}
                     type="button"

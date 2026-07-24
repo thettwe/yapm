@@ -184,6 +184,40 @@ describe('issue.routeIssue', () => {
     expect(calls.find((call) => call.verb === 'update')).toBeUndefined()
   })
 
+  it('rejects a cross-team assignee', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id, teamId: TEAM_ID }, membershipRow(MEMBER.userID), undefined])
+    const error = await capture(
+      mutators.issue.routeIssue.fn({
+        tx,
+        args: { id, assigneeId: 'user-other', updatedAt: 11 },
+        ctx: MEMBER,
+      }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.crossTeam)
+    expect(calls.find((call) => call.verb === 'update')).toBeUndefined()
+  })
+
+  it('rejects a cross-team label', async () => {
+    const id = newId()
+    const labelId = newId()
+    const { tx, calls } = fakeTx([
+      { id, teamId: TEAM_ID },
+      membershipRow(MEMBER.userID),
+      { id: labelId, teamId: OTHER_TEAM_ID },
+    ])
+    const error = await capture(
+      mutators.issue.routeIssue.fn({
+        tx,
+        args: { id, addLabelIds: [labelId], updatedAt: 11 },
+        ctx: MEMBER,
+      }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.crossTeam)
+    expect(calls.find((call) => call.verb === 'update')).toBeUndefined()
+    expect(calls.find((call) => call.verb === 'upsert')).toBeUndefined()
+  })
+
   it('rejects a viewer before any write', async () => {
     const id = newId()
     const { tx, calls } = fakeTx([{ id, teamId: TEAM_ID }])

@@ -8,7 +8,7 @@
 - [x] 2.2 Emit the Warm raw-token block for `:root`/`[data-theme="warm"]` (light) and `[data-theme="warm"].dark` (dark), transcribed from `design-explorations/warm/DIRECTION.md` (surfaces, borders, text-1/2/3, accent + strong/hover/active/soft/line, status/signal, `--font-ui`=Figtree/`--font-mono`=IBM Plex Mono, density, radius). App must run in Warm light + dark after this task.
 - [x] 2.3 Add the Focused preset blocks (`[data-theme="focused"]` light + `.dark`), transcribed from its DIRECTION.md (Inter, iris accent, 36px rows, hairline borders).
 - [x] 2.4 Add the Editorial preset blocks (`[data-theme="editorial"]` light + `.dark`), transcribed from its DIRECTION.md (Fraunces `--font-heading`, JetBrains Mono `--font-mono`, vermilion accent, 42px rows) — tokens only, no serif-masthead chrome.
-- [ ] 2.5 Update the six existing scaffold components (`button`, `input`, `label`, `dialog`, `menu`, `select`) to the re-pointed token utilities; `pnpm turbo typecheck lint build test` stays green and `apps/web` renders unchanged in Warm.
+- [x] 2.5 Update the six existing scaffold components (`button`, `input`, `label`, `dialog`, `menu`, `select`) to the re-pointed token utilities; `pnpm turbo typecheck lint build test` stays green and `apps/web` renders unchanged in Warm.
 
 ## 3. Accent derivation and contrast (packages/ui)
 
@@ -45,4 +45,4 @@
 ## 8. Verification
 
 - [x] 8.1 `pnpm turbo typecheck lint build test` green; boundary guard clean (ZQL/mutators only in `packages/schema`, no package→app imports); drift test run against live Postgres including `user_preference`.
-- [ ] 8.2 Add/adjust a Playwright check: no first-paint flash (document root carries `data-theme`/mode before first contentful paint), keyboard-only theme + accent change persists, and the existing workspace-auth e2e still passes (no regression). Prod build contains no `/showcase` route.
+- [x] 8.2 Add/adjust a Playwright check: no first-paint flash (document root carries `data-theme`/mode before first contentful paint), keyboard-only theme + accent change persists, and the existing workspace-auth e2e still passes (no regression). Prod build contains no `/showcase` route.

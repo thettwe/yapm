@@ -15,7 +15,7 @@ import { IssueRow } from '@yapm/ui/components/issue-row'
 import { Label } from '@yapm/ui/components/label'
 import { cn } from '@yapm/ui/lib/utils'
 import { CircleDashedIcon, FlagIcon, PlusIcon } from 'lucide-react'
-import { type FormEvent, useCallback, useId, useMemo, useState } from 'react'
+import { type FormEvent, useCallback, useId, useMemo, useRef, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import {
   CYCLE_STATUS_LABEL,
@@ -70,8 +70,12 @@ export function CyclesView({ teamId }: { teamId: string }) {
 
   const { active, upcoming, completed } = useMemo(() => partitionCycles(cycles), [cycles])
   const selected = useMemo(
-    () => cycles.find((cycle) => cycle.id === selectedId) ?? currentCycle(cycles),
-    [cycles, selectedId],
+    () =>
+      cycles.find((cycle) => cycle.id === selectedId) ??
+      currentCycle(cycles) ??
+      completed[0] ??
+      null,
+    [cycles, selectedId, completed],
   )
 
   const selectedIssues = useMemo(
@@ -202,12 +206,19 @@ function CyclePanel({
   onOpenIssue: (issue: IssueRowData) => void
 }) {
   const progress = cycleProgress(issues)
+  const headingRef = useRef<HTMLHeadingElement>(null)
 
   return (
     <>
       <header className="flex flex-col gap-3 border-b border-border p-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold tracking-tight text-text-1">{cycle.name}</h2>
+          <h2
+            ref={headingRef}
+            tabIndex={-1}
+            className="text-base font-semibold tracking-tight text-text-1 outline-none"
+          >
+            {cycle.name}
+          </h2>
           <span className="font-mono text-xs text-text-3">{cycleKey(cycle)}</span>
           <span className="rounded-full bg-bg-sidebar px-2 py-0.5 text-[11px] font-medium text-text-2">
             {CYCLE_STATUS_LABEL[cycle.status]}
@@ -216,7 +227,11 @@ function CyclePanel({
             {formatCycleRange(cycle.startDate, cycle.endDate)}
           </span>
           <div className="ml-auto">
-            <CompleteCycleButton teamId={teamId} cycle={cycle} />
+            <CompleteCycleButton
+              teamId={teamId}
+              cycle={cycle}
+              onCompleted={() => headingRef.current?.focus()}
+            />
           </div>
         </div>
         <ProgressBar progress={progress} />
@@ -272,7 +287,15 @@ function ProgressBar({ progress }: { progress: { total: number; done: number; pe
   )
 }
 
-function CompleteCycleButton({ teamId, cycle }: { teamId: string; cycle: CycleRowData }) {
+function CompleteCycleButton({
+  teamId,
+  cycle,
+  onCompleted,
+}: {
+  teamId: string
+  cycle: CycleRowData
+  onCompleted: () => void
+}) {
   const { canWrite } = useMembership()
   const zero = useZero()
   const [error, setError] = useState<string | undefined>(undefined)
@@ -284,6 +307,10 @@ function CompleteCycleButton({ teamId, cycle }: { teamId: string; cycle: CycleRo
     const failure = await runMutation(
       zero.mutate(mutators.cycle.complete({ id: cycle.id, updatedAt: Date.now() })),
     )
+    if (failure === undefined) {
+      onCompleted()
+      return
+    }
     setError(failure)
   }
 

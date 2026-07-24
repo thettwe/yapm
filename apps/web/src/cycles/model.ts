@@ -66,6 +66,6 @@ export function currentCycle(cycles: readonly CycleRowData[]): CycleRowData | nu
 
 export function formatCycleRange(startDate: number, endDate: number): string {
   const fmt = (ts: number) =>
-    new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
   return `${fmt(startDate)} – ${fmt(endDate)}`
 }

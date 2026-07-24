@@ -62,10 +62,11 @@ const PRIORITY_RANK: Record<IssuePriority, number> = {
 export const UNASSIGNED = '__unassigned__'
 export const NO_LABEL = '__no_label__'
 export const NO_CYCLE = '__no_cycle__'
+export const NO_PROJECT = '__no_project__'
 
-// The list supports one grouping the schema doesn't persist: by cycle. It layers over the
-// persistable IssueGrouping enum (saved views only store the enum groupings).
-export type ListGrouping = IssueGrouping | 'cycle'
+// The list supports two groupings the schema doesn't persist: by cycle and by project. They
+// layer over the persistable IssueGrouping enum (saved views only store the enum groupings).
+export type ListGrouping = IssueGrouping | 'cycle' | 'project'
 
 export interface IssueLabelRow {
   readonly id: string
@@ -91,6 +92,7 @@ export interface IssueRowData {
   readonly assigneeId: string | null
   readonly rank?: string | null
   readonly cycleId?: string | null
+  readonly projectId?: string | null
   readonly updatedAt: number
   readonly createdAt: number
   readonly labels?: readonly IssueLabelRow[]
@@ -151,6 +153,9 @@ export interface GroupOptions {
   // Web-only cycle axis (not part of the persistable schema filter/grouping).
   readonly cycleIds?: readonly (string | null)[]
   readonly cycleName?: (id: string) => string
+  // Web-only project axis (workspace-level; not part of the persistable schema filter/grouping).
+  readonly projectIds?: readonly (string | null)[]
+  readonly projectName?: (id: string) => string
 }
 
 // Filter (locally, over synced rows) → group → sort within each group. Groups render in a
@@ -161,10 +166,12 @@ export function buildGroups(
   options: GroupOptions,
 ): { groups: IssueGroup[]; ordered: IssueRowData[] } {
   const cycleIds = options.cycleIds
+  const projectIds = options.projectIds
   const filtered = issues.filter(
     (issue) =>
       matchesFilter(issue, options.filter, { teamKey: options.teamKey }) &&
-      (cycleIds === undefined || cycleIds.includes(issue.cycleId ?? null)),
+      (cycleIds === undefined || cycleIds.includes(issue.cycleId ?? null)) &&
+      (projectIds === undefined || projectIds.includes(issue.projectId ?? null)),
   )
   const cmp = compareBy(options.sort)
 
@@ -222,6 +229,28 @@ function groupBy(issues: readonly IssueRowData[], options: GroupOptions): IssueG
       .sort((a, b) => {
         if (a.key === NO_CYCLE) return 1
         if (b.key === NO_CYCLE) return -1
+        return a.label.localeCompare(b.label)
+      })
+  }
+
+  if (grouping === 'project') {
+    const buckets = new Map<string, IssueRowData[]>()
+    for (const issue of issues) {
+      const key = issue.projectId ?? NO_PROJECT
+      const bucket = buckets.get(key) ?? []
+      bucket.push(issue)
+      buckets.set(key, bucket)
+    }
+    const name = options.projectName ?? ((id: string) => id)
+    return [...buckets.entries()]
+      .map(([key, bucket]) => ({
+        key,
+        label: key === NO_PROJECT ? 'No project' : name(key),
+        issues: bucket,
+      }))
+      .sort((a, b) => {
+        if (a.key === NO_PROJECT) return 1
+        if (b.key === NO_PROJECT) return -1
         return a.label.localeCompare(b.label)
       })
   }

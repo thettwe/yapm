@@ -118,6 +118,32 @@ export const queries = defineQueries({
       teamScoped(zql.cycle.where('teamId', args.teamId).orderBy('startDate', 'asc'), ctx),
     ),
   },
+  projects: {
+    // Workspace-level: every project in the workspace, readable by any workspace member via the
+    // same `isMember` gate as workspace/teams/members (deny by empty query otherwise). This is
+    // what makes the roadmap a cross-team overview. The related `issues` are re-scoped with the
+    // `teamScoped` predicate so a workspace-level project query can NEVER widen issue reads past
+    // the caller's teams — a member only ever sees (and computes progress over) the project's
+    // issues in teams they belong to. `needsTriage` issues are held out, matching the list.
+    all: defineQuery(({ ctx }) => {
+      const q = zql.project
+        .related('lead')
+        .related('issues', (issues) =>
+          teamScoped(issues.where('needsTriage', false).related('assignee'), ctx),
+        )
+        .orderBy('createdAt', 'asc')
+      return isMember(ctx) ? q : denyAll(q)
+    }),
+    get: defineQuery(z.object({ id: z.string() }), ({ args, ctx }) => {
+      const q = zql.project
+        .where('id', args.id)
+        .related('lead')
+        .related('issues', (issues) =>
+          teamScoped(issues.where('needsTriage', false).related('assignee').related('team'), ctx),
+        )
+      return (isMember(ctx) ? q : denyAll(q)).one()
+    }),
+  },
   triage: {
     // Team-scoped triage inbox: exactly the issues awaiting triage in one team, oldest first
     // (FIFO). Same predicate as `issues.byTeam`; a non-member gets an empty result.
@@ -156,6 +182,8 @@ export const ISSUES_BY_TEAM_QUERY_NAME = 'issues.byTeam'
 export const ISSUES_MINE_QUERY_NAME = 'issues.mine'
 export const ISSUE_DETAIL_QUERY_NAME = 'issues.detail'
 export const CYCLES_BY_TEAM_QUERY_NAME = 'cycles.byTeam'
+export const PROJECTS_ALL_QUERY_NAME = 'projects.all'
+export const PROJECT_GET_QUERY_NAME = 'projects.get'
 export const TRIAGE_INBOX_QUERY_NAME = 'triage.inbox'
 export const LABELS_BY_TEAM_QUERY_NAME = 'labels.byTeam'
 export const SAVED_VIEWS_BY_TEAM_QUERY_NAME = 'savedViews.byTeam'

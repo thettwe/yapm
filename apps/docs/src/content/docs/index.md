@@ -15,3 +15,6 @@ runs as three containers you own.
   unfinished work when a cycle ends, at `/teams/<teamId>/cycles`.
 - [Triage](/features/triage/) — an inbox for incoming, unsorted issues with keyboard-first
   accept, decline, and route, at `/teams/<teamId>/triage`.
+- [Projects & roadmap](/features/projects/) — lightweight, workspace-level projects with
+  computed progress and a keyboard-first roadmap timeline across teams, at
+  `/teams/<teamId>/projects` and `/teams/<teamId>/roadmap`.

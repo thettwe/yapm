@@ -14,6 +14,7 @@ import type {
   IssueGrouping,
   IssuePriority,
   IssueStatus,
+  ProjectStatus,
   ThemePreset,
   WorkspaceRole,
 } from './context.js'
@@ -98,6 +99,7 @@ const issue = table('issue')
     creatorId: string().from('creator_id'),
     rank: string().optional(),
     cycleId: string().from('cycle_id').optional(),
+    projectId: string().from('project_id').optional(),
     needsTriage: boolean().from('needs_triage'),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
@@ -113,6 +115,19 @@ const cycle = table('cycle')
     status: enumeration<CycleStatus>(),
     startDate: number().from('start_date'),
     endDate: number().from('end_date'),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+const project = table('project')
+  .columns({
+    id: string(),
+    workspaceId: string().from('workspace_id'),
+    name: string(),
+    leadId: string().from('lead_id').optional(),
+    status: enumeration<ProjectStatus>(),
+    targetDate: number().from('target_date').optional(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })
@@ -191,6 +206,11 @@ const workspaceRelationships = relationships(workspace, ({ many }) => ({
     sourceField: ['id'],
     destField: ['workspaceId'],
     destSchema: invite,
+  }),
+  projects: many({
+    sourceField: ['id'],
+    destField: ['workspaceId'],
+    destSchema: project,
   }),
 }))
 
@@ -280,6 +300,11 @@ const issueRelationships = relationships(issue, ({ one, many }) => ({
     destField: ['id'],
     destSchema: cycle,
   }),
+  project: one({
+    sourceField: ['projectId'],
+    destField: ['id'],
+    destSchema: project,
+  }),
   issueLabels: many({
     sourceField: ['id'],
     destField: ['issueId'],
@@ -313,6 +338,24 @@ const cycleRelationships = relationships(cycle, ({ one, many }) => ({
   issues: many({
     sourceField: ['id'],
     destField: ['cycleId'],
+    destSchema: issue,
+  }),
+}))
+
+const projectRelationships = relationships(project, ({ one, many }) => ({
+  workspace: one({
+    sourceField: ['workspaceId'],
+    destField: ['id'],
+    destSchema: workspace,
+  }),
+  lead: one({
+    sourceField: ['leadId'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+  issues: many({
+    sourceField: ['id'],
+    destField: ['projectId'],
     destSchema: issue,
   }),
 }))
@@ -379,6 +422,7 @@ export const schema = createSchema({
     userPreference,
     issue,
     cycle,
+    project,
     label,
     issueLabel,
     comment,
@@ -394,6 +438,7 @@ export const schema = createSchema({
     userPreferenceRelationships,
     issueRelationships,
     cycleRelationships,
+    projectRelationships,
     labelRelationships,
     issueLabelRelationships,
     commentRelationships,

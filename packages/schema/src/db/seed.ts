@@ -98,6 +98,7 @@ interface DemoIssueSpec {
   description?: string
   inActiveCycle?: boolean
   needsTriage?: boolean
+  project?: 0 | 1
 }
 
 const DEMO_LABELS: { name: string; color: string }[] = [
@@ -116,6 +117,7 @@ const DEMO_ISSUES: DemoIssueSpec[] = [
     labels: ['bug'],
     description: 'Focus should return to the previously focused row when the palette closes.',
     inActiveCycle: true,
+    project: 0,
   },
   {
     title: 'Add saved views for the team issue list',
@@ -124,6 +126,7 @@ const DEMO_ISSUES: DemoIssueSpec[] = [
     assigned: true,
     labels: ['feature'],
     inActiveCycle: true,
+    project: 0,
   },
   {
     title: 'Reality strip renders the not-linked placeholder',
@@ -132,6 +135,7 @@ const DEMO_ISSUES: DemoIssueSpec[] = [
     assigned: false,
     labels: ['design'],
     inActiveCycle: true,
+    project: 1,
   },
   {
     title: 'Tune row density to match the Warm mockups',
@@ -246,6 +250,17 @@ export async function seedDemoContent(
     `.execute(trx)
     await sql`insert into cycle_sequence (team_id, next_number) values (${teamId}, 3)`.execute(trx)
 
+    // Two workspace-level projects so the roadmap and project views have content on first run:
+    // an active project with a near-term target date and a planned one further out. Some demo
+    // issues below are pointed at them via `project_id`.
+    const projectIds = [newId(), newId()]
+    await sql`
+      insert into project (id, workspace_id, name, lead_id, status, target_date)
+      values
+        (${projectIds[0]}, ${workspace.id}, 'Onboarding polish', ${options.userId}, 'active', ${new Date(now + 14 * day)}),
+        (${projectIds[1]}, ${workspace.id}, 'Reality strip GA', null, 'planned', ${new Date(now + 45 * day)})
+    `.execute(trx)
+
     let number = 0
     for (const spec of DEMO_ISSUES) {
       number += 1
@@ -253,10 +268,11 @@ export async function seedDemoContent(
       const assigneeId = spec.assigned ? options.userId : null
       const description = spec.description ? sql`${demoDoc(spec.description)}::jsonb` : sql`null`
       const cycleId = spec.inActiveCycle ? activeCycleId : null
+      const projectId = spec.project === undefined ? null : projectIds[spec.project]
       const needsTriage = spec.needsTriage ?? false
       await sql`
-        insert into issue (id, team_id, number, title, description, status, priority, assignee_id, creator_id, cycle_id, needs_triage)
-        values (${issueId}, ${teamId}, ${number}, ${spec.title}, ${description}, ${spec.status}, ${spec.priority}, ${assigneeId}, ${options.userId}, ${cycleId}, ${needsTriage})
+        insert into issue (id, team_id, number, title, description, status, priority, assignee_id, creator_id, cycle_id, project_id, needs_triage)
+        values (${issueId}, ${teamId}, ${number}, ${spec.title}, ${description}, ${spec.status}, ${spec.priority}, ${assigneeId}, ${options.userId}, ${cycleId}, ${projectId}, ${needsTriage})
       `.execute(trx)
 
       for (const labelName of spec.labels) {

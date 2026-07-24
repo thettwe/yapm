@@ -11,6 +11,8 @@ import {
   LABELS_BY_TEAM_QUERY_NAME,
   MEMBERS_ALL_QUERY_NAME,
   PREFERENCES_MINE_QUERY_NAME,
+  PROJECT_GET_QUERY_NAME,
+  PROJECTS_ALL_QUERY_NAME,
   queries,
   SAVED_VIEWS_BY_TEAM_QUERY_NAME,
   TEAMS_ALL_QUERY_NAME,
@@ -65,6 +67,8 @@ describe('the synced query registry', () => {
       [ISSUES_MINE_QUERY_NAME, queries.issues.mine],
       [ISSUE_DETAIL_QUERY_NAME, queries.issues.detail],
       [CYCLES_BY_TEAM_QUERY_NAME, queries.cycles.byTeam],
+      [PROJECTS_ALL_QUERY_NAME, queries.projects.all],
+      [PROJECT_GET_QUERY_NAME, queries.projects.get],
       [TRIAGE_INBOX_QUERY_NAME, queries.triage.inbox],
       [LABELS_BY_TEAM_QUERY_NAME, queries.labels.byTeam],
       [SAVED_VIEWS_BY_TEAM_QUERY_NAME, queries.savedViews.byTeam],
@@ -91,6 +95,41 @@ describe('member-gated queries deny non-members', () => {
 
     expect(astOf(query, NON_MEMBER).where).toEqual(DENY_ALL_WHERE)
     expect(astOf(query, undefined).where).toEqual(DENY_ALL_WHERE)
+  })
+})
+
+describe('projects.all is workspace-level, member-gated', () => {
+  it('returns rows for any member (including viewers) and denies non-members', () => {
+    expect(astOf(queries.projects.all, MEMBER).where).not.toEqual(DENY_ALL_WHERE)
+    expect(astOf(queries.projects.all, VIEWER).where).not.toEqual(DENY_ALL_WHERE)
+    expect(astOf(queries.projects.all, NON_MEMBER).where).toEqual(DENY_ALL_WHERE)
+    expect(astOf(queries.projects.all, undefined).where).toEqual(DENY_ALL_WHERE)
+  })
+
+  it('team-scopes the related issues so a workspace-level query cannot widen issue reads', () => {
+    const ast = astOf(queries.projects.all, MEMBER) as QueryAst & {
+      related?: { subquery: { where?: unknown } }[]
+    }
+    const issuesRelated = ast.related?.find((r) =>
+      JSON.stringify(r.subquery).includes('needsTriage'),
+    )
+    expect(issuesRelated).toBeDefined()
+    // The membership predicate is present on the related issues subquery.
+    expect(JSON.stringify(issuesRelated?.subquery)).toContain(MEMBER.userID)
+  })
+
+  it('team-scopes the related issues in projects.get', () => {
+    const id = '019f8f00-0000-7000-8000-0000000000bb'
+    expect(astOfArgs(queries.projects.get, { id }, MEMBER).where).not.toEqual(DENY_ALL_WHERE)
+    expect(astOfArgs(queries.projects.get, { id }, NON_MEMBER).where).toEqual(DENY_ALL_WHERE)
+    const ast = astOfArgs(queries.projects.get, { id }, MEMBER) as QueryAst & {
+      related?: { subquery: { where?: unknown } }[]
+    }
+    const issuesRelated = ast.related?.find((r) =>
+      JSON.stringify(r.subquery).includes('needsTriage'),
+    )
+    expect(issuesRelated).toBeDefined()
+    expect(JSON.stringify(issuesRelated?.subquery)).toContain(MEMBER.userID)
   })
 })
 

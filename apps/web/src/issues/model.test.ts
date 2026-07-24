@@ -78,3 +78,59 @@ describe('buildGroups — filter by cycle', () => {
     expect(ordered.map((i) => i.id).sort()).toEqual(['a', 'b'])
   })
 })
+
+describe('buildGroups — group by project', () => {
+  it('buckets issues per projectId, applies projectName, and orders "No project" last', () => {
+    const issues = [
+      issue({ id: 'a', projectId: 'p1' }),
+      issue({ id: 'b', projectId: 'p2' }),
+      issue({ id: 'c', projectId: null }),
+      issue({ id: 'd', projectId: 'p1' }),
+    ]
+    const names: Record<string, string> = { p1: 'Beta', p2: 'Alpha' }
+    const { groups } = buildGroups(issues, {
+      ...base,
+      grouping: 'project',
+      projectName: (id) => names[id] ?? id,
+    })
+
+    expect(groups.map((g) => g.label)).toEqual(['Alpha', 'Beta', 'No project'])
+    const noProject = groups[groups.length - 1]
+    expect(noProject?.label).toBe('No project')
+    expect(noProject?.issues.map((i) => i.id)).toEqual(['c'])
+    const beta = groups.find((g) => g.label === 'Beta')
+    expect(beta?.issues.map((i) => i.id).sort()).toEqual(['a', 'd'])
+  })
+})
+
+describe('buildGroups — filter by project', () => {
+  it('keeps only issues whose projectId is in projectIds', () => {
+    const issues = [
+      issue({ id: 'a', projectId: 'p1' }),
+      issue({ id: 'b', projectId: 'p2' }),
+      issue({ id: 'c', projectId: null }),
+    ]
+    const { ordered } = buildGroups(issues, { ...base, grouping: 'none', projectIds: ['p1'] })
+    expect(ordered.map((i) => i.id)).toEqual(['a'])
+  })
+
+  it('selects issues with no project when null is included', () => {
+    const issues = [
+      issue({ id: 'a', projectId: 'p1' }),
+      issue({ id: 'b', projectId: null }),
+      issue({ id: 'c', projectId: null }),
+    ]
+    const { ordered } = buildGroups(issues, {
+      ...base,
+      grouping: 'none',
+      projectIds: [null, 'p1'],
+    })
+    expect(ordered.map((i) => i.id).sort()).toEqual(['a', 'b', 'c'])
+  })
+
+  it('does not filter by project when projectIds is absent', () => {
+    const issues = [issue({ id: 'a', projectId: 'p1' }), issue({ id: 'b', projectId: null })]
+    const { ordered } = buildGroups(issues, { ...base, grouping: 'none' })
+    expect(ordered.map((i) => i.id).sort()).toEqual(['a', 'b'])
+  })
+})

@@ -1,6 +1,13 @@
 import { Link } from '@tanstack/react-router'
 import { cn } from '@yapm/ui/lib/utils'
-import { InboxIcon, KanbanSquareIcon, ListIcon, RefreshCwIcon } from 'lucide-react'
+import {
+  InboxIcon,
+  KanbanSquareIcon,
+  ListIcon,
+  MapIcon,
+  RefreshCwIcon,
+  RocketIcon,
+} from 'lucide-react'
 
 const ACTIVE = 'bg-bg-elevated text-text-1 shadow-sm'
 const INACTIVE = 'text-text-3 hover:text-text-1'
@@ -16,7 +23,7 @@ export function ViewSwitch({
   current,
 }: {
   teamId: string
-  current: 'list' | 'board' | 'cycles' | 'triage'
+  current: 'list' | 'board' | 'cycles' | 'triage' | 'projects' | 'roadmap'
 }) {
   return (
     <nav
@@ -58,6 +65,24 @@ export function ViewSwitch({
       >
         <InboxIcon className="size-3.5" />
         Triage
+      </Link>
+      <Link
+        to="/teams/$teamId/projects"
+        params={{ teamId }}
+        aria-current={current === 'projects' ? 'page' : undefined}
+        className={cn(LINK_CLASS, current === 'projects' ? ACTIVE : INACTIVE)}
+      >
+        <RocketIcon className="size-3.5" />
+        Projects
+      </Link>
+      <Link
+        to="/teams/$teamId/roadmap"
+        params={{ teamId }}
+        aria-current={current === 'roadmap' ? 'page' : undefined}
+        className={cn(LINK_CLASS, current === 'roadmap' ? ACTIVE : INACTIVE)}
+      >
+        <MapIcon className="size-3.5" />
+        Roadmap
       </Link>
     </nav>
   )

@@ -14,10 +14,10 @@ code-review health are just views, not a $30/developer/month add-on.
 
 > **Status: pre-alpha, building in the open.** The tracker is real: accounts, teams, and roles;
 > a three-preset theme system; a keyboard-first issue list, command palette, and issue detail; and
-> a kanban board; time-boxed cycles with automatic rollover; and a keyboard-first triage inbox for
-> incoming issues — all self-hostable in three
-> containers. Still landing: projects &
-> roadmap, the GitHub connector (which lights up the delivery signals), and BYO-key AI. Direction is
+> a kanban board; time-boxed cycles with automatic rollover; a keyboard-first triage inbox for
+> incoming issues; and lightweight projects with a roadmap timeline — all self-hostable in three
+> containers. Still landing: the GitHub connector (which lights up the delivery signals), and
+> BYO-key AI. Direction is
 > settled in [VISION.md](VISION.md), [TECHSTACK.md](TECHSTACK.md), and [ROADMAP.md](ROADMAP.md).
 
 ## Why another one
@@ -50,12 +50,13 @@ GitHub, and OIDC sign-in, all free · a keyboard-first issue list with a command
 filtering · an issue detail view with rich-text descriptions and comments · a kanban board ·
 time-boxed cycles with a progress view and automatic rollover of unfinished work ·
 a keyboard-first triage inbox for incoming issues (accept / decline / route, without a seventh status) ·
+lightweight, workspace-level projects with computed progress and a keyboard-first roadmap timeline across teams ·
 three switchable themes (Warm, Focused, Editorial) with a custom accent color. Every issue row
 already reserves a **delivery-signal** slot — it fills in once the GitHub connector lands.
 
 ## What's next
 
-Projects & roadmap · a first-party **connector framework**
+A first-party **connector framework**
 (GitHub first — PR/CI/deploy state into the work graph) · **BYO-key AI agents** that read and act
 through the same permissions as a human. Then DORA and review-health metrics computed from the
 graph — team-level only, never individual scorecards.

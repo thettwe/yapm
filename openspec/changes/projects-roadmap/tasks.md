@@ -34,11 +34,11 @@
 
 ## 6. Documentation
 
-- [ ] 6.1 `apps/docs` Projects & roadmap feature page + sidebar + home link; `pnpm --filter @yapm/docs build` passes
-- [ ] 6.2 Root docs: README (status + features), ROADMAP (#7 status)
+- [x] 6.1 `apps/docs` Projects & roadmap feature page + sidebar + home link; `pnpm --filter @yapm/docs build` passes
+- [x] 6.2 Root docs: README (status + features), ROADMAP (#7 status)
 
 ## 7. Tests + gates
 
 - [x] 7.1 Unit: mutator validation, progress math, roadmap layout, project scoping AST
-- [ ] 7.2 E2E: keyboard-first project create + assign + roadmap navigation, viewer read-only
-- [ ] 7.3 `pnpm turbo lint typecheck test build` green; docs build green
+- [x] 7.2 E2E: keyboard-first project create + assign + roadmap navigation, viewer read-only
+- [x] 7.3 `pnpm turbo lint typecheck test build` green; docs build green

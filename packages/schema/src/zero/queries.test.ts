@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { AuthContext } from './context.js'
 import { tableShapes } from './introspect.js'
 import {
+  CYCLES_BY_TEAM_QUERY_NAME,
   INVITES_ALL_QUERY_NAME,
   ISSUE_DETAIL_QUERY_NAME,
   ISSUES_BY_TEAM_QUERY_NAME,
@@ -62,6 +63,7 @@ describe('the synced query registry', () => {
       [ISSUES_BY_TEAM_QUERY_NAME, queries.issues.byTeam],
       [ISSUES_MINE_QUERY_NAME, queries.issues.mine],
       [ISSUE_DETAIL_QUERY_NAME, queries.issues.detail],
+      [CYCLES_BY_TEAM_QUERY_NAME, queries.cycles.byTeam],
       [LABELS_BY_TEAM_QUERY_NAME, queries.labels.byTeam],
       [SAVED_VIEWS_BY_TEAM_QUERY_NAME, queries.savedViews.byTeam],
     ] as const) {
@@ -141,6 +143,30 @@ describe('team-scoped work-data queries', () => {
   it('never widens beyond the caller memberships even given a foreign teamId arg', () => {
     const where = astOfArgs(queries.issues.byTeam, { teamId: TEAM_ID }, MEMBER).where
     // the membership predicate is driven by ctx.userID, not the teamId arg
+    expect(JSON.stringify(where)).toContain(MEMBER.userID)
+    expect(JSON.stringify(where)).not.toContain(NON_MEMBER.userID)
+  })
+
+  it('scope cycles.byTeam to the caller teams and deny non-members', () => {
+    for (const ctx of [MEMBER, VIEWER]) {
+      const where = astOfArgs(queries.cycles.byTeam, { teamId: TEAM_ID }, ctx).where
+      expect(where).not.toEqual(DENY_ALL_WHERE)
+      expect(JSON.stringify(where)).toContain(ctx.userID)
+    }
+    // Admins bypass the per-team membership filter (workspace-wide read access), mirroring the
+    // write-side `assertTeamAccess` admin bypass so a created cycle is never invisible.
+    const adminWhere = astOfArgs(queries.cycles.byTeam, { teamId: TEAM_ID }, ADMIN).where
+    expect(adminWhere).not.toEqual(DENY_ALL_WHERE)
+    expect(JSON.stringify(adminWhere)).not.toContain(ADMIN.userID)
+    for (const ctx of [NON_MEMBER, undefined]) {
+      expect(astOfArgs(queries.cycles.byTeam, { teamId: TEAM_ID }, ctx).where).toEqual(
+        DENY_ALL_WHERE,
+      )
+    }
+  })
+
+  it('never widens cycles.byTeam beyond the caller memberships given a foreign teamId arg', () => {
+    const where = astOfArgs(queries.cycles.byTeam, { teamId: TEAM_ID }, MEMBER).where
     expect(JSON.stringify(where)).toContain(MEMBER.userID)
     expect(JSON.stringify(where)).not.toContain(NON_MEMBER.userID)
   })

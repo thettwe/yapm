@@ -6,6 +6,7 @@
 - [x] 1.2 `CYCLE_STATUSES`/`CycleStatus` in context; `CycleTable`/`CycleSequenceTable` + `issue.cycle_id` in the Kysely `DB` interface
 - [x] 1.3 Zero schema: `cycle` table, `issue.cycleId`, team↔cycles and cycle↔issues relationships
 - [x] 1.4 Extend the schema-drift test (cycle, issue.cycle_id, cycle_sequence exclusion); verify against live Postgres
+- [x] 1.5 Seed demo cycles (active + upcoming) + `cycle_sequence`, and assign unfinished issues to the active cycle so the Cycles view has content on first run
 
 ## 2. Mutators + queries
 
@@ -36,6 +37,7 @@
 - [x] 6.1 `apps/docs` Cycles feature page + sidebar + home link; `pnpm --filter @yapm/docs build` passes
 - [x] 6.2 Root docs: README (status + features), ROADMAP (#5 status), TECHSTACK (pg-boss first-use), `.env.example`
 
-## 7. Gates
+## 7. Tests + gates
 
-- [x] 7.1 `pnpm turbo lint typecheck test build` green (with live Postgres)
+- [x] 7.1 E2E (Playwright, `apps/web/e2e/cycles.spec.ts`): keyboard-first create → assign → complete rolls the unfinished issue to the next cycle; the Cycles view is correct across all three presets in light and dark; existing suites (auth/issues/board/sync/theme) still pass
+- [x] 7.2 `pnpm turbo lint typecheck test build` green (with live Postgres); boundary guard clean (ZQL/mutators only in `packages/schema`, no package→app imports)

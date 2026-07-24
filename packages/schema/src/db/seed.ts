@@ -96,6 +96,7 @@ interface DemoIssueSpec {
   assigned: boolean
   labels: string[]
   description?: string
+  inActiveCycle?: boolean
 }
 
 const DEMO_LABELS: { name: string; color: string }[] = [
@@ -113,6 +114,7 @@ const DEMO_ISSUES: DemoIssueSpec[] = [
     assigned: true,
     labels: ['bug'],
     description: 'Focus should return to the previously focused row when the palette closes.',
+    inActiveCycle: true,
   },
   {
     title: 'Add saved views for the team issue list',
@@ -120,6 +122,7 @@ const DEMO_ISSUES: DemoIssueSpec[] = [
     priority: 'medium',
     assigned: true,
     labels: ['feature'],
+    inActiveCycle: true,
   },
   {
     title: 'Reality strip renders the not-linked placeholder',
@@ -127,6 +130,7 @@ const DEMO_ISSUES: DemoIssueSpec[] = [
     priority: 'medium',
     assigned: false,
     labels: ['design'],
+    inActiveCycle: true,
   },
   {
     title: 'Tune row density to match the Warm mockups',
@@ -209,15 +213,32 @@ export async function seedDemoContent(
       )
     }
 
+    // A pair of cycles so the Cycles view has content on first run: an active cycle (started a
+    // few days ago, ending in the same week) that a handful of unfinished issues are assigned
+    // to, and an upcoming one after it. The per-team `cycle_sequence` is seeded past their
+    // numbers so the next server-claimed cycle number continues the run.
+    const day = 24 * 60 * 60 * 1000
+    const now = Date.now()
+    const activeCycleId = newId()
+    const upcomingCycleId = newId()
+    await sql`
+      insert into cycle (id, team_id, number, name, status, start_date, end_date)
+      values
+        (${activeCycleId}, ${teamId}, 1, 'Cycle 1', 'active', ${new Date(now - 3 * day)}, ${new Date(now + 4 * day)}),
+        (${upcomingCycleId}, ${teamId}, 2, 'Cycle 2', 'upcoming', ${new Date(now + 4 * day)}, ${new Date(now + 11 * day)})
+    `.execute(trx)
+    await sql`insert into cycle_sequence (team_id, next_number) values (${teamId}, 3)`.execute(trx)
+
     let number = 0
     for (const spec of DEMO_ISSUES) {
       number += 1
       const issueId = newId()
       const assigneeId = spec.assigned ? options.userId : null
       const description = spec.description ? sql`${demoDoc(spec.description)}::jsonb` : sql`null`
+      const cycleId = spec.inActiveCycle ? activeCycleId : null
       await sql`
-        insert into issue (id, team_id, number, title, description, status, priority, assignee_id, creator_id)
-        values (${issueId}, ${teamId}, ${number}, ${spec.title}, ${description}, ${spec.status}, ${spec.priority}, ${assigneeId}, ${options.userId})
+        insert into issue (id, team_id, number, title, description, status, priority, assignee_id, creator_id, cycle_id)
+        values (${issueId}, ${teamId}, ${number}, ${spec.title}, ${description}, ${spec.status}, ${spec.priority}, ${assigneeId}, ${options.userId}, ${cycleId})
       `.execute(trx)
 
       for (const labelName of spec.labels) {

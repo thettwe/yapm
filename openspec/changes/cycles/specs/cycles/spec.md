@@ -86,6 +86,11 @@ Work-graph placement: a view over team-scoped `cycle` and `issue` rows. Permissi
 - **WHEN** the Cycles view is viewed in each preset in light and dark
 - **THEN** all colors, fonts, and density come from tokens and remain legible
 
+#### Scenario: The Cycles view is fully keyboard-operable
+
+- **WHEN** a member operates the Cycles view with the keyboard only — moving focus through the cycle rail, activating a cycle to feature it, opening the create form, triggering "Complete cycle", and opening a listed issue — without a pointer
+- **THEN** every cycle and control is reachable and operable by keyboard, and each action behaves identically to its pointer equivalent
+
 ### Requirement: Group and filter the issue list by cycle
 
 The issue list SHALL let a user filter issues by one or more cycles (including a "no cycle" option) and group issues by cycle, with issues that belong to no cycle bucketed last.
@@ -101,3 +106,8 @@ Work-graph placement: a client-side view concern over the synced `cycleId`. Perm
 
 - **WHEN** a member groups the list by cycle
 - **THEN** issues are bucketed under each cycle with a "no cycle" group last
+
+#### Scenario: Cycle grouping and filtering are keyboard-operable
+
+- **WHEN** a member opens the list's cycle filter, selects cycles, and switches to group-by-cycle using only the keyboard
+- **THEN** the filter and grouping controls are reachable and operable by keyboard, and the list updates without a pointer

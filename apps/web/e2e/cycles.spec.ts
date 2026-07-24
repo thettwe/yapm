@@ -70,6 +70,14 @@ async function createCycle(page: Page, name: string, startOffset: number, endOff
   })
 }
 
+async function assignIssueToCycle(page: Page, issueTitle: string, cycleName: string) {
+  await page.getByRole('link', { name: 'List' }).click()
+  await page.locator(ROW).filter({ hasText: issueTitle }).click()
+  await page.getByRole('button', { name: /^Cycle:/ }).click()
+  await page.getByRole('menuitem', { name: new RegExp(cycleName) }).click()
+  await page.keyboard.press('Escape')
+}
+
 test('create a cycle, assign an issue, and complete it rolls the issue to the next cycle', async ({
   page,
 }) => {
@@ -86,7 +94,7 @@ test('create a cycle, assign an issue, and complete it rolls the issue to the ne
   await createCycle(page, cycleB, 8, 15)
 
   // Assign the issue to cycle A from the issue detail.
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await page.getByRole('link', { name: 'List' }).click()
   await page.locator(ROW).filter({ hasText: issueTitle }).click()
   await page.getByRole('button', { name: /^Cycle:/ }).click()
   await page.getByRole('menuitem', { name: new RegExp(cycleA) }).click()
@@ -133,4 +141,86 @@ test('the Cycles view is correct across every preset in light and dark', async (
       })
     }
   }
+})
+
+test('the Cycles view is fully keyboard-operable', async ({ page }) => {
+  await enterApp(page)
+  await openTeam(page)
+
+  const issueTitle = unique('KB cycle work')
+  await createIssue(page, issueTitle)
+
+  await openCycles(page)
+  const cycleA = unique('KB Sprint A')
+  const cycleB = unique('KB Sprint B')
+  await createCycle(page, cycleA, -1, 7)
+  await createCycle(page, cycleB, 8, 15)
+  await assignIssueToCycle(page, issueTitle, cycleA)
+
+  await openCycles(page)
+
+  // The rail is keyboard-operable: focus a cycle button and feature it with Enter.
+  const railB = page.getByRole('button', { name: new RegExp(cycleB) })
+  await railB.focus()
+  await page.keyboard.press('Enter')
+  await expect(railB).toHaveAttribute('aria-current', 'true')
+
+  // Space activates a rail button too; feature cycle A (which holds the issue).
+  const railA = page.getByRole('button', { name: new RegExp(cycleA) })
+  await railA.focus()
+  await page.keyboard.press('Space')
+  await expect(railA).toHaveAttribute('aria-current', 'true')
+
+  // Keyboard-open a listed issue: focus its cycle row and press Enter — the detail opens.
+  const cycleRow = page.locator(CYCLE_ROW).filter({ hasText: issueTitle })
+  await expect(cycleRow).toBeVisible({ timeout: 20_000 })
+  await cycleRow.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('dialog', { name: 'Issue detail' })).toBeVisible({ timeout: 20_000 })
+  await page.keyboard.press('Escape')
+
+  // Complete the featured cycle with the keyboard, then confirm the issue rolled to cycle B.
+  await openCycles(page)
+  await railA.focus()
+  await page.keyboard.press('Enter')
+  const complete = page.getByTestId('complete-cycle')
+  await complete.focus()
+  await page.keyboard.press('Enter')
+  await railB.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator(CYCLE_ROW).filter({ hasText: issueTitle })).toBeVisible({
+    timeout: 20_000,
+  })
+})
+
+test('cycle grouping and filtering in the list are keyboard-operable', async ({ page }) => {
+  await enterApp(page)
+  await openTeam(page)
+
+  const inCycle = unique('KB grouped')
+  const noCycle = unique('KB ungrouped')
+  await createIssue(page, inCycle)
+  await createIssue(page, noCycle)
+
+  await openCycles(page)
+  const cycleA = unique('KB Group cycle')
+  await createCycle(page, cycleA, -1, 7)
+  await assignIssueToCycle(page, inCycle, cycleA)
+
+  // Group the list by cycle with the keyboard (native select): buckets appear, "No cycle" last.
+  await page.getByRole('link', { name: 'List' }).click()
+  const groupBy = page.getByLabel('Group by')
+  await groupBy.focus()
+  await groupBy.selectOption('cycle')
+  await expect(page.getByText(cycleA, { exact: true })).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText('No cycle', { exact: true })).toBeVisible()
+
+  // Filter by the cycle using the keyboard: open the menu, toggle the option, close it.
+  const filterButton = page.getByRole('button', { name: 'Filter by Cycle' })
+  await filterButton.focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('menuitem', { name: new RegExp(cycleA) }).press('Enter')
+  await page.keyboard.press('Escape')
+  await expect(page.locator(ROW).filter({ hasText: inCycle })).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator(ROW).filter({ hasText: noCycle })).toHaveCount(0)
 })

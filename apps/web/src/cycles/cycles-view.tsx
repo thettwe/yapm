@@ -2,12 +2,20 @@ import { useQuery, useZero } from '@rocicorp/zero/react'
 import { useNavigate } from '@tanstack/react-router'
 import { mutators, newId, queries } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from '@yapm/ui/components/dialog'
 import { Input } from '@yapm/ui/components/input'
 import { IssueRow } from '@yapm/ui/components/issue-row'
-import { Popover, PopoverContent, PopoverTrigger } from '@yapm/ui/components/popover'
+import { Label } from '@yapm/ui/components/label'
 import { cn } from '@yapm/ui/lib/utils'
 import { CircleDashedIcon, FlagIcon, PlusIcon } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { type FormEvent, useCallback, useId, useMemo, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import {
   CYCLE_STATUS_LABEL,
@@ -230,6 +238,12 @@ function CyclePanel({
               status={STATUS_TO_KIND[issue.status]}
               priority={PRIORITY_TO_KIND[issue.priority]}
               onClick={() => onOpenIssue(issue)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  onOpenIssue(issue)
+                }
+              }}
             />
           ))
         )}
@@ -296,21 +310,36 @@ function CompleteCycleButton({ teamId, cycle }: { teamId: string; cycle: CycleRo
 function NewCycleButton({ teamId }: { teamId: string }) {
   const { canWrite } = useMembership()
   const zero = useZero()
+  const nameId = useId()
+  const startId = useId()
+  const endId = useId()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
   const [error, setError] = useState<string | undefined>(undefined)
+  const [busy, setBusy] = useState(false)
+
+  function reset() {
+    setName('')
+    setStart('')
+    setEnd('')
+    setError(undefined)
+  }
 
   if (!canWrite) return null
 
-  async function create() {
+  async function create(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (busy) return
     const startDate = Date.parse(start)
     const endDate = Date.parse(end)
     if (name.trim().length === 0 || Number.isNaN(startDate) || Number.isNaN(endDate)) {
       setError('Name and both dates are required.')
       return
     }
+    setError(undefined)
+    setBusy(true)
     const now = Date.now()
     const failure = await runMutation(
       zero.mutate(
@@ -325,55 +354,61 @@ function NewCycleButton({ teamId }: { teamId: string }) {
         }),
       ),
     )
+    setBusy(false)
     if (failure !== undefined) {
       setError(failure)
       return
     }
-    setName('')
-    setStart('')
-    setEnd('')
-    setError(undefined)
+    reset()
     setOpen(false)
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) reset()
+      }}
+    >
+      <DialogTrigger
         render={
           <Button size="icon-sm" variant="outline" aria-label="New cycle" data-testid="new-cycle">
             <PlusIcon />
           </Button>
         }
       />
-      <PopoverContent className="w-72">
-        <form
-          className="flex flex-col gap-2"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void create()
-          }}
-        >
-          <Input
-            autoFocus
-            aria-label="Cycle name"
-            placeholder="Cycle name…"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-          <div className="flex flex-col gap-1 text-xs text-text-3">
-            <label htmlFor="cycle-start-date">Start date</label>
+      <DialogContent initialFocus>
+        <DialogTitle>New cycle</DialogTitle>
+        <DialogDescription>
+          A cycle is a time-boxed iteration. Set a name and a start and end date.
+        </DialogDescription>
+        <form className="flex flex-col gap-4" onSubmit={create} noValidate>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={nameId}>Cycle name</Label>
             <Input
-              id="cycle-start-date"
+              id={nameId}
+              aria-label="Cycle name"
+              autoComplete="off"
+              placeholder="Cycle name…"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={startId}>Start date</Label>
+            <Input
+              id={startId}
               type="date"
               aria-label="Start date"
               value={start}
               onChange={(event) => setStart(event.target.value)}
             />
           </div>
-          <div className="flex flex-col gap-1 text-xs text-text-3">
-            <label htmlFor="cycle-end-date">End date</label>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={endId}>End date</Label>
             <Input
-              id="cycle-end-date"
+              id={endId}
               type="date"
               aria-label="End date"
               value={end}
@@ -385,11 +420,14 @@ function NewCycleButton({ teamId }: { teamId: string }) {
               {error}
             </p>
           ) : null}
-          <Button type="submit" size="sm">
-            Create cycle
-          </Button>
+          <div className="flex justify-end gap-2">
+            <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
+            <Button type="submit" size="sm" disabled={busy}>
+              Create cycle
+            </Button>
+          </div>
         </form>
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   )
 }

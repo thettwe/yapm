@@ -3,7 +3,7 @@ import { AppShell } from '@/components/app-shell'
 import { Authenticated } from '@/components/authenticated'
 import { TeamDetail } from '@/components/team-detail'
 
-export const Route = createFileRoute('/teams/$teamId')({ component: TeamPage })
+export const Route = createFileRoute('/teams/$teamId/')({ component: TeamPage })
 
 function TeamPage() {
   const { teamId } = Route.useParams()

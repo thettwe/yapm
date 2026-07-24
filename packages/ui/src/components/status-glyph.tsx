@@ -7,6 +7,7 @@ const STATUS = {
   'in-progress': { label: 'In progress', color: 'text-status-in-progress' },
   'in-review': { label: 'In review', color: 'text-status-in-review' },
   done: { label: 'Done', color: 'text-status-done' },
+  canceled: { label: 'Canceled', color: 'text-text-3' },
 } as const
 
 export type StatusKind = keyof typeof STATUS
@@ -57,6 +58,15 @@ function StatusGlyph({
       )}
       {status === 'in-progress' ? <Pie fraction={0.4} /> : null}
       {status === 'in-review' ? <Pie fraction={0.7} /> : null}
+      {status === 'canceled' ? (
+        <path
+          d="M4.8 4.8 9.2 9.2M9.2 4.8 4.8 9.2"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      ) : null}
       {status === 'done' ? (
         <>
           <circle cx="7" cy="7" r="6" fill="currentColor" />

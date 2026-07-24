@@ -19,6 +19,9 @@ export type LabelTone = keyof typeof LABEL_TONE
 export interface IssueLabel {
   name: string
   tone?: LabelTone
+  // A concrete color string from the label entity (hex/rgb/oklch). When present it drives the
+  // dot directly; otherwise the `tone` token class is used. This is data, never a design value.
+  color?: string
 }
 
 export interface IssueAssignee {
@@ -129,12 +132,16 @@ function IssueRow({
               key={label.name}
               className="flex items-center gap-1.5 font-ui text-[11.5px] text-text-2"
             >
-              <span
-                className={cn(
-                  'size-2 rounded-full bg-current',
-                  LABEL_TONE[label.tone ?? 'neutral'],
-                )}
-              />
+              {label.color ? (
+                <span className="size-2 rounded-full" style={{ backgroundColor: label.color }} />
+              ) : (
+                <span
+                  className={cn(
+                    'size-2 rounded-full bg-current',
+                    LABEL_TONE[label.tone ?? 'neutral'],
+                  )}
+                />
+              )}
               {label.name}
             </span>
           ))}

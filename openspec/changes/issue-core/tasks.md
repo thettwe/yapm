@@ -29,18 +29,18 @@
 
 ## 6. UI components (packages/ui)
 
-- [ ] 6.1 Add the `canceled` variant to `status-glyph` (tokenized, accessible label); update its stories to render all six statuses across presets and modes.
+- [x] 6.1 Add the `canceled` variant to `status-glyph` (tokenized, accessible label); update its stories to render all six statuses across presets and modes.
 - [ ] 6.2 Add a tokenized TipTap-v3 rich-text editor component (read-only and editable modes, keyboard-operable) and a rich-text renderer; add stories.
 - [ ] 6.3 Add issue-detail building blocks (metadata controls for status/priority/assignee/labels, comment thread + composer) and palette action-item components, all tokenized and keyboard-operable; wire the `issue-row` reality-strip/divergence slots to the computation seam output (unlinked/dormant now). Add stories.
 
 ## 7. Web — list, detail, palette (apps/web)
 
-- [ ] 7.1 Add the team issue-list route: status-grouped list built from `issue-row`, reading the team-scoped synced query, with local filter/sort/grouping, saved-view select/save, and the pending-number state. Reality/delivery filter chips hidden.
-- [ ] 7.2 Implement the full list keyboard model (`j`/`k`, `x` multi-select, Arrow/Enter open, status/assign/label shortcuts) invoking the shared mutators with a visible accent focus indicator.
+- [x] 7.1 Add the team issue-list route: status-grouped list built from `issue-row`, reading the team-scoped synced query, with local filter/sort/grouping, saved-view select/save, and the pending-number state. Reality/delivery filter chips hidden.
+- [x] 7.2 Implement the full list keyboard model (`j`/`k`, `x` multi-select, Arrow/Enter open, status/assign/label shortcuts) invoking the shared mutators with a visible accent focus indicator.
 - [ ] 7.3 Add the issue-detail route/panel: TipTap description editing, inline metadata editing (team-scoped assignee/label choices), and the comment thread — all via shared mutators, keyboard-operable, with loading-vs-not-found distinction.
-- [ ] 7.4 Wire the command-palette provider to real actions (navigate, create issue, change status, assign, add label) scoped to the focused/selected/open issue, invoking shared mutators; keyboard open/filter/execute/dismiss with focus restore.
+- [x] 7.4 Wire the command-palette provider to real actions (navigate, create issue, change status, assign, add label) scoped to the focused/selected/open issue, invoking shared mutators; keyboard open/filter/execute/dismiss with focus restore.
 
 ## 8. Verification
 
-- [ ] 8.1 `pnpm turbo typecheck lint build test` green; boundary guard clean (ZQL/mutators only in `packages/schema`, no package→app imports); drift test run against live Postgres including the new tables.
+- [x] 8.1 `pnpm turbo typecheck lint build test` green; boundary guard clean (ZQL/mutators only in `packages/schema`, no package→app imports); drift test run against live Postgres including the new tables.
 - [ ] 8.2 Add Playwright coverage: keyboard-only create/navigate/status-change/assign/label in the list and palette; pending-number settles without reload; viewer is read-only across list/detail/palette; list is correct in all three presets light+dark; and the existing foundation/workspace-auth/design-system e2e and unit tests still pass (no regression).

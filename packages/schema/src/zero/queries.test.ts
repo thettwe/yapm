@@ -121,11 +121,16 @@ describe('preferences.mine is user-scoped and owner-only', () => {
 
 describe('team-scoped work-data queries', () => {
   it('scope issues.byTeam to the caller teams and deny non-members', () => {
-    for (const ctx of [ADMIN, MEMBER, VIEWER]) {
+    for (const ctx of [MEMBER, VIEWER]) {
       const where = astOfArgs(queries.issues.byTeam, { teamId: TEAM_ID }, ctx).where
       expect(where).not.toEqual(DENY_ALL_WHERE)
       expect(JSON.stringify(where)).toContain(ctx.userID)
     }
+    // Admins bypass the per-team membership filter (workspace-wide read access), mirroring the
+    // write-side `assertTeamAccess` admin bypass so a created issue is never invisible.
+    const adminWhere = astOfArgs(queries.issues.byTeam, { teamId: TEAM_ID }, ADMIN).where
+    expect(adminWhere).not.toEqual(DENY_ALL_WHERE)
+    expect(JSON.stringify(adminWhere)).not.toContain(ADMIN.userID)
     for (const ctx of [NON_MEMBER, undefined]) {
       expect(astOfArgs(queries.issues.byTeam, { teamId: TEAM_ID }, ctx).where).toEqual(
         DENY_ALL_WHERE,
@@ -170,6 +175,13 @@ describe('teamScoped helper', () => {
       teamScoped(zql.team_membership, NON_MEMBER) as unknown as { ast: QueryAst }
     ).ast.where
     expect(outsiderWhere).toEqual(DENY_ALL_WHERE)
+  })
+
+  it('grants admins an unscoped query (workspace-wide access, no membership filter)', () => {
+    const adminWhere = (teamScoped(zql.team_membership, ADMIN) as unknown as { ast: QueryAst }).ast
+      .where
+    expect(adminWhere).not.toEqual(DENY_ALL_WHERE)
+    expect(JSON.stringify(adminWhere ?? null)).not.toContain(ADMIN.userID)
   })
 })
 

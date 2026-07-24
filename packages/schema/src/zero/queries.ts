@@ -16,6 +16,9 @@ export function teamScoped<TTable extends keyof Schema['tables'] & string, TRetu
   ctx: AuthContext | undefined,
 ): Query<TTable, Schema, TReturn> {
   if (!isMember(ctx)) return denyAll(q)
+  // Workspace admins have workspace-wide access, mirroring the write-side `assertTeamAccess`
+  // bypass: an admin can create issues in any team, so they must be able to read them too.
+  if (ctx.role === 'admin') return q
   const scoped = (q as Query<'team_membership', Schema>).whereExists('team', (team) =>
     team.whereExists('members', (m) => m.where('userId', ctx.userID)),
   )

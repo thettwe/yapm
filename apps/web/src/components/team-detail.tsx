@@ -1,5 +1,5 @@
 import { useQuery, useZero } from '@rocicorp/zero/react'
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { mutators, newId, queries } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import {
@@ -55,6 +55,15 @@ export function TeamDetail({ teamId }: { teamId: string }) {
           {team.name}
           <span className="text-muted-foreground font-normal"> · {team.key}</span>
         </h2>
+        <Button
+          variant="outline"
+          size="sm"
+          render={
+            <Link to="/teams/$teamId/issues" params={{ teamId: team.id }}>
+              Issues
+            </Link>
+          }
+        />
         <TeamMembershipButton teamId={team.id} memberships={memberships} />
         {canManage ? (
           <>

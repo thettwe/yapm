@@ -14,6 +14,8 @@ Docs ship *with* the change that adds the behavior — never "later". Enforced a
 2. **Tasks** — a `## Documentation` task group in `tasks.md`.
 3. **Close gate** — archive is blocked until: the pages exist in `apps/docs` (Astro Starlight), `pnpm --filter @yapm/docs build` passes, and the config/reference docs match the Zod env schema (no drift).
 
+**No stale docs, ever.** "Docs" is not only the site — a change must update **every root doc it makes stale**: `README.md` (status + feature list), `ROADMAP.md` (change status), `TECHSTACK.md` (version baseline / changed decisions), `.env.example` (new env vars), and any reference/`VISION`/`DESIGN`/`CLAUDE`/`PROCESS` doc whose content it changes. The PR-review flow's `ux-docs` lens flags a stale root doc as a **merge-blocking finding**; mechanical checks catch the detectable cases (`.env.example` vs the Zod schema; ROADMAP status vs archived changes).
+
 Audiences: evaluators (why / the work-graph wedge), self-hosters (install, 3-container stack, config, upgrades, backup, connectors/AI setup), users (features), contributors (architecture, sync model, boundaries, OpenSpec, testing, DCO).
 
 ## 3. Three test tiers

@@ -66,6 +66,8 @@ if it works:
   drift test against the live Postgres schema.
 - Env-only configuration, validated with Zod at startup, failing fast with the variable name.
 - Public REST API under `/api/v1`, additive-only within a major.
+- **No stale docs.** Update every root doc your change makes stale (README, ROADMAP,
+  TECHSTACK, `.env.example`, references) plus its docs-site pages — see PROCESS.md §2.
 - Match surrounding code style; Biome decides formatting. No comments explaining what a
   line does or why a change was made — only constraints the code can't express.
 

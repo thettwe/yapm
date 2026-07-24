@@ -18,9 +18,9 @@ Scope decisions from the v1 scoping session (2026-07-23). Each item becomes an O
 | 1 | `foundation` | Monorepo, 3-container compose, CI, dev loop, Zero walking skeleton | ✅ built & archived |
 | 2 | `workspace-auth` | Workspace, users, teams, roles, better-auth (email/password, GitHub OAuth, OIDC — free), invites, row-level sync permissions | ✅ built & archived |
 | — | `design-system` | Tokenized theme system: Warm/Focused/Editorial presets + accent customization + per-user synced preference; strictly-tokenized component library; issue-row primitive with reserved reality-strip + divergence slots | ✅ built & archived |
-| 3 | `issue-core` | Issues + statuses/priorities/labels/comments, keyboard-first list, command palette, filtering. **Reality strip + divergence flag** in the row (layout now, git data via connectors); filter architecture designed for derived delivery state | next |
-| 4 | `board-view` | Kanban board grouped by status | |
-| 5 | `cycles` | Time-boxed iterations, auto-rollover | |
+| 3 | `issue-core` | Issues + statuses/priorities/labels/comments, keyboard-first list, command palette, filtering. **Reality strip + divergence flag** in the row (layout now, git data via connectors); filter architecture designed for derived delivery state | ✅ built & archived |
+| 4 | `board-view` | Kanban board grouped by status; dnd-kit + fractional-index single-write moves; keyboard + command-palette move | ✅ built & archived (PR #1) |
+| 5 | `cycles` | Time-boxed iterations, auto-rollover | next |
 | 6 | `triage` | Triage inbox: accept/decline/route incoming issues | |
 | 7 | `projects-roadmap` | Projects entity + roadmap timeline | |
 | 8 | `connectors` | **First-party connector framework** + GitHub as its first connector: webhook ingestion (pg-boss, serialized per install), PR/CI/deploy → work-graph edges, PR linking + auto-status. Shared encrypted-secrets/config surface. Gated on the user registering a GitHub App. GitLab etc. = later connectors | |

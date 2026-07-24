@@ -10,6 +10,7 @@ import {
   table,
 } from '@rocicorp/zero'
 import type {
+  CycleStatus,
   IssueGrouping,
   IssuePriority,
   IssueStatus,
@@ -96,6 +97,21 @@ const issue = table('issue')
     assigneeId: string().from('assignee_id').optional(),
     creatorId: string().from('creator_id'),
     rank: string().optional(),
+    cycleId: string().from('cycle_id').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+const cycle = table('cycle')
+  .columns({
+    id: string(),
+    teamId: string().from('team_id'),
+    number: number().optional(),
+    name: string(),
+    status: enumeration<CycleStatus>(),
+    startDate: number().from('start_date'),
+    endDate: number().from('end_date'),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })
@@ -196,6 +212,11 @@ const teamRelationships = relationships(team, ({ many }) => ({
     destField: ['teamId'],
     destSchema: issue,
   }),
+  cycles: many({
+    sourceField: ['id'],
+    destField: ['teamId'],
+    destSchema: cycle,
+  }),
   labels: many({
     sourceField: ['id'],
     destField: ['teamId'],
@@ -253,6 +274,11 @@ const issueRelationships = relationships(issue, ({ one, many }) => ({
     destField: ['id'],
     destSchema: user,
   }),
+  cycle: one({
+    sourceField: ['cycleId'],
+    destField: ['id'],
+    destSchema: cycle,
+  }),
   issueLabels: many({
     sourceField: ['id'],
     destField: ['issueId'],
@@ -274,6 +300,19 @@ const issueRelationships = relationships(issue, ({ one, many }) => ({
     sourceField: ['id'],
     destField: ['issueId'],
     destSchema: comment,
+  }),
+}))
+
+const cycleRelationships = relationships(cycle, ({ one, many }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  issues: many({
+    sourceField: ['id'],
+    destField: ['cycleId'],
+    destSchema: issue,
   }),
 }))
 
@@ -338,6 +377,7 @@ export const schema = createSchema({
     invite,
     userPreference,
     issue,
+    cycle,
     label,
     issueLabel,
     comment,
@@ -352,6 +392,7 @@ export const schema = createSchema({
     inviteRelationships,
     userPreferenceRelationships,
     issueRelationships,
+    cycleRelationships,
     labelRelationships,
     issueLabelRelationships,
     commentRelationships,

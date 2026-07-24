@@ -14,6 +14,7 @@ import { createAuth } from './auth.js'
 import { createAuthRoutes } from './auth-routes.js'
 import { type Env, EnvValidationError, loadEnv } from './config/env.js'
 import { databaseCheck, replicationCheck } from './health.js'
+import { type CycleScheduler, startCycleScheduler } from './jobs/scheduler.js'
 import { createLogger, type Logger } from './logger.js'
 import { createSessionContextResolver } from './zero/context.js'
 import { createZeroDatabase } from './zero/db-provider.js'
@@ -80,6 +81,22 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
+  const dbProvider = createZeroDatabase(database.db)
+
+  let cycleScheduler: CycleScheduler | undefined
+  if (env.CYCLE_MAINTENANCE === 'true') {
+    try {
+      cycleScheduler = await startCycleScheduler({
+        db: database.db,
+        dbProvider,
+        logger,
+        cron: env.CYCLE_MAINTENANCE_CRON,
+      })
+    } catch (error) {
+      logger.error({ err: error }, 'failed to start the cycle maintenance scheduler')
+    }
+  }
+
   const app = createApp({
     logger,
     readinessChecks: [
@@ -91,7 +108,7 @@ async function main(): Promise<void> {
     webDistDir: env.WEB_DIST_DIR,
     authRoutes: createAuthRoutes({ auth, db: database.db, env, logger }),
     zero: {
-      dbProvider: createZeroDatabase(database.db),
+      dbProvider,
       resolveContext: createSessionContextResolver({
         verifyToken: auth.verifySyncToken,
         lookupRole: (userID) => lookupWorkspaceRole(database.db, userID),
@@ -106,7 +123,14 @@ async function main(): Promise<void> {
     logger.info({ host: env.HOST, port: info.port }, 'yapm server listening')
   })
 
-  installShutdownHandlers({ server, close: database.close, logger })
+  installShutdownHandlers({
+    server,
+    close: async () => {
+      if (cycleScheduler) await cycleScheduler.stop()
+      await database.close()
+    },
+    logger,
+  })
 }
 
 interface ShutdownOptions {

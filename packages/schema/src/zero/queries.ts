@@ -108,6 +108,12 @@ export const queries = defineQueries({
       ),
     ),
   },
+  cycles: {
+    // Team-scoped: only cycles in teams the ctx user belongs to, narrowed to one team.
+    byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
+      teamScoped(zql.cycle.where('teamId', args.teamId).orderBy('startDate', 'asc'), ctx),
+    ),
+  },
   labels: {
     byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
       teamScoped(zql.label.where('teamId', args.teamId).orderBy('name', 'asc'), ctx),
@@ -129,5 +135,6 @@ export const PREFERENCES_MINE_QUERY_NAME = 'preferences.mine'
 export const ISSUES_BY_TEAM_QUERY_NAME = 'issues.byTeam'
 export const ISSUES_MINE_QUERY_NAME = 'issues.mine'
 export const ISSUE_DETAIL_QUERY_NAME = 'issues.detail'
+export const CYCLES_BY_TEAM_QUERY_NAME = 'cycles.byTeam'
 export const LABELS_BY_TEAM_QUERY_NAME = 'labels.byTeam'
 export const SAVED_VIEWS_BY_TEAM_QUERY_NAME = 'savedViews.byTeam'

@@ -61,6 +61,11 @@ const PRIORITY_RANK: Record<IssuePriority, number> = {
 
 export const UNASSIGNED = '__unassigned__'
 export const NO_LABEL = '__no_label__'
+export const NO_CYCLE = '__no_cycle__'
+
+// The list supports one grouping the schema doesn't persist: by cycle. It layers over the
+// persistable IssueGrouping enum (saved views only store the enum groupings).
+export type ListGrouping = IssueGrouping | 'cycle'
 
 export interface IssueLabelRow {
   readonly id: string
@@ -85,6 +90,7 @@ export interface IssueRowData {
   readonly priority: IssuePriority
   readonly assigneeId: string | null
   readonly rank?: string | null
+  readonly cycleId?: string | null
   readonly updatedAt: number
   readonly createdAt: number
   readonly labels?: readonly IssueLabelRow[]
@@ -138,10 +144,13 @@ function labelToneless(name: string): string {
 
 export interface GroupOptions {
   readonly filter: IssueFilter
-  readonly grouping: IssueGrouping
+  readonly grouping: ListGrouping
   readonly sort: IssueSort
   readonly teamKey?: string
   readonly assigneeName?: (id: string) => string
+  // Web-only cycle axis (not part of the persistable schema filter/grouping).
+  readonly cycleIds?: readonly (string | null)[]
+  readonly cycleName?: (id: string) => string
 }
 
 // Filter (locally, over synced rows) → group → sort within each group. Groups render in a
@@ -151,8 +160,11 @@ export function buildGroups(
   issues: readonly IssueRowData[],
   options: GroupOptions,
 ): { groups: IssueGroup[]; ordered: IssueRowData[] } {
-  const filtered = issues.filter((issue) =>
-    matchesFilter(issue, options.filter, { teamKey: options.teamKey }),
+  const cycleIds = options.cycleIds
+  const filtered = issues.filter(
+    (issue) =>
+      matchesFilter(issue, options.filter, { teamKey: options.teamKey }) &&
+      (cycleIds === undefined || cycleIds.includes(issue.cycleId ?? null)),
   )
   const cmp = compareBy(options.sort)
 
@@ -190,6 +202,28 @@ function groupBy(issues: readonly IssueRowData[], options: GroupOptions): IssueG
         issues: issues.filter((issue) => issue.priority === priority),
       }))
       .filter((group) => group.issues.length > 0)
+  }
+
+  if (grouping === 'cycle') {
+    const buckets = new Map<string, IssueRowData[]>()
+    for (const issue of issues) {
+      const key = issue.cycleId ?? NO_CYCLE
+      const bucket = buckets.get(key) ?? []
+      bucket.push(issue)
+      buckets.set(key, bucket)
+    }
+    const name = options.cycleName ?? ((id: string) => id)
+    return [...buckets.entries()]
+      .map(([key, bucket]) => ({
+        key,
+        label: key === NO_CYCLE ? 'No cycle' : name(key),
+        issues: bucket,
+      }))
+      .sort((a, b) => {
+        if (a.key === NO_CYCLE) return 1
+        if (b.key === NO_CYCLE) return -1
+        return a.label.localeCompare(b.label)
+      })
   }
 
   if (grouping === 'assignee') {

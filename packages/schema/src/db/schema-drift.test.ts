@@ -69,6 +69,18 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     assignee_id: { nullable: true, hasDefault: false },
     creator_id: { nullable: false, hasDefault: false },
     rank: { nullable: true, hasDefault: false },
+    cycle_id: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  cycle: {
+    id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    number: { nullable: true, hasDefault: false },
+    name: { nullable: false, hasDefault: false },
+    status: { nullable: false, hasDefault: false },
+    start_date: { nullable: false, hasDefault: false },
+    end_date: { nullable: false, hasDefault: false },
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },
@@ -109,6 +121,12 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
   // Server-only per-team counter: present in the Kysely DB interface and migrations, and
   // deliberately absent from the Zero schema (asserted below) so its churn never syncs.
   issue_sequence: {
+    team_id: { nullable: false, hasDefault: false },
+    next_number: { nullable: false, hasDefault: true },
+  },
+  // Server-only per-team cycle counter, mirroring issue_sequence: in the Kysely DB interface
+  // and migrations, absent from the Zero schema (asserted below) so its churn never syncs.
+  cycle_sequence: {
     team_id: { nullable: false, hasDefault: false },
     next_number: { nullable: false, hasDefault: true },
   },
@@ -171,11 +189,13 @@ async function primaryKeys(db: Kysely<DB>): Promise<Map<string, string[]>> {
   return new Map(rows.map((row) => [row.table_name, row.columns]))
 }
 
-describe('issue_sequence is excluded from the Zero schema', () => {
-  it('appears in the Kysely DB map but never in the Zero introspection', () => {
-    expect(Object.keys(KYSELY_DB)).toContain('issue_sequence')
+describe('sequence tables are excluded from the Zero schema', () => {
+  it('appear in the Kysely DB map but never in the Zero introspection', () => {
     const zeroTables = tableShapes().map((table) => table.serverName)
-    expect(zeroTables).not.toContain('issue_sequence')
+    for (const name of ['issue_sequence', 'cycle_sequence']) {
+      expect(Object.keys(KYSELY_DB)).toContain(name)
+      expect(zeroTables).not.toContain(name)
+    }
   })
 })
 

@@ -14,7 +14,8 @@ code-review health are just views, not a $30/developer/month add-on.
 
 > **Status: pre-alpha, building in the open.** The tracker is real: accounts, teams, and roles;
 > a three-preset theme system; a keyboard-first issue list, command palette, and issue detail; and
-> a kanban board — all self-hostable in three containers. Still landing: cycles, triage, projects &
+> a kanban board; and time-boxed cycles with automatic rollover — all self-hostable in three
+> containers. Still landing: triage, projects &
 > roadmap, the GitHub connector (which lights up the delivery signals), and BYO-key AI. Direction is
 > settled in [VISION.md](VISION.md), [TECHSTACK.md](TECHSTACK.md), and [ROADMAP.md](ROADMAP.md).
 
@@ -46,12 +47,13 @@ part of engineering metrics disappears.
 Accounts, teams, and roles (admin / member / viewer — viewers free and unlimited) · email,
 GitHub, and OIDC sign-in, all free · a keyboard-first issue list with a command palette and
 filtering · an issue detail view with rich-text descriptions and comments · a kanban board ·
+time-boxed cycles with a progress view and automatic rollover of unfinished work ·
 three switchable themes (Warm, Focused, Editorial) with a custom accent color. Every issue row
 already reserves a **delivery-signal** slot — it fills in once the GitHub connector lands.
 
 ## What's next
 
-Cycles with rollover · triage inbox · projects & roadmap · a first-party **connector framework**
+Triage inbox · projects & roadmap · a first-party **connector framework**
 (GitHub first — PR/CI/deploy state into the work graph) · **BYO-key AI agents** that read and act
 through the same permissions as a human. Then DORA and review-health metrics computed from the
 graph — team-level only, never individual scorecards.

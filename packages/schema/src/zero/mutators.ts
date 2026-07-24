@@ -7,14 +7,17 @@ import {
 import * as z from 'zod'
 import {
   type AuthContext,
+  type CycleStatus,
   canManage,
   canWrite,
   ISSUE_PRIORITIES,
   ISSUE_STATUSES,
+  type IssueStatus,
   isAuthenticated,
   isMember,
   THEME_PRESETS,
 } from './context.js'
+import { type CycleOrderRow, isUnfinished, nextCycleId } from './cycles.js'
 import { MutationError, MutationErrorCode } from './errors.js'
 import { issueFilterSchema, issueGroupingSchema, issueSortSchema } from './filter.js'
 import { zql } from './schema.js'
@@ -23,6 +26,7 @@ export const WORKSPACE_NAME_MAX_LENGTH = 200
 export const TEAM_NAME_MAX_LENGTH = 200
 export const TEAM_KEY_MAX_LENGTH = 16
 export const ISSUE_TITLE_MAX_LENGTH = 300
+export const CYCLE_NAME_MAX_LENGTH = 200
 export const LABEL_NAME_MAX_LENGTH = 60
 export const SAVED_VIEW_NAME_MAX_LENGTH = 100
 
@@ -627,6 +631,181 @@ export const moveIssue = defineMutator(moveIssueArgs, async ({ tx, args, ctx }) 
   })
 })
 
+interface CycleRow {
+  id: string
+  teamId: string
+  status: CycleStatus
+  number: number | null
+  startDate: number
+  endDate: number
+}
+
+// Load an existing cycle for a write. `canWrite` runs in the caller first (viewer/non-member
+// rejected before any existence check); here the row is read and a generic not-authorized is
+// thrown for both "missing" and "wrong team" so a cycle's existence never leaks.
+async function loadCycleForWrite(
+  tx: Transaction,
+  ctx: AuthContext,
+  cycleId: string,
+): Promise<CycleRow> {
+  const cycle = (await tx.run(zql.cycle.where('id', cycleId).one())) as CycleRow | undefined
+  if (!cycle) throw notAuthorized(cycleId)
+  await assertTeamAccess(tx, ctx, cycle.teamId, cycleId)
+  return cycle
+}
+
+function assertValidCycleDates(startDate: number, endDate: number, id: string): void {
+  if (endDate <= startDate) {
+    throw new MutationError(
+      'Cycle end date must be after its start date',
+      MutationErrorCode.invalidDate,
+      id,
+    )
+  }
+}
+
+export const createCycleArgs = z.object({
+  id: z.string().min(1),
+  teamId: z.string().min(1),
+  name: z.string(),
+  startDate: timestamp,
+  endDate: timestamp,
+  createdAt: timestamp,
+  updatedAt: timestamp,
+})
+
+export type CreateCycleArgs = z.infer<typeof createCycleArgs>
+
+// Shared client + server create. Leaves `number` unset (claimed only in the server override,
+// like the issue number); the id is minted at the call site. A new cycle always starts
+// `upcoming`; the scheduler or a deliberate action promotes it to active/completed.
+export const createCycle = defineMutator(createCycleArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await assertTeamAccess(tx, ctx, args.teamId, args.id)
+
+  const name = assertValidName(args.name, args.id, CYCLE_NAME_MAX_LENGTH)
+  assertValidCycleDates(args.startDate, args.endDate, args.id)
+
+  await tx.mutate.cycle.insert({
+    id: args.id,
+    teamId: args.teamId,
+    name,
+    status: 'upcoming',
+    startDate: args.startDate,
+    endDate: args.endDate,
+    createdAt: args.createdAt,
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const updateCycleArgs = z.object({
+  id: z.string().min(1),
+  name: z.string().optional(),
+  startDate: timestamp.optional(),
+  endDate: timestamp.optional(),
+  updatedAt: timestamp,
+})
+
+export const updateCycle = defineMutator(updateCycleArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const cycle = await loadCycleForWrite(tx, ctx, args.id)
+
+  const name =
+    args.name === undefined ? undefined : assertValidName(args.name, args.id, CYCLE_NAME_MAX_LENGTH)
+
+  if (args.startDate !== undefined || args.endDate !== undefined) {
+    const startDate = args.startDate ?? cycle.startDate
+    const endDate = args.endDate ?? cycle.endDate
+    assertValidCycleDates(startDate, endDate, args.id)
+  }
+
+  await tx.mutate.cycle.update({
+    id: args.id,
+    ...(name === undefined ? {} : { name }),
+    ...(args.startDate === undefined ? {} : { startDate: args.startDate }),
+    ...(args.endDate === undefined ? {} : { endDate: args.endDate }),
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const activateCycleArgs = z.object({
+  id: z.string().min(1),
+  updatedAt: timestamp,
+})
+
+export const activateCycle = defineMutator(activateCycleArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const cycle = await loadCycleForWrite(tx, ctx, args.id)
+  if (cycle.status !== 'upcoming') return
+  await tx.mutate.cycle.update({ id: args.id, status: 'active', updatedAt: args.updatedAt })
+})
+
+export const completeCycleArgs = z.object({
+  id: z.string().min(1),
+  updatedAt: timestamp,
+})
+
+// The signature behavior: completing a cycle rolls its unfinished issues (every status except
+// done/canceled) into the next open cycle, so nothing is silently dropped. Team-scoped,
+// permission-gated (canWrite + loadCycleForWrite), and IDEMPOTENT — the status guard makes a
+// re-run (a retried mutation, or the scheduler racing the deliberate action) a no-op. The
+// destination is chosen deterministically from the synced cycles (identical client/server),
+// and issues are re-pointed by cycleId only, so no id is minted inside the mutator.
+export const completeCycle = defineMutator(completeCycleArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const cycle = await loadCycleForWrite(tx, ctx, args.id)
+  if (cycle.status === 'completed') return
+
+  const cycleRows = (await tx.run(zql.cycle.where('teamId', cycle.teamId))) as CycleOrderRow[]
+  const target = nextCycleId(cycleRows, {
+    id: cycle.id,
+    status: cycle.status,
+    number: cycle.number,
+    startDate: cycle.startDate,
+  })
+
+  await tx.mutate.cycle.update({ id: args.id, status: 'completed', updatedAt: args.updatedAt })
+
+  const issues = (await tx.run(zql.issue.where('cycleId', args.id))) as {
+    id: string
+    status: IssueStatus
+  }[]
+  for (const issue of issues) {
+    if (!isUnfinished(issue.status)) continue
+    await tx.mutate.issue.update({ id: issue.id, cycleId: target, updatedAt: args.updatedAt })
+  }
+})
+
+export const setIssueCycleArgs = z.object({
+  id: z.string().min(1),
+  cycleId: z.string().min(1).nullable(),
+  updatedAt: timestamp,
+})
+
+export const setIssueCycle = defineMutator(setIssueCycleArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const issue = await loadIssueForWrite(tx, ctx, args.id)
+
+  if (args.cycleId !== null) {
+    const cycle = (await tx.run(zql.cycle.where('id', args.cycleId).one())) as
+      | { id: string; teamId: string }
+      | undefined
+    if (!cycle || cycle.teamId !== issue.teamId) {
+      throw new MutationError(
+        'Cycle and issue must belong to the same team',
+        MutationErrorCode.crossTeam,
+        args.id,
+      )
+    }
+  }
+
+  await tx.mutate.issue.update({
+    id: args.id,
+    cycleId: args.cycleId,
+    updatedAt: args.updatedAt,
+  })
+})
+
 export const addIssueLabelArgs = z.object({
   issueId: z.string().min(1),
   labelId: z.string().min(1),
@@ -898,8 +1077,15 @@ export const mutators = defineMutators({
     setPriority: setIssuePriority,
     assign: assignIssue,
     move: moveIssue,
+    setCycle: setIssueCycle,
     addLabel: addIssueLabel,
     removeLabel: removeIssueLabel,
+  },
+  cycle: {
+    create: createCycle,
+    update: updateCycle,
+    activate: activateCycle,
+    complete: completeCycle,
   },
   label: {
     create: createLabel,
@@ -926,6 +1112,11 @@ export const SET_ISSUE_STATUS_MUTATOR_NAME = 'issue.setStatus'
 export const SET_ISSUE_PRIORITY_MUTATOR_NAME = 'issue.setPriority'
 export const ASSIGN_ISSUE_MUTATOR_NAME = 'issue.assign'
 export const MOVE_ISSUE_MUTATOR_NAME = 'issue.move'
+export const SET_ISSUE_CYCLE_MUTATOR_NAME = 'issue.setCycle'
+export const CREATE_CYCLE_MUTATOR_NAME = 'cycle.create'
+export const UPDATE_CYCLE_MUTATOR_NAME = 'cycle.update'
+export const ACTIVATE_CYCLE_MUTATOR_NAME = 'cycle.activate'
+export const COMPLETE_CYCLE_MUTATOR_NAME = 'cycle.complete'
 export const ADD_ISSUE_LABEL_MUTATOR_NAME = 'issue.addLabel'
 export const REMOVE_ISSUE_LABEL_MUTATOR_NAME = 'issue.removeLabel'
 export const CREATE_LABEL_MUTATOR_NAME = 'label.create'

@@ -11,3 +11,5 @@ runs as three containers you own.
 
 - [Board](/features/board/) — a keyboard-first kanban of your team's issues, grouped into
   the six fixed status columns, at `/teams/<teamId>/board`.
+- [Cycles](/features/cycles/) — time-boxed iterations for a team, with automatic rollover of
+  unfinished work when a cycle ends, at `/teams/<teamId>/cycles`.

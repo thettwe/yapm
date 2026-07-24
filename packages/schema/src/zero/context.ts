@@ -21,6 +21,10 @@ export const ISSUE_PRIORITIES = ['no_priority', 'low', 'medium', 'high', 'urgent
 
 export type IssuePriority = (typeof ISSUE_PRIORITIES)[number]
 
+export const CYCLE_STATUSES = ['upcoming', 'active', 'completed'] as const
+
+export type CycleStatus = (typeof CYCLE_STATUSES)[number]
+
 export const ISSUE_GROUPINGS = ['status', 'assignee', 'priority', 'label', 'none'] as const
 
 export type IssueGrouping = (typeof ISSUE_GROUPINGS)[number]

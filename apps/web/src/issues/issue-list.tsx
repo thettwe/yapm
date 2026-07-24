@@ -40,6 +40,7 @@ import {
   useState,
 } from 'react'
 import { useMembership } from '@/auth/use-membership'
+import { cycleKey } from '@/cycles/model'
 import { CommandProvider, useCommand } from '@/issues/command'
 import {
   buildGroups,
@@ -49,6 +50,8 @@ import {
   type IssueRowData,
   isPendingNumber,
   issueKey,
+  type ListGrouping,
+  NO_CYCLE,
   PRIORITY_LABEL,
   PRIORITY_TO_KIND,
   STATUS_LABEL,
@@ -57,11 +60,12 @@ import {
 } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
 
-const GROUPING_LABEL: Record<IssueGrouping, string> = {
+const GROUPING_LABEL: Record<ListGrouping, string> = {
   status: 'Status',
   assignee: 'Assignee',
   priority: 'Priority',
   label: 'Label',
+  cycle: 'Cycle',
   none: 'No grouping',
 }
 
@@ -97,6 +101,7 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
   const [issuesRaw, issuesResult] = useQuery(queries.issues.byTeam({ teamId }))
   const [users] = useQuery(queries.users.all())
   const [labels] = useQuery(queries.labels.byTeam({ teamId }))
+  const [cycles] = useQuery(queries.cycles.byTeam({ teamId }))
 
   const team = teams.find((candidate) => candidate.id === teamId)
   const teamKey = team?.key ?? ''
@@ -119,6 +124,7 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
         priority: issue.priority,
         assigneeId: issue.assigneeId ?? null,
         rank: issue.rank ?? null,
+        cycleId: issue.cycleId ?? null,
         updatedAt: issue.updatedAt,
         createdAt: issue.createdAt,
         labels: (
@@ -166,11 +172,22 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
           name: label.name,
           color: label.color,
         }))}
+        cycleOptions={cycles.map((cycle) => ({
+          id: cycle.id,
+          name: cycle.name,
+          number: cycle.number ?? null,
+        }))}
         openIssueId={openIssueId}
         onOpenIssue={onOpenIssue}
       />
     </CommandProvider>
   )
+}
+
+interface CycleOption {
+  id: string
+  name: string
+  number: number | null
 }
 
 interface IssueListBodyProps {
@@ -180,6 +197,7 @@ interface IssueListBodyProps {
   rows: readonly IssueRowData[]
   memberOptions: readonly TeamMemberOption[]
   labelOptions: readonly { id: string; name: string; color: string }[]
+  cycleOptions: readonly CycleOption[]
   openIssueId?: string
   onOpenIssue: (issue: IssueRowData) => void
 }
@@ -191,6 +209,7 @@ function IssueListBody({
   rows,
   memberOptions,
   labelOptions,
+  cycleOptions,
   openIssueId,
   onOpenIssue,
 }: IssueListBodyProps) {
@@ -198,7 +217,8 @@ function IssueListBody({
   const [savedViews] = useQuery(queries.savedViews.byTeam({ teamId }))
 
   const [filter, setFilter] = useState<IssueFilter>({})
-  const [grouping, setGrouping] = useState<IssueGrouping>(DEFAULT_GROUPING)
+  const [grouping, setGrouping] = useState<ListGrouping>(DEFAULT_GROUPING)
+  const [cycleFilter, setCycleFilter] = useState<readonly (string | null)[] | undefined>(undefined)
   const [sort, setSort] = useState<IssueSort>(DEFAULT_SORT)
   const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set())
   const [focusIndex, setFocusIndex] = useState(0)
@@ -209,9 +229,23 @@ function IssueListBody({
     [memberOptions],
   )
 
+  const cycleName = useCallback(
+    (id: string) => cycleOptions.find((cycle) => cycle.id === id)?.name ?? id,
+    [cycleOptions],
+  )
+
   const { groups, ordered } = useMemo(
-    () => buildGroups(rows, { filter, grouping, sort, teamKey, assigneeName }),
-    [rows, filter, grouping, sort, teamKey, assigneeName],
+    () =>
+      buildGroups(rows, {
+        filter,
+        grouping,
+        sort,
+        teamKey,
+        assigneeName,
+        cycleName,
+        ...(cycleFilter ? { cycleIds: cycleFilter } : {}),
+      }),
+    [rows, filter, grouping, sort, teamKey, assigneeName, cycleName, cycleFilter],
   )
 
   // Keep focus in range as the filtered set changes.
@@ -337,6 +371,9 @@ function IssueListBody({
         setSort={setSort}
         memberOptions={memberOptions}
         labelOptions={labelOptions}
+        cycleOptions={cycleOptions}
+        cycleFilter={cycleFilter}
+        setCycleFilter={setCycleFilter}
         savedViews={savedViews}
         applySavedView={applySavedView}
         teamId={teamId}
@@ -460,12 +497,15 @@ interface ToolbarProps {
   count: number
   filter: IssueFilter
   setFilter: (next: IssueFilter) => void
-  grouping: IssueGrouping
-  setGrouping: (next: IssueGrouping) => void
+  grouping: ListGrouping
+  setGrouping: (next: ListGrouping) => void
   sort: IssueSort
   setSort: (next: IssueSort) => void
   memberOptions: readonly TeamMemberOption[]
   labelOptions: readonly { id: string; name: string; color: string }[]
+  cycleOptions: readonly CycleOption[]
+  cycleFilter: readonly (string | null)[] | undefined
+  setCycleFilter: (next: readonly (string | null)[] | undefined) => void
   savedViews: readonly {
     id: string
     name: string
@@ -489,6 +529,9 @@ function Toolbar({
   setSort,
   memberOptions,
   labelOptions,
+  cycleOptions,
+  cycleFilter,
+  setCycleFilter,
   savedViews,
   applySavedView,
   teamId,
@@ -593,6 +636,23 @@ function Toolbar({
             onToggle={(value) => patch({ labelIds: toggle(filter.labelIds, value) })}
           />
         ) : null}
+        {cycleOptions.length > 0 ? (
+          <FilterMenu
+            label="Cycle"
+            options={[
+              { value: NO_CYCLE, label: 'No cycle' },
+              ...cycleOptions.map((cycle) => ({
+                value: cycle.id,
+                label: `${cycle.name} · ${cycleKey(cycle)}`,
+              })),
+            ]}
+            selected={(cycleFilter ?? []).map((id) => id ?? NO_CYCLE)}
+            onToggle={(value) => {
+              const real = value === NO_CYCLE ? null : value
+              setCycleFilter(toggle(cycleFilter, real))
+            }}
+          />
+        ) : null}
 
         <div className="ml-auto flex items-center gap-2">
           <span className="flex items-center gap-1.5 text-xs text-text-3">
@@ -600,10 +660,10 @@ function Toolbar({
             <Select
               aria-label="Group by"
               value={grouping}
-              onChange={(event) => setGrouping(event.target.value as IssueGrouping)}
+              onChange={(event) => setGrouping(event.target.value as ListGrouping)}
               className="h-7 w-32"
             >
-              {(Object.keys(GROUPING_LABEL) as IssueGrouping[]).map((value) => (
+              {(Object.keys(GROUPING_LABEL) as ListGrouping[]).map((value) => (
                 <option key={value} value={value}>
                   {GROUPING_LABEL[value]}
                 </option>
@@ -700,7 +760,7 @@ function SavedViewControls({
 }: {
   teamId: string
   filter: IssueFilter
-  grouping: IssueGrouping
+  grouping: ListGrouping
   sort: IssueSort
   savedViews: readonly {
     id: string
@@ -744,7 +804,7 @@ function SaveViewButton({
 }: {
   teamId: string
   filter: IssueFilter
-  grouping: IssueGrouping
+  grouping: ListGrouping
   sort: IssueSort
 }) {
   const { canWrite } = useMembership()
@@ -818,8 +878,14 @@ interface SaveViewInput {
   teamId: string
   name: string
   filter: IssueFilter
-  grouping: IssueGrouping
+  grouping: ListGrouping
   sort: IssueSort
+}
+
+// Saved views persist only the schema groupings; the web-only cycle grouping falls back to
+// the default when a view is saved.
+function persistableGrouping(grouping: ListGrouping): IssueGrouping {
+  return grouping === 'cycle' ? DEFAULT_GROUPING : grouping
 }
 
 function useSaveView(): (input: SaveViewInput) => Promise<string | undefined> {
@@ -834,7 +900,7 @@ function useSaveView(): (input: SaveViewInput) => Promise<string | undefined> {
             teamId,
             name,
             filter: filter as unknown as ReadonlyJSONValue,
-            grouping,
+            grouping: persistableGrouping(grouping),
             sort: sort as unknown as ReadonlyJSONValue,
             createdAt: now,
             updatedAt: now,

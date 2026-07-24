@@ -117,6 +117,20 @@ describe('projects.all is workspace-level, member-gated', () => {
     // The membership predicate is present on the related issues subquery.
     expect(JSON.stringify(issuesRelated?.subquery)).toContain(MEMBER.userID)
   })
+
+  it('team-scopes the related issues in projects.get', () => {
+    const id = '019f8f00-0000-7000-8000-0000000000bb'
+    expect(astOfArgs(queries.projects.get, { id }, MEMBER).where).not.toEqual(DENY_ALL_WHERE)
+    expect(astOfArgs(queries.projects.get, { id }, NON_MEMBER).where).toEqual(DENY_ALL_WHERE)
+    const ast = astOfArgs(queries.projects.get, { id }, MEMBER) as QueryAst & {
+      related?: { subquery: { where?: unknown } }[]
+    }
+    const issuesRelated = ast.related?.find((r) =>
+      JSON.stringify(r.subquery).includes('needsTriage'),
+    )
+    expect(issuesRelated).toBeDefined()
+    expect(JSON.stringify(issuesRelated?.subquery)).toContain(MEMBER.userID)
+  })
 })
 
 describe('invites are admin-only', () => {

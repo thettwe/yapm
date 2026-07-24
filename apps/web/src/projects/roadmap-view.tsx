@@ -5,6 +5,7 @@ import { cn } from '@yapm/ui/lib/utils'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -62,6 +63,12 @@ export function RoadmapView({ teamId }: { teamId: string }) {
 
   const [focusIndex, setFocusIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Keep the roving tabindex pointed at a valid, mounted row when the ordered set shrinks,
+  // so focus never falls to <body> and keyboard navigation keeps working (CLAUDE.md #10).
+  useEffect(() => {
+    setFocusIndex((prev) => Math.min(prev, Math.max(0, ordered.length - 1)))
+  }, [ordered.length])
 
   const focusRow = useCallback((index: number) => {
     containerRef.current?.querySelector<HTMLElement>(`[data-roadmap-index="${index}"]`)?.focus()

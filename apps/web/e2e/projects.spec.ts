@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount } from './support'
+import { ADMIN, ensureAccount, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -32,7 +32,7 @@ async function enterApp(page: Page): Promise<void> {
   })
 }
 
-async function openTeam(page: Page): Promise<void> {
+async function openTeam(page: Page): Promise<string> {
   const teamName = unique('Team')
   await page.getByTestId('create-team').click()
   const dialog = page.getByRole('dialog')
@@ -44,6 +44,7 @@ async function openTeam(page: Page): Promise<void> {
   await teamLink.click()
   await page.getByRole('link', { name: 'Issues' }).click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
+  return teamName
 }
 
 async function createIssue(page: Page, title: string): Promise<void> {
@@ -153,5 +154,98 @@ test('the projects view is correct across every preset in light and dark', async
         timeout: 20_000,
       })
     }
+  }
+})
+
+test('a viewer reads the workspace-level projects but cannot create one', async ({
+  page,
+  browser,
+}) => {
+  await enterApp(page)
+  const teamName = await openTeam(page)
+
+  await openProjects(page)
+  const projectName = unique('Shared roadmap')
+  await createProject(page, projectName, 14)
+
+  // The admin mints a viewer invite from the workspace overview.
+  await page.goto('/')
+  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await page.getByTestId('create-invite').click()
+  await page.getByLabel('Role', { exact: true }).selectOption('viewer')
+  await page.getByRole('button', { name: 'Create invite' }).click()
+  const inviteLink = await page.getByTestId('invite-link').first().inputValue()
+
+  const viewer = {
+    email: uniqueEmail('projects-viewer'),
+    password: 'viewer-password-1234',
+    name: `Projects Viewer ${Date.now().toString(36)}`,
+  }
+  const context = await browser.newContext()
+  try {
+    const vp = await context.newPage()
+    await vp.goto(inviteLink)
+    await vp.getByRole('button', { name: 'Create one' }).click()
+    await vp.getByLabel('Name').fill(viewer.name)
+    await vp.getByLabel('Email').fill(viewer.email)
+    await vp.getByLabel('Password', { exact: true }).fill(viewer.password)
+    await vp.getByTestId('login-submit').click()
+    await expect(vp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+    await expect(vp.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+      timeout: 30_000,
+    })
+
+    const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
+    await teamCard.getByRole('button', { name: 'Join this team' }).click()
+    await vp.getByRole('link', { name: new RegExp(teamName) }).click()
+
+    // The Projects link lives on the issue-views switch, so reach it via Issues (the team
+    // overview only links to Issues and Board). The workspace-level project is then readable
+    // by any member, including a viewer.
+    await vp.getByRole('link', { name: 'Issues' }).click()
+    await vp.getByRole('link', { name: 'Projects' }).click()
+    await expect(vp.getByTestId('project-rail-item').filter({ hasText: projectName })).toBeVisible({
+      timeout: 20_000,
+    })
+
+    // But the writer-gated create control is absent for a viewer.
+    await expect(vp.getByTestId('new-project')).toHaveCount(0)
+  } finally {
+    await context.close()
+  }
+})
+
+test('a project created in one client converges to another without a reload', async ({
+  browser,
+}) => {
+  const editorCtx = await browser.newContext()
+  const watcherCtx = await browser.newContext()
+  try {
+    const editor = await editorCtx.newPage()
+    const watcher = await watcherCtx.newPage()
+
+    await enterApp(editor)
+    const teamName = await openTeam(editor)
+    await openProjects(editor)
+
+    // A second client (same admin) watches the same team's projects.
+    await enterApp(watcher)
+    await watcher.getByRole('link', { name: new RegExp(teamName) }).click()
+    await watcher.getByRole('link', { name: 'Issues' }).click()
+    await watcher.getByRole('link', { name: 'Projects' }).click()
+    await expect(watcher.getByRole('button', { name: 'New project' })).toBeVisible({
+      timeout: 20_000,
+    })
+
+    const projectName = unique('Converged')
+    await createProject(editor, projectName, 30)
+
+    // The new project reaches the watcher over sync without a reload.
+    await expect(
+      watcher.getByTestId('project-rail-item').filter({ hasText: projectName }),
+    ).toBeVisible({ timeout: 20_000 })
+  } finally {
+    await editorCtx.close()
+    await watcherCtx.close()
   }
 })

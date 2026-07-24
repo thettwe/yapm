@@ -1,6 +1,6 @@
 ## 1. Dependencies and fonts
 
-- [ ] 1.1 Add `cmdk` and the preset font packages (Figtree, IBM Plex Mono, Inter, Fraunces, JetBrains Mono via `@fontsource`/variable packages) to the pnpm catalog and to `packages/ui`; run `pnpm install` and confirm `pnpm turbo build` still passes.
+- [x] 1.1 Add `cmdk` and the preset font packages (Figtree, IBM Plex Mono, Inter, Fraunces, JetBrains Mono via `@fontsource`/variable packages) to the pnpm catalog and to `packages/ui`; run `pnpm install` and confirm `pnpm turbo build` still passes.
 
 ## 2. Token architecture (packages/ui)
 
@@ -31,16 +31,16 @@
 
 ## 6. Core components (packages/ui)
 
-- [ ] 6.1 Add tokenized `badge`, `popover` (Base UI), `avatar` (Base UI), and `tooltip` (Base UI) components; ensure keyboard operation, focus-return, and accent focus indicators.
-- [ ] 6.2 Add `status-glyph` and `priority-mark` components drawing from status/signal tokens (separate from accent), each with an accessible label.
-- [ ] 6.3 Add the `command-palette` shell on `cmdk` (input, grouped list, item, empty, keyboard hints) styled to tokens with an accent-highlighted active row; keyboard open/filter/arrow/Enter/Escape; placeholder items only.
-- [ ] 6.4 Add the `issue-row` primitive styled to the Warm mockup density/layout with reserved reality-strip and divergence-flag slots (quiet placeholders), hover/focus/selected states from accent tokens, keyboard-focusable.
+- [x] 6.1 Add tokenized `badge`, `popover` (Base UI), `avatar` (Base UI), and `tooltip` (Base UI) components; ensure keyboard operation, focus-return, and accent focus indicators.
+- [x] 6.2 Add `status-glyph` and `priority-mark` components drawing from status/signal tokens (separate from accent), each with an accessible label.
+- [x] 6.3 Add the `command-palette` shell on `cmdk` (input, grouped list, item, empty, keyboard hints) styled to tokens with an accent-highlighted active row; keyboard open/filter/arrow/Enter/Escape; placeholder items only.
+- [x] 6.4 Add the `issue-row` primitive styled to the Warm mockup density/layout with reserved reality-strip and divergence-flag slots (quiet placeholders), hover/focus/selected states from accent tokens, keyboard-focusable.
 
 ## 7. Showcase
 
-- [ ] 7.1 Add Ladle stories for every component (button, input, label, badge, dialog, popover, menu, avatar, tooltip, command palette, status glyphs, priority marks, issue-row) rendering across presets and modes.
+- [x] 7.1 Add Ladle stories for every component (button, input, label, badge, dialog, popover, menu, avatar, tooltip, command palette, status glyphs, priority marks, issue-row) rendering across presets and modes.
 - [ ] 7.2 Add the theme switcher (preset select + light/dark toggle) and accent picker UI, fully keyboard-operable, wired to the theme provider; place it in the app shell (e.g. user menu) and the showcase.
-- [ ] 7.3 Add the dev-only `/showcase` route in `apps/web` rendering the full component set plus a representative static issue-list mockup built from the issue-row primitive, with keyboard-operable `data-theme`/mode controls; guard it out of production builds.
+- [x] 7.3 Add the dev-only `/showcase` route in `apps/web` rendering the full component set plus a representative static issue-list mockup built from the issue-row primitive, with keyboard-operable `data-theme`/mode controls; guard it out of production builds.
 
 ## 8. Verification
 

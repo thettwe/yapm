@@ -6,12 +6,16 @@ import { defineConfig } from 'vite'
 
 const SERVER_ORIGIN = process.env.SERVER_ORIGIN ?? 'http://localhost:3000'
 
-export default defineConfig({
+const TEST_ROUTES = '\\.(test|spec)\\.[tj]sx?$'
+const DEV_ONLY_ROUTES = 'showcase'
+
+export default defineConfig(({ command }) => ({
   plugins: [
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,
-      routeFileIgnorePattern: '\\.(test|spec)\\.[tj]sx?$',
+      routeFileIgnorePattern:
+        command === 'build' ? `${DEV_ONLY_ROUTES}|${TEST_ROUTES}` : TEST_ROUTES,
     }),
     react(),
     tailwindcss(),
@@ -33,4 +37,4 @@ export default defineConfig({
     sourcemap: true,
     target: 'baseline-widely-available',
   },
-})
+}))

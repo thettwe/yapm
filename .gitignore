@@ -47,5 +47,6 @@ pnpm-debug.log*
 
 # Design exploration screenshots (kept as design history; not part of the build)
 design-explorations/**/*.png
-# except the built theme-system review screenshots (committed for human visual review)
+# except the built review screenshots (committed for human visual review)
 !design-explorations/built/*.png
+!design-explorations/built/**/*.png

@@ -1,8 +1,10 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount } from './support'
+import { ADMIN, ensureAccount, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
+const PRESETS = ['warm', 'focused', 'editorial'] as const
+const MODES = ['light', 'dark'] as const
 
 function unique(prefix: string): string {
   return `${prefix} ${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
@@ -208,4 +210,120 @@ test('status can be changed from the detail panel and persists', async ({ page }
   await expect(reopened.getByRole('button', { name: 'Status: In Progress' })).toBeVisible({
     timeout: 20_000,
   })
+})
+
+// Task 8.2: the list must be correct in all three presets, light and dark. Setting the theme
+// cache before load forces the preset/mode; the grouped list and the reality-strip slot must
+// render from tokens with no hardcoded values in every combination.
+test('the grouped list renders in all three presets, light and dark', async ({ page }) => {
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  const title = unique('Preset issue')
+  await createIssue(page, title)
+
+  for (const preset of PRESETS) {
+    for (const mode of MODES) {
+      await page.evaluate(
+        ([p, m]) => {
+          window.localStorage.setItem(
+            'yapm:pref',
+            JSON.stringify({ theme: p, mode: m, accent: null }),
+          )
+        },
+        [preset, mode] as const,
+      )
+      await page.reload()
+
+      await expect(page.locator('html')).toHaveAttribute('data-theme', preset)
+      const isDark = await page.locator('html').evaluate((el) => el.classList.contains('dark'))
+      expect(isDark).toBe(mode === 'dark')
+
+      // The status group and the created row (with its unlinked reality strip) render.
+      await expect(page.getByRole('region', { name: 'Todo', exact: true })).toBeVisible({
+        timeout: 20_000,
+      })
+      const created = row(page, title)
+      await expect(created).toBeVisible()
+      await expect(created.getByLabel('No delivery signal yet')).toBeVisible()
+    }
+  }
+})
+
+// Task 8.2: a viewer reads work data but is denied every write, across the list, the detail
+// panel, and the palette. Self-contained: the admin creates a team, an issue, and a viewer
+// invite; a second browser context accepts it, joins the team for read scope, and verifies
+// the read-only surfaces.
+test('a viewer reads issues but cannot write across list, detail, and palette', async ({
+  page,
+  browser,
+}) => {
+  await enterApp(page)
+  const teamName = await openTeamIssues(page)
+
+  const issueTitle = unique('Viewer sees')
+  await createIssue(page, issueTitle)
+  await expect(row(page, issueTitle)).not.toHaveAttribute('data-pending', '', { timeout: 20_000 })
+
+  // The admin mints a viewer invite from the workspace overview.
+  await page.goto('/')
+  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await page.getByTestId('create-invite').click()
+  await page.getByLabel('Role', { exact: true }).selectOption('viewer')
+  await page.getByRole('button', { name: 'Create invite' }).click()
+  const inviteLink = await page.getByTestId('invite-link').first().inputValue()
+  expect(inviteLink).toContain('/invite?token=')
+
+  const viewer = {
+    email: uniqueEmail('issue-viewer'),
+    password: 'viewer-password-1234',
+    name: `Issue Viewer ${Date.now().toString(36)}`,
+  }
+  const context = await browser.newContext()
+  try {
+    const vp = await context.newPage()
+    await vp.goto(inviteLink)
+    await expect(vp.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
+    await vp.getByRole('button', { name: 'Create one' }).click()
+    await vp.getByLabel('Name').fill(viewer.name)
+    await vp.getByLabel('Email').fill(viewer.email)
+    await vp.getByLabel('Password', { exact: true }).fill(viewer.password)
+    await vp.getByTestId('login-submit').click()
+    await expect(vp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+    await expect(vp.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+      timeout: 30_000,
+    })
+
+    // The viewer joins the team for read scope, then opens its issues.
+    const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
+    await teamCard.getByRole('button', { name: 'Join this team' }).click()
+    await vp.getByRole('link', { name: new RegExp(teamName) }).click()
+    await vp.getByRole('link', { name: 'Issues' }).click()
+
+    // List: the viewer reads the admin's issue.
+    await expect(row(vp, issueTitle)).toBeVisible({ timeout: 20_000 })
+
+    // Detail: opening the issue is fully read-only.
+    const target = row(vp, issueTitle)
+    await target.focus()
+    await vp.keyboard.press('Enter')
+    const panel = vp.getByRole('dialog', { name: 'Issue detail' })
+    await expect(panel).toBeVisible({ timeout: 20_000 })
+    await expect(panel.getByRole('heading', { name: issueTitle })).toBeVisible()
+    await expect(panel.getByRole('textbox', { name: 'Issue title' })).toHaveCount(0)
+    await expect(panel.getByRole('textbox', { name: 'Issue description' })).toHaveCount(0)
+    await expect(panel.getByRole('textbox', { name: 'Add a comment' })).toHaveCount(0)
+    await expect(panel.getByRole('button', { name: /^Status:/ })).toBeDisabled()
+    await vp.keyboard.press('Escape')
+
+    // Palette: no write commands are offered even with a focused target.
+    await target.focus()
+    await vp.keyboard.press('ControlOrMeta+k')
+    await expect(vp.getByRole('dialog', { name: 'Command palette' })).toBeVisible()
+    await expect(vp.getByRole('option', { name: /Change status/ })).toHaveCount(0)
+    await expect(vp.getByRole('option', { name: /^Assign/ })).toHaveCount(0)
+    await expect(vp.getByRole('option', { name: /Add label/ })).toHaveCount(0)
+  } finally {
+    await context.close()
+  }
 })

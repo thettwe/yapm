@@ -26,6 +26,8 @@ Scope decisions from the v1 scoping session (2026-07-23). Each item becomes an O
 | 8 | `connectors` | **First-party connector framework** + GitHub as its first connector: webhook ingestion (pg-boss, serialized per install), PR/CI/deploy → work-graph edges, PR linking + auto-status. Shared encrypted-secrets/config surface. Gated on the user registering a GitHub App. GitLab etc. = later connectors | |
 | 9 | `ai` | **BYO-key, work-graph-native AI**: provider-agnostic gateway (Anthropic/Gemini/OpenAI), toggle + configure per workspace, agents that read via the same synced queries and act via the same mutators + permissions. Reuses the connector secrets/config surface. Built after the graph exists so the AI is differentiated by the data, not the model | |
 
+**V1 PM core complete** (changes 1–7): with `projects-roadmap` built, the whole tracker — workspace/auth, design system, issues, board, cycles, triage, and projects with a roadmap — is in place. What remains (`connectors`, `ai`) is the delivery-truth wedge and the work-graph-native AI, not core project management.
+
 Order rationale: schema-risk first (2–3 define the work graph's core tables), daily-use surfaces before periphery, connectors before AI, and both last because they bind to stable issue semantics and a rich work graph. `design-system` was inserted after workspace-auth (design pass before the first product screens).
 
 ## Differentiation commitments

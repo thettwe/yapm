@@ -50,6 +50,22 @@ async function openTeamIssues(page: Page): Promise<string> {
   return teamName
 }
 
+// dnd-kit's PointerSensor has a 4px activation constraint and drives its collision detection
+// from incremental pointer moves, so a single dragTo never starts a drag. Press, nudge past the
+// threshold, glide over the target in steps, then release just above its top edge so the moved
+// card settles before it.
+async function pointerDrag(page: Page, source: Locator, target: Locator): Promise<void> {
+  const from = await source.boundingBox()
+  const to = await target.boundingBox()
+  if (!from || !to) throw new Error('drag source or target is not visible')
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 - 8, { steps: 5 })
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 })
+  await page.mouse.move(to.x + to.width / 2, to.y + 4, { steps: 5 })
+  await page.mouse.up()
+}
+
 async function createIssue(page: Page, title: string): Promise<void> {
   await page.getByRole('button', { name: 'New issue' }).click()
   const input = page.getByLabel('New issue title')
@@ -109,9 +125,13 @@ test('a card can be picked up and moved across columns with the keyboard', async
 
   const target = card(page, title)
   await target.first().focus()
-  // Space picks up; ArrowRight moves to the adjacent column; Space drops.
+  // Space picks up; ArrowRight moves to the adjacent column; Space drops. dnd-kit measures
+  // layout asynchronously between keyboard steps, so pace the keystrokes — firing them in one
+  // burst races the pick-up measurement and the move no-ops.
   await page.keyboard.press('Space')
+  await page.waitForTimeout(300)
   await page.keyboard.press('ArrowRight')
+  await page.waitForTimeout(300)
   await page.keyboard.press('Space')
 
   // The card leaves the Todo column and its status changes to the next column (In Progress).
@@ -135,7 +155,7 @@ test('dragging reorders two cards within a column and the order persists', async
   await expect(card(todo, second)).toBeVisible({ timeout: 20_000 })
 
   // Drag the second card above the first.
-  await card(todo, second).dragTo(card(todo, first))
+  await pointerDrag(page, card(todo, second), card(todo, first))
 
   // The moved card settles; order is asserted by DOM position after a reload.
   await page.reload()

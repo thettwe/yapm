@@ -238,7 +238,7 @@ function RoadmapRow({
       onFocus={onFocus}
       onClick={onOpen}
       className={cn(
-        'flex w-full cursor-pointer items-stretch border-b border-border text-left outline-none transition-colors hover:bg-bg-sidebar',
+        'flex w-full cursor-pointer items-stretch border-b border-border text-left outline-none transition-colors hover:bg-bg-sidebar focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
         focused ? 'bg-bg-elevated' : '',
       )}
     >

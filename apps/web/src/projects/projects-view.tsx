@@ -531,8 +531,24 @@ function EditProjectButton({
     setOpen(false)
   }
 
+  // Reseed the form each time the dialog opens (not via a component key) so switching the
+  // selected project and reopening Edit shows the current project — without remounting, so the
+  // Edit trigger persists and focus is still returned correctly after a delete.
+  function onOpenChange(next: boolean) {
+    setOpen(next)
+    if (next) {
+      form.setName(project.name)
+      form.setLeadId(project.leadId ?? '')
+      form.setStatus(project.status)
+      form.setTarget(
+        project.targetDate ? new Date(project.targetDate).toISOString().slice(0, 10) : '',
+      )
+      setError(undefined)
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger
         render={
           <Button size="sm" variant="outline" data-testid="edit-project">

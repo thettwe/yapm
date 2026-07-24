@@ -56,6 +56,7 @@ import {
   type IssueRowData,
   isPendingNumber,
   issueKey,
+  PRIORITY_LABEL,
   PRIORITY_TO_KIND,
   STATUS_LABEL,
   STATUS_TO_KIND,
@@ -144,10 +145,17 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
   const columns = useMemo(() => buildColumns(cards), [cards])
   const cardById = useMemo(() => new Map(cards.map((card) => [card.id, card])), [cards])
 
+  const virtualizedIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const col of columns) {
+      if (shouldVirtualize(col.cards.length)) for (const card of col.cards) set.add(card.id)
+    }
+    return set
+  }, [columns])
+
   const [activeId, setActiveId] = useState<string | null>(null)
   const [paletteFor, setPaletteFor] = useState<string | null>(null)
   const [pendingFocus, setPendingFocus] = useState<string | null>(null)
-  const pendingAttemptsRef = useRef(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
 
@@ -161,7 +169,6 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
 
   const move = useCallback(
     (id: string, status: IssueStatus, rank: string) => {
-      pendingAttemptsRef.current = 0
       setPendingFocus(id)
       void runMutation(
         zero.mutate(mutators.issue.move({ id, status, rank, updatedAt: Date.now() })),
@@ -189,11 +196,15 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
   // trigger when the move palette closes, and dnd-kit's KeyboardSensor refocuses the activator
   // after a drop. So focus is (re)asserted across a bounded run of animation frames and only
   // settled once it has actually stuck (activeElement is the card). A card that lands in a
-  // virtualized column outside the rendered window is never found here; those frames elapse
-  // harmlessly while its VirtualColumnList scrolls it into view and focuses it instead.
+  // virtualized column is delegated entirely to its VirtualColumnList, which owns re-scroll +
+  // re-focus and clears pendingFocus itself; this effect returns early for those targets so the
+  // two never co-drive (and race to clear) the same pendingFocus. The attempt counter is local to
+  // each effect run, mirroring VirtualColumnList, so a mid-window `cards` re-render resets both.
   useEffect(() => {
     if (pendingFocus === null) return
+    if (virtualizedIds.has(pendingFocus)) return
     let frame = 0
+    let attempts = 0
     const step = () => {
       const el = containerRef.current?.querySelector<HTMLElement>(
         `[data-card-id="${pendingFocus}"]`,
@@ -203,8 +214,8 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
         return
       }
       el?.focus()
-      pendingAttemptsRef.current += 1
-      if (pendingAttemptsRef.current >= FOCUS_RESTORE_FRAMES) {
+      attempts += 1
+      if (attempts >= FOCUS_RESTORE_FRAMES) {
         setPendingFocus(null)
         return
       }
@@ -212,7 +223,7 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
     }
     frame = requestAnimationFrame(step)
     return () => cancelAnimationFrame(frame)
-  }, [cards, pendingFocus])
+  }, [cards, pendingFocus, virtualizedIds])
 
   const onDragStart = useCallback((event: DragStartEvent) => {
     draggingRef.current = true
@@ -429,7 +440,7 @@ function Column({
 
   return (
     <section
-      className="flex w-72 shrink-0 flex-col rounded-card bg-bg-sidebar/50"
+      className="flex w-72 shrink-0 flex-col rounded-card border border-border bg-bg-sidebar/50"
       aria-label={`${column.label}, ${column.cards.length} issues`}
     >
       <header className="flex items-center gap-2 px-3 py-2.5">
@@ -541,6 +552,7 @@ export function SortableCard({
       priority={PRIORITY_TO_KIND[card.priority]}
       labels={(card.labels ?? []).map((l) => ({ name: l.name, color: l.color }))}
       {...assigneeProps(card)}
+      aria-label={`${issueKey(teamKey, card)}: ${card.title}, ${STATUS_LABEL[card.status]}, ${PRIORITY_LABEL[card.priority]}`}
       aria-keyshortcuts="o"
       onClick={() => onOpenCard(card.id)}
       {...dragA11y}

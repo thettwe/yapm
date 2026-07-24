@@ -58,7 +58,7 @@ The board SHALL expose a "Move to status…" action in a keyboard-opened command
 
 ### Requirement: Single-write fractional ordering
 
-Reordering SHALL be backed by a nullable fractional-index `rank` on the issue. Moving a card SHALL write only that card's `rank` (and `status` when the column changed) and SHALL NOT renumber any sibling. The fractional index SHALL be computed at the mutator call site from the destination neighbours' current ranks and passed to the mutator, so a rebase of the mutator does not recompute or jump the card. Cards without a rank SHALL sort last deterministically until first moved.
+Reordering SHALL be backed by a nullable fractional-index `rank` on the issue. Moving a card SHALL write only that card's `rank` (and `status` when the column changed) and SHALL NOT renumber any sibling. The fractional index SHALL be computed at the mutator call site from the destination neighbours' current ranks and passed to the mutator, so a rebase of the mutator does not recompute or jump the card. Issues SHALL be densely ranked from creation — the create call site mints a rank appended after the destination column's current maximum — so a drop always lands position-faithfully; a null rank SHALL be tolerated only as a transient pre-sync value and SHALL sort last deterministically.
 
 Work-graph placement: an ordering field on `issue`. Permission story: unchanged from the issue's team scope.
 

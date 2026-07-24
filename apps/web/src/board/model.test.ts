@@ -99,6 +99,24 @@ describe('rankForSlot', () => {
     const rank = rankForSlot(finalOrder, 1)
     expect(at(rs, 0) < rank).toBe(true)
   })
+
+  it('does not throw when dropped between two equal-rank neighbours, and sorts after them', () => {
+    // Equal-rank adjacency is a transient degenerate state (two clients minted the same key).
+    // rankBetween(r, r) would throw 'a >= b'; the guard falls back to a strict mint after the
+    // lower bound so the moved card self-heals into a strictly-ordered position on this write.
+    const collided = at(ranks(1), 0)
+    const finalOrder = [
+      card({ id: 'a', rank: collided }),
+      card({ id: 'moved', rank: null }),
+      card({ id: 'b', rank: collided }),
+    ]
+    let rank = ''
+    expect(() => {
+      rank = rankForSlot(finalOrder, 1)
+    }).not.toThrow()
+    expect(typeof rank).toBe('string')
+    expect(collided < rank).toBe(true)
+  })
 })
 
 describe('appendRank', () => {

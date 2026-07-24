@@ -139,8 +139,8 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
 
   const [activeId, setActiveId] = useState<string | null>(null)
   const [paletteFor, setPaletteFor] = useState<string | null>(null)
-  const focusedIdRef = useRef<string | null>(null)
-  const pendingFocusRef = useRef<string | null>(null)
+  const [pendingFocus, setPendingFocus] = useState<string | null>(null)
+  const pendingAttemptsRef = useRef(0)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const sensors = useSensors(
@@ -153,7 +153,8 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
 
   const move = useCallback(
     (id: string, status: IssueStatus, rank: string) => {
-      pendingFocusRef.current = id
+      pendingAttemptsRef.current = 0
+      setPendingFocus(id)
       void runMutation(
         zero.mutate(mutators.issue.move({ id, status, rank, updatedAt: Date.now() })),
       )
@@ -161,17 +162,35 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
     [zero],
   )
 
+  const clearPendingFocus = useCallback(() => setPendingFocus(null), [])
+
+  const openCard = useCallback(
+    (id: string) => {
+      void navigate({
+        to: '/teams/$teamId/issues',
+        params: { teamId },
+        search: { open: id },
+      })
+    },
+    [navigate, teamId],
+  )
+
   // Restore focus to a moved card after its optimistic row lands and it remounts in the new
-  // column (a keyboard move would otherwise drop focus to <body>).
+  // column (a keyboard move would otherwise drop focus to <body>). A card that lands in a
+  // virtualized column outside the rendered window is scrolled into view and focused by its
+  // VirtualColumnList; here the retries are bounded so a genuinely unreachable target is
+  // dropped rather than left pending, where a late remount could abruptly steal focus.
   useEffect(() => {
-    const id = pendingFocusRef.current
-    if (id === null) return
-    const el = containerRef.current?.querySelector<HTMLElement>(`[data-card-id="${id}"]`)
+    if (pendingFocus === null) return
+    const el = containerRef.current?.querySelector<HTMLElement>(`[data-card-id="${pendingFocus}"]`)
     if (el) {
       el.focus()
-      pendingFocusRef.current = null
+      setPendingFocus(null)
+      return
     }
-  }, [cards])
+    pendingAttemptsRef.current += 1
+    if (pendingAttemptsRef.current >= 3) setPendingFocus(null)
+  }, [cards, pendingFocus])
 
   const onDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(String(event.active.id))
@@ -245,11 +264,12 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
     [],
   )
 
-  // Open the "Move to status…" palette for the focused card (keyboard equivalent of dragging).
-  // Ignored while typing in a field or while a dialog is already open, so the shortcut never
-  // eats a keystroke.
+  // Keyboard shortcuts on the focused card. `o` opens the issue — a pointer-free open available
+  // to viewers too (Enter and Space stay owned by dnd-kit's KeyboardSensor for pick-up/drop, so
+  // they cannot double as "open"). `m` / ⌘K opens the "Move to status…" palette for writers.
+  // The focused card is read from document.activeElement, so a shortcut can never fire against a
+  // stale reference. Ignored while typing in a field or while a dialog is already open.
   useEffect(() => {
-    if (!canWrite) return
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null
       const editing =
@@ -257,17 +277,28 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
         target?.tagName === 'INPUT' ||
         target?.tagName === 'TEXTAREA' ||
         target?.closest('[role="dialog"]') != null
-      const openMove =
-        (event.key.toLowerCase() === 'm' && !editing) ||
-        ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k' && !editing)
-      if (openMove && focusedIdRef.current) {
+      if (editing) return
+      const cardEl = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
+        '[data-card-id]',
+      )
+      const cardId = cardEl?.dataset.cardId
+      if (!cardId) return
+      if (event.key.toLowerCase() === 'o') {
         event.preventDefault()
-        setPaletteFor(focusedIdRef.current)
+        openCard(cardId)
+        return
+      }
+      const openMove =
+        event.key.toLowerCase() === 'm' ||
+        ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k')
+      if (openMove && canWrite) {
+        event.preventDefault()
+        setPaletteFor(cardId)
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [canWrite])
+  }, [canWrite, openCard])
 
   const activeCard = activeId ? cardById.get(activeId) : undefined
 
@@ -292,16 +323,9 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
             teamKey={teamKey}
             readOnly={!canWrite}
             activeId={activeId}
-            onFocusCard={(id) => {
-              focusedIdRef.current = id
-            }}
-            onOpenCard={(id) => {
-              void navigate({
-                to: '/teams/$teamId/issues',
-                params: { teamId },
-                search: { open: id },
-              })
-            }}
+            pendingFocusId={pendingFocus}
+            onFocusRestored={clearPendingFocus}
+            onOpenCard={openCard}
           />
         ))}
       </section>
@@ -351,11 +375,20 @@ interface ColumnProps {
   teamKey: string
   readOnly: boolean
   activeId: string | null
-  onFocusCard: (id: string) => void
+  pendingFocusId: string | null
+  onFocusRestored: () => void
   onOpenCard: (id: string) => void
 }
 
-function Column({ column, teamKey, readOnly, activeId, onFocusCard, onOpenCard }: ColumnProps) {
+function Column({
+  column,
+  teamKey,
+  readOnly,
+  activeId,
+  pendingFocusId,
+  onFocusRestored,
+  onOpenCard,
+}: ColumnProps) {
   const { setNodeRef } = useDroppable({
     id: columnDroppableId(column.status),
     data: { status: column.status, type: 'column' },
@@ -385,7 +418,8 @@ function Column({ column, teamKey, readOnly, activeId, onFocusCard, onOpenCard }
               teamKey={teamKey}
               readOnly={readOnly}
               activeId={activeId}
-              onFocusCard={onFocusCard}
+              pendingFocusId={pendingFocusId}
+              onFocusRestored={onFocusRestored}
               onOpenCard={onOpenCard}
             />
           ) : (
@@ -396,7 +430,6 @@ function Column({ column, teamKey, readOnly, activeId, onFocusCard, onOpenCard }
                 teamKey={teamKey}
                 readOnly={readOnly}
                 dimmed={activeId === card.id}
-                onFocusCard={onFocusCard}
                 onOpenCard={onOpenCard}
               />
             ))
@@ -412,18 +445,10 @@ export interface SortableCardProps {
   teamKey: string
   readOnly: boolean
   dimmed: boolean
-  onFocusCard: (id: string) => void
   onOpenCard: (id: string) => void
 }
 
-export function SortableCard({
-  card,
-  teamKey,
-  readOnly,
-  dimmed,
-  onFocusCard,
-  onOpenCard,
-}: SortableCardProps) {
+export function SortableCard({ card, teamKey, readOnly, dimmed, onOpenCard }: SortableCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: { status: card.status, rank: card.rank, type: 'card' },
@@ -444,15 +469,7 @@ export function SortableCard({
       priority={PRIORITY_TO_KIND[card.priority]}
       labels={(card.labels ?? []).map((l) => ({ name: l.name, color: l.color }))}
       {...assigneeProps(card)}
-      onFocus={() => onFocusCard(card.id)}
       onClick={() => onOpenCard(card.id)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' && !isDragging) {
-          // Enter opens the issue only when not in an active pick-up (dnd-kit owns Enter then).
-          event.preventDefault()
-          onOpenCard(card.id)
-        }
-      }}
       {...attributes}
       {...listeners}
     />

@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { BoardCardData } from '@/board/model'
 import { SortableCard } from './board'
 
@@ -17,14 +17,16 @@ export function VirtualColumnList({
   teamKey,
   readOnly,
   activeId,
-  onFocusCard,
+  pendingFocusId,
+  onFocusRestored,
   onOpenCard,
 }: {
   cards: readonly BoardCardData[]
   teamKey: string
   readOnly: boolean
   activeId: string | null
-  onFocusCard: (id: string) => void
+  pendingFocusId: string | null
+  onFocusRestored: () => void
   onOpenCard: (id: string) => void
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -35,6 +37,25 @@ export function VirtualColumnList({
     overscan: OVERSCAN,
     getItemKey: (index) => cards[index]?.id ?? index,
   })
+
+  // A card moved into this virtualized column may land outside the rendered window, so the
+  // board-level focus-restore cannot reach it. When it belongs here, scroll it into view, then
+  // focus it on the next frame once its row has mounted and clear the pending-focus state — so
+  // "focus returns to the moved card" holds even for appended-to-a-large-column moves.
+  useEffect(() => {
+    if (pendingFocusId === null) return
+    const index = cards.findIndex((card) => card.id === pendingFocusId)
+    if (index === -1) return
+    virtualizer.scrollToIndex(index, { align: 'auto' })
+    const frame = requestAnimationFrame(() => {
+      const el = scrollRef.current?.querySelector<HTMLElement>(`[data-card-id="${pendingFocusId}"]`)
+      if (el) {
+        el.focus()
+        onFocusRestored()
+      }
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [cards, pendingFocusId, virtualizer, onFocusRestored])
 
   return (
     <div ref={scrollRef} className="max-h-[70vh] overflow-y-auto">
@@ -55,7 +76,6 @@ export function VirtualColumnList({
                 teamKey={teamKey}
                 readOnly={readOnly}
                 dimmed={activeId === card.id}
-                onFocusCard={onFocusCard}
                 onOpenCard={onOpenCard}
               />
             </div>

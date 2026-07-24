@@ -40,9 +40,11 @@ export function columnDroppableId(status: IssueStatus): string {
   return `${COLUMN_DROPPABLE_PREFIX}${status}`
 }
 
-// The nearest real (non-null) rank scanning outward from a slot. Because real ranks are
-// contiguous at the front of a column's display order, the value found scanning back is always
-// strictly less than the one found scanning forward, so `rankBetween` never throws.
+// The nearest real (non-null) rank scanning outward from a slot. Cards are densely ranked from
+// creation, so real ranks are contiguous at the front of a column's display order and the value
+// found scanning back normally precedes the one found scanning forward. It is not guaranteed
+// strictly less, though: two clients can mint identical keys that `compareCards` renders
+// adjacent (rank is non-unique — see design.md), so `rankForSlot` guards the equal/inverted case.
 function realRankBefore(cards: readonly BoardCardData[], index: number): string | null {
   for (let i = index - 1; i >= 0; i -= 1) {
     const rank = cards[i]?.rank
@@ -65,6 +67,13 @@ function realRankAtOrAfter(cards: readonly BoardCardData[], index: number): stri
 export function rankForSlot(finalOrder: readonly BoardCardData[], index: number): string {
   const before = realRankBefore(finalOrder, index)
   const after = realRankAtOrAfter(finalOrder, index + 1)
+  // Equal ranks are an accepted concurrency state (design.md: non-unique rank, two clients can
+  // mint identical keys that compareCards renders adjacent). rankBetween(r, r) throws, so when
+  // the neighbours collide fall back to a strict mint after the lower bound; this self-heals the
+  // moved card into a strictly-ordered position on this move.
+  if (before !== null && after !== null && before >= after) {
+    return rankBetween(before, null)
+  }
   return rankBetween(before, after)
 }
 

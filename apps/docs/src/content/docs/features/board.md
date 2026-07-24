@@ -5,8 +5,8 @@ description: A keyboard-first kanban of your team's issues, grouped into the six
 
 The board is a kanban view of a team's issues, grouped into columns by status. It is a peer
 view to the issue list — both show the same team-scoped issues, and a change made in one
-shows up in the other without a reload. Open it at `/board`, or use the **List ↔ Board**
-toggle in the team header.
+shows up in the other without a reload. Open it at `/teams/<teamId>/board`, or use the
+**List ↔ Board** toggle in the team header.
 
 ## The six columns
 
@@ -52,7 +52,8 @@ Each step is announced to assistive technology through a live region, and focus 
 the card in its new location after the drop.
 
 :::tip
-With a card focused but not picked up, press **Enter** to open the issue.
+With a card focused, press **o** to open the issue (or click the card). **Enter** and
+**Space** are reserved for picking the card up.
 :::
 
 ### With the command palette

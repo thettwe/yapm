@@ -10,4 +10,4 @@ runs as three containers you own.
 ## Features
 
 - [Board](/features/board/) — a keyboard-first kanban of your team's issues, grouped into
-  the six fixed status columns, at `/board`.
+  the six fixed status columns, at `/teams/<teamId>/board`.

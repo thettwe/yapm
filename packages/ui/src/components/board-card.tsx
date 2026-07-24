@@ -78,7 +78,7 @@ function BoardCard({
         </span>
       </div>
 
-      <span className="text-[13px] font-medium leading-snug tracking-[-0.008em] text-text-1">
+      <span className="text-[13.5px] font-medium leading-snug tracking-[-0.008em] text-text-1">
         {title}
       </span>
 
@@ -88,7 +88,7 @@ function BoardCard({
             {labels.map((label) => (
               <span
                 key={label.name}
-                className="flex items-center gap-1 font-ui text-[11px] text-text-2"
+                className="flex items-center gap-1 font-ui text-[11.5px] text-text-2"
               >
                 {label.color ? (
                   <span className="size-2 rounded-full" style={{ backgroundColor: label.color }} />

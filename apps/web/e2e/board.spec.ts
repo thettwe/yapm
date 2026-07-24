@@ -78,7 +78,7 @@ async function createIssue(page: Page, title: string): Promise<void> {
 // From the list, seed some issues then switch to the board via the List↔Board toggle.
 async function openBoard(page: Page, titles: string[]): Promise<void> {
   for (const title of titles) await createIssue(page, title)
-  await page.getByRole('tab', { name: 'Board' }).click()
+  await page.getByRole('link', { name: 'Board' }).click()
   await expect(page.locator(CARD).first()).toBeVisible({ timeout: 20_000 })
 }
 
@@ -142,6 +142,45 @@ test('a card can be picked up and moved across columns with the keyboard', async
   await expect(card(column(page, 'In Progress'), title)).toBeVisible({ timeout: 20_000 })
 })
 
+test('Escape cancels a pick-up and writes no change', async ({ page }) => {
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  const title = unique('Cancel card')
+  await openBoard(page, [title])
+
+  const target = card(page, title)
+  await target.first().focus()
+  // Pick up, nudge to the adjacent column, then cancel with Escape.
+  await page.keyboard.press('Space')
+  await page.waitForTimeout(300)
+  await page.keyboard.press('ArrowRight')
+  await page.waitForTimeout(300)
+  await page.keyboard.press('Escape')
+
+  // The card returns to Todo and never lands in In Progress.
+  await expect(card(column(page, 'Todo'), title)).toBeVisible({ timeout: 20_000 })
+  await expect(card(column(page, 'In Progress'), title)).toHaveCount(0)
+
+  // No status/rank change persisted.
+  await page.reload()
+  await expect(card(column(page, 'Todo'), title)).toBeVisible({ timeout: 20_000 })
+  await expect(card(column(page, 'In Progress'), title)).toHaveCount(0)
+})
+
+test('a focused board card opens its issue with the keyboard', async ({ page }) => {
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  const title = unique('Open card')
+  await openBoard(page, [title])
+
+  await card(page, title).first().focus()
+  // `o` opens the focused issue without a pointer (Enter/Space are reserved for pick-up/drop).
+  await page.keyboard.press('o')
+  await expect(page).toHaveURL(/[?&]open=/, { timeout: 20_000 })
+})
+
 test('dragging reorders two cards within a column and the order persists', async ({ page }) => {
   await enterApp(page)
   await openTeamIssues(page)
@@ -161,6 +200,59 @@ test('dragging reorders two cards within a column and the order persists', async
   await page.reload()
   const todoCards = column(page, 'Todo').locator(CARD)
   await expect(todoCards.first()).toContainText(second, { timeout: 20_000 })
+})
+
+test('dropping a card below its siblings lands it in place, not at the top', async ({ page }) => {
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  // Three cards, densely ranked from creation, so a drop lands position-faithfully rather than
+  // minting a key that sorts the moved card to the top of the column.
+  const a = unique('Alpha rank')
+  const b = unique('Bravo rank')
+  const c = unique('Charlie rank')
+  await openBoard(page, [a, b, c])
+
+  const todo = column(page, 'Todo')
+  await expect(card(todo, a)).toBeVisible({ timeout: 20_000 })
+  await expect(card(todo, c)).toBeVisible({ timeout: 20_000 })
+
+  // Drag the first card (Alpha) down onto the last, so it settles lower in the column.
+  await pointerDrag(page, card(todo, a), card(todo, c))
+
+  await page.reload()
+  const todoCards = column(page, 'Todo').locator(CARD)
+  // Alpha landed lower in the column (before OR after Charlie), not back at the top: it is no
+  // longer first, so Bravo — previously second — is now first. Under the old null-rank bug the
+  // moved card minted a mid key that sorted it to the very top instead.
+  await expect(todoCards.first()).toContainText(b, { timeout: 20_000 })
+  await expect(todoCards.first()).not.toContainText(a)
+})
+
+test('the palette appends a moved card to the bottom of a multi-card column', async ({ page }) => {
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  const first = unique('Review first')
+  const second = unique('Review second')
+  await openBoard(page, [first, second])
+
+  // Move both cards to In Review via the palette; each appends to the bottom of that column.
+  for (const title of [first, second]) {
+    await card(page, title).first().focus()
+    await page.keyboard.press('m')
+    const palette = page.getByRole('dialog', { name: 'Move issue' })
+    await expect(palette).toBeVisible()
+    await palette.getByPlaceholder(/Move .* to/).fill('In Review')
+    await palette.getByRole('option', { name: 'Move to In Review' }).click()
+    await expect(card(column(page, 'In Review'), title)).toBeVisible({ timeout: 20_000 })
+  }
+
+  await page.reload()
+  const reviewCards = column(page, 'In Review').locator(CARD)
+  // The second card appended after the first stays last across a reload.
+  await expect(reviewCards.first()).toContainText(first, { timeout: 20_000 })
+  await expect(reviewCards.last()).toContainText(second)
 })
 
 test('the board renders in all three presets, light and dark', async ({ page }) => {

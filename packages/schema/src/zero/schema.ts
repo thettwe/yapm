@@ -8,7 +8,7 @@ import {
   string,
   table,
 } from '@rocicorp/zero'
-import type { WorkspaceRole } from './context.js'
+import type { ThemePreset, WorkspaceRole } from './context.js'
 
 const workspace = table('workspace')
   .columns({
@@ -63,6 +63,17 @@ const invite = table('invite')
     expiresAt: number().from('expires_at'),
     revokedAt: number().from('revoked_at').optional(),
     createdAt: number().from('created_at'),
+  })
+  .primaryKey('id')
+
+const userPreference = table('user_preference')
+  .columns({
+    id: string(),
+    userId: string().from('user_id'),
+    theme: enumeration<ThemePreset>(),
+    accent: string().optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
   })
   .primaryKey('id')
 
@@ -133,14 +144,23 @@ const inviteRelationships = relationships(invite, ({ one }) => ({
   }),
 }))
 
+const userPreferenceRelationships = relationships(userPreference, ({ one }) => ({
+  user: one({
+    sourceField: ['userId'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+}))
+
 export const schema = createSchema({
-  tables: [workspace, workspaceMember, team, teamMembership, invite, user],
+  tables: [workspace, workspaceMember, team, teamMembership, invite, userPreference, user],
   relationships: [
     workspaceRelationships,
     workspaceMemberRelationships,
     teamRelationships,
     teamMembershipRelationships,
     inviteRelationships,
+    userPreferenceRelationships,
   ],
   enableLegacyMutators: false,
   enableLegacyQueries: false,

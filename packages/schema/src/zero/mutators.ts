@@ -1,6 +1,6 @@
 import { defineMutator, defineMutators, type Transaction } from '@rocicorp/zero'
 import * as z from 'zod'
-import { type AuthContext, canManage, isMember } from './context.js'
+import { type AuthContext, canManage, isAuthenticated, isMember, THEME_PRESETS } from './context.js'
 import { MutationError, MutationErrorCode } from './errors.js'
 import { zql } from './schema.js'
 
@@ -9,6 +9,17 @@ export const TEAM_NAME_MAX_LENGTH = 200
 export const TEAM_KEY_MAX_LENGTH = 16
 
 const TEAM_KEY_PATTERN = /^[A-Z][A-Z0-9]*$/u
+
+const HEX_COLOR = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/iu
+const RGB_COLOR = /^rgba?\([^)]+\)$/iu
+const OKLCH_COLOR = /^oklch\([^)]+\)$/iu
+
+// A shared, presentation-free color validator (the schema layer stores and validates the
+// string; the sRGB/contrast math lives in packages/ui). Accepts hex, rgb()/rgba(), oklch().
+export function isParseableColor(value: string): boolean {
+  const v = value.trim()
+  return HEX_COLOR.test(v) || RGB_COLOR.test(v) || OKLCH_COLOR.test(v)
+}
 
 const roleSchema = z.enum(['admin', 'member', 'viewer'])
 const timestamp = z.number().int().positive()
@@ -326,9 +337,57 @@ export const revokeInvite = defineMutator(revokeInviteArgs, async ({ tx, args, c
   await tx.mutate.invite.update({ id: args.id, revokedAt: args.revokedAt })
 })
 
+export const setPreferenceArgs = z.object({
+  id: z.string().min(1),
+  theme: z.enum(THEME_PRESETS),
+  accent: z.string().nullable(),
+  updatedAt: timestamp,
+})
+
+export type SetPreferenceArgs = z.infer<typeof setPreferenceArgs>
+
+// Owner-only, gated on authentication (not membership). `user_id` is always taken from the
+// verified ctx, never args; the accent string is validated (unparseable colors rejected on
+// both client and server); the single per-user row is upserted with a call-site-minted id.
+export const setPreference = defineMutator(setPreferenceArgs, async ({ tx, args, ctx }) => {
+  if (!isAuthenticated(ctx)) throw notAuthorized(args.id)
+
+  if (args.accent !== null && !isParseableColor(args.accent)) {
+    throw new MutationError(
+      'Accent must be a parseable color',
+      MutationErrorCode.invalidColor,
+      args.id,
+    )
+  }
+
+  const existing = await tx.run(zql.user_preference.where('userId', ctx.userID).one())
+
+  if (existing) {
+    await tx.mutate.user_preference.update({
+      id: existing.id,
+      theme: args.theme,
+      accent: args.accent,
+      updatedAt: args.updatedAt,
+    })
+    return
+  }
+
+  await tx.mutate.user_preference.insert({
+    id: args.id,
+    userId: ctx.userID,
+    theme: args.theme,
+    accent: args.accent,
+    createdAt: args.updatedAt,
+    updatedAt: args.updatedAt,
+  })
+})
+
 export const mutators = defineMutators({
   workspace: {
     rename: renameWorkspace,
+  },
+  preference: {
+    set: setPreference,
   },
   member: {
     changeRole: changeMemberRole,
@@ -348,3 +407,4 @@ export const mutators = defineMutators({
 })
 
 export const RENAME_WORKSPACE_MUTATOR_NAME = 'workspace.rename'
+export const SET_PREFERENCE_MUTATOR_NAME = 'preference.set'

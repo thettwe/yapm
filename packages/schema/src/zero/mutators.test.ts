@@ -462,11 +462,84 @@ describe('invite create and revoke', () => {
   })
 })
 
+describe('setPreference mutator', () => {
+  const args = (over: Partial<Parameters<typeof mutators.preference.set.fn>[0]['args']> = {}) => ({
+    id: newId(),
+    theme: 'focused' as const,
+    accent: '#3366ff' as string | null,
+    updatedAt: 1_784_820_335_919,
+    ...over,
+  })
+
+  it('inserts a first row with a call-site-minted id and user_id from ctx (not args)', async () => {
+    const a = args()
+    const { tx, calls } = fakeTx([undefined])
+    await mutators.preference.set.fn({ tx, args: a, ctx: MEMBER })
+    expect(calls).toEqual([
+      {
+        table: 'user_preference',
+        verb: 'insert',
+        value: {
+          id: a.id,
+          userId: MEMBER.userID,
+          theme: 'focused',
+          accent: '#3366ff',
+          createdAt: a.updatedAt,
+          updatedAt: a.updatedAt,
+        },
+      },
+    ])
+  })
+
+  it('updates the caller own existing row, ignoring the args id (own-row-only)', async () => {
+    const existingId = newId()
+    const { tx, calls } = fakeTx([
+      { id: existingId, userId: MEMBER.userID, theme: 'warm', accent: null },
+    ])
+    await mutators.preference.set.fn({
+      tx,
+      args: args({ theme: 'editorial', accent: null }),
+      ctx: MEMBER,
+    })
+    expect(calls).toEqual([
+      {
+        table: 'user_preference',
+        verb: 'update',
+        value: { id: existingId, theme: 'editorial', accent: null, updatedAt: 1_784_820_335_919 },
+      },
+    ])
+  })
+
+  it('lets an authenticated non-member set their own preference', async () => {
+    const { tx, calls } = fakeTx([undefined])
+    await mutators.preference.set.fn({ tx, args: args({ accent: null }), ctx: NON_MEMBER })
+    expect(calls).toHaveLength(1)
+  })
+
+  it('rejects an unparseable accent with no write', async () => {
+    const { tx, calls } = fakeTx([undefined])
+    const error = await capture(
+      mutators.preference.set.fn({ tx, args: args({ accent: 'not-a-color' }), ctx: MEMBER }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.invalidColor)
+    expect(calls).toEqual([])
+  })
+
+  it('rejects an unauthenticated caller before reading the existing row', async () => {
+    const { tx, calls, runQueue } = fakeTx([{ id: 'x', userId: 'x', theme: 'warm', accent: null }])
+    const error = await capture(mutators.preference.set.fn({ tx, args: args(), ctx: undefined }))
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+    expect(runQueue).toHaveLength(1)
+  })
+})
+
 describe('the mutator registry', () => {
   it('registers every mutator under the name the client and server resolve', () => {
     expect(mutators.workspace.rename.mutatorName).toBe('workspace.rename')
     for (const name of [
       'workspace.rename',
+      'preference.set',
       'member.changeRole',
       'member.remove',
       'team.create',

@@ -1,5 +1,5 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely'
-import type { WorkspaceRole } from '../zero/context.js'
+import type { ThemePreset, WorkspaceRole } from '../zero/context.js'
 
 export type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>
 export type TimestampOrNull = ColumnType<
@@ -55,6 +55,19 @@ export interface InviteTable {
   created_at: Generated<Timestamp>
 }
 
+// User-scoped preference leaf off `user` (identity), orthogonal to the membership graph.
+// `theme` defaults to 'warm' in Postgres (so Generated); `accent = null` means the preset's
+// own default accent. `user_id` is a plain text column with no hard FK to better-auth's
+// `user`, matching the workspace-auth boot-order rationale.
+export interface UserPreferenceTable {
+  id: string
+  user_id: string
+  theme: Generated<ThemePreset>
+  accent: Nullable<string>
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
 // Owned by better-auth (created by its `getMigrations()` at boot), read-only here so
 // mutators/queries can join member profiles. camelCase columns and a `text` id are
 // better-auth's shape (reference/kysely-stack.md §5.4), not ours to change.
@@ -74,6 +87,7 @@ export interface DB {
   team: TeamTable
   team_membership: TeamMembershipTable
   invite: InviteTable
+  user_preference: UserPreferenceTable
   user: UserTable
 }
 
@@ -95,5 +109,9 @@ export type NewTeamMembership = Insertable<TeamMembershipTable>
 export type Invite = Selectable<InviteTable>
 export type NewInvite = Insertable<InviteTable>
 export type InviteUpdate = Updateable<InviteTable>
+
+export type UserPreference = Selectable<UserPreferenceTable>
+export type NewUserPreference = Insertable<UserPreferenceTable>
+export type UserPreferenceUpdate = Updateable<UserPreferenceTable>
 
 export type User = Selectable<UserTable>

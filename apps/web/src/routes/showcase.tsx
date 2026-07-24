@@ -49,8 +49,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@yapm/ui/components/tooltip'
+import { deriveAccent } from '@yapm/ui/lib/color'
 import { ArrowRightIcon, CircleDotIcon, GitPullRequestIcon, UserIcon } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { type CSSProperties, useEffect, useState } from 'react'
 
 export const Route = createFileRoute('/showcase')({ component: Showcase })
 
@@ -180,10 +181,25 @@ function IssueListMockup() {
   )
 }
 
+function accentStyle(accent: string | null, dark: boolean): CSSProperties | undefined {
+  if (!accent) return undefined
+  const shades = deriveAccent(accent, dark ? 'dark' : 'light')
+  return {
+    '--accent': shades.accent,
+    '--accent-strong': shades.strong,
+    '--accent-hover': shades.hover,
+    '--accent-active': shades.active,
+    '--accent-soft': shades.soft,
+    '--accent-line': shades.line,
+    '--on-accent': shades.onAccent,
+  } as CSSProperties
+}
+
 function Showcase() {
   const [preset, setPreset] = useState<Preset>('warm')
   const [dark, setDark] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [accent, setAccent] = useState<string | null>(null)
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -197,7 +213,11 @@ function Showcase() {
   }, [])
 
   return (
-    <div data-theme={preset} className={dark ? 'dark' : undefined}>
+    <div
+      data-theme={preset}
+      className={dark ? 'dark' : undefined}
+      style={accentStyle(accent, dark)}
+    >
       <div className="min-h-svh bg-bg font-ui text-text-1">
         <header className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-border bg-bg/95 px-6 py-3 backdrop-blur">
           <span className="font-heading text-lg font-semibold tracking-tight">yapm showcase</span>
@@ -219,6 +239,21 @@ function Showcase() {
           <Button variant="outline" size="sm" onClick={() => setDark((value) => !value)}>
             {dark ? 'Dark' : 'Light'}
           </Button>
+          <Label className="text-xs text-text-2">
+            Accent
+            <input
+              type="color"
+              aria-label="Custom accent color"
+              value={accent ?? '#c15a38'}
+              onChange={(event) => setAccent(event.currentTarget.value)}
+              className="size-7 shrink-0 cursor-pointer rounded-control border border-border bg-transparent"
+            />
+          </Label>
+          {accent ? (
+            <Button variant="ghost" size="sm" onClick={() => setAccent(null)}>
+              Reset accent
+            </Button>
+          ) : null}
           <Button size="sm" onClick={() => setPaletteOpen(true)}>
             Command palette ⌘K
           </Button>

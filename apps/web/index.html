@@ -4,6 +4,37 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>yapm</title>
+    <script>
+      (() => {
+        const root = document.documentElement
+        const themes = { warm: 1, focused: 1, editorial: 1 }
+        let pref = null
+        try {
+          pref = JSON.parse(localStorage.getItem('yapm:pref') || 'null')
+        } catch {
+          pref = null
+        }
+        const theme = pref && themes[pref.theme] ? pref.theme : 'warm'
+        root.setAttribute('data-theme', theme)
+        const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches
+        const mode =
+          pref && (pref.mode === 'light' || pref.mode === 'dark')
+            ? pref.mode
+            : systemDark
+              ? 'dark'
+              : 'light'
+        root.classList.toggle('dark', mode === 'dark')
+        if (pref && typeof pref.accent === 'string' && pref.accent) {
+          root.style.setProperty('--accent', pref.accent)
+          root.style.setProperty('--accent-strong', pref.accentStrong || pref.accent)
+          if (pref.accentHover) root.style.setProperty('--accent-hover', pref.accentHover)
+          if (pref.accentActive) root.style.setProperty('--accent-active', pref.accentActive)
+          if (pref.accentSoft) root.style.setProperty('--accent-soft', pref.accentSoft)
+          if (pref.accentLine) root.style.setProperty('--accent-line', pref.accentLine)
+          if (pref.onAccent) root.style.setProperty('--on-accent', pref.onAccent)
+        }
+      })()
+    </script>
   </head>
   <body class="h-full">
     <div id="app" class="h-full"></div>

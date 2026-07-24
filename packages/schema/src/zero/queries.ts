@@ -1,5 +1,5 @@
 import { defineQueries, defineQuery, type Query, type Schema } from '@rocicorp/zero'
-import { type AuthContext, canManage, isMember } from './context.js'
+import { type AuthContext, canManage, isAuthenticated, isMember } from './context.js'
 import { zql } from './schema.js'
 
 export function denyAll<
@@ -55,6 +55,14 @@ export const queries = defineQueries({
       return canManage(ctx) ? q : denyAll(q)
     }),
   },
+  preferences: {
+    // User-scoped: filtered by the verified ctx.userID (never args), gated on
+    // authentication rather than membership, denied by an empty query otherwise.
+    mine: defineQuery(({ ctx }) => {
+      if (!isAuthenticated(ctx)) return denyAll(zql.user_preference).one()
+      return zql.user_preference.where('userId', ctx.userID).one()
+    }),
+  },
 })
 
 export const WORKSPACE_CURRENT_QUERY_NAME = 'workspace.current'
@@ -62,3 +70,4 @@ export const MEMBERS_ALL_QUERY_NAME = 'members.all'
 export const USERS_ALL_QUERY_NAME = 'users.all'
 export const TEAMS_ALL_QUERY_NAME = 'teams.all'
 export const INVITES_ALL_QUERY_NAME = 'invites.all'
+export const PREFERENCES_MINE_QUERY_NAME = 'preferences.mine'

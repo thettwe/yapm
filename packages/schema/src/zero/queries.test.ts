@@ -5,6 +5,7 @@ import { tableShapes } from './introspect.js'
 import {
   INVITES_ALL_QUERY_NAME,
   MEMBERS_ALL_QUERY_NAME,
+  PREFERENCES_MINE_QUERY_NAME,
   queries,
   TEAMS_ALL_QUERY_NAME,
   teamScoped,
@@ -41,6 +42,7 @@ describe('the synced query registry', () => {
       [USERS_ALL_QUERY_NAME, queries.users.all],
       [TEAMS_ALL_QUERY_NAME, queries.teams.all],
       [INVITES_ALL_QUERY_NAME, queries.invites.all],
+      [PREFERENCES_MINE_QUERY_NAME, queries.preferences.mine],
     ] as const) {
       expect(query.queryName).toBe(name)
       expect(mustGetQuery(queries, name)).toBe(query)
@@ -74,6 +76,25 @@ describe('invites are admin-only', () => {
     for (const ctx of [MEMBER, VIEWER, NON_MEMBER, undefined]) {
       expect(astOf(queries.invites.all, ctx).where).toEqual(DENY_ALL_WHERE)
     }
+  })
+})
+
+describe('preferences.mine is user-scoped and owner-only', () => {
+  it('filters by the caller ctx.userID for any authenticated caller, member or not', () => {
+    for (const ctx of [ADMIN, MEMBER, VIEWER, NON_MEMBER]) {
+      const where = astOf(queries.preferences.mine, ctx).where
+      expect(where).not.toEqual(DENY_ALL_WHERE)
+      expect(JSON.stringify(where)).toContain(ctx.userID)
+    }
+  })
+
+  it('denies an unauthenticated caller with an empty query', () => {
+    expect(astOf(queries.preferences.mine, undefined).where).toEqual(DENY_ALL_WHERE)
+  })
+
+  it('never widens to another user, even given a foreign userID in args', () => {
+    const where = astOf(queries.preferences.mine, MEMBER).where
+    expect(JSON.stringify(where)).not.toContain(NON_MEMBER.userID)
   })
 })
 

@@ -50,6 +50,14 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     revoked_at: { nullable: true, hasDefault: false },
     created_at: { nullable: false, hasDefault: true },
   },
+  user_preference: {
+    id: { nullable: false, hasDefault: false },
+    user_id: { nullable: false, hasDefault: false },
+    theme: { nullable: false, hasDefault: true },
+    accent: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
   // better-auth owns this table; the drift test provisions it (see `createAuthUserTable`)
   // so the read-surface interface and Zero schema are still checked against its real shape
   // (reference/kysely-stack.md §5.4).

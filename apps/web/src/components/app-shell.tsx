@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { useSession } from '@/auth/client'
 import { ConnectionStatus } from '@/components/connection-status'
 import { Switcher } from '@/components/switcher'
+import { ThemeControls } from '@/components/theme-controls'
 import { UserMenu } from '@/components/user-menu'
 import { useConnectionSummary } from '@/zero/connection'
 
@@ -18,6 +19,7 @@ export function AppShell({ current, children }: { current: string; children: Rea
         <Switcher current={current} />
         <div className="flex-1" />
         <ConnectionStatus connection={connection} />
+        <ThemeControls />
         <UserMenu
           {...(session?.user.name ? { name: session.user.name } : {})}
           {...(session?.user.email ? { email: session.user.email } : {})}

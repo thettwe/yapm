@@ -12,22 +12,22 @@
 
 ## 3. Accent derivation and contrast (packages/ui)
 
-- [ ] 3.1 Add `packages/ui/src/lib/color.ts`: a pure `contrastRatio(a, b)` (WCAG 2.x) and `deriveAccent(base)` returning `{accent, hover, active, soft, line, onAccent}` — hover/active via `color-mix(in oklch, …)` (mode-aware), soft/line via transparent mix, and an auto-computed `onAccent` that picks the AA-meeting candidate (higher-contrast when tied or when neither reaches AA). Unit-test dark/light/mid-tone accents and the "never unreadable" guarantee.
+- [x] 3.1 Add `packages/ui/src/lib/color.ts`: a pure `contrastRatio(a, b)` (WCAG 2.x) and `deriveAccent(base)` returning `{accent, hover, active, soft, line, onAccent}` — hover/active via `color-mix(in oklch, …)` (mode-aware), soft/line via transparent mix, and an auto-computed `onAccent` that picks the AA-meeting candidate (higher-contrast when tied or when neither reaches AA). Unit-test dark/light/mid-tone accents and the "never unreadable" guarantee.
 - [x] 3.2 Add a preset-contrast unit test asserting every preset's text-on-surface and text-on-accent pairs meet WCAG AA in both light and dark; wire it into `pnpm turbo test` so an AA-failing token edit fails CI.
 
 ## 4. Preference entity (packages/schema)
 
-- [ ] 4.1 Extend the hand-written `DB` interface (`src/db/types.ts`) with `UserPreferenceTable` (`id`, `user_id` unique, `theme`, `accent` nullable, `created_at`/`updated_at` Generated) and its Selectable/Insertable/Updateable exports.
-- [ ] 4.2 Write forward-only migration `0003_user_preference` (unique on `user_id`, CHECK `theme in ('warm','focused','editorial')`, no FK to `user`); register it in `migrations/index.ts`. App boots and migrates cleanly.
-- [ ] 4.3 Add `user_preference` to the Zero schema (`userId from('user_id')`, `theme`, `accent` optional, timestamps `number().from(...)`) with a `user` relationship; export via the schema.
-- [ ] 4.4 Add `isAuthenticated(ctx)` to `src/zero/context.ts`; add the `preferences.mine` user-scoped synced query (`where('userId', ctx.userID).one()`, `denyAll` when unauthenticated) to `queries.ts`.
-- [ ] 4.5 Add the `preference.set` shared mutator to `mutators.ts`: authenticated-only, `user_id` set from `ctx.userID`, Zod-validated `theme` and parseable-or-null `accent`, auth-before-existence on update, UUIDv7 minted at the call site; upsert semantics for the single per-user row.
-- [ ] 4.6 Extend the schema-drift test to cover `user_preference` (Kysely `DB` map + Zero schema); keep it a hard CI failure. Unit-test the query (owner-only/denyAll) and mutator (own-row-only, invalid-accent rejection, client-minted id).
+- [x] 4.1 Extend the hand-written `DB` interface (`src/db/types.ts`) with `UserPreferenceTable` (`id`, `user_id` unique, `theme`, `accent` nullable, `created_at`/`updated_at` Generated) and its Selectable/Insertable/Updateable exports.
+- [x] 4.2 Write forward-only migration `0003_user_preference` (unique on `user_id`, CHECK `theme in ('warm','focused','editorial')`, no FK to `user`); register it in `migrations/index.ts`. App boots and migrates cleanly.
+- [x] 4.3 Add `user_preference` to the Zero schema (`userId from('user_id')`, `theme`, `accent` optional, timestamps `number().from(...)`) with a `user` relationship; export via the schema.
+- [x] 4.4 Add `isAuthenticated(ctx)` to `src/zero/context.ts`; add the `preferences.mine` user-scoped synced query (`where('userId', ctx.userID).one()`, `denyAll` when unauthenticated) to `queries.ts`.
+- [x] 4.5 Add the `preference.set` shared mutator to `mutators.ts`: authenticated-only, `user_id` set from `ctx.userID`, Zod-validated `theme` and parseable-or-null `accent`, auth-before-existence on update, UUIDv7 minted at the call site; upsert semantics for the single per-user row.
+- [x] 4.6 Extend the schema-drift test to cover `user_preference` (Kysely `DB` map + Zero schema); keep it a hard CI failure. Unit-test the query (owner-only/denyAll) and mutator (own-row-only, invalid-accent rejection, client-minted id).
 
 ## 5. Bootstrap and theme provider (apps/web)
 
-- [ ] 5.1 Add the synchronous inline bootstrap script to `apps/web/index.html`: read `localStorage['yapm:pref']` `{theme, mode, accent + resolved shades}`, set `data-theme`/`.dark` and inline accent override vars on `<html>` before the bundle loads; default to Warm + `prefers-color-scheme` when absent/invalid.
-- [ ] 5.2 Add a theme provider in `apps/web` that subscribes to `preferences.mine`, applies the synced `{theme, accent}` (recomputing accent shades via `deriveAccent`) to `<html>`, writes back the localStorage cache as source of truth, and exposes optimistic setters that also call `preference.set`. Mode is device-local (localStorage + `prefers-color-scheme`), not synced. Mount it inside `ZeroRoot`.
+- [x] 5.1 Add the synchronous inline bootstrap script to `apps/web/index.html`: read `localStorage['yapm:pref']` `{theme, mode, accent + resolved shades}`, set `data-theme`/`.dark` and inline accent override vars on `<html>` before the bundle loads; default to Warm + `prefers-color-scheme` when absent/invalid.
+- [x] 5.2 Add a theme provider in `apps/web` that subscribes to `preferences.mine`, applies the synced `{theme, accent}` (recomputing accent shades via `deriveAccent`) to `<html>`, writes back the localStorage cache as source of truth, and exposes optimistic setters that also call `preference.set`. Mode is device-local (localStorage + `prefers-color-scheme`), not synced. Mount it inside `ZeroRoot`.
 
 ## 6. Core components (packages/ui)
 
@@ -39,10 +39,10 @@
 ## 7. Showcase
 
 - [x] 7.1 Add Ladle stories for every component (button, input, label, badge, dialog, popover, menu, avatar, tooltip, command palette, status glyphs, priority marks, issue-row) rendering across presets and modes.
-- [ ] 7.2 Add the theme switcher (preset select + light/dark toggle) and accent picker UI, fully keyboard-operable, wired to the theme provider; place it in the app shell (e.g. user menu) and the showcase.
+- [x] 7.2 Add the theme switcher (preset select + light/dark toggle) and accent picker UI, fully keyboard-operable, wired to the theme provider; place it in the app shell (e.g. user menu) and the showcase.
 - [x] 7.3 Add the dev-only `/showcase` route in `apps/web` rendering the full component set plus a representative static issue-list mockup built from the issue-row primitive, with keyboard-operable `data-theme`/mode controls; guard it out of production builds.
 
 ## 8. Verification
 
-- [ ] 8.1 `pnpm turbo typecheck lint build test` green; boundary guard clean (ZQL/mutators only in `packages/schema`, no package→app imports); drift test run against live Postgres including `user_preference`.
+- [x] 8.1 `pnpm turbo typecheck lint build test` green; boundary guard clean (ZQL/mutators only in `packages/schema`, no package→app imports); drift test run against live Postgres including `user_preference`.
 - [ ] 8.2 Add/adjust a Playwright check: no first-paint flash (document root carries `data-theme`/mode before first contentful paint), keyboard-only theme + accent change persists, and the existing workspace-auth e2e still passes (no regression). Prod build contains no `/showcase` route.

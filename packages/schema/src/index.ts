@@ -1,9 +1,17 @@
 export { newId } from './id.js'
-export type { AuthContext, WorkspaceRole } from './zero/context.js'
-export { canManage, canRead, canWrite, isMember, WORKSPACE_ROLES } from './zero/context.js'
+export type { AuthContext, ThemePreset, WorkspaceRole } from './zero/context.js'
+export {
+  canManage,
+  canRead,
+  canWrite,
+  isAuthenticated,
+  isMember,
+  THEME_PRESETS,
+  WORKSPACE_ROLES,
+} from './zero/context.js'
 export type { MutationErrorDetails } from './zero/errors.js'
 export { isMutationErrorDetails, MutationError, MutationErrorCode } from './zero/errors.js'
-export type { RenameWorkspaceArgs } from './zero/mutators.js'
+export type { RenameWorkspaceArgs, SetPreferenceArgs } from './zero/mutators.js'
 export {
   addTeamMember,
   addTeamMemberArgs,
@@ -17,6 +25,7 @@ export {
   createInviteArgs,
   createTeam,
   createTeamArgs,
+  isParseableColor,
   mutators,
   normalizeName,
   normalizeTeamKey,
@@ -32,6 +41,9 @@ export {
   renameWorkspaceArgs,
   revokeInvite,
   revokeInviteArgs,
+  SET_PREFERENCE_MUTATOR_NAME,
+  setPreference,
+  setPreferenceArgs,
   TEAM_KEY_MAX_LENGTH,
   TEAM_NAME_MAX_LENGTH,
   WORKSPACE_NAME_MAX_LENGTH,
@@ -40,6 +52,7 @@ export {
   denyAll,
   INVITES_ALL_QUERY_NAME,
   MEMBERS_ALL_QUERY_NAME,
+  PREFERENCES_MINE_QUERY_NAME,
   queries,
   TEAMS_ALL_QUERY_NAME,
   teamScoped,

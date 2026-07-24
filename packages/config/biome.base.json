@@ -15,7 +15,8 @@
       "!**/test-results",
       "!**/routeTree.gen.ts",
       "!**/pnpm-lock.yaml",
-      "!design-explorations"
+      "!design-explorations",
+      "!.claude"
     ]
   },
   "formatter": {

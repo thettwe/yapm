@@ -94,6 +94,69 @@ describe('cycle.create', () => {
   })
 })
 
+describe('cycle.update', () => {
+  const existingCycle = (over: Record<string, unknown> = {}) => ({
+    id: 'c1',
+    teamId: TEAM_ID,
+    status: 'upcoming',
+    number: null,
+    startDate: 1_000,
+    endDate: 2_000,
+    ...over,
+  })
+
+  it('rejects a viewer before any write', async () => {
+    const { tx, calls } = fakeTx([])
+    const error = await capture(
+      mutators.cycle.update.fn({
+        tx,
+        args: { id: 'c1', name: 'Renamed', updatedAt: 3 },
+        ctx: VIEWER,
+      }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it('rejects a start-only update that lands on or after the existing end date', async () => {
+    const { tx, calls } = fakeTx([existingCycle()])
+    const error = await capture(
+      mutators.cycle.update.fn({
+        tx,
+        args: { id: 'c1', startDate: 2_000, updatedAt: 3 },
+        ctx: ADMIN,
+      }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.invalidDate)
+    expect(calls).toEqual([])
+  })
+
+  it('rejects an end-only update that lands on or before the existing start date', async () => {
+    const { tx, calls } = fakeTx([existingCycle()])
+    const error = await capture(
+      mutators.cycle.update.fn({
+        tx,
+        args: { id: 'c1', endDate: 1_000, updatedAt: 3 },
+        ctx: ADMIN,
+      }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.invalidDate)
+    expect(calls).toEqual([])
+  })
+
+  it('writes only the provided fields on a valid partial update', async () => {
+    const { tx, calls } = fakeTx([existingCycle()])
+    await mutators.cycle.update.fn({
+      tx,
+      args: { id: 'c1', endDate: 3_000, updatedAt: 3 },
+      ctx: ADMIN,
+    })
+    expect(calls).toEqual([
+      { table: 'cycle', verb: 'update', value: { id: 'c1', endDate: 3_000, updatedAt: 3 } },
+    ])
+  })
+})
+
 describe('cycle.complete rollover', () => {
   const cycleRow = (over: Record<string, unknown>) => ({
     id: 'c1',

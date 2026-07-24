@@ -14,8 +14,12 @@
   },
   "dependencies": {
     "@better-auth/sso": "catalog:",
+    "@dnd-kit/core": "catalog:",
+    "@dnd-kit/sortable": "catalog:",
+    "@dnd-kit/utilities": "catalog:",
     "@rocicorp/zero": "catalog:",
     "@tanstack/react-router": "catalog:",
+    "@tanstack/react-virtual": "catalog:",
     "@yapm/schema": "workspace:*",
     "@yapm/ui": "workspace:*",
     "better-auth": "catalog:",

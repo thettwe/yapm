@@ -91,6 +91,7 @@ export interface IssueTable {
   priority: IssuePriority
   assignee_id: Nullable<string>
   creator_id: string
+  rank: Nullable<string>
   created_at: Generated<Timestamp>
   updated_at: Generated<Timestamp>
 }

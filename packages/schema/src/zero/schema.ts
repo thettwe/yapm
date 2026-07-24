@@ -95,6 +95,7 @@ const issue = table('issue')
     priority: enumeration<IssuePriority>(),
     assigneeId: string().from('assignee_id').optional(),
     creatorId: string().from('creator_id'),
+    rank: string().optional(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })

@@ -68,6 +68,7 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     priority: { nullable: false, hasDefault: false },
     assignee_id: { nullable: true, hasDefault: false },
     creator_id: { nullable: false, hasDefault: false },
+    rank: { nullable: true, hasDefault: false },
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },

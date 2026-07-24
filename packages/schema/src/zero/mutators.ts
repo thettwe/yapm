@@ -589,6 +589,29 @@ export const assignIssue = defineMutator(assignIssueArgs, async ({ tx, args, ctx
   })
 })
 
+export const moveIssueArgs = z.object({
+  id: z.string().min(1),
+  status: issueStatusSchema,
+  rank: z.string().min(1),
+  updatedAt: timestamp,
+})
+
+// The board's single-write move: set the card's fractional `rank` (and `status` when it
+// changed columns) in one row update, never renumbering siblings. The `rank` is computed at
+// the call site (the client mints the fractional index between the destination neighbours and
+// passes it in) — never here, because a mutator re-runs during rebase and recomputing from
+// shifted neighbours would jump the card, mirroring the client-minted-UUID rule.
+export const moveIssue = defineMutator(moveIssueArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadIssueForWrite(tx, ctx, args.id)
+  await tx.mutate.issue.update({
+    id: args.id,
+    status: args.status,
+    rank: args.rank,
+    updatedAt: args.updatedAt,
+  })
+})
+
 export const addIssueLabelArgs = z.object({
   issueId: z.string().min(1),
   labelId: z.string().min(1),
@@ -859,6 +882,7 @@ export const mutators = defineMutators({
     setStatus: setIssueStatus,
     setPriority: setIssuePriority,
     assign: assignIssue,
+    move: moveIssue,
     addLabel: addIssueLabel,
     removeLabel: removeIssueLabel,
   },
@@ -886,6 +910,7 @@ export const UPDATE_ISSUE_MUTATOR_NAME = 'issue.update'
 export const SET_ISSUE_STATUS_MUTATOR_NAME = 'issue.setStatus'
 export const SET_ISSUE_PRIORITY_MUTATOR_NAME = 'issue.setPriority'
 export const ASSIGN_ISSUE_MUTATOR_NAME = 'issue.assign'
+export const MOVE_ISSUE_MUTATOR_NAME = 'issue.move'
 export const ADD_ISSUE_LABEL_MUTATOR_NAME = 'issue.addLabel'
 export const REMOVE_ISSUE_LABEL_MUTATOR_NAME = 'issue.removeLabel'
 export const CREATE_LABEL_MUTATOR_NAME = 'label.create'

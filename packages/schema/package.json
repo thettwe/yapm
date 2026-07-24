@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@rocicorp/zero": "catalog:",
+    "fractional-indexing": "catalog:",
     "kysely": "catalog:",
     "pg": "catalog:",
     "uuidv7": "catalog:",

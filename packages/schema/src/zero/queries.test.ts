@@ -14,6 +14,7 @@ import {
   queries,
   SAVED_VIEWS_BY_TEAM_QUERY_NAME,
   TEAMS_ALL_QUERY_NAME,
+  TRIAGE_INBOX_QUERY_NAME,
   teamScoped,
   USERS_ALL_QUERY_NAME,
   WORKSPACE_CURRENT_QUERY_NAME,
@@ -64,6 +65,7 @@ describe('the synced query registry', () => {
       [ISSUES_MINE_QUERY_NAME, queries.issues.mine],
       [ISSUE_DETAIL_QUERY_NAME, queries.issues.detail],
       [CYCLES_BY_TEAM_QUERY_NAME, queries.cycles.byTeam],
+      [TRIAGE_INBOX_QUERY_NAME, queries.triage.inbox],
       [LABELS_BY_TEAM_QUERY_NAME, queries.labels.byTeam],
       [SAVED_VIEWS_BY_TEAM_QUERY_NAME, queries.savedViews.byTeam],
     ] as const) {
@@ -167,6 +169,28 @@ describe('team-scoped work-data queries', () => {
 
   it('never widens cycles.byTeam beyond the caller memberships given a foreign teamId arg', () => {
     const where = astOfArgs(queries.cycles.byTeam, { teamId: TEAM_ID }, MEMBER).where
+    expect(JSON.stringify(where)).toContain(MEMBER.userID)
+    expect(JSON.stringify(where)).not.toContain(NON_MEMBER.userID)
+  })
+
+  it('scope triage.inbox to the caller teams and deny non-members', () => {
+    for (const ctx of [MEMBER, VIEWER]) {
+      const where = astOfArgs(queries.triage.inbox, { teamId: TEAM_ID }, ctx).where
+      expect(where).not.toEqual(DENY_ALL_WHERE)
+      expect(JSON.stringify(where)).toContain(ctx.userID)
+    }
+    const adminWhere = astOfArgs(queries.triage.inbox, { teamId: TEAM_ID }, ADMIN).where
+    expect(adminWhere).not.toEqual(DENY_ALL_WHERE)
+    expect(JSON.stringify(adminWhere)).not.toContain(ADMIN.userID)
+    for (const ctx of [NON_MEMBER, undefined]) {
+      expect(astOfArgs(queries.triage.inbox, { teamId: TEAM_ID }, ctx).where).toEqual(
+        DENY_ALL_WHERE,
+      )
+    }
+  })
+
+  it('never widens triage.inbox beyond caller memberships given a foreign teamId arg', () => {
+    const where = astOfArgs(queries.triage.inbox, { teamId: TEAM_ID }, MEMBER).where
     expect(JSON.stringify(where)).toContain(MEMBER.userID)
     expect(JSON.stringify(where)).not.toContain(NON_MEMBER.userID)
   })

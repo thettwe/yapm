@@ -1195,7 +1195,7 @@ export const mutators = defineMutators({
     flagTriage,
     acceptTriage,
     declineTriage,
-    route: routeIssue,
+    routeIssue,
   },
   cycle: {
     create: createCycle,
@@ -1232,7 +1232,7 @@ export const SET_ISSUE_CYCLE_MUTATOR_NAME = 'issue.setCycle'
 export const FLAG_TRIAGE_MUTATOR_NAME = 'issue.flagTriage'
 export const ACCEPT_TRIAGE_MUTATOR_NAME = 'issue.acceptTriage'
 export const DECLINE_TRIAGE_MUTATOR_NAME = 'issue.declineTriage'
-export const ROUTE_ISSUE_MUTATOR_NAME = 'issue.route'
+export const ROUTE_ISSUE_MUTATOR_NAME = 'issue.routeIssue'
 export const CREATE_CYCLE_MUTATOR_NAME = 'cycle.create'
 export const UPDATE_CYCLE_MUTATOR_NAME = 'cycle.update'
 export const ACTIVATE_CYCLE_MUTATOR_NAME = 'cycle.activate'

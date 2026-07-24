@@ -91,6 +91,16 @@ describe('issue.acceptTriage', () => {
       { table: 'issue', verb: 'update', value: { id, needsTriage: false, updatedAt: 7 } },
     ])
   })
+
+  it('rejects a viewer before any write', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id, teamId: TEAM_ID }])
+    const error = await capture(
+      mutators.issue.acceptTriage.fn({ tx, args: { id, updatedAt: 7 }, ctx: VIEWER }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toHaveLength(0)
+  })
 })
 
 describe('issue.declineTriage', () => {
@@ -118,7 +128,7 @@ describe('issue.declineTriage', () => {
   })
 })
 
-describe('issue.route', () => {
+describe('issue.routeIssue', () => {
   it('clears the flag and applies same-team fields atomically', async () => {
     const id = newId()
     const cycleId = newId()
@@ -130,7 +140,7 @@ describe('issue.route', () => {
       { id: cycleId, teamId: TEAM_ID },
       { id: labelId, teamId: TEAM_ID },
     ])
-    await mutators.issue.route.fn({
+    await mutators.issue.routeIssue.fn({
       tx,
       args: {
         id,
@@ -168,7 +178,7 @@ describe('issue.route', () => {
       { id: cycleId, teamId: OTHER_TEAM_ID },
     ])
     const error = await capture(
-      mutators.issue.route.fn({ tx, args: { id, cycleId, updatedAt: 11 }, ctx: MEMBER }),
+      mutators.issue.routeIssue.fn({ tx, args: { id, cycleId, updatedAt: 11 }, ctx: MEMBER }),
     )
     expect(mutationErrorCode(error)).toBe(MutationErrorCode.crossTeam)
     expect(calls.find((call) => call.verb === 'update')).toBeUndefined()
@@ -178,7 +188,11 @@ describe('issue.route', () => {
     const id = newId()
     const { tx, calls } = fakeTx([{ id, teamId: TEAM_ID }])
     const error = await capture(
-      mutators.issue.route.fn({ tx, args: { id, status: 'todo', updatedAt: 11 }, ctx: VIEWER }),
+      mutators.issue.routeIssue.fn({
+        tx,
+        args: { id, status: 'todo', updatedAt: 11 },
+        ctx: VIEWER,
+      }),
     )
     expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
     expect(calls).toHaveLength(0)

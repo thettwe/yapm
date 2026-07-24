@@ -85,14 +85,21 @@ export function TriageView({ teamId }: { teamId: string }) {
     [inboxRaw],
   )
 
-  useEffect(() => {
-    setFocusIndex((prev) => Math.min(prev, Math.max(0, issues.length - 1)))
-  }, [issues.length])
-
   const focusRow = useCallback((index: number) => {
     const el = containerRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`)
     el?.focus()
   }, [])
+
+  useEffect(() => {
+    const clamped = Math.min(focusIndex, Math.max(0, issues.length - 1))
+    if (clamped !== focusIndex) setFocusIndex(clamped)
+    const container = containerRef.current
+    if (!container || issues.length === 0) return
+    const active = document.activeElement
+    if (active === document.body || container.contains(active)) {
+      focusRow(clamped)
+    }
+  }, [issues, focusIndex, focusRow])
 
   const move = useCallback(
     (delta: number) => {
@@ -254,7 +261,7 @@ export function TriageView({ teamId }: { teamId: string }) {
           onSubmit={async (target) => {
             const failure = await runMutation(
               zero.mutate(
-                mutators.issue.route({
+                mutators.issue.routeIssue({
                   id: routing.id,
                   ...(target.status === undefined ? {} : { status: target.status }),
                   ...(target.assigneeId === undefined ? {} : { assigneeId: target.assigneeId }),

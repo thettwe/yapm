@@ -35,6 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
           node-version-file: .node-version
@@ -138,10 +139,9 @@ jobs:
           done
           echo "::error::/readyz never became ready"
           exit 1
-      - name: Assert the synced workspace renders
+      - name: Assert sign-up and Zero sync work in the prod image
         env:
           SMOKE_URL: http://localhost:3000
-          SMOKE_WORKSPACE_NAME: yapm
         run: node scripts/smoke.mjs
       - name: Compose logs
         if: always()

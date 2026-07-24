@@ -1,6 +1,6 @@
 ## 1. Dependencies
 
-- [ ] 1.1 Add TipTap v3 (`@tiptap/react`, `@tiptap/pm`, `@tiptap/starter-kit`, and needed extensions) to the pnpm catalog and to `packages/ui`; confirm `cmdk` is already present; run `pnpm install` and confirm `pnpm turbo build` still passes.
+- [x] 1.1 Add TipTap v3 (`@tiptap/react`, `@tiptap/pm`, `@tiptap/starter-kit`, and needed extensions) to the pnpm catalog and to `packages/ui`; confirm `cmdk` is already present; run `pnpm install` and confirm `pnpm turbo build` still passes.
 
 ## 2. Schema — tables, migration, Zero schema (packages/schema)
 
@@ -30,14 +30,14 @@
 ## 6. UI components (packages/ui)
 
 - [x] 6.1 Add the `canceled` variant to `status-glyph` (tokenized, accessible label); update its stories to render all six statuses across presets and modes.
-- [ ] 6.2 Add a tokenized TipTap-v3 rich-text editor component (read-only and editable modes, keyboard-operable) and a rich-text renderer; add stories.
-- [ ] 6.3 Add issue-detail building blocks (metadata controls for status/priority/assignee/labels, comment thread + composer) and palette action-item components, all tokenized and keyboard-operable; wire the `issue-row` reality-strip/divergence slots to the computation seam output (unlinked/dormant now). Add stories.
+- [x] 6.2 Add a tokenized TipTap-v3 rich-text editor component (read-only and editable modes, keyboard-operable) and a rich-text renderer; add stories.
+- [x] 6.3 Add issue-detail building blocks (metadata controls for status/priority/assignee/labels, comment thread + composer) and palette action-item components, all tokenized and keyboard-operable; wire the `issue-row` reality-strip/divergence slots to the computation seam output (unlinked/dormant now). Add stories.
 
 ## 7. Web — list, detail, palette (apps/web)
 
 - [x] 7.1 Add the team issue-list route: status-grouped list built from `issue-row`, reading the team-scoped synced query, with local filter/sort/grouping, saved-view select/save, and the pending-number state. Reality/delivery filter chips hidden.
 - [x] 7.2 Implement the full list keyboard model (`j`/`k`, `x` multi-select, Arrow/Enter open, status/assign/label shortcuts) invoking the shared mutators with a visible accent focus indicator.
-- [ ] 7.3 Add the issue-detail route/panel: TipTap description editing, inline metadata editing (team-scoped assignee/label choices), and the comment thread — all via shared mutators, keyboard-operable, with loading-vs-not-found distinction.
+- [x] 7.3 Add the issue-detail route/panel: TipTap description editing, inline metadata editing (team-scoped assignee/label choices), and the comment thread — all via shared mutators, keyboard-operable, with loading-vs-not-found distinction.
 - [x] 7.4 Wire the command-palette provider to real actions (navigate, create issue, change status, assign, add label) scoped to the focused/selected/open issue, invoking shared mutators; keyboard open/filter/execute/dismiss with focus restore.
 
 ## 8. Verification

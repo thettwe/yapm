@@ -139,3 +139,73 @@ test('filtering by text narrows the list', async ({ page }) => {
   await expect(row(page, keep)).toBeVisible()
   await expect(row(page, hide)).toHaveCount(0)
 })
+
+async function openIssue(page: Page, title: string): Promise<Locator> {
+  const target = row(page, title)
+  await target.focus()
+  await page.keyboard.press('Enter')
+  const panel = page.getByRole('dialog', { name: 'Issue detail' })
+  await expect(panel).toBeVisible()
+  return panel
+}
+
+test('an issue opens to a detail panel where the description and comments persist', async ({
+  page,
+}) => {
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  const title = unique('Detail issue')
+  await createIssue(page, title)
+  await expect(row(page, title)).not.toHaveAttribute('data-pending', '', { timeout: 20_000 })
+
+  const panel = await openIssue(page, title)
+  await expect(panel.getByRole('textbox', { name: 'Issue title' })).toHaveValue(title)
+
+  const description = panel.getByRole('textbox', { name: 'Issue description' })
+  await description.click()
+  await page.keyboard.type('Root cause identified in the reconnect path')
+
+  const composer = panel.getByRole('textbox', { name: 'Add a comment' })
+  await composer.click()
+  await page.keyboard.type('Investigating this now')
+  await panel.getByRole('button', { name: 'Comment', exact: true }).click()
+  await expect(
+    panel.getByRole('article').filter({ hasText: 'Investigating this now' }),
+  ).toBeVisible({ timeout: 20_000 })
+
+  // Let the debounced description write settle authoritatively, then reload: the panel
+  // reopens from the ?open search param and both edits are still there.
+  await page.waitForTimeout(900)
+  await page.reload()
+
+  const reopened = page.getByRole('dialog', { name: 'Issue detail' })
+  await expect(reopened).toBeVisible({ timeout: 20_000 })
+  await expect(reopened.getByText('Root cause identified in the reconnect path')).toBeVisible()
+  await expect(
+    reopened.getByRole('article').filter({ hasText: 'Investigating this now' }),
+  ).toBeVisible()
+})
+
+test('status can be changed from the detail panel and persists', async ({ page }) => {
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  const title = unique('Detail status')
+  await createIssue(page, title)
+  await expect(row(page, title)).not.toHaveAttribute('data-pending', '', { timeout: 20_000 })
+
+  const panel = await openIssue(page, title)
+  await panel.getByRole('button', { name: /^Status:/ }).click()
+  await page.getByRole('menuitem', { name: /In Progress/ }).click()
+
+  await expect(panel.getByRole('button', { name: 'Status: In Progress' })).toBeVisible({
+    timeout: 20_000,
+  })
+
+  await page.reload()
+  const reopened = page.getByRole('dialog', { name: 'Issue detail' })
+  await expect(reopened.getByRole('button', { name: 'Status: In Progress' })).toBeVisible({
+    timeout: 20_000,
+  })
+})

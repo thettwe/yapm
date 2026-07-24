@@ -1,10 +1,11 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useSession } from '@/auth/client'
 import { Authenticated } from '@/components/authenticated'
 import { ConnectionStatus } from '@/components/connection-status'
 import { Switcher } from '@/components/switcher'
 import { ThemeControls } from '@/components/theme-controls'
 import { UserMenu } from '@/components/user-menu'
+import { IssueDetailPanel } from '@/issues/issue-detail'
 import { IssueList } from '@/issues/issue-list'
 import { useConnectionSummary } from '@/zero/connection'
 
@@ -12,7 +13,7 @@ interface IssuesSearch {
   open?: string
 }
 
-export const Route = createFileRoute('/teams/$teamId/issues')({
+export const Route = createFileRoute('/teams/$teamId/issues/')({
   component: IssuesPage,
   validateSearch: (search: Record<string, unknown>): IssuesSearch => ({
     open: typeof search.open === 'string' ? search.open : undefined,
@@ -22,6 +23,7 @@ export const Route = createFileRoute('/teams/$teamId/issues')({
 function IssuesPage() {
   const { teamId } = Route.useParams()
   const { open } = Route.useSearch()
+  const navigate = useNavigate()
   const connection = useConnectionSummary()
   const { data: session } = useSession()
 
@@ -39,6 +41,15 @@ function IssuesPage() {
           />
         </header>
         <IssueList teamId={teamId} {...(open ? { openIssueId: open } : {})} />
+        {open ? (
+          <IssueDetailPanel
+            issueId={open}
+            teamId={teamId}
+            onClose={() =>
+              void navigate({ to: '/teams/$teamId/issues', params: { teamId }, search: {} })
+            }
+          />
+        ) : null}
       </div>
     </Authenticated>
   )

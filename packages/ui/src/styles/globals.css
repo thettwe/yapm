@@ -1,7 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+
+@import "@fontsource-variable/figtree";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/fraunces";
+@import "@fontsource-variable/jetbrains-mono";
+
 @import "@yapm/config/tailwind/preset.css";
 
 @source "../";
@@ -10,8 +17,41 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: "Geist Variable", sans-serif;
+  --font-sans: var(--type-ui);
+  --font-ui: var(--type-ui);
+  --font-heading: var(--type-heading);
+  --font-mono: var(--type-mono);
+
+  --color-bg: var(--bg);
+  --color-bg-sidebar: var(--bg-sidebar);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-hover: var(--bg-hover);
+  --color-bg-selected: var(--bg-selected);
+
+  --color-text-1: var(--text-1);
+  --color-text-2: var(--text-2);
+  --color-text-3: var(--text-3);
+  --color-border-strong: var(--border-strong);
+
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
+  --color-on-accent: var(--on-accent);
+
+  --color-status-backlog: var(--status-backlog);
+  --color-status-todo: var(--status-todo);
+  --color-status-in-progress: var(--status-in-progress);
+  --color-status-in-review: var(--status-in-review);
+  --color-status-done: var(--status-done);
+  --color-status-urgent: var(--status-urgent);
+  --color-signal-sync: var(--signal-sync);
+
+  --radius-control: var(--rad-control);
+  --radius-pill: var(--rad-pill);
+  --radius-card: var(--rad-card);
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -52,73 +92,253 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+/* Warm — default + light. Fonts, density, and radius are theme-level (mode-independent). */
+:root,
+[data-theme="warm"] {
+  --bg: #faf7f1;
+  --bg-sidebar: #f0eae0;
+  --bg-elevated: #ffffff;
+  --bg-hover: #f2ece2;
+  --bg-selected: #f6e6da;
+  --border: #e7e0d4;
+  --border-strong: #dcd3c4;
+  --text-1: #2b2620;
+  --text-2: #6b6357;
+  --text-3: #9a9186;
+  --accent: #bd5837;
+  --accent-strong: #a94d2f;
+  --accent-hover: color-mix(in oklch, var(--accent), black 8%);
+  --accent-active: color-mix(in oklch, var(--accent), black 14%);
+  --accent-soft: #f6e6da;
+  --accent-line: rgba(193, 90, 56, 0.34);
+  --on-accent: #ffffff;
+  --status-backlog: #a79e92;
+  --status-todo: #8a8175;
+  --status-in-progress: #ce8a26;
+  --status-in-review: #6a62c2;
+  --status-done: #3e8c63;
+  --status-urgent: #cc5a40;
+  --signal-sync: #3e8c63;
+
+  --type-ui: "Figtree Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --type-heading: "Figtree Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --type-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --density-row: 44px;
+  --density-sidebar: 244px;
+  --density-topbar: 52px;
+  --density-group-header: 35px;
+
+  --radius: 0.5rem;
+  --rad-control: 7px;
+  --rad-pill: 20px;
+  --rad-card: 15px;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+/* Focused — light. */
+[data-theme="focused"] {
+  --bg: #ffffff;
+  --bg-sidebar: #fbfbfa;
+  --bg-elevated: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.035);
+  --bg-selected: rgba(91, 99, 214, 0.1);
+  --border: rgba(0, 0, 0, 0.09);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --text-1: #17181a;
+  --text-2: #5f636b;
+  --text-3: #898e96;
+  --accent: #5b63d6;
+  --accent-strong: #5b63d6;
+  --accent-hover: color-mix(in oklch, var(--accent), black 8%);
+  --accent-active: color-mix(in oklch, var(--accent), black 14%);
+  --accent-soft: rgba(91, 99, 214, 0.1);
+  --accent-line: rgba(91, 99, 214, 0.25);
+  --on-accent: #ffffff;
+  --status-backlog: #6b7078;
+  --status-todo: #8a8f97;
+  --status-in-progress: #e0a63c;
+  --status-in-review: #3f9e7c;
+  --status-done: #5b63d6;
+  --status-urgent: #e2593f;
+  --signal-sync: #3f9e7c;
+
+  --type-ui:
+    "Inter Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --type-heading:
+    "Inter Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --type-mono: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --density-row: 36px;
+  --density-sidebar: 236px;
+  --density-topbar: 48px;
+  --density-group-header: 34px;
+
+  --radius: 0.4375rem;
+  --rad-control: 7px;
+  --rad-pill: 8px;
+  --rad-card: 14px;
+}
+
+/* Editorial — light. */
+[data-theme="editorial"] {
+  --bg: #fcfcfb;
+  --bg-sidebar: #f6f5f2;
+  --bg-elevated: #ffffff;
+  --bg-hover: #f2f0eb;
+  --bg-selected: rgba(222, 52, 26, 0.1);
+  --border: #e9e7e1;
+  --border-strong: #dddacf;
+  --text-1: #14130f;
+  --text-2: #6b6860;
+  --text-3: #9c988e;
+  --accent: #de341a;
+  --accent-strong: #de341a;
+  --accent-hover: color-mix(in oklch, var(--accent), black 8%);
+  --accent-active: color-mix(in oklch, var(--accent), black 14%);
+  --accent-soft: rgba(222, 52, 26, 0.1);
+  --accent-line: rgba(222, 52, 26, 0.28);
+  --on-accent: #ffffff;
+  --status-backlog: #a19e95;
+  --status-todo: #a19e95;
+  --status-in-progress: #c98a15;
+  --status-in-review: #6d5fe0;
+  --status-done: #2f9068;
+  --status-urgent: #d9741c;
+  --signal-sync: #2f9068;
+
+  --type-ui: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --type-heading: "Fraunces Variable", Georgia, "Times New Roman", serif;
+  --type-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --density-row: 42px;
+  --density-sidebar: 248px;
+  --density-topbar: 48px;
+  --density-group-header: 33px;
+
+  --radius: 0.25rem;
+  --rad-control: 4px;
+  --rad-pill: 6px;
+  --rad-card: 6px;
+}
+
+/* Warm — dark (also the default dark, via bare .dark). Colors only. */
+.dark,
+[data-theme="warm"].dark {
+  --bg: #1b1613;
+  --bg-sidebar: #141010;
+  --bg-elevated: #241e19;
+  --bg-hover: rgba(255, 247, 240, 0.04);
+  --bg-selected: rgba(222, 122, 79, 0.15);
+  --border: #2c2621;
+  --border-strong: #38312a;
+  --text-1: #f1ebe3;
+  --text-2: #a79e93;
+  --text-3: #746b61;
+  --accent: #de7a4f;
+  --accent-strong: #e88e63;
+  --accent-hover: color-mix(in oklch, var(--accent), white 8%);
+  --accent-active: color-mix(in oklch, var(--accent), white 14%);
+  --accent-soft: rgba(222, 122, 79, 0.15);
+  --accent-line: rgba(222, 122, 79, 0.42);
+  --on-accent: #1b1613;
+  --status-backlog: #7c736a;
+  --status-todo: #948a80;
+  --status-in-progress: #e7ab44;
+  --status-in-review: #9089da;
+  --status-done: #59a57b;
+  --status-urgent: #df6a4e;
+  --signal-sync: #5eb489;
+}
+
+/* Focused — dark. Colors only. */
+[data-theme="focused"].dark {
+  --bg: #0b0c0e;
+  --bg-sidebar: #0a0b0d;
+  --bg-elevated: #17181c;
+  --bg-hover: rgba(255, 255, 255, 0.035);
+  --bg-selected: rgba(255, 255, 255, 0.055);
+  --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.11);
+  --text-1: #e9eaec;
+  --text-2: #9a9ea6;
+  --text-3: #676c74;
+  --accent: #6e79f0;
+  --accent-strong: #6e79f0;
+  --accent-hover: color-mix(in oklch, var(--accent), white 8%);
+  --accent-active: color-mix(in oklch, var(--accent), white 14%);
+  --accent-soft: rgba(110, 121, 240, 0.15);
+  --accent-line: rgba(110, 121, 240, 0.3);
+  --on-accent: #0b0c0e;
+  --status-backlog: #6b7078;
+  --status-todo: #8a8f97;
+  --status-in-progress: #e0a63c;
+  --status-in-review: #3f9e7c;
+  --status-done: #6e79f0;
+  --status-urgent: #e2593f;
+  --signal-sync: #3f9e7c;
+}
+
+/* Editorial — dark. Colors only. */
+[data-theme="editorial"].dark {
+  --bg: #0b0b0c;
+  --bg-sidebar: #0d0d0f;
+  --bg-elevated: #161618;
+  --bg-hover: #151517;
+  --bg-selected: rgba(255, 90, 60, 0.14);
+  --border: #1f1f21;
+  --border-strong: #2b2b2e;
+  --text-1: #f1efea;
+  --text-2: #9a988f;
+  --text-3: #67655e;
+  --accent: #ff5a3c;
+  --accent-strong: #ff5a3c;
+  --accent-hover: color-mix(in oklch, var(--accent), white 8%);
+  --accent-active: color-mix(in oklch, var(--accent), white 14%);
+  --accent-soft: rgba(255, 90, 60, 0.14);
+  --accent-line: rgba(255, 90, 60, 0.3);
+  --on-accent: #0b0b0c;
+  --status-backlog: #6e6c66;
+  --status-todo: #6e6c66;
+  --status-in-progress: #e7a93a;
+  --status-in-review: #9b8cf5;
+  --status-done: #4fae83;
+  --status-urgent: #f0872e;
+  --signal-sync: #4fae83;
+}
+
+/* shadcn/Base-UI contract aliases → semantic tokens. One rule, re-resolved per themed
+   element so nested `data-theme` panels (the showcase) theme correctly. */
+:root,
+[data-theme] {
+  --background: var(--bg);
+  --foreground: var(--text-1);
+  --card: var(--bg-elevated);
+  --card-foreground: var(--text-1);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-1);
+  --primary: var(--accent);
+  --primary-foreground: var(--on-accent);
+  --secondary: var(--bg-hover);
+  --secondary-foreground: var(--text-1);
+  --muted: var(--bg-hover);
+  --muted-foreground: var(--text-2);
+  --accent-foreground: var(--on-accent);
+  --destructive: var(--status-urgent);
+  --input: var(--border-strong);
+  --ring: var(--accent);
+  --sidebar: var(--bg-sidebar);
+  --sidebar-foreground: var(--text-1);
+  --sidebar-primary: var(--accent);
+  --sidebar-primary-foreground: var(--on-accent);
+  --sidebar-accent: var(--bg-hover);
+  --sidebar-accent-foreground: var(--text-1);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--accent);
+  --chart-1: var(--status-in-progress);
+  --chart-2: var(--status-in-review);
+  --chart-3: var(--status-done);
+  --chart-4: var(--accent);
+  --chart-5: var(--status-urgent);
 }
 
 @layer base {

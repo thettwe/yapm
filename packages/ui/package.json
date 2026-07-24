@@ -11,12 +11,18 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "workbench": "ladle serve",
     "workbench:build": "ladle build"
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
+    "@fontsource-variable/figtree": "catalog:",
+    "@fontsource-variable/fraunces": "catalog:",
     "@fontsource-variable/geist": "catalog:",
+    "@fontsource-variable/inter": "catalog:",
+    "@fontsource-variable/jetbrains-mono": "catalog:",
+    "@fontsource/ibm-plex-mono": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "lucide-react": "catalog:",
@@ -39,6 +45,7 @@
     "react-dom": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

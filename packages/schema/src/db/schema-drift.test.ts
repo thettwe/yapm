@@ -70,6 +70,7 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     creator_id: { nullable: false, hasDefault: false },
     rank: { nullable: true, hasDefault: false },
     cycle_id: { nullable: true, hasDefault: false },
+    needs_triage: { nullable: false, hasDefault: true },
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },

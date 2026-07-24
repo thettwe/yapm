@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { cn } from '@yapm/ui/lib/utils'
-import { KanbanSquareIcon, ListIcon, RefreshCwIcon } from 'lucide-react'
+import { InboxIcon, KanbanSquareIcon, ListIcon, RefreshCwIcon } from 'lucide-react'
 
 const ACTIVE = 'bg-bg-elevated text-text-1 shadow-sm'
 const INACTIVE = 'text-text-3 hover:text-text-1'
@@ -8,15 +8,15 @@ const INACTIVE = 'text-text-3 hover:text-text-1'
 const LINK_CLASS =
   'flex items-center gap-1.5 rounded-control px-2.5 py-1 text-xs font-medium transition-colors'
 
-// The List ↔ Board ↔ Cycles toggle: peer views of the same team-scoped issues. These are route
-// navigation links, not an ARIA tab widget (no tabpanel, no roving tabindex), so they use a
-// plain <nav> with aria-current marking the active view.
+// The List ↔ Board ↔ Cycles ↔ Triage toggle: peer views of the same team-scoped issues. These
+// are route navigation links, not an ARIA tab widget (no tabpanel, no roving tabindex), so they
+// use a plain <nav> with aria-current marking the active view.
 export function ViewSwitch({
   teamId,
   current,
 }: {
   teamId: string
-  current: 'list' | 'board' | 'cycles'
+  current: 'list' | 'board' | 'cycles' | 'triage'
 }) {
   return (
     <nav
@@ -49,6 +49,15 @@ export function ViewSwitch({
       >
         <RefreshCwIcon className="size-3.5" />
         Cycles
+      </Link>
+      <Link
+        to="/teams/$teamId/triage"
+        params={{ teamId }}
+        aria-current={current === 'triage' ? 'page' : undefined}
+        className={cn(LINK_CLASS, current === 'triage' ? ACTIVE : INACTIVE)}
+      >
+        <InboxIcon className="size-3.5" />
+        Triage
       </Link>
     </nav>
   )

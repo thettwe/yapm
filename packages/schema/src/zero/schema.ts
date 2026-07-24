@@ -98,6 +98,7 @@ const issue = table('issue')
     creatorId: string().from('creator_id'),
     rank: string().optional(),
     cycleId: string().from('cycle_id').optional(),
+    needsTriage: boolean().from('needs_triage'),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })

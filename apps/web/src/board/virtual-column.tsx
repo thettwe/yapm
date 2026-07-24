@@ -16,6 +16,7 @@ export function VirtualColumnList({
   cards,
   teamKey,
   readOnly,
+  reducedMotion,
   activeId,
   pendingFocusId,
   onFocusRestored,
@@ -24,6 +25,7 @@ export function VirtualColumnList({
   cards: readonly BoardCardData[]
   teamKey: string
   readOnly: boolean
+  reducedMotion: boolean
   activeId: string | null
   pendingFocusId: string | null
   onFocusRestored: () => void
@@ -75,6 +77,7 @@ export function VirtualColumnList({
                 card={card}
                 teamKey={teamKey}
                 readOnly={readOnly}
+                reducedMotion={reducedMotion}
                 dimmed={activeId === card.id}
                 onOpenCard={onOpenCard}
               />

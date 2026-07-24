@@ -54,7 +54,7 @@ function BoardCard({
       data-selected={selected || undefined}
       data-dragging={dragging || undefined}
       className={cn(
-        'group/board-card relative flex touch-none flex-col gap-2 rounded-card border border-border bg-bg-elevated px-3 py-2.5 text-left outline-none transition-colors hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
+        'group/board-card relative flex touch-none flex-col gap-2 rounded-card border border-border bg-bg-elevated px-3 py-2.5 text-left outline-none transition-colors hover:border-border-strong focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
         selected && 'bg-accent-soft',
         dragging && 'opacity-40',
         className,

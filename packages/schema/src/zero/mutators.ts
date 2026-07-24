@@ -487,7 +487,13 @@ export const createIssueArgs = z.object({
   priority: issuePrioritySchema,
   assigneeId: z.string().min(1).nullable().optional(),
   description: richTextSchema.nullable().optional(),
-  rank: z.string().min(1).nullable().optional(),
+  rank: z
+    .string()
+    .min(1)
+    .max(256)
+    .regex(/^[0-9A-Za-z]+$/u)
+    .nullable()
+    .optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
 })
@@ -597,7 +603,11 @@ export const assignIssue = defineMutator(assignIssueArgs, async ({ tx, args, ctx
 export const moveIssueArgs = z.object({
   id: z.string().min(1),
   status: issueStatusSchema,
-  rank: z.string().min(1),
+  rank: z
+    .string()
+    .min(1)
+    .max(256)
+    .regex(/^[0-9A-Za-z]+$/u),
   updatedAt: timestamp,
 })
 

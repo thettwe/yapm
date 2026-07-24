@@ -7,7 +7,7 @@ It is roadmap change #4. It reuses issue-core wholesale — the same team-scoped
 ## What Changes
 
 - **A `/board` route, peer to the list.** A kanban of the team's issues in six fixed columns (Backlog, Todo, In Progress, In Review, Done, Canceled), reading the same `issues.byTeam` synced query. A view toggle links List ↔ Board.
-- **A nullable `rank` on `issue`** — a fractional-index string (`fractional-indexing`, BASE_62, stored `text COLLATE "C"`) that orders cards within a column. Existing issues are backfilled once, per status group, matching the list's default order. New issues keep `rank` null until first moved and sort last deterministically.
+- **A nullable `rank` on `issue`** — a fractional-index string (`fractional-indexing`, BASE_62, stored `text COLLATE "C"`) that orders cards within a column. Existing issues are backfilled once, per status group, matching the list's default order. New issues are densely ranked at the create call site (a key minted after the destination column's current maximum), so a drop always lands position-faithfully; a null rank is tolerated only as a transient pre-sync value and sorts last deterministically.
 - **A single-write move.** One new shared mutator `issue.move` sets the moved card's `rank` (and `status` when the column changed) — never renumbering siblings. The fractional index is computed at the **mutator call site** (the client picks the key between the destination neighbours and passes it in), never inside the mutator, which re-runs on rebase.
 - **Drag via @dnd-kit classic** (`@dnd-kit/core` + `@dnd-kit/sortable`) for pointer moves, **plus a full keyboard path** (Space/Enter to pick up, arrows to move within and across columns, Space/Enter to drop, Escape to cancel) via the KeyboardSensor + `sortableKeyboardCoordinates`, with ARIA live-region announcements.
 - **A command-palette "Move to status…" action** — the non-pointer, always-available equivalent that appends the focused card to a chosen column via the same `issue.move` mutator.
@@ -31,7 +31,7 @@ It is roadmap change #4. It reuses issue-core wholesale — the same team-scoped
 - **Web** (`apps/web`): the `/board` route, the DnD board (columns, sortable cards, drag overlay, keyboard sensor, announcements), the board command-palette "Move to status…" surface, the List↔Board toggle, lazy virtualization.
 - **Dependencies**: `@dnd-kit/core`, `@dnd-kit/sortable`, `@tanstack/react-virtual`, `fractional-indexing` added to the pnpm catalog.
 
-Docs: the docs site (`apps/docs`) is still a pre-Starlight stub (as of issue-core); no user pages are added until it is stood up. The behavior is specified in `openspec/specs/board`.
+Docs (`apps/docs`): this change stands up the Astro Starlight docs site (catalog `astro` + `@astrojs/starlight`, `astro.config.mjs`, `src/content.config.ts`) and adds the user-facing Board page (`src/content/docs/features/board.md`) plus a home page (`src/content/docs/index.md`) whose Features section links it; `pnpm --filter @yapm/docs build` passes. The behavior is also specified in `openspec/specs/board`.
 
 ## Non-goals
 

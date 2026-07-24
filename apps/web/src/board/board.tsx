@@ -142,6 +142,7 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
   const [pendingFocus, setPendingFocus] = useState<string | null>(null)
   const pendingAttemptsRef = useRef(0)
   const containerRef = useRef<HTMLDivElement>(null)
+  const draggingRef = useRef(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -193,11 +194,13 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
   }, [cards, pendingFocus])
 
   const onDragStart = useCallback((event: DragStartEvent) => {
+    draggingRef.current = true
     setActiveId(String(event.active.id))
   }, [])
 
   const onDragEnd = useCallback(
     (event: DragEndEvent) => {
+      draggingRef.current = false
       setActiveId(null)
       const { active, over } = event
       if (!over) return
@@ -271,6 +274,7 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
   // stale reference. Ignored while typing in a field or while a dialog is already open.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (draggingRef.current) return
       const target = event.target as HTMLElement | null
       const editing =
         target?.isContentEditable ||
@@ -309,7 +313,10 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
       accessibility={{ announcements, screenReaderInstructions }}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      onDragCancel={() => setActiveId(null)}
+      onDragCancel={() => {
+        draggingRef.current = false
+        setActiveId(null)
+      }}
     >
       <section
         ref={containerRef}
@@ -322,6 +329,7 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
             column={column}
             teamKey={teamKey}
             readOnly={!canWrite}
+            reducedMotion={reducedMotion}
             activeId={activeId}
             pendingFocusId={pendingFocus}
             onFocusRestored={clearPendingFocus}
@@ -374,6 +382,7 @@ interface ColumnProps {
   column: BoardColumn
   teamKey: string
   readOnly: boolean
+  reducedMotion: boolean
   activeId: string | null
   pendingFocusId: string | null
   onFocusRestored: () => void
@@ -384,6 +393,7 @@ function Column({
   column,
   teamKey,
   readOnly,
+  reducedMotion,
   activeId,
   pendingFocusId,
   onFocusRestored,
@@ -417,6 +427,7 @@ function Column({
               cards={column.cards}
               teamKey={teamKey}
               readOnly={readOnly}
+              reducedMotion={reducedMotion}
               activeId={activeId}
               pendingFocusId={pendingFocusId}
               onFocusRestored={onFocusRestored}
@@ -429,6 +440,7 @@ function Column({
                 card={card}
                 teamKey={teamKey}
                 readOnly={readOnly}
+                reducedMotion={reducedMotion}
                 dimmed={activeId === card.id}
                 onOpenCard={onOpenCard}
               />
@@ -444,21 +456,40 @@ export interface SortableCardProps {
   card: BoardCardData
   teamKey: string
   readOnly: boolean
+  reducedMotion: boolean
   dimmed: boolean
   onOpenCard: (id: string) => void
 }
 
-export function SortableCard({ card, teamKey, readOnly, dimmed, onOpenCard }: SortableCardProps) {
+export function SortableCard({
+  card,
+  teamKey,
+  readOnly,
+  reducedMotion,
+  dimmed,
+  onOpenCard,
+}: SortableCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: { status: card.status, rank: card.rank, type: 'card' },
     disabled: readOnly,
+    animateLayoutChanges: () => !reducedMotion,
   })
+
+  // dnd-kit reports a read-only card as aria-disabled/draggable because dragging is off, but the
+  // card is still an operable button (click and the `o` shortcut open the issue). Strip those
+  // states for viewers so AT announces an actionable button rather than a dead/dimmed one.
+  const dragA11y = readOnly
+    ? { ...attributes, 'aria-disabled': undefined, 'aria-roledescription': undefined }
+    : attributes
 
   return (
     <BoardCard
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition: reducedMotion ? undefined : transition,
+      }}
       data-card-id={card.id}
       data-testid="board-card"
       data-pending={isPendingNumber(card) || undefined}
@@ -470,7 +501,7 @@ export function SortableCard({ card, teamKey, readOnly, dimmed, onOpenCard }: So
       labels={(card.labels ?? []).map((l) => ({ name: l.name, color: l.color }))}
       {...assigneeProps(card)}
       onClick={() => onOpenCard(card.id)}
-      {...attributes}
+      {...dragA11y}
       {...listeners}
     />
   )

@@ -26,6 +26,7 @@ import {
   CircleDotIcon,
   InboxIcon,
   PlusIcon,
+  RocketIcon,
   RouteIcon,
   TagIcon,
   UserIcon,
@@ -47,13 +48,14 @@ import { useMembership } from '@/auth/use-membership'
 import { type IssueRowData, issueKey, STATUS_LABEL, STATUS_TO_KIND } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
 
-type PalettePage = 'root' | 'status' | 'assign' | 'label' | 'create'
+type PalettePage = 'root' | 'status' | 'assign' | 'label' | 'project' | 'create'
 
 interface CommandApi {
   open: () => void
   openStatus: (ids: readonly string[]) => void
   openAssign: (ids: readonly string[]) => void
   openLabel: (ids: readonly string[]) => void
+  openProject: (ids: readonly string[]) => void
   openCreate: () => void
   setContextIssues: (ids: readonly string[]) => void
 }
@@ -93,6 +95,7 @@ export function CommandProvider({
   const [teams] = useQuery(queries.teams.all())
   const [users] = useQuery(queries.users.all())
   const [labels] = useQuery(queries.labels.byTeam({ teamId }))
+  const [projects] = useQuery(queries.projects.all())
 
   const [open, setOpen] = useState(false)
   const [page, setPage] = useState<PalettePage>('root')
@@ -128,6 +131,7 @@ export function CommandProvider({
       openStatus: (ids) => start('status', ids),
       openAssign: (ids) => start('assign', ids),
       openLabel: (ids) => start('label', ids),
+      openProject: (ids) => start('project', ids),
       openCreate: () => start('create', []),
       setContextIssues: (ids) => {
         contextRef.current = ids
@@ -195,6 +199,18 @@ export function CommandProvider({
       void runAll(
         targetIds.map((issueId) =>
           zero.mutate(mutators.issue.addLabel({ issueId, labelId, createdAt: now })),
+        ),
+      )
+    },
+    [runAll, targetIds, zero],
+  )
+
+  const applyProject = useCallback(
+    (projectId: string | null) => {
+      const now = Date.now()
+      void runAll(
+        targetIds.map((id) =>
+          zero.mutate(mutators.issue.setProject({ id, projectId, updatedAt: now })),
         ),
       )
     },
@@ -291,6 +307,7 @@ export function CommandProvider({
                   onStatus={() => start('status', targetIds)}
                   onAssign={() => start('assign', targetIds)}
                   onLabel={() => start('label', targetIds)}
+                  onProject={() => start('project', targetIds)}
                   onAcceptTriage={() => applyTriage('accept')}
                   onDeclineTriage={() => applyTriage('decline')}
                   onFlagTriage={() => applyTriage('flag')}
@@ -305,6 +322,9 @@ export function CommandProvider({
                 <AssignPage members={members} meId={userId} onPick={applyAssign} />
               ) : null}
               {page === 'label' ? <LabelPage labels={labels} onPick={applyLabel} /> : null}
+              {page === 'project' ? (
+                <ProjectPage projects={projects} onPick={applyProject} />
+              ) : null}
             </CommandList>
             {error !== undefined ? (
               <div
@@ -335,6 +355,8 @@ function placeholderFor(page: PalettePage, target: string): string {
       return `Assign ${target}…`
     case 'label':
       return `Add label to ${target}…`
+    case 'project':
+      return `Move ${target} to project…`
     default:
       return 'Type a command or search…'
   }
@@ -353,6 +375,7 @@ function RootPage({
   onStatus,
   onAssign,
   onLabel,
+  onProject,
   onAcceptTriage,
   onDeclineTriage,
   onFlagTriage,
@@ -370,6 +393,7 @@ function RootPage({
   onStatus: () => void
   onAssign: () => void
   onLabel: () => void
+  onProject: () => void
   onAcceptTriage: () => void
   onDeclineTriage: () => void
   onFlagTriage: () => void
@@ -400,6 +424,11 @@ function RootPage({
             <TagIcon />
             Add label…
             <CommandShortcut>L</CommandShortcut>
+          </CommandItem>
+          <CommandItem value="move to project" onSelect={onProject}>
+            <RocketIcon />
+            Move to project…
+            <CommandShortcut>P</CommandShortcut>
           </CommandItem>
         </CommandGroup>
       ) : null}
@@ -538,6 +567,33 @@ function LabelPage({
         >
           <span className="size-3 rounded-full" style={{ backgroundColor: label.color }} />
           {label.name}
+        </CommandItem>
+      ))}
+    </CommandGroup>
+  )
+}
+
+function ProjectPage({
+  projects,
+  onPick,
+}: {
+  projects: readonly { id: string; name: string }[]
+  onPick: (projectId: string | null) => void
+}) {
+  return (
+    <CommandGroup heading="Move to project">
+      <CommandItem value="remove from project none" onSelect={() => onPick(null)}>
+        <XIcon />
+        No project
+      </CommandItem>
+      {projects.map((project) => (
+        <CommandItem
+          key={project.id}
+          value={`move to project ${project.name}`}
+          onSelect={() => onPick(project.id)}
+        >
+          <RocketIcon />
+          {project.name}
         </CommandItem>
       ))}
     </CommandGroup>

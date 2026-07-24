@@ -52,6 +52,7 @@ import {
   issueKey,
   type ListGrouping,
   NO_CYCLE,
+  NO_PROJECT,
   PRIORITY_LABEL,
   PRIORITY_TO_KIND,
   STATUS_LABEL,
@@ -66,6 +67,7 @@ const GROUPING_LABEL: Record<ListGrouping, string> = {
   priority: 'Priority',
   label: 'Label',
   cycle: 'Cycle',
+  project: 'Project',
   none: 'No grouping',
 }
 
@@ -102,6 +104,7 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
   const [users] = useQuery(queries.users.all())
   const [labels] = useQuery(queries.labels.byTeam({ teamId }))
   const [cycles] = useQuery(queries.cycles.byTeam({ teamId }))
+  const [projects] = useQuery(queries.projects.all())
 
   const team = teams.find((candidate) => candidate.id === teamId)
   const teamKey = team?.key ?? ''
@@ -125,6 +128,7 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
         assigneeId: issue.assigneeId ?? null,
         rank: issue.rank ?? null,
         cycleId: issue.cycleId ?? null,
+        projectId: issue.projectId ?? null,
         updatedAt: issue.updatedAt,
         createdAt: issue.createdAt,
         labels: (
@@ -177,6 +181,7 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
           name: cycle.name,
           number: cycle.number ?? null,
         }))}
+        projectOptions={projects.map((project) => ({ id: project.id, name: project.name }))}
         openIssueId={openIssueId}
         onOpenIssue={onOpenIssue}
       />
@@ -190,6 +195,11 @@ interface CycleOption {
   number: number | null
 }
 
+interface ProjectOption {
+  id: string
+  name: string
+}
+
 interface IssueListBodyProps {
   teamId: string
   teamKey: string
@@ -198,6 +208,7 @@ interface IssueListBodyProps {
   memberOptions: readonly TeamMemberOption[]
   labelOptions: readonly { id: string; name: string; color: string }[]
   cycleOptions: readonly CycleOption[]
+  projectOptions: readonly ProjectOption[]
   openIssueId?: string
   onOpenIssue: (issue: IssueRowData) => void
 }
@@ -210,6 +221,7 @@ function IssueListBody({
   memberOptions,
   labelOptions,
   cycleOptions,
+  projectOptions,
   openIssueId,
   onOpenIssue,
 }: IssueListBodyProps) {
@@ -219,6 +231,9 @@ function IssueListBody({
   const [filter, setFilter] = useState<IssueFilter>({})
   const [grouping, setGrouping] = useState<ListGrouping>(DEFAULT_GROUPING)
   const [cycleFilter, setCycleFilter] = useState<readonly (string | null)[] | undefined>(undefined)
+  const [projectFilter, setProjectFilter] = useState<readonly (string | null)[] | undefined>(
+    undefined,
+  )
   const [sort, setSort] = useState<IssueSort>(DEFAULT_SORT)
   const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set())
   const [focusIndex, setFocusIndex] = useState(0)
@@ -234,6 +249,11 @@ function IssueListBody({
     [cycleOptions],
   )
 
+  const projectName = useCallback(
+    (id: string) => projectOptions.find((project) => project.id === id)?.name ?? id,
+    [projectOptions],
+  )
+
   const { groups, ordered } = useMemo(
     () =>
       buildGroups(rows, {
@@ -243,9 +263,22 @@ function IssueListBody({
         teamKey,
         assigneeName,
         cycleName,
+        projectName,
         ...(cycleFilter ? { cycleIds: cycleFilter } : {}),
+        ...(projectFilter ? { projectIds: projectFilter } : {}),
       }),
-    [rows, filter, grouping, sort, teamKey, assigneeName, cycleName, cycleFilter],
+    [
+      rows,
+      filter,
+      grouping,
+      sort,
+      teamKey,
+      assigneeName,
+      cycleName,
+      projectName,
+      cycleFilter,
+      projectFilter,
+    ],
   )
 
   // Keep focus in range as the filtered set changes.
@@ -340,6 +373,12 @@ function IssueListBody({
             command.openLabel(targets)
           }
           break
+        case 'p':
+          if (targets.length > 0) {
+            event.preventDefault()
+            command.openProject(targets)
+          }
+          break
         default:
           break
       }
@@ -374,6 +413,9 @@ function IssueListBody({
         cycleOptions={cycleOptions}
         cycleFilter={cycleFilter}
         setCycleFilter={setCycleFilter}
+        projectOptions={projectOptions}
+        projectFilter={projectFilter}
+        setProjectFilter={setProjectFilter}
         savedViews={savedViews}
         applySavedView={applySavedView}
         teamId={teamId}
@@ -506,6 +548,9 @@ interface ToolbarProps {
   cycleOptions: readonly CycleOption[]
   cycleFilter: readonly (string | null)[] | undefined
   setCycleFilter: (next: readonly (string | null)[] | undefined) => void
+  projectOptions: readonly ProjectOption[]
+  projectFilter: readonly (string | null)[] | undefined
+  setProjectFilter: (next: readonly (string | null)[] | undefined) => void
   savedViews: readonly {
     id: string
     name: string
@@ -532,6 +577,9 @@ function Toolbar({
   cycleOptions,
   cycleFilter,
   setCycleFilter,
+  projectOptions,
+  projectFilter,
+  setProjectFilter,
   savedViews,
   applySavedView,
   teamId,
@@ -650,6 +698,20 @@ function Toolbar({
             onToggle={(value) => {
               const real = value === NO_CYCLE ? null : value
               setCycleFilter(toggle(cycleFilter, real))
+            }}
+          />
+        ) : null}
+        {projectOptions.length > 0 ? (
+          <FilterMenu
+            label="Project"
+            options={[
+              { value: NO_PROJECT, label: 'No project' },
+              ...projectOptions.map((project) => ({ value: project.id, label: project.name })),
+            ]}
+            selected={(projectFilter ?? []).map((id) => id ?? NO_PROJECT)}
+            onToggle={(value) => {
+              const real = value === NO_PROJECT ? null : value
+              setProjectFilter(toggle(projectFilter, real))
             }}
           />
         ) : null}
@@ -882,10 +944,10 @@ interface SaveViewInput {
   sort: IssueSort
 }
 
-// Saved views persist only the schema groupings; the web-only cycle grouping falls back to
-// the default when a view is saved.
+// Saved views persist only the schema groupings; the web-only cycle/project groupings fall
+// back to the default when a view is saved.
 function persistableGrouping(grouping: ListGrouping): IssueGrouping {
-  return grouping === 'cycle' ? DEFAULT_GROUPING : grouping
+  return grouping === 'cycle' || grouping === 'project' ? DEFAULT_GROUPING : grouping
 }
 
 function useSaveView(): (input: SaveViewInput) => Promise<string | undefined> {

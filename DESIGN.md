@@ -15,6 +15,20 @@ A distinctive, human aesthetic that stays dense enough for an issue list — the
 
 The winning direction becomes real theme tokens and core components in `packages/ui` (Tailwind v4 `@theme` + Base UI). Judge shipped screens against the Warm mockups.
 
+## Theme system (built from the start)
+
+yapm ships a **tokenized theme system**, decided 2026-07-24. Every component references semantic tokens (color, font, radius, density) — **never hardcoded values** — so themes are token-set swaps via a `data-theme` attribute. This discipline is non-negotiable regardless of how many themes ship; retrofitting it later means hunting hardcoded colors across the app.
+
+**Shipping now (before/with issue-core):**
+- **Three switchable presets** as pure token sets: **Warm (default)**, **Focused**, **Editorial** — differing in color + typography + density + radius only, each with first-class light and dark. Presets are token-level: per-theme *structural* flourishes from the explorations (e.g. Editorial's serif masthead layout, rule-fills) are NOT reproduced — Editorial keeps its serif *headings*, vermilion accent, and mono metadata as tokens, not its bespoke chrome. Distinct, honest, and cheap to maintain.
+- **Accent-color customization**: a user-set accent token with auto-derived shades and an **auto-computed, contrast-safe on-accent text color** (users cannot make it unreadable). Covers most of what "customize the palette" means.
+- **Per-user preference** for theme + accent, persisted and **synced via Zero** (dogfoods our own sync with a per-user-scoped entity), with a localStorage bootstrap cache to avoid first-paint flash.
+
+**Deferred to a later dedicated change:**
+- A **full multi-color theme editor** (arbitrary per-token colors, contrast validation, import/export of theme JSON). The token architecture already makes this a clean add; the editor UI is the cost. Not built while there is still no core tracker to theme.
+
+All presets and any custom accent MUST pass WCAG contrast in both light and dark.
+
 ## Issue list: how yapm differs from Linear and Plane
 
 Warm differentiates visually; these differentiate **structurally**. The thesis: **every other tracker's row shows *intention* (a status a human set); yapm's row shows *reality* (state derived from the linked PR ↔ CI ↔ deploy).** That is "reality over ritual" (VISION #3) expressed in the primary surface, and no competitor can copy it without rebuilding their data model.

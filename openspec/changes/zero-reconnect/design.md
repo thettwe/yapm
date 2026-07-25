@@ -377,4 +377,114 @@ Rollback is reverting the commit; nothing persists.
 
 ## Decisions made during implementation
 
-<!-- Append: what was ambiguous, what was chosen, why. -->
+### C1. Every re-mint was silently destroying and rebuilding the Zero client
+
+Not anticipated by the design, and the more expensive half of the bug. `ZeroProvider`'s
+construction effect (1.8.0 `zero-react/src/zero-provider.tsx`, read from
+`out/zero-react/src/zero-provider.js.map`) has this dependency array:
+
+```ts
+const keysWithoutAuth = useMemo(
+  () => Object.entries(props).filter(([key]) => key !== 'auth')
+    .sort(([a], [b]) => stringCompare(a, b)).map(([_, value]) => value),
+  [props],
+)
+useEffect(() => { … new Zero({…props}) … return () => { void z.close() } },
+  [hasAuth, init, rotationGeneration, ...keysWithoutAuth])
+```
+
+Every non-`auth` option is compared **by value identity**. `context` was
+`{ userID, role: asRole(data.role) }` — a fresh object on every token fetch — so each
+re-mint changed a dependency, closed the Zero instance, reopened IndexedDB and rehydrated
+every query. That is why the design's *"alternative rejected: recreating the Zero
+instance"* was in fact what already happened on every `useSyncControl().refresh()`.
+
+`context` is now memoized on `[userID, role]`, so a re-mint that keeps the same identity and
+role changes **only** `auth`, which is the in-place `connect({auth})` path. All the other
+options are module constants or primitives. Recorded here because nothing in the type system
+prevents someone from reintroducing an inline object literal in `options`.
+
+### C2. The recovery effect must not depend on the Zero instance's identity
+
+The first run of `provider.test.tsx` did not fail — it exhausted the V8 heap after 193
+seconds. The mocked `useZero()` returned a fresh object per call, `zero` was in the
+scheduler effect's dependency array, and the effect's `setStatus` re-rendered: effect →
+render → effect, forever. A hot loop, produced by the code written to remove a hot loop.
+
+The mock is unrealistic, but the coupling was real and the fix is unconditional: `zero` (and
+the current token) are read through refs, and the dependency array is only
+`[name, request, enabled, remint]` — all primitives or stable callbacks. The mock is left
+deliberately churning as a standing regression guard, with a comment saying so. Every
+`setStatus` in a non-scheduling branch was also made idempotent (returns `current` when
+nothing changed) so no future dependency mistake can spin.
+
+### C3. `retryNow` reuses the scheduling path with a zero delay
+
+Rather than a second, separately-tested "immediate attempt" code path, **Retry now** resets
+the attempt counter and schedules the normal attempt with `delayMs === 0`. One path, one set
+of invariants. The unit test asserts a zero-length timer window is enough, which is the
+observable meaning of "immediate".
+
+### C4. A settled-request counter, so a failed proactive refresh reschedules itself
+
+The proactive timer is keyed on the credential. An `unavailable` outcome changes no
+credential field, so the timer would not have been re-armed and proactive refresh would
+silently stop for the rest of the token's life. `SyncSessionRecord` carries a `revision`
+counter bumped by every settled request; the timer effect depends on it, and re-arms at
+`proactiveRefreshDelay(expiresAt, now)` — never below the 60s floor.
+
+### C5. Recovery is disabled while the session is `logged-out`
+
+`ZeroProvider` is mounted on the login page too, with `auth: null`. Running the scheduler
+there would poll `/api/zero/token` on backoff for a user who is deliberately signed out. The
+machine is gated on `status !== 'logged-out'`; the initial credential still comes from
+`ZeroRoot`'s mount effect, so the login → app transition is unaffected.
+
+### C6. A state the machine will act on reads as "recovering" immediately
+
+React passive effects run after paint, so a strict `phase !== 'idle'` test would paint one
+frame of "Sync error" and announce that dead end to a screen reader before the first retry
+was scheduled. `summarizeConnection` therefore treats a state whose `recoveryPlan` is a
+re-mint as recovering regardless of phase. The phase still decides the only genuinely
+ambiguous case — `connecting` is "Connecting" on a first connect and "Reconnecting…" once
+an attempt has been made.
+
+### C7. `expiresAt` and the 401 protocol are consumed optionally
+
+This phase ships the client only. `expiresAt` is absent from `/api/zero/token` until the
+server phase lands, so the client falls back to the fixed 45-minute timer — the
+version-skew path the design already required, now the live path until then. Likewise the
+`error`-state recovery does not depend on the server returning 401; the 401 work makes the
+common case take the cheaper `needs-auth` route.
+
+### C8. `DOMException` is not reliably `instanceof Error`
+
+`AbortSignal.timeout` rejects with a `DOMException`, which under this jsdom did not satisfy
+`error instanceof Error`, so the abort reason fell through to a generic string. The
+classification was never wrong (both are `unavailable`), but the reason is diagnostic, so it
+is now read structurally from `.name`. Caught by the unit test, noted because the same
+assumption appears elsewhere in web code.
+
+### C9. The `disconnected` grace floors every attempt, not only the first
+
+The design says *"after a 20s grace, re-mint on backoff"*, which read literally means attempt
+0 waits 20s and attempt 1 waits ~2s — a **tighter** cadence than the grace was meant to
+establish. Since Zero is already retrying every 5s while `disconnected`, the re-mint exists
+only to have a fresh credential ready, so the grace is applied as a floor on every attempt:
+`delay = max(graceMs, backoffDelay(attempt))`. `needs-auth` and `error` have `graceMs === 0`,
+so their schedule is unchanged, and this removed a special case rather than adding one.
+
+### C10. The single-flight slot is cleared on rejection as well as fulfilment
+
+`fetchSyncCredential` is total by construction, but if a rejection ever escaped it, the
+in-flight slot would stay occupied and every later `remint()` would return the same rejected
+promise — recovery permanently disabled, which is a worse version of the reported bug. Both
+settlement paths clear the slot and record an `unavailable` outcome.
+
+### C11. Pill markup: `data-*` moved out to a wrapper, `role="status"` kept where it was
+
+`data-testid="connection-status"` and `data-connection` now sit on a wrapping `<div>` with
+`data-recovery`, and the announced text keeps `role="status"` (plus an explicit
+`aria-live="polite"`) on the inner `<p>`. This keeps **Retry now** out of the live region —
+a button inside it would be re-announced on every state change — while leaving all nine
+existing e2e `data-connection` assertions untouched.

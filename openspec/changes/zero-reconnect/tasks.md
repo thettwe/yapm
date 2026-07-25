@@ -16,36 +16,36 @@
 
 ## 4. Client: session fetch with three outcomes
 
-- [ ] 4.1 Replace `fetchSyncSession()`'s boolean-ish result in `apps/web/src/zero/provider.tsx` with a discriminated `session | no-session | unavailable` result: `no-session` only on HTTP 401/403; `unavailable` on a thrown error, abort/timeout, any other non-OK status, or a malformed body; add `AbortSignal.timeout(10_000)`.
-- [ ] 4.2 Make `unavailable` preserve the previous session state instead of collapsing to `LOGGED_OUT`, and expose an `unavailable` flag on `useSyncSession()` so surfaces can distinguish "signed out" from "cannot reach the server". App behaves identically on the happy path.
+- [x] 4.1 Replace `fetchSyncSession()`'s boolean-ish result in `apps/web/src/zero/provider.tsx` with a discriminated `session | no-session | unavailable` result: `no-session` only on HTTP 401/403; `unavailable` on a thrown error, abort/timeout, any other non-OK status, or a malformed body; add `AbortSignal.timeout(10_000)`.
+- [x] 4.2 Make `unavailable` preserve the previous session state instead of collapsing to `LOGGED_OUT`, and expose an `unavailable` flag on `useSyncSession()` so surfaces can distinguish "signed out" from "cannot reach the server". App behaves identically on the happy path.
 
 ## 5. Client: recovery state machine
 
-- [ ] 5.1 Add the pure backoff scheduler (base 1s, factor 2, cap 30s, full jitter, reset on success) as a standalone testable unit in `apps/web/src/zero/`.
-- [ ] 5.2 Replace `SyncAuthRefresher` with a `SyncRecovery` component mounted inside `ZeroProvider` that owns every re-mint: act on `needs-auth` and `error` (re-mint, then `zero.connection.connect({auth})` via `useZero()`); on `disconnected` past a 20s grace, re-mint only (never call `connect()` — it does not reconnect from `disconnected`); do nothing on `connecting`/`closed`; reset the schedule on `connected`.
-- [ ] 5.3 Handle the identical-token case: when the re-minted JWT equals the current one and the state is terminal, call `zero.connection.connect()` explicitly, because an unchanged `auth` prop makes `ZeroProvider` a no-op and would leave the client parked.
-- [ ] 5.4 Route `useSyncControl().refresh()` (membership changes) through the same scheduler so a role change and a reconnect can never run two token fetches concurrently; its existing contract and call sites are unchanged.
+- [x] 5.1 Add the pure backoff scheduler (base 1s, factor 2, cap 30s, full jitter, reset on success) as a standalone testable unit in `apps/web/src/zero/`.
+- [x] 5.2 Replace `SyncAuthRefresher` with a `SyncRecovery` component mounted inside `ZeroProvider` that owns every re-mint: act on `needs-auth` and `error` (re-mint, then `zero.connection.connect({auth})` via `useZero()`); on `disconnected` past a 20s grace, re-mint only (never call `connect()` — it does not reconnect from `disconnected`); do nothing on `connecting`/`closed`; reset the schedule on `connected`.
+- [x] 5.3 Handle the identical-token case: when the re-minted JWT equals the current one and the state is terminal, call `zero.connection.connect()` explicitly, because an unchanged `auth` prop makes `ZeroProvider` a no-op and would leave the client parked.
+- [x] 5.4 Route `useSyncControl().refresh()` (membership changes) through the same scheduler so a role change and a reconnect can never run two token fetches concurrently; its existing contract and call sites are unchanged.
 
 ## 6. Client: proactive refresh
 
-- [ ] 6.1 Consume `expiresAt` and schedule a re-mint at 75% of the remaining lifetime, clamped to [60s, 30min]; fall back to a fixed 45-minute timer when the field is absent.
-- [ ] 6.2 Re-check on `visibilitychange → visible` and on `online`, re-minting when more than half the lifetime has elapsed; ensure timers and listeners are cleaned up on unmount and never stack.
+- [x] 6.1 Consume `expiresAt` and schedule a re-mint at 75% of the remaining lifetime, clamped to [60s, 30min]; fall back to a fixed 45-minute timer when the field is absent.
+- [x] 6.2 Re-check on `visibilitychange → visible` and on `online`, re-minting when more than half the lifetime has elapsed; ensure timers and listeners are cleaned up on unmount and never stack.
 
 ## 7. Client: visible reconnecting state
 
-- [ ] 7.1 Extend `apps/web/src/zero/connection.ts` so the summary carries the recovery state (`idle | retrying | waiting`) and recovery-aware labels (`Reconnecting…`, `Offline — retrying`, `Sign-in expired — reconnecting`, `Sync error — retrying`) alongside the existing `state`/`writable`/`detail` fields.
-- [ ] 7.2 Rework `apps/web/src/components/connection-status.tsx`: polite live region for the label, a keyboard-operable **Retry now** `<button>` once the delay reaches the top of the range or recovery has failed for >15s, a new `data-recovery` attribute for tests, and the existing `data-connection` values left untouched so no current e2e assertion changes.
-- [ ] 7.3 Replace the hardcoded `bg-emerald-500`/`bg-amber-500` dots with `--color-status-*` tokens (`bg-status-done` / `bg-status-in-progress` / `bg-status-urgent` / `bg-muted-foreground`); verify in all three presets, light and dark.
-- [ ] 7.4 Replace `authenticated.tsx`'s indefinite "Loading…" with an actionable state once a credential request has come back `unavailable`: same `role="status"` + Retry treatment, still redirecting to `/login` only on a real `no-session`.
+- [x] 7.1 Extend `apps/web/src/zero/connection.ts` so the summary carries the recovery state (`idle | retrying | waiting`) and recovery-aware labels (`Reconnecting…`, `Offline — retrying`, `Sign-in expired — reconnecting`, `Sync error — retrying`) alongside the existing `state`/`writable`/`detail` fields.
+- [x] 7.2 Rework `apps/web/src/components/connection-status.tsx`: polite live region for the label, a keyboard-operable **Retry now** `<button>` once the delay reaches the top of the range or recovery has failed for >15s, a new `data-recovery` attribute for tests, and the existing `data-connection` values left untouched so no current e2e assertion changes.
+- [x] 7.3 Replace the hardcoded `bg-emerald-500`/`bg-amber-500` dots with `--color-status-*` tokens (`bg-status-done` / `bg-status-in-progress` / `bg-status-urgent` / `bg-muted-foreground`); verify in all three presets, light and dark.
+- [x] 7.4 Replace `authenticated.tsx`'s indefinite "Loading…" with an actionable state once a credential request has come back `unavailable`: same `role="status"` + Retry treatment, still redirecting to `/login` only on a real `no-session`.
 
 ## 8. Unit tests (Vitest, no DB)
 
-- [ ] 8.1 Backoff scheduler: delays stay within `[0, min(cap, base·2^n)]`, grow, never exceed the cap, and reset to base after a success.
-- [ ] 8.2 Recovery action table: `needs-auth`/`error` re-mint and connect; `disconnected` re-mints only after the grace and never calls `connect()`; `connecting`/`closed` do nothing; `connected` resets the schedule.
-- [ ] 8.3 Identical-token fallback calls `zero.connection.connect()` when the state is terminal and the minted token is unchanged.
-- [ ] 8.4 Session classifier: 401/403 → `no-session`; 500, 404, thrown error, abort/timeout, malformed body → `unavailable`; valid body → `session`.
-- [ ] 8.5 Proactive-refresh scheduling from `expiresAt` (75% clamped to [60s, 30min]), the missing-`expiresAt` fallback, and the visibility/online re-check threshold.
-- [ ] 8.6 Connection summary maps every Zero state × recovery state to the right label, `writable` flag, and `data-recovery` value.
+- [x] 8.1 Backoff scheduler: delays stay within `[0, min(cap, base·2^n)]`, grow, never exceed the cap, and reset to base after a success.
+- [x] 8.2 Recovery action table: `needs-auth`/`error` re-mint and connect; `disconnected` re-mints only after the grace and never calls `connect()`; `connecting`/`closed` do nothing; `connected` resets the schedule.
+- [x] 8.3 Identical-token fallback calls `zero.connection.connect()` when the state is terminal and the minted token is unchanged.
+- [x] 8.4 Session classifier: 401/403 → `no-session`; 500, 404, thrown error, abort/timeout, malformed body → `unavailable`; valid body → `session`.
+- [x] 8.5 Proactive-refresh scheduling from `expiresAt` (75% clamped to [60s, 30min]), the missing-`expiresAt` fallback, and the visibility/online re-check threshold.
+- [x] 8.6 Connection summary maps every Zero state × recovery state to the right label, `writable` flag, and `data-recovery` value.
 
 ## 9. Integration tests (Vitest, live Postgres)
 

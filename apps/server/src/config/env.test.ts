@@ -1,9 +1,16 @@
+import { randomBytes } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { EnvValidationError, loadEnv } from './env.js'
+import { EnvValidationError, githubAppEnv, loadEnv } from './env.js'
 
 const VALID = {
   DATABASE_URL: 'postgres://yapm:yapm@localhost:5432/yapm',
 } satisfies NodeJS.ProcessEnv
+
+const APP_TRIPLET = {
+  GITHUB_APP_ID: '123456',
+  GITHUB_APP_PRIVATE_KEY: '-----BEGIN RSA PRIVATE KEY-----\nMII...\n-----END RSA PRIVATE KEY-----',
+  GITHUB_APP_WEBHOOK_SECRET: 'whsec_test',
+}
 
 describe('loadEnv', () => {
   it('applies documented defaults', () => {
@@ -72,6 +79,53 @@ describe('loadEnv', () => {
     } catch (error) {
       const variables = (error as EnvValidationError).issues.map((issue) => issue.variable)
       expect(variables.sort()).toEqual(['DATABASE_URL', 'LOG_LEVEL', 'PORT'])
+    }
+  })
+
+  it('leaves the GitHub connector disabled when no App env is set', () => {
+    const env = loadEnv({ ...VALID })
+    expect(env.GITHUB_APP_ID).toBeUndefined()
+    expect(env.SECRETS_ENCRYPTION_KEY).toBeUndefined()
+    expect(githubAppEnv(env)).toBeNull()
+  })
+
+  it('accepts a full GitHub App triplet and exposes it via githubAppEnv', () => {
+    const env = loadEnv({ ...VALID, ...APP_TRIPLET })
+    expect(githubAppEnv(env)).toEqual({
+      appId: APP_TRIPLET.GITHUB_APP_ID,
+      privateKey: APP_TRIPLET.GITHUB_APP_PRIVATE_KEY,
+      webhookSecret: APP_TRIPLET.GITHUB_APP_WEBHOOK_SECRET,
+    })
+  })
+
+  it('fast-fails a partial GitHub App triplet, naming the missing variables', () => {
+    try {
+      loadEnv({ ...VALID, GITHUB_APP_ID: '123456' })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      expect(error).toBeInstanceOf(EnvValidationError)
+      const variables = (error as EnvValidationError).issues.map((issue) => issue.variable).sort()
+      expect(variables).toEqual(['GITHUB_APP_PRIVATE_KEY', 'GITHUB_APP_WEBHOOK_SECRET'])
+    }
+  })
+
+  it('treats a whitespace-only GitHub App value as unset (no partial-config error)', () => {
+    const env = loadEnv({ ...VALID, GITHUB_APP_ID: '   ' })
+    expect(githubAppEnv(env)).toBeNull()
+  })
+
+  it('accepts a valid base64 32-byte SECRETS_ENCRYPTION_KEY', () => {
+    const key = randomBytes(32).toString('base64')
+    expect(loadEnv({ ...VALID, SECRETS_ENCRYPTION_KEY: key }).SECRETS_ENCRYPTION_KEY).toBe(key)
+  })
+
+  it('rejects a SECRETS_ENCRYPTION_KEY that does not decode to 32 bytes', () => {
+    try {
+      loadEnv({ ...VALID, SECRETS_ENCRYPTION_KEY: randomBytes(16).toString('base64') })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      const issues = (error as EnvValidationError).issues
+      expect(issues[0]?.variable).toBe('SECRETS_ENCRYPTION_KEY')
     }
   })
 })

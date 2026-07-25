@@ -1,6 +1,9 @@
 export { newId } from './id.js'
 export type {
   AuthContext,
+  ConnectorConfigData,
+  ConnectorProvider,
+  ConnectorStatus,
   CycleStatus,
   IssueGrouping,
   IssuePriority,
@@ -13,6 +16,8 @@ export type {
   WorkspaceRole,
 } from './zero/context.js'
 export {
+  CONNECTOR_PROVIDERS,
+  CONNECTOR_STATUSES,
   CYCLE_STATUSES,
   canManage,
   canRead,

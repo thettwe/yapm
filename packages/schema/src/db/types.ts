@@ -1,5 +1,7 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely'
 import type {
+  ConnectorConfigData,
+  ConnectorStatus,
   CycleStatus,
   IssueGrouping,
   IssuePriority,
@@ -23,6 +25,9 @@ type Nullable<T> = ColumnType<T | null, T | null | undefined, T | null>
 // string on write (node-postgres serializes a plain object to json for us).
 type Json<T> = ColumnType<T, T | string, T | string>
 type JsonOrNull<T> = ColumnType<T | null, T | string | null | undefined, T | string | null>
+// A jsonb column with a database default: reads back the parsed value, omittable on insert.
+// (Wrapping `Json<T>` in `Generated<>` does not unwrap under kysely 0.28, so express it here.)
+type JsonWithDefault<T> = ColumnType<T, T | string | undefined, T | string>
 
 export interface WorkspaceTable {
   id: string
@@ -188,6 +193,53 @@ export interface IssueSequenceTable {
   next_number: Generated<number>
 }
 
+// Provider-neutral connector surface — three SERVER-ONLY tables (Kysely-managed, absent
+// from the Zero schema so their rows, and especially the encrypted secret blobs, never
+// replicate to a client's IndexedDB). Reused by the AI change for BYO-key providers.
+//
+// Per-workspace, per-provider config: the `enabled` toggle, an opaque non-secret `config`
+// blob, connection `status`, and last-sync / last-error telemetry for the admin settings UI.
+export interface ConnectorConfigTable {
+  id: string
+  workspace_id: string
+  provider: string
+  enabled: Generated<boolean>
+  config: JsonWithDefault<ConnectorConfigData>
+  status: Generated<ConnectorStatus>
+  last_synced_at: TimestampOrNull
+  last_error: Nullable<string>
+  // `Timestamp` (not `Generated<Timestamp>`) so these DB-defaulted columns stay omittable on
+  // insert yet settable on update — the server-only accessors bump `updated_at` on change.
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+// Encrypted-at-rest secret material (AES-256-GCM blob from `secrets/codec.ts`), one row per
+// named secret (e.g. `app_private_key`, `webhook_secret`) of a config. `ciphertext` is never
+// decrypted outside the server and never leaves this table toward a client.
+export interface ConnectorSecretTable {
+  id: string
+  connector_config_id: string
+  key: string
+  ciphertext: string
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+// Per-installation record: the provider's external installation id, the account it targets,
+// the admin-managed repo -> team mapping (repo full name -> team id), and per-resource ETags
+// for conditional-request reconciliation. Installation access tokens are NEVER persisted.
+export interface ConnectorInstallationTable {
+  id: string
+  connector_config_id: string
+  external_installation_id: string
+  account_login: Nullable<string>
+  repo_mapping: JsonWithDefault<Record<string, string>>
+  etags: JsonWithDefault<Record<string, string>>
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
 // Owned by better-auth (created by its `getMigrations()` at boot), read-only here so
 // mutators/queries can join member profiles. camelCase columns and a `text` id are
 // better-auth's shape (reference/kysely-stack.md §5.4), not ours to change.
@@ -217,6 +269,9 @@ export interface DB {
   saved_view: SavedViewTable
   issue_sequence: IssueSequenceTable
   cycle_sequence: CycleSequenceTable
+  connector_config: ConnectorConfigTable
+  connector_secret: ConnectorSecretTable
+  connector_installation: ConnectorInstallationTable
   user: UserTable
 }
 
@@ -273,5 +328,17 @@ export type NewSavedView = Insertable<SavedViewTable>
 export type SavedViewUpdate = Updateable<SavedViewTable>
 
 export type IssueSequence = Selectable<IssueSequenceTable>
+
+export type ConnectorConfig = Selectable<ConnectorConfigTable>
+export type NewConnectorConfig = Insertable<ConnectorConfigTable>
+export type ConnectorConfigUpdate = Updateable<ConnectorConfigTable>
+
+export type ConnectorSecret = Selectable<ConnectorSecretTable>
+export type NewConnectorSecret = Insertable<ConnectorSecretTable>
+export type ConnectorSecretUpdate = Updateable<ConnectorSecretTable>
+
+export type ConnectorInstallation = Selectable<ConnectorInstallationTable>
+export type NewConnectorInstallation = Insertable<ConnectorInstallationTable>
+export type ConnectorInstallationUpdate = Updateable<ConnectorInstallationTable>
 
 export type User = Selectable<UserTable>

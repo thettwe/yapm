@@ -1,5 +1,36 @@
+export type { SecretCodec } from '../secrets/codec.js'
+export { createSecretCodec, decodeEncryptionKey, SecretCodecError } from '../secrets/codec.js'
 export type { Database, DatabaseOptions } from './client.js'
 export { createDatabase, pingDatabase } from './client.js'
+export type {
+  RecordConnectorSyncOptions,
+  RedactedConnectorStatus,
+  RedactedInstallation,
+  SetConnectorSecretOptions,
+  SetRepoTeamOptions,
+  UpsertConnectorConfigOptions,
+  UpsertConnectorInstallationOptions,
+} from './connector.js'
+export {
+  ConnectorAuthorizationError,
+  deleteConnectorSecret,
+  getConnectorConfig,
+  getConnectorInstallation,
+  getConnectorSecret,
+  getInstallationEtag,
+  getRedactedConnectorStatus,
+  listConnectorConfigs,
+  listConnectorInstallations,
+  listConnectorSecretKeys,
+  recordConnectorSync,
+  removeInstallationRepoTeam,
+  resolveTeamForRepo,
+  setConnectorSecret,
+  setInstallationEtag,
+  setInstallationRepoTeam,
+  upsertConnectorConfig,
+  upsertConnectorInstallation,
+} from './connector.js'
 export type { AcceptInviteOptions, AcceptInviteRefusal, AcceptInviteResult } from './invite.js'
 export { acceptInvite } from './invite.js'
 export { lookupWorkspaceRole } from './membership.js'
@@ -30,6 +61,15 @@ export type {
   Comment,
   CommentTable,
   CommentUpdate,
+  ConnectorConfig,
+  ConnectorConfigTable,
+  ConnectorConfigUpdate,
+  ConnectorInstallation,
+  ConnectorInstallationTable,
+  ConnectorInstallationUpdate,
+  ConnectorSecret,
+  ConnectorSecretTable,
+  ConnectorSecretUpdate,
   Cycle,
   CycleSequence,
   CycleSequenceTable,
@@ -50,6 +90,9 @@ export type {
   LabelTable,
   LabelUpdate,
   NewComment,
+  NewConnectorConfig,
+  NewConnectorInstallation,
+  NewConnectorSecret,
   NewCycle,
   NewInvite,
   NewIssue,

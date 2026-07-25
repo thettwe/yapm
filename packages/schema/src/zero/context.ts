@@ -29,6 +29,21 @@ export const PROJECT_STATUSES = ['planned', 'active', 'completed', 'cancelled'] 
 
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number]
 
+// Provider-neutral connector surface. `github` is the only v1 provider; the AI change
+// reuses this table set for BYO-key AI providers, so the accessors treat `provider` as an
+// open string rather than binding it to this list.
+export const CONNECTOR_PROVIDERS = ['github'] as const
+
+export type ConnectorProvider = (typeof CONNECTOR_PROVIDERS)[number]
+
+export const CONNECTOR_STATUSES = ['disabled', 'pending', 'connected', 'error'] as const
+
+export type ConnectorStatus = (typeof CONNECTOR_STATUSES)[number]
+
+// The non-secret settings blob of a connector config (repo filters etc.). Opaque here —
+// each connector validates its own shape with a Zod `configSchema`.
+export type ConnectorConfigData = Record<string, unknown>
+
 export const ISSUE_GROUPINGS = ['status', 'assignee', 'priority', 'label', 'none'] as const
 
 export type IssueGrouping = (typeof ISSUE_GROUPINGS)[number]

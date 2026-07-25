@@ -122,7 +122,7 @@ Work-graph placement: an admin configuration view over the off-graph connector s
 
 ### Requirement: Absent GitHub App configuration disables the connector cleanly
 
-The GitHub connector SHALL be enabled only when the GitHub App configuration (App ID, private key, webhook secret) and a `SECRETS_ENCRYPTION_KEY` are all present; when any is absent the connector SHALL be disabled — the webhook endpoint SHALL NOT accept deliveries, no ingestion queue or reconciliation cron SHALL be created, and the settings UI SHALL show a "not configured" state naming the variables to set — and boot SHALL NOT crash. A partially-configured connector (some but not all required values) SHALL fail fast at boot with the name of the missing variable, so it never silently half-runs.
+The GitHub connector SHALL be enabled when the GitHub App configuration (App ID, private key, webhook secret) is present; `SECRETS_ENCRYPTION_KEY` is required only to store secrets entered via the admin UI (it is optional and shape-validated — base64 → 32 bytes — when present, and its absence does not disable an env-configured connector). When the App triplet is absent the connector SHALL be disabled — the webhook endpoint SHALL NOT accept deliveries, no ingestion queue or reconciliation cron SHALL be created, and the settings UI SHALL show a "not configured" state naming the variables to set — and boot SHALL NOT crash. A partially-configured App triplet (some but not all of the three App values) SHALL fail fast at boot with the name of the missing variable, so it never silently half-runs.
 
 Work-graph placement: gates whether the ingestion pipeline exists at all. Permission story: unchanged — a disabled connector writes nothing.
 

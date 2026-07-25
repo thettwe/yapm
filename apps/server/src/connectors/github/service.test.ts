@@ -260,6 +260,10 @@ describe.skipIf(DATABASE_URL === undefined)('createGithubConnector — live queu
     })
 
     const listForRef = () => Promise.resolve({ status: 200, headers: {}, data: { check_runs: [] } })
+    const repos = {
+      listDeployments: () => Promise.resolve({ status: 200, headers: {}, data: [] }),
+      listDeploymentStatuses: () => Promise.resolve({ status: 200, headers: {}, data: [] }),
+    }
     const emptyClient = {
       rest: {
         pulls: {
@@ -267,6 +271,7 @@ describe.skipIf(DATABASE_URL === undefined)('createGithubConnector — live queu
           listReviews: () => Promise.resolve({ status: 200, headers: {}, data: [] }),
         },
         checks: { listForRef },
+        repos,
       },
     }
     const mockClient = {
@@ -293,6 +298,7 @@ describe.skipIf(DATABASE_URL === undefined)('createGithubConnector — live queu
           listReviews: () => Promise.resolve({ status: 200, headers: {}, data: [] }),
         },
         checks: { listForRef },
+        repos,
       },
     }
     // Scope the mock to this test's installation so the global reconcile sweep returns empty

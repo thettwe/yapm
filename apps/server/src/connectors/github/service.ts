@@ -48,20 +48,29 @@ export interface GithubConnector {
   stop(): Promise<void>
 }
 
+interface DeliveryDedupe {
+  has(deliveryId: string): boolean
+  markSeen(deliveryId: string): void
+}
+
 // Bounded FIFO dedupe of `X-GitHub-Delivery` ids: a fast-path against same-process webhook
-// redelivery. The durable guarantee is the order-safe upsert-on-external-id write path (it
-// dedupes on the provider external id and refuses to regress fresher state), so a process
-// restart that forgets a delivery id still re-applies safely.
-function createDeliveryDedupe(): (deliveryId: string) => boolean {
+// redelivery. A delivery id is recorded (`markSeen`) only AFTER processing resolves, so a
+// transient failure that pg-boss retries in the same process still re-runs rather than being
+// silently swallowed. The durable guarantee is the order-safe upsert-on-external-id write path
+// (it dedupes on the provider external id and refuses to regress fresher state), so a re-run —
+// or a process restart that forgets a delivery id — still converges safely.
+function createDeliveryDedupe(): DeliveryDedupe {
   const seen = new Set<string>()
-  return (deliveryId) => {
-    if (seen.has(deliveryId)) return true
-    seen.add(deliveryId)
-    if (seen.size > DEDUPE_CAPACITY) {
-      const oldest = seen.values().next().value
-      if (oldest !== undefined) seen.delete(oldest)
-    }
-    return false
+  return {
+    has: (deliveryId) => seen.has(deliveryId),
+    markSeen: (deliveryId) => {
+      if (seen.has(deliveryId)) return
+      seen.add(deliveryId)
+      if (seen.size > DEDUPE_CAPACITY) {
+        const oldest = seen.values().next().value
+        if (oldest !== undefined) seen.delete(oldest)
+      }
+    },
   }
 }
 
@@ -83,13 +92,14 @@ export function createGithubConnector(options: GithubConnectorOptions): GithubCo
   const app = options.app ?? createGithubApp(secrets)
   const boss = options.boss ?? new PgBoss({ db: fromKysely(db), schema: 'pgboss' })
   const workerDeps = { db, dbProvider, connector: githubConnector, logger }
-  const alreadyProcessed = createDeliveryDedupe()
+  const dedupe = createDeliveryDedupe()
   let ownsBoss = options.boss === undefined
   let started = false
 
   const processDelivery = async (delivery: NormalizedDelivery): Promise<void> => {
-    if (alreadyProcessed(delivery.deliveryId)) return
+    if (dedupe.has(delivery.deliveryId)) return
     await processGithubDelivery(workerDeps, delivery)
+    dedupe.markSeen(delivery.deliveryId)
   }
 
   const reconcileConfig = async (configId: string): Promise<void> => {

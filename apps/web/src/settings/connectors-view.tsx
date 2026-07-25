@@ -77,12 +77,12 @@ function ConnectorsAdmin() {
         <p className="text-sm text-text-3" role="status">
           Loading connector status…
         </p>
+      ) : data ? (
+        <GithubConnectorCard data={data} onChanged={reload} />
       ) : error !== undefined ? (
         <p className="text-sm text-status-urgent" role="alert">
           {error}
         </p>
-      ) : data ? (
-        <GithubConnectorCard data={data} onChanged={reload} setError={setError} />
       ) : null}
     </section>
   )
@@ -91,23 +91,22 @@ function ConnectorsAdmin() {
 function GithubConnectorCard({
   data,
   onChanged,
-  setError,
 }: {
   data: ConnectorStatusResponse
   onChanged: () => Promise<void>
-  setError: (message: string | undefined) => void
 }) {
   const [busy, setBusy] = useState(false)
+  const [actionError, setActionError] = useState<string | undefined>(undefined)
   const enabled = data.status?.enabled ?? false
 
   const toggle = async () => {
     setBusy(true)
-    setError(undefined)
+    setActionError(undefined)
     try {
       await setGithubConnectorEnabled(!enabled)
       await onChanged()
     } catch {
-      setError('Could not update the connector.')
+      setActionError('Could not update the connector.')
     } finally {
       setBusy(false)
     }
@@ -115,6 +114,22 @@ function GithubConnectorCard({
 
   return (
     <div className="flex flex-col gap-4 rounded-card border border-border p-4">
+      {actionError !== undefined ? (
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-control border border-status-urgent/40 bg-status-urgent/10 px-3 py-2 text-sm text-status-urgent"
+        >
+          <span className="min-w-0 flex-1">{actionError}</span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Dismiss error"
+            onClick={() => setActionError(undefined)}
+          >
+            <XIcon />
+          </Button>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-3">
         <span className="flex size-8 items-center justify-center rounded-control bg-bg-hover font-mono text-sm">
           GH
@@ -141,7 +156,7 @@ function GithubConnectorCard({
       {data.configured ? null : <NotConfigured missingEnv={data.missingEnv} />}
 
       {data.configured && data.status ? (
-        <ConnectedDetail status={data.status} onChanged={onChanged} setError={setError} />
+        <ConnectedDetail status={data.status} onChanged={onChanged} setError={setActionError} />
       ) : null}
     </div>
   )

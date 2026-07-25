@@ -51,9 +51,10 @@ apart — and clears itself the moment you reconcile them.
 ## Filtering by delivery reality
 
 Because the signal is real, the issue list's **Delivery** filter narrows to issues by their
-delivery state — **Blocked on review**, **Failing CI**, or **Merged, not deployed** — evaluated the
-same way the strip is computed. Where an issue has no linked data, a delivery filter simply matches
-nothing rather than hiding the issue.
+delivery state. **Blocked on review** and **Failing CI** are evaluated the same way the strip is
+computed. **Merged, not deployed** is reserved: the issue→deployment edge is not yet modeled, so it
+currently matches nothing pending deployment-edge support. Where an issue has no linked data, a
+delivery filter simply matches nothing rather than hiding the issue.
 
 ## Issue detail
 

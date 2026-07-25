@@ -78,6 +78,19 @@ describe('reconcileInstallation', () => {
             }),
           ),
         },
+        repos: {
+          listDeployments: vi.fn().mockResolvedValue(
+            response({
+              headers: { etag: 'W/"deploy-fresh"' },
+              data: [{ id: 8001, ref: 'main', environment: 'production', sha: 'sha1' }],
+            }),
+          ),
+          listDeploymentStatuses: vi.fn().mockResolvedValue(
+            response({
+              data: [{ state: 'success', environment: 'production' }],
+            }),
+          ),
+        },
       },
     }
     const etags = new Map<string, string>()
@@ -109,21 +122,44 @@ describe('reconcileInstallation', () => {
         externalId: '9001',
         state: 'approved',
       }),
+      expect.objectContaining({
+        kind: 'upsertDeployment',
+        installationId: 'inst-internal',
+        repo: 'acme/app',
+        externalId: '8001',
+        environment: 'production',
+        state: 'success',
+      }),
     ])
     expect(etags.get('pulls:acme/app')).toBe('W/"fresh"')
+    expect(etags.get('deployments:acme/app')).toBe('W/"deploy-fresh"')
     expect(client.rest.checks.listForRef).toHaveBeenCalledWith({
       owner: 'acme',
       repo: 'app',
       ref: 'sha1',
     })
+    expect(client.rest.repos.listDeploymentStatuses).toHaveBeenCalledWith({
+      owner: 'acme',
+      repo: 'app',
+      deployment_id: 8001,
+      per_page: 1,
+    })
   })
 
-  it('sends the stored ETag and yields nothing on a 304 response', async () => {
+  it('sends the stored ETags and yields nothing on a 304 response', async () => {
     const list = vi.fn().mockResolvedValue(response({ status: 304, data: [] }))
+    const listDeployments = vi.fn().mockResolvedValue(response({ status: 304, data: [] }))
     const client = {
-      rest: { pulls: { list, listReviews: vi.fn() }, checks: { listForRef: vi.fn() } },
+      rest: {
+        pulls: { list, listReviews: vi.fn() },
+        checks: { listForRef: vi.fn() },
+        repos: { listDeployments, listDeploymentStatuses: vi.fn() },
+      },
     } as unknown as GithubRestClient
-    const etags = new Map([['pulls:acme/app', 'W/"old"']])
+    const etags = new Map([
+      ['pulls:acme/app', 'W/"old"'],
+      ['deployments:acme/app', 'W/"deploy-old"'],
+    ])
     const ctx = ctxWith(client, etags)
 
     const mutations = await reconcileInstallation(RECORD, ctx)
@@ -132,15 +168,26 @@ describe('reconcileInstallation', () => {
     expect(list).toHaveBeenCalledWith(
       expect.objectContaining({ headers: { 'if-none-match': 'W/"old"' } }),
     )
+    expect(listDeployments).toHaveBeenCalledWith(
+      expect.objectContaining({ headers: { 'if-none-match': 'W/"deploy-old"' } }),
+    )
     expect(etags.get('pulls:acme/app')).toBe('W/"old"')
+    expect(etags.get('deployments:acme/app')).toBe('W/"deploy-old"')
   })
 
   it('treats a thrown 304 RequestError as unchanged', async () => {
     const list = vi
       .fn()
       .mockRejectedValue(Object.assign(new Error('Not Modified'), { status: 304 }))
+    const listDeployments = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('Not Modified'), { status: 304 }))
     const client = {
-      rest: { pulls: { list, listReviews: vi.fn() }, checks: { listForRef: vi.fn() } },
+      rest: {
+        pulls: { list, listReviews: vi.fn() },
+        checks: { listForRef: vi.fn() },
+        repos: { listDeployments, listDeploymentStatuses: vi.fn() },
+      },
     } as unknown as GithubRestClient
     const mutations = await reconcileInstallation(RECORD, ctxWith(client))
     expect(mutations).toEqual([])

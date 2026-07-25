@@ -250,8 +250,30 @@ async function stage(name, brief, extraChecks, prevNotes, phaseName = 'Build') {
   return { passed: false, notes: `${name} unverified after ${MAX_ATTEMPTS} attempts`, summary: '' }
 }
 
+// Resuming a change whose proposal already exists and whose earlier stages are already committed.
+// Plan then works from the UNTICKED tasks rather than the whole file, so stopping a long build and
+// restarting it on this flow costs only the work that actually remains.
+const RESUME = Boolean(A.resume)
+
 phase('Propose')
-const propose = await agent(
+const propose = RESUME
+  ? await agent(
+      `${PREAMBLE}\n\n## Resume phase — no proposal to write\n` +
+        `${CHANGE} was already proposed and partly built; earlier stages are committed on ${BRANCH}. Do NOT create ` +
+        `or re-propose the change, and do NOT re-do completed work.\n` +
+        `Establish the true state and report it:\n` +
+        `1. git log --oneline ${BASE}..${BRANCH} — what has already landed.\n` +
+        `2. Read openspec/changes/${CHANGE}/tasks.md and list every task still marked \`[ ]\` or \`[~]\`, by section.\n` +
+        `3. Read openspec/changes/${CHANGE}/design.md, especially "## Decisions made during implementation" — ` +
+        `decisions taken by the earlier stages that the remaining work must honour.\n` +
+        `4. git status --porcelain must be clean; if it is not, say exactly what is uncommitted rather than ` +
+        `committing it yourself.\n` +
+        `5. Flag anything ticked that you cannot find evidence for in the diff — an earlier stage may have marked a ` +
+        `task done without doing it, and the remaining stages would then build on a false premise.\n\n` +
+        `Report: what landed, what remains (by task number), and any decisions the remaining work must respect.`,
+      { label: 'resume:assess', phase: 'Propose', effort: 'high' },
+    )
+  : await agent(
   `${PREAMBLE}\n\n## Propose phase\nWrite the OpenSpec change artifacts for ${CHANGE}; do NOT implement anything yet.\n` +
     `1. cd ${REPO} && npx -y @fission-ai/openspec@latest new change ${CHANGE}\n` +
     `2. Read the mandatory references in your mission above, plus CLAUDE.md, PROCESS.md, VISION.md, DESIGN.md and ` +
@@ -281,6 +303,12 @@ phase('Plan')
 const plan = await agent(
   `${PREAMBLE}\n\n## Plan phase\nRead ${REPO}/openspec/changes/${CHANGE}/tasks.md, proposal.md and design.md, then ` +
     `derive the IMPLEMENTATION STAGE ORDER from them. You are not writing code.\n\n` +
+    (RESUME
+      ? `**This is a RESUME.** Earlier stages are already committed. Plan ONLY the tasks still marked \`[ ]\` or ` +
+        `\`[~]\` — never re-do completed work, and never re-open a decision an earlier stage already made and logged ` +
+        `in design.md. A partially-done \`[~]\` task means only the stated remainder is in scope. If the assessment ` +
+        `above flagged a task ticked without evidence, put THAT back in scope explicitly and say why.\n\n`
+      : '') +
     `Group the task sections into at most ${CEILING.maxStages} build stages in true dependency order. Rules:\n` +
     `- A stage must not depend on anything a LATER stage produces. Walk the task graph and check this explicitly — ` +
     `putting a consumer before its producer is the specific mistake this phase exists to prevent.\n` +

@@ -71,8 +71,8 @@
 
 ## 12. Verification
 
-- [ ] 12.1 `pnpm turbo lint typecheck test build` passes; `node scripts/check-boundaries.mjs` and `node scripts/check-catalog.mjs` pass.
-- [ ] 12.2 The compose smoke test passes against the isolated `yapm-zr` project/ports.
-- [ ] 12.3 Manual close-the-loop on the live stack: idle past the token lifetime, confirm the app reconnects on its own with a visible reconnecting state and no reload; then stop zero-cache, confirm the retry cadence backs off to the cap without pinning the CPU, restart it, and confirm recovery.
-- [ ] 12.4 Walk every scenario in this change's specs and confirm each is true; log anything ambiguous under `design.md` → "Decisions made during implementation".
-- [ ] 12.5 Tear down with `docker compose -p yapm-zr -f docker/docker-compose.dev.yml down -v`.
+- [x] 12.1 `pnpm turbo lint typecheck test build` passes; `node scripts/check-boundaries.mjs` and `node scripts/check-catalog.mjs` pass. *(Run with `--force`, no cache: 14/14 tasks green. With a live Postgres the server suite is 127/127 — the 33 integration tests that skip without a database all pass, including the new §9 ones.)*
+- [x] 12.2 The compose smoke test passes against the isolated `yapm-zr` project/ports. *(Prod three-container stack built and run as `yapm-zr-smoke` on 3004/4852; `smoke ok` — SPA served, sign-up accepted, Zero sync connected. `BETTER_AUTH_URL`/`WEB_ORIGIN` must be moved with the port or sign-up fails "Invalid origin"; that is the port override, not the image.)*
+- [x] 12.3 Manual close-the-loop on the live stack. *(Measured against the prod stack; numbers in `design.md` → C20. 60s `zero-cache` outage: 2 token requests 20s apart, a 100ms heartbeat logging 601 ticks in 60s against ~600 ideal, pill `disconnected`/`waiting` reading "Offline — retrying" with **Retry now** offered; restart recovered in ~5s with the page-lifetime sentinel intact. Not done: idling out the real 1h token lifetime in wall-clock time — that path is covered by the credential-rejection e2e and the §8.5 proactive-refresh unit tests instead.)*
+- [x] 12.4 Walk every scenario in this change's specs and confirm each is true. *(All 57 Playwright tests observed green in this worktree, and every scenario in both spec deltas maps to a passing test — the endpoint scenarios to §9's integration tests, the recovery/UI scenarios to `reconnect.spec.ts`, the calm-retry scenario to the C20 measurement. C19 records the one scenario that holds only for a client that stays `disconnected` without redialling; C20 is new here.)*
+- [x] 12.5 Tear down with `docker compose -p yapm-zr -f docker/docker-compose.dev.yml down -v` (and the `yapm-zr-smoke` prod project alongside it).

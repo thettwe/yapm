@@ -707,3 +707,24 @@ period, the client SHALL re-mint*" is therefore satisfied only for a client that
 `disconnected` without redialling (a sleeping tab, a dead network); the unit tests in §8.2 assert
 the action table, which is the part that is true unconditionally. Worth revisiting if a future
 change gives the scheduler a state-independent clock.
+
+### C20. The main-thread question is closed by measurement, not inference
+
+The open question above ("exactly which loop pinned the main thread") is answered as far as this
+change needs it to be. Against the live three-container stack, with `zero-cache` stopped for a
+sustained 60s outage and an authenticated tab left alone:
+
+- **2** requests to `/api/zero/token` in the whole window, 20s apart — the `disconnected` grace
+  flooring the cadence, not the backoff ceiling, because Zero is redialling on its own the whole
+  time (the case C19 describes). No hot loop, and no pressure on the credential endpoint.
+- A 100ms heartbeat planted before the outage recorded **601 ticks in 60s against an ideal of
+  ~600**. The main thread is not merely un-pinned, it is idle. That is the measurement the
+  original report's "Page Unresponsive" lacked.
+- The pill read `disconnected` / `waiting`, labelled "Offline — retrying", with the keyboard
+  **Retry now** control offered.
+- Restarting `zero-cache` recovered the tab in ~5s with the page-lifetime sentinel intact, so
+  recovery went through no reload.
+
+We still have not profiled the *user's original* session, so the claim stays scoped: this change
+removes the preconditions and the recovered stack demonstrably idles through an outage it
+previously died in. The question is retired rather than answered in the forensic sense.

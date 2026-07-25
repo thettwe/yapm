@@ -90,6 +90,18 @@ describe('resolveModel — selection + disabled/unconfigured returns null', () =
     expect(await gw.resolveModel(WS)).toBeNull()
   })
 
+  it('keeps an explicitly toggled-off workspace off even when an env default exists', async () => {
+    const { factory } = recordingFactory()
+    const env: AiEnv = { keys: { anthropic: 'env-key' }, defaultProvider: 'anthropic' }
+    const gw = createAiGateway({
+      db: fakeDb({ connector_config: [aiConfigRow({ enabled: false })] }),
+      codec: identityCodec,
+      env,
+      modelFactory: factory,
+    })
+    expect(await gw.resolveModel(WS)).toBeNull()
+  })
+
   it('returns null when enabled but no key is stored for the provider', async () => {
     const { factory } = recordingFactory()
     const gw = createAiGateway({

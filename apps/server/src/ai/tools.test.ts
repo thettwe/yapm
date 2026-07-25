@@ -106,4 +106,36 @@ describe.skipIf(DATABASE_URL === undefined)('agent-as-actor tool ceiling (live d
       { actor: 'agent', onBehalfOf: memberId, tool: 'issue.create', kind: 'write' },
     ])
   })
+
+  it('mutates the model-supplied TARGET row (id is not clobbered) for a non-insert write', async () => {
+    // Seed an existing issue with a known id; the agent's setStatus tool must update THIS row,
+    // not mint a fresh id and miss it (which would throw notAuthorized and break every
+    // update/delete/status tool).
+    const seededId = newId()
+    await database.db
+      .insertInto('issue')
+      .values({
+        id: seededId,
+        team_id: teamId,
+        title: 'Seeded target issue',
+        status: 'todo',
+        priority: 'medium',
+        creator_id: memberId,
+      })
+      .execute()
+
+    const tools = toolsFor({ userID: memberId, role: 'member' })
+    const result = await tools['issue.setStatus']?.execute?.(
+      { id: seededId, status: 'done', updatedAt: Date.now() },
+      {} as never,
+    )
+    expect(result).toEqual({ ok: true, tool: 'issue.setStatus' })
+
+    const row = await database.db
+      .selectFrom('issue')
+      .select(['id', 'status'])
+      .where('id', '=', seededId)
+      .executeTakeFirst()
+    expect(row?.status).toBe('done')
+  })
 })

@@ -47,7 +47,9 @@ function callSiteMintedFields(
   now: number,
 ): Record<string, unknown> {
   const minted: Record<string, unknown> = {}
-  if ('id' in shape) minted.id = newId()
+  // Only insert mutators mint a new-row id — they are exactly the ones carrying `createdAt`.
+  // Update/delete/status mutators take `id` as a TARGET, so it must never be overwritten.
+  if ('id' in shape && 'createdAt' in shape) minted.id = newId()
   if ('createdAt' in shape) minted.createdAt = now
   if ('updatedAt' in shape) minted.updatedAt = now
   return minted

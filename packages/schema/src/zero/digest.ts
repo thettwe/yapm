@@ -121,8 +121,10 @@ export function contentNamesMember(
   const needles = rosterNameNeedles(roster)
   if (needles.length === 0) return false
   if (textNamesMember(content.headline, needles)) return true
-  return content.sections.some((section) =>
-    section.items.some((item) => textNamesMember(item.summary, needles)),
+  return content.sections.some(
+    (section) =>
+      textNamesMember(section.title, needles) ||
+      section.items.some((item) => textNamesMember(item.summary, needles)),
   )
 }
 
@@ -136,6 +138,7 @@ export function dropItemsNamingMembers(
   const needles = rosterNameNeedles(roster)
   if (needles.length === 0) return content
   const sections = content.sections
+    .filter((section) => !textNamesMember(section.title, needles))
     .map((section) => ({
       ...section,
       items: section.items.filter((item) => !textNamesMember(item.summary, needles)),

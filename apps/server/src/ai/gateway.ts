@@ -157,9 +157,14 @@ export function createAiGateway(deps: AiGatewayDeps): AiGateway {
     const config = await getAiConfig(deps.db, workspaceId)
     // Master toggle off / never configured ⇒ AI disabled for this workspace. But an env-level
     // instance default (single-instance self-host) still enables it without a DB row.
-    const enabled = config?.enabled ?? false
     const hasEnvDefault = deps.env.defaultProvider !== null
-    if (!enabled && !hasEnvDefault) return null
+    // An explicit config row wins: a toggled-off workspace is off regardless of any env default;
+    // only a NEVER-configured workspace (no row) can be enabled by an instance env default.
+    if (config) {
+      if (!config.enabled) return null
+    } else if (!hasEnvDefault) {
+      return null
+    }
 
     const chosen = pickProvider(provider, config?.data.defaultProvider ?? null)
     if (!chosen) return null

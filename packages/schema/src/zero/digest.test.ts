@@ -121,6 +121,40 @@ describe('name-validator — team-level / blameless backstop', () => {
     expect(contentNamesMember(content(), roster)).toBe(false)
   })
 
+  it('flags and drops a section whose TITLE names a roster member', () => {
+    const namedTitle = content({
+      sections: [
+        {
+          title: 'Alice Smith highlights',
+          items: [
+            {
+              kind: 'shipped',
+              summary: 'Guest checkout went live.',
+              evidenceRefs: [{ kind: 'issue', id: 'issue-1' }],
+              confidence: 'high',
+            },
+          ],
+        },
+        {
+          title: 'What shipped',
+          items: [
+            {
+              kind: 'shipped',
+              summary: 'Refund window cut to seven days.',
+              evidenceRefs: [{ kind: 'issue', id: 'issue-2' }],
+              confidence: 'high',
+            },
+          ],
+        },
+      ],
+    })
+    expect(contentNamesMember(namedTitle, roster)).toBe(true)
+    const result = dropItemsNamingMembers(namedTitle, roster)
+    expect(result.sections).toHaveLength(1)
+    expect(result.sections[0]?.title).toBe('What shipped')
+    expect(contentNamesMember(result, roster)).toBe(false)
+  })
+
   it('drops the offending item and blanks a naming headline, keeping clean content', () => {
     const named = content({
       headline: 'Alice Smith drove this cycle.',

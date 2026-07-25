@@ -95,6 +95,7 @@ function pullRequestMutation(
     headSha: pr.head?.sha ?? null,
     openedAt: toEpochMs(pr.created_at, now),
     mergedAt: pr.merged_at ? toEpochMs(pr.merged_at, now) : null,
+    updatedAt: toEpochMs(pr.updated_at, now),
     issueRefs: parseIssueRefs({ branch: pr.head?.ref, body: pr.body }),
   }
 }

@@ -49,8 +49,9 @@ export interface GithubConnector {
 }
 
 // Bounded FIFO dedupe of `X-GitHub-Delivery` ids: a fast-path against same-process webhook
-// redelivery. The durable idempotency guarantee is the upsert-on-external-id write path, so a
-// process restart that forgets a delivery id still re-applies safely.
+// redelivery. The durable guarantee is the order-safe upsert-on-external-id write path (it
+// dedupes on the provider external id and refuses to regress fresher state), so a process
+// restart that forgets a delivery id still re-applies safely.
 function createDeliveryDedupe(): (deliveryId: string) => boolean {
   const seen = new Set<string>()
   return (deliveryId) => {

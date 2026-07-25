@@ -139,10 +139,22 @@ function RealityStrip({ pr, ci, reviewAgeMs }: RealityStripProps) {
   )
 }
 
-function DivergenceFlag({ label = 'Status diverges from delivery reality' }: { label?: string }) {
+function DivergenceFlag({
+  label = 'Status diverges from delivery reality',
+  decorative = false,
+}: {
+  label?: string
+  // When the same sentence is already shown as adjacent visible text, mark the icon decorative
+  // so a screen reader announces the divergence once, not twice.
+  decorative?: boolean
+}) {
   return (
     <span className="flex w-4 shrink-0 items-center justify-center text-status-urgent">
-      <TriangleAlertIcon role="img" aria-label={label} className="size-3.5" />
+      {decorative ? (
+        <TriangleAlertIcon aria-hidden="true" className="size-3.5" />
+      ) : (
+        <TriangleAlertIcon role="img" aria-label={label} className="size-3.5" />
+      )}
     </span>
   )
 }

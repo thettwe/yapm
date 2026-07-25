@@ -26,6 +26,7 @@ export interface GithubPullRequest {
   html_url?: string | null
   body?: string | null
   created_at?: string | null
+  updated_at?: string | null
   head?: { sha?: string | null; ref?: string | null } | null
 }
 

@@ -69,6 +69,7 @@ const prMutation = (
     headSha: 'abc123',
     openedAt: 1_699_000_000_000,
     mergedAt: null,
+    updatedAt: 1_699_500_000_000,
     issueRefs: [],
     ...over,
   }) satisfies WorkGraphMutation
@@ -129,12 +130,36 @@ describe('applyWorkGraphMutation — pull request', () => {
 
   it('updates an existing PR (dedupe on external id) instead of inserting', async () => {
     const mutation = prMutation({ state: 'merged', mergedAt: CTX.now })
-    const { tx, calls } = fakeTx([{ id: 'pr-existing', teamId: 'team-1' }])
+    const { tx, calls } = fakeTx([
+      { id: 'pr-existing', teamId: 'team-1', state: 'open', mergedAt: null, updatedAt: 1_000 },
+    ])
     await applyWorkGraphMutation(tx, CTX, mutation)
 
     expect(calls).toHaveLength(1)
     expect(calls[0]).toMatchObject({ table: 'pull_request', verb: 'update' })
     expect(calls[0]?.value).toMatchObject({ id: 'pr-existing', state: 'merged', mergedAt: CTX.now })
+  })
+
+  it('never regresses a terminal merged PR back to open, preserving the merge time', async () => {
+    const mutation = prMutation({ state: 'open', mergedAt: null, updatedAt: 5_000 })
+    const { tx, calls } = fakeTx([
+      { id: 'pr-existing', teamId: 'team-1', state: 'merged', mergedAt: 2_222, updatedAt: 1_000 },
+    ])
+    await applyWorkGraphMutation(tx, CTX, mutation)
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({ table: 'pull_request', verb: 'update' })
+    expect(calls[0]?.value).toMatchObject({ id: 'pr-existing', state: 'merged', mergedAt: 2_222 })
+  })
+
+  it('skips a stale (out-of-order/redelivered older) event instead of overwriting', async () => {
+    const mutation = prMutation({ state: 'open', title: 'stale', updatedAt: 1_000 })
+    const { tx, calls } = fakeTx([
+      { id: 'pr-existing', teamId: 'team-1', state: 'merged', mergedAt: 2_222, updatedAt: 9_000 },
+    ])
+    await applyWorkGraphMutation(tx, CTX, mutation)
+
+    expect(calls.some((c) => c.table === 'pull_request')).toBe(false)
   })
 
   it('links an issue whose key+number resolve inside the PR team', async () => {

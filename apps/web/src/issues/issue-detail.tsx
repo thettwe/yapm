@@ -713,7 +713,7 @@ function DeliveryDetail({
           <RealityStrip {...strip} />
           {divergence ? (
             <span className="flex items-center gap-1 text-[12px] text-status-urgent">
-              <DivergenceFlag label={DIVERGENCE_LABEL[divergence]} />
+              <DivergenceFlag label={DIVERGENCE_LABEL[divergence]} decorative />
               {DIVERGENCE_LABEL[divergence]}
             </span>
           ) : null}

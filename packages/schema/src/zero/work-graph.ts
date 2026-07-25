@@ -28,6 +28,9 @@ export type WorkGraphMutation =
       readonly headSha: string | null
       readonly openedAt: number
       readonly mergedAt: number | null
+      // The source event's own modification time (GitHub `updated_at`), NOT wall clock. Carried
+      // so the write path can skip an out-of-order/redelivered older event instead of regressing.
+      readonly updatedAt: number
       readonly issueRefs: readonly IssueRef[]
     }
   | {
@@ -117,6 +120,9 @@ export function parseIssueRefs(input: {
 interface PrRow {
   id: string
   teamId: string
+  state: PullRequestState
+  mergedAt: number | null
+  updatedAt: number
 }
 
 async function findPr(
@@ -131,7 +137,7 @@ async function findPr(
 
 async function linkIssues(
   tx: Transaction,
-  pr: PrRow,
+  pr: { id: string; teamId: string },
   refs: readonly IssueRef[],
   now: number,
 ): Promise<void> {
@@ -174,16 +180,26 @@ export async function applyWorkGraphMutation(
     case 'upsertPullRequest': {
       const existing = await findPr(tx, mutation.installationId, mutation.externalId)
       if (existing) {
+        // Ordering safety net: an out-of-order or redelivered older event must never overwrite
+        // fresher state. Links are still reconciled (upsert is additive) so a late-arriving ref
+        // is not lost. Equal timestamps proceed — the write is idempotent.
+        if (mutation.updatedAt < existing.updatedAt) {
+          await linkIssues(tx, existing, mutation.issueRefs, now)
+          return
+        }
+        // `merged` is terminal on GitHub: never regress away from it, and preserve the recorded
+        // merge time. A closed PR may still reopen, so only merged is pinned.
+        const terminalMerged = existing.state === 'merged'
         await tx.mutate.pull_request.update({
           id: existing.id,
           repo: mutation.repo,
           number: mutation.number,
           title: mutation.title,
-          state: mutation.state,
+          state: terminalMerged ? 'merged' : mutation.state,
           url: mutation.url,
           headSha: mutation.headSha,
-          mergedAt: mutation.mergedAt,
-          updatedAt: now,
+          mergedAt: terminalMerged ? existing.mergedAt : mutation.mergedAt,
+          updatedAt: mutation.updatedAt,
         })
         await linkIssues(tx, existing, mutation.issueRefs, now)
         return
@@ -203,7 +219,7 @@ export async function applyWorkGraphMutation(
         openedAt: mutation.openedAt,
         mergedAt: mutation.mergedAt,
         createdAt: now,
-        updatedAt: now,
+        updatedAt: mutation.updatedAt,
       })
       await linkIssues(tx, { id: mutation.id, teamId: ctx.teamId }, mutation.issueRefs, now)
       return

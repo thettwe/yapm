@@ -30,7 +30,9 @@ export interface GithubRestClient {
       list(params: {
         owner: string
         repo: string
-        state: 'open'
+        state: 'all'
+        sort: 'updated'
+        direction: 'desc'
         per_page: number
         headers: Record<string, string>
       }): Promise<GithubRestResponse<GithubPullRequest[]>>
@@ -62,12 +64,13 @@ function toEpochMs(value: string | null | undefined, fallback: number): number {
   return Number.isNaN(parsed) ? fallback : parsed
 }
 
-// The safety net: re-poll each mapped repo's open PRs with the stored ETag (a `304` costs no
-// rate-limit budget and yields no mutations), and on a change re-derive PR + CI + review state.
-// This also serves as the first-install backfill, since webhooks are future-only. Mutations
-// carry the INTERNAL installation id (`installation.id`), so the caller applies them directly.
-// Callers drive one repo at a time (a single-entry `repoMapping`) so every emitted PR/deploy
-// lands in that repo's mapped team.
+// The safety net: re-poll each mapped repo's PRs (most-recently-updated first, including
+// closed/merged so terminal drift — e.g. a missed merge — is corrected) with the stored ETag
+// (a `304` costs no rate-limit budget and yields no mutations), and on a change re-derive
+// PR + CI + review state. This also serves as the first-install backfill, since webhooks are
+// future-only. Mutations carry the INTERNAL installation id (`installation.id`), so the caller
+// applies them directly. Callers drive one repo at a time (a single-entry `repoMapping`) so
+// every emitted PR/deploy lands in that repo's mapped team.
 export async function reconcileInstallation(
   installation: InstallationRecord,
   ctx: ConnectorContext,
@@ -89,7 +92,9 @@ export async function reconcileInstallation(
       response = await client.rest.pulls.list({
         owner,
         repo,
-        state: 'open',
+        state: 'all',
+        sort: 'updated',
+        direction: 'desc',
         per_page: 100,
         headers: etag ? { 'if-none-match': etag } : {},
       })
@@ -117,6 +122,7 @@ export async function reconcileInstallation(
         headSha,
         openedAt: toEpochMs(pr.created_at, now),
         mergedAt: pr.merged_at ? toEpochMs(pr.merged_at, now) : null,
+        updatedAt: toEpochMs(pr.updated_at, now),
         issueRefs: parseIssueRefs({ branch: pr.head?.ref, body: pr.body }),
       })
 

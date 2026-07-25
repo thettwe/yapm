@@ -193,5 +193,88 @@ describe.skipIf(DATABASE_URL === undefined)(
       const still = unmapped.status?.installations.find((i) => 'acme/app' in i.repoMapping)
       expect(still).toBeUndefined()
     }, 30_000)
+
+    it('will not let a workspace admin map another workspace’s installation', async () => {
+      const other = await freshWorkspace()
+      const otherConfig = await upsertConnectorConfig(
+        database.db,
+        { userID: other.adminId, role: 'admin' },
+        { id: newId(), workspaceId: other.workspaceId, provider: 'github', enabled: true },
+      )
+      const otherExternalId = newId()
+      await upsertConnectorInstallation(database.db, {
+        id: newId(),
+        configId: otherConfig.id,
+        externalInstallationId: otherExternalId,
+        accountLogin: 'other',
+      })
+
+      const attacker = await freshWorkspace()
+      await upsertConnectorConfig(
+        database.db,
+        { userID: attacker.adminId, role: 'admin' },
+        { id: newId(), workspaceId: attacker.workspaceId, provider: 'github', enabled: true },
+      )
+      const attackerTeamId = newId()
+      await database.db
+        .insertInto('team')
+        .values({
+          id: attackerTeamId,
+          workspace_id: attacker.workspaceId,
+          name: 'Eng',
+          key: `AT${Date.now().toString(36).toUpperCase()}`,
+        })
+        .execute()
+
+      // The attacker admin, scoped to their own workspace config, cannot resolve the other
+      // workspace's installation by its global external id.
+      const crossMap = await routes(true).request(
+        `/api/v1/connectors/github/installations/${otherExternalId}/repos`,
+        {
+          method: 'PUT',
+          headers: { 'x-test-user': attacker.adminId, 'content-type': 'application/json' },
+          body: JSON.stringify({ repo: 'acme/app', teamId: attackerTeamId }),
+        },
+      )
+      expect(crossMap.status).toBe(404)
+    }, 30_000)
+
+    it('rejects mapping a repo to a team outside the caller’s workspace', async () => {
+      const { workspaceId, adminId } = await freshWorkspace()
+      const config = await upsertConnectorConfig(
+        database.db,
+        { userID: adminId, role: 'admin' },
+        { id: newId(), workspaceId, provider: 'github', enabled: true },
+      )
+      const externalId = newId()
+      await upsertConnectorInstallation(database.db, {
+        id: newId(),
+        configId: config.id,
+        externalInstallationId: externalId,
+        accountLogin: 'acme',
+      })
+
+      const other = await freshWorkspace()
+      const foreignTeamId = newId()
+      await database.db
+        .insertInto('team')
+        .values({
+          id: foreignTeamId,
+          workspace_id: other.workspaceId,
+          name: 'Foreign',
+          key: `FT${Date.now().toString(36).toUpperCase()}`,
+        })
+        .execute()
+
+      const map = await routes(true).request(
+        `/api/v1/connectors/github/installations/${externalId}/repos`,
+        {
+          method: 'PUT',
+          headers: { 'x-test-user': adminId, 'content-type': 'application/json' },
+          body: JSON.stringify({ repo: 'acme/app', teamId: foreignTeamId }),
+        },
+      )
+      expect(map.status).toBe(404)
+    }, 30_000)
   },
 )

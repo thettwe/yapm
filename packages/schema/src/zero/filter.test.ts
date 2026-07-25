@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeDeliverySignal, computeDivergence } from './delivery.js'
+import { computeDeliverySignal, computeDivergence, type LinkedEntities } from './delivery.js'
 import { evaluateFilter, type IssueView, matchesFilter } from './filter.js'
 
 const issue = (over: Partial<IssueView> = {}): IssueView => ({
@@ -88,5 +88,41 @@ describe('the reserved delivery axis', () => {
     expect(
       matchesFilter(issue({ status: 'todo' }), { status: ['todo'], delivery: ['failing-ci'] }),
     ).toBe(false)
+  })
+})
+
+describe('delivery predicates narrow to matching linked delivery state', () => {
+  const failingCi = issue({ title: 'FailingCI', number: 1 })
+  const blocked = issue({ title: 'Blocked', number: 2 })
+  const mergedDeployed = issue({ title: 'MergedDeployed', number: 3 })
+  const rows = [failingCi, blocked, mergedDeployed]
+
+  const linkedFor = (row: IssueView): LinkedEntities => {
+    if (row === failingCi) {
+      return {
+        pullRequests: [{ state: 'open', openedAt: 1_000 }],
+        ciRuns: [{ health: 'failing' }],
+      }
+    }
+    if (row === blocked) {
+      return { pullRequests: [{ state: 'open', openedAt: 1_000 }], ciRuns: [{ health: 'passing' }] }
+    }
+    return { pullRequests: [{ state: 'merged', openedAt: 1_000 }], ciRuns: [{ health: 'passing' }] }
+  }
+
+  it('narrows failing-ci to the issue whose linked CI is failing', () => {
+    expect(
+      evaluateFilter(rows, { delivery: ['failing-ci'] }, { linkedFor }).map((r) => r.title),
+    ).toEqual(['FailingCI'])
+  })
+
+  it('narrows blocked-on-review to issues with an open, unreviewed PR', () => {
+    expect(
+      evaluateFilter(rows, { delivery: ['blocked-on-review'] }, { linkedFor }).map((r) => r.title),
+    ).toEqual(['FailingCI', 'Blocked'])
+  })
+
+  it('matches nothing for merged-not-deployed even when a merged PR is linked (no deployment data)', () => {
+    expect(evaluateFilter(rows, { delivery: ['merged-not-deployed'] }, { linkedFor })).toEqual([])
   })
 })

@@ -26,15 +26,19 @@ Audiences: evaluators (why / the work-graph wedge), self-hosters (install, 3-con
 
 **Big-feature rule** — a change needs all three tiers iff it touches **≥2 of** {synced entity/schema, mutator, permission surface, signature UI}. Otherwise it is small: unit + integration only; do not add E2E reflexively.
 
-> CI runs the full Playwright E2E suite as a dedicated `e2e` job (added with `connectors`) alongside the compose smoke test: fresh volumes on the e2e port (`YAPM_HOST_PORT=3210`), booting postgres → migrate → zero-cache → vite. The PR-review flow also runs the suite before every merge, so merges stay gated on it.
+> CI runs the full Playwright E2E suite as a dedicated `e2e` job (added with `connectors`) alongside the compose smoke test: fresh volumes on the e2e port (`YAPM_HOST_PORT=3210`), booting postgres → migrate → zero-cache → vite. **CI is where e2e runs** — the PR-review flow no longer duplicates it locally; it blocks the merge on the `e2e` and `smoke` checks instead, so merges stay gated on it either way.
 
 ## 4. Every feature ships via a reviewed PR
 
 Change workflows build on a `feat/<change>` branch (never direct to `main`), then hand off to **`.claude/workflows/pr-review-flow.js`**:
 
-open PR → **parallel 8-lens review** (correctness, security, yapm-constraints, tests, performance, accessibility, design-fidelity, docs) → **adversarial confirm** (each finding gets a skeptic that tries to refute it — kills false positives and subjective nits) → **fix every confirmed finding, critical → low** → **loop until a review round is clean** (cap 4 rounds; reappearing findings are flagged as stuck) → **merge only when dry AND all gates green** (typecheck/lint/build/unit/integration/e2e/boundaries/three-container). A stuck finding blocks the merge and is reported, never merged around.
+open PR → **parallel 3-lens review** (correctness+security, constraints+tests, ux+docs) → **adversarial confirm** (one batched skeptic tries to refute every finding — kills false positives and subjective nits) → **fix every confirmed finding, critical → low**, run the fast gates, push → **loop while critical/high remain** (cap 3 rounds; rounds 2+ review only the fix commits, not the whole diff again; reappearing findings are flagged as stuck) → **merge only when dry AND every GitHub CI check is green**. A stuck finding blocks the merge and is reported, never merged around.
 
 "Fix 100% critical→low" means 100% of *confirmed* defects; the adversarial step is what lets the loop converge instead of chasing noise.
+
+**Severity decides the loop, not the fix.** Every confirmed finding gets fixed in the round it surfaces. But only **critical/high** buy another review round — medium/low ride out on CI. Before this rule, all five measured runs burned all three rounds, because three reviewers against a 6k-line diff always surface one nit, and one nit cost a full round (~23 min).
+
+**CI is the gate of record.** The fix pass runs *fast gates only* — `turbo typecheck`, `lint`, affected `test`, `check-boundaries` — then pushes immediately so CI overlaps the next review round. It does **not** run the full build, the Playwright e2e suite, docker compose, or the compose smoke test, and the merge pass runs no local gates at all: it joins `gh pr checks --watch` and reads every one. CI covers that ground in 8–10 min, and duplicating it locally on every round plus once more at merge was 67% of the flow's wall clock.
 
 ## 5. Parallelism & the working-tree rule
 

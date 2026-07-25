@@ -340,6 +340,100 @@ test('the retro command palette reaches every retro action', async ({ page }) =>
   await expect(phaseStep(page, 'group')).toHaveAttribute('aria-current', 'step', {
     timeout: 20_000,
   })
+
+  // Into `vote`: the palette casts a dot on the focused card AND takes it back, so neither half of
+  // dot voting is shortcut-or-pointer only.
+  await page.keyboard.press(']')
+  await expect(phaseStep(page, 'vote')).toHaveAttribute('aria-current', 'step', { timeout: 20_000 })
+  await page.locator(CARD).first().focus()
+  await page.keyboard.press('ControlOrMeta+k')
+  await expect(palette).toBeVisible({ timeout: 20_000 })
+  await page.keyboard.type('cast a dot')
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('retro-vote-budget')).toHaveText('2/3 dots left', {
+    timeout: 20_000,
+  })
+
+  await page.locator(CARD).first().focus()
+  await page.keyboard.press('ControlOrMeta+k')
+  await expect(palette).toBeVisible({ timeout: 20_000 })
+  await page.keyboard.type('take a dot back')
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('retro-vote-budget')).toHaveText('3/3 dots left', {
+    timeout: 20_000,
+  })
+
+  // Into `discuss`: an action captured from the palette is also CONVERTED from the palette, which
+  // is the one retro action that had no palette entry at all.
+  await page.keyboard.press(']')
+  await expect(phaseStep(page, 'discuss')).toHaveAttribute('aria-current', 'step', {
+    timeout: 20_000,
+  })
+  await page.keyboard.press('ControlOrMeta+k')
+  await expect(palette).toBeVisible({ timeout: 20_000 })
+  await page.keyboard.type('new action')
+  await page.keyboard.press('Enter')
+  const actionComposer = page.getByTestId('retro-action-composer')
+  await expect(actionComposer).toBeFocused({ timeout: 20_000 })
+  await actionComposer.fill('Rotate a review buddy each cycle')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('retro-action')).toHaveCount(1, { timeout: 20_000 })
+
+  await page.getByTestId('retro-convert-action').focus()
+  await page.keyboard.press('ControlOrMeta+k')
+  await expect(palette).toBeVisible({ timeout: 20_000 })
+  await page.keyboard.type('convert this action')
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('retro-action-issue')).toBeVisible({ timeout: 20_000 })
+})
+
+// The three settings of an empty retro. Each one had a mutator and no caller: the format and the
+// budget were unreachable from the product entirely, and anonymity could be flipped after publish
+// by stepping the phase back — which is the one thing a storage-layer guarantee must never allow.
+test('format, dot budget and anonymity are set on an empty retro and close afterwards', async ({
+  page,
+}) => {
+  await enterApp(page)
+  await openTeam(page)
+  await completedCycleWithRetro(page)
+  await openRetro(page)
+  await page.getByTestId('retro-claim-facilitator').click()
+
+  const format = page.getByTestId('retro-format')
+  await expect(format).toBeVisible({ timeout: 20_000 })
+  await format.selectOption('mad_sad_glad')
+  await expect(page.locator('[data-retro-column]').first()).toContainText('Mad', {
+    timeout: 20_000,
+  })
+
+  const budget = page.getByTestId('retro-vote-budget-set')
+  await budget.selectOption('5')
+
+  const anonymity = page.getByTestId('retro-anonymity-toggle')
+  await anonymity.click()
+  await expect(anonymity).toHaveAttribute('data-anonymous', 'true', { timeout: 20_000 })
+
+  // A card, published — and every one of the three closes, on this phase and on a step back into
+  // `brainstorm`, because by then there is something to re-column and something to attribute.
+  await page.keyboard.press('c')
+  const composer = page.getByTestId('retro-composer')
+  await expect(composer).toBeFocused()
+  await composer.fill('Something to attribute')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press(']')
+  await expect(page.locator(CARD)).toHaveCount(1, { timeout: 20_000 })
+  await expect(page.getByTestId('retro-vote-budget-set')).toHaveCount(0)
+
+  await page.keyboard.press('[')
+  await expect(phaseStep(page, 'brainstorm')).toHaveAttribute('aria-current', 'step', {
+    timeout: 20_000,
+  })
+  await expect(page.getByTestId('retro-format')).toHaveCount(0)
+  await expect(page.getByTestId('retro-vote-budget-set')).toHaveCount(0)
+  await expect(page.getByTestId('retro-anonymity-toggle')).toHaveCount(0)
+  await expect(page.getByText('Anonymous', { exact: true }).first()).toBeVisible()
 })
 
 test('the retro is correct across every preset in light and dark', async ({ page }) => {

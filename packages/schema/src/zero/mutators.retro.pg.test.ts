@@ -502,6 +502,58 @@ describe.skipIf(DATABASE_URL === undefined)('retro mutators against Postgres', (
       )
       expect(card[0]?.author_display_id).toBe(MEMBER.userID)
     })
+
+    // Stepping back into `brainstorm` is a LEGAL single step, so the phase gate alone would let a
+    // facilitator flip anonymity after cards were published and synced. The card check is what
+    // actually pins the guarantee to "before there is anything to attribute".
+    it('refuses an anonymity flip once cards exist, even back in brainstorm', async () => {
+      await apply((tx) =>
+        mutators.retro.configure.fn({
+          tx,
+          args: { id: retroId, isAnonymous: true, updatedAt: Date.now() },
+          ctx: FACILITATOR,
+        }),
+      )
+      await apply((tx) =>
+        mutators.retro.configure.fn({
+          tx,
+          args: { id: retroId, isAnonymous: false, updatedAt: Date.now() },
+          ctx: FACILITATOR,
+        }),
+      )
+
+      const cardId = await draft(MEMBER, 'Attributed before the flip', 'a1')
+      await moveTo('group')
+      await apply((tx) =>
+        mutators.retro.setPhase.fn({
+          tx,
+          args: { id: retroId, to: 'brainstorm', updatedAt: Date.now() },
+          ctx: FACILITATOR,
+        }),
+      )
+
+      const code = await rejection(
+        apply((tx) =>
+          mutators.retro.configure.fn({
+            tx,
+            args: { id: retroId, isAnonymous: true, updatedAt: Date.now() },
+            ctx: FACILITATOR,
+          }),
+        ),
+      )
+      expect(code).toBe('invalid_phase')
+
+      const retro = await rows(
+        sql<{ is_anonymous: boolean }>`select is_anonymous from retro where id = ${retroId}`,
+      )
+      expect(retro[0]?.is_anonymous).toBe(false)
+      const card = await rows(
+        sql<{
+          author_display_id: string | null
+        }>`select author_display_id from retro_card where id = ${cardId}`,
+      )
+      expect(card[0]?.author_display_id).toBe(MEMBER.userID)
+    })
   })
 
   describe('the vote budget is counted from real rows', () => {

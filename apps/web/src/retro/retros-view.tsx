@@ -14,7 +14,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import { CYCLE_STATUS_LABEL, type CycleRowData, formatCycleRange } from '@/cycles/model'
 import { runMutation } from '@/lib/mutation'
-import { nextCycleIdAfter, openRetroArgs, PHASE_LABEL, RETRO_FORMAT_LABEL } from '@/retro/model'
+import { openRetroArgs, PHASE_LABEL, RETRO_FORMAT_LABEL } from '@/retro/model'
 
 interface RetroSummary {
   id: string
@@ -82,7 +82,7 @@ export function RetrosView({ teamId }: { teamId: string }) {
 
   const open = useCallback(
     async (cycle: CycleRowData) => {
-      const args = openRetroArgs(cycle.id, nextCycleIdAfter(cycles, cycle.id), DEFAULT_RETRO_FORMAT)
+      const args = openRetroArgs(cycle, cycles, DEFAULT_RETRO_FORMAT)
       const failure = await runMutation(zero.mutate(mutators.retro.openForCycle(args)))
       if (failure !== undefined) {
         setError(failure)

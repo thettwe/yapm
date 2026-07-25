@@ -2,13 +2,14 @@ import { useZero } from '@rocicorp/zero/react'
 import {
   mutators,
   newId,
+  type RetroFormat,
   type RetroPhase,
   type RetroSeedRef,
   type RetroVoteTarget,
 } from '@yapm/schema'
 import { useCallback, useMemo, useState } from 'react'
 import { runMutation } from '@/lib/mutation'
-import { appendRank } from '@/retro/model'
+import { appendRank, retroColumnArgsFor } from '@/retro/model'
 
 export interface RetroApi {
   createDraft: (
@@ -36,6 +37,8 @@ export interface RetroApi {
   retractVote: (voteId: string) => Promise<void>
   setPhase: (to: RetroPhase) => Promise<void>
   setAnonymous: (isAnonymous: boolean) => Promise<void>
+  setFormat: (format: RetroFormat) => Promise<void>
+  setVoteBudget: (votesPerParticipant: number) => Promise<void>
   claimFacilitator: () => Promise<void>
   setFacilitator: (userId: string | null) => Promise<void>
   startTimer: (durationS: number) => Promise<void>
@@ -144,6 +147,26 @@ export function useRetroApi(retroId: string): RetroApiHandle {
         run(
           zero.mutate(
             mutators.retro.configure({ id: retroId, isAnonymous, updatedAt: Date.now() }),
+          ),
+        ),
+      // A format change replaces the columns, so the new set is minted HERE and re-validated
+      // against the named template server-side; the mutator refuses outright once any draft or
+      // card exists, including drafts this client cannot see.
+      setFormat: (format) =>
+        run(
+          zero.mutate(
+            mutators.retro.configure({
+              id: retroId,
+              format,
+              columns: retroColumnArgsFor(format),
+              updatedAt: Date.now(),
+            }),
+          ),
+        ),
+      setVoteBudget: (votesPerParticipant) =>
+        run(
+          zero.mutate(
+            mutators.retro.configure({ id: retroId, votesPerParticipant, updatedAt: Date.now() }),
           ),
         ),
       claimFacilitator: () =>

@@ -19,7 +19,6 @@ import {
   isFacilitator,
   livePresence,
   myVotesFor,
-  nextCycleIdAfter,
   nextPhase,
   openRetroArgs,
   PHASE_HINT,
@@ -33,6 +32,7 @@ import {
   type RetroVoteRowData,
   rankForSlot,
   remainingVotes,
+  resolveVoteTarget,
   retroCan,
   TIMER_PRESETS_S,
   tallyFor,
@@ -176,6 +176,19 @@ describe('voting', () => {
     })
   })
 
+  // The board and the command palette both act on a bare focused id, so the retarget rule has to
+  // live somewhere both can call: a dot at a CLUSTERED card is a guaranteed mutator rejection.
+  it('retargets a clustered card to its cluster, from a bare id', () => {
+    const cards = [card({ id: 'k1', rank: 'V0' }), card({ id: 'k2', rank: 'V1', groupId: 'g1' })]
+    expect(resolveVoteTarget(cards, 'k1', 'card')).toEqual({ targetType: 'card', targetId: 'k1' })
+    expect(resolveVoteTarget(cards, 'k2', 'card')).toEqual({ targetType: 'group', targetId: 'g1' })
+    expect(resolveVoteTarget(cards, 'g1', 'group')).toEqual({ targetType: 'group', targetId: 'g1' })
+    expect(resolveVoteTarget(cards, 'gone', 'card')).toEqual({
+      targetType: 'card',
+      targetId: 'gone',
+    })
+  })
+
   const vote = (id: string, targetId: string): RetroVoteRowData => ({
     id,
     targetType: 'card',
@@ -275,11 +288,15 @@ describe('accents and formats', () => {
 })
 
 describe('openRetroArgs', () => {
+  const completed = { id: 'c1', number: 1, status: 'completed' as const, startDate: 100 }
+  const skipped = { id: 'c2', number: 2, status: 'completed' as const, startDate: 200 }
+  const open = { id: 'c3', number: 3, status: 'upcoming' as const, startDate: 300 }
+
   // `retro.openForCycle` re-validates the columns against the named format, so a call site that
   // drifts from the template is rejected server-side. This is the client half of that contract.
   it('mints ids at the call site and matches the format template exactly', () => {
     for (const format of RETRO_FORMATS) {
-      const args = openRetroArgs('cycle-1', 'cycle-2', format)
+      const args = openRetroArgs(completed, [completed, open], format)
       expect(args.id).toMatch(/^[0-9a-f-]{36}$/)
       expect(
         args.columns.map((c) => ({ key: c.key, title: c.title, accentToken: c.accentToken })),
@@ -297,22 +314,20 @@ describe('openRetroArgs', () => {
   })
 
   it('mints a fresh retro id every call', () => {
-    const a = openRetroArgs('cycle-1', null, 'wentwell_didnt_action')
-    const b = openRetroArgs('cycle-1', null, 'wentwell_didnt_action')
+    const a = openRetroArgs(completed, [completed, open], 'wentwell_didnt_action')
+    const b = openRetroArgs(completed, [completed, open], 'wentwell_didnt_action')
     expect(a.id).not.toBe(b.id)
   })
-})
 
-describe('nextCycleIdAfter', () => {
-  const cycles = [
-    { id: 'c2', startDate: 200 },
-    { id: 'c1', startDate: 100 },
-    { id: 'c3', startDate: 300 },
-  ]
+  // The action target is the ROLLOVER's successor rule, not the next row by start date: a cycle
+  // that is already completed is skipped, so an action can never default into finished work.
+  it('resolves the action target with the rollover rule, skipping completed cycles', () => {
+    const args = openRetroArgs(completed, [completed, skipped, open], 'wentwell_didnt_action')
+    expect(args.nextCycleId).toBe('c3')
+  })
 
-  it('is the next cycle by start date, and null past the last one', () => {
-    expect(nextCycleIdAfter(cycles, 'c1')).toBe('c2')
-    expect(nextCycleIdAfter(cycles, 'c3')).toBeNull()
-    expect(nextCycleIdAfter(cycles, 'missing')).toBeNull()
+  it('has no action target when nothing open follows the cycle', () => {
+    const args = openRetroArgs(completed, [completed, skipped], 'wentwell_didnt_action')
+    expect(args.nextCycleId).toBeNull()
   })
 })

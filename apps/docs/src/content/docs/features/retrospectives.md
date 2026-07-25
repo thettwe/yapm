@@ -35,13 +35,20 @@ Phase changes are **adjacent-only**: exactly one step forward or exactly one ste
 skip-to-closed and no rewind-to-brainstorm, because publishing and voting both depend on the retro
 having passed through the phases in order.
 
-Only the **facilitator** or a **workspace admin** changes phase, sets the format, or turns anonymity
-on. A facilitator is never assigned for you — an auto-opened retro has none, since the scheduler is
-not a person. Whoever is running the session claims the seat with **Run this retro** in the header
-or the same entry in the command palette, and can hand it off later.
+Only the **facilitator** or a **workspace admin** changes phase, sets the format, turns anonymity
+on, or sets the dot budget. A facilitator is never assigned for you — an auto-opened retro has none,
+since the scheduler is not a person. Whoever is running the session claims the seat with **Run this
+retro** in the header or the same entry in the command palette, and can hand it off later.
 
-Four starter formats are available, chosen while the retro is still empty: Went well / Didn't /
-Actions (the default), Start / Stop / Continue, Mad / Sad / Glad, and 4Ls.
+Four starter formats are available, chosen from the header (or the palette) while the retro is still
+empty: Went well / Didn't / Actions (the default), Start / Stop / Continue, Mad / Sad / Glad, and
+4Ls. Changing the format replaces the columns, so it is refused once anyone has written anything —
+including a draft you cannot see, in which case the swap is rolled back and the header says why.
+
+The format, anonymity and the dot budget are all **settings of an empty retro**. They are open while
+the retro is in `brainstorm` *and* has no cards; stepping a retro back into `brainstorm` after cards
+are published does not re-open them, because by then there is something to re-column and something
+to attribute.
 
 ## Anonymity
 
@@ -69,14 +76,15 @@ The rest follows from that:
   nobody but the voter.
 - **A published card's body is not editable by anyone**, because there is no client-visible owner to
   authorize an edit against. Your own draft is retained as your personal record, and it is what lets
-  you retract your own card: hold the draft, and you may delete the published card. A facilitator or
-  admin may also delete a card as moderation, which the server checks against the server-only
-  author table.
+  you retract your own card: hold the draft, and you may delete the published card — which is why a
+  remove control appears only on your own cards. A facilitator or admin may also delete any card as
+  moderation, which the server checks against the server-only author table.
 - **Reveal-on-close is not offered.** No code path copies an anonymous card's author onto anything
   that syncs.
 
 Anonymity is set while the retro is in `brainstorm` — before a single card exists — and is fixed
-after that. A retro's anonymity is therefore decided before there is anything to attribute.
+after that. A retro's anonymity is therefore decided before there is anything to attribute, and
+stepping the retro back into `brainstorm` later does not reopen the question.
 
 ### What the server stores
 
@@ -94,7 +102,7 @@ they have direct access to your database. If you self-host, that is you.
 ## Dots
 
 Voting is dot voting. Each participant gets a budget — **three** by default, settable from one to
-ten while the retro is still in `brainstorm` — and may **stack** them: two dots on the thing you
+ten in the header (or the palette) while the retro is still empty — and may **stack** them: two dots on the thing you
 care most about is a legitimate use of the budget, not a bug. The header reads `2/3 dots left`
 throughout the `vote` phase.
 
@@ -163,6 +171,8 @@ converted issue's live status inline, and an already-created action can still be
 ## Keyboard
 
 Every action below is also a command-palette entry, so nothing is keyboard-only or pointer-only.
+The palette acts on whatever the keyboard last held — the focused card or cluster for a dot, the
+focused action for a conversion.
 
 Anywhere in the retro:
 
@@ -183,6 +193,10 @@ On the board:
 | `v` | Spend a dot on the focused card or cluster |
 | `Shift+V` | Take a dot back |
 | `g` | Group the focused card with… |
+
+Only the arrow keys are pure navigation; every other row above is an action the palette also
+offers, alongside the ones with no key at all — claiming or handing off facilitation, changing the
+format, setting the dot budget, and turning anonymity on.
 
 `Space` and `Enter` on a card are reserved for drag-and-drop: they pick a card up and drop it,
 which is how you cluster cards without a pointer. On your own draft during `brainstorm`, `Enter`

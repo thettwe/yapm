@@ -1622,11 +1622,11 @@ export const configureRetroArgs = z.object({
   updatedAt: timestamp,
 })
 
-// `brainstorm` only, facilitator/admin only. Anonymity is therefore fixed BEFORE any card exists,
-// which is what makes the guarantee crisp: a retro's anonymity cannot be flipped once there is
-// something to attribute. Changing the format replaces the columns, so it is refused once any draft
-// or card exists (a client that cannot see other people's drafts will have its optimistic swap
-// rejected by the server, which is authoritative here).
+// `brainstorm` only, facilitator/admin only. Anonymity is fixed BEFORE any card exists, which is
+// what makes the guarantee crisp: a retro's anonymity cannot be flipped once there is something to
+// attribute. Changing the format replaces the columns, so it is refused once any draft or card
+// exists (a client that cannot see other people's drafts will have its optimistic swap rejected by
+// the server, which is authoritative here).
 export const configureRetro = defineMutator(configureRetroArgs, async ({ tx, args, ctx }) => {
   if (!canWrite(ctx)) throw notAuthorized(args.id)
   const retro = await loadRetroForWrite(tx, ctx, args.id, 'configure')
@@ -1673,6 +1673,20 @@ export const configureRetro = defineMutator(configureRetroArgs, async ({ tx, arg
         createdAt: args.updatedAt,
         updatedAt: args.updatedAt,
       })
+    }
+  }
+
+  // `configure` is brainstorm-only, but a facilitator may step BACK into brainstorm after cards
+  // have been published and synced. The phase gate alone therefore does not fix anonymity before
+  // there is something to attribute — the card check does.
+  if (args.isAnonymous !== undefined && args.isAnonymous !== retro.isAnonymous) {
+    const cards = await tx.run(zql.retro_card.where('retroId', args.id))
+    if (cards.length > 0) {
+      throw new MutationError(
+        'Anonymity cannot change once the retro has cards',
+        MutationErrorCode.invalidPhase,
+        args.id,
+      )
     }
   }
 

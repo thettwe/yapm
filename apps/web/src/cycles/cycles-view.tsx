@@ -30,7 +30,7 @@ import {
 } from '@/cycles/model'
 import { type IssueRowData, issueKey, PRIORITY_TO_KIND, STATUS_TO_KIND } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
-import { nextCycleIdAfter, openRetroArgs } from '@/retro/model'
+import { openRetroArgs } from '@/retro/model'
 
 export function CyclesView({ teamId }: { teamId: string }) {
   const navigate = useNavigate()
@@ -388,7 +388,7 @@ async function openRetroFor(
   cycles: readonly CycleRowData[],
   cycle: CycleRowData,
 ): Promise<{ retroId: string; failure: string | undefined }> {
-  const args = openRetroArgs(cycle.id, nextCycleIdAfter(cycles, cycle.id), DEFAULT_RETRO_FORMAT)
+  const args = openRetroArgs(cycle, cycles, DEFAULT_RETRO_FORMAT)
   const failure = await runMutation(zero.mutate(mutators.retro.openForCycle(args)))
   return { retroId: args.id, failure }
 }

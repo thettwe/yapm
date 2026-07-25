@@ -316,7 +316,7 @@ describe('the phase gate on every write', () => {
 
 describe('retro.configure', () => {
   it('sets anonymity and the budget during brainstorm, facilitator only', async () => {
-    const { tx, calls } = fakeTx([retroRow({ facilitatorId: MEMBER.userID }), {}])
+    const { tx, calls } = fakeTx([retroRow({ facilitatorId: MEMBER.userID }), {}, []])
     await mutators.retro.configure.fn({
       tx,
       args: { id: RETRO_ID, isAnonymous: true, votesPerParticipant: 5, updatedAt: 7 },
@@ -342,6 +342,37 @@ describe('retro.configure', () => {
     )
     expect(mutationErrorCode(error)).toBe(MutationErrorCode.invalidPhase)
     expect(calls).toEqual([])
+  })
+
+  // Stepping back into `brainstorm` is a legal single step, so the phase gate alone would let a
+  // facilitator flip anonymity on a board whose cards are already published and synced.
+  it('refuses an anonymity flip once the retro has cards, back in brainstorm', async () => {
+    const { tx, calls } = fakeTx([retroRow({ facilitatorId: ADMIN.userID }), [{ id: 'card-1' }]])
+    const error = await capture(
+      mutators.retro.configure.fn({
+        tx,
+        args: { id: RETRO_ID, isAnonymous: true, updatedAt: 7 },
+        ctx: ADMIN,
+      }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.invalidPhase)
+    expect(calls).toEqual([])
+  })
+
+  it('leaves the budget settable while the board is still empty', async () => {
+    const { tx, calls } = fakeTx([retroRow({ facilitatorId: ADMIN.userID })])
+    await mutators.retro.configure.fn({
+      tx,
+      args: { id: RETRO_ID, votesPerParticipant: 8, updatedAt: 7 },
+      ctx: ADMIN,
+    })
+    expect(calls).toEqual([
+      {
+        table: 'retro',
+        verb: 'update',
+        value: { id: RETRO_ID, votesPerParticipant: 8, updatedAt: 7 },
+      },
+    ])
   })
 
   it('refuses a format change once any draft exists', async () => {

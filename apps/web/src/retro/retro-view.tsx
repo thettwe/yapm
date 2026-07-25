@@ -1,15 +1,20 @@
 import { useQuery } from '@rocicorp/zero/react'
 import { useNavigate } from '@tanstack/react-router'
 import {
+  MAX_VOTES_PER_PARTICIPANT,
+  MIN_VOTES_PER_PARTICIPANT,
   queries,
+  RETRO_FORMATS,
   RETRO_PHASES,
   RETRO_PRESENCE_HEARTBEAT_MS,
+  type RetroFormat,
   type RetroPhase,
   type RetroSeed,
   type RetroSeedRef,
 } from '@yapm/schema'
 import { Avatar, AvatarFallback } from '@yapm/ui/components/avatar'
 import { Button } from '@yapm/ui/components/button'
+import { Select } from '@yapm/ui/components/select'
 import { cn } from '@yapm/ui/lib/utils'
 import { ArrowLeftIcon, ArrowRightIcon, TimerIcon, TimerOffIcon, UserIcon } from 'lucide-react'
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -204,6 +209,14 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
     [drafts],
   )
 
+  // The ids of the cards this caller wrote. A published card reuses its draft's id, and the draft
+  // query is self-filtered — so this set is exactly "my cards", built WITHOUT ever learning anyone
+  // else's authorship. It is what lets an author retract their own card, matching the mutator.
+  const ownCardIds = useMemo<ReadonlySet<string>>(
+    () => new Set((drafts as readonly { id: string }[]).map((draft) => draft.id)),
+    [drafts],
+  )
+
   const myVotes = useMemo<RetroVoteRowData[]>(
     () =>
       (votes as readonly RetroVoteRowData[]).map((vote) => ({
@@ -250,6 +263,7 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
       presence={presence}
       drafts={myDrafts}
       votes={myVotes}
+      ownCardIds={ownCardIds}
       users={users as readonly RelatedUser[]}
       teamMemberIds={((team.members ?? []) as readonly { userId: string }[]).map((m) => m.userId)}
       cycles={(cycles as readonly { id: string; name: string }[]).map((cycle) => ({
@@ -273,6 +287,7 @@ interface RetroShellProps {
   presence: readonly RetroPresenceData[]
   drafts: readonly RetroDraftData[]
   votes: readonly RetroVoteRowData[]
+  ownCardIds: ReadonlySet<string>
   users: readonly RelatedUser[]
   teamMemberIds: readonly string[]
   cycles: readonly { id: string; name: string }[]
@@ -338,6 +353,8 @@ function RetroShell(props: RetroShellProps) {
       columns={props.columns}
       cards={props.cards}
       groups={props.groups}
+      votes={props.votes}
+      actions={props.actions}
       members={members}
       canWrite={canWrite}
       facilitator={facilitator}
@@ -405,6 +422,7 @@ function RetroSurface({
   presence,
   drafts,
   votes,
+  ownCardIds,
   users,
   cycles,
   api,
@@ -471,6 +489,14 @@ function RetroSurface({
   const back = previousPhase(retro.phase)
   const canFacilitate = facilitator && canWrite
   const canAct = retroCan(retro.phase, 'action', { canWrite })
+  // Format, anonymity and the dot budget are all settable only while the retro still has nothing
+  // to re-column or attribute. `configure` is brainstorm-only, but stepping BACK into brainstorm
+  // after publish would otherwise re-open all three, so the card count is part of the gate — the
+  // same pair of conditions `retro.configure` enforces authoritatively.
+  const configurable =
+    canFacilitate &&
+    retroCan(retro.phase, 'configure', { canWrite, facilitator: true }) &&
+    cards.length === 0
 
   // Retro-wide shortcuts. Card/vote/group keys belong to the focused card and live on the board;
   // these are the ones that act on the retro itself, so they are read at the window and ignored
@@ -482,7 +508,8 @@ function RetroSurface({
         target?.isContentEditable ||
         target?.tagName === 'INPUT' ||
         target?.tagName === 'TEXTAREA' ||
-        target?.closest('[role="dialog"]') != null
+        target?.tagName === 'SELECT' ||
+        target?.closest('[role="dialog"], [role="listbox"], [role="combobox"]') != null
       if (editing) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
 
@@ -539,15 +566,20 @@ function RetroSurface({
       <header className="flex flex-col gap-3 border-b border-border px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-base font-semibold tracking-tight text-text-1">{retro.title}</h1>
-          <span className="rounded-full bg-bg-sidebar px-2 py-0.5 text-[11px] font-medium text-text-2">
-            {RETRO_FORMAT_LABEL[retro.format]}
-          </span>
+          <FormatControl
+            format={retro.format}
+            canConfigure={configurable}
+            onChange={(next) => void api.setFormat(next)}
+          />
           <AnonymityControl
             anonymous={retro.isAnonymous}
-            canConfigure={
-              canFacilitate && retroCan(retro.phase, 'configure', { canWrite, facilitator: true })
-            }
+            canConfigure={configurable}
             onToggle={(next) => void api.setAnonymous(next)}
+          />
+          <BudgetControl
+            budget={retro.votesPerParticipant}
+            canConfigure={configurable}
+            onChange={(next) => void api.setVoteBudget(next)}
           />
           <div className="ml-auto flex items-center gap-2">
             <PresenceStrip presence={live} />
@@ -611,6 +643,7 @@ function RetroSurface({
           tallies={tallies}
           drafts={drafts}
           votes={votes}
+          ownCardIds={ownCardIds}
           authorOf={authorOf}
           canWrite={canWrite}
           facilitator={facilitator}
@@ -643,6 +676,7 @@ function RetroSurface({
           teamKey={teamKey}
           canWrite={canWrite}
           composerOpen={actionComposerOpen}
+          onFocusAction={command.setFocusedAction}
           onOpenComposer={onOpenActionComposer}
           onCloseComposer={onCloseActionComposer}
           api={api}
@@ -672,15 +706,22 @@ function PhaseStepper({
   const forward = nextPhase(phase)
   const back = previousPhase(phase)
 
+  // At either end of the machine one arrow stops being usable. Natively disabling it while it holds
+  // focus makes the browser blur it to <body>, stranding a keyboard user at the top of the
+  // document — so the arrow stays focusable, states its unavailability with `aria-disabled`, and
+  // no-ops. Focus never moves as a side effect of stepping.
+  const unavailable = 'aria-disabled:pointer-events-none aria-disabled:opacity-50'
+
   return (
     <nav className="flex items-center gap-1" aria-label="Retro phase">
       {canFacilitate ? (
         <Button
           size="icon-xs"
           variant="ghost"
+          className={unavailable}
           aria-label={back ? `Step back to ${PHASE_LABEL[back]}` : 'Step back'}
           aria-keyshortcuts="["
-          disabled={back === null}
+          aria-disabled={back === null}
           data-testid="retro-phase-back"
           onClick={() => back && onStep(back)}
         >
@@ -712,9 +753,10 @@ function PhaseStepper({
         <Button
           size="icon-xs"
           variant="ghost"
+          className={unavailable}
           aria-label={forward ? `Advance to ${PHASE_LABEL[forward]}` : 'Advance'}
           aria-keyshortcuts="]"
-          disabled={forward === null}
+          aria-disabled={forward === null}
           data-testid="retro-phase-forward"
           onClick={() => forward && onStep(forward)}
         >
@@ -796,9 +838,82 @@ function TimerControl({
   )
 }
 
+// The four starter formats, chosen while the retro is still empty. A format change replaces the
+// columns, so the mutator refuses once any draft or card exists — including drafts this client
+// cannot see, which is why the failure surfaces in the error line rather than being pre-empted.
+function FormatControl({
+  format,
+  canConfigure,
+  onChange,
+}: {
+  format: RetroFormat
+  canConfigure: boolean
+  onChange: (next: RetroFormat) => void
+}) {
+  if (!canConfigure) {
+    return (
+      <span className="rounded-full bg-bg-sidebar px-2 py-0.5 text-[11px] font-medium text-text-2">
+        {RETRO_FORMAT_LABEL[format]}
+      </span>
+    )
+  }
+  // `Select` fills its wrapper, so the header bounds it rather than letting it claim a whole row.
+  return (
+    <span className="w-52">
+      <Select
+        aria-label="Retro format"
+        className="h-7 text-xs"
+        data-testid="retro-format"
+        value={format}
+        onChange={(event) => onChange(event.target.value as RetroFormat)}
+      >
+        {RETRO_FORMATS.map((entry) => (
+          <option key={entry} value={entry}>
+            {RETRO_FORMAT_LABEL[entry]}
+          </option>
+        ))}
+      </Select>
+    </span>
+  )
+}
+
+// One knob, one row: how many dots each participant may spend. Settable only while the retro is
+// still empty, and enforced authoritatively per voter when a dot is cast.
+function BudgetControl({
+  budget,
+  canConfigure,
+  onChange,
+}: {
+  budget: number
+  canConfigure: boolean
+  onChange: (next: number) => void
+}) {
+  if (!canConfigure) return null
+  return (
+    <span className="w-32">
+      <Select
+        aria-label="Dots per person"
+        className="h-7 text-xs"
+        data-testid="retro-vote-budget-set"
+        value={String(budget)}
+        onChange={(event) => onChange(Number(event.target.value))}
+      >
+        {Array.from(
+          { length: MAX_VOTES_PER_PARTICIPANT - MIN_VOTES_PER_PARTICIPANT + 1 },
+          (_, index) => MIN_VOTES_PER_PARTICIPANT + index,
+        ).map((dots) => (
+          <option key={dots} value={dots}>
+            {dots === 1 ? '1 dot each' : `${dots} dots each`}
+          </option>
+        ))}
+      </Select>
+    </span>
+  )
+}
+
 // Anonymity is a storage fact, not a display option, and it is fixed BEFORE any card exists — so
-// the control only exists while `configure` is allowed (brainstorm) and only for the facilitator.
-// Once the retro leaves brainstorm the badge remains as a statement of what the retro is.
+// the control only exists while `configure` is allowed (brainstorm, nothing published yet) and
+// only for the facilitator. After that the badge remains as a statement of what the retro is.
 function AnonymityControl({
   anonymous,
   canConfigure,

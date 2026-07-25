@@ -16,6 +16,7 @@ export interface RetroActionsProps {
   teamKey: string
   canWrite: boolean
   composerOpen: boolean
+  onFocusAction: (actionId: string | null) => void
   onOpenComposer: () => void
   onCloseComposer: () => void
   api: RetroApi
@@ -32,6 +33,7 @@ export function RetroActions({
   teamKey,
   canWrite,
   composerOpen,
+  onFocusAction,
   onOpenComposer,
   onCloseComposer,
   api,
@@ -44,6 +46,13 @@ export function RetroActions({
     <section
       className="flex w-96 shrink-0 flex-col gap-2 overflow-y-auto border-l border-border bg-bg-sidebar/40 p-3"
       aria-label="Action items"
+      // The palette's "Convert this action to an issue" acts on whatever the keyboard last held,
+      // recorded here because opening the dialog moves focus off it — the same rule the board uses
+      // for the focused card.
+      onFocusCapture={(event) => {
+        const row = (event.target as HTMLElement).closest<HTMLElement>('[data-retro-action]')
+        onFocusAction(row?.dataset.retroAction ?? null)
+      }}
     >
       <header className="flex items-center gap-2">
         <h2 className="text-[12.5px] font-semibold tracking-[-0.006em] text-text-1">Actions</h2>

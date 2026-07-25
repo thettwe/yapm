@@ -1,7 +1,9 @@
 import {
+  type CycleOrderRow,
   initialRanks,
   isRetroWriteAllowed,
   newId,
+  nextCycleId,
   RETRO_FORMAT_COLUMNS,
   RETRO_PHASES,
   RETRO_PRESENCE_STALE_MS,
@@ -250,6 +252,21 @@ export function voteTarget(item: RetroBoardItem): {
     : { targetType: 'card', targetId: item.id }
 }
 
+// The same rule, resolved from a bare id: the board and the command palette both act on whatever
+// currently holds focus, and neither may send a dot at a card the mutator will refuse because it
+// has since been clustered. One function, so the two surfaces cannot drift.
+export function resolveVoteTarget(
+  cards: readonly RetroCardData[],
+  id: string,
+  kind: 'card' | 'group',
+): { targetType: RetroVoteTarget; targetId: string } {
+  if (kind === 'group') return { targetType: 'group', targetId: id }
+  const groupId = cards.find((card) => card.id === id)?.groupId ?? null
+  return groupId === null
+    ? { targetType: 'card', targetId: id }
+    : { targetType: 'group', targetId: groupId }
+}
+
 export function tallyFor(tallies: readonly RetroTallyData[], targetId: string): number {
   return tallies.find((tally) => tally.targetId === targetId)?.count ?? 0
 }
@@ -311,54 +328,55 @@ export function formatDuration(seconds: number): string {
   return seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds}s`
 }
 
+export interface RetroColumnArgs {
+  id: string
+  key: string
+  title: string
+  accentToken: RetroColumnAccent
+  rank: string
+}
+
+// A format's columns, minted at the CALL SITE — one per template entry, ranked in template order.
+// `retro.openForCycle` and `retro.configure` both re-validate the set against the named format, so
+// a client cannot inject its own columns under a known name.
+export function retroColumnArgsFor(format: RetroFormat): RetroColumnArgs[] {
+  const template = RETRO_FORMAT_COLUMNS[format]
+  const ranks = initialRanks(template.length)
+  return template.map((column, index) => ({
+    id: newId(),
+    key: column.key,
+    title: column.title,
+    accentToken: column.accentToken,
+    rank: ranks[index] ?? '',
+  }))
+}
+
 // Opening a retro mints the retro AND its column ids at the CALL SITE, because a mutator may
-// never mint an id — it re-runs on rebase. The columns are the named format's template, which
-// `retro.openForCycle` re-validates, so a client cannot inject its own under a known name.
+// never mint an id — it re-runs on rebase. The successor cycle (this retro's default action
+// target) is resolved HERE, by the same deterministic `nextCycleId` rule the rollover uses, so
+// every open path — the Cycles view, the retros list, the maintenance pass — agrees and an action
+// can never default into an already-completed cycle.
 export function openRetroArgs(
-  cycleId: string,
-  nextCycleId: string | null,
+  cycle: CycleOrderRow,
+  cycles: readonly CycleOrderRow[],
   format: RetroFormat,
 ): {
   id: string
   cycleId: string
   nextCycleId: string | null
   format: RetroFormat
-  columns: {
-    id: string
-    key: string
-    title: string
-    accentToken: RetroColumnAccent
-    rank: string
-  }[]
+  columns: RetroColumnArgs[]
   createdAt: number
   updatedAt: number
 } {
-  const template = RETRO_FORMAT_COLUMNS[format]
-  const ranks = initialRanks(template.length)
   const now = Date.now()
   return {
     id: newId(),
-    cycleId,
-    nextCycleId,
+    cycleId: cycle.id,
+    nextCycleId: nextCycleId(cycles, cycle),
     format,
-    columns: template.map((column, index) => ({
-      id: newId(),
-      key: column.key,
-      title: column.title,
-      accentToken: column.accentToken,
-      rank: ranks[index] ?? '',
-    })),
+    columns: retroColumnArgsFor(format),
     createdAt: now,
     updatedAt: now,
   }
-}
-
-// The next cycle by start date — the default target for this retro's action items.
-export function nextCycleIdAfter(
-  cycles: readonly { id: string; startDate: number }[],
-  cycleId: string,
-): string | null {
-  const ordered = [...cycles].sort((a, b) => a.startDate - b.startDate)
-  const index = ordered.findIndex((candidate) => candidate.id === cycleId)
-  return index === -1 ? null : (ordered[index + 1]?.id ?? null)
 }

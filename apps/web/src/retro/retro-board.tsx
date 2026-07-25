@@ -54,6 +54,7 @@ import {
   type RetroTallyData,
   type RetroVoteRowData,
   rankForSlot,
+  resolveVoteTarget,
   retroCan,
   tallyFor,
   voteTarget,
@@ -72,6 +73,9 @@ export interface RetroBoardProps {
   tallies: readonly RetroTallyData[]
   drafts: readonly RetroDraftData[]
   votes: readonly RetroVoteRowData[]
+  // The ids of the cards this caller wrote — their own retained drafts, which the mutator accepts
+  // as proof of authorship. Nobody else's authorship is knowable, so nobody else's control renders.
+  ownCardIds: ReadonlySet<string>
   authorOf: (userId: string) => RetroAuthor
   canWrite: boolean
   facilitator: boolean
@@ -105,6 +109,7 @@ export function RetroBoard({
   tallies,
   drafts,
   votes,
+  ownCardIds,
   authorOf,
   canWrite,
   facilitator,
@@ -130,6 +135,7 @@ export function RetroBoard({
   const canDraft = retroCan(retro.phase, 'draft', { canWrite })
   const canGroup = retroCan(retro.phase, 'group', { canWrite })
   const canVote = retroCan(retro.phase, 'vote', { canWrite })
+  const canAct = retroCan(retro.phase, 'action', { canWrite })
   const canModerate = retroCan(retro.phase, 'moderate', { canWrite })
 
   const sensors = useSensors(
@@ -179,18 +185,16 @@ export function RetroBoard({
   const castOrRetract = useCallback(
     (id: string, kind: 'card' | 'group', retract: boolean) => {
       if (!canVote) return
-      const card = kind === 'card' ? cardById.get(id) : undefined
-      const targetType = card?.groupId != null ? 'group' : kind
-      const targetId = card?.groupId != null ? card.groupId : id
+      const target = resolveVoteTarget(cards, id, kind)
       if (retract) {
-        const mine = myVotesFor(votes, targetId)
+        const mine = myVotesFor(votes, target.targetId)
         const last = mine[mine.length - 1]
         if (last) void api.retractVote(last.id)
         return
       }
-      void api.castVote(targetType, targetId)
+      void api.castVote(target.targetType, target.targetId)
     },
-    [api, canVote, cardById, votes],
+    [api, canVote, cards, votes],
   )
 
   const onKeyDown = useCallback(
@@ -201,7 +205,8 @@ export function RetroBoard({
         target?.isContentEditable ||
         target?.tagName === 'INPUT' ||
         target?.tagName === 'TEXTAREA' ||
-        target?.closest('[role="dialog"]') != null
+        target?.tagName === 'SELECT' ||
+        target?.closest('[role="dialog"], [role="listbox"], [role="combobox"]') != null
       if (editing) return
       const current = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
         '[data-retro-item]',
@@ -402,7 +407,9 @@ export function RetroBoard({
             canDraft={canDraft}
             canGroup={canGroup}
             canVote={canVote}
+            canAct={canAct}
             canModerate={canModerate}
+            ownCardIds={ownCardIds}
             facilitator={facilitator}
             api={api}
             activeId={activeId}
@@ -444,7 +451,9 @@ interface BoardColumnProps {
   canDraft: boolean
   canGroup: boolean
   canVote: boolean
+  canAct: boolean
   canModerate: boolean
+  ownCardIds: ReadonlySet<string>
   facilitator: boolean
   api: RetroApi
   activeId: string | null
@@ -470,7 +479,9 @@ function BoardColumn({
   canDraft,
   canGroup,
   canVote,
+  canAct,
   canModerate,
+  ownCardIds,
   facilitator,
   api,
   activeId,
@@ -568,13 +579,14 @@ function BoardColumn({
                     item={item}
                     columnId={column.id}
                     accent={accent}
-                    retro={retro}
                     votes={votes}
                     tallies={tallies}
                     authorOf={authorOf}
                     canGroup={canGroup}
                     canVote={canVote}
+                    canAct={canAct}
                     canModerate={canModerate}
+                    ownCardIds={ownCardIds}
                     facilitator={facilitator}
                     api={api}
                     activeId={activeId}
@@ -591,11 +603,11 @@ function BoardColumn({
                     card={item.card}
                     columnId={column.id}
                     accent={accent}
-                    retro={retro}
                     authorOf={authorOf}
                     draggable={canGroup}
                     canVote={canVote}
-                    canModerate={canModerate}
+                    canAct={canAct}
+                    canDelete={canModerate && (facilitator || ownCardIds.has(item.id))}
                     reducedMotion={reducedMotion}
                     dimmed={activeId === item.id}
                     votes={myVotesFor(votes, item.id).length}
@@ -804,13 +816,14 @@ interface GroupBlockProps {
   item: Extract<RetroBoardItem, { kind: 'group' }>
   columnId: string
   accent: RetroAccentKind
-  retro: RetroRowData
   votes: readonly RetroVoteRowData[]
   tallies: readonly RetroTallyData[]
   authorOf: (userId: string) => RetroAuthor
   canGroup: boolean
   canVote: boolean
+  canAct: boolean
   canModerate: boolean
+  ownCardIds: ReadonlySet<string>
   facilitator: boolean
   api: RetroApi
   activeId: string | null
@@ -826,13 +839,14 @@ function GroupBlock({
   item,
   columnId,
   accent,
-  retro,
   votes,
   tallies,
   authorOf,
   canGroup,
   canVote,
+  canAct,
   canModerate,
+  ownCardIds,
   facilitator,
   api,
   activeId,
@@ -927,7 +941,7 @@ function GroupBlock({
             <UngroupIcon />
           </Button>
         ) : null}
-        <ActionFromButton onClick={() => onActionFrom(item)} retro={retro} />
+        <ActionFromButton onClick={() => onActionFrom(item)} enabled={canAct} />
       </div>
       {item.cards.map((card) => (
         <SortableRetroCard
@@ -935,11 +949,11 @@ function GroupBlock({
           card={card}
           columnId={columnId}
           accent={accent}
-          retro={retro}
           authorOf={authorOf}
           draggable={canGroup}
           canVote={false}
-          canModerate={canModerate}
+          canAct={canAct}
+          canDelete={canModerate && (facilitator || ownCardIds.has(card.id))}
           reducedMotion={reducedMotion}
           dimmed={activeId === card.id}
           votes={0}
@@ -963,11 +977,11 @@ interface SortableRetroCardProps {
   card: RetroCardData
   columnId: string
   accent: RetroAccentKind
-  retro: RetroRowData
   authorOf: (userId: string) => RetroAuthor
   draggable: boolean
   canVote: boolean
-  canModerate: boolean
+  canAct: boolean
+  canDelete: boolean
   reducedMotion: boolean
   dimmed: boolean
   votes: number
@@ -984,11 +998,11 @@ function SortableRetroCard({
   card,
   columnId,
   accent,
-  retro,
   authorOf,
   draggable,
   canVote,
-  canModerate,
+  canAct,
+  canDelete,
   reducedMotion,
   dimmed,
   votes,
@@ -1000,11 +1014,16 @@ function SortableRetroCard({
   onAction,
   onOpenEvidence,
 }: SortableRetroCardProps) {
+  // dnd-kit defaults a draggable to `role="button"`, but a published card CONTAINS its own controls
+  // (vote +/-, group with…, make an action, remove, the evidence chip) — buttons nested inside a
+  // button. The card is a labelled group holding them; dnd-kit's Space/Enter pick-up rides on the
+  // listeners, not on the role, so keyboard dragging is unaffected.
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     data: { columnId, groupId: card.groupId, type: 'card' },
     disabled: !draggable,
     animateLayoutChanges: () => !reducedMotion,
+    attributes: { role: 'group' },
   })
 
   // dnd-kit reports a non-draggable card as aria-disabled because dragging is off, but the card
@@ -1070,8 +1089,8 @@ function SortableRetroCard({
               <GroupIcon />
             </Button>
           ) : null}
-          <ActionFromButton onClick={onAction} retro={retro} />
-          {canModerate ? (
+          <ActionFromButton onClick={onAction} enabled={canAct} />
+          {canDelete ? (
             <Button size="icon-xs" variant="ghost" aria-label="Remove card" onClick={onDelete}>
               <Trash2Icon />
             </Button>
@@ -1084,8 +1103,8 @@ function SortableRetroCard({
   )
 }
 
-function ActionFromButton({ onClick, retro }: { onClick: () => void; retro: RetroRowData }) {
-  if (!retroCan(retro.phase, 'action', { canWrite: true })) return null
+function ActionFromButton({ onClick, enabled }: { onClick: () => void; enabled: boolean }) {
+  if (!enabled) return null
   return (
     <Button size="xs" variant="ghost" onClick={onClick} data-testid="retro-action-from">
       Make an action
@@ -1113,12 +1132,15 @@ function VoteControl({
   }
   return (
     <span className="flex shrink-0 items-center gap-1">
+      {/* A natively disabled control that holds focus is blurred to <body> by the browser, which
+          strands a keyboard user after the last dot comes back. This one keeps focus and no-ops. */}
       <Button
         size="icon-xs"
         variant="ghost"
+        className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
         aria-label={`Retract a dot from ${label}`}
-        disabled={mine === 0}
-        onClick={onRetract}
+        aria-disabled={mine === 0}
+        onClick={() => mine > 0 && onRetract()}
         data-testid="retro-retract-vote"
       >
         −

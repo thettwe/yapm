@@ -50,8 +50,9 @@ Sequenced so the app runs after every task. The anonymity boundary (group 1–2)
 
 ## 6. Documentation
 
-- [x] 6.1 `apps/docs` **Retrospectives** feature page: phases, the storage-layer anonymity guarantee, the data panel and how it degrades without connectors, the action→issue loop, the keyboard map; sidebar entry + home link; `pnpm --filter @yapm/docs build` passes
-- [x] 6.2 Root docs: README (status + feature list), ROADMAP (the `retro-board` row + Phase-2 status). Confirm `.env.example` and TECHSTACK need no change (no new env var, no new dependency) and say so in the PR — verified: `git diff main...HEAD` touches neither, nor `pnpm-workspace.yaml` nor any `package.json` (design.md D-38)
+- [x] 6.1 `apps/docs` **Retrospectives** feature page: phases, the storage-layer anonymity guarantee, **dots** (budget, stacking, cluster targeting, server-enforced under concurrency, refunds), the data panel and how it degrades without connectors, the action→issue loop, the keyboard map; sidebar entry + home link; the Cycles page cross-links to it now that completion opens one; `pnpm --filter @yapm/docs build` passes (design.md D-44)
+- [x] 6.2 Root docs: README (status + feature list), ROADMAP (the `retro-board` row + Phase-2 status). `.env.example` **does** change — no new variable, but `CYCLE_MAINTENANCE`'s description was stale once the pass also opened retros and swept presence (design.md D-42). TECHSTACK confirmed unchanged: no dependency and no version moved, and `git diff main...HEAD` touches neither it, `pnpm-workspace.yaml`, nor any `package.json`
+- [x] 6.3 `reference/` corrections for what this change proved about the stack: `kysely-stack.md` — `Generated<ColumnTypeAlias>` nests and Kysely unwraps one level, with both compiler errors verbatim and the fix; `zero.md` — empty `and()` is TRUE while empty `or()` is FALSE (the half D-32 got wrong), and the client replica's Replicache-chunk layout that makes a from-the-replica privacy assertion meaningful (design.md D-43)
 
 ## 7. Gates
 

@@ -12,9 +12,12 @@ The board itself is deliberately small: columns, cards, clusters, dots, actions.
 that make it worth opening are the **data panel** that seeds the conversation and the
 **action → issue loop** that closes it.
 
-A retro opens automatically when a cycle completes, and lives at `/teams/<teamId>/retros`. You can
-also open one by hand from the [Cycles](/features/cycles/) view, and a completed cycle links
-straight to its retrospective.
+A retro lives at `/teams/<teamId>/retros`, and one opens whenever a cycle completes — whether you
+pressed **Complete cycle** yourself or the [scheduled rollover](/features/cycles/) closed it for
+you. Both go through the same mutator, which is a no-op when the cycle already has a retro, so the
+two can race and still produce exactly one. Any completed cycle that somehow has no retro — one
+closed before you upgraded, say — offers **Open a retrospective** in the [Cycles](/features/cycles/)
+view, and a completed cycle that has one links straight to it.
 
 ## Phases
 
@@ -87,6 +90,24 @@ behind.
 What that means in practice: no participant — including a workspace admin, using the product — can
 learn who wrote an anonymous card. Someone with direct access to your Postgres database can, because
 they have direct access to your database. If you self-host, that is you.
+
+## Dots
+
+Voting is dot voting. Each participant gets a budget — **three** by default, settable from one to
+ten while the retro is still in `brainstorm` — and may **stack** them: two dots on the thing you
+care most about is a legitimate use of the budget, not a bug. The header reads `2/3 dots left`
+throughout the `vote` phase.
+
+A dot goes on a card or on a **cluster**, never on a card inside one — a cluster votes as a unit, so
+a dot on a member card would count twice. A clustered card therefore shows no pip of its own, and
+pressing `v` while it is focused puts your dot on its cluster rather than refusing the keystroke.
+
+The budget is enforced by the **server**, not by the button being disabled: two tabs clicking at the
+same instant are serialised per voter, so you cannot spend four dots out of three by being fast. If
+a cast is refused after the fact, the optimistic dot is rolled back. Dots also come back to you
+automatically whenever their target stops being votable — deleting a card you voted on, dissolving a
+cluster, or (if the facilitator steps back to `group`) folding a voted-on card into a cluster all
+refund those dots to spend again, rather than leaving them stranded against your budget.
 
 ## The data panel
 
@@ -165,8 +186,8 @@ On the board:
 
 `Space` and `Enter` on a card are reserved for drag-and-drop: they pick a card up and drop it,
 which is how you cluster cards without a pointer. On your own draft during `brainstorm`, `Enter`
-opens the editor and `Backspace` deletes it. In the actions list, `⌘/Ctrl+Enter` converts the
-focused action into an issue. `Esc` always leaves the editor you are in.
+opens the editor and `Backspace` (or `Delete`) removes it. In the actions list, `⌘/Ctrl+Enter`
+converts the focused action into an issue. `Esc` always leaves the editor you are in.
 
 ## What is next
 

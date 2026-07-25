@@ -43,6 +43,10 @@ A cycle is completed in one of two ways, and both do exactly the same rollover:
   service), and it is idempotent: completing an already-completed cycle does nothing, so the
   scheduler and a manual **Complete cycle** can never double-move an issue.
 
+Either way, completing a cycle also opens its [retrospective](/features/retrospectives/) —
+already seeded with what the cycle actually delivered. Opening one is idempotent too: the
+scheduler and the button can race and still produce exactly one retro.
+
 ## Grouping and filtering by cycle in the list
 
 The issue list can **filter by cycle** — pick one or more cycles (or **No cycle**) to narrow

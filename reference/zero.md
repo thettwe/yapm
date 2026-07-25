@@ -1748,6 +1748,17 @@ export type MaterializeOptions = PreloadOptions;
 - IndexedDB DB name is derived from `userID` + `storageKey` + internal Zero info; names are prefixed with `rep`/`replicache`.
 - **Users sharing a computer can read each other's synced data** — Zero cannot prevent this. If it matters, set `kvStore: 'mem'`.
 - Logout: recreate `Zero` without `userID`. To wipe local data, `await zero.delete()`.
+- **The replica is stored as Replicache B-tree chunks, not one record per row.** A whole client
+  replica is a handful of IndexedDB values, each holding many rows. Rows live inside them under keys
+  of the form `e/<table>/<id>`, mapped to the row object. This matters when you want to *prove* a
+  privacy property — "client 2 never received client 1's draft" — from the real replica rather than
+  from the DOM (a DOM assertion cannot tell "not rendered" from "not received"). A naive
+  `getAll()`-then-`includes()` scan is worthless here: everything co-occurs inside the same chunk, so
+  every value appears adjacent to every other. Walk each stored value recursively instead, lift out
+  each `e/<table>/<id>` entry as its own row tagged with its table, and assert over *those*. See
+  `apps/web/e2e/retro.spec.ts`'s `readReplica` for a working implementation. ⚠️ Verified empirically
+  against 1.8.0 in Chromium; the chunk layout is Replicache-internal and unversioned, so treat it as
+  a testing affordance, never as an API.
 
 ### 8.4 Connection API
 
@@ -2581,7 +2592,16 @@ Previews (Vercel-style per-branch hostnames): set `ZERO_QUERY_URL`/`ZERO_MUTATE_
 - **Do not generate IDs inside mutators.** Mutators run multiple times (up to twice on the client for rebase, once on the server). Generate `crypto.randomUUID()` / `uuidv7` / `nanoid` at the **call site** and pass it in as an arg. Also avoid auto-increment PKs — optimistic creation with relationships breaks.
 - **Treat all ZQL results as immutable.** ZQL caches row objects across queries; mutating one mutates it everywhere.
 - **Client-side `tx.run` only sees synced data.** If no *active* query covers a row, a mutator's client-side read returns nothing, while the server read returns everything. Write mutators that tolerate this asymmetry (zbugs' `assertIsCreatorOrAdmin` returns a generic "not authorized" rather than distinguishing "missing").
-- **Deny reads by returning an empty query, not by throwing.** `q.where(({or}) => or())`.
+- **Deny reads by returning an empty query, not by throwing.** `q.where(({or}) => or())`. The two
+  empty junctions are the AST's constants, and they are **opposites** — from
+  `zql/src/query/expression.js` (1.8.0, verbatim): `isAlwaysTrue = type === 'and' && conditions.length === 0`,
+  `isAlwaysFalse = type === 'or' && conditions.length === 0`. So `{type:'and',conditions:[]}` is
+  TRUE and `{type:'or',conditions:[]}` is FALSE. If you ever **evaluate an AST yourself** — a test
+  harness compiling ZQL to SQL, a custom analyzer — you must encode both, and get them the right way
+  round. Defaulting an empty junction of either kind to `true` silently turns every deny-by-empty-query
+  in the registry into "return the whole table", and no test that never *runs* a denied query will
+  notice. (This is not hypothetical: it is exactly the defect the yapm Postgres harness shipped with
+  until the anonymity proof started evaluating denied paths over real rows.)
 - **Do auth checks before existence checks** in mutators, or you leak the existence of private rows (zbugs comments this explicitly).
 - **Always `await` writes** inside mutators.
 - **`defineQueries` / `defineMutators` exactly once at top level** — they assign the wire names.

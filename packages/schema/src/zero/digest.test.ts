@@ -185,6 +185,32 @@ describe('name-validator — team-level / blameless backstop', () => {
     expect(contentNamesMember(result, roster)).toBe(false)
   })
 
+  it('matches needles on word boundaries — a short name never false-blocks common words', () => {
+    const withIan = [{ name: 'Ian', email: 'ian@example.test' }]
+    const commonWords = content({
+      headline: 'The median build time fell and the guardian check stayed green.',
+      sections: [
+        {
+          title: 'What shipped',
+          items: [
+            {
+              kind: 'shipped',
+              summary: 'Indian-region latency dropped below the median.',
+              evidenceRefs: [{ kind: 'issue', id: 'issue-1' }],
+              confidence: 'high',
+            },
+          ],
+        },
+      ],
+    })
+    // "median", "guardian", "Indian" all contain "ian" but must NOT flag.
+    expect(contentNamesMember(commonWords, withIan)).toBe(false)
+    expect(dropItemsNamingMembers(commonWords, withIan).sections[0]?.items).toHaveLength(1)
+    // But the actual roster member, on a word boundary, still flags.
+    const namesIan = content({ headline: 'Ian shipped guest checkout.' })
+    expect(contentNamesMember(namesIan, withIan)).toBe(true)
+  })
+
   it('builds needles from full name and email handle, ignoring empty roster', () => {
     expect(rosterNameNeedles(roster)).toEqual(
       expect.arrayContaining(['alice smith', 'alice.smith', 'bob jones', 'bjones']),

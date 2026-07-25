@@ -423,6 +423,10 @@ function WorkspaceDefaults({
             Save
           </Button>
         </div>
+        <p className="text-[11px] text-text-3" data-testid="spend-so-far">
+          Spent ~${status.spendSoFarUsd.toFixed(2)} estimated
+          {status.spendCapUsd != null ? ` of $${status.spendCapUsd}` : ''}
+        </p>
       </div>
     </div>
   )

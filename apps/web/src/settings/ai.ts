@@ -8,6 +8,8 @@ export interface RedactedAiStatus {
   defaultProvider: AiProvider | null
   models: Partial<Record<AiProvider, string>>
   spendCapUsd: number | null
+  // Per-workspace ESTIMATED running total (sum of every ready digest's estimated cost).
+  spendSoFarUsd: number
   configuredProviders: AiProvider[]
 }
 

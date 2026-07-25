@@ -9,6 +9,7 @@ import {
   setConnectorSecret,
   upsertConnectorConfig,
 } from './connector.js'
+import { getWorkspaceAiSpendUsd } from './cycle-digest.js'
 import type { DB } from './types.js'
 
 // The AI configuration reuses the connector surface verbatim: one `connector_config` row per
@@ -152,6 +153,9 @@ export interface RedactedAiStatus {
   defaultProvider: AiProvider | null
   models: Partial<Record<AiProvider, string>>
   spendCapUsd: number | null
+  // The per-workspace ESTIMATED running total (sum of every ready digest's estimated cost) the cap
+  // is checked against — surfaced so an admin setting a cap can see spend-so-far.
+  spendSoFarUsd: number
   // Which providers have a stored key (names only — never the key material).
   configuredProviders: AiProvider[]
 }
@@ -173,11 +177,13 @@ export async function getRedactedAiStatus(
   const configuredProviders = keys.filter((key): key is AiProvider =>
     (AI_PROVIDERS as readonly string[]).includes(key),
   )
+  const spendSoFarUsd = await getWorkspaceAiSpendUsd(db, workspaceId)
   return {
     enabled: config.enabled,
     defaultProvider: data.defaultProvider ?? null,
     models: data.models,
     spendCapUsd: data.spendCapUsd ?? null,
+    spendSoFarUsd,
     configuredProviders,
   }
 }

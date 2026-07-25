@@ -105,10 +105,16 @@ export function rosterNameNeedles(roster: readonly RosterMember[]): string[] {
   return [...needles]
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// Match each needle on WORD BOUNDARIES, not raw substring: a member/handle like `ian` must flag
+// "Ian shipped X" but never false-block common words such as "median" or "guardian". This is the
+// "exact needle, never false-block on common words" behavior design.md decision 131 promises.
 function textNamesMember(text: string, needles: readonly string[]): boolean {
   if (needles.length === 0) return false
-  const hay = text.toLowerCase()
-  return needles.some((needle) => hay.includes(needle))
+  return needles.some((needle) => new RegExp(`\\b${escapeRegExp(needle)}\\b`, 'i').test(text))
 }
 
 // The deterministic name-validator backstop: true when any headline/item text names a workspace

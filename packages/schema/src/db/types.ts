@@ -107,6 +107,7 @@ export interface IssueTable {
   creator_id: string
   rank: Nullable<string>
   cycle_id: Nullable<string>
+  rolled_over_from_cycle_id: Nullable<string>
   project_id: Nullable<string>
   needs_triage: Generated<boolean>
   created_at: Generated<Timestamp>

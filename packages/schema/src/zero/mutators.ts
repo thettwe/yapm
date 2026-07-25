@@ -777,7 +777,15 @@ export const completeCycle = defineMutator(completeCycleArgs, async ({ tx, args,
   }[]
   for (const issue of issues) {
     if (!isUnfinished(issue.status)) continue
-    await tx.mutate.issue.update({ id: issue.id, cycleId: target, updatedAt: args.updatedAt })
+    // Stamp the origin cycle as we re-point the issue so a completed cycle's carried set survives
+    // the rollover: the cycle view reconstructs it from `rolledOverFromCycleId`, since the issue no
+    // longer points at this cycle. Deterministic (args-derived) — no id minted in the mutator.
+    await tx.mutate.issue.update({
+      id: issue.id,
+      cycleId: target,
+      rolledOverFromCycleId: args.id,
+      updatedAt: args.updatedAt,
+    })
   }
 })
 

@@ -53,7 +53,12 @@ export {
   upsertConnectorConfig,
   upsertConnectorInstallation,
 } from './connector.js'
-export { getCycleDigestByCycle, getWorkspaceAiSpendUsd } from './cycle-digest.js'
+export type { CycleNeedingDigest, CyclesNeedingDigestOptions } from './cycle-digest.js'
+export {
+  cyclesNeedingDigest,
+  getCycleDigestByCycle,
+  getWorkspaceAiSpendUsd,
+} from './cycle-digest.js'
 export { cycleFactsForTeam } from './cycle-facts.js'
 export type { AcceptInviteOptions, AcceptInviteRefusal, AcceptInviteResult } from './invite.js'
 export { acceptInvite } from './invite.js'

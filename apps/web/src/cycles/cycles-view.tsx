@@ -85,11 +85,17 @@ export function CyclesView({ teamId }: { teamId: string }) {
     [issues, selected],
   )
 
+  // The digest surface's evidence + scope-delta set: issues still pointing at the cycle PLUS the
+  // issues this cycle rolled forward on completion (they now point at the next cycle but carry
+  // `rolledOverFromCycleId`). Without the rolled-over set a completed cycle would report carried=0
+  // and an undercounted total, since `cycle.complete` re-points its unfinished issues away.
   const selectedRawIssues = useMemo<readonly DigestIssueRow[]>(
     () =>
       selected
         ? (issuesRaw.filter(
-            (issue) => (issue.cycleId ?? null) === selected.id,
+            (issue) =>
+              (issue.cycleId ?? null) === selected.id ||
+              (issue.rolledOverFromCycleId ?? null) === selected.id,
           ) as unknown as readonly DigestIssueRow[])
         : [],
     [issuesRaw, selected],

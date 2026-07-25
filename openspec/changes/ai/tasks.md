@@ -19,7 +19,7 @@
 
 ## 4. Schema: agent-as-actor tool registry
 
-- [x] 4.1 Generate the AI-SDK tool registry from `defineMutators` (one tool per mutator, `inputSchema` = the mutator's exported Zod args schema) plus read-only tools over the named queries; types live in `packages/schema` with no SDK/UI import.
+- [x] 4.1 Generate the AI-SDK tool registry from `defineMutators` (one tool per mutator, `inputSchema` = the mutator's exported Zod args schema); types live in `packages/schema` with no SDK/UI import. (Read-only tools over the named queries are deferred to a follow-up change — see design.md "Read-over-query tools deferred"; the read-only, structured-only digest flagship exercises no read tool.)
 - [x] 4.2 Add the tool-ceiling predicates + `activeTools` selection helpers (write/destructive tools flagged `needsApproval`, reads auto-run, least-privilege per task) and the audit shape (actor = agent, on-behalf-of = user).
 
 ## 5. Server: the gateway wrapper

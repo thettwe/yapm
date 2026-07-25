@@ -254,7 +254,7 @@ function ProviderRow({
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium text-text-1">{PROVIDER_LABELS[provider]}</span>
         {hasKey ? (
-          <span className="rounded-control bg-status-done/15 px-1.5 py-0.5 text-[11px] text-status-done">
+          <span className="rounded-control bg-status-done/15 px-1.5 py-0.5 text-[11px] text-text-1">
             Key stored
           </span>
         ) : fromEnv ? (

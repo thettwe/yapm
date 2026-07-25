@@ -191,6 +191,7 @@ describe('cycle.complete rollover', () => {
     for (const call of moved) {
       expect(call.table).toBe('issue')
       expect(call.value.cycleId).toBe('c2')
+      expect(call.value.rolledOverFromCycleId).toBe('c1')
     }
   })
 
@@ -202,7 +203,7 @@ describe('cycle.complete rollover', () => {
     expect(calls[1]).toEqual({
       table: 'issue',
       verb: 'update',
-      value: { id: 'i1', cycleId: null, updatedAt: 9 },
+      value: { id: 'i1', cycleId: null, rolledOverFromCycleId: 'c1', updatedAt: 9 },
     })
   })
 

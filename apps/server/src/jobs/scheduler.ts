@@ -1,5 +1,5 @@
-import type { CycleFacts } from '@yapm/schema'
-import type { DB } from '@yapm/schema/db'
+import { type CycleFacts, newId, upsertCycleDigest } from '@yapm/schema'
+import { cycleFactsForTeam, cyclesNeedingDigest, type DB } from '@yapm/schema/db'
 import { createServerMutators } from '@yapm/schema/server'
 import type { Kysely } from 'kysely'
 import { fromKysely, PgBoss } from 'pg-boss'
@@ -11,6 +11,13 @@ import { type CycleMaintenanceOptions, runCycleMaintenance } from './cycles.js'
 
 export const CYCLE_MAINTENANCE_QUEUE = 'cycle-maintenance'
 export const CYCLE_DIGEST_QUEUE = 'cycle-digest'
+
+// The manual-completion sweep bound: a cycle completed by hand (through the shared `cycle.complete`
+// mutator, which the scheduler never re-selects) is picked up for a digest by the next maintenance
+// cron if it completed within this window. Generous enough to survive a slow cron or a brief
+// outage, tight enough that enabling AI on an existing instance never back-fills every past cycle.
+const MANUAL_COMPLETION_SWEEP_WINDOW_MS = 60 * 60 * 1000
+const MANUAL_COMPLETION_SWEEP_LIMIT = 25
 
 export interface CycleScheduler {
   stop: () => Promise<void>
@@ -76,28 +83,37 @@ export async function startCycleScheduler(
     })
   }
 
+  const enqueueDigest = async (facts: CycleFacts): Promise<void> => {
+    const team = await db
+      .selectFrom('team')
+      .select('workspace_id')
+      .where('id', '=', facts.teamId)
+      .executeTakeFirst()
+    if (!team) return
+    await boss.send(CYCLE_DIGEST_QUEUE, { workspaceId: team.workspace_id, facts })
+  }
+
   const maintenanceOptions: CycleMaintenanceOptions = digest
-    ? {
-        onCycleClosing: async (facts: CycleFacts) => {
-          const team = await db
-            .selectFrom('team')
-            .select('workspace_id')
-            .where('id', '=', facts.teamId)
-            .executeTakeFirst()
-          if (!team) return
-          await boss.send(CYCLE_DIGEST_QUEUE, { workspaceId: team.workspace_id, facts })
-        },
-      }
+    ? { onCycleClosing: enqueueDigest }
     : {}
 
   await boss.work(CYCLE_MAINTENANCE_QUEUE, async () => {
-    const result = await runCycleMaintenance(
-      db,
-      dbProvider,
-      mutators,
-      Date.now(),
-      maintenanceOptions,
-    )
+    const now = Date.now()
+    const result = await runCycleMaintenance(db, dbProvider, mutators, now, maintenanceOptions)
+    // Catch cycles completed by hand (through the shared `cycle.complete` mutator, off the
+    // scheduler's radar) so an AI-configured workspace gets a digest for them too — reconstructing
+    // the pre-rollover facts from the rollover-origin marker, off the hot path. The scheduler-closed
+    // cycles in this same pass are excluded (they already enqueued with fresh facts).
+    if (digest) {
+      await sweepManualCompletions({
+        db,
+        dbProvider,
+        now,
+        exclude: result.completed,
+        enqueue: enqueueDigest,
+        logger,
+      })
+    }
     if (result.activated.length > 0 || result.completed.length > 0) {
       logger.info(
         { activated: result.activated, completed: result.completed },
@@ -113,5 +129,50 @@ export async function startCycleScheduler(
     stop: async () => {
       await boss.stop({ graceful: true })
     },
+  }
+}
+
+interface SweepManualCompletionsOptions {
+  db: Kysely<DB>
+  dbProvider: ZeroDatabase
+  now: number
+  exclude: string[]
+  enqueue: (facts: CycleFacts) => Promise<void>
+  logger: Logger
+}
+
+// Enqueue a digest for each recently hand-completed cycle that has no digest row yet. Before
+// enqueuing, stamp a `pending` `cycle_digest` (unique on `cycle_id`) so a following maintenance pass
+// does not re-select — and re-spend on — the same cycle before the worker writes the real result;
+// the worker's `upsertCycleDigest` then updates that row in place. Facts are reconstructed AFTER
+// rollover via the rollover-origin marker, so the carried set is intact.
+async function sweepManualCompletions(options: SweepManualCompletionsOptions): Promise<void> {
+  const { db, dbProvider, now, exclude, enqueue, logger } = options
+  const orphans = await cyclesNeedingDigest(db, {
+    completedSince: new Date(now - MANUAL_COMPLETION_SWEEP_WINDOW_MS),
+    exclude,
+    limit: MANUAL_COMPLETION_SWEEP_LIMIT,
+  })
+  for (const orphan of orphans) {
+    const facts = await cycleFactsForTeam(db, orphan.teamId, orphan.id)
+    if (!facts) continue
+    await dbProvider.transaction((tx) =>
+      upsertCycleDigest(tx, {
+        id: newId(),
+        teamId: facts.teamId,
+        cycleId: facts.cycleId,
+        status: 'pending',
+        content: null,
+        provider: null,
+        model: null,
+        generatedAt: null,
+        inputToken: null,
+        outputToken: null,
+        estimatedCostUsd: null,
+        now,
+      }),
+    )
+    await enqueue(facts)
+    logger.info({ cycleId: orphan.id }, 'enqueued digest for a manually-completed cycle')
   }
 }

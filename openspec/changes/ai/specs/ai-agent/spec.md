@@ -2,7 +2,9 @@
 
 ### Requirement: Agent-as-actor — tools are mutators under the invoking user's ceiling
 
-The system SHALL model the AI as an actor that reads via the same named Zero queries and acts via the same shared mutators as a human, under the invoking user's `AuthContext`. One AI-SDK tool SHALL be generated per yapm mutator from `defineMutators`, with the tool's `inputSchema` being the mutator's existing exported Zod args schema — no parallel schema — so the model can never call anything a human could not. Each tool's `execute` SHALL invoke the same mutator function the human UI calls, passing an `AuthContext` derived from the invoking user, so the workspace role is an automatic ceiling: a viewer's agent SHALL be rejected for every write, a member's agent SHALL be able to write but not manage. Identity fields SHALL be taken from `ctx`, never from model output. Reads SHALL be exposed as read-only tools over the named queries, each running under `ctx` so out-of-scope rows are masked. Any agent-created row's UUIDv7 SHALL be minted at the tool `execute` call site, never inside a mutator body.
+The system SHALL model the AI as an actor that reads via the same named Zero queries and acts via the same shared mutators as a human, under the invoking user's `AuthContext`. One AI-SDK tool SHALL be generated per yapm mutator from `defineMutators`, with the tool's `inputSchema` being the mutator's existing exported Zod args schema — no parallel schema — so the model can never call anything a human could not. Each tool's `execute` SHALL invoke the same mutator function the human UI calls, passing an `AuthContext` derived from the invoking user, so the workspace role is an automatic ceiling: a viewer's agent SHALL be rejected for every write, a member's agent SHALL be able to write but not manage. Identity fields SHALL be taken from `ctx`, never from model output. Any agent-created row's UUIDv7 SHALL be minted at the tool `execute` call site, never inside a mutator body.
+
+> **Deferred to a follow-up change** (recorded in design.md, "Read-over-query tools deferred"): exposing the named queries as auto-run read-only tools (each running under `ctx` so out-of-scope rows are masked). The write path (agent-as-actor under the role ceiling + HITL) is the injection-critical surface delivered here; the read-only, structured-only cycle-digest flagship exercises no read tool. The two scenarios below marked *(Deferred)* land with that follow-up.
 
 Work-graph placement: the agent writes/reads through the same mutators and queries as humans; it introduces no separate write path. Permission story: the invoking user's role is the ceiling — there is no separate "agent permission" system.
 
@@ -32,12 +34,12 @@ Work-graph placement: gates the agent's write path onto the shared mutators. Per
 - **WHEN** an agent decides to call a write/destructive tool
 - **THEN** the loop pauses on an approval request and the mutation runs only after the user confirms it in-UI
 
-#### Scenario: Reads auto-run, writes wait
+#### Scenario: Reads auto-run, writes wait *(Deferred — lands with the read-over-query-tools follow-up)*
 
 - **WHEN** an agent run mixes read and write tool calls
 - **THEN** read tools execute automatically and every write tool waits for approval
 
-#### Scenario: Least-privilege tool set
+#### Scenario: Least-privilege tool set *(Deferred — lands with the read-over-query-tools follow-up)*
 
 - **WHEN** a read-only task (e.g. summarizing a cycle) runs
 - **THEN** only read tools are active and no management or write tool is reachable in that run

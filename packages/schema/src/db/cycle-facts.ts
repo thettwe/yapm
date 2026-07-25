@@ -23,11 +23,18 @@ export async function cycleFactsForTeam(
 
   const team = await db.selectFrom('team').select('key').where('id', '=', teamId).executeTakeFirst()
 
+  // Match the cycle's issues by BOTH the live pointer and the rollover-origin marker, so the facts
+  // are correct whether this runs BEFORE rollover (the scheduler's `onCycleClosing` — every issue
+  // still points at `cycleId`, no marker set yet) or AFTER it (the maintenance sweep re-computing a
+  // manually-completed cycle — done/canceled issues still point here, carried issues moved on but
+  // carry `rolled_over_from_cycle_id = cycleId`). An issue never matches both branches.
   const issues = await db
     .selectFrom('issue')
     .select(['id', 'number', 'title', 'status'])
-    .where('cycle_id', '=', cycleId)
     .where('team_id', '=', teamId)
+    .where((eb) =>
+      eb.or([eb('cycle_id', '=', cycleId), eb('rolled_over_from_cycle_id', '=', cycleId)]),
+    )
     .execute()
 
   const issueIds = issues.map((issue) => issue.id)

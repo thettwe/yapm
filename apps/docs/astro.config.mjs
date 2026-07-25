@@ -24,6 +24,7 @@ export default defineConfig({
           items: [
             { label: 'Connect GitHub', slug: 'self-hosting/github-connector' },
             { label: 'Enable AI', slug: 'self-hosting/ai-setup' },
+            { label: 'Sync connection & recovery', slug: 'self-hosting/sync-recovery' },
           ],
         },
       ],

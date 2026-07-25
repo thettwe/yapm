@@ -272,7 +272,8 @@ failure look like a logout; keeping it is the whole fix.
 `/api/zero/token` additively returns `expiresAt` (epoch seconds), read from the JWT it just
 minted via the existing local `verifySyncToken` JWKS path — no new dependency, no hardcoded
 duplicate of `SYNC_TOKEN_EXPIRATION`. The client schedules a re-mint at **75% of the
-remaining lifetime**, clamped to `[60s, 30min]` (so ≈45min on today's 1h token), and also
+remaining lifetime**, clamped to `[60s, 30min]` — on today's 1h token the clamp binds first, so
+the refresh lands 30min in rather than at the 45min the fraction alone would give — and also
 re-mints on `visibilitychange → visible` and on `online` when more than half the lifetime
 has elapsed — timers do not fire faithfully across a laptop sleep, which is precisely the
 scenario in the report. If `expiresAt` is absent (an older server behind a newer client), it
@@ -671,8 +672,10 @@ is why the helper starts in `pass-through` and the app signs in *through* it. An
 is served entirely in-process: `context.setOffline(true)` does not stop it, so what marks the
 start of the outage is the interception count, not the connection state.
 
-Zero 1.8 carries `initConnection` in the socket URL, so a mock that waits for a message from the
-page waits forever; the error is pushed as soon as the socket is up.
+Zero 1.8 carries `initConnection` and the auth token in the socket's `Sec-WebSocket-Protocol`
+header (not as a first client message, and not in the URL, which carries only the connection's
+identifiers), so a mock that waits for a message from the page waits forever; the error is pushed
+as soon as the socket is up. Harvested into `reference/zero.md` §8.4.
 
 **Mutation-tested.** With the pre-change client behaviour restored in place — `recoveryPlan`
 returning `{kind:'none'}` for `error` and `disconnected`, the identical-token `connect()` fallback

@@ -1796,6 +1796,12 @@ Reads/writes by state (docs, verbatim):
 | `InvalidConnectionRequest*`, `ClientNotFound`, `InvalidMessage`, `InvalidPush`, `VersionNotSupported`, `SchemaVersionNotSupported`, `Internal`, other `TransformFailed`/`PushFailed` | `error` |
 | `Rebalance`, `Rehome`, `ServerOverloaded` | no transition; `minBackoffMs`/`maxBackoffMs` from the body are honoured |
 
+**The connect handshake carries everything — the client sends no first message** (read from `createSocket` / `createConnectionURL` in `zero-client/src/client/zero.js` and `encodeSecProtocols` in `zero-protocol/src/connect.js`, 1.8.0). The socket URL is `<server>/sync/v51/connect` with `clientID`, `clientGroupID`, `userID`, `baseCookie`, `ts`, `lmid`, `wsid`, `profileID` as query parameters. The `initConnection` message *and the auth token* travel in the **`Sec-WebSocket-Protocol`** header instead, as `encodeURIComponent(btoa(JSON.stringify({initConnectionMessage, authToken})))`, which the server decodes with `decodeSecProtocols`. Two consequences worth knowing:
+
+- The token is neither a query parameter nor an `Authorization` header, so it does not appear in a proxy's access log — but it is also invisible to anything that only inspects those.
+- A test double or proxy standing in for zero-cache must push as soon as the socket is open. Waiting for a first message from the page waits forever.
+- If the encoded protocol exceeds `maxHeaderLength` (default 8 KB) the client silently re-encodes with the auth token alone — no `initConnection`, no desired-queries patch — and only warns if the token by itself is still over. A large query set therefore changes the handshake shape without saying so.
+
 Forward connection errors to Sentry (docs, verbatim):
 
 ```ts

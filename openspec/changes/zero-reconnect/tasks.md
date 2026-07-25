@@ -64,10 +64,10 @@
 
 ## 11. Documentation
 
-- [ ] 11.1 Add `apps/docs/src/content/docs/self-hosting/sync-recovery.md` — the connection states a user can see, automatic re-mint + bounded backoff, the 1h sync-token lifetime and proactive refresh, and what to check when it stays reconnecting (zero-cache logs, `ZERO_QUERY_URL` reachability from the container, clock skew) — and register it in the Starlight sidebar in `apps/docs/astro.config.mjs`.
+- [x] 11.1 Add `apps/docs/src/content/docs/self-hosting/sync-recovery.md` — the connection states a user can see, automatic re-mint + bounded backoff, the 1h sync-token lifetime and proactive refresh, and what to check when it stays reconnecting (zero-cache logs, `ZERO_QUERY_URL` reachability from the container, clock skew) — and register it in the Starlight sidebar in `apps/docs/astro.config.mjs`.
 - [x] 11.2 Update `reference/zero.md` with the facts harvested from the 1.8.0 sources for this change: the `/query` validation round trip and `server-validated` userID matching, the background-connection requirement for shared query work, `connect()`'s terminal-state-only rule, and the 401-vs-200 rejection contract restated at the endpoint level.
-- [ ] 11.3 Update `ROADMAP.md` with a row for this change, and `PROCESS.md` §3 so the E2E tier explicitly lists reconnection/recovery; update `README.md` only where this change makes it stale. No `.env.example` or `TECHSTACK.md` change (no new env var, no version change) — confirm by inspection.
-- [ ] 11.4 `pnpm --filter @yapm/docs build` passes.
+- [x] 11.3 Update `ROADMAP.md` with a row for this change, and `PROCESS.md` §3 so the E2E tier explicitly lists reconnection/recovery; update `README.md` only where this change makes it stale. No `.env.example` or `TECHSTACK.md` change (no new env var, no version change) — confirmed by inspection: the Zod env schema is untouched by this change, and TECHSTACK's only sync-connection claim ("Zero rejects writes while offline, so disconnection must be visible in the UI") is what this change makes *more* true.
+- [x] 11.4 `pnpm --filter @yapm/docs build` passes.
 
 ## 12. Verification
 

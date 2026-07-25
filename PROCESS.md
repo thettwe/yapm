@@ -22,7 +22,7 @@ Audiences: evaluators (why / the work-graph wedge), self-hosters (install, 3-con
 
 - **Unit** (Vitest, no DB): pure logic — mutator validation, permission predicates, color/ordering math, filter logic.
 - **Integration** (Vitest against live Postgres + zero-cache): migrations, schema-drift, synced-query permission **scoping**, mutator authz end-to-end, per-team numbering. Self-gated by `describe.skipIf(DATABASE_URL === undefined)`, with an in-CI guard that fails if the DB is absent.
-- **E2E** (Playwright against the real 3-container stack): keyboard flows, multi-client sync convergence, offline read / blocked-write, theme persistence.
+- **E2E** (Playwright against the real 3-container stack): keyboard flows, multi-client sync convergence, offline read / blocked-write, sync **reconnection and recovery** (a refused socket, the protocol errors zero-cache really sends, and a failing or hung sync-credential request — each asserting the visible reconnecting state and recovery *without* a page reload), theme persistence.
 
 **Big-feature rule** — a change needs all three tiers iff it touches **≥2 of** {synced entity/schema, mutator, permission surface, signature UI}. Otherwise it is small: unit + integration only; do not add E2E reflexively.
 

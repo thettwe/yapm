@@ -1788,6 +1788,14 @@ Reads/writes by state (docs, verbatim):
 
 `connect()` semantics (verbatim from `.d.ts`): "Calling `connect()` without `auth` preserves the current auth token. If Zero is already `connected`, it sends an auth update to the server _without_ reconnecting... This method does not reconnect from `disconnected` or `closed`."
 
+**How a downstream `["error", body]` becomes a state** (read from `zero-client/src/client/error.js`, 1.8.0). `body.origin` is optional in the wire schema but decisive in the client: `isServerError` requires `origin` to be `"server"` or `"zeroCache"`, and every kind-specific mapping below sits behind it. An `Unauthorized` body **without** `origin` is not recognised as a server error at all and lands in the generic `error` state instead of `needs-auth`.
+
+| Error kind (with `origin`) | Connection state |
+|---|---|
+| `Unauthorized`, `AuthInvalidated`; `TransformFailed`/`PushFailed` with `reason:'http'` and status 401/403 | `needs-auth` |
+| `InvalidConnectionRequest*`, `ClientNotFound`, `InvalidMessage`, `InvalidPush`, `VersionNotSupported`, `SchemaVersionNotSupported`, `Internal`, other `TransformFailed`/`PushFailed` | `error` |
+| `Rebalance`, `Rehome`, `ServerOverloaded` | no transition; `minBackoffMs`/`maxBackoffMs` from the body are honoured |
+
 Forward connection errors to Sentry (docs, verbatim):
 
 ```ts

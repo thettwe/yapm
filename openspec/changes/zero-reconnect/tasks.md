@@ -58,9 +58,9 @@
 
 ## 10. Reconnection e2e (Playwright)
 
-- [ ] 10.1 Add `apps/web/e2e/reconnect.spec.ts`: sign in, install a page-lifetime sentinel, drop the connection (`context.setOffline` and/or `page.routeWebSocket` against the zero-cache URL), assert the pill reports reconnecting with `data-recovery`, restore, then assert `data-connection="connected"`, data converging, and the sentinel intact — proving no page reload.
-- [ ] 10.2 Add the credential-failure case: `page.route('**/api/zero/token', …)` fails the request, assert the user stays signed in on the retry surface (never `/login`), then let it succeed and assert full recovery — including via the keyboard-only **Retry now** path.
-- [ ] 10.3 Confirm the new spec runs in the existing CI `e2e` job with no new service, port, or job.
+- [x] 10.1 Add `apps/web/e2e/reconnect.spec.ts`: sign in, install a page-lifetime sentinel, drop the connection (`context.setOffline` and/or `page.routeWebSocket` against the zero-cache URL), assert the pill reports reconnecting with `data-recovery`, restore, then assert `data-connection="connected"`, data converging, and the sentinel intact — proving no page reload. *(Five specs: a refused socket, the two protocol failures Zero parks in, and the two credential-request failures. The probe is both sentinel and heartbeat; see `design.md` → C18.)*
+- [x] 10.2 Add the credential-failure case: `page.route('**/api/zero/token', …)` fails the request, assert the user stays signed in on the retry surface (never `/login`), then let it succeed and assert full recovery — including via the keyboard-only **Retry now** path. *(Plus the hung-request case, which the 10s timeout has to abandon.)*
+- [x] 10.3 Confirm the new spec runs in the existing CI `e2e` job with no new service, port, or job. *(`pnpm --filter @yapm/web e2e` picks the file up from `testDir`; the only env it reads, `E2E_ZERO_CACHE_URL`, the job already sets.)*
 
 ## 11. Documentation
 

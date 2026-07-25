@@ -639,3 +639,68 @@ uses — so the client's refresh schedule can never drift from what the plugin a
 and `SYNC_TOKEN_EXPIRATION` is not duplicated anywhere. `VerifiedToken` gained
 `expiresAt: number | null`; a JWT without `exp` is tolerated (expiry is `jwtVerify`'s job) and
 simply leaves the client on its fixed-timer fallback.
+
+### C18. The reconnection e2e injects zero-cache's protocol error rather than waiting for one
+
+Three ways to break sync from Playwright were tried against the live stack; only the third
+reproduces the production failure inside a single test.
+
+*Rewriting `/api/zero/token` to hand back a credential the server refuses* is the most faithful
+to the bug report, but nothing makes the client re-mint at a controllable moment: the proactive
+timer is 30 minutes away on a 1h token, the wake re-check needs half a lifetime spent, and the
+recovery re-mint fires only from a broken state — the state we are trying to produce. Bootstrapping
+it with a reload was rejected: a test that reloads cannot then prove recovery happens *without* one.
+
+*Refusing every websocket* (`ws.close()` on the intercepted socket) produces the outage but not the
+failure: the client sits in `disconnected`, where Zero's own retry recovers it as soon as the
+sockets are let through. Kept as its own test — it is the "zero-cache restarted" case, and it is
+what asserts the pill's `Offline — retrying` and the `data-recovery` attribute.
+
+*Standing in for zero-cache and sending the protocol error it really sends* is the reproduction.
+The mock accepts the socket and pushes `["error", {kind, message, origin:'zeroCache'}]` — the
+literal `InvalidConnectionRequest: "No validated connection is available for shared query work."`
+of the bug report, and the `Unauthorized` that C12's 401 produces. Both park Zero in a state it
+never retries out of, with the rest of the stack healthy, so the credential the client re-mints
+is byte-identical to the one it holds: the `error`-recovery path and the identical-token
+`connect()` fallback are both exercised end to end, at a moment the test chooses.
+
+Two Playwright facts cost a debugging cycle each and are worth recording. `page.routeWebSocket`
+intercepts by patching the `WebSocket` constructor from an init script, so a route installed after
+the page has loaded silently never fires — it must be in place before the first navigation, which
+is why the helper starts in `pass-through` and the app signs in *through* it. And a mocked socket
+is served entirely in-process: `context.setOffline(true)` does not stop it, so what marks the
+start of the outage is the interception count, not the connection state.
+
+Zero 1.8 carries `initConnection` in the socket URL, so a mock that waits for a message from the
+page waits forever; the error is pushed as soon as the socket is up.
+
+**Mutation-tested.** With the pre-change client behaviour restored in place — `recoveryPlan`
+returning `{kind:'none'}` for `error` and `disconnected`, the identical-token `connect()` fallback
+disabled, and `fetchSyncCredential` mapping a thrown fetch to `no-session` with no timeout — all
+five specs fail, each on its own defect: no visible recovery on `disconnected`
+(`"connected/idle connecting/idle disconnected/idle"`), never leaving `error`, the page navigating
+to `/login` mid-outage (the probe assertion catches it: *"the page-lifetime probe is gone"*), and
+an indefinite `Loading…` for the hung request. The three files were restored from a pre-mutation
+copy and `git diff` is empty.
+
+### C19. A lingering `disconnected` does not re-mint while Zero is actively redialling — spec gap, not a regression
+
+Measured while building the e2e: with every websocket refused but the network up, the client made
+**zero `/api/zero/token` requests in 60 seconds**. `recoveryPlan('disconnected')` schedules its
+re-mint after `DISCONNECTED_GRACE_MS` (20s), but the scheduler lives in an effect keyed on the
+connection state, and Zero redials every ~5s — each `disconnected → connecting → disconnected`
+lap tears down the pending timer, so the 20s grace never elapses. The re-mint fires only if the
+client sits still in `disconnected` for the whole grace, which a client with a reachable network
+and an unreachable zero-cache never does.
+
+Left as is, deliberately. Recovery is not lost, only deferred by one round trip: when zero-cache
+returns, the socket opens with the stale credential, the endpoints answer 401, and the client
+lands in `needs-auth`, from which the re-mint is immediate and the e2e proves the recovery. The
+alternative — hoisting the timer out of the effect so it survives state changes — trades the
+scheduler's single owner and its cancel-on-transition guarantee for a case that costs one 401,
+and the hot loop this change exists to remove came from exactly that kind of bookkeeping. The
+`local-first-sync` scenario that reads "*when it reports `disconnected` beyond a short grace
+period, the client SHALL re-mint*" is therefore satisfied only for a client that stays
+`disconnected` without redialling (a sleeping tab, a dead network); the unit tests in §8.2 assert
+the action table, which is the part that is true unconditionally. Worth revisiting if a future
+change gives the scheduler a state-independent clock.

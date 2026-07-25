@@ -6,6 +6,7 @@ import {
   type IssuePriority,
   type IssueSort,
   type IssueStatus,
+  type LinkedEntities,
   matchesFilter,
 } from '@yapm/schema'
 import type { PriorityKind } from '@yapm/ui/components/priority-mark'
@@ -97,6 +98,9 @@ export interface IssueRowData {
   readonly createdAt: number
   readonly labels?: readonly IssueLabelRow[]
   readonly assignee?: IssueAssigneeRow | null
+  // Assembled linked work-graph entities behind the delivery-signal seam (empty for an
+  // unlinked issue). Feeds the reality strip, the divergence flag, and reality-derived filters.
+  readonly linked?: LinkedEntities
 }
 
 export interface IssueGroup {
@@ -169,7 +173,10 @@ export function buildGroups(
   const projectIds = options.projectIds
   const filtered = issues.filter(
     (issue) =>
-      matchesFilter(issue, options.filter, { teamKey: options.teamKey }) &&
+      matchesFilter(issue, options.filter, {
+        teamKey: options.teamKey,
+        linkedFor: (candidate) => (candidate as IssueRowData).linked ?? {},
+      }) &&
       (cycleIds === undefined || cycleIds.includes(issue.cycleId ?? null)) &&
       (projectIds === undefined || projectIds.includes(issue.projectId ?? null)),
   )

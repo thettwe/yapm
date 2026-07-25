@@ -109,8 +109,11 @@ function matchesDelivery(
         return signal.ciHealth === 'failing'
       case 'blocked-on-review':
         return signal.pr === 'open'
+      // The delivery signal carries no deployment field and the issue->deployment edge is
+      // deferred, so this predicate has no data to consult: per the issue-list spec it matches
+      // nothing rather than aliasing to merged (which would wrongly include merged+deployed).
       case 'merged-not-deployed':
-        return signal.pr === 'merged'
+        return false
       default:
         return false
     }

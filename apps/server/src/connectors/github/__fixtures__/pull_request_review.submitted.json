@@ -1,0 +1,19 @@
+{
+  "action": "submitted",
+  "review": {
+    "id": 9001,
+    "node_id": "PRR_kwXYZ",
+    "state": "approved",
+    "submitted_at": "2026-07-20T14:15:00Z",
+    "user": { "login": "reviewer-jane" }
+  },
+  "pull_request": {
+    "id": 5001,
+    "number": 12,
+    "state": "open",
+    "head": { "sha": "abc123def456", "ref": "eng-1-login-race" }
+  },
+  "repository": { "full_name": "acme/app" },
+  "sender": { "login": "reviewer-jane" },
+  "installation": { "id": 42 }
+}

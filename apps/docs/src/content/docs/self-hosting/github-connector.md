@@ -31,8 +31,8 @@ to own it under an organization).
 - **GitHub App name:** `yapm` (or `yapm-<yourorg>` if taken).
 - **Homepage URL:** your yapm URL.
 - **Webhook → Active:** checked.
-- **Webhook URL:** `https://<your-yapm-domain>/api/connectors/github/webhooks` (or your smee.io URL).
-  yapm's *Settings → Connectors → GitHub* screen shows the exact URL to paste.
+- **Webhook URL:** `https://<your-yapm-domain>/api/github/webhooks` (or your smee.io URL).
+  yapm's *Settings → Connectors* screen shows the exact URL to paste.
 - **Webhook secret:** generate one (`openssl rand -hex 32`) and paste it. **Save it** — yapm
   requires it to verify webhooks (HMAC-SHA256).
 - **Callback URL:** leave blank (only for user-login flows, which are not used yet).
@@ -67,18 +67,37 @@ Click **Create GitHub App**. On the App's page: **Private keys → Generate a pr
 a `.pem` file downloads. Keep it safe — GitHub stores only the public half, and anyone with this
 key can authenticate as your App.
 
-## 7. Capture these for yapm
+## 7. Set the environment variables
 
-1. **App ID**
-2. **Private key** (the `.pem`)
-3. **Webhook secret** (from step 2)
-4. *(optional, later)* Client ID / secret — only if user-login is added
+The three App values plus an encryption key become environment variables on your instance
+(Zod-validated at boot); they never touch the codebase. Never paste a private key into a chat or
+issue.
 
-These become environment variables on your instance (Zod-validated at boot); they never touch the
-codebase. Never paste a private key into a chat or issue.
+| Variable | From | Notes |
+|---|---|---|
+| `GITHUB_APP_ID` | App ID | numeric |
+| `GITHUB_APP_PRIVATE_KEY` | the `.pem` | PKCS#1 PEM; `\n`-escape or base64 the multiline value |
+| `GITHUB_APP_WEBHOOK_SECRET` | webhook secret (step 2) | verifies webhook HMAC |
+| `SECRETS_ENCRYPTION_KEY` | `openssl rand -base64 32` | base64 32 bytes; encrypts any UI-entered secrets at rest — **back this up**, losing it makes stored secrets unrecoverable |
+| `GITHUB_RECONCILE_CRON` | *(optional)* | how often the ETag reconcile sweep runs; default `*/15 * * * *` |
+
+**All optional.** With the three `GITHUB_APP_*` values **absent**, the connector is cleanly
+**disabled**: the webhook endpoint returns `404`, no ingestion queue or reconcile cron is created,
+boot is unaffected, and *Settings → Connectors* shows a "not configured" state naming the variables
+to set. A **partial** triplet (some but not all three) fails fast at boot naming the missing
+variable, so the connector never silently half-runs.
 
 ## 8. Install it
 
 On the App page → **Install App** → choose your account/org → **All repositories** or a selection.
 yapm receives an `installation` webhook with the installation ID and stores it per workspace to know
 which repos it can see.
+
+## 9. Map repositories to teams
+
+Open *Settings → Connectors* in yapm (workspace admins only), **Enable** the GitHub connector, and
+map each repository (`owner/repo`) to the team that should own its pull requests, checks, and
+deployments. Ingested work-graph rows land inside that team's boundary; a webhook for an unmapped
+repo is dropped. Once mapped, a PR whose branch name or body mentions an issue key (e.g. `ENG-142`)
+lights up that issue's **reality strip** — PR state, CI health, and review age — on the issue row
+and detail.

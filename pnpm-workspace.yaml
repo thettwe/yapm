@@ -28,6 +28,8 @@ catalog:
   '@hono/zod-openapi': ^1.5.1
   '@hono/zod-validator': ^0.9.0
   '@ladle/react': ^5.1.1
+  '@octokit/auth-app': ^8.2.0
+  '@octokit/webhooks': ^14.2.0
   '@playwright/test': ^1.61.1
   '@rocicorp/zero': ^1.8.0
   '@tailwindcss/vite': ^4.3.3

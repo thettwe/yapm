@@ -2,7 +2,18 @@ import { Avatar, AvatarFallback, AvatarImage } from '@yapm/ui/components/avatar'
 import { type PriorityKind, PriorityMark } from '@yapm/ui/components/priority-mark'
 import { StatusGlyph, type StatusKind } from '@yapm/ui/components/status-glyph'
 import { cn } from '@yapm/ui/lib/utils'
-import { TriangleAlertIcon } from 'lucide-react'
+import {
+  CheckIcon,
+  GitMergeIcon,
+  GitPullRequestArrowIcon,
+  GitPullRequestClosedIcon,
+  GitPullRequestDraftIcon,
+  GitPullRequestIcon,
+  LoaderIcon,
+  type LucideIcon,
+  TriangleAlertIcon,
+  XIcon,
+} from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 
 const LABEL_TONE = {
@@ -51,10 +62,106 @@ function RealityStripPlaceholder() {
   )
 }
 
-function DivergenceFlag({ label = 'Status diverges from delivery reality' }: { label?: string }) {
+// The reality strip's typed vocabulary, mirrored from the schema delivery seam as plain string
+// unions so this design-system primitive stays free of a schema dependency (the web layer
+// computes the signal and hands over these primitives).
+export type PrGlyphState = 'draft' | 'open' | 'approved' | 'merged' | 'closed'
+export type CiHealthState = 'passing' | 'failing' | 'pending'
+
+const PR_GLYPH: Record<PrGlyphState, { icon: LucideIcon; label: string; tone: string }> = {
+  draft: { icon: GitPullRequestDraftIcon, label: 'Draft PR', tone: 'text-text-3' },
+  open: {
+    icon: GitPullRequestIcon,
+    label: 'PR open, awaiting review',
+    tone: 'text-status-in-review',
+  },
+  approved: { icon: GitPullRequestArrowIcon, label: 'PR approved', tone: 'text-signal-sync' },
+  merged: { icon: GitMergeIcon, label: 'PR merged', tone: 'text-status-done' },
+  closed: { icon: GitPullRequestClosedIcon, label: 'PR closed', tone: 'text-text-3' },
+}
+
+// CI health carries a distinct GLYPH per state (check / x / spinner), not hue alone, so passing
+// vs failing vs pending is distinguishable without color — a WCAG 1.4.1 requirement for the
+// row's core reality signal. The tone token still reinforces the shape.
+const CI_GLYPH: Record<CiHealthState, { label: string; icon: LucideIcon; tone: string }> = {
+  passing: { label: 'CI passing', icon: CheckIcon, tone: 'text-signal-sync' },
+  failing: { label: 'CI failing', icon: XIcon, tone: 'text-status-urgent' },
+  pending: { label: 'CI running', icon: LoaderIcon, tone: 'text-status-in-progress' },
+}
+
+// Compact review-age label ("3d", "2h", "now"), rendered from the ms since the newest review
+// (or, before any review, how long the PR has awaited one).
+export function formatReviewAge(ms: number): string {
+  if (ms < 60_000) return 'now'
+  const min = Math.floor(ms / 60_000)
+  if (min < 60) return `${min}m`
+  const hours = Math.floor(min / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d`
+  return `${Math.floor(days / 7)}w`
+}
+
+export interface RealityStripProps {
+  pr: PrGlyphState | null
+  ci: CiHealthState | null
+  reviewAgeMs: number | null
+}
+
+// The reality strip: PR lifecycle glyph, CI health dot, and review age — the row's "reality
+// over ritual" slot. Occupies the same reserved width as the placeholder so populating a signal
+// never shifts row alignment. Every color is a theme token; correct in all presets, light+dark.
+function RealityStrip({ pr, ci, reviewAgeMs }: RealityStripProps) {
+  const prGlyph = pr ? PR_GLYPH[pr] : null
+  const ciGlyph = ci ? CI_GLYPH[ci] : null
+  const PrIcon = prGlyph?.icon
+  const CiIcon = ciGlyph?.icon
+  const summary = [
+    prGlyph?.label,
+    ciGlyph?.label,
+    reviewAgeMs != null ? `reviewed ${formatReviewAge(reviewAgeMs)} ago` : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
+
+  return (
+    <span
+      data-slot="reality-strip"
+      role="img"
+      aria-label={summary || 'Delivery signal'}
+      className="flex w-16 shrink-0 items-center gap-1.5 font-mono text-[10.5px] tabular-nums text-text-3"
+    >
+      {PrIcon && prGlyph ? (
+        <PrIcon className={cn('size-3.5 shrink-0', prGlyph.tone)} aria-hidden="true" />
+      ) : (
+        <span className="size-3.5 shrink-0" aria-hidden="true" />
+      )}
+      {CiIcon && ciGlyph ? (
+        <CiIcon className={cn('size-3 shrink-0', ciGlyph.tone)} aria-hidden="true" />
+      ) : null}
+      {reviewAgeMs != null ? (
+        <span className="truncate">{formatReviewAge(reviewAgeMs)}</span>
+      ) : null}
+    </span>
+  )
+}
+
+function DivergenceFlag({
+  label = 'Status diverges from delivery reality',
+  decorative = false,
+}: {
+  label?: string
+  // When the same sentence is already shown as adjacent visible text, mark the icon decorative
+  // so a screen reader announces the divergence once, not twice.
+  decorative?: boolean
+}) {
   return (
     <span className="flex w-4 shrink-0 items-center justify-center text-status-urgent">
-      <TriangleAlertIcon role="img" aria-label={label} className="size-3.5" />
+      {decorative ? (
+        <TriangleAlertIcon aria-hidden="true" className="size-3.5" />
+      ) : (
+        <TriangleAlertIcon role="img" aria-label={label} className="size-3.5" />
+      )}
     </span>
   )
 }
@@ -173,4 +280,4 @@ function IssueRow({
   )
 }
 
-export { DivergenceFlag, IssueRow, RealityStripPlaceholder }
+export { DivergenceFlag, IssueRow, RealityStrip, RealityStripPlaceholder }

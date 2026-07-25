@@ -7,6 +7,7 @@ import * as m0005 from './0005_board_rank.js'
 import * as m0006 from './0006_cycles.js'
 import * as m0007 from './0007_triage.js'
 import * as m0008 from './0008_projects.js'
+import * as m0009 from './0009_connectors.js'
 
 export const migrations: Record<string, Migration> = {
   '0001_workspace': m0001,
@@ -17,6 +18,7 @@ export const migrations: Record<string, Migration> = {
   '0006_cycles': m0006,
   '0007_triage': m0007,
   '0008_projects': m0008,
+  '0009_connectors': m0009,
 }
 
 export const migrationProvider: MigrationProvider = {

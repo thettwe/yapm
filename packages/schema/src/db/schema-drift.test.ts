@@ -142,6 +142,102 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     team_id: { nullable: false, hasDefault: false },
     next_number: { nullable: false, hasDefault: true },
   },
+  // Server-only connector surface: present in the Kysely DB interface and migrations,
+  // deliberately absent from the Zero schema (asserted below) so config/secrets/installation
+  // rows — especially the encrypted secret blobs — never replicate to a client.
+  connector_config: {
+    id: { nullable: false, hasDefault: false },
+    workspace_id: { nullable: false, hasDefault: false },
+    provider: { nullable: false, hasDefault: false },
+    enabled: { nullable: false, hasDefault: true },
+    config: { nullable: false, hasDefault: true },
+    status: { nullable: false, hasDefault: true },
+    last_synced_at: { nullable: true, hasDefault: false },
+    last_error: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  connector_secret: {
+    id: { nullable: false, hasDefault: false },
+    connector_config_id: { nullable: false, hasDefault: false },
+    key: { nullable: false, hasDefault: false },
+    ciphertext: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  connector_installation: {
+    id: { nullable: false, hasDefault: false },
+    connector_config_id: { nullable: false, hasDefault: false },
+    external_installation_id: { nullable: false, hasDefault: false },
+    account_login: { nullable: true, hasDefault: false },
+    repo_mapping: { nullable: false, hasDefault: true },
+    etags: { nullable: false, hasDefault: true },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  // Team-scoped, Zero-synced work-graph entities (change 8, part B): present in BOTH the
+  // Kysely DB interface and the Zero schema, so they must match Postgres on both axes.
+  pull_request: {
+    id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    installation_id: { nullable: false, hasDefault: false },
+    provider: { nullable: false, hasDefault: false },
+    repo: { nullable: false, hasDefault: false },
+    number: { nullable: false, hasDefault: false },
+    external_id: { nullable: false, hasDefault: false },
+    title: { nullable: true, hasDefault: false },
+    state: { nullable: false, hasDefault: false },
+    url: { nullable: true, hasDefault: false },
+    head_sha: { nullable: true, hasDefault: false },
+    opened_at: { nullable: false, hasDefault: false },
+    merged_at: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  ci_check: {
+    id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    pull_request_id: { nullable: false, hasDefault: false },
+    provider: { nullable: false, hasDefault: false },
+    external_id: { nullable: false, hasDefault: false },
+    name: { nullable: true, hasDefault: false },
+    conclusion: { nullable: false, hasDefault: false },
+    head_sha: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  review: {
+    id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    pull_request_id: { nullable: false, hasDefault: false },
+    provider: { nullable: false, hasDefault: false },
+    external_id: { nullable: false, hasDefault: false },
+    author: { nullable: true, hasDefault: false },
+    state: { nullable: false, hasDefault: false },
+    submitted_at: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  deployment: {
+    id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    installation_id: { nullable: false, hasDefault: false },
+    provider: { nullable: false, hasDefault: false },
+    repo: { nullable: false, hasDefault: false },
+    external_id: { nullable: false, hasDefault: false },
+    ref: { nullable: true, hasDefault: false },
+    environment: { nullable: true, hasDefault: false },
+    state: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  issue_link: {
+    issue_id: { nullable: false, hasDefault: false },
+    pull_request_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    source: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+  },
   // better-auth owns this table; the drift test provisions it (see `createAuthUserTable`)
   // so the read-surface interface and Zero schema are still checked against its real shape
   // (reference/kysely-stack.md §5.4).
@@ -201,10 +297,16 @@ async function primaryKeys(db: Kysely<DB>): Promise<Map<string, string[]>> {
   return new Map(rows.map((row) => [row.table_name, row.columns]))
 }
 
-describe('sequence tables are excluded from the Zero schema', () => {
+describe('server-only tables are excluded from the Zero schema', () => {
   it('appear in the Kysely DB map but never in the Zero introspection', () => {
     const zeroTables = tableShapes().map((table) => table.serverName)
-    for (const name of ['issue_sequence', 'cycle_sequence']) {
+    for (const name of [
+      'issue_sequence',
+      'cycle_sequence',
+      'connector_config',
+      'connector_secret',
+      'connector_installation',
+    ]) {
       expect(Object.keys(KYSELY_DB)).toContain(name)
       expect(zeroTables).not.toContain(name)
     }

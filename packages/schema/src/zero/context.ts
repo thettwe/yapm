@@ -29,6 +29,64 @@ export const PROJECT_STATUSES = ['planned', 'active', 'completed', 'cancelled'] 
 
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number]
 
+// Provider-neutral connector surface. `github` is the only v1 provider; the AI change
+// reuses this table set for BYO-key AI providers, so the accessors treat `provider` as an
+// open string rather than binding it to this list.
+export const CONNECTOR_PROVIDERS = ['github'] as const
+
+export type ConnectorProvider = (typeof CONNECTOR_PROVIDERS)[number]
+
+export const CONNECTOR_STATUSES = ['disabled', 'pending', 'connected', 'error'] as const
+
+export type ConnectorStatus = (typeof CONNECTOR_STATUSES)[number]
+
+// The non-secret settings blob of a connector config (repo filters etc.). Opaque here —
+// each connector validates its own shape with a Zod `configSchema`.
+export type ConnectorConfigData = Record<string, unknown>
+
+// Provider-neutral work-graph enums. The stored `pull_request.state` is the raw lifecycle
+// (draft/open/merged/closed) faithful to any provider's PR/MR object; the reality strip's
+// `approved` state is REVIEW-derived (see `delivery.ts`), never stored on the PR row.
+export const PULL_REQUEST_STATES = ['draft', 'open', 'merged', 'closed'] as const
+
+export type PullRequestState = (typeof PULL_REQUEST_STATES)[number]
+
+// A rolled-up CI conclusion, provider-neutral (GitHub check-run conclusions and a GitLab
+// pipeline status both normalize here). `pending` covers not-yet-terminal runs.
+export const CI_CONCLUSIONS = [
+  'success',
+  'failure',
+  'pending',
+  'neutral',
+  'cancelled',
+  'skipped',
+  'timed_out',
+  'action_required',
+] as const
+
+export type CiConclusion = (typeof CI_CONCLUSIONS)[number]
+
+export const REVIEW_STATES = ['approved', 'changes_requested', 'commented', 'dismissed'] as const
+
+export type ReviewState = (typeof REVIEW_STATES)[number]
+
+export const DEPLOYMENT_STATES = [
+  'queued',
+  'in_progress',
+  'success',
+  'failure',
+  'error',
+  'inactive',
+  'pending',
+] as const
+
+export type DeploymentState = (typeof DEPLOYMENT_STATES)[number]
+
+// Which rule linked an issue to a PR: a branch name (`head.ref`) or the PR body magic word.
+export const CONNECTOR_LINK_SOURCES = ['branch', 'body'] as const
+
+export type ConnectorLinkSource = (typeof CONNECTOR_LINK_SOURCES)[number]
+
 export const ISSUE_GROUPINGS = ['status', 'assignee', 'priority', 'label', 'none'] as const
 
 export type IssueGrouping = (typeof ISSUE_GROUPINGS)[number]

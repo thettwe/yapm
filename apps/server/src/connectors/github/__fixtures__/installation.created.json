@@ -1,0 +1,9 @@
+{
+  "action": "created",
+  "installation": {
+    "id": 42,
+    "account": { "login": "acme" }
+  },
+  "repositories": [{ "full_name": "acme/app" }],
+  "sender": { "login": "acme-admin" }
+}

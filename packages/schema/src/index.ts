@@ -1,22 +1,43 @@
 export { newId } from './id.js'
 export type {
+  ConnectorContext,
+  ConnectorDefinition,
+  ConnectorHeaders,
+  ConnectorLogger,
+  InstallationRecord,
+  NormalizedDelivery,
+} from './zero/connector-framework.js'
+export type {
   AuthContext,
+  CiConclusion,
+  ConnectorConfigData,
+  ConnectorLinkSource,
+  ConnectorProvider,
+  ConnectorStatus,
   CycleStatus,
+  DeploymentState,
   IssueGrouping,
   IssuePriority,
   IssueSortKey,
   IssueStatus,
   ProjectStatus,
+  PullRequestState,
+  ReviewState,
   RichTextDoc,
   SortDirection,
   ThemePreset,
   WorkspaceRole,
 } from './zero/context.js'
 export {
+  CI_CONCLUSIONS,
+  CONNECTOR_LINK_SOURCES,
+  CONNECTOR_PROVIDERS,
+  CONNECTOR_STATUSES,
   CYCLE_STATUSES,
   canManage,
   canRead,
   canWrite,
+  DEPLOYMENT_STATES,
   ISSUE_GROUPINGS,
   ISSUE_PRIORITIES,
   ISSUE_SORT_KEYS,
@@ -24,6 +45,8 @@ export {
   isAuthenticated,
   isMember,
   PROJECT_STATUSES,
+  PULL_REQUEST_STATES,
+  REVIEW_STATES,
   THEME_PRESETS,
   WORKSPACE_ROLES,
 } from './zero/context.js'
@@ -38,10 +61,17 @@ export type {
   CiHealth,
   DeliverySignal,
   DivergenceKind,
+  IssueLinkRow,
   LinkedEntities,
+  LinkedPullRequestRow,
   PrState,
 } from './zero/delivery.js'
-export { computeDeliverySignal, computeDivergence } from './zero/delivery.js'
+export {
+  assembleLinkedEntities,
+  ciHealthFromConclusion,
+  computeDeliverySignal,
+  computeDivergence,
+} from './zero/delivery.js'
 export type { MutationErrorDetails } from './zero/errors.js'
 export { isMutationErrorDetails, MutationError, MutationErrorCode } from './zero/errors.js'
 export type {
@@ -193,6 +223,7 @@ export {
 } from './zero/mutators.js'
 export {
   CYCLES_BY_TEAM_QUERY_NAME,
+  DEPLOYMENTS_BY_TEAM_QUERY_NAME,
   denyAll,
   INVITES_ALL_QUERY_NAME,
   ISSUE_DETAIL_QUERY_NAME,
@@ -214,3 +245,9 @@ export {
 export { initialRanks, rankBetween } from './zero/rank.js'
 export type { Schema } from './zero/schema.js'
 export { schema, zql } from './zero/schema.js'
+export type { IssueRef, WorkGraphContext, WorkGraphMutation } from './zero/work-graph.js'
+export {
+  applyWorkGraphMutation,
+  applyWorkGraphMutations,
+  parseIssueRefs,
+} from './zero/work-graph.js'

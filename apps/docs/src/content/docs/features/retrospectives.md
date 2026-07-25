@@ -88,16 +88,25 @@ stepping the retro back into `brainstorm` later does not reopen the question.
 
 ### What the server stores
 
-Being precise about the boundary matters more than a bigger promise. yapm **does** record which
-account wrote each card, server-side, so that moderation and deletion can be authorized and so the
-record is auditable. That row never leaves the server: it is not in the sync schema, not in any
-query, and not in any browser. It does reach `zero-cache`'s internal replica, which is a trusted
-component of your own three-container deployment and the same boundary the connector secrets sit
-behind.
+Being precise about the boundary matters more than a bigger promise. The guarantee has two halves,
+and both are worth stating plainly.
 
-What that means in practice: no participant — including a workspace admin, using the product — can
-learn who wrote an anonymous card. Someone with direct access to your Postgres database can, because
-they have direct access to your database. If you self-host, that is you.
+**Anonymous to every client, permanently and structurally.** The author is never synced, because the
+card → author table is absent from the Zero schema. A query cannot name a table that schema does not
+contain, so there is no query — present or future — that can return it, and no browser holds it.
+That half is not a policy the code follows; it is a shape the code cannot escape.
+
+**Stored server-side, all the same.** yapm **does** record which account wrote each card, so that
+moderation and retraction can be authorized and so the record is auditable. Two components hold it:
+your Postgres database, and `zero-cache`'s internal replica — Zero replicates with Postgres's default
+`for tables in schema public` publication, so the row is copied there along with every other table
+whether or not it is in the sync schema. That replica is a trusted component of your own
+three-container deployment — the same boundary the encrypted
+[connector secrets](/self-hosting/github-connector/) already sit behind.
+
+What that means in practice: **no participant, workspace admin included, can learn who wrote an
+anonymous card through the product.** Someone with direct access to your database can, because they
+have direct access to your database. On a self-hosted instance, that is the operator — you.
 
 ## Dots
 
@@ -110,12 +119,12 @@ A dot goes on a card or on a **cluster**, never on a card inside one — a clust
 a dot on a member card would count twice. A clustered card therefore shows no pip of its own, and
 pressing `v` while it is focused puts your dot on its cluster rather than refusing the keystroke.
 
-The budget is enforced by the **server**, not by the button being disabled: two tabs clicking at the
-same instant are serialised per voter, so you cannot spend four dots out of three by being fast. If
-a cast is refused after the fact, the optimistic dot is rolled back. Dots also come back to you
-automatically whenever their target stops being votable — deleting a card you voted on, dissolving a
-cluster, or (if the facilitator steps back to `group`) folding a voted-on card into a cluster all
-refund those dots to spend again, rather than leaving them stranded against your budget.
+The budget is enforced by the **server**, not by the button being disabled: casts in one retro are
+serialised as they are applied, so you cannot spend four dots out of three by being fast in two
+tabs. If a cast is refused after the fact, the optimistic dot is rolled back. Dots also come back
+to you automatically whenever their target stops being votable — deleting a card you voted on,
+dissolving a cluster, or (if the facilitator steps back to `group`) folding a voted-on card into a
+cluster all refund those dots to spend again, rather than leaving them stranded against your budget.
 
 ## The data panel
 

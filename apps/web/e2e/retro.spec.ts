@@ -343,6 +343,13 @@ test('the retro command palette reaches every retro action', async ({ page }) =>
 
   // Into `vote`: the palette casts a dot on the focused card AND takes it back, so neither half of
   // dot voting is shortcut-or-pointer only.
+  //
+  // The palette is awaited GONE first: it stays mounted through its exit transition, and while it
+  // is there it holds focus, so pressing `]` against a still-visible palette measures the
+  // transition rather than the shortcut. The product accepts the keystroke either way (a popup in
+  // its ending state no longer owns the keyboard); the wait is what makes the assertion below
+  // about the shortcut and nothing else.
+  await expect(palette).toBeHidden({ timeout: 20_000 })
   await page.keyboard.press(']')
   await expect(phaseStep(page, 'vote')).toHaveAttribute('aria-current', 'step', { timeout: 20_000 })
   await page.locator(CARD).first().focus()
@@ -365,6 +372,7 @@ test('the retro command palette reaches every retro action', async ({ page }) =>
 
   // Into `discuss`: an action captured from the palette is also CONVERTED from the palette, which
   // is the one retro action that had no palette entry at all.
+  await expect(palette).toBeHidden({ timeout: 20_000 })
   await page.keyboard.press(']')
   await expect(phaseStep(page, 'discuss')).toHaveAttribute('aria-current', 'step', {
     timeout: 20_000,
@@ -386,6 +394,40 @@ test('the retro command palette reaches every retro action', async ({ page }) =>
   await page.keyboard.type('convert this action')
   await page.keyboard.press('Enter')
   await expect(page.getByTestId('retro-action-issue')).toBeVisible({ timeout: 20_000 })
+
+  // The keystroke a dismissed palette used to swallow. The popup stays mounted and keeps focus in
+  // its own input for its ~150ms exit transition, so a key pressed just after a command lands on
+  // the dying palette — and must still reach the retro.
+  //
+  // Dismissal and the following key are driven in the page rather than through the wall clock: the
+  // dispatch waits for the frame on which the popup is actually carrying Base UI's closing-state
+  // attributes, so the case under test is the one that runs. Timing it from the outside reproduces
+  // the defect only sometimes, which is worth nothing as a regression guard.
+  await page.keyboard.press('ControlOrMeta+k')
+  await expect(palette).toBeVisible({ timeout: 20_000 })
+  const dispatch = await page.evaluate(async () => {
+    const closingPopup = (): Element | null => {
+      const popup = document.querySelector('[role="dialog"]')
+      if (popup === null) return null
+      const closing = popup.hasAttribute('data-ending-style') || popup.hasAttribute('data-closed')
+      return closing ? popup : null
+    }
+    const input = document.querySelector('[role="dialog"] input')
+    if (input === null) return 'the palette has no input to hold focus'
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    for (let frame = 0; frame < 60 && closingPopup() === null; frame += 1) {
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+    }
+    const popup = closingPopup()
+    if (popup === null) return 'the palette never entered its closing state'
+    const target = popup.querySelector('input') ?? popup
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: ']', bubbles: true }))
+    return 'dispatched into the closing palette'
+  })
+  expect(dispatch).toBe('dispatched into the closing palette')
+  await expect(phaseStep(page, 'actions')).toHaveAttribute('aria-current', 'step', {
+    timeout: 20_000,
+  })
 })
 
 // The three settings of an empty retro. Each one had a mutator and no caller: the format and the

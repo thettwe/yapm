@@ -24,7 +24,7 @@ import {
 import {
   bumpRetroVoteTally,
   isRetroCardAuthor,
-  lockRetroVoteBudget,
+  lockRetroForVote,
   recordRetroCardAuthor,
 } from './retro/server-writes.js'
 import { zql } from './schema.js'
@@ -236,12 +236,12 @@ export function createServerMutators() {
       // voting at once would otherwise lose updates. The shared mutator writes the optimistic tally
       // on the client only, so this is the single authoritative write.
       //
-      // The caller's budget is locked FIRST, before the shared mutator counts their dots: that count
+      // The retro row is locked FIRST, before the shared mutator counts the caller's dots: that count
       // and the insert that follows it are two statements, and two casts racing under READ COMMITTED
       // would otherwise both read the same pre-insert count and both land, past the budget.
       cast: defineMutator(castRetroVoteArgs, async ({ tx, args, ctx }) => {
         if (tx.location === 'server' && ctx !== undefined) {
-          await lockRetroVoteBudget(serverDb(tx), args.retroId, ctx.userID)
+          await lockRetroForVote(serverDb(tx), args.retroId)
         }
         await mutators.retroVote.cast.fn({ tx, args, ctx })
         if (tx.location !== 'server') return

@@ -37,6 +37,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { ownsKeyboard } from '@/lib/keyboard'
 import type { RetroApi } from '@/retro/api'
 import {
   ACCENT_TO_KIND,
@@ -200,14 +201,7 @@ export function RetroBoard({
   const onKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>) => {
       if (draggingRef.current) return
-      const target = event.target as HTMLElement | null
-      const editing =
-        target?.isContentEditable ||
-        target?.tagName === 'INPUT' ||
-        target?.tagName === 'TEXTAREA' ||
-        target?.tagName === 'SELECT' ||
-        target?.closest('[role="dialog"], [role="listbox"], [role="combobox"]') != null
-      if (editing) return
+      if (ownsKeyboard(event.target)) return
       const current = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
         '[data-retro-item]',
       )

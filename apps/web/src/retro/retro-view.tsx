@@ -19,6 +19,7 @@ import { cn } from '@yapm/ui/lib/utils'
 import { ArrowLeftIcon, ArrowRightIcon, TimerIcon, TimerOffIcon, UserIcon } from 'lucide-react'
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
+import { ownsKeyboard } from '@/lib/keyboard'
 import { useRetroApi } from '@/retro/api'
 import {
   countdownSeconds,
@@ -503,14 +504,7 @@ function RetroSurface({
   // while a field or dialog owns the keyboard.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null
-      const editing =
-        target?.isContentEditable ||
-        target?.tagName === 'INPUT' ||
-        target?.tagName === 'TEXTAREA' ||
-        target?.tagName === 'SELECT' ||
-        target?.closest('[role="dialog"], [role="listbox"], [role="combobox"]') != null
-      if (editing) return
+      if (ownsKeyboard(event.target)) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
 
       if (event.key === ']' && canFacilitate && forward) {

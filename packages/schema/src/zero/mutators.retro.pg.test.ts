@@ -6,6 +6,7 @@ import { newId } from '../id.js'
 import type { AuthContext, RetroPhase } from './context.js'
 import { MutationErrorCode, mutationErrorCode } from './errors.js'
 import { retroColumnTemplate } from './retro/phase.js'
+import { bumpRetroVoteTally } from './retro/server-writes.js'
 import { createServerMutators } from './server-mutators.js'
 import {
   createPgServerTransaction,
@@ -624,9 +625,15 @@ describe.skipIf(DATABASE_URL === undefined)('retro mutators against Postgres', (
   describe('the vote budget and the tally under concurrent casts', () => {
     // Fires N casts with no `await` between them, so N Postgres transactions are open at once and
     // each one's budget count is taken while the others are mid-flight.
+    //
+    // The pool is warmed first, and that is load-bearing rather than tidy: node-postgres opens
+    // connections lazily, so a small burst against a pool holding one warm connection runs the
+    // first cast to completion while the second is still shaking hands — which made a two-cast race
+    // pass with the lock removed. Warming makes the transactions genuinely simultaneous.
     async function burst(
       casts: readonly { ctx: AuthContext; targetType: 'card' | 'group'; targetId: string }[],
     ): Promise<number> {
+      await Promise.all(casts.map(() => sql`select 1`.execute(database.db)))
       const settled = await Promise.allSettled(
         casts.map((cast) =>
           apply((tx) =>
@@ -659,6 +666,25 @@ describe.skipIf(DATABASE_URL === undefined)('retro mutators against Postgres', (
       return result[0]?.count
     }
 
+    // The smallest form of the race, and the one the row lock exists for: two casts opened at the
+    // same moment against a budget of one. Without the lock both take the same pre-insert count of
+    // zero and both land.
+    it('lands exactly one of two simultaneous casts against a budget of one', async () => {
+      await sql`delete from retro where team_id = ${teamId}`.execute(database.db)
+      await openRetro({ votesPerParticipant: 1 })
+      const cardId = await draft(MEMBER, 'Contested', 'a1')
+      await moveTo('vote')
+
+      const landed = await burst([
+        { ctx: OTHER, targetType: 'card', targetId: cardId },
+        { ctx: OTHER, targetType: 'card', targetId: cardId },
+      ])
+
+      expect(landed).toBe(1)
+      expect(await countOf('retro_vote', 'voter_id', OTHER.userID)).toBe(1)
+      expect(await tallyOf(cardId)).toBe(1)
+    })
+
     it('never lets one voter spend more dots than the budget, however hard they race', async () => {
       await sql`delete from retro where team_id = ${teamId}`.execute(database.db)
       await openRetro({ votesPerParticipant: 3 })
@@ -680,8 +706,6 @@ describe.skipIf(DATABASE_URL === undefined)('retro mutators against Postgres', (
       expect(await tallyOf(cardId)).toBe(landed)
     })
 
-    // The loss-of-updates case D-6 is about: without the atomic bump the tally would read low
-    // because every transaction reads the same pre-burst count.
     it('counts every dot when the whole team votes on one target at once', async () => {
       const cardId = await draft(MEMBER, 'Unanimous', 'a1')
       await moveTo('vote')
@@ -693,6 +717,25 @@ describe.skipIf(DATABASE_URL === undefined)('retro mutators against Postgres', (
       expect(landed).toBe(TEAM.length)
       expect(await countOf('retro_vote', 'target_id', cardId)).toBe(TEAM.length)
       expect(await tallyOf(cardId)).toBe(TEAM.length)
+    })
+
+    // The loss-of-updates case D-6 is about, driven directly rather than through the mutator: the
+    // budget lock serializes a burst of casts on one retro, so a read-then-write tally inside the
+    // mutator would now pass the test above for the wrong reason. These transactions take no retro
+    // lock at all, so only the single-statement increment keeps the count honest.
+    it('counts every increment when the tally is bumped from parallel transactions', async () => {
+      const targetId = newId()
+      await Promise.all(
+        Array.from({ length: TEAM.length }, () =>
+          database.db
+            .transaction()
+            .execute((trx) =>
+              bumpRetroVoteTally(trx, { targetId, retroId, teamId, targetType: 'card', delta: 1 }),
+            ),
+        ),
+      )
+
+      expect(await tallyOf(targetId)).toBe(TEAM.length)
     })
 
     // D-7's two edges, after a burst rather than after a single tidy dot: a target that stops being

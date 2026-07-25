@@ -39,26 +39,30 @@ export async function isRetroCardAuthor(
   return rows[0]?.match === true
 }
 
-// Serializes ONE voter's casts in one retro, which is exactly the scope of the budget. The shared
-// mutator counts the caller's own vote rows and then inserts; under READ COMMITTED two casts opened
-// at the same moment both take the pre-insert count and both land, so a voter could spend past their
-// budget — six dots against a budget of three, reproducibly. The lock is taken BEFORE the shared
-// mutator runs its count and is held to commit, and READ COMMITTED takes a fresh snapshot per
-// statement, so the count that follows sees the dot the previous holder committed.
+// Serializes the casts in one retro. The shared mutator counts the caller's own vote rows and then
+// inserts; under READ COMMITTED two casts opened at the same moment both take the pre-insert count
+// and both land, so a voter could spend past their budget — six dots against a budget of three,
+// reproducibly. The lock is taken on the RETRO ROW, BEFORE the shared mutator runs its count, and is
+// held to commit; READ COMMITTED takes a fresh snapshot per statement, so the count that follows
+// sees the dot the previous holder committed.
 //
-// Keyed on (retro, voter) rather than taken on the retro row, so a team voting at once still runs
-// genuinely concurrently: nothing queues behind another person's dot, and the tally stays reliant on
-// its atomic increment rather than on incidental serialization. A hash collision costs two unrelated
-// voters a few microseconds of ordering and nothing else.
+// `for no key update` rather than `for update`: nine tables carry an FK to `retro.id`, so every
+// insert of a card, draft, vote, group, action or presence heartbeat takes `for key share` on this
+// same row. `for update` conflicts with that and would queue those writes behind every dot — and,
+// worse, a mutator that clears a tally row before inserting a group (the auto-dissolve path) could
+// then deadlock against a cast holding the retro row and waiting on that tally row. `for no key
+// update` conflicts with itself and with the row's own updates, which is exactly the mutual
+// exclusion the budget needs, and with nothing else.
 //
 // This lives on the authoritative path only. The optimistic client path never reaches it, so the dot
 // and the remaining-budget readout stay instant; the server is the one that has to be right.
-export async function lockRetroVoteBudget(
-  db: Kysely<DB>,
-  retroId: string,
-  voterId: string,
-): Promise<void> {
-  await sql`select pg_advisory_xact_lock(hashtext(${retroId}), hashtext(${voterId}))`.execute(db)
+export async function lockRetroForVote(db: Kysely<DB>, retroId: string): Promise<void> {
+  await db
+    .selectFrom('retro')
+    .select('id')
+    .where('id', '=', retroId)
+    .forNoKeyUpdate()
+    .executeTakeFirst()
 }
 
 // The atomic tally write. A read-then-write count loses updates the moment a whole team votes at

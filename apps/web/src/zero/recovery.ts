@@ -24,11 +24,25 @@ export type RecoveryPlan =
   | { kind: 'reset' }
   | { kind: 'remint'; reconnect: boolean; graceMs: number }
 
+// Conditions outside Zero's own state that change what a state means.
+export interface RecoveryConditions {
+  // Zero disconnects a backgrounded tab on purpose — `hiddenTabDisconnectDelay` defaults to
+  // 5 minutes (1.8.0 `zero-client/src/client/zero.ts`), after which its run loop parks on
+  // `waitForVisible()` and stops redialling. That `disconnected` is not a fault, and
+  // re-minting against it turns every backgrounded tab into a permanent token poll.
+  hidden: boolean
+}
+
+const VISIBLE: RecoveryConditions = { hidden: false }
+
 // `connect()` does not reconnect from `disconnected` or `closed` (verified against the
 // installed 1.8.0 `Connection` contract), so `disconnected` gets a re-mint only — Zero's
 // own 5s retry then presents the fresh credential. Calling `connect()` there would be a
 // silent no-op that looks like recovery.
-export function recoveryPlan(name: ConnectionState['name']): RecoveryPlan {
+export function recoveryPlan(
+  name: ConnectionState['name'],
+  { hidden }: RecoveryConditions = VISIBLE,
+): RecoveryPlan {
   switch (name) {
     case 'connected':
       return { kind: 'reset' }
@@ -39,7 +53,11 @@ export function recoveryPlan(name: ConnectionState['name']): RecoveryPlan {
     case 'error':
       return { kind: 'remint', reconnect: true, graceMs: 0 }
     case 'disconnected':
-      return { kind: 'remint', reconnect: false, graceMs: DISCONNECTED_GRACE_MS }
+      // Nothing to recover while hidden: Zero will not redial until the tab is visible, and
+      // the wake path re-checks the credential's age then anyway.
+      return hidden
+        ? { kind: 'none' }
+        : { kind: 'remint', reconnect: false, graceMs: DISCONNECTED_GRACE_MS }
   }
 }
 

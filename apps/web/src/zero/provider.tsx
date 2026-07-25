@@ -91,6 +91,15 @@ export function applyCredential(
   }
 }
 
+interface RemintOptions {
+  // "The token as of now" rather than "any current token": a caller that just changed
+  // something the server bakes into the credential cannot be answered with one minted
+  // before that change committed.
+  fresh?: boolean
+}
+
+type Remint = (options?: RemintOptions) => Promise<SyncCredentialResult>
+
 interface SyncControl {
   refresh: () => void
 }
@@ -136,6 +145,7 @@ interface SyncRecoveryProps {
 function SyncRecovery({ token, enabled, remint, children }: SyncRecoveryProps) {
   const zero = useZero()
   const state = useConnectionState()
+  const hidden = useDocumentHidden()
   const [status, setStatus] = useState<SyncRecoveryStatus>(RECOVERY_IDLE)
   const [request, setRequest] = useState(0)
 
@@ -164,7 +174,7 @@ function SyncRecovery({ token, enabled, remint, children }: SyncRecoveryProps) {
   const name = state.name
 
   useEffect(() => {
-    const plan: RecoveryPlan = enabled ? recoveryPlan(name) : { kind: 'none' }
+    const plan: RecoveryPlan = enabled ? recoveryPlan(name, { hidden }) : { kind: 'none' }
 
     if (plan.kind === 'reset') {
       immediateRef.current = false
@@ -246,11 +256,24 @@ function SyncRecovery({ token, enabled, remint, children }: SyncRecoveryProps) {
       clearTimeout(timer)
       if (offerTimer !== undefined) clearTimeout(offerTimer)
     }
-  }, [name, request, enabled, remint])
+  }, [name, hidden, request, enabled, remint])
 
   const value = useMemo<SyncRecoveryValue>(() => ({ ...status, retryNow }), [status, retryNow])
 
   return <SyncRecoveryContext.Provider value={value}>{children}</SyncRecoveryContext.Provider>
+}
+
+function useDocumentHidden(): boolean {
+  const [hidden, setHidden] = useState(() => document.visibilityState === 'hidden')
+
+  useEffect(() => {
+    const read = () => setHidden(document.visibilityState === 'hidden')
+    read()
+    document.addEventListener('visibilitychange', read)
+    return () => document.removeEventListener('visibilitychange', read)
+  }, [])
+
+  return hidden
 }
 
 function useProactiveRefresh(
@@ -283,6 +306,50 @@ function useProactiveRefresh(
   }, [ready, expiresAt, fetchedAt, remint])
 }
 
+// Before the first credential lands there is no Zero connection to be broken, so
+// `SyncRecovery` sees a healthy client, and the proactive refresher is gated off by `ready`.
+// Nothing re-armed, and the "Can't reach the server — retrying" surface never retried. This
+// loop is keyed on `revision` — bumped by every settled request — so each failure schedules
+// the next attempt on the same bounded backoff.
+//
+// Scoped to `pending` on purpose, to keep one owner per fault: once a session exists, a
+// failed refresh already reschedules itself through the proactive refresher's `revision`
+// dependency, and a broken connection is `SyncRecovery`'s. A third scheduler on the same
+// endpoint would double the traffic this change exists to bound.
+function useUnavailableRetry(session: SyncSessionRecord, remint: () => void): void {
+  const { status, unavailable, revision } = session
+  const retrying = status === 'pending' && unavailable
+  const attemptRef = useRef(0)
+
+  useEffect(() => {
+    if (!retrying) {
+      attemptRef.current = 0
+      return
+    }
+
+    const attempt = attemptRef.current
+    const timer = setTimeout(() => {
+      attemptRef.current = attempt + 1
+      remint()
+    }, backoffDelay(attempt))
+
+    // Timers do not fire faithfully across a sleep, and a machine that just regained the
+    // network should not wait out a 30s window it accrued while offline.
+    const check = () => remint()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') check()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', check)
+
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', check)
+    }
+  }, [retrying, revision, remint])
+}
+
 export function ZeroRoot({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SyncSessionRecord>(PENDING)
   const { data: authSession } = useSession()
@@ -292,38 +359,53 @@ export function ZeroRoot({ children }: { children: ReactNode }) {
   const flightId = useRef(0)
 
   // One scheduler, one in-flight fetch: a role change and a reconnect arriving together
-  // share the same request instead of racing two tokens onto the same connection.
-  const remint = useCallback((): Promise<SyncCredentialResult> => {
+  // share the same request instead of racing two tokens onto the same connection. A `fresh`
+  // caller opts out of the sharing — but chains behind the open request rather than racing
+  // it, so the server is only asked once the earlier answer is in.
+  const remint = useCallback<Remint>(({ fresh = false } = {}): Promise<SyncCredentialResult> => {
     const current = inFlight.current
-    if (current !== null) return current
+    if (current !== null && !fresh) return current
 
     const id = flightId.current + 1
     flightId.current = id
     // `fetchSyncCredential` is total, but a rejection escaping here would leave the slot
     // occupied forever and disable recovery permanently — the failure this whole change
-    // exists to prevent. Clear the slot on both paths.
+    // exists to prevent. Clear the slot on both paths. A superseded flight applies nothing:
+    // its answer predates the change the newer request exists to observe.
     const settle = (result: SyncCredentialResult) => {
-      if (flightId.current === id) inFlight.current = null
+      if (flightId.current !== id) return result
+      inFlight.current = null
       setSession((previous) => applyCredential(previous, result, Date.now()))
       return result
     }
-    const pending = fetchSyncCredential().then(settle, (error: unknown) =>
-      settle({ kind: 'unavailable', reason: String(error) }),
-    )
+    const start = () =>
+      fetchSyncCredential().then(settle, (error: unknown) =>
+        settle({ kind: 'unavailable', reason: String(error) }),
+      )
+
+    const pending = current === null ? start() : current.then(start, start)
     inFlight.current = pending
     return pending
   }, [])
 
+  // Membership changes are why this exists, and a credential minted before the change
+  // committed would answer with the stale role — parking a just-accepted invitee on the
+  // access gate. `refresh()` therefore always forces a new request.
   const refresh = useCallback(() => {
+    void remint({ fresh: true })
+  }, [remint])
+
+  const retry = useCallback(() => {
     void remint()
   }, [remint])
 
   // Re-mint the sync token on mount and whenever the signed-in identity changes.
   useEffect(() => {
-    refresh()
-  }, [refresh, authUserId])
+    void remint()
+  }, [remint, authUserId])
 
   useProactiveRefresh(session, remint)
+  useUnavailableRetry(session, retry)
 
   const { userID, token, role } = session
 

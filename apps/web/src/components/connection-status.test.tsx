@@ -91,6 +91,43 @@ test('the retry escape hatch is a real button, reachable by keyboard alone', () 
   expect(retryNow).toHaveBeenCalledTimes(1)
 })
 
+const OFFERED: ConnectionSummary = {
+  ...CONNECTED,
+  state: 'error',
+  recovery: 'waiting',
+  label: 'Sync error — retrying',
+  writable: false,
+  retryOffered: true,
+}
+
+// Recovery is exactly the moment the button vanishes, and the keyboard user who pressed it
+// is still standing on it. Letting focus fall to `<body>` sends the next Tab back to the top
+// of the document — from a control in the app header, that is the whole page again.
+test('the retry control hands focus to the pill when recovery removes it', () => {
+  const view = render(<ConnectionStatus connection={OFFERED} />)
+
+  const retry = screen.getByTestId('connection-retry')
+  retry.focus()
+  expect(retry).toHaveFocus()
+
+  view.rerender(<ConnectionStatus connection={CONNECTED} />)
+
+  expect(screen.queryByTestId('connection-retry')).not.toBeInTheDocument()
+  expect(screen.getByRole('status')).toHaveFocus()
+})
+
+test('a retry control nobody was standing on does not steal focus', () => {
+  const elsewhere = document.createElement('button')
+  document.body.append(elsewhere)
+  const view = render(<ConnectionStatus connection={OFFERED} />)
+  elsewhere.focus()
+
+  view.rerender(<ConnectionStatus connection={CONNECTED} />)
+
+  expect(elsewhere).toHaveFocus()
+  elsewhere.remove()
+})
+
 test('every dot colour comes from a theme token, never a raw palette shade', () => {
   const states: ConnectionSummary['state'][] = [
     'connected',

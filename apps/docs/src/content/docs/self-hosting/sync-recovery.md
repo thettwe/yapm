@@ -56,6 +56,11 @@ of on its own (`needs-auth` after a refused credential, `error` after a protocol
 re-mints the token and explicitly resumes the connection. From `disconnected`, Zero's own 5-second
 redial does the work and yapm only refreshes the credential it will present.
 
+**A backgrounded tab goes quiet.** Zero closes the socket of a tab that has been hidden for five
+minutes, on purpose. That is not a fault, so yapm does not retry against it — a tab left in the
+background generates no token traffic at all. Bringing the tab back to the front reconnects it and
+re-checks the credential's age in one step.
+
 **Retries back off.** Attempts are spaced by exponential back-off with full jitter — 1 second base,
 doubling, **capped at 30 seconds** — and the schedule only resets once a connection has *held* for
 a few seconds. So an instance that is genuinely down (a deploy, a stopped container) degrades to a
@@ -92,7 +97,9 @@ something between `zero-cache` and the app is rewriting the response.
 Inside the **app** container, Zero's query and mutate handlers now log at your `LOG_LEVEL` instead
 of always printing at `info`, so a server configured quiet stays quiet. `LOG_LEVEL=silent` is
 honoured as `error` — that is the quietest level Zero's logger offers. The `zero-cache` container
-keeps its own separate `ZERO_LOG_LEVEL` (`info` by default; set it to `debug` while diagnosing).
+keeps its own separate `ZERO_LOG_LEVEL`, forwarded by both compose files and listed in
+`.env.example` (`info` by default; set `ZERO_LOG_LEVEL=debug` in your `.env` and recreate the
+container while diagnosing).
 
 ## When it stays reconnecting
 

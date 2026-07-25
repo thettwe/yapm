@@ -37,6 +37,20 @@ test('disconnected re-mints after a grace and never calls connect, which is a no
   })
 })
 
+test('a hidden tab is disconnected on purpose, so there is nothing to recover', () => {
+  expect(recoveryPlan('disconnected', { hidden: true })).toEqual({ kind: 'none' })
+})
+
+test('visibility changes nothing for the states Zero never retries out of', () => {
+  for (const name of ['needs-auth', 'error'] as const) {
+    expect(recoveryPlan(name, { hidden: true })).toEqual({
+      kind: 'remint',
+      reconnect: true,
+      graceMs: 0,
+    })
+  }
+})
+
 test('every Zero connection state has a plan', () => {
   for (const name of NAMES) {
     expect(['none', 'reset', 'remint']).toContain(recoveryPlan(name).kind)

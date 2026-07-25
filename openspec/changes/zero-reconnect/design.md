@@ -728,3 +728,67 @@ sustained 60s outage and an authenticated tab left alone:
 We still have not profiled the *user's original* session, so the claim stays scoped: this change
 removes the preconditions and the recovered stack demonstrably idles through an outage it
 previously died in. The question is retired rather than answered in the forensic sense.
+
+### C21. `refresh()` forces a new credential; everything else still shares one
+
+The single-flight slot was applied uniformly, which is wrong for exactly one caller.
+`useSyncControl().refresh()` exists because a **membership** change (accepting an invite, a
+promotion) does not change the better-auth identity, so the role has to be re-fetched — and
+joining a request that was already open when the change committed answers with the *old*
+role. A just-accepted invitee would sit on "You need an invitation" until they reloaded, which
+is the failure the control exists to prevent.
+
+`remint` therefore takes `{fresh}`. A forcing caller chains a **new** `fetchSyncCredential()`
+behind the open one rather than racing it — one request at a time is still the invariant — and
+`settle` is now guarded by `flightId` on *both* halves, so a superseded answer neither clears
+the slot the newer flight owns nor overwrites the newer credential. Recovery, the proactive
+refresher and the mount/identity effect keep the coalescing path: their contract is "any
+current token", and forcing there would double the traffic the backoff exists to bound.
+
+### C22. The `pending` + `unavailable` state had no scheduler at all
+
+`Authenticated` renders "Can't reach the server — retrying." the moment the first credential
+request fails, and nothing was retrying. `SyncRecovery` only reacts to Zero's connection
+state, which is healthy before a credential exists, and `useProactiveRefresh` is gated on
+`ready`. The copy, the self-hosting page and the spec's "retries on backoff" were all untrue
+for the one state a first-load outage actually produces.
+
+`useUnavailableRetry` closes it: keyed on `revision` (the counter C4 added for precisely this
+re-arming problem), armed with the same `backoffDelay`, plus `visibilitychange`/`online`
+re-checks so a machine that just woke does not wait out a window it accrued while asleep.
+
+Deliberately scoped to `status === 'pending'`, to keep one owner per fault. Once a session
+exists, a failed refresh already reschedules itself through the proactive refresher's
+`revision` dependency, and a broken connection is `SyncRecovery`'s job — a third scheduler on
+`/api/zero/token` would double the traffic in exactly the outage where it is most expensive.
+
+### C23. Zero's hidden-tab disconnect is not a fault
+
+`hiddenTabDisconnectDelay` defaults to **five minutes** (1.8.0 `zero-client/src/client/zero.ts`),
+after which Zero closes the socket with *"Connection closed because tab was hidden"* and its
+run loop parks on `promiseRace({visible, stateChange})` — it will not redial until the tab is
+visible. `recoveryPlan('disconnected')` read that as an outage, so every backgrounded tab
+re-minted its credential forever on a ~20–30s schedule: the calm-retry promise inverted into a
+permanent background poll, worst on the many-tabs setup the bug report describes.
+
+`recoveryPlan` now takes the visibility condition and returns `{kind:'none'}` for a hidden
+`disconnected`. Nothing is lost: the credential is re-checked on `visibilitychange → visible`
+by the proactive refresher, and Zero reconnects on the same event.
+
+### C24. The pill's retry control hands focus back before it is removed
+
+Recovering is the moment the button disappears, and the keyboard user who just pressed it is
+still standing on it — focus fell to `<body>`, so the next Tab restarted at the top of the
+document, from a control that lives in the app header. The handoff has to happen while the
+node still exists, which rules out a `useEffect` cleanup (passive cleanups run *after* the
+DOM mutation). It is a `useLayoutEffect` cleanup inside a dedicated `RetryButton` component,
+because React runs a deleted fiber's layout destroy before it removes that subtree's host
+nodes; the same cleanup on the parent would run after the child was already gone. Focus goes
+to the status `<p>`, which is `tabIndex={-1}` for the purpose.
+
+The hand-rolled retry markup on the `pending` surface is gone in the same pass:
+`hover:bg-accent` painted the brand accent behind inherited body text with no
+`hover:text-accent-foreground`, failing contrast in every preset. It is now
+`<Button variant="outline" size="sm">`, the control its sibling `AccessGate` already uses.
+`workspace-name.tsx` carried the same unpaired `hover:bg-accent` and is fixed alongside so the
+pattern is not propagated.

@@ -1,4 +1,5 @@
 import { Navigate } from '@tanstack/react-router'
+import { Button } from '@yapm/ui/components/button'
 import type { ReactNode } from 'react'
 import { useSession } from '@/auth/client'
 import { AccessGate } from '@/components/access-gate'
@@ -48,14 +49,9 @@ function SyncUnavailable() {
         <p className="text-muted-foreground text-sm" role="status" aria-live="polite">
           Can’t reach the server — retrying.
         </p>
-        <button
-          type="button"
-          className="border-input hover:bg-accent focus-visible:ring-ring rounded-md border px-3 py-1.5 text-sm focus-visible:ring-2 focus-visible:outline-none"
-          onClick={refresh}
-          data-testid="sync-unavailable-retry"
-        >
+        <Button variant="outline" size="sm" onClick={refresh} data-testid="sync-unavailable-retry">
           Retry now
-        </button>
+        </Button>
       </div>
     </main>
   )

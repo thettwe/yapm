@@ -145,6 +145,28 @@ async function interceptSyncSocket(page: Page): Promise<SyncSocket> {
   }
 }
 
+// The escape hatch the recovery spec is actually about: by this point the backoff has
+// stretched to tens of seconds, so a token request arriving within a second of pressing
+// Enter can only have come from the button. Reached by Tab alone — the pill lives in the
+// header, and nothing here may need a pointer.
+async function retryFromTheKeyboard(page: Page): Promise<void> {
+  const retry = page.getByTestId('connection-retry')
+  await expect(retry).toBeVisible()
+
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  for (let stop = 0; stop < 40; stop += 1) {
+    if (await retry.evaluate((node) => node === document.activeElement)) break
+    await page.keyboard.press('Tab')
+  }
+  await expect(retry, 'Retry now must be reachable by Tab alone').toBeFocused()
+
+  const minted = page.waitForRequest((request) => request.url().includes('/api/zero/token'), {
+    timeout: 2_000,
+  })
+  await page.keyboard.press('Enter')
+  await minted
+}
+
 // A route only takes effect on the *next* socket, so the live one has to drop first. This is
 // also how the outage starts for real: an idle machine's network goes away underneath an
 // open connection. The redial itself is served by the route, which is why the interception
@@ -244,6 +266,8 @@ for (const failure of PROTOCOL_FAILURES) {
     expect(mints - mintsBefore, 'the client must keep trying').toBeGreaterThan(0)
     expect(during.ticks - before.ticks, 'the main thread stayed responsive').toBeGreaterThan(20)
     await expect(page.locator(NAME)).toBeVisible()
+
+    await retryFromTheKeyboard(page)
 
     socket.set('pass-through')
     await expectHeldConnected(page, 120_000)

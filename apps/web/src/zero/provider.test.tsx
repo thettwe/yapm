@@ -52,7 +52,7 @@ vi.mock('@/zero/session', async (importOriginal) => ({
   fetchSyncCredential: mocks.fetchSyncCredential,
 }))
 
-import { ZeroRoot } from './provider'
+import { useSyncControl, useSyncSession, ZeroRoot } from './provider'
 
 const SESSION: SyncCredentialResult = {
   kind: 'session',
@@ -64,14 +64,20 @@ const SESSION: SyncCredentialResult = {
 
 function Probe() {
   const recovery = useSyncRecovery()
+  const session = useSyncSession()
+  const { refresh } = useSyncControl()
   return (
     <div>
       <span data-testid="phase">{recovery.phase}</span>
       <span data-testid="attempt">{String(recovery.attempt)}</span>
       <span data-testid="delay">{String(Math.round(recovery.delayMs))}</span>
       <span data-testid="offered">{String(recovery.retryOffered)}</span>
+      <span data-testid="role">{session.role ?? 'none'}</span>
       <button type="button" data-testid="retry" onClick={recovery.retryNow}>
         retry
+      </button>
+      <button type="button" data-testid="refresh" onClick={refresh}>
+        refresh
       </button>
     </div>
   )
@@ -375,6 +381,91 @@ test('concurrent recovery and membership refreshes share one in-flight token req
   await act(async () => {
     release?.(SESSION)
   })
+})
+
+// The membership case the control exists for: accepting an invite changes the role the
+// server bakes into the credential, so an answer minted before the change committed would
+// leave the new member parked on the access gate until they reloaded.
+test('a membership refresh never settles for a token minted before the change', async () => {
+  const releases: ((result: SyncCredentialResult) => void)[] = []
+  mocks.fetchSyncCredential.mockImplementation(
+    () =>
+      new Promise<SyncCredentialResult>((resolve) => {
+        releases.push(resolve)
+      }),
+  )
+
+  await mount()
+  expect(remintCount()).toBe(1)
+
+  await act(async () => {
+    screen.getByTestId('refresh').click()
+  })
+  // Chained, not raced: the server is asked once the earlier answer is in.
+  expect(remintCount()).toBe(1)
+
+  await act(async () => {
+    releases[0]?.({ ...SESSION, role: null })
+  })
+  expect(remintCount()).toBe(2)
+  expect(screen.getByTestId('role'), 'the superseded answer is discarded').toHaveTextContent('none')
+
+  await act(async () => {
+    releases[1]?.({ ...SESSION, role: 'admin' })
+  })
+  expect(screen.getByTestId('role')).toHaveTextContent('admin')
+})
+
+// Recovery and the proactive refresher keep sharing one request — only `refresh()` forces.
+test('recovery still joins an open request rather than forcing a second one', async () => {
+  mocks.fetchSyncCredential.mockImplementation(() => new Promise<SyncCredentialResult>(() => {}))
+
+  await mount()
+  await transition({ name: 'error', reason: 'boom' })
+  await advance(1_000)
+
+  expect(remintCount()).toBe(1)
+})
+
+// Nothing else re-arms while the session is still `pending`: `SyncRecovery` sees a healthy
+// client and the proactive refresher is gated on `ready`. Without this loop the
+// "Can't reach the server — retrying" surface would never retry.
+test('a first credential request that never lands is retried on backoff', async () => {
+  mocks.fetchSyncCredential.mockResolvedValue({ kind: 'unavailable', reason: 'TypeError' })
+
+  await mount()
+  expect(remintCount()).toBe(1)
+
+  await advance(BACKOFF_CAP_MS)
+  const retried = remintCount()
+  expect(retried).toBeGreaterThan(1)
+
+  mocks.fetchSyncCredential.mockResolvedValue(SESSION)
+  await advance(BACKOFF_CAP_MS)
+  expect(remintCount()).toBe(retried + 1)
+
+  // A settled session stops the loop — it does not keep polling behind a healthy app.
+  await advance(BACKOFF_CAP_MS * 4)
+  expect(remintCount()).toBe(retried + 1)
+})
+
+// Zero closes the socket of a tab hidden for five minutes on purpose, then parks its run
+// loop until the tab is visible. Re-minting against that turns every backgrounded tab into
+// a permanent token poll.
+test('a hidden tab does not re-mint against its own deliberate disconnect', async () => {
+  await mount()
+  const baseline = remintCount()
+
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+  await act(async () => {
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+
+  await transition({ name: 'disconnected', reason: 'Connection closed because tab was hidden' })
+  await advance(DISCONNECTED_GRACE_MS * 5)
+
+  expect(remintCount()).toBe(baseline)
+  expect(mocks.connect).not.toHaveBeenCalled()
 })
 
 test('a token that expires soon is re-minted before the socket ever breaks', async () => {

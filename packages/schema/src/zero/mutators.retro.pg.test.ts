@@ -42,6 +42,11 @@ describe.skipIf(DATABASE_URL === undefined)('retro mutators against Postgres', (
   const OTHER: AuthContext = { userID: `other-${newId()}`, role: 'member' }
   const ADMIN: AuthContext = { userID: `admin-${newId()}`, role: 'admin' }
   const VIEWER: AuthContext = { userID: `viewer-${newId()}`, role: 'viewer' }
+  // A team large enough that "the whole team votes at once" is a real burst rather than a pair.
+  const TEAM: readonly AuthContext[] = Array.from({ length: 5 }, () => ({
+    userID: `voter-${newId()}`,
+    role: 'member' as const,
+  }))
 
   let meta: PgSchemaMeta
   let retroId: string
@@ -198,7 +203,7 @@ describe.skipIf(DATABASE_URL === undefined)('retro mutators against Postgres', (
     await sql`insert into team (id, workspace_id, name, key) values (${teamId}, ${workspaceId}, 'Retro', ${key})`.execute(
       database.db,
     )
-    for (const ctx of [FACILITATOR, MEMBER, OTHER, VIEWER]) {
+    for (const ctx of [FACILITATOR, MEMBER, OTHER, VIEWER, ...TEAM]) {
       await sql`insert into team_membership (id, team_id, user_id) values (${newId()}, ${teamId}, ${ctx.userID})`.execute(
         database.db,
       )
@@ -557,6 +562,133 @@ describe.skipIf(DATABASE_URL === undefined)('retro mutators against Postgres', (
       const cardId = await draft(MEMBER, 'Card', 'a1')
       await moveTo('vote')
       expect(await rejection(vote(VIEWER, 'card', cardId))).toBe(MutationErrorCode.notAuthorized)
+    })
+  })
+
+  // Every cast here goes through `createServerMutators()` in its own Postgres transaction, opened in
+  // parallel. That is the only path that measures anything: the shared mutator returns before the
+  // tally write when `tx.location === 'server'` (D-6), so the atomic increment — the thing loss of
+  // updates would break — exists only in the override.
+  describe('the vote budget and the tally under concurrent casts', () => {
+    // Fires N casts with no `await` between them, so N Postgres transactions are open at once and
+    // each one's budget count is taken while the others are mid-flight.
+    async function burst(
+      casts: readonly { ctx: AuthContext; targetType: 'card' | 'group'; targetId: string }[],
+    ): Promise<number> {
+      const settled = await Promise.allSettled(
+        casts.map((cast) =>
+          apply((tx) =>
+            mutators.retroVote.cast.fn({
+              tx,
+              args: {
+                id: newId(),
+                retroId,
+                targetType: cast.targetType,
+                targetId: cast.targetId,
+                createdAt: Date.now(),
+              },
+              ctx: cast.ctx,
+            }),
+          ),
+        ),
+      )
+      for (const result of settled) {
+        if (result.status === 'rejected') {
+          expect(mutationErrorCode(result.reason)).toBe(MutationErrorCode.voteBudget)
+        }
+      }
+      return settled.filter((result) => result.status === 'fulfilled').length
+    }
+
+    async function tallyOf(targetId: string): Promise<number | undefined> {
+      const result = await rows(
+        sql<{ count: number }>`select count from retro_vote_tally where target_id = ${targetId}`,
+      )
+      return result[0]?.count
+    }
+
+    it('never lets one voter spend more dots than the budget, however hard they race', async () => {
+      await sql`delete from retro where team_id = ${teamId}`.execute(database.db)
+      await openRetro({ votesPerParticipant: 3 })
+      const cardId = await draft(MEMBER, 'Popular', 'a1')
+      await moveTo('vote')
+
+      const landed = await burst(
+        Array.from({ length: 6 }, () => ({
+          ctx: OTHER,
+          targetType: 'card' as const,
+          targetId: cardId,
+        })),
+      )
+
+      // Exactly the budget: bounded above, and still fully spendable — a fix that simply lost the
+      // losing casts would satisfy the bound and fail this.
+      expect(landed).toBe(3)
+      expect(await countOf('retro_vote', 'voter_id', OTHER.userID)).toBe(3)
+      expect(await tallyOf(cardId)).toBe(landed)
+    })
+
+    // The loss-of-updates case D-6 is about: without the atomic bump the tally would read low
+    // because every transaction reads the same pre-burst count.
+    it('counts every dot when the whole team votes on one target at once', async () => {
+      const cardId = await draft(MEMBER, 'Unanimous', 'a1')
+      await moveTo('vote')
+
+      const landed = await burst(
+        TEAM.map((ctx) => ({ ctx, targetType: 'card' as const, targetId: cardId })),
+      )
+
+      expect(landed).toBe(TEAM.length)
+      expect(await countOf('retro_vote', 'target_id', cardId)).toBe(TEAM.length)
+      expect(await tallyOf(cardId)).toBe(TEAM.length)
+    })
+
+    // D-7's two edges, after a burst rather than after a single tidy dot: a target that stops being
+    // votable returns EVERY dot spent on it and takes its tally row with it.
+    it('refunds a concurrent burst when the target card is deleted', async () => {
+      const cardId = await draft(MEMBER, 'Doomed', 'a1')
+      await moveTo('vote')
+      const landed = await burst(
+        TEAM.map((ctx) => ({ ctx, targetType: 'card' as const, targetId: cardId })),
+      )
+      expect(landed).toBe(TEAM.length)
+
+      await apply((tx) =>
+        mutators.retroCard.delete.fn({ tx, args: { id: cardId }, ctx: FACILITATOR }),
+      )
+
+      expect(await countOf('retro_vote', 'target_id', cardId)).toBe(0)
+      expect(await countOf('retro_vote_tally', 'target_id', cardId)).toBe(0)
+      for (const ctx of TEAM) {
+        expect(await countOf('retro_vote', 'voter_id', ctx.userID)).toBe(0)
+      }
+    })
+
+    it('refunds a concurrent burst when the target group is dissolved', async () => {
+      const first = await draft(MEMBER, 'First', 'a1')
+      const second = await draft(MEMBER, 'Second', 'a2')
+      await moveTo('group')
+      const groupId = await group([first, second])
+      await moveTo('vote')
+      const landed = await burst(
+        TEAM.map((ctx) => ({ ctx, targetType: 'group' as const, targetId: groupId })),
+      )
+      expect(landed).toBe(TEAM.length)
+      await moveTo('group')
+
+      await apply((tx) =>
+        mutators.retroGroup.dissolve.fn({
+          tx,
+          args: { id: groupId, updatedAt: Date.now() },
+          ctx: FACILITATOR,
+        }),
+      )
+
+      expect(await countOf('retro_vote', 'target_id', groupId)).toBe(0)
+      expect(await countOf('retro_vote_tally', 'target_id', groupId)).toBe(0)
+      for (const ctx of TEAM) {
+        expect(await countOf('retro_vote', 'voter_id', ctx.userID)).toBe(0)
+      }
     })
   })
 

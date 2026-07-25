@@ -39,6 +39,28 @@ export async function isRetroCardAuthor(
   return rows[0]?.match === true
 }
 
+// Serializes ONE voter's casts in one retro, which is exactly the scope of the budget. The shared
+// mutator counts the caller's own vote rows and then inserts; under READ COMMITTED two casts opened
+// at the same moment both take the pre-insert count and both land, so a voter could spend past their
+// budget — six dots against a budget of three, reproducibly. The lock is taken BEFORE the shared
+// mutator runs its count and is held to commit, and READ COMMITTED takes a fresh snapshot per
+// statement, so the count that follows sees the dot the previous holder committed.
+//
+// Keyed on (retro, voter) rather than taken on the retro row, so a team voting at once still runs
+// genuinely concurrently: nothing queues behind another person's dot, and the tally stays reliant on
+// its atomic increment rather than on incidental serialization. A hash collision costs two unrelated
+// voters a few microseconds of ordering and nothing else.
+//
+// This lives on the authoritative path only. The optimistic client path never reaches it, so the dot
+// and the remaining-budget readout stay instant; the server is the one that has to be right.
+export async function lockRetroVoteBudget(
+  db: Kysely<DB>,
+  retroId: string,
+  voterId: string,
+): Promise<void> {
+  await sql`select pg_advisory_xact_lock(hashtext(${retroId}), hashtext(${voterId}))`.execute(db)
+}
+
 // The atomic tally write. A read-then-write count loses updates the moment a whole team votes at
 // once, so the authoritative path increments the row in one statement — the same row-locked upsert
 // the per-team sequence counters use.

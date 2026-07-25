@@ -240,6 +240,74 @@ export async function getConnectorInstallation(
   return row ?? null
 }
 
+// System read: resolve an installation by the provider's external id alone (the webhook
+// worker only has that id from the payload). Joins to `connector_config` so a stray external
+// id belonging to another provider never resolves. Self-host runs a single workspace, so the
+// (provider, external id) pair is unambiguous.
+export async function findConnectorInstallation(
+  db: Kysely<DB>,
+  provider: string,
+  externalInstallationId: string,
+): Promise<ConnectorInstallation | null> {
+  const row = await db
+    .selectFrom('connector_installation')
+    .innerJoin(
+      'connector_config',
+      'connector_config.id',
+      'connector_installation.connector_config_id',
+    )
+    .where('connector_config.provider', '=', provider)
+    .where('connector_installation.external_installation_id', '=', externalInstallationId)
+    .selectAll('connector_installation')
+    .executeTakeFirst()
+  return row ?? null
+}
+
+// System read: the connector config a lifecycle webhook (install/uninstall) attaches to.
+// Returns the earliest-created config for the provider; self-host has exactly one.
+export async function findConnectorConfigByProvider(
+  db: Kysely<DB>,
+  provider: string,
+): Promise<ConnectorConfig | null> {
+  const row = await db
+    .selectFrom('connector_config')
+    .selectAll()
+    .where('provider', '=', provider)
+    .orderBy('created_at', 'asc')
+    .executeTakeFirst()
+  return row ?? null
+}
+
+// System read: every config for the provider (self-host has one; cloud has one per
+// workspace). The reconcile sweep iterates all of them.
+export async function listConnectorConfigsByProvider(
+  db: Kysely<DB>,
+  provider: string,
+): Promise<ConnectorConfig[]> {
+  return db
+    .selectFrom('connector_config')
+    .selectAll()
+    .where('provider', '=', provider)
+    .orderBy('created_at', 'asc')
+    .execute()
+}
+
+// System write: an uninstall lifecycle webhook removes the installation record (its
+// work-graph rows cascade away via the FK).
+export async function deleteConnectorInstallation(
+  db: Kysely<DB>,
+  provider: string,
+  externalInstallationId: string,
+): Promise<void> {
+  await db
+    .deleteFrom('connector_installation')
+    .where('external_installation_id', '=', externalInstallationId)
+    .where('connector_config_id', 'in', (qb) =>
+      qb.selectFrom('connector_config').select('id').where('provider', '=', provider),
+    )
+    .execute()
+}
+
 export async function listConnectorInstallations(
   db: Kysely<DB>,
   configId: string,

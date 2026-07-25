@@ -13,13 +13,17 @@ export type {
 } from './connector.js'
 export {
   ConnectorAuthorizationError,
+  deleteConnectorInstallation,
   deleteConnectorSecret,
+  findConnectorConfigByProvider,
+  findConnectorInstallation,
   getConnectorConfig,
   getConnectorInstallation,
   getConnectorSecret,
   getInstallationEtag,
   getRedactedConnectorStatus,
   listConnectorConfigs,
+  listConnectorConfigsByProvider,
   listConnectorInstallations,
   listConnectorSecretKeys,
   recordConnectorSync,

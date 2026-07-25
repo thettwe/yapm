@@ -14,12 +14,15 @@
   "dependencies": {
     "@better-auth/sso": "catalog:",
     "@hono/node-server": "catalog:",
+    "@octokit/auth-app": "catalog:",
+    "@octokit/webhooks": "catalog:",
     "@rocicorp/zero": "catalog:",
     "@yapm/schema": "workspace:*",
     "better-auth": "catalog:",
     "hono": "catalog:",
     "jose": "catalog:",
     "kysely": "catalog:",
+    "octokit": "catalog:",
     "pg-boss": "catalog:",
     "pino": "catalog:",
     "zod": "catalog:"

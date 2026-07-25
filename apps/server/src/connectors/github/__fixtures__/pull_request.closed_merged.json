@@ -1,0 +1,21 @@
+{
+  "action": "closed",
+  "number": 12,
+  "pull_request": {
+    "id": 5001,
+    "number": 12,
+    "node_id": "PR_kwABCDEF",
+    "title": "Fix the login race",
+    "state": "closed",
+    "draft": false,
+    "merged": true,
+    "merged_at": "2026-07-21T09:30:00Z",
+    "html_url": "https://github.com/acme/app/pull/12",
+    "body": "Implements the fix. Closes ENG-1.",
+    "created_at": "2026-07-20T10:00:00Z",
+    "head": { "sha": "abc123def456", "ref": "eng-1-login-race" }
+  },
+  "repository": { "full_name": "acme/app" },
+  "sender": { "login": "octodev" },
+  "installation": { "id": 42 }
+}

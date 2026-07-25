@@ -12,7 +12,9 @@ import {
 import { createApp } from './app.js'
 import { createAuth } from './auth.js'
 import { createAuthRoutes } from './auth-routes.js'
-import { type Env, EnvValidationError, loadEnv } from './config/env.js'
+import { type Env, EnvValidationError, githubAppEnv, loadEnv } from './config/env.js'
+import { createGithubConnector, githubConnector } from './connectors/github/index.js'
+import { createGithubWebhookRoute } from './connectors/github/routes.js'
 import { databaseCheck, replicationCheck } from './health.js'
 import { type CycleScheduler, startCycleScheduler } from './jobs/scheduler.js'
 import { createLogger, type Logger } from './logger.js'
@@ -83,6 +85,27 @@ async function main(): Promise<void> {
 
   const dbProvider = createZeroDatabase(database.db)
 
+  const github = createGithubConnector({
+    appEnv: githubAppEnv(env),
+    db: database.db,
+    dbProvider,
+    logger,
+    reconcileCron: env.GITHUB_RECONCILE_CRON,
+  })
+  if (github.enabled) {
+    try {
+      await github.start()
+    } catch (error) {
+      logger.error({ err: error }, 'failed to start the GitHub connector')
+    }
+  }
+  const githubWebhook = createGithubWebhookRoute({
+    enabled: github.enabled,
+    connector: githubConnector,
+    secrets: github.secrets,
+    enqueue: (delivery) => github.enqueue(delivery),
+  })
+
   let cycleScheduler: CycleScheduler | undefined
   if (env.CYCLE_MAINTENANCE === 'true') {
     try {
@@ -107,6 +130,7 @@ async function main(): Promise<void> {
     ],
     webDistDir: env.WEB_DIST_DIR,
     authRoutes: createAuthRoutes({ auth, db: database.db, env, logger }),
+    githubWebhook,
     zero: {
       dbProvider,
       resolveContext: createSessionContextResolver({
@@ -127,6 +151,7 @@ async function main(): Promise<void> {
     server,
     close: async () => {
       if (cycleScheduler) await cycleScheduler.stop()
+      await github.stop()
       await database.close()
     },
     logger,

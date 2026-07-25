@@ -1,0 +1,14 @@
+{
+  "action": "completed",
+  "check_run": {
+    "id": 7001,
+    "name": "build-and-test",
+    "status": "completed",
+    "conclusion": "failure",
+    "head_sha": "abc123def456",
+    "pull_requests": [{ "id": 5001, "number": 12 }]
+  },
+  "repository": { "full_name": "acme/app" },
+  "sender": { "login": "github-actions" },
+  "installation": { "id": 42 }
+}

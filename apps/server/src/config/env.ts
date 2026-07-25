@@ -103,6 +103,9 @@ export const envSchema = z
     GITHUB_APP_ID: optionalString,
     GITHUB_APP_PRIVATE_KEY: optionalString,
     GITHUB_APP_WEBHOOK_SECRET: optionalString,
+    // How often the connector's reconcile sweep re-polls GitHub with conditional (ETag/304)
+    // requests to heal any missed webhook. Only runs when the GitHub App is configured.
+    GITHUB_RECONCILE_CRON: z.string().min(1).default('*/15 * * * *'),
   })
   .check((ctx) => {
     const value = ctx.value
@@ -155,6 +158,7 @@ export const EXPECTED_FORMAT: Record<string, string> = {
     'the GitHub App private key PEM (PKCS#1); set with the other GITHUB_APP_* vars, or leave all unset',
   GITHUB_APP_WEBHOOK_SECRET:
     'the GitHub App webhook secret; set with the other GITHUB_APP_* vars, or leave all unset',
+  GITHUB_RECONCILE_CRON: "a cron expression for the connector reconcile sweep, e.g. '*/15 * * * *'",
 }
 
 export interface EnvIssue {

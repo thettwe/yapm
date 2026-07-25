@@ -1,0 +1,15 @@
+{
+  "deployment": {
+    "id": 8001,
+    "ref": "eng-1-login-race",
+    "environment": "production",
+    "sha": "abc123def456"
+  },
+  "deployment_status": {
+    "state": "success",
+    "environment": "production"
+  },
+  "repository": { "full_name": "acme/app" },
+  "sender": { "login": "deploy-bot" },
+  "installation": { "id": 42 }
+}

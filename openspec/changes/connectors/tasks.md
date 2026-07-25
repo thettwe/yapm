@@ -23,11 +23,11 @@
 
 ## 4. GitHub connector (apps/server)
 
-- [ ] 4.1 Add `octokit` (catalog) to `apps/server`; build the `App` (auth-app) client factory, enabled only when the App triplet + encryption key are present
-- [ ] 4.2 Webhook Hono route: raw-body capture, `X-Hub-Signature-256` HMAC verify (with fallback-secret rotation), enqueue + `202`; disabled-connector returns not-found/unavailable
-- [ ] 4.3 pg-boss `github-webhook` queue (`key_strict_fifo`, `singletonKey: installation-<id>`, dead-letter) + worker (`batchSize: 1`, dedupe on `X-GitHub-Delivery`) driving `ingest`→`applyWorkGraphMutation`
-- [ ] 4.4 GitHub `parseDelivery` + `ingest`: map `pull_request`/`pull_request_review`/`check_suite`/`check_run`/`status`/`deployment_status`/`push`/`installation` payloads to `WorkGraphMutation[]`; resolve repo→team; merged-vs-closed
-- [ ] 4.5 `reconcile` cron (ETag/304 conditional requests) + first-install backfill sweep, emitting the same `WorkGraphMutation[]`
+- [x] 4.1 Add `octokit` + `@octokit/auth-app` + `@octokit/webhooks` (catalog) to `apps/server`; build the `App` (auth-app) client factory, enabled only when the App triplet is present (installation tokens minted on demand, never persisted)
+- [x] 4.2 Webhook Hono route: raw-body capture, `X-Hub-Signature-256` HMAC verify (with fallback-secret rotation), enqueue + `202`; disabled-connector returns 404
+- [x] 4.3 pg-boss `github-webhook` queue (`key_strict_fifo`, `singletonKey: installation-<id>`, dead-letter) + worker (`batchSize: 1`, dedupe on `X-GitHub-Delivery`) driving `ingest`→`applyWorkGraphMutations`
+- [x] 4.4 GitHub `parseDelivery` + `ingest`: map `pull_request`/`pull_request_review`/`check_suite`/`check_run`/`deployment_status` payloads to `WorkGraphMutation[]`; `installation`/`installation_repositories` handled as lifecycle out of band; `push`/`status`/`issues` are no-ops (see design decisions); resolve repo→team; merged-vs-closed
+- [x] 4.5 `reconcile` cron (ETag/304 conditional requests) + first-install backfill sweep, emitting the same `WorkGraphMutation[]`
 - [ ] 4.6 Admin connector REST surface (`/api/v1/connectors/...`): redacted status + enable/configure/map, admin-gated
 
 ## 5. Web UI
@@ -45,8 +45,8 @@
 
 ## 7. Tests + CI gates
 
-- [ ] 7.1 Unit: secret codec, `parseIssueRefs`, `WorkGraphMutation` mapping, delivery-signal/divergence over linked entities, env disable/partial-config
-- [ ] 7.2 Integration (live Postgres): HMAC verify (mocked octokit + recorded webhook fixtures), serialized-per-installation ordering + idempotency, ingest→mutator authz + team scope, reconcile 304 path, drift test
+- [x] 7.1 Unit: secret codec, `parseIssueRefs`, `WorkGraphMutation` mapping, delivery-signal/divergence over linked entities, env disable/partial-config
+- [x] 7.2 Integration (live Postgres): HMAC verify (mocked octokit + recorded webhook fixtures), serialized-per-installation ordering + idempotency, ingest→mutator authz + team scope, reconcile 304 path, drift test
 - [ ] 7.3 E2E (Playwright): admin enables the connector (mocked GitHub); a linked PR fixture lights up the reality strip on row + detail; divergence flag appears; viewer read-only; keyboard-first
 - [ ] 7.4 Add the full Playwright e2e suite to `.github/workflows/ci.yml` (fresh DB per run, `YAPM_HOST_PORT=3210`, boot order postgres → migrate → zero-cache → vite)
 - [ ] 7.5 `pnpm turbo lint typecheck test build` green; compose smoke green; docs build green

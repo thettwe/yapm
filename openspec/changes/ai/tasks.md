@@ -42,8 +42,8 @@
 ## 8. Web: admin AI settings + cycle-digest surface
 
 - [x] 8.1 Build the admin AI settings view (enable toggle, masked key entry, per-provider model + workspace default, spend cap, running-total display) over the admin REST surface — keyboard-first, all three themes, tokens only, non-admins never see it.
-- [ ] 8.2 Build the cycle-view digest panel: typed sections + items with evidence links opening the issue/PR/check/deploy, AI-generated + model + estimated-cost framing, render-safe (no auto-loaded remote content) — keyboard-first, all three themes, tokens only.
-- [ ] 8.3 Build the AI-off raw-evidence fallback on the cycle view (completed/carried issues + linked PRs + CI/deploy + scope delta) shown when the digest is absent/`ai_off`/`failed`.
+- [x] 8.2 Build the cycle-view digest panel: typed sections + items with evidence links opening the issue/PR/check/deploy, AI-generated + model + estimated-cost framing, render-safe (no auto-loaded remote content) — keyboard-first, all three themes, tokens only.
+- [x] 8.3 Build the AI-off raw-evidence fallback on the cycle view (completed/carried issues + linked PRs + CI/deploy + scope delta) shown when the digest is absent/`ai_off`/`failed`.
 
 ## 9. Unit tests (Vitest, no DB)
 
@@ -63,16 +63,16 @@
 
 ## 11. E2E tests (Playwright, mock provider, real 3-container stack)
 
-- [ ] 11.1 Admin configures a (mock) key → toggles AI on → opens a completed cycle → sees the digest; evidence links open the referenced entity; full keyboard flow across all three themes.
-- [ ] 11.2 Toggle AI off (or unconfigured) → the cycle view renders the AI-off raw-evidence fallback; opening the cycle is never blocked.
+- [x] 11.1 Admin configures a (mock) key → toggles AI on → opens a completed cycle → sees the digest; evidence links open the referenced entity; full keyboard flow across all three themes.
+- [x] 11.2 Toggle AI off (or unconfigured) → the cycle view renders the AI-off raw-evidence fallback; opening the cycle is never blocked.
 
 ## 12. Documentation
 
-- [ ] 12.1 `apps/docs`: a self-hoster **AI setup** page (enable AI, enter a provider key, choose a model, the optional instance-default env + `SECRETS_ENCRYPTION_KEY`, spend/estimated-cost notes, BYO-key privacy, AI-off behavior) under Self-hosting, linked from the sidebar/home.
-- [ ] 12.2 `apps/docs`: a user-facing **Cycle digest** feature page (what it summarizes, team-level/blameless, evidence links, AI-off fallback), linked from the sidebar/home; `pnpm --filter @yapm/docs build` passes.
+- [x] 12.1 `apps/docs`: a self-hoster **AI setup** page (enable AI, enter a provider key, choose a model, the optional instance-default env + `SECRETS_ENCRYPTION_KEY`, spend/estimated-cost notes, BYO-key privacy, AI-off behavior) under Self-hosting, linked from the sidebar/home.
+- [x] 12.2 `apps/docs`: a user-facing **Cycle digest** feature page (what it summarizes, team-level/blameless, evidence links, AI-off fallback), linked from the sidebar/home; `pnpm --filter @yapm/docs build` passes.
 - [x] 12.3 Update `.env.example` with the new optional AI vars (matching the Zod schema exactly — drift check passes) with comments that absent = disabled.
-- [ ] 12.4 Update root docs made stale: `README.md` (status + feature list), `ROADMAP.md` (#9 status), `TECHSTACK.md` (AI SDK catalog additions + the BYO-key gateway/agent-as-actor/substrate decisions and the three-container/no-new-service reaffirmation).
+- [x] 12.4 Update root docs made stale: `README.md` (status + feature list), `ROADMAP.md` (#9 status), `TECHSTACK.md` (AI SDK catalog additions + the BYO-key gateway/agent-as-actor/substrate decisions and the three-container/no-new-service reaffirmation).
 
 ## 13. Close-out
 
-- [ ] 13.1 `pnpm turbo lint typecheck test build` green; compose smoke test passes; walk every scenario in the change's specs and confirm it holds.
+- [x] 13.1 `pnpm turbo lint typecheck test build` green; compose smoke test passes; walk every scenario in the change's specs and confirm it holds.

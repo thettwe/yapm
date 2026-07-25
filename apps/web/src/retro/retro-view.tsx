@@ -1,6 +1,13 @@
 import { useQuery } from '@rocicorp/zero/react'
 import { useNavigate } from '@tanstack/react-router'
-import { queries, RETRO_PHASES, RETRO_PRESENCE_HEARTBEAT_MS, type RetroPhase } from '@yapm/schema'
+import {
+  queries,
+  RETRO_PHASES,
+  RETRO_PRESENCE_HEARTBEAT_MS,
+  type RetroPhase,
+  type RetroSeed,
+  type RetroSeedRef,
+} from '@yapm/schema'
 import { Avatar, AvatarFallback } from '@yapm/ui/components/avatar'
 import { Button } from '@yapm/ui/components/button'
 import { cn } from '@yapm/ui/lib/utils'
@@ -33,6 +40,8 @@ import {
 import { RetroActions } from '@/retro/retro-actions'
 import { RetroBoard } from '@/retro/retro-board'
 import { RetroCommandProvider, useRetroCommand } from '@/retro/retro-command'
+import { RetroSeedPanel, seedWidgetSelector } from '@/retro/retro-seed-panel'
+import { buildRetroSeedFor, type SeedCycleRow, type SeedIssueRow } from '@/retro/seed-model'
 
 interface RelatedUser {
   id: string
@@ -48,6 +57,9 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
   const [teams] = useQuery(queries.teams.all())
   const [users] = useQuery(queries.users.all())
   const [cycles] = useQuery(queries.cycles.byTeam({ teamId }))
+  // The seed's substrate: the team's issues with their linked delivery subtree. Already the
+  // issue list's query, so the panel costs no new sync surface.
+  const [issues] = useQuery(queries.issues.byTeam({ teamId }))
 
   const team = teams.find((candidate) => candidate.id === teamId)
 
@@ -89,6 +101,7 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
         (detail?.cards ?? []) as readonly (RetroCardData & {
           groupId?: string | null
           authorDisplayId?: string | null
+          seedRef?: RetroSeedRef | null
         })[]
       ).map((card) => ({
         id: card.id,
@@ -98,6 +111,7 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
         rank: card.rank,
         isAnonymous: card.isAnonymous,
         authorDisplayId: card.authorDisplayId ?? null,
+        seedRef: card.seedRef ?? null,
         createdAt: card.createdAt,
       })),
     [detail],
@@ -172,13 +186,19 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
 
   const myDrafts = useMemo<RetroDraftData[]>(
     () =>
-      (drafts as readonly (RetroDraftData & { publishedAt?: number | null })[])
+      (
+        drafts as readonly (RetroDraftData & {
+          publishedAt?: number | null
+          seedRef?: RetroSeedRef | null
+        })[]
+      )
         .filter((draft) => (draft.publishedAt ?? null) === null)
         .map((draft) => ({
           id: draft.id,
           columnId: draft.columnId,
           body: draft.body,
           rank: draft.rank,
+          seedRef: draft.seedRef ?? null,
           publishedAt: draft.publishedAt ?? null,
         })),
     [drafts],
@@ -193,6 +213,18 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
         createdAt: vote.createdAt,
       })),
     [votes],
+  )
+
+  // The panel is a live client-side computation over rows the caller already has: sub-100ms, correct
+  // offline, and identical on every client.
+  const seed = useMemo<RetroSeed | null>(
+    () =>
+      buildRetroSeedFor(
+        retro?.cycleId ?? null,
+        cycles as readonly SeedCycleRow[],
+        issues as readonly SeedIssueRow[],
+      ),
+    [cycles, issues, retro],
   )
 
   if (!retro || !team) {
@@ -224,6 +256,7 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
         id: cycle.id,
         name: cycle.name,
       }))}
+      seed={seed}
     />
   )
 }
@@ -243,6 +276,7 @@ interface RetroShellProps {
   users: readonly RelatedUser[]
   teamMemberIds: readonly string[]
   cycles: readonly { id: string; name: string }[]
+  seed: RetroSeed | null
 }
 
 function RetroShell(props: RetroShellProps) {
@@ -261,12 +295,42 @@ function RetroShell(props: RetroShellProps) {
   )
 
   const [composerColumnId, setComposerColumnId] = useState<string | null>(null)
+  const [composerSeed, setComposerSeed] = useState<RetroSeedRef | null>(null)
   const [actionComposer, setActionComposer] = useState(false)
+  const [seedOpen, setSeedOpen] = useState(true)
   const focusColumnRef = useRef<string | null>(null)
 
-  const openCardComposer = useCallback(() => {
-    setComposerColumnId(focusColumnRef.current ?? props.columns[0]?.id ?? null)
-  }, [props.columns])
+  const openComposerIn = useCallback(
+    (seedRef: RetroSeedRef | null) => {
+      setComposerSeed(seedRef)
+      setComposerColumnId(focusColumnRef.current ?? props.columns[0]?.id ?? null)
+    },
+    [props.columns],
+  )
+
+  const openCardComposer = useCallback(() => openComposerIn(null), [openComposerIn])
+
+  // "Add a card from this widget": the composer opens in the column focus was last in, carrying the
+  // widget's evidence ref, so the captured card links back to the number that prompted it.
+  const seedCardFrom = useCallback(
+    (seedRef: RetroSeedRef) => openComposerIn(seedRef),
+    [openComposerIn],
+  )
+
+  const onComposerColumn = useCallback((columnId: string | null) => {
+    setComposerColumnId(columnId)
+    if (columnId === null) setComposerSeed(null)
+  }, [])
+
+  // The other half of the join: a card's chip reveals the panel and focuses the tile it came from.
+  const openEvidence = useCallback((seedRef: RetroSeedRef) => {
+    setSeedOpen(true)
+    requestAnimationFrame(() => {
+      const tile = document.querySelector<HTMLElement>(seedWidgetSelector(seedRef.id))
+      tile?.scrollIntoView({ block: 'nearest' })
+      tile?.focus()
+    })
+  }, [])
 
   return (
     <RetroCommandProvider
@@ -278,8 +342,10 @@ function RetroShell(props: RetroShellProps) {
       canWrite={canWrite}
       facilitator={facilitator}
       api={api}
+      seed={props.seed}
       onNewCard={openCardComposer}
       onNewAction={() => setActionComposer(true)}
+      onSeedCard={seedCardFrom}
     >
       <RetroSurface
         {...props}
@@ -290,12 +356,17 @@ function RetroShell(props: RetroShellProps) {
         facilitator={facilitator}
         members={members}
         composerColumnId={composerColumnId}
-        onComposerColumn={setComposerColumnId}
+        composerSeed={composerSeed}
+        onComposerColumn={onComposerColumn}
         onOpenCardComposer={openCardComposer}
         focusColumnRef={focusColumnRef}
         actionComposerOpen={actionComposer}
         onOpenActionComposer={() => setActionComposer(true)}
         onCloseActionComposer={() => setActionComposer(false)}
+        seedOpen={seedOpen}
+        onSeedOpenChange={setSeedOpen}
+        onSeedCard={seedCardFrom}
+        onOpenEvidence={openEvidence}
       />
     </RetroCommandProvider>
   )
@@ -309,12 +380,17 @@ interface RetroSurfaceProps extends RetroShellProps {
   facilitator: boolean
   members: readonly { id: string; name: string }[]
   composerColumnId: string | null
+  composerSeed: RetroSeedRef | null
   onComposerColumn: (columnId: string | null) => void
   onOpenCardComposer: () => void
   focusColumnRef: RefObject<string | null>
   actionComposerOpen: boolean
   onOpenActionComposer: () => void
   onCloseActionComposer: () => void
+  seedOpen: boolean
+  onSeedOpenChange: (open: boolean) => void
+  onSeedCard: (ref: RetroSeedRef) => void
+  onOpenEvidence: (ref: RetroSeedRef) => void
 }
 
 function RetroSurface({
@@ -337,13 +413,19 @@ function RetroSurface({
   canWrite,
   facilitator,
   members,
+  seed,
   composerColumnId,
+  composerSeed,
   onComposerColumn,
   onOpenCardComposer,
   focusColumnRef,
   actionComposerOpen,
   onOpenActionComposer,
   onCloseActionComposer,
+  seedOpen,
+  onSeedOpenChange,
+  onSeedCard,
+  onOpenEvidence,
 }: RetroSurfaceProps) {
   const navigate = useNavigate()
   const command = useRetroCommand()
@@ -513,6 +595,14 @@ function RetroSurface({
         ) : null}
       </header>
 
+      <RetroSeedPanel
+        seed={seed}
+        canDraft={retroCan(retro.phase, 'draft', { canWrite })}
+        open={seedOpen}
+        onOpenChange={onSeedOpenChange}
+        onSeedCard={onSeedCard}
+      />
+
       <div className="flex min-h-0 flex-1">
         <RetroBoard
           retro={retro}
@@ -527,7 +617,9 @@ function RetroSurface({
           facilitator={facilitator}
           api={api}
           composerColumnId={composerColumnId}
+          composerSeed={composerSeed}
           onComposerColumn={onComposerColumn}
+          onOpenEvidence={onOpenEvidence}
           onFocusColumn={onFocusColumn}
           onFocusChange={command.setFocused}
           onGroupWith={command.openGroupWith}

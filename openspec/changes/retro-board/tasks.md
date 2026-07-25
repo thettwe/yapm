@@ -26,15 +26,15 @@ Sequenced so the app runs after every task. The anonymity boundary (group 1–2)
 
 ## 3. Auto-open + presence pruning on the existing pg-boss pass (apps/server)
 
-- [ ] 3.1 `runCycleMaintenance`: after each `cycle.complete`, mint the retro + column ids in the job and call `retro.openForCycle`; idempotent against the deliberate action
-- [ ] 3.2 Prune `retro_presence` rows older than the heartbeat window in the same pass; no new job type and no new env var
-- [ ] 3.3 Live-Postgres integration test: scheduled completion opens exactly one retro, a second pass changes nothing, stale presence is pruned
+- [x] 3.1 `runCycleMaintenance`: after each `cycle.complete`, mint the retro + column ids in the job and call `retro.openForCycle`; idempotent against the deliberate action
+- [x] 3.2 Prune `retro_presence` rows older than the heartbeat window in the same pass; no new job type and no new env var
+- [x] 3.3 Live-Postgres integration test: scheduled completion opens exactly one retro, a second pass changes nothing, stale presence is pruned
 
 ## 4. Retro surface (apps/web)
 
 - [x] 4.1 `/teams/$teamId/retros` and `/teams/$teamId/retros/$retroId` routes + the retro shell: phase stepper, facilitator controls, timer, presence — all token-driven
 - [x] 4.2 The board: columns, the brainstorm composer over drafts, published cards, drag grouping via dnd-kit reusing the board's single-write move, vote pips from the synced tally with a live remaining-budget readout
-- [ ] 4.3 The data-seed panel: Delivered always, Flow when delivery data exists (quiet named empty state otherwise), sparkline trends, blameless captions, and "add a card from this widget" seeding a draft with its evidence ref
+- [x] 4.3 The data-seed panel: Delivered always, Flow when delivery data exists (quiet named empty state otherwise), sparkline trends, blameless captions, and "add a card from this widget" seeding a draft with its evidence ref
 - [x] 4.4 The actions list: create/assign/target-cycle, convert to issue, and the converted issue's live status rendered with the existing status tokens
 - [x] 4.5 Keyboard model + command palette: `c`, `Enter`, arrows, `v`/`Shift+V`, `g`, `a`, `⌘/Ctrl+Enter`, `]`/`[`, `t`, `Esc` — every action also a palette entry; affordances driven by the shared `isRetroWriteAllowed`
 - [x] 4.6 Entry points: a Retros entry in the view switch and a link from a completed cycle in the Cycles view
@@ -46,7 +46,7 @@ Sequenced so the app runs after every task. The anonymity boundary (group 1–2)
 - [ ] 5.2 Integration (live Postgres + zero-cache) — **the anonymity proof**: enumerate every query in the registry, evaluate each with a non-author member's context (including a workspace admin), and assert no result yields an anonymous card's author; assert drafts and votes never cross users
 - [ ] 5.3 Integration: migration + drift (new tables/columns + `retro_card_author` exclusion — done in 1.4), phase enforcement end-to-end against the server mutators (skip, rewind, non-facilitator, write-in-wrong-phase — done in 5.0), publish idempotency (done in 5.0); still open: **vote budget under concurrency**
 - [ ] 5.4 Integration: `convertActionToIssue` creates a numbered issue in the next cycle through the shared create path, is idempotent, and is rejected for a viewer (done in 5.0); still open: `carryover_count`/`cycle_assigned_at` across two consecutive rollovers
-- [~] 5.5 E2E (Playwright, real 3-container stack): a full keyboard-only retro (capture → group → vote → action → convert → close), the palette equivalents, and theme correctness across the three presets in light and dark are done in `apps/web/e2e/retro.spec.ts`; still open: the **two-client** pass (brainstorm privacy then reveal on advance, anonymity verified from the second client's synced state)
+- [~] 5.5 E2E (Playwright, real 3-container stack): a full keyboard-only retro (capture → group → vote → action → convert → close), the palette equivalents, the data panel (Delivered populated with no connectors, Flow's named empty state, keyboard "add a card from this widget", the evidence chip's link back, the palette equivalent), and theme correctness across the three presets in light and dark are done in `apps/web/e2e/retro.spec.ts`; still open: the **two-client** pass (brainstorm privacy then reveal on advance, anonymity verified from the second client's synced state)
 
 ## 6. Documentation
 

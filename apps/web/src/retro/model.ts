@@ -8,6 +8,7 @@ import {
   type RetroColumnAccent,
   type RetroFormat,
   type RetroPhase,
+  type RetroSeedRef,
   type RetroVoteTarget,
   type RetroWriteOp,
   rankBetween,
@@ -47,6 +48,7 @@ export interface RetroCardData {
   readonly rank: string
   readonly isAnonymous: boolean
   readonly authorDisplayId: string | null
+  readonly seedRef: RetroSeedRef | null
   readonly createdAt: number
 }
 
@@ -62,6 +64,7 @@ export interface RetroDraftData {
   readonly columnId: string
   readonly body: string
   readonly rank: string
+  readonly seedRef: RetroSeedRef | null
   readonly publishedAt: number | null
 }
 

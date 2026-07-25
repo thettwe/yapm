@@ -173,6 +173,56 @@ test('a whole retro runs end to end from the keyboard', async ({ page }) => {
   })
 })
 
+test('the data panel is useful with no connectors and seeds an evidence-anchored card', async ({
+  page,
+}) => {
+  await enterApp(page)
+  await openTeam(page)
+  await completedCycleWithRetro(page)
+  await openRetro(page)
+
+  // The differentiator, on an instance with no connector configured at all: Delivered is computed
+  // from cycles alone, and Flow says exactly what would light it up instead of drawing zeros.
+  const panel = page.getByTestId('retro-seed-panel')
+  await expect(panel).toBeVisible({ timeout: 20_000 })
+  const delivered = page.locator('[data-testid="retro-seed-section"][data-section="delivered"]')
+  await expect(delivered.getByTestId('retro-seed-widget')).toHaveCount(7, { timeout: 20_000 })
+  await expect(delivered.locator('[data-metric="carried_twice_plus"]')).toBeVisible()
+  const flow = page.locator('[data-testid="retro-seed-section"][data-section="flow"]')
+  await expect(flow.getByTestId('retro-seed-empty')).toContainText('Connect GitHub')
+  await expect(flow.getByTestId('retro-seed-widget')).toHaveCount(0)
+
+  // "Add a card from this widget", from the keyboard: the composer opens carrying the figure.
+  const seedButton = delivered.locator('[data-metric="shipped"]').getByTestId('retro-seed-add-card')
+  await seedButton.focus()
+  await expect(seedButton).toBeFocused()
+  await page.keyboard.press('Enter')
+  const composer = page.getByTestId('retro-composer')
+  await expect(composer).toBeFocused({ timeout: 20_000 })
+  await expect(page.getByTestId('retro-composer-seeded')).toContainText('From Shipped')
+  await composer.fill('Only a handful shipped — what got in the way?')
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Escape')
+
+  // The card carries the evidence link back to the number that prompted it.
+  const chip = page.locator(DRAFT).getByTestId('retro-evidence-chip')
+  await expect(chip).toHaveText('Shipped', { timeout: 20_000 })
+  await chip.focus()
+  await page.keyboard.press('Enter')
+  await expect(delivered.locator('[data-metric="shipped"]')).toBeFocused({ timeout: 20_000 })
+
+  // The same action is in the palette, so nothing here is pointer- or shortcut-only.
+  await page.keyboard.press('ControlOrMeta+k')
+  await expect(page.getByRole('dialog', { name: 'Retro command palette' })).toBeVisible({
+    timeout: 20_000,
+  })
+  await page.keyboard.type('add a card from a figure')
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('Carried twice or more')
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('retro-composer-seeded')).toContainText('From Carried twice')
+})
+
 test('the retro command palette reaches every retro action', async ({ page }) => {
   await enterApp(page)
   await openTeam(page)

@@ -19,6 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import type { RetroSeedRef } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import {
   RetroAccentBar,
@@ -27,7 +28,7 @@ import {
   RetroVotePips,
 } from '@yapm/ui/components/retro-card'
 import { cn } from '@yapm/ui/lib/utils'
-import { GroupIcon, PlusIcon, Trash2Icon, UngroupIcon } from 'lucide-react'
+import { ChartNoAxesColumnIcon, GroupIcon, PlusIcon, Trash2Icon, UngroupIcon } from 'lucide-react'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
@@ -76,11 +77,15 @@ export interface RetroBoardProps {
   facilitator: boolean
   api: RetroApi
   composerColumnId: string | null
+  // The evidence ref a panel widget attached to the open composer: every card it captures links
+  // back to the number that prompted it.
+  composerSeed: RetroSeedRef | null
   onComposerColumn: (columnId: string | null) => void
   onFocusColumn: (columnId: string | null) => void
   onFocusChange: (focus: RetroFocus | null) => void
   onGroupWith: (cardId: string) => void
   onActionFrom: (item: RetroBoardItem) => void
+  onOpenEvidence: (ref: RetroSeedRef) => void
 }
 
 export interface RetroFocus {
@@ -105,11 +110,13 @@ export function RetroBoard({
   facilitator,
   api,
   composerColumnId,
+  composerSeed,
   onComposerColumn,
   onFocusColumn,
   onFocusChange,
   onGroupWith,
   onActionFrom,
+  onOpenEvidence,
 }: RetroBoardProps) {
   const boardColumns = useMemo(
     () => buildRetroColumns(columns, cards, groups),
@@ -401,11 +408,13 @@ export function RetroBoard({
             activeId={activeId}
             reducedMotion={reducedMotion}
             composerOpen={composerColumnId === entry.column.id}
+            composerSeed={composerSeed}
             onOpenComposer={() => onComposerColumn(entry.column.id)}
             onCloseComposer={() => onComposerColumn(null)}
             onFocusItem={focusItem}
             onGroupWith={onGroupWith}
             onActionFrom={onActionFrom}
+            onOpenEvidence={onOpenEvidence}
             onVote={castOrRetract}
           />
         ))}
@@ -441,11 +450,13 @@ interface BoardColumnProps {
   activeId: string | null
   reducedMotion: boolean
   composerOpen: boolean
+  composerSeed: RetroSeedRef | null
   onOpenComposer: () => void
   onCloseComposer: () => void
   onFocusItem: (id: string) => void
   onGroupWith: (cardId: string) => void
   onActionFrom: (item: RetroBoardItem) => void
+  onOpenEvidence: (ref: RetroSeedRef) => void
   onVote: (targetId: string, targetType: 'card' | 'group', retract: boolean) => void
 }
 
@@ -465,11 +476,13 @@ function BoardColumn({
   activeId,
   reducedMotion,
   composerOpen,
+  composerSeed,
   onOpenComposer,
   onCloseComposer,
   onFocusItem,
   onGroupWith,
   onActionFrom,
+  onOpenEvidence,
   onVote,
 }: BoardColumnProps) {
   const { column, items, cardCount } = entry
@@ -531,12 +544,14 @@ function BoardColumn({
                   columnId={column.id}
                   editable={canDraft}
                   api={api}
+                  onOpenEvidence={onOpenEvidence}
                 />
               ))}
               {composerOpen ? (
                 <Composer
                   columnTitle={column.title}
-                  onSubmit={(body) => void api.createDraft(column.id, body, mine)}
+                  seedRef={composerSeed}
+                  onSubmit={(body) => void api.createDraft(column.id, body, mine, composerSeed)}
                   onClose={onCloseComposer}
                 />
               ) : null}
@@ -566,6 +581,7 @@ function BoardColumn({
                     reducedMotion={reducedMotion}
                     onGroupWith={onGroupWith}
                     onActionFrom={onActionFrom}
+                    onOpenEvidence={onOpenEvidence}
                     onVote={onVote}
                     onFocusItem={onFocusItem}
                   />
@@ -588,6 +604,7 @@ function BoardColumn({
                     onGroupWith={() => onGroupWith(item.id)}
                     onDelete={() => void api.deleteCard(item.id)}
                     onAction={() => onActionFrom(item)}
+                    onOpenEvidence={onOpenEvidence}
                   />
                 ),
               )}
@@ -599,12 +616,45 @@ function BoardColumn({
   )
 }
 
+// The evidence chip: the join no whiteboard tool can make. A card seeded from a panel widget names
+// the number it came from and takes the reader back to it.
+function EvidenceChip({
+  seedRef,
+  onOpen,
+}: {
+  seedRef: RetroSeedRef
+  onOpen: (ref: RetroSeedRef) => void
+}) {
+  const label = seedRef.label ?? seedRef.id
+  return (
+    <button
+      type="button"
+      data-testid="retro-evidence-chip"
+      aria-label={`From the ${label} figure — show it`}
+      className="flex shrink-0 items-center gap-1 rounded-pill border border-accent-line bg-accent-soft/50 px-2 py-0.5 text-[11px] text-text-2 outline-none hover:text-text-1 focus-visible:ring-2 focus-visible:ring-accent"
+      onClick={(event) => {
+        event.stopPropagation()
+        onOpen(seedRef)
+      }}
+      // The chip sits inside a card that treats Enter/Backspace as edit and delete. The keystroke
+      // that activates the chip must not also reach the card, or following the link would open the
+      // editor over the top of it.
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <ChartNoAxesColumnIcon className="size-3" aria-hidden="true" />
+      {label}
+    </button>
+  )
+}
+
 function Composer({
   columnTitle,
+  seedRef,
   onSubmit,
   onClose,
 }: {
   columnTitle: string
+  seedRef: RetroSeedRef | null
   onSubmit: (body: string) => void
   onClose: () => void
 }) {
@@ -617,7 +667,7 @@ function Composer({
 
   // Enter submits and KEEPS the composer open for the next card; Shift+Enter is a newline and
   // Escape leaves. This is the capture loop the keyboard spec asks for.
-  return (
+  const field = (
     <textarea
       ref={ref}
       rows={3}
@@ -643,6 +693,17 @@ function Composer({
       className="w-full resize-none rounded-card border border-accent-line bg-bg-elevated px-3 py-2.5 text-[13.5px] leading-snug text-text-1 outline-none placeholder:text-text-3 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
     />
   )
+
+  if (seedRef === null) return field
+  return (
+    <div className="flex flex-col gap-1" data-testid="retro-composer-seeded">
+      <span className="flex items-center gap-1 self-start rounded-pill border border-accent-line bg-accent-soft/50 px-2 py-0.5 text-[11px] text-text-2">
+        <ChartNoAxesColumnIcon className="size-3" aria-hidden="true" />
+        From {seedRef.label ?? seedRef.id}
+      </span>
+      {field}
+    </div>
+  )
 }
 
 function DraftCard({
@@ -651,12 +712,14 @@ function DraftCard({
   columnId,
   editable,
   api,
+  onOpenEvidence,
 }: {
   draft: RetroDraftData
   accent: RetroAccentKind
   columnId: string
   editable: boolean
   api: RetroApi
+  onOpenEvidence: (ref: RetroSeedRef) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [body, setBody] = useState(draft.body)
@@ -699,6 +762,11 @@ function DraftCard({
       data-testid="retro-draft"
       accent={accent}
       body={draft.body}
+      evidence={
+        draft.seedRef === null ? undefined : (
+          <EvidenceChip seedRef={draft.seedRef} onOpen={onOpenEvidence} />
+        )
+      }
       aria-label={`Your card: ${draft.body}`}
       onClick={() => editable && setEditing(true)}
       onKeyDown={(event) => {
@@ -749,6 +817,7 @@ interface GroupBlockProps {
   reducedMotion: boolean
   onGroupWith: (cardId: string) => void
   onActionFrom: (item: RetroBoardItem) => void
+  onOpenEvidence: (ref: RetroSeedRef) => void
   onVote: (targetId: string, targetType: 'card' | 'group', retract: boolean) => void
   onFocusItem: (id: string) => void
 }
@@ -770,6 +839,7 @@ function GroupBlock({
   reducedMotion,
   onGroupWith,
   onActionFrom,
+  onOpenEvidence,
   onVote,
   onFocusItem,
 }: GroupBlockProps) {
@@ -879,6 +949,7 @@ function GroupBlock({
           onGroupWith={() => onGroupWith(card.id)}
           onDelete={() => void api.deleteCard(card.id)}
           onAction={() => onActionFrom({ kind: 'card', id: card.id, rank: card.rank, card })}
+          onOpenEvidence={onOpenEvidence}
         />
       ))}
       {facilitator && item.cards.length === 0 ? (
@@ -906,6 +977,7 @@ interface SortableRetroCardProps {
   onGroupWith: () => void
   onDelete: () => void
   onAction: () => void
+  onOpenEvidence: (ref: RetroSeedRef) => void
 }
 
 function SortableRetroCard({
@@ -926,6 +998,7 @@ function SortableRetroCard({
   onGroupWith,
   onDelete,
   onAction,
+  onOpenEvidence,
 }: SortableRetroCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
@@ -963,6 +1036,11 @@ function SortableRetroCard({
       accent={accent}
       body={card.body}
       anonymous={card.isAnonymous}
+      evidence={
+        card.seedRef === null ? undefined : (
+          <EvidenceChip seedRef={card.seedRef} onOpen={onOpenEvidence} />
+        )
+      }
       {...(author ? { author: { name: author.name, src: author.image ?? null } } : {})}
       aria-label={`${card.body}${card.isAnonymous ? ', anonymous' : ''}`}
       aria-keyshortcuts={canVote ? 'v' : undefined}

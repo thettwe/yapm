@@ -1,4 +1,4 @@
-import { RETRO_PHASES } from '@yapm/schema'
+import { RETRO_PHASES, type RetroSeed, type RetroSeedRef } from '@yapm/schema'
 import {
   CommandDialog,
   CommandEmpty,
@@ -12,6 +12,7 @@ import {
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  ChartNoAxesColumnIcon,
   CircleDotIcon,
   GroupIcon,
   ListChecksIcon,
@@ -45,6 +46,7 @@ import {
   retroCan,
   TIMER_PRESETS_S,
 } from '@/retro/model'
+import { seedRefForMetric } from '@/retro/retro-seed-panel'
 
 export interface RetroFocus {
   id: string
@@ -68,7 +70,7 @@ export function useRetroCommand(): RetroCommandApi {
   return value
 }
 
-type Page = 'root' | 'group' | 'facilitator' | 'timer'
+type Page = 'root' | 'group' | 'facilitator' | 'timer' | 'seed'
 
 export interface RetroCommandProviderProps {
   retro: RetroRowData
@@ -79,8 +81,10 @@ export interface RetroCommandProviderProps {
   canWrite: boolean
   facilitator: boolean
   api: RetroApi
+  seed: RetroSeed | null
   onNewCard: () => void
   onNewAction: () => void
+  onSeedCard: (ref: RetroSeedRef) => void
   children: ReactNode
 }
 
@@ -96,8 +100,10 @@ export function RetroCommandProvider({
   canWrite,
   facilitator,
   api,
+  seed,
   onNewCard,
   onNewAction,
+  onSeedCard,
   children,
 }: RetroCommandProviderProps) {
   const [open, setOpen] = useState(false)
@@ -147,6 +153,7 @@ export function RetroCommandProvider({
   const focused = focusRef.current
 
   const groupCard = groupCardId === null ? null : (cards.find((c) => c.id === groupCardId) ?? null)
+  const seedMetrics = (seed?.sections ?? []).flatMap((section) => section.metrics)
 
   return (
     <RetroCommandContext.Provider value={api2}>
@@ -154,7 +161,11 @@ export function RetroCommandProvider({
       <CommandDialog open={open} onOpenChange={setOpen} label="Retro command palette">
         <CommandInput
           placeholder={
-            page === 'group' ? 'Group this card with…' : 'Type a retro command or search…'
+            page === 'group'
+              ? 'Group this card with…'
+              : page === 'seed'
+                ? 'Add a card from which figure?'
+                : 'Type a retro command or search…'
           }
           value={search}
           onValueChange={setSearch}
@@ -176,6 +187,15 @@ export function RetroCommandProvider({
                     <PlusIcon />
                     New card
                     <CommandShortcut>C</CommandShortcut>
+                  </CommandItem>
+                ) : null}
+                {seedMetrics.length > 0 && retroCan(retro.phase, 'draft', { canWrite }) ? (
+                  <CommandItem
+                    value="add a card from a cycle data widget figure"
+                    onSelect={() => start('seed')}
+                  >
+                    <ChartNoAxesColumnIcon />
+                    Add a card from a figure…
                   </CommandItem>
                 ) : null}
                 {retroCan(retro.phase, 'action', { canWrite }) ? (
@@ -348,6 +368,25 @@ export function RetroCommandProvider({
                 >
                   <UserIcon />
                   {member.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ) : null}
+
+          {page === 'seed' ? (
+            <CommandGroup heading="Add a card from a figure">
+              {seedMetrics.map((metric) => (
+                <CommandItem
+                  key={metric.key}
+                  value={`add a card from ${metric.label} ${metric.caption}`}
+                  onSelect={() => {
+                    onSeedCard(seedRefForMetric(metric))
+                    close()
+                  }}
+                >
+                  <ChartNoAxesColumnIcon />
+                  <span className="truncate">{metric.label}</span>
+                  <CommandShortcut>{metric.value}</CommandShortcut>
                 </CommandItem>
               ))}
             </CommandGroup>

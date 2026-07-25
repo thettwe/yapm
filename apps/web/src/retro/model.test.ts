@@ -53,6 +53,7 @@ const card = (over: Partial<RetroCardData> & { id: string; rank: string }): Retr
   body: over.id,
   isAnonymous: false,
   authorDisplayId: null,
+  seedRef: null,
   createdAt: 0,
   ...over,
 })

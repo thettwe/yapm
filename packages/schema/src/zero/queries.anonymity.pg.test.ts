@@ -58,6 +58,10 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
   // whole workspace, so this is the widest read anyone can have. If the guarantee holds here it
   // holds for everyone.
   const C: AuthContext = { userID: `admin-${newId()}`, role: 'admin' }
+  // A workspace member who belongs to no team at all. `teamScoped` denies them by a CORRELATED
+  // `whereExists` over `team_membership` rather than by an empty query, so this persona is the one
+  // that exercises the correlated-subquery compilation the registry walk depends on (D-31).
+  const D: AuthContext = { userID: `outsider-${newId()}`, role: 'member' }
 
   let meta: PgSchemaMeta
   let anonymousRetroId: string
@@ -202,6 +206,7 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
       [A, 'Author'],
       [B, 'Teammate'],
       [C, 'Admin'],
+      [D, 'Outsider'],
     ] as const) {
       await sql`
         insert into "user" ("id", "name", "email", "emailVerified")
@@ -496,9 +501,9 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
 
   afterAll(async () => {
     await sql`delete from workspace where id = ${workspaceId}`.execute(database.db)
-    await sql`delete from "user" where id in (${A.userID}, ${B.userID}, ${C.userID})`.execute(
-      database.db,
-    )
+    await sql`
+      delete from "user" where id in (${A.userID}, ${B.userID}, ${C.userID}, ${D.userID})
+    `.execute(database.db)
     await database.close()
   })
 
@@ -564,7 +569,22 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
     return [...new Set(offences)].sort()
   }
 
-  async function visitEverything(ctx: AuthContext): Promise<VisitedValue[]> {
+  // Every table that carries retro content or its membership. A caller outside the team must reach
+  // no row of any of them — including `retro_presence`, whose team-wide visibility (D-8) stops at
+  // the team boundary like everything else.
+  const RETRO_TABLES: readonly string[] = [
+    'retro',
+    'retro_column',
+    'retro_card',
+    'retro_draft',
+    'retro_group',
+    'retro_vote',
+    'retro_vote_tally',
+    'retro_action',
+    'retro_presence',
+  ]
+
+  async function visitEverything(ctx: AuthContext | undefined): Promise<VisitedValue[]> {
     const args = argsByQueryName()
     const visited: VisitedValue[] = []
     for (const query of registryQueries(queries)) {
@@ -605,8 +625,28 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
     ])
   })
 
+  // The two denied paths, evaluated over real rows rather than read off the AST. `queries.test.ts`
+  // already pins their SHAPE; that is not the same claim, and D-32 is why. The harness compiled
+  // `denyAll` — `or()` with no branches — to `true`, so every deny-by-empty-query in the registry
+  // would have returned the whole table, and no test noticed because none of them ran a denied
+  // query against rows. These two do.
+  it('reaches no retro content from a workspace member who is on no team', async () => {
+    const visited = await visitEverything(D)
+    expect(visited.length).toBeGreaterThan(0)
+    expect(
+      [...new Set(visited.map((entry) => entry.table))].filter((table) =>
+        RETRO_TABLES.includes(table),
+      ),
+    ).toEqual([])
+    expect(offendingValues(visited, A.userID)).toEqual([])
+  })
+
+  it('reaches nothing at all when nobody is signed in', async () => {
+    expect(await visitEverything(undefined)).toEqual([])
+  })
+
   it('reaches no row of another member’s drafts or votes, for anyone', async () => {
-    for (const ctx of [A, B, C]) {
+    for (const ctx of [A, B, C, D]) {
       const visited = await visitEverything(ctx)
       const drafts = visited.filter((entry) => entry.table === 'retro_draft')
       const votes = visited.filter((entry) => entry.table === 'retro_vote')

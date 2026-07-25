@@ -17,6 +17,7 @@ export default defineConfig({
             { label: 'Projects & roadmap', slug: 'features/projects' },
             { label: 'Delivery signals', slug: 'features/delivery-signals' },
             { label: 'Cycle digest', slug: 'features/cycle-digest' },
+            { label: 'Retrospectives', slug: 'features/retrospectives' },
           ],
         },
         {

@@ -25,3 +25,6 @@ runs as three containers you own.
 - [Cycle digest](/features/cycle-digest/) — a team-internal, evidence-linked AI summary of a
   completed cycle, with a raw-evidence fallback when AI is off. Bring your own key with
   [Enable AI](/self-hosting/ai-setup/).
+- [Retrospectives](/features/retrospectives/) — a retro that opens with your cycle's own delivery
+  data already gathered, anonymity guaranteed at the storage layer, and actions that become real
+  issues in the next cycle, at `/teams/<teamId>/retros`.

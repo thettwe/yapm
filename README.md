@@ -17,9 +17,11 @@ code-review health are just views, not a $30/developer/month add-on.
 > a kanban board; time-boxed cycles with automatic rollover; a keyboard-first triage inbox for
 > incoming issues; and lightweight projects with a roadmap timeline — all self-hostable in three
 > containers; a first-party GitHub connector that ingests PR, CI, and deploy state into the
-> work graph so every issue row shows delivery reality; and a BYO-key, provider-agnostic AI
-> foundation whose first feature is a team-internal, evidence-linked cycle digest. Direction is
-> settled in [VISION.md](VISION.md), [TECHSTACK.md](TECHSTACK.md), and [ROADMAP.md](ROADMAP.md).
+> work graph so every issue row shows delivery reality; a BYO-key, provider-agnostic AI
+> foundation whose first feature is a team-internal, evidence-linked cycle digest; and a
+> data-seeded retrospective that opens with the cycle's own delivery facts already gathered.
+> Direction is settled in [VISION.md](VISION.md), [TECHSTACK.md](TECHSTACK.md), and
+> [ROADMAP.md](ROADMAP.md).
 
 ## Why another one
 
@@ -59,13 +61,19 @@ work graph, so every issue row's **reality strip** shows live PR state, a CI hea
 age — with a **divergence flag** when a human status disagrees with git · a **BYO-key AI
 foundation** (bring your own Anthropic / Gemini / OpenAI key, admin-configured, off until you
 enable it) whose first feature is a team-internal, evidence-linked **cycle digest** — pre-computed
-at cycle close, team-level and blameless, with a raw linked-evidence fallback when AI is off.
+at cycle close, team-level and blameless, with a raw linked-evidence fallback when AI is off ·
+a **data-seeded retrospective**, opened automatically when a cycle closes, whose gather-data phase
+is already filled in from the team's own cycles (and from PR/CI data when a connector is
+configured), with **anonymity guaranteed at the storage layer** — the card→author binding lives in
+a server-only table the sync schema cannot name — and actions that become real, numbered issues in
+the next cycle.
 
 ## What's next
 
 **BYO-key AI agents** that read and act through the same permissions as a human — the foundation
 (gateway, agent-as-actor tools, the AI-over-work-graph substrate) is in; a governed PM-facing
-digest and an AI-facilitated retro build on it next. Then DORA and review-health metrics computed
+digest and an **AI-facilitated** retro — drafting themes and candidate actions on top of the
+retrospective that already ships — build on it next. Then DORA and review-health metrics computed
 from the graph — team-level only, never individual scorecards. More connectors (GitLab, …) slot
 into the same framework with no feature-code change.
 

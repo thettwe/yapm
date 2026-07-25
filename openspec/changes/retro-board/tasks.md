@@ -50,8 +50,8 @@ Sequenced so the app runs after every task. The anonymity boundary (group 1–2)
 
 ## 6. Documentation
 
-- [ ] 6.1 `apps/docs` **Retrospectives** feature page: phases, the storage-layer anonymity guarantee, the data panel and how it degrades without connectors, the action→issue loop, the keyboard map; sidebar entry + home link; `pnpm --filter @yapm/docs build` passes
-- [ ] 6.2 Root docs: README (status + feature list), ROADMAP (the `retro-board` row + Phase-2 status). Confirm `.env.example` and TECHSTACK need no change (no new env var, no new dependency) and say so in the PR
+- [x] 6.1 `apps/docs` **Retrospectives** feature page: phases, the storage-layer anonymity guarantee, the data panel and how it degrades without connectors, the action→issue loop, the keyboard map; sidebar entry + home link; `pnpm --filter @yapm/docs build` passes
+- [x] 6.2 Root docs: README (status + feature list), ROADMAP (the `retro-board` row + Phase-2 status). Confirm `.env.example` and TECHSTACK need no change (no new env var, no new dependency) and say so in the PR — verified: `git diff main...HEAD` touches neither, nor `pnpm-workspace.yaml` nor any `package.json` (design.md D-38)
 
 ## 7. Gates
 

@@ -103,8 +103,11 @@ export function createAuthRoutes(options: AuthRoutesOptions): Hono {
     // context. The server still verifies the token and re-resolves the role per request,
     // so this value never grants authority on its own.
     const role = await lookupWorkspaceRole(db, user.id)
-    const token = await auth.issueSyncToken(c.req.raw.headers)
-    return c.json({ token, userID: user.id, role })
+    // `expiresAt` (epoch seconds) lets the client re-mint before the credential dies instead
+    // of after the socket breaks. Additive and optional: a client that ignores it falls back
+    // to a fixed timer.
+    const { token, expiresAt } = await auth.issueSyncToken(c.req.raw.headers)
+    return c.json({ token, userID: user.id, role, expiresAt })
   })
 
   app.post('/api/invites/accept', requireSession, async (c) => {

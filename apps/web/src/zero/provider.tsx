@@ -14,6 +14,7 @@ import {
 import { useSession } from '@/auth/client'
 import { atBackoffCeiling, backoffDelay } from '@/zero/backoff'
 import {
+  CONNECTION_SETTLED_MS,
   RECOVERY_IDLE,
   RETRY_OFFER_AFTER_MS,
   type RecoveryPlan,
@@ -166,11 +167,17 @@ function SyncRecovery({ token, enabled, remint, children }: SyncRecoveryProps) {
     const plan: RecoveryPlan = enabled ? recoveryPlan(name) : { kind: 'none' }
 
     if (plan.kind === 'reset') {
-      attemptRef.current = 0
-      startedAtRef.current = null
       immediateRef.current = false
+      // The pill clears immediately — the user is connected — but the schedule only forgets
+      // the outage once the connection has held for `CONNECTION_SETTLED_MS`. Leaving
+      // `connected` before then cancels this timer, so a validation-failure cycle keeps
+      // climbing the backoff instead of restarting it.
       setStatus(RECOVERY_IDLE)
-      return
+      const settled = setTimeout(() => {
+        attemptRef.current = 0
+        startedAtRef.current = null
+      }, CONNECTION_SETTLED_MS)
+      return () => clearTimeout(settled)
     }
 
     if (plan.kind === 'none') {

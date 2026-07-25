@@ -31,7 +31,7 @@ function fakeAuth(): AuthService {
       return Promise.resolve(id ? { id, email: `${id}@example.test` } : undefined)
     },
     migrateAuth: () => Promise.resolve({ created: [], altered: [] }),
-    issueSyncToken: () => Promise.resolve('token'),
+    issueSyncToken: () => Promise.resolve({ token: 'token', expiresAt: null }),
     verifySyncToken: () => Promise.resolve(undefined),
   }
 }

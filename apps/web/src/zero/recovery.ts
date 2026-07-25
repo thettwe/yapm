@@ -8,6 +8,15 @@ export const DISCONNECTED_GRACE_MS = 20_000
 // Offer the manual escape hatch once waiting stops feeling like a hiccup.
 export const RETRY_OFFER_AFTER_MS = 15_000
 
+// Zero reports `connected` the moment the socket opens, which is *before* zero-cache runs
+// the `/query` round trip that validates the credential. A connection that then fails
+// validation therefore passes through `connected` on its way back to `needs-auth`, so
+// treating arrival at `connected` as recovery clears the attempt counter on every failed
+// cycle and pins the backoff at its first step — measured at ~75 re-mints in 45s against a
+// live stack. Only a connection that holds this long counts as recovered. The failed cycle
+// measures ~600ms end to end, so this sits well clear of it.
+export const CONNECTION_SETTLED_MS = 3_000
+
 export type RecoveryPhase = 'idle' | 'retrying' | 'waiting'
 
 export type RecoveryPlan =

@@ -1,18 +1,19 @@
 ## 1. Reproduce and instrument
 
-- [ ] 1.1 Bring up an isolated stack for this change — `docker compose -p yapm-zr -f docker/docker-compose.dev.yml up -d` with `POSTGRES_HOST_PORT=5441 ZERO_CACHE_HOST_PORT=4849 YAPM_HOST_PORT=3001`, `DATABASE_URL=postgres://yapm:yapm@localhost:5441/yapm`, `VITE_ZERO_CACHE_URL=http://localhost:4849` — and confirm the app boots and syncs. Never run a bare `down`; tear down only with `-p yapm-zr … down -v`.
-- [ ] 1.2 Reproduce the failure deterministically: sign in, then force the expired-credential path (temporarily shorten `SYNC_TOKEN_EXPIRATION`, or mint and inject a stale JWT) and capture the zero-cache log line `InvalidConnectionRequest: "No validated connection is available for shared query work."` plus the client's `error` state. Record the transcript in `design.md` under "Decisions made during implementation" if the observed sequence differs from the root-cause chain.
+- [x] 1.1 Bring up an isolated stack for this change — `docker compose -p yapm-zr -f docker/docker-compose.dev.yml up -d` with `POSTGRES_HOST_PORT=5441 ZERO_CACHE_HOST_PORT=4849 YAPM_HOST_PORT=3001`, `DATABASE_URL=postgres://yapm:yapm@localhost:5441/yapm`, `VITE_ZERO_CACHE_URL=http://localhost:4849` — and confirm the app boots and syncs. Never run a bare `down`; tear down only with `-p yapm-zr … down -v`.
+- [x] 1.2 Reproduce the failure deterministically: sign in, then force the expired-credential path (temporarily shorten `SYNC_TOKEN_EXPIRATION`, or mint and inject a stale JWT) and capture the zero-cache log line `InvalidConnectionRequest: "No validated connection is available for shared query work."` plus the client's `error` state. Record the transcript in `design.md` under "Decisions made during implementation" if the observed sequence differs from the root-cause chain. *(The observed sequence does differ; the transcript and the reason are in `design.md` → C12.)*
 
 ## 2. Server: credential rejection protocol
 
-- [ ] 2.1 Widen `apps/server/src/zero/context.ts` to report a three-way outcome — authenticated / credential absent / credential rejected — without changing the resolved `AuthContext` shape any caller already consumes.
-- [ ] 2.2 In `apps/server/src/zero/routes.ts`, return `401 {error:'unauthorized'}` from `/query` and `/mutate` when the credential is *rejected*, before invoking `handleQueryRequest`/`handleMutateRequest`; keep `200 + userID: null` when it is *absent*; keep a non-auth resolver failure as a 500. App still boots and syncs.
-- [ ] 2.3 Verify against the live stack that an expired token now yields a client `needs-auth` (not a group-wide `InvalidConnectionRequest`), and that a signed-out client is unaffected.
+- [x] 2.1 Widen `apps/server/src/zero/context.ts` to report a three-way outcome — authenticated / credential absent / credential rejected — without changing the resolved `AuthContext` shape any caller already consumes.
+- [x] 2.2 In `apps/server/src/zero/routes.ts`, return `401 {error:'unauthorized'}` from `/query` and `/mutate` when the credential is *rejected*, before invoking `handleQueryRequest`/`handleMutateRequest`; keep `200 + userID: null` when it is *absent*; keep a non-auth resolver failure as a 500. App still boots and syncs.
+- [x] 2.3 Verify against the live stack that an expired token now yields a client `needs-auth` (not a group-wide `InvalidConnectionRequest`), and that a signed-out client is unaffected. *(Re-verified independently as a matched pair; counts in `design.md` → C17.)*
+- [x] 2.4 Pass a log level derived from the configured pino logger to `handleQueryRequest`/`handleMutateRequest`, so Zero's own console `LogContext` stops ignoring `LOG_LEVEL`. Unblocks a quiet test run; see `design.md` → C16.
 
 ## 3. Server: token expiry hint
 
-- [ ] 3.1 Extend `issueSyncToken` in `apps/server/src/auth.ts` to return the token together with its `exp`, read via the existing local JWKS verification — no new dependency and no hardcoded copy of `SYNC_TOKEN_EXPIRATION`.
-- [ ] 3.2 Add `expiresAt` (epoch seconds) to the `/api/zero/token` response in `apps/server/src/auth-routes.ts`, additively — existing fields and status codes unchanged.
+- [x] 3.1 Extend `issueSyncToken` in `apps/server/src/auth.ts` to return the token together with its `exp`, read via the existing local JWKS verification — no new dependency and no hardcoded copy of `SYNC_TOKEN_EXPIRATION`.
+- [x] 3.2 Add `expiresAt` (epoch seconds) to the `/api/zero/token` response in `apps/server/src/auth-routes.ts`, additively — existing fields and status codes unchanged.
 
 ## 4. Client: session fetch with three outcomes
 
@@ -25,6 +26,7 @@
 - [x] 5.2 Replace `SyncAuthRefresher` with a `SyncRecovery` component mounted inside `ZeroProvider` that owns every re-mint: act on `needs-auth` and `error` (re-mint, then `zero.connection.connect({auth})` via `useZero()`); on `disconnected` past a 20s grace, re-mint only (never call `connect()` — it does not reconnect from `disconnected`); do nothing on `connecting`/`closed`; reset the schedule on `connected`.
 - [x] 5.3 Handle the identical-token case: when the re-minted JWT equals the current one and the state is terminal, call `zero.connection.connect()` explicitly, because an unchanged `auth` prop makes `ZeroProvider` a no-op and would leave the client parked.
 - [x] 5.4 Route `useSyncControl().refresh()` (membership changes) through the same scheduler so a role change and a reconnect can never run two token fetches concurrently; its existing contract and call sites are unchanged.
+- [x] 5.5 Reset the schedule only once `connected` has *held* for `CONNECTION_SETTLED_MS`, not on arrival: Zero reports `connected` on socket open, before zero-cache validates, so a refused connection flaps through it and was restarting the backoff every cycle. See `design.md` → C17.
 
 ## 6. Client: proactive refresh
 
@@ -46,12 +48,13 @@
 - [x] 8.4 Session classifier: 401/403 → `no-session`; 500, 404, thrown error, abort/timeout, malformed body → `unavailable`; valid body → `session`.
 - [x] 8.5 Proactive-refresh scheduling from `expiresAt` (75% clamped to [60s, 30min]), the missing-`expiresAt` fallback, and the visibility/online re-check threshold.
 - [x] 8.6 Connection summary maps every Zero state × recovery state to the right label, `writable` flag, and `data-recovery` value.
+- [x] 8.7 A `needs-auth → connecting → connected → needs-auth` cycle that never holds still climbs the backoff to the cap, and a connection that does hold still resets it.
 
 ## 9. Integration tests (Vitest, live Postgres)
 
-- [ ] 9.1 `/api/zero/query` and `/api/zero/mutate`: presented-but-invalid bearer → 401 with no `QueryResponse` body; absent credential → 200 with `userID: null`; valid credential → 200 with the verified subject.
-- [ ] 9.2 A non-auth resolver failure still surfaces as a server error, not a 401.
-- [ ] 9.3 `/api/zero/token` returns `expiresAt` in the future and consistent with the configured token lifetime, alongside the unchanged `token`/`userID`/`role`.
+- [x] 9.1 `/api/zero/query` and `/api/zero/mutate`: presented-but-invalid bearer → 401 with no `QueryResponse` body; absent credential → 200 with `userID: null`; valid credential → 200 with the verified subject. *(`/mutate` carries `?schema=…&appID=…` and the test provisions Zero's bookkeeping tables, so the assertions reach a real mutator — see `design.md` → C13.)*
+- [x] 9.2 A non-auth resolver failure still surfaces as a server error, not a 401.
+- [x] 9.3 `/api/zero/token` returns `expiresAt` in the future and consistent with the configured token lifetime, alongside the unchanged `token`/`userID`/`role`.
 
 ## 10. Reconnection e2e (Playwright)
 
@@ -62,7 +65,7 @@
 ## 11. Documentation
 
 - [ ] 11.1 Add `apps/docs/src/content/docs/self-hosting/sync-recovery.md` — the connection states a user can see, automatic re-mint + bounded backoff, the 1h sync-token lifetime and proactive refresh, and what to check when it stays reconnecting (zero-cache logs, `ZERO_QUERY_URL` reachability from the container, clock skew) — and register it in the Starlight sidebar in `apps/docs/astro.config.mjs`.
-- [ ] 11.2 Update `reference/zero.md` with the facts harvested from the 1.8.0 sources for this change: the `/query` validation round trip and `server-validated` userID matching, the background-connection requirement for shared query work, `connect()`'s terminal-state-only rule, and the 401-vs-200 rejection contract restated at the endpoint level.
+- [x] 11.2 Update `reference/zero.md` with the facts harvested from the 1.8.0 sources for this change: the `/query` validation round trip and `server-validated` userID matching, the background-connection requirement for shared query work, `connect()`'s terminal-state-only rule, and the 401-vs-200 rejection contract restated at the endpoint level.
 - [ ] 11.3 Update `ROADMAP.md` with a row for this change, and `PROCESS.md` §3 so the E2E tier explicitly lists reconnection/recovery; update `README.md` only where this change makes it stale. No `.env.example` or `TECHSTACK.md` change (no new env var, no version change) — confirm by inspection.
 - [ ] 11.4 `pnpm --filter @yapm/docs build` passes.
 

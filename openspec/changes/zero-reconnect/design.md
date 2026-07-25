@@ -488,3 +488,154 @@ settlement paths clear the slot and record an `unavailable` outcome.
 `aria-live="polite"`) on the inner `<p>`. This keeps **Retry now** out of the live region —
 a button inside it would be re-announced on every state change — while leaving all nine
 existing e2e `data-connection` assertions untouched.
+
+### C12. The root cause was reproduced live, and the verdict is confirmed: it is ours
+
+Run against the isolated stack (compose project `yapm-zr`, Postgres 5441, zero-cache 4849 with
+`ZERO_LOG_LEVEL=debug`, server 3001, Vite 5184) with a throwaway Playwright spec that signs in,
+pins a **rejected** credential onto `/api/zero/token` via `page.route` (a real `userID` with a
+token JWKS verification refuses — the shape of an expired JWT), reloads so the client presents
+it, and then watches for 60s. The two runs differ only in whether `/query` and `/mutate`
+short-circuit with 401; everything else — same stack, same spec, same 60s window — is identical.
+
+| zero-cache log line (60s window) | before (`200 {userID: null}`) | after (401) |
+|---|---|---|
+| `Unauthorized: Connection userID does not match validated server userID.` | **648** | **0** |
+| `closing connection: Unauthorized (zeroCache): …` | 108 | 0 |
+| `closing connection: TransformFailed (zeroCache): … non-OK status 401` | 0 | 110 |
+
+Earlier in the same session the failure was also produced the *honest* way — by shortening
+`SYNC_TOKEN_EXPIRATION` to 5s, letting the token expire while the socket was open, and
+restarting zero-cache so the client reconnected with the stale JWT: 1,236 occurrences of the
+same `Connection userID does not match validated server userID.` line and 103 connections
+closed `Unauthorized`. Expired and malformed take the identical server path (`verifySyncToken`
+returns `undefined` in both cases), which is why the shorter pinned-credential harness is used
+for the matched pair.
+
+So step 1 of the evidence chain is not a reading of the sources, it is a measurement: yapm's
+`200 + userID: null` **is** what makes zero-cache tear the connection out of the client group,
+and the 401 removes it completely. The chain from there to the reported
+`InvalidConnectionRequest: "No validated connection is available for shared query work."` is
+established from the 1.8.0 sources and restated in `reference/zero.md` §10.7.
+
+**Honest limit of the reproduction:** the reported `InvalidConnectionRequest` string itself was
+*not* observed live in either run (0 occurrences in both). It cannot be, in a single-client
+scenario: `run()` awaits `#initialized`, which `initConnection` only resolves *after* a
+successful validation, so a client group whose one connection never validates never starts the
+run loop that does shared background work. Producing that exact line requires a group that was
+healthy (pipelines synced, a background connection selected) and then lost every validated
+connection while still serving a client — the multi-tab situation the user reported ("some
+client groups connect fine; one loops… multiple tabs make it worse"). Both routes into that
+state are now documented in `reference/zero.md` §10.7: a *validated* connection failing
+validation (what yapm caused, now fixed) and a connection demoted by `updateAuth` whose
+re-transform is fully cached and therefore never re-validates (Zero's own window). Forcing the
+second one deterministically needs a ≥5-minute TTL eviction plus a cache-timing race, which was
+judged not worth the run time given the chain is already source-verified end to end and the
+dominant cause is fixed.
+
+**Verdict, stated plainly:** the trigger is **yapm's**, and it is fixed here. The amplifier is
+**Zero 1.8's** — a `mustGetBackgroundConnectionContext()` throw is fatal for the entire
+view-syncer, and the provisional window is reachable without any help from us — and it is
+deliberately *not* worked around, because doing so means patching the zero-cache image, which
+the three-container constraint forbids. Client-side recovery remains load-bearing for it.
+
+### C13. The integration test provisions Zero's bookkeeping schema itself
+
+An earlier revision of `apps/server/src/zero/routes.integration.test.ts` posted to
+`/api/zero/mutate` with no query string and asserted only `status === 200`. That is vacuous:
+`handleMutateRequest` parses `mutateParamsSchema = {schema, appID}` off the URL *before* it
+does anything else, so the request died at `Missing property schema` and answered
+`200 {kind:'PushFailed', reason:'parse'}` — a status a wrong credential, a missing credential
+and a valid credential all produce identically. It also printed two `TypeError` stack traces to
+stderr on every `pnpm turbo run test`. The earlier text of this decision blamed the missing
+`zero_0` schema; that was wrong, because the request never got far enough to touch it.
+
+The fix is both halves. The path carries `?schema=zero_0&appID=zero`, and `beforeAll` creates
+`zero_0.clients` and `zero_0.mutations` in the throwaway database with the DDL zero-cache
+provisions (the two statements Zero's Kysely adapter issues are visible in
+`zero-server/src/zql-database.ts`; the shapes were read off a live zero-cache-provisioned
+Postgres). That is ten lines of test fixture and it buys the whole write path in CI, with no
+zero-cache: `/mutate` now asserts `userID` — the exact field §10.7 identifies as the
+authoritative identity assertion — plus the mutation result and the row itself. A rejected
+credential 401s and does not write; an absent one reports `userID: null` and is refused by the
+mutator's own guard; a valid one reports the verified subject and the workspace really is
+renamed. If Zero changes the bookkeeping SQL, this test fails loudly rather than silently
+degrading. Confirmed load-bearing by four mutants — dropping the query string, answering the
+rejected credential 200, reporting `userID: null`, and running mutators with no auth context —
+each of which fails the test.
+
+### C16. The Zero handlers' log level follows `LOG_LEVEL`
+
+`ZeroRoutesOptions.logger` was declared and never read. Meanwhile `handleQueryRequest` and
+`handleMutateRequest` each build their own `LogContext` over `consoleLogSink` and default it to
+`info`, so Zero's request logging bypassed pino entirely and ignored the configured level — a
+server running `LOG_LEVEL=error` still printed a warning for every denied mutation. `routes.ts`
+now maps pino's level onto the four levels `@rocicorp/logger` accepts and passes it to both
+handlers. `silent` cannot be honoured exactly: `error` is the quietest level that library has.
+The level union is declared locally rather than imported, so the server takes no direct
+dependency on Zero's logger package and the catalog is unchanged.
+
+### C17. `connected` alone is not recovery — the backoff never engaged
+
+Found by measuring, not by reading. With C12's 401 in place, a persistently rejected credential
+still drove **86 `/api/zero/token` re-mints and 88 websocket opens in 45 seconds**, gaps
+uniformly distributed in `[0, 1000] ms` with no growth over the whole window — the CPU-pinning
+hot loop this change exists to remove, merely relocated. A `MutationObserver` on
+`data-connection` (1 Hz sampling is blind to a 2 Hz loop) showed the cycle exactly:
+
+```
+needs-auth → connecting → connected → needs-auth → …   ×75
+```
+
+Zero reports **`connected` when the websocket opens**, which is *before* zero-cache performs the
+`/query` round trip that validates the credential. A connection that then fails validation
+therefore passes through `connected` on its way back to `needs-auth`. `recoveryPlan('connected')`
+returns `{kind:'reset'}`, so `attemptRef` was cleared on every failed cycle and every delay was
+`backoffDelay(0) = random() × 1000` — forever. The unit tests missed it because they drove
+`error` repeatedly with no intervening `connected`, which real Zero always emits.
+
+The fix keeps the two meanings of "reset" apart. The visible pill still clears the instant
+`connected` arrives — the user is connected — but the *schedule* only forgets the outage after
+the connection has held for `CONNECTION_SETTLED_MS` (3s, comfortably above the ~600ms failure
+cycle). Leaving `connected` earlier cancels that timer, so a flapping connection keeps climbing
+the backoff. Measured on the same live stack, same spec, same 45s window:
+
+| 45s window | pre-fix `200 {userID:null}` | 401 only | 401 + settle |
+|---|---|---|---|
+| `Connection userID does not match validated server userID.` | 80 | 0 | 0 |
+| `closing connection: Unauthorized` | 80 | 0 | 0 |
+| `closing connection: TransformFailed … 401` | 0 | 79 | **7** |
+| client `/api/zero/token` re-mints | 81 | 86 | **7** |
+| websocket opens | 83 | 88 | **9** |
+| zero-cache log lines | 1929 | 2630 | **606** |
+
+Observed socket gaps in the final run climb to `29999 ms` — the 30s cap — which is the calm
+retry the change promised. `InvalidConnectionRequest` was 0 in all three runs, consistent with
+C12's stated limit: a client group whose only connection never validates never starts the run
+loop that does shared background work.
+
+Read against the specs, this is the only consistent reading of the two scenarios. *Backoff
+resets after recovery* is conditioned on "a recovery attempt **succeeds** and the connection
+reaches `connected`" — a connection zero-cache refuses 600ms later did not succeed — and *A
+persistent fault degrades to a calm retry* is unsatisfiable under the looser reading, as the
+measurements above show. The settle window is what makes both true at once.
+
+### C14. The integration test owns a throwaway database
+
+better-auth encrypts its JWKS private key with `BETTER_AUTH_SECRET`, and the key outlives the
+process: opening a database whose `jwks` row was written under a different secret fails
+`/api/zero/token` with *"Failed to decrypt private key"*. Since `turbo test` only passes
+`DATABASE_URL` and `CI` through, the test cannot depend on an ambient secret matching. It
+therefore creates `yapm_zero_protocol_test`, migrates it, runs there, and drops it in
+`afterAll`. Schema isolation via `search_path` was tried first and rejected: Kysely's `Migrator`
+resolves `kysely_migration_lock` through `db.introspection.getTables()`, which sees the table in
+`public` and then skips creating it in the isolated schema.
+
+### C15. `issueSyncToken` returns `{token, expiresAt}` and shares one verifier
+
+`AuthService.issueSyncToken` now returns an object rather than a bare string, and `exp` is read
+back off the freshly minted JWT through the same local JWKS verification `verifySyncToken`
+uses — so the client's refresh schedule can never drift from what the plugin actually signed,
+and `SYNC_TOKEN_EXPIRATION` is not duplicated anywhere. `VerifiedToken` gained
+`expiresAt: number | null`; a JWT without `exp` is tolerated (expiry is `jwtVerify`'s job) and
+simply leaves the client on its fixed-timer fallback.

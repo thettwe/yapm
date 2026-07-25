@@ -15,6 +15,14 @@ const SYNC_TOKEN_EXPIRATION = '1h'
 
 export interface VerifiedToken {
   sub: string
+  // `exp` as epoch seconds when the JWT carries one. Absent is tolerated rather than
+  // rejected: expiry is enforced by `jwtVerify`, and this value is only a refresh hint.
+  expiresAt: number | null
+}
+
+export interface SyncToken {
+  token: string
+  expiresAt: number | null
 }
 
 export interface SessionUser {
@@ -28,7 +36,7 @@ export interface AuthService {
   handler: (request: Request) => Promise<Response>
   getSessionUser: (headers: Headers) => Promise<SessionUser | undefined>
   migrateAuth: () => Promise<{ created: string[]; altered: string[] }>
-  issueSyncToken: (headers: Headers) => Promise<string>
+  issueSyncToken: (headers: Headers) => Promise<SyncToken>
   verifySyncToken: (token: string) => Promise<VerifiedToken | undefined>
 }
 
@@ -76,6 +84,20 @@ export function createAuth(db: Kysely<DB>, env: Env): AuthService {
   const internalHost = env.HOST === '0.0.0.0' || env.HOST === '::' ? '127.0.0.1' : env.HOST
   const jwks = createRemoteJWKSet(new URL('/api/auth/jwks', `http://${internalHost}:${env.PORT}`))
 
+  // Local JWKS verification — no DB round-trip on the sync hot path.
+  const verify = async (token: string): Promise<VerifiedToken | undefined> => {
+    try {
+      const { payload } = await jwtVerify(token, jwks, {
+        issuer: env.BETTER_AUTH_URL,
+        audience: env.BETTER_AUTH_URL,
+      })
+      if (typeof payload.sub !== 'string') return undefined
+      return { sub: payload.sub, expiresAt: typeof payload.exp === 'number' ? payload.exp : null }
+    } catch {
+      return undefined
+    }
+  }
+
   return {
     handler: (request) => auth.handler(request),
 
@@ -97,22 +119,15 @@ export function createAuth(db: Kysely<DB>, env: Env): AuthService {
       return { created, altered }
     },
 
+    // The expiry is read back off the minted JWT rather than derived from
+    // SYNC_TOKEN_EXPIRATION, so the client's refresh schedule can never drift from what the
+    // plugin actually signed.
     issueSyncToken: async (headers) => {
       const { token } = await auth.api.getToken({ headers })
-      return token
+      const verified = await verify(token)
+      return { token, expiresAt: verified?.expiresAt ?? null }
     },
 
-    // Local JWKS verification — no DB round-trip on the sync hot path.
-    verifySyncToken: async (token) => {
-      try {
-        const { payload } = await jwtVerify(token, jwks, {
-          issuer: env.BETTER_AUTH_URL,
-          audience: env.BETTER_AUTH_URL,
-        })
-        return typeof payload.sub === 'string' ? { sub: payload.sub } : undefined
-      } catch {
-        return undefined
-      }
-    },
+    verifySyncToken: verify,
   }
 }

@@ -2072,6 +2072,10 @@ if (!session) {
 
 Zero disconnects and moves to `needs-auth`. Recover:
 
+> **A rejected credential must be a status, never a body.** Answering `200 {kind:'QueryResponse',
+> …, userID: null}` is *not* the same thing and is a protocol violation — see §10.7. Only
+> answer 200 with `userID: null` when the request carried **no** credential at all.
+
 ```ts
 // cookie auth: refresh the cookie, then
 zero.connection.connect()
@@ -2112,6 +2116,79 @@ Two zero-cache knobs bound how long stale auth survives on already-open connecti
 - `ZERO_AUTH_RETRANSFORM_INTERVAL_SECONDS` — periodically re-runs query transformation for a client group so auth-derived query shapes (roles, org membership, feature flags) refresh even when the query set is unchanged.
 
 Set both if your permissions can change server-side without a client reconnect. For yapm, `ZERO_AUTH_RETRANSFORM_INTERVAL_SECONDS` matters when a user is removed from a project.
+
+`ZERO_AUTH_REVALIDATE_INTERVAL_SECONDS` only schedules revalidation for connections **already
+in `validated` state** (`planMaintenance` in `zero-cache/src/services/view-syncer/connection-context-manager.ts`
+skips anything `provisional`), so it does not rescue the provisional window described in §10.7.
+
+### 10.7 Connection validation: `userID` in a `QueryResponse` is an assertion
+
+Harvested from the 1.8.0 sources (`node_modules/@rocicorp/zero/out/**/*.js.map` carry the
+original TypeScript in `sourcesContent`). This is the contract that decides whether a stale
+credential costs one client or the whole client group.
+
+1. **`userID` present on the response means "server-validated".**
+   `CustomQueryTransformer.#requestTransform` (`zero-cache/src/custom-queries/transform-query.ts`)
+   maps the field with `transformResponse.userID !== undefined ? {kind:'server-validated',
+   validatedUserID: transformResponse.userID} : {kind:'client-fallback'}` — `null` is a
+   **value**, not "unknown". `handleQueryRequest`
+   (`zero-server/src/queries/process-queries.ts`) emits the field whenever `userID` was passed,
+   including when it was `null`.
+
+2. **A mismatch fails the connection.**
+   `ConnectionContextManagerImpl.validateConnection` throws
+   `Unauthorized: 'Connection userID does not match validated server userID.'` when
+   `connection.user.id !== validatedUserState.id`. For a socket that connected as user X with a
+   now-expired JWT, `200 {userID: null}` is exactly that mismatch.
+
+3. **A failed connection leaves the group without a background connection.**
+   `failConnection` → `#removeConnection` recomputes `GroupAuthState.backgroundConnection`;
+   with no other `validated` connection it becomes `undefined`.
+
+4. **Shared background work then throws, fatally for every client in the group.**
+   `#hydrateUnchangedQueries` and `#syncQueryPipelineSet(…, connCtx: undefined)` (the TTL
+   eviction path `#removeExpiredQueries`) both resolve their context with
+   `connCtx ?? this.connContextManager.mustGetBackgroundConnectionContext()`, whose only
+   failure mode is `InvalidConnectionRequest: 'No validated connection is available for shared
+   query work.'` Those call sites are on the run loop, not inside `#runInLockForClient`, so the
+   throw reaches `run()`'s `catch` → `#cleanup(e)` → `client.fail(err)` for **every** client.
+   (`#runBackgroundRetransform` in the same file uses the non-throwing
+   `getBackgroundConnectionContext()` and merely logs *"Skipping background retransform with no
+   selected connection"* — the safe pattern exists; those two call sites do not use it.)
+
+5. **401 takes a different, recoverable path.** `fetchFromAPIServer`
+   (`zero-cache/src/custom/fetch.ts`) turns any non-OK status into
+   `TransformFailed{reason: HTTP, status}`; `isAuthError` (`zero-client/src/client/error.ts`)
+   classifies `status === 401 | 403` as an auth error → `ConnectionStatus.NeedsAuth`. The
+   connection is invalidated **without** asserting a contradictory identity, so it never
+   poisons the group's validation state.
+
+**Where connections are `provisional` (no validated connection available):** connections are
+registered `provisional`; `initConnection` demotes and then explicitly validates via an
+*uncached* empty-query `/query` round trip (`CustomQueryTransformer.validate`); `updateAuth`
+with a changed token demotes and relies on the follow-up re-transform to re-validate — but
+`#syncQueryPipelineSet` only calls `validateConnection` when `!transformedCustomQueries.cached`,
+and `CustomQueryTransformer.transform` short-circuits to `{cached: true}` when every query hits
+its 5-second `TimedCache` or when the request list is empty. A connection demoted by a token
+refresh whose re-transform is fully cached therefore stays `provisional`.
+
+**Client-side consequence — `connected` is reached before validation.** The client reports
+`connected` on socket open; validation happens afterwards over `/query`. A connection that
+fails it therefore passes *through* `connected` on its way back to `needs-auth`. Observed live
+against 1.8.0 with a rejected credential: `needs-auth → connecting → connected → needs-auth`
+repeating 75 times in 45 seconds. Any reconnect backoff keyed on "reached `connected`" resets
+every cycle and never grows; gate the reset on the connection *holding* for a few seconds.
+
+**`/mutate` needs its query string.** `handleMutateRequest` parses
+`mutateParamsSchema = {schema, appID}` off the request URL before anything else, and `schema`
+names the Postgres schema holding `clients` / `mutations` (zero-cache provisions `zero_0`).
+Omitting them does not throw — it answers `200 {kind:'PushFailed', reason:'parse'}`, which
+looks like success to a status-only assertion.
+
+**yapm's rule, restated at the endpoint level:** `/api/zero/query` and `/api/zero/mutate` answer
+`401 {error:'unauthorized'}` when a credential was presented and rejected, `200` with
+`userID: null` when none was presented, and a 500 for a non-auth failure (a role lookup against
+a briefly unavailable Postgres is a server fault, not an auth fault).
 
 ---
 
@@ -2494,6 +2571,8 @@ Previews (Vercel-style per-branch hostnames): set `ZERO_QUERY_URL`/`ZERO_MUTATE_
 - **`defineQueries` / `defineMutators` exactly once at top level** — they assign the wire names.
 - **Zero types are registered globally with `declare module '@rocicorp/zero'`** (`DefaultTypes.schema`, `.context`, `.dbProvider`). Forgetting these produces confusing type errors; the `*WithType` variants are the escape hatch.
 - **Auth errors need a manual reconnect** — Zero will not retry out of `needs-auth` or `error` by itself.
+- **`connected` means "socket open", not "credential accepted".** The state flips as soon as the websocket opens, *before* zero-cache's validating `/query` round trip. A refused credential therefore produces `needs-auth → connecting → connected → needs-auth` on a loop, so any backoff that resets on arrival at `connected` never advances past its first step. Reset only after the connection has *held*. Measured, not inferred — see §10.7.
+- **Never answer a rejected credential with `200 … userID: null` from `/query` or `/mutate`.** zero-cache reads a present `userID` as the authoritative identity of the socket, so a null one contradicts the connection's claimed user, drops it from the client group, and can take every client on that view-syncer down with `InvalidConnectionRequest`. Return **401/403** instead. §10.7 has the source chain.
 - **Queries must be optimized.** From llms.txt: "The query plan commonly has `TEMP B-TREE` when it is not optimized... `zero-cache` derives indexes from upstream" — so add the index in **Postgres**, not in Zero.
 
 ### Consistency behavior

@@ -2,7 +2,12 @@ import type { ConnectionState } from '@rocicorp/zero'
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { BACKOFF_CAP_MS } from './backoff'
-import { DISCONNECTED_GRACE_MS, RETRY_OFFER_AFTER_MS, useSyncRecovery } from './recovery'
+import {
+  CONNECTION_SETTLED_MS,
+  DISCONNECTED_GRACE_MS,
+  RETRY_OFFER_AFTER_MS,
+  useSyncRecovery,
+} from './recovery'
 import type { SyncCredentialResult } from './session'
 
 const mocks = vi.hoisted(() => {
@@ -259,10 +264,47 @@ test('reconnecting resets the schedule so the next outage starts fast again', as
 
   await transition({ name: 'connected' })
   expect(screen.getByTestId('phase')).toHaveTextContent('idle')
+
+  await advance(CONNECTION_SETTLED_MS)
   expect(screen.getByTestId('attempt')).toHaveTextContent('0')
 
   mocks.fetchSyncCredential.mockResolvedValue(SESSION)
   await transition({ name: 'error', reason: 'boom' })
+  expect(screen.getByTestId('delay')).toHaveTextContent('1000')
+})
+
+// The regression this change exists to close. Zero reports `connected` on socket open, so a
+// credential that zero-cache refuses produces `needs-auth → connecting → connected →
+// needs-auth` forever. Resetting the counter on arrival at `connected` pinned every delay at
+// the first backoff step; measured live at ~75 re-mints in 45s with the CPU pegged.
+test('a connection that fails validation cannot reset the backoff by passing through connected', async () => {
+  await mount()
+  mocks.fetchSyncCredential.mockResolvedValue(SESSION)
+
+  const delays: number[] = []
+  for (let cycle = 0; cycle < 6; cycle += 1) {
+    await transition({ name: 'needs-auth', reason: { type: 'query', status: 401 } })
+    delays.push(Number(screen.getByTestId('delay').textContent))
+    await advance(BACKOFF_CAP_MS)
+    await transition({ name: 'connecting' })
+    // Held for less than the settle window, exactly as a refused connection is.
+    await transition({ name: 'connected' })
+    await advance(CONNECTION_SETTLED_MS / 4)
+  }
+
+  expect(delays).toEqual([1000, 2000, 4000, 8000, 16000, 30000])
+})
+
+test('a connection that holds does reset the backoff', async () => {
+  await mount()
+  mocks.fetchSyncCredential.mockResolvedValue(SESSION)
+
+  await transition({ name: 'needs-auth', reason: { type: 'query', status: 401 } })
+  await advance(BACKOFF_CAP_MS)
+  await transition({ name: 'connected' })
+  await advance(CONNECTION_SETTLED_MS)
+
+  await transition({ name: 'needs-auth', reason: { type: 'query', status: 401 } })
   expect(screen.getByTestId('delay')).toHaveTextContent('1000')
 })
 

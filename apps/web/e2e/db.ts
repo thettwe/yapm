@@ -1,4 +1,4 @@
-import { newId } from '@yapm/schema'
+import { type DigestContent, newId } from '@yapm/schema'
 import {
   createDatabase,
   type Database,
@@ -120,4 +120,58 @@ export async function seedLinkedPr(
     .execute()
 
   return { pullRequestId, installationId: installation.id }
+}
+
+// Find the cycle the admin just created by name (its id + team_id).
+export async function findCycle(
+  db: Database,
+  name: string,
+): Promise<{ id: string; teamId: string }> {
+  const row = await db.db
+    .selectFrom('cycle')
+    .select(['id', 'team_id'])
+    .where('name', '=', name)
+    .executeTakeFirstOrThrow()
+  return { id: row.id, teamId: row.team_id }
+}
+
+export interface SeedCycleDigestOptions {
+  teamId: string
+  cycleId: string
+  status?: 'ready' | 'ai_off' | 'failed' | 'pending'
+  content?: DigestContent | null
+  provider?: string | null
+  model?: string | null
+  estimatedCostUsd?: number | null
+}
+
+// Seed a `cycle_digest` row directly. The row is Zero-synced, so it replicates to the signed-in
+// member's client and renders on the cycle view exactly as the server-side pre-compute job's output
+// would — mirroring how the work-graph rows are seeded (the job path itself is covered by the
+// server integration tests, which run the pre-compute with the SDK mock provider).
+export async function seedCycleDigest(
+  db: Database,
+  options: SeedCycleDigestOptions,
+): Promise<void> {
+  const now = new Date()
+  const status = options.status ?? 'ready'
+  const content = options.content ?? null
+  await db.db
+    .insertInto('cycle_digest')
+    .values({
+      id: newId(),
+      team_id: options.teamId,
+      cycle_id: options.cycleId,
+      status,
+      content: (content === null ? null : JSON.stringify(content)) as never,
+      provider: options.provider ?? null,
+      model: options.model ?? null,
+      generated_at: status === 'ready' ? now : null,
+      input_token: null,
+      output_token: null,
+      estimated_cost_usd: options.estimatedCostUsd ?? null,
+      created_at: now,
+      updated_at: now,
+    })
+    .execute()
 }

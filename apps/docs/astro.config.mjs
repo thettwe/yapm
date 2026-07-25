@@ -16,11 +16,15 @@ export default defineConfig({
             { label: 'Triage', slug: 'features/triage' },
             { label: 'Projects & roadmap', slug: 'features/projects' },
             { label: 'Delivery signals', slug: 'features/delivery-signals' },
+            { label: 'Cycle digest', slug: 'features/cycle-digest' },
           ],
         },
         {
           label: 'Self-hosting',
-          items: [{ label: 'Connect GitHub', slug: 'self-hosting/github-connector' }],
+          items: [
+            { label: 'Connect GitHub', slug: 'self-hosting/github-connector' },
+            { label: 'Enable AI', slug: 'self-hosting/ai-setup' },
+          ],
         },
       ],
     }),

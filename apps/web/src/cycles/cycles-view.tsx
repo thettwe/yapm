@@ -17,6 +17,8 @@ import { cn } from '@yapm/ui/lib/utils'
 import { CircleDashedIcon, FlagIcon, PlusIcon } from 'lucide-react'
 import { type FormEvent, useCallback, useId, useMemo, useRef, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
+import type { DigestIssueRow } from '@/cycles/digest'
+import { CycleDigestPanel } from '@/cycles/digest-panel'
 import {
   CYCLE_STATUS_LABEL,
   type CycleRowData,
@@ -83,12 +85,30 @@ export function CyclesView({ teamId }: { teamId: string }) {
     [issues, selected],
   )
 
-  const onOpenIssue = useCallback(
-    (issue: IssueRowData) => {
-      void navigate({ to: '/teams/$teamId/issues', params: { teamId }, search: { open: issue.id } })
+  // The digest surface's evidence + scope-delta set: issues still pointing at the cycle PLUS the
+  // issues this cycle rolled forward on completion (they now point at the next cycle but carry
+  // `rolledOverFromCycleId`). Without the rolled-over set a completed cycle would report carried=0
+  // and an undercounted total, since `cycle.complete` re-points its unfinished issues away.
+  const selectedRawIssues = useMemo<readonly DigestIssueRow[]>(
+    () =>
+      selected
+        ? (issuesRaw.filter(
+            (issue) =>
+              (issue.cycleId ?? null) === selected.id ||
+              (issue.rolledOverFromCycleId ?? null) === selected.id,
+          ) as unknown as readonly DigestIssueRow[])
+        : [],
+    [issuesRaw, selected],
+  )
+
+  const onOpenIssueId = useCallback(
+    (issueId: string) => {
+      void navigate({ to: '/teams/$teamId/issues', params: { teamId }, search: { open: issueId } })
     },
     [navigate, teamId],
   )
+
+  const onOpenIssue = useCallback((issue: IssueRowData) => onOpenIssueId(issue.id), [onOpenIssueId])
 
   if (!team) {
     return (
@@ -137,7 +157,9 @@ export function CyclesView({ teamId }: { teamId: string }) {
             teamKey={teamKey}
             cycle={selected}
             issues={selectedIssues}
+            rawIssues={selectedRawIssues}
             onOpenIssue={onOpenIssue}
+            onOpenIssueId={onOpenIssueId}
           />
         ) : (
           <p className="p-8 text-center text-sm text-text-3" role="status">
@@ -197,13 +219,17 @@ function CyclePanel({
   teamKey,
   cycle,
   issues,
+  rawIssues,
   onOpenIssue,
+  onOpenIssueId,
 }: {
   teamId: string
   teamKey: string
   cycle: CycleRowData
   issues: readonly IssueRowData[]
+  rawIssues: readonly DigestIssueRow[]
   onOpenIssue: (issue: IssueRowData) => void
+  onOpenIssueId: (issueId: string) => void
 }) {
   const progress = cycleProgress(issues)
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -236,6 +262,13 @@ function CyclePanel({
         </div>
         <ProgressBar progress={progress} />
       </header>
+
+      <CycleDigestPanel
+        teamId={teamId}
+        cycle={cycle}
+        issues={rawIssues}
+        onOpenIssue={onOpenIssueId}
+      />
 
       <div className="flex-1">
         {issues.length === 0 ? (

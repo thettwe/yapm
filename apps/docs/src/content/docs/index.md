@@ -22,3 +22,6 @@ runs as three containers you own.
   (PR state, CI health, review age) derived from linked GitHub activity, with a divergence
   flag when a human status disagrees with git. [Connect GitHub](/self-hosting/github-connector/)
   to turn it on.
+- [Cycle digest](/features/cycle-digest/) — a team-internal, evidence-linked AI summary of a
+  completed cycle, with a raw-evidence fallback when AI is off. Bring your own key with
+  [Enable AI](/self-hosting/ai-setup/).

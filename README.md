@@ -16,8 +16,9 @@ code-review health are just views, not a $30/developer/month add-on.
 > a three-preset theme system; a keyboard-first issue list, command palette, and issue detail; and
 > a kanban board; time-boxed cycles with automatic rollover; a keyboard-first triage inbox for
 > incoming issues; and lightweight projects with a roadmap timeline — all self-hostable in three
-> containers; and a first-party GitHub connector that ingests PR, CI, and deploy state into the
-> work graph so every issue row shows delivery reality. Still landing: BYO-key AI. Direction is
+> containers; a first-party GitHub connector that ingests PR, CI, and deploy state into the
+> work graph so every issue row shows delivery reality; and a BYO-key, provider-agnostic AI
+> foundation whose first feature is a team-internal, evidence-linked cycle digest. Direction is
 > settled in [VISION.md](VISION.md), [TECHSTACK.md](TECHSTACK.md), and [ROADMAP.md](ROADMAP.md).
 
 ## Why another one
@@ -54,14 +55,18 @@ lightweight, workspace-level projects with computed progress and a keyboard-firs
 three switchable themes (Warm, Focused, Editorial) with a custom accent color · a first-party
 **GitHub connector** (admin-configured) that ingests PR, CI, review, and deploy state into the
 work graph, so every issue row's **reality strip** shows live PR state, a CI health dot, and review
-age — with a **divergence flag** when a human status disagrees with git.
+age — with a **divergence flag** when a human status disagrees with git · a **BYO-key AI
+foundation** (bring your own Anthropic / Gemini / OpenAI key, admin-configured, off until you
+enable it) whose first feature is a team-internal, evidence-linked **cycle digest** — pre-computed
+at cycle close, team-level and blameless, with a raw linked-evidence fallback when AI is off.
 
 ## What's next
 
-**BYO-key AI agents** that read and act through the same permissions as a human, reusing the
-connector's encrypted-secrets surface. Then DORA and review-health metrics computed from the
-graph — team-level only, never individual scorecards. More connectors (GitLab, …) slot into the
-same framework with no feature-code change.
+**BYO-key AI agents** that read and act through the same permissions as a human — the foundation
+(gateway, agent-as-actor tools, the AI-over-work-graph substrate) is in; a governed PM-facing
+digest and an AI-facilitated retro build on it next. Then DORA and review-health metrics computed
+from the graph — team-level only, never individual scorecards. More connectors (GitLab, …) slot
+into the same framework with no feature-code change.
 
 ## Quickstart
 

@@ -1,5 +1,22 @@
 export type { SecretCodec } from '../secrets/codec.js'
 export { createSecretCodec, decodeEncryptionKey, SecretCodecError } from '../secrets/codec.js'
+export type {
+  AiConfig,
+  AiConfigData,
+  RedactedAiStatus,
+  SetAiProviderKeyOptions,
+  UpsertAiConfigOptions,
+} from './ai-config.js'
+export {
+  AI_CONNECTOR_PROVIDER,
+  aiConfigDataSchema,
+  getAiConfig,
+  getAiProviderKey,
+  getRedactedAiStatus,
+  listConfiguredAiProviders,
+  setAiProviderKey,
+  upsertAiConfig,
+} from './ai-config.js'
 export type { Database, DatabaseOptions } from './client.js'
 export { createDatabase, pingDatabase } from './client.js'
 export type {
@@ -36,6 +53,13 @@ export {
   upsertConnectorConfig,
   upsertConnectorInstallation,
 } from './connector.js'
+export type { CycleNeedingDigest, CyclesNeedingDigestOptions } from './cycle-digest.js'
+export {
+  cyclesNeedingDigest,
+  getCycleDigestByCycle,
+  getWorkspaceAiSpendUsd,
+} from './cycle-digest.js'
+export { cycleFactsForTeam } from './cycle-facts.js'
 export type { AcceptInviteOptions, AcceptInviteRefusal, AcceptInviteResult } from './invite.js'
 export { acceptInvite } from './invite.js'
 export { lookupWorkspaceRole } from './membership.js'
@@ -79,6 +103,9 @@ export type {
   ConnectorSecretTable,
   ConnectorSecretUpdate,
   Cycle,
+  CycleDigest,
+  CycleDigestTable,
+  CycleDigestUpdate,
   CycleSequence,
   CycleSequenceTable,
   CycleTable,
@@ -108,6 +135,7 @@ export type {
   NewConnectorInstallation,
   NewConnectorSecret,
   NewCycle,
+  NewCycleDigest,
   NewDeployment,
   NewInvite,
   NewIssue,

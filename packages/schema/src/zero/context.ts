@@ -36,6 +36,21 @@ export const CONNECTOR_PROVIDERS = ['github'] as const
 
 export type ConnectorProvider = (typeof CONNECTOR_PROVIDERS)[number]
 
+// The BYO-key AI providers the gateway can construct. Stored as the `key` of a
+// `connector_secret` under the single `provider = "ai"` connector_config row (the AI change
+// reuses the connector surface — no new table). Model IDs are runtime config, never enumerated
+// here (they are volatile — see reference/ai-providers.md).
+export const AI_PROVIDERS = ['anthropic', 'google', 'openai'] as const
+
+export type AiProvider = (typeof AI_PROVIDERS)[number]
+
+// The lifecycle of a pre-computed cycle digest. `pending` = job enqueued/not-yet-run; `ready` =
+// an AI narrative was generated + validated; `ai_off` = AI disabled/keyless/spend-capped (the
+// cycle view falls back to raw linked evidence); `failed` = the run errored (same fallback).
+export const CYCLE_DIGEST_STATUSES = ['pending', 'ready', 'failed', 'ai_off'] as const
+
+export type CycleDigestStatus = (typeof CYCLE_DIGEST_STATUSES)[number]
+
 export const CONNECTOR_STATUSES = ['disabled', 'pending', 'connected', 'error'] as const
 
 export type ConnectorStatus = (typeof CONNECTOR_STATUSES)[number]

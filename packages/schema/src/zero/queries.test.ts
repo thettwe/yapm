@@ -5,6 +5,8 @@ import { tableShapes } from './introspect.js'
 import {
   CYCLES_BY_TEAM_QUERY_NAME,
   DEPLOYMENTS_BY_TEAM_QUERY_NAME,
+  DIGESTS_BY_CYCLE_QUERY_NAME,
+  DIGESTS_BY_TEAM_QUERY_NAME,
   INVITES_ALL_QUERY_NAME,
   ISSUE_DETAIL_QUERY_NAME,
   ISSUES_BY_TEAM_QUERY_NAME,
@@ -74,6 +76,8 @@ describe('the synced query registry', () => {
       [LABELS_BY_TEAM_QUERY_NAME, queries.labels.byTeam],
       [DEPLOYMENTS_BY_TEAM_QUERY_NAME, queries.deployments.byTeam],
       [SAVED_VIEWS_BY_TEAM_QUERY_NAME, queries.savedViews.byTeam],
+      [DIGESTS_BY_CYCLE_QUERY_NAME, queries.digests.byCycle],
+      [DIGESTS_BY_TEAM_QUERY_NAME, queries.digests.byTeam],
     ] as const) {
       expect(query.queryName).toBe(name)
       expect(mustGetQuery(queries, name)).toBe(query)
@@ -132,6 +136,36 @@ describe('projects.all is workspace-level, member-gated', () => {
     )
     expect(issuesRelated).toBeDefined()
     expect(JSON.stringify(issuesRelated?.subquery)).toContain(MEMBER.userID)
+  })
+})
+
+describe('cycle digests are team-scoped and client-read-only', () => {
+  const CYCLE_ID = '019f8f00-0000-7000-8000-0000000000cc'
+
+  it('scopes digests.byCycle to the caller teams and denies non-members', () => {
+    for (const ctx of [MEMBER, VIEWER]) {
+      const where = astOfArgs(queries.digests.byCycle, { cycleId: CYCLE_ID }, ctx).where
+      expect(where).not.toEqual(DENY_ALL_WHERE)
+      expect(JSON.stringify(where)).toContain(ctx.userID)
+    }
+    for (const ctx of [NON_MEMBER, undefined]) {
+      expect(astOfArgs(queries.digests.byCycle, { cycleId: CYCLE_ID }, ctx).where).toEqual(
+        DENY_ALL_WHERE,
+      )
+    }
+  })
+
+  it('scopes digests.byTeam to the caller teams and denies non-members', () => {
+    for (const ctx of [MEMBER, VIEWER]) {
+      const where = astOfArgs(queries.digests.byTeam, { teamId: TEAM_ID }, ctx).where
+      expect(where).not.toEqual(DENY_ALL_WHERE)
+      expect(JSON.stringify(where)).toContain(ctx.userID)
+    }
+    for (const ctx of [NON_MEMBER, undefined]) {
+      expect(astOfArgs(queries.digests.byTeam, { teamId: TEAM_ID }, ctx).where).toEqual(
+        DENY_ALL_WHERE,
+      )
+    }
   })
 })
 

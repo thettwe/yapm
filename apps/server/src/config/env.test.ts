@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { EnvValidationError, githubAppEnv, loadEnv } from './env.js'
+import { aiEnv, EnvValidationError, githubAppEnv, loadEnv } from './env.js'
 
 const VALID = {
   DATABASE_URL: 'postgres://yapm:yapm@localhost:5432/yapm',
@@ -127,5 +127,42 @@ describe('loadEnv', () => {
       const issues = (error as EnvValidationError).issues
       expect(issues[0]?.variable).toBe('SECRETS_ENCRYPTION_KEY')
     }
+  })
+
+  it('leaves AI disabled and boot unaffected when no AI env is set', () => {
+    const env = loadEnv({ ...VALID })
+    expect(env.AI_ANTHROPIC_API_KEY).toBeUndefined()
+    expect(env.AI_DEFAULT_PROVIDER).toBeUndefined()
+    expect(env.AI_DIGEST_ON_CYCLE_CLOSE).toBe('true')
+    expect(aiEnv(env)).toEqual({ keys: {}, defaultProvider: null })
+  })
+
+  it('exposes instance-default AI provider keys and the default provider via aiEnv', () => {
+    const env = loadEnv({
+      ...VALID,
+      AI_ANTHROPIC_API_KEY: 'sk-ant',
+      AI_OPENAI_API_KEY: 'sk-oai',
+      AI_DEFAULT_PROVIDER: 'anthropic',
+    })
+    expect(aiEnv(env)).toEqual({
+      keys: { anthropic: 'sk-ant', openai: 'sk-oai' },
+      defaultProvider: 'anthropic',
+    })
+  })
+
+  it('rejects an unknown AI_DEFAULT_PROVIDER', () => {
+    try {
+      loadEnv({ ...VALID, AI_DEFAULT_PROVIDER: 'llama' })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      expect(error).toBeInstanceOf(EnvValidationError)
+      expect((error as EnvValidationError).issues[0]?.variable).toBe('AI_DEFAULT_PROVIDER')
+    }
+  })
+
+  it('treats a whitespace-only AI key as unset', () => {
+    const env = loadEnv({ ...VALID, AI_GOOGLE_API_KEY: '   ' })
+    expect(env.AI_GOOGLE_API_KEY).toBeUndefined()
+    expect(aiEnv(env).keys.google).toBeUndefined()
   })
 })

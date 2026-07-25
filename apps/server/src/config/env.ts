@@ -106,6 +106,24 @@ export const envSchema = z
     // How often the connector's reconcile sweep re-polls GitHub with conditional (ETag/304)
     // requests to heal any missed webhook. Only runs when the GitHub App is configured.
     GITHUB_RECONCILE_CRON: z.string().min(1).default('*/15 * * * *'),
+    // AI (BYO-key gateway). ALL optional: absent env cleanly DISABLES AI, never crashes boot.
+    // These are the OPTIONAL instance-default provider keys for a single-instance self-host that
+    // prefers env over DB-resident secrets (mirroring githubAppEnv); UI-entered per-workspace
+    // keys use SECRETS_ENCRYPTION_KEY instead. AI_DEFAULT_PROVIDER picks which of the three is the
+    // instance default. AI_DIGEST_ON_CYCLE_CLOSE gates the digest pre-compute job (default on).
+    AI_ANTHROPIC_API_KEY: optionalString,
+    AI_GOOGLE_API_KEY: optionalString,
+    AI_OPENAI_API_KEY: optionalString,
+    AI_DEFAULT_PROVIDER: z.preprocess(
+      (value) => (typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined),
+      z.enum(['anthropic', 'google', 'openai']).optional(),
+    ),
+    AI_DIGEST_ON_CYCLE_CLOSE: z
+      .preprocess(
+        (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+        z.enum(['true', 'false']),
+      )
+      .default('true'),
   })
   .check((ctx) => {
     const value = ctx.value
@@ -159,6 +177,14 @@ export const EXPECTED_FORMAT: Record<string, string> = {
   GITHUB_APP_WEBHOOK_SECRET:
     'the GitHub App webhook secret; set with the other GITHUB_APP_* vars, or leave all unset',
   GITHUB_RECONCILE_CRON: "a cron expression for the connector reconcile sweep, e.g. '*/15 * * * *'",
+  AI_ANTHROPIC_API_KEY:
+    'an Anthropic API key as the instance-default AI provider key, or unset (per-workspace keys are entered in the admin UI)',
+  AI_GOOGLE_API_KEY: 'a Google Gemini API key as the instance-default AI provider key, or unset',
+  AI_OPENAI_API_KEY: 'an OpenAI API key as the instance-default AI provider key, or unset',
+  AI_DEFAULT_PROVIDER:
+    'one of anthropic | google | openai — the instance-default AI provider, or unset',
+  AI_DIGEST_ON_CYCLE_CLOSE:
+    "'true' to pre-compute a cycle digest when a cycle closes (default), or 'false' to disable it",
 }
 
 export interface EnvIssue {
@@ -235,4 +261,25 @@ export function githubAppEnv(env: Env): GithubAppEnv | null {
     }
   }
   return null
+}
+
+export type AiProviderName = 'anthropic' | 'google' | 'openai'
+
+export interface AiEnv {
+  // Instance-default provider keys from env (a per-provider fallback used when a workspace has no
+  // UI-entered key for that provider). Empty when none are set.
+  keys: Partial<Record<AiProviderName, string>>
+  // The instance-default provider, if configured.
+  defaultProvider: AiProviderName | null
+}
+
+// The AI instance-default provider keys + default provider from env, mirroring `githubAppEnv`.
+// Every field optional: an empty result simply means no env-level AI defaults, so AI is driven
+// entirely by per-workspace UI config (or is off). Never throws — absent env disables cleanly.
+export function aiEnv(env: Env): AiEnv {
+  const keys: Partial<Record<AiProviderName, string>> = {}
+  if (env.AI_ANTHROPIC_API_KEY) keys.anthropic = env.AI_ANTHROPIC_API_KEY
+  if (env.AI_GOOGLE_API_KEY) keys.google = env.AI_GOOGLE_API_KEY
+  if (env.AI_OPENAI_API_KEY) keys.openai = env.AI_OPENAI_API_KEY
+  return { keys, defaultProvider: env.AI_DEFAULT_PROVIDER ?? null }
 }

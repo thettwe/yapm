@@ -8,6 +8,8 @@ import * as m0006 from './0006_cycles.js'
 import * as m0007 from './0007_triage.js'
 import * as m0008 from './0008_projects.js'
 import * as m0009 from './0009_connectors.js'
+import * as m0010 from './0010_ai.js'
+import * as m0011 from './0011_cycle_rollover_origin.js'
 
 export const migrations: Record<string, Migration> = {
   '0001_workspace': m0001,
@@ -19,6 +21,8 @@ export const migrations: Record<string, Migration> = {
   '0007_triage': m0007,
   '0008_projects': m0008,
   '0009_connectors': m0009,
+  '0010_ai': m0010,
+  '0011_cycle_rollover_origin': m0011,
 }
 
 export const migrationProvider: MigrationProvider = {

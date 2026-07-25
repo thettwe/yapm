@@ -13,6 +13,7 @@ export interface AppOptions {
   authRoutes?: Hono
   githubWebhook?: Hono
   connectorAdmin?: Hono
+  aiAdmin?: Hono
 }
 
 const QUIET_PATHS = new Set(['/healthz', '/readyz'])
@@ -59,6 +60,10 @@ export function createApp(options: AppOptions): Hono {
 
   if (options.connectorAdmin) {
     app.route('/', options.connectorAdmin)
+  }
+
+  if (options.aiAdmin) {
+    app.route('/', options.aiAdmin)
   }
 
   if (options.zero) {

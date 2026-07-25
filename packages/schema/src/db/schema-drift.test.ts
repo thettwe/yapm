@@ -70,6 +70,7 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     creator_id: { nullable: false, hasDefault: false },
     rank: { nullable: true, hasDefault: false },
     cycle_id: { nullable: true, hasDefault: false },
+    rolled_over_from_cycle_id: { nullable: true, hasDefault: false },
     project_id: { nullable: true, hasDefault: false },
     needs_triage: { nullable: false, hasDefault: true },
     created_at: { nullable: false, hasDefault: true },
@@ -237,6 +238,24 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     team_id: { nullable: false, hasDefault: false },
     source: { nullable: false, hasDefault: false },
     created_at: { nullable: false, hasDefault: true },
+  },
+  // Team-scoped, Zero-synced cycle-digest artifact (change 9): present in BOTH the Kysely DB
+  // interface and the Zero schema. `status` is DB-defaulted ('pending'); `content` and the
+  // model/token/cost columns are nullable (null until ready / when AI is off).
+  cycle_digest: {
+    id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    cycle_id: { nullable: false, hasDefault: false },
+    status: { nullable: false, hasDefault: true },
+    content: { nullable: true, hasDefault: false },
+    provider: { nullable: true, hasDefault: false },
+    model: { nullable: true, hasDefault: false },
+    generated_at: { nullable: true, hasDefault: false },
+    input_token: { nullable: true, hasDefault: false },
+    output_token: { nullable: true, hasDefault: false },
+    estimated_cost_usd: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
   },
   // better-auth owns this table; the drift test provisions it (see `createAuthUserTable`)
   // so the read-surface interface and Zero schema are still checked against its real shape

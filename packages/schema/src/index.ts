@@ -1,5 +1,18 @@
 export { newId } from './id.js'
 export type {
+  ActiveToolOptions,
+  AgentAuditEntry,
+  MutatorToolSpec,
+  ToolKind,
+} from './zero/ai-tools.js'
+export {
+  activeMutatorTools,
+  agentAuditEntry,
+  buildMutatorToolSpecs,
+  mutatorToolNames,
+  needsApproval,
+} from './zero/ai-tools.js'
+export type {
   ConnectorContext,
   ConnectorDefinition,
   ConnectorHeaders,
@@ -8,12 +21,14 @@ export type {
   NormalizedDelivery,
 } from './zero/connector-framework.js'
 export type {
+  AiProvider,
   AuthContext,
   CiConclusion,
   ConnectorConfigData,
   ConnectorLinkSource,
   ConnectorProvider,
   ConnectorStatus,
+  CycleDigestStatus,
   CycleStatus,
   DeploymentState,
   IssueGrouping,
@@ -29,10 +44,12 @@ export type {
   WorkspaceRole,
 } from './zero/context.js'
 export {
+  AI_PROVIDERS,
   CI_CONCLUSIONS,
   CONNECTOR_LINK_SOURCES,
   CONNECTOR_PROVIDERS,
   CONNECTOR_STATUSES,
+  CYCLE_DIGEST_STATUSES,
   CYCLE_STATUSES,
   canManage,
   canRead,
@@ -50,6 +67,17 @@ export {
   THEME_PRESETS,
   WORKSPACE_ROLES,
 } from './zero/context.js'
+export type { CycleDigestWrite } from './zero/cycle-digest.js'
+export { upsertCycleDigest } from './zero/cycle-digest.js'
+export type {
+  CycleFacts,
+  CycleFactsCounts,
+  CycleFactsInput,
+  CycleFactsIssueInput,
+  CycleFactsPr,
+  CycleIssueFacts,
+} from './zero/cycle-facts.js'
+export { buildCycleFacts } from './zero/cycle-facts.js'
 export type { CycleOrderRow } from './zero/cycles.js'
 export {
   compareCycles,
@@ -72,6 +100,29 @@ export {
   computeDeliverySignal,
   computeDivergence,
 } from './zero/delivery.js'
+export type {
+  DigestConfidence,
+  DigestContent,
+  DigestEvidenceKind,
+  DigestEvidenceRef,
+  DigestItem,
+  DigestItemKind,
+  DigestSection,
+  RosterMember,
+} from './zero/digest.js'
+export {
+  contentNamesMember,
+  DIGEST_CONFIDENCE_LEVELS,
+  DIGEST_EVIDENCE_KINDS,
+  DIGEST_ITEM_KINDS,
+  digestContentSchema,
+  digestEvidenceRefSchema,
+  digestItemSchema,
+  digestSectionSchema,
+  dropItemsNamingMembers,
+  dropUncitedItems,
+  rosterNameNeedles,
+} from './zero/digest.js'
 export type { MutationErrorDetails } from './zero/errors.js'
 export { isMutationErrorDetails, MutationError, MutationErrorCode } from './zero/errors.js'
 export type {
@@ -224,6 +275,8 @@ export {
 export {
   CYCLES_BY_TEAM_QUERY_NAME,
   DEPLOYMENTS_BY_TEAM_QUERY_NAME,
+  DIGESTS_BY_CYCLE_QUERY_NAME,
+  DIGESTS_BY_TEAM_QUERY_NAME,
   denyAll,
   INVITES_ALL_QUERY_NAME,
   ISSUE_DETAIL_QUERY_NAME,

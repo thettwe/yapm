@@ -80,6 +80,9 @@ services:
       ZERO_MUTATE_API_KEY: ${ZERO_MUTATE_API_KEY:-yapm-zero-mutate-key-change-me}
       ZERO_ENABLE_CRUD_MUTATIONS: "false"
       ZERO_PORT: 4848
+      # zero-cache's own level, separate from the app's LOG_LEVEL. `debug` while diagnosing
+      # a connection that will not settle (see the sync-recovery self-hosting page).
+      ZERO_LOG_LEVEL: ${ZERO_LOG_LEVEL:-info}
     depends_on:
       yapm:
         condition: service_healthy

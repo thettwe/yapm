@@ -40,7 +40,8 @@ part of engineering metrics disappears.
 - **Free means free.** No seat caps. No SSO tax. No features behind a license key. No upgrade
   nags in the UI you self-host. 100% AGPL — there is no `ee/` directory.
 - **Free viewer seats, forever.** Stakeholders should never be a line item.
-- **Fast.** Local-first sync: reads come from memory, not the network.
+- **Fast.** Local-first sync: reads come from memory, not the network. When the connection drops —
+  a sleeping laptop, a restarted container — it says so and repairs itself, without a reload.
 - **Three containers.** `docker compose up` on a small VPS. Not thirteen.
 - **Your data.** One-command export, no lock-in, no phone-home you didn't agree to.
 

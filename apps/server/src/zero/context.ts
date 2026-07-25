@@ -1,9 +1,25 @@
 import type { AuthContext, WorkspaceRole } from '@yapm/schema'
 import type { VerifiedToken } from '../auth.js'
 
-export type ResolveAuthContext = (
-  request: Request,
-) => Promise<AuthContext | undefined> | AuthContext | undefined
+// "No credential" and "a credential I refuse" are different facts, and Zero's protocol
+// treats them differently: an absent one is a legitimately signed-out socket, a rejected one
+// must produce 401 so the client re-mints. Collapsing them into `undefined` is what let an
+// expired token be reported to zero-cache as the authoritative identity `null`.
+export type AuthResolution =
+  | { kind: 'authenticated'; ctx: AuthContext }
+  | { kind: 'absent' }
+  | { kind: 'rejected' }
+
+export const CREDENTIAL_ABSENT: AuthResolution = { kind: 'absent' }
+export const CREDENTIAL_REJECTED: AuthResolution = { kind: 'rejected' }
+
+export type ResolveAuthContext = (request: Request) => Promise<AuthResolution> | AuthResolution
+
+// The `AuthContext` handed to queries and mutators is unchanged: absent and rejected both
+// deny, so no query predicate or mutator guard has to learn the difference.
+export function resolvedContext(resolution: AuthResolution): AuthContext | undefined {
+  return resolution.kind === 'authenticated' ? resolution.ctx : undefined
+}
 
 export interface SessionContextResolverOptions {
   verifyToken: (token: string) => Promise<VerifiedToken | undefined>
@@ -29,12 +45,12 @@ export function createSessionContextResolver(
 ): ResolveAuthContext {
   return async (request) => {
     const token = bearerToken(request)
-    if (token === undefined) return undefined
+    if (token === undefined) return CREDENTIAL_ABSENT
 
     const verified = await options.verifyToken(token)
-    if (verified === undefined) return undefined
+    if (verified === undefined) return CREDENTIAL_REJECTED
 
     const role = await options.lookupRole(verified.sub)
-    return { userID: verified.sub, role }
+    return { kind: 'authenticated', ctx: { userID: verified.sub, role } }
   }
 }

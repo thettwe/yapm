@@ -83,7 +83,7 @@ export function WorkspaceName({ workspace, connection }: WorkspaceNameProps) {
       <div className="flex flex-col gap-1">
         <button
           type="button"
-          className="hover:bg-accent focus-visible:ring-ring -mx-2 rounded-md px-2 py-1 text-left font-heading text-2xl font-semibold tracking-tight focus-visible:ring-2 focus-visible:outline-none"
+          className="hover:bg-muted hover:text-foreground focus-visible:ring-ring -mx-2 rounded-md px-2 py-1 text-left font-heading text-2xl font-semibold tracking-tight focus-visible:ring-2 focus-visible:outline-none"
           onClick={startEditing}
           data-testid="workspace-name"
           aria-label={`Workspace name: ${workspace.name}. Activate to rename.`}

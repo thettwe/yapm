@@ -56,5 +56,5 @@ Sequenced so the app runs after every task. The anonymity boundary (group 1–2)
 
 ## 7. Gates
 
-- [ ] 7.1 `pnpm turbo lint typecheck test build` green; boundaries check passes (no ZQL or mutators outside `packages/schema`)
-- [ ] 7.2 Compose smoke test + the CI e2e job green on a fresh stack
+- [x] 7.1 `pnpm turbo lint typecheck test build` green (forced, no cache, against live Postgres); `check-boundaries.mjs` and `check-catalog.mjs` pass. Two shared-database defects in the test tiers surfaced and were fixed by giving `apps/server`'s live suites their own database (design.md D-45)
+- [x] 7.2 Compose smoke test green on a freshly built prod image (three services: postgres, yapm, zero-cache) + the full Playwright suite green on a fresh stack — 57 tests, this change's five retro specs included

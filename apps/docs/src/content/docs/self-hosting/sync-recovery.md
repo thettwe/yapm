@@ -37,9 +37,10 @@ pill. It fires the next attempt immediately and resets the schedule; nobody has 
 back-off window, and nobody has to reload.
 
 If the app cannot reach the server *before* it knows who you are, the full-page loading state turns
-into **"Can’t reach the server — retrying"** with the same Retry button. A failed request is never
-treated as a sign-out — you are only sent to the sign-in page when the server explicitly answers
-that there is no session.
+into **"Can’t reach the server — retrying"** with the same Retry button. Pressing it when an attempt
+is already on the wire joins that attempt instead of starting over, so it can only make the wait
+shorter. A failed request is never treated as a sign-out — you are only sent to the sign-in page
+when the server explicitly answers that there is no session.
 
 ## What happens automatically
 

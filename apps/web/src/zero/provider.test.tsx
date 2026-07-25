@@ -65,7 +65,7 @@ const SESSION: SyncCredentialResult = {
 function Probe() {
   const recovery = useSyncRecovery()
   const session = useSyncSession()
-  const { refresh } = useSyncControl()
+  const { refresh, retry } = useSyncControl()
   return (
     <div>
       <span data-testid="phase">{recovery.phase}</span>
@@ -78,6 +78,9 @@ function Probe() {
       </button>
       <button type="button" data-testid="refresh" onClick={refresh}>
         refresh
+      </button>
+      <button type="button" data-testid="outage-retry" onClick={retry}>
+        outage retry
       </button>
     </div>
   )
@@ -414,6 +417,34 @@ test('a membership refresh never settles for a token minted before the change', 
     releases[1]?.({ ...SESSION, role: 'admin' })
   })
   expect(screen.getByTestId('role')).toHaveTextContent('admin')
+})
+
+// The outage surface's "Retry now" is the opposite case to the membership refresh above:
+// there is nothing newer to wait for, so forcing would throw away the answer already on its
+// way and queue a second request behind it — pressing the button would slow recovery down.
+test('the outage retry joins the open request and takes its answer', async () => {
+  const releases: ((result: SyncCredentialResult) => void)[] = []
+  mocks.fetchSyncCredential.mockImplementation(
+    () =>
+      new Promise<SyncCredentialResult>((resolve) => {
+        releases.push(resolve)
+      }),
+  )
+
+  await mount()
+  expect(remintCount()).toBe(1)
+
+  await act(async () => {
+    screen.getByTestId('outage-retry').click()
+  })
+  expect(remintCount()).toBe(1)
+
+  await act(async () => {
+    releases[0]?.({ ...SESSION, role: 'admin' })
+  })
+  // The in-flight answer lands instead of being discarded, and nothing was queued behind it.
+  expect(screen.getByTestId('role')).toHaveTextContent('admin')
+  expect(remintCount()).toBe(1)
 })
 
 // Recovery and the proactive refresher keep sharing one request — only `refresh()` forces.

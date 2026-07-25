@@ -101,10 +101,13 @@ interface RemintOptions {
 type Remint = (options?: RemintOptions) => Promise<SyncCredentialResult>
 
 interface SyncControl {
+  // "The token as of now" — for a caller that just changed what the server bakes into it.
   refresh: () => void
+  // "Any current token" — for a caller that only wants the outage to end sooner.
+  retry: () => void
 }
 
-const SyncControlContext = createContext<SyncControl>({ refresh: () => {} })
+const SyncControlContext = createContext<SyncControl>({ refresh: () => {}, retry: () => {} })
 
 export interface SyncSessionState {
   status: SyncStatus
@@ -120,9 +123,10 @@ const SyncSessionContext = createContext<SyncSessionState>({
   unavailable: false,
 })
 
-// Membership changes (accepting an invite, being promoted/removed) do not change the
-// better-auth identity, so the sync token must be re-minted explicitly to pick up the new
+// `refresh()`: membership changes (accepting an invite, being promoted/removed) do not change
+// the better-auth identity, so the sync token must be re-minted explicitly to pick up the new
 // role. Any surface that mutates membership calls this after the server confirms it.
+// `retry()`: the outage surfaces, which want whatever token the server will give them next.
 export function useSyncControl(): SyncControl {
   return useContext(SyncControlContext)
 }
@@ -395,6 +399,9 @@ export function ZeroRoot({ children }: { children: ReactNode }) {
     void remint({ fresh: true })
   }, [remint])
 
+  // The outage path wants the wait to end, not a guaranteed-newer token. Forcing here would
+  // discard the answer already on its way and queue a second request behind it, making the
+  // "Retry now" button slower than doing nothing.
   const retry = useCallback(() => {
     void remint()
   }, [remint])
@@ -433,7 +440,7 @@ export function ZeroRoot({ children }: { children: ReactNode }) {
     [userID, token, context],
   )
 
-  const control = useMemo<SyncControl>(() => ({ refresh }), [refresh])
+  const control = useMemo<SyncControl>(() => ({ refresh, retry }), [refresh, retry])
   const sessionState = useMemo<SyncSessionState>(
     () => ({ status: session.status, userID, role, unavailable: session.unavailable }),
     [session.status, userID, role, session.unavailable],

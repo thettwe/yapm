@@ -792,3 +792,23 @@ The hand-rolled retry markup on the `pending` surface is gone in the same pass:
 `<Button variant="outline" size="sm">`, the control its sibling `AccessGate` already uses.
 `workspace-name.tsx` carried the same unpaired `hover:bg-accent` and is fixed alongside so the
 pattern is not propagated.
+
+### C25. The outage retry coalesces; only the membership refresh forces
+
+C21 gave `remint` a `{fresh}` mode and `useSyncControl().refresh()` was the caller that used it.
+The "Can't reach the server — retrying" surface was wired to that same `refresh()`, which made
+its **Retry now** button counter-productive: forcing supersedes the request already on the wire
+(`settle` drops a superseded answer by `flightId`) and chains a second `fetchSyncCredential()`
+behind it, so pressing the button threw away an answer that was about to land and started the
+wait over. The one control whose whole promise is "this makes it faster" made it slower.
+
+The two callers want different things, so `SyncControl` now has two members. `refresh()` keeps
+forcing — its contract is "the token as of *now*", because a membership change has to be
+observed. `retry()` calls `remint()` with no options: its contract is "any current token", the
+same as recovery and the proactive refresher, so it joins the open request and takes its answer.
+`useUnavailableRetry` already used that callback, and it re-arms off `revision`, which the joined
+answer bumps exactly once.
+
+The alternative — bumping `revision` on a superseded settle so the re-arm survives — was
+rejected: it repairs the re-arm without repairing the wasted round trip, and it would make a
+discarded answer look like a settled one to every other `revision` consumer.

@@ -40,8 +40,10 @@ function SyncPending() {
   )
 }
 
+// `retry`, not `refresh`: pressing this during an outage should join the request already in
+// flight and take its answer, not discard it and queue a forced one behind it.
 function SyncUnavailable() {
-  const { refresh } = useSyncControl()
+  const { retry } = useSyncControl()
 
   return (
     <main className="flex min-h-svh items-center justify-center p-6">
@@ -49,7 +51,7 @@ function SyncUnavailable() {
         <p className="text-muted-foreground text-sm" role="status" aria-live="polite">
           Can’t reach the server — retrying.
         </p>
-        <Button variant="outline" size="sm" onClick={refresh} data-testid="sync-unavailable-retry">
+        <Button variant="outline" size="sm" onClick={retry} data-testid="sync-unavailable-retry">
           Retry now
         </Button>
       </div>

@@ -1781,7 +1781,9 @@ Reads/writes by state (docs, verbatim):
 | `closed` | ❌ | ❌ |
 
 - `connecting`: retries every 5s; after `disconnectTimeoutMs` (default 1 min) → `disconnected`. Writes queue.
-- `disconnected`: also entered when the tab is hidden for `hiddenTabDisconnectDelay` (default 5 min). Keeps retrying every 5s. Writes rejected.
+- `disconnected`: also entered when the tab is hidden for `hiddenTabDisconnectDelay` (default 5 min). Writes rejected. **Whether it keeps retrying depends on Zero's visibility watcher, not on the raw `document.visibilityState`** — read from `zero-client/src/client/zero.js` and `shared/src/document-visible.js`, 1.8.0:
+  - **Watcher still reads `visible`** — the run loop's `case Connecting: case Disconnected:` races `visibilityWatcher.waitForVisible()` (already resolved) against `connectionManager.waitForStateChange()`, dials, and on a failed dial sleeps `RUN_LOOP_INTERVAL_MS` (`5e3`) before the next pass. This is the familiar "retries every 5s".
+  - **Watcher has flipped to `hidden`** — `DocumentVisibilityWatcherImpl` flips only after the raw `document.visibilityState === 'hidden'` has been *sustained* for `hiddenIntervalMS` (Zero passes `hiddenTabDisconnectDelay`, `DEFAULT_DISCONNECT_HIDDEN_DELAY_MS = 300 * 1e3`); a return to `visible` clears the pending timeout. Once flipped, `waitForVisible()` returns a promise that stays unresolved, so that same run-loop case **parks** on the `promiseRace` and issues no further dials until the tab is foregrounded. A backgrounded tab is silent, not retrying — so treating its `disconnected` as an outage worth re-minting a credential against turns every backgrounded tab into a permanent token poll.
 - `error`: zero-cache crashed, or `/query` `/mutate` returned a network/HTTP error. **Zero does not retry** — call `zero.connection.connect()`.
 - `needs-auth`: `/query` or `/mutate` returned 401/403. Call `connect()` (cookies) or `connect({auth: newToken})` (tokens).
 - `closed`: terminal; only after `zero.close()`.

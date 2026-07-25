@@ -5,6 +5,7 @@ import type { SyncSessionState } from '@/zero/provider'
 const mocks = vi.hoisted(() => ({
   session: { status: 'pending', userID: null, role: null, unavailable: false } as SyncSessionState,
   refresh: vi.fn(),
+  retry: vi.fn(),
 }))
 
 vi.mock('@/auth/client', () => ({
@@ -13,7 +14,7 @@ vi.mock('@/auth/client', () => ({
 
 vi.mock('@/zero/provider', () => ({
   useSyncSession: () => mocks.session,
-  useSyncControl: () => ({ refresh: mocks.refresh }),
+  useSyncControl: () => ({ refresh: mocks.refresh, retry: mocks.retry }),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -37,6 +38,7 @@ function show() {
 beforeEach(() => {
   mocks.session = { status: 'pending', userID: null, role: null, unavailable: false }
   mocks.refresh.mockReset()
+  mocks.retry.mockReset()
 })
 
 test('a member reaches the app', () => {
@@ -84,7 +86,9 @@ test('the retry surface never blames the user for an outage it can fix itself', 
   expect(screen.queryByText(/sign in|signed out|logged out/i)).not.toBeInTheDocument()
 })
 
-test('the retry button is keyboard-operable and re-mints the credential', () => {
+// Coalescing, not forcing: an outage retry that discarded the answer already in flight and
+// queued a fresh request behind it would make pressing the button slower than waiting.
+test('the retry button is keyboard-operable and joins the open credential request', () => {
   mocks.session = { status: 'pending', userID: null, role: null, unavailable: true }
   show()
 
@@ -94,5 +98,6 @@ test('the retry button is keyboard-operable and re-mints the credential', () => 
   expect(retry).toHaveFocus()
 
   fireEvent.click(retry)
-  expect(mocks.refresh).toHaveBeenCalledTimes(1)
+  expect(mocks.retry).toHaveBeenCalledTimes(1)
+  expect(mocks.refresh).not.toHaveBeenCalled()
 })

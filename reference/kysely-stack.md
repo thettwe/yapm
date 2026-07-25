@@ -158,10 +158,54 @@ export interface DB {
   task: TaskTable
 }
 
-export type Project       = Selectable<ProjectTable>   // { id: string; ...; created_at: Date }
+export type Project       = Selectable<ProjectTable>   // created_at: Timestamp — NOT Date, see below
 export type NewProject    = Insertable<ProjectTable>   // settings?/created_at? optional
 export type ProjectUpdate = Updateable<ProjectTable>   // everything optional
 ```
+
+> 🚨 **`Generated<SomeColumnType>` NESTS, and Kysely unwraps only one level.** Verified against
+> `kysely@0.28.17` `dist/esm/util/column-type.d.ts`: `Generated<S> = ColumnType<S, S | undefined, S>`
+> and `SelectType<T> = T extends ColumnType<infer S, any, any> ? S : T` — a single, non-recursive
+> conditional. So when `S` is *itself* a `ColumnType` alias (`Timestamp`, a `Json<T>` helper), the
+> select/insert/update types come back as **the alias**, not as the type inside it:
+>
+> ```ts
+> // last_seen_at: Generated<Timestamp>
+> type Sel = Selectable<RetroPresenceTable>['last_seen_at']
+> const probe: Sel = new Date()
+> // ✗ TS2739: Type 'Date' is missing the following properties from type 'Timestamp':
+> //           __select__, __insert__, __update__
+> ```
+>
+> The column still *declares* fine and still round-trips a real `Date` at runtime — the damage is
+> confined to the types, and it bites hardest where you least expect it, in a **where-operand**:
+>
+> ```ts
+> db.deleteFrom('retro_presence').where('last_seen_at', '<', someDate)
+> // ✗ TS2345: Argument of type 'Date' is not assignable to parameter of type
+> //           'OperandValueExpressionOrList<DB, "retro_presence", "last_seen_at">'.
+> //   Type 'Date' is missing the following properties from type
+> //   'readonly ValueExpression<DB, "retro_presence", Timestamp | null>[]' …
+> ```
+>
+> (The error names the array overload because the scalar one already failed — the real message is
+> the `Timestamp` in it.) Three ways out, in order of preference:
+>
+> 1. **Hand-express the combined `ColumnType`** instead of wrapping: a DB-defaulted timestamptz is
+>    `ColumnType<Date, Date | string | undefined, Date | string>` — which is exactly what the
+>    `Timestamp` alias above already is, so write `created_at: Timestamp`, not
+>    `Generated<Timestamp>`. Same for a defaulted `jsonb`:
+>    `ColumnType<T, T | string | undefined, T | string>`.
+> 2. **Compare through the `sql` tag**, which sidesteps operand typing entirely:
+>    ``.where(sql<SqlBool>`${sql.ref('t.last_seen_at')} < ${someDate}`)``.
+> 3. Leave it alone if the column is only ever written by the database and never read into TS or
+>    filtered on.
+>
+> `kysely-codegen` never hits this because it emits its own *flattening* `Generated<T>` (§3.4,
+> `T extends ColumnType<infer S, infer I, infer U> ? ColumnType<S, I | undefined, U> : …`) rather
+> than importing Kysely's — which is precisely why a hand-written `DB` interface (the only option
+> here: no codegen under TS7) needs the rule stated. Same root cause as the `sql<T>`-in-`.set()`
+> note in §1.4.
 
 Rules that trip agents up:
 
@@ -170,6 +214,7 @@ Rules that trip agents up:
 | `uuid primary key` supplied by the app | `id: string` (**not** `Generated<string>`) |
 | `bigserial` / `generated always as identity` | `Generated<number>` / `GeneratedAlways<number>` |
 | `text not null default 'x'` | `Generated<string>` (default makes it optional on insert) |
+| `timestamptz not null default now()` | `ColumnType<Date, Date \| string \| undefined, Date \| string>` — **not** `Generated<Timestamp>`, which nests (see the warning above) |
 | `text null` | `foo: string \| null` — a `?` here is wrong; `Insertable` derives optionality from the type |
 | `jsonb` returned parsed by `pg` | `Generated<SomeObject>` or `ColumnType<Obj, string, string>` if you stringify yourself |
 | Read-only computed column | `ColumnType<T, never, never>` = `GeneratedAlways<T>` |

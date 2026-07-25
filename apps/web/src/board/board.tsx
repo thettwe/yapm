@@ -61,6 +61,7 @@ import {
   STATUS_LABEL,
   STATUS_TO_KIND,
 } from '@/issues/model'
+import { ownsKeyboard } from '@/lib/keyboard'
 import { runMutation } from '@/lib/mutation'
 import { VirtualColumnList } from './virtual-column'
 
@@ -307,13 +308,7 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (draggingRef.current) return
-      const target = event.target as HTMLElement | null
-      const editing =
-        target?.isContentEditable ||
-        target?.tagName === 'INPUT' ||
-        target?.tagName === 'TEXTAREA' ||
-        target?.closest('[role="dialog"]') != null
-      if (editing) return
+      if (ownsKeyboard(event.target)) return
       const cardEl = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
         '[data-card-id]',
       )

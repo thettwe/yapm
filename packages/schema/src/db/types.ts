@@ -12,6 +12,10 @@ import type {
   IssueStatus,
   ProjectStatus,
   PullRequestState,
+  RetroColumnAccent,
+  RetroFormat,
+  RetroPhase,
+  RetroVoteTarget,
   ReviewState,
   RichTextDoc,
   ThemePreset,
@@ -19,6 +23,7 @@ import type {
 } from '../zero/context.js'
 import type { DigestContent } from '../zero/digest.js'
 import type { IssueFilter, IssueSort } from '../zero/filter.js'
+import type { RetroSeedRef } from '../zero/retro/seed.js'
 
 export type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>
 export type TimestampOrNull = ColumnType<
@@ -110,6 +115,12 @@ export interface IssueTable {
   rolled_over_from_cycle_id: Nullable<string>
   project_id: Nullable<string>
   needs_triage: Generated<boolean>
+  // Two cycle-history facts an issue's current state cannot reconstruct, feeding the retro's
+  // team-level Delivered panel: how many times the rollover carried this issue ("carried twice or
+  // more") and when it was placed in its cycle ("added mid-cycle"). Written only by the mutators
+  // that already write the row; no identity dimension.
+  carryover_count: Generated<number>
+  cycle_assigned_at: TimestampOrNull
   created_at: Generated<Timestamp>
   updated_at: Generated<Timestamp>
 }
@@ -351,6 +362,152 @@ export interface CycleDigestTable {
   updated_at: Generated<Timestamp>
 }
 
+// The retrospective. Nine Zero-synced tables plus ONE server-only table (`retro_card_author`),
+// which is in this interface and in the migrations but deliberately ABSENT from the Zero schema —
+// the drift test asserts that absence, exactly as it does for the sequence counters.
+//
+// The meeting object: a phase machine anchored to a cycle. `cycle_id` is unique when set (at most
+// one retro per cycle), `next_cycle_id` is where converted actions land, `timer_ends_at` is durable
+// state each client counts down against locally, and anonymity/budget are fixed during `brainstorm`.
+export interface RetroTable {
+  id: string
+  team_id: string
+  cycle_id: Nullable<string>
+  next_cycle_id: Nullable<string>
+  title: string
+  format: RetroFormat
+  phase: Generated<RetroPhase>
+  facilitator_id: Nullable<string>
+  is_anonymous: Generated<boolean>
+  votes_per_participant: Generated<number>
+  timer_ends_at: TimestampOrNull
+  timer_duration_s: Nullable<number>
+  created_by: string
+  closed_at: TimestampOrNull
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// Columns are ROWS, so a custom format costs no schema change. `accent_token` is a retro-semantic
+// accent key that `packages/ui` maps to a theme token — never a color literal.
+export interface RetroColumnTable {
+  id: string
+  retro_id: string
+  team_id: string
+  key: string
+  title: string
+  accent_token: RetroColumnAccent
+  rank: string
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// The private brainstorm row: syncs ONLY to `author_id`, with no workspace-admin bypass. Publishing
+// reuses this row's id for the card, so nothing is minted inside a mutator and publish is
+// idempotent; `rank` is minted at the draft's call site and copied onto the card.
+export interface RetroDraftTable {
+  id: string
+  retro_id: string
+  team_id: string
+  column_id: string
+  author_id: string
+  body: string
+  rank: string
+  seed_ref: JsonOrNull<RetroSeedRef>
+  published_at: TimestampOrNull
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// The published card. `author_display_id` is written ONLY when the retro is not anonymous, so an
+// anonymous card's synced row carries no author value and there is nothing to strip.
+export interface RetroCardTable {
+  id: string
+  retro_id: string
+  team_id: string
+  column_id: string
+  group_id: Nullable<string>
+  body: string
+  rank: string
+  is_anonymous: Generated<boolean>
+  author_display_id: Nullable<string>
+  seed_ref: JsonOrNull<RetroSeedRef>
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// SERVER-ONLY — the crux of the anonymity guarantee. Zero syncs whole rows and has no column-level
+// read permission, so the card -> author binding lives here, in a table absent from the Zero schema:
+// a client cannot name it in any query, which makes the leak structurally impossible rather than
+// merely unwritten. Read only by the server mutator pass, for authorization, moderation and audit.
+export interface RetroCardAuthorTable {
+  card_id: string
+  retro_id: string
+  author_id: string
+  created_at: Generated<Timestamp>
+}
+
+export interface RetroGroupTable {
+  id: string
+  retro_id: string
+  team_id: string
+  column_id: string
+  label: Nullable<string>
+  rank: string
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// One row per dot, synced ONLY to its voter (bare ctx filter, no admin bypass). `target_id` is
+// polymorphic (card or group) so it carries no FK; the mutator validates the target instead.
+export interface RetroVoteTable {
+  id: string
+  retro_id: string
+  team_id: string
+  target_type: RetroVoteTarget
+  target_id: string
+  voter_id: string
+  created_at: Generated<Timestamp>
+}
+
+// Zero has no aggregates and a client cannot count rows it cannot see, so the per-target count is a
+// real synced row keyed by the target's own client-minted id — upserted without minting anything.
+export interface RetroVoteTallyTable {
+  target_id: string
+  retro_id: string
+  team_id: string
+  target_type: RetroVoteTarget
+  count: Generated<number>
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// The retro's outcome. `issue_id` is set once the action becomes a real issue through the shared
+// issue-create path, after which the action renders that issue's live status.
+export interface RetroActionTable {
+  id: string
+  retro_id: string
+  team_id: string
+  group_id: Nullable<string>
+  card_id: Nullable<string>
+  body: string
+  assignee_id: Nullable<string>
+  target_cycle_id: Nullable<string>
+  issue_id: Nullable<string>
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// Coarse throttled presence, pruned by the existing cycle-maintenance pass — no sidecar service and
+// no Redis, so the 3-container promise holds. `focus_target` is column-level, never a pixel cursor.
+export interface RetroPresenceTable {
+  retro_id: string
+  user_id: string
+  team_id: string
+  focus_target: Nullable<string>
+  last_seen_at: Generated<Timestamp>
+}
+
 // Owned by better-auth (created by its `getMigrations()` at boot), read-only here so
 // mutators/queries can join member profiles. camelCase columns and a `text` id are
 // better-auth's shape (reference/kysely-stack.md §5.4), not ours to change.
@@ -389,6 +546,16 @@ export interface DB {
   deployment: DeploymentTable
   issue_link: IssueLinkTable
   cycle_digest: CycleDigestTable
+  retro: RetroTable
+  retro_column: RetroColumnTable
+  retro_draft: RetroDraftTable
+  retro_card: RetroCardTable
+  retro_card_author: RetroCardAuthorTable
+  retro_group: RetroGroupTable
+  retro_vote: RetroVoteTable
+  retro_vote_tally: RetroVoteTallyTable
+  retro_action: RetroActionTable
+  retro_presence: RetroPresenceTable
   user: UserTable
 }
 
@@ -480,5 +647,36 @@ export type NewIssueLink = Insertable<IssueLinkTable>
 export type CycleDigest = Selectable<CycleDigestTable>
 export type NewCycleDigest = Insertable<CycleDigestTable>
 export type CycleDigestUpdate = Updateable<CycleDigestTable>
+
+export type Retro = Selectable<RetroTable>
+export type NewRetro = Insertable<RetroTable>
+export type RetroUpdate = Updateable<RetroTable>
+
+export type RetroColumn = Selectable<RetroColumnTable>
+export type NewRetroColumn = Insertable<RetroColumnTable>
+
+export type RetroDraft = Selectable<RetroDraftTable>
+export type NewRetroDraft = Insertable<RetroDraftTable>
+
+export type RetroCard = Selectable<RetroCardTable>
+export type NewRetroCard = Insertable<RetroCardTable>
+
+export type RetroCardAuthor = Selectable<RetroCardAuthorTable>
+export type NewRetroCardAuthor = Insertable<RetroCardAuthorTable>
+
+export type RetroGroup = Selectable<RetroGroupTable>
+export type NewRetroGroup = Insertable<RetroGroupTable>
+
+export type RetroVote = Selectable<RetroVoteTable>
+export type NewRetroVote = Insertable<RetroVoteTable>
+
+export type RetroVoteTally = Selectable<RetroVoteTallyTable>
+export type NewRetroVoteTally = Insertable<RetroVoteTallyTable>
+
+export type RetroAction = Selectable<RetroActionTable>
+export type NewRetroAction = Insertable<RetroActionTable>
+
+export type RetroPresence = Selectable<RetroPresenceTable>
+export type NewRetroPresence = Insertable<RetroPresenceTable>
 
 export type User = Selectable<UserTable>

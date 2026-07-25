@@ -9,6 +9,15 @@ export const MutationErrorCode = {
   notAuthorized: 'not_authorized',
   lastAdmin: 'last_admin',
   crossTeam: 'cross_team',
+  // The retro's phase machine: a non-adjacent transition, or a write in a phase where that kind of
+  // change is closed. Checked against the retro's phase AT APPLY TIME on the server, so a write
+  // racing a phase advance is rejected and the optimistic write rolls back.
+  invalidPhase: 'invalid_phase',
+  // The per-participant dot budget, counted from the caller's own vote rows.
+  voteBudget: 'vote_budget',
+  // A vote target that is not votable: a card that has been grouped (vote the group instead), or a
+  // card/group that does not belong to the retro.
+  invalidTarget: 'invalid_target',
 } as const
 
 export type MutationErrorCode = (typeof MutationErrorCode)[keyof typeof MutationErrorCode]

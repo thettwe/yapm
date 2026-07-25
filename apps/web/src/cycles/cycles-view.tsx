@@ -1,6 +1,6 @@
 import { useQuery, useZero } from '@rocicorp/zero/react'
-import { useNavigate } from '@tanstack/react-router'
-import { mutators, newId, queries } from '@yapm/schema'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { DEFAULT_RETRO_FORMAT, mutators, newId, queries } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import {
   Dialog,
@@ -14,7 +14,7 @@ import { Input } from '@yapm/ui/components/input'
 import { IssueRow } from '@yapm/ui/components/issue-row'
 import { Label } from '@yapm/ui/components/label'
 import { cn } from '@yapm/ui/lib/utils'
-import { CircleDashedIcon, FlagIcon, PlusIcon } from 'lucide-react'
+import { CircleDashedIcon, FlagIcon, MessagesSquareIcon, PlusIcon } from 'lucide-react'
 import { type FormEvent, useCallback, useId, useMemo, useRef, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import type { DigestIssueRow } from '@/cycles/digest'
@@ -30,6 +30,7 @@ import {
 } from '@/cycles/model'
 import { type IssueRowData, issueKey, PRIORITY_TO_KIND, STATUS_TO_KIND } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
+import { openRetroArgs } from '@/retro/model'
 
 export function CyclesView({ teamId }: { teamId: string }) {
   const navigate = useNavigate()
@@ -156,6 +157,7 @@ export function CyclesView({ teamId }: { teamId: string }) {
             teamId={teamId}
             teamKey={teamKey}
             cycle={selected}
+            cycles={cycles}
             issues={selectedIssues}
             rawIssues={selectedRawIssues}
             onOpenIssue={onOpenIssue}
@@ -218,6 +220,7 @@ function CyclePanel({
   teamId,
   teamKey,
   cycle,
+  cycles,
   issues,
   rawIssues,
   onOpenIssue,
@@ -226,6 +229,7 @@ function CyclePanel({
   teamId: string
   teamKey: string
   cycle: CycleRowData
+  cycles: readonly CycleRowData[]
   issues: readonly IssueRowData[]
   rawIssues: readonly DigestIssueRow[]
   onOpenIssue: (issue: IssueRowData) => void
@@ -252,10 +256,12 @@ function CyclePanel({
           <span className="ml-1 text-xs text-text-3">
             {formatCycleRange(cycle.startDate, cycle.endDate)}
           </span>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <RetroEntry teamId={teamId} cycle={cycle} cycles={cycles} />
             <CompleteCycleButton
               teamId={teamId}
               cycle={cycle}
+              cycles={cycles}
               onCompleted={() => headingRef.current?.focus()}
             />
           </div>
@@ -320,13 +326,82 @@ function ProgressBar({ progress }: { progress: { total: number; done: number; pe
   )
 }
 
+// The retro that hangs off a completed cycle. The scheduled maintenance pass opens one too and
+// `retro.openForCycle` no-ops when the cycle already has a retro, so the two never race into a
+// second row — the unique index on `cycle_id` is the backstop.
+function RetroEntry({
+  teamId,
+  cycle,
+  cycles,
+}: {
+  teamId: string
+  cycle: CycleRowData
+  cycles: readonly CycleRowData[]
+}) {
+  const zero = useZero()
+  const navigate = useNavigate()
+  const { canWrite } = useMembership()
+  const [retros] = useQuery(queries.retros.byTeam({ teamId }))
+
+  if (cycle.status !== 'completed') return null
+
+  const existing = (retros as readonly { id: string; cycleId?: string | null }[]).find(
+    (retro) => (retro.cycleId ?? null) === cycle.id,
+  )
+
+  if (existing) {
+    return (
+      <Link
+        to="/teams/$teamId/retros/$retroId"
+        params={{ teamId, retroId: existing.id }}
+        data-testid="cycle-retro-link"
+        className="flex items-center gap-1.5 rounded-control px-2 py-1 text-xs font-medium text-text-2 outline-none hover:text-text-1 focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <MessagesSquareIcon className="size-3.5" />
+        Retrospective
+      </Link>
+    )
+  }
+
+  if (!canWrite) return null
+
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      data-testid="cycle-open-retro"
+      onClick={() => {
+        void openRetroFor(zero, cycles, cycle).then(({ retroId, failure }) => {
+          if (failure !== undefined) return
+          void navigate({ to: '/teams/$teamId/retros/$retroId', params: { teamId, retroId } })
+        })
+      }}
+    >
+      <MessagesSquareIcon />
+      Open a retrospective
+    </Button>
+  )
+}
+
+async function openRetroFor(
+  zero: ReturnType<typeof useZero>,
+  cycles: readonly CycleRowData[],
+  cycle: CycleRowData,
+): Promise<{ retroId: string; failure: string | undefined }> {
+  const args = openRetroArgs(cycle, cycles, DEFAULT_RETRO_FORMAT)
+  const failure = await runMutation(zero.mutate(mutators.retro.openForCycle(args)))
+  return { retroId: args.id, failure }
+}
+
 function CompleteCycleButton({
   teamId,
   cycle,
+  cycles,
   onCompleted,
 }: {
   teamId: string
   cycle: CycleRowData
+  cycles: readonly CycleRowData[]
   onCompleted: () => void
 }) {
   const { canWrite } = useMembership()
@@ -336,15 +411,20 @@ function CompleteCycleButton({
 
   if (!canWrite || cycle.status === 'completed') return null
 
+  // Completing a cycle also opens its retrospective, minting the retro and column ids here at the
+  // call site. The scheduled maintenance pass does the same, and the mutator no-ops when the cycle
+  // already has one, so the button racing the scheduler still yields exactly one retro.
   async function complete() {
     const failure = await runMutation(
       zero.mutate(mutators.cycle.complete({ id: cycle.id, updatedAt: Date.now() })),
     )
-    if (failure === undefined) {
-      onCompleted()
+    if (failure !== undefined) {
+      setError(failure)
       return
     }
-    setError(failure)
+    const retro = await openRetroFor(zero, cycles, cycle)
+    setError(retro.failure)
+    onCompleted()
   }
 
   return (

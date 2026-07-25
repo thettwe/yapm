@@ -20,6 +20,10 @@ import type {
   IssueStatus,
   ProjectStatus,
   PullRequestState,
+  RetroColumnAccent,
+  RetroFormat,
+  RetroPhase,
+  RetroVoteTarget,
   ReviewState,
   ThemePreset,
   WorkspaceRole,
@@ -108,6 +112,9 @@ const issue = table('issue')
     rolledOverFromCycleId: string().from('rolled_over_from_cycle_id').optional(),
     projectId: string().from('project_id').optional(),
     needsTriage: boolean().from('needs_triage'),
+    // Cycle-history facts the retro's Delivered panel reports as facts rather than guesses.
+    carryoverCount: number().from('carryover_count'),
+    cycleAssignedAt: number().from('cycle_assigned_at').optional(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })
@@ -285,6 +292,147 @@ const cycleDigest = table('cycle_digest')
     updatedAt: number().from('updated_at'),
   })
   .primaryKey('id')
+
+// The retrospective's NINE synced tables. `retro_card_author` — the card -> author binding — is
+// DELIBERATELY ABSENT from this schema: Zero syncs whole rows and has no column-level read
+// permission, so the author of an anonymous card lives in a server-only table a client cannot name
+// in any query. The drift test asserts that absence. Do not add it here.
+const retro = table('retro')
+  .columns({
+    id: string(),
+    teamId: string().from('team_id'),
+    cycleId: string().from('cycle_id').optional(),
+    nextCycleId: string().from('next_cycle_id').optional(),
+    title: string(),
+    format: enumeration<RetroFormat>(),
+    phase: enumeration<RetroPhase>(),
+    facilitatorId: string().from('facilitator_id').optional(),
+    isAnonymous: boolean().from('is_anonymous'),
+    votesPerParticipant: number().from('votes_per_participant'),
+    timerEndsAt: number().from('timer_ends_at').optional(),
+    timerDurationS: number().from('timer_duration_s').optional(),
+    createdBy: string().from('created_by'),
+    closedAt: number().from('closed_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+const retroColumn = table('retro_column')
+  .columns({
+    id: string(),
+    retroId: string().from('retro_id'),
+    teamId: string().from('team_id'),
+    key: string(),
+    title: string(),
+    accentToken: enumeration<RetroColumnAccent>().from('accent_token'),
+    rank: string(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+// Synced ONLY to its author (`retroDrafts.mine`), so private brainstorming needs no author column on
+// the card. Published cards reuse this row's id.
+const retroDraft = table('retro_draft')
+  .columns({
+    id: string(),
+    retroId: string().from('retro_id'),
+    teamId: string().from('team_id'),
+    columnId: string().from('column_id'),
+    authorId: string().from('author_id'),
+    body: string(),
+    rank: string(),
+    seedRef: json().from('seed_ref').optional(),
+    publishedAt: number().from('published_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+const retroCard = table('retro_card')
+  .columns({
+    id: string(),
+    retroId: string().from('retro_id'),
+    teamId: string().from('team_id'),
+    columnId: string().from('column_id'),
+    groupId: string().from('group_id').optional(),
+    body: string(),
+    rank: string(),
+    isAnonymous: boolean().from('is_anonymous'),
+    // Null for an anonymous retro's cards — there is no hidden author column to strip.
+    authorDisplayId: string().from('author_display_id').optional(),
+    seedRef: json().from('seed_ref').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+const retroGroup = table('retro_group')
+  .columns({
+    id: string(),
+    retroId: string().from('retro_id'),
+    teamId: string().from('team_id'),
+    columnId: string().from('column_id'),
+    label: string().optional(),
+    rank: string(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+// Synced ONLY to its voter (`retroVotes.mine`); everyone else reads the tally.
+const retroVote = table('retro_vote')
+  .columns({
+    id: string(),
+    retroId: string().from('retro_id'),
+    teamId: string().from('team_id'),
+    targetType: enumeration<RetroVoteTarget>().from('target_type'),
+    targetId: string().from('target_id'),
+    voterId: string().from('voter_id'),
+    createdAt: number().from('created_at'),
+  })
+  .primaryKey('id')
+
+// Keyed by the vote target's own id, because Zero has no aggregates and a client cannot count rows
+// it cannot see.
+const retroVoteTally = table('retro_vote_tally')
+  .columns({
+    targetId: string().from('target_id'),
+    retroId: string().from('retro_id'),
+    teamId: string().from('team_id'),
+    targetType: enumeration<RetroVoteTarget>().from('target_type'),
+    count: number(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('targetId')
+
+const retroAction = table('retro_action')
+  .columns({
+    id: string(),
+    retroId: string().from('retro_id'),
+    teamId: string().from('team_id'),
+    groupId: string().from('group_id').optional(),
+    cardId: string().from('card_id').optional(),
+    body: string(),
+    assigneeId: string().from('assignee_id').optional(),
+    targetCycleId: string().from('target_cycle_id').optional(),
+    issueId: string().from('issue_id').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+const retroPresence = table('retro_presence')
+  .columns({
+    retroId: string().from('retro_id'),
+    userId: string().from('user_id'),
+    teamId: string().from('team_id'),
+    focusTarget: string().from('focus_target').optional(),
+    lastSeenAt: number().from('last_seen_at'),
+  })
+  .primaryKey('retroId', 'userId')
 
 const user = table('user')
   .columns({
@@ -612,6 +760,219 @@ const savedViewRelationships = relationships(savedView, ({ one }) => ({
   }),
 }))
 
+// Every retro table carries a `team` relationship, because the `teamScoped` read predicate is a
+// two-hop `whereExists('team', team => team.whereExists('members', ...))` over the verified ctx.
+const retroRelationships = relationships(retro, ({ one, many }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  cycle: one({
+    sourceField: ['cycleId'],
+    destField: ['id'],
+    destSchema: cycle,
+  }),
+  nextCycle: one({
+    sourceField: ['nextCycleId'],
+    destField: ['id'],
+    destSchema: cycle,
+  }),
+  columns: many({
+    sourceField: ['id'],
+    destField: ['retroId'],
+    destSchema: retroColumn,
+  }),
+  cards: many({
+    sourceField: ['id'],
+    destField: ['retroId'],
+    destSchema: retroCard,
+  }),
+  groups: many({
+    sourceField: ['id'],
+    destField: ['retroId'],
+    destSchema: retroGroup,
+  }),
+  voteTallies: many({
+    sourceField: ['id'],
+    destField: ['retroId'],
+    destSchema: retroVoteTally,
+  }),
+  actions: many({
+    sourceField: ['id'],
+    destField: ['retroId'],
+    destSchema: retroAction,
+  }),
+  presence: many({
+    sourceField: ['id'],
+    destField: ['retroId'],
+    destSchema: retroPresence,
+  }),
+}))
+
+const retroColumnRelationships = relationships(retroColumn, ({ one, many }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  retro: one({
+    sourceField: ['retroId'],
+    destField: ['id'],
+    destSchema: retro,
+  }),
+  cards: many({
+    sourceField: ['id'],
+    destField: ['columnId'],
+    destSchema: retroCard,
+  }),
+  groups: many({
+    sourceField: ['id'],
+    destField: ['columnId'],
+    destSchema: retroGroup,
+  }),
+}))
+
+// No `author` relationship, deliberately: a draft's author is the caller (the query filters on the
+// verified ctx), and joining `user` here would put an identity on a row other clients must not read.
+const retroDraftRelationships = relationships(retroDraft, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  retro: one({
+    sourceField: ['retroId'],
+    destField: ['id'],
+    destSchema: retro,
+  }),
+  column: one({
+    sourceField: ['columnId'],
+    destField: ['id'],
+    destSchema: retroColumn,
+  }),
+}))
+
+const retroCardRelationships = relationships(retroCard, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  retro: one({
+    sourceField: ['retroId'],
+    destField: ['id'],
+    destSchema: retro,
+  }),
+  column: one({
+    sourceField: ['columnId'],
+    destField: ['id'],
+    destSchema: retroColumn,
+  }),
+  group: one({
+    sourceField: ['groupId'],
+    destField: ['id'],
+    destSchema: retroGroup,
+  }),
+}))
+
+const retroGroupRelationships = relationships(retroGroup, ({ one, many }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  retro: one({
+    sourceField: ['retroId'],
+    destField: ['id'],
+    destSchema: retro,
+  }),
+  column: one({
+    sourceField: ['columnId'],
+    destField: ['id'],
+    destSchema: retroColumn,
+  }),
+  cards: many({
+    sourceField: ['id'],
+    destField: ['groupId'],
+    destSchema: retroCard,
+  }),
+}))
+
+const retroVoteRelationships = relationships(retroVote, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  retro: one({
+    sourceField: ['retroId'],
+    destField: ['id'],
+    destSchema: retro,
+  }),
+}))
+
+const retroVoteTallyRelationships = relationships(retroVoteTally, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  retro: one({
+    sourceField: ['retroId'],
+    destField: ['id'],
+    destSchema: retro,
+  }),
+}))
+
+const retroActionRelationships = relationships(retroAction, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  retro: one({
+    sourceField: ['retroId'],
+    destField: ['id'],
+    destSchema: retro,
+  }),
+  // The action -> issue edge is what closes yapm's own loop: a converted action renders its issue's
+  // live status with the tracker's own status tokens.
+  issue: one({
+    sourceField: ['issueId'],
+    destField: ['id'],
+    destSchema: issue,
+  }),
+  assignee: one({
+    sourceField: ['assigneeId'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+  targetCycle: one({
+    sourceField: ['targetCycleId'],
+    destField: ['id'],
+    destSchema: cycle,
+  }),
+}))
+
+const retroPresenceRelationships = relationships(retroPresence, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  retro: one({
+    sourceField: ['retroId'],
+    destField: ['id'],
+    destSchema: retro,
+  }),
+  user: one({
+    sourceField: ['userId'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+}))
+
 export const schema = createSchema({
   tables: [
     workspace,
@@ -633,6 +994,15 @@ export const schema = createSchema({
     deployment,
     issueLink,
     cycleDigest,
+    retro,
+    retroColumn,
+    retroDraft,
+    retroCard,
+    retroGroup,
+    retroVote,
+    retroVoteTally,
+    retroAction,
+    retroPresence,
     user,
   ],
   relationships: [
@@ -655,6 +1025,15 @@ export const schema = createSchema({
     deploymentRelationships,
     issueLinkRelationships,
     cycleDigestRelationships,
+    retroRelationships,
+    retroColumnRelationships,
+    retroDraftRelationships,
+    retroCardRelationships,
+    retroGroupRelationships,
+    retroVoteRelationships,
+    retroVoteTallyRelationships,
+    retroActionRelationships,
+    retroPresenceRelationships,
   ],
   enableLegacyMutators: false,
   enableLegacyQueries: false,

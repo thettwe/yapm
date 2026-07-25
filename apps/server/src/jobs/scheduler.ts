@@ -116,7 +116,11 @@ export async function startCycleScheduler(
     }
     if (result.activated.length > 0 || result.completed.length > 0) {
       logger.info(
-        { activated: result.activated, completed: result.completed },
+        {
+          activated: result.activated,
+          completed: result.completed,
+          retrosOpened: result.retrosOpened,
+        },
         'cycle maintenance ran',
       )
     }

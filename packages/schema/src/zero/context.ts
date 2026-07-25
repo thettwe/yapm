@@ -29,6 +29,55 @@ export const PROJECT_STATUSES = ['planned', 'active', 'completed', 'cancelled'] 
 
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number]
 
+// The retro's ordered phase machine. ORDER IS LOAD-BEARING: `retro.setPhase` accepts only an
+// adjacent target (exactly one step forward or one step back), computed from this array's indices,
+// and `isRetroWriteAllowed` keys its matrix off these names. Never reorder or insert in the middle
+// without revisiting `retro/phase.ts` and its exhaustive tests.
+export const RETRO_PHASES = ['brainstorm', 'group', 'vote', 'discuss', 'actions', 'closed'] as const
+
+export type RetroPhase = (typeof RETRO_PHASES)[number]
+
+// Four starter formats, each a column-set over one board engine (columns are rows, so a custom
+// format costs no schema change — only a template-editor UI, which is deferred). The template map
+// itself lives in `retro/phase.ts`; this is the stored key.
+export const RETRO_FORMATS = [
+  'wentwell_didnt_action',
+  'start_stop_continue',
+  'mad_sad_glad',
+  '4ls',
+] as const
+
+export type RetroFormat = (typeof RETRO_FORMATS)[number]
+
+export const DEFAULT_RETRO_FORMAT: RetroFormat = 'wentwell_didnt_action'
+
+// A dot targets a group once the card has been grouped, and the card itself otherwise.
+export const RETRO_VOTE_TARGETS = ['card', 'group'] as const
+
+export type RetroVoteTarget = (typeof RETRO_VOTE_TARGETS)[number]
+
+// A column's accent is stored as a retro-SEMANTIC key, never a color literal and never a CSS
+// variable name: `packages/ui` maps each key to a theme token so the accent stays correct in
+// Warm/Focused/Editorial, light and dark, at AA.
+export const RETRO_COLUMN_ACCENTS = [
+  'positive',
+  'negative',
+  'caution',
+  'neutral',
+  'action',
+] as const
+
+export type RetroColumnAccent = (typeof RETRO_COLUMN_ACCENTS)[number]
+
+// Default vote budget: one knob, settable only during `brainstorm`, stacking allowed.
+export const DEFAULT_VOTES_PER_PARTICIPANT = 3
+export const MIN_VOTES_PER_PARTICIPANT = 1
+export const MAX_VOTES_PER_PARTICIPANT = 10
+
+// The heartbeat window the maintenance pass prunes against, and the client's heartbeat interval.
+export const RETRO_PRESENCE_STALE_MS = 5 * 60 * 1000
+export const RETRO_PRESENCE_HEARTBEAT_MS = 10 * 1000
+
 // Provider-neutral connector surface. `github` is the only v1 provider; the AI change
 // reuses this table set for BYO-key AI providers, so the accessors treat `provider` as an
 // open string rather than binding it to this list.

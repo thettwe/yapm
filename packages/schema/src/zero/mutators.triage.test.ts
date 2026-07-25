@@ -159,6 +159,9 @@ describe('issue.routeIssue', () => {
       status: 'todo',
       assigneeId: MEMBER.userID,
       cycleId,
+      // Routing into a cycle stamps the assignment moment, which is what makes the retro's
+      // "added mid-cycle" a fact rather than a `created_at` approximation.
+      cycleAssignedAt: 11,
       updatedAt: 11,
     })
     expect(calls.find((call) => call.verb === 'upsert')?.value).toEqual({

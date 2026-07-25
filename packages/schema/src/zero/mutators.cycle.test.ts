@@ -173,10 +173,10 @@ describe('cycle.complete rollover', () => {
       { id: 'c2', teamId: TEAM_ID, status: 'upcoming', number: 2, startDate: 200 },
     ]
     const issues = [
-      { id: 'i1', status: 'todo' },
-      { id: 'i2', status: 'done' },
-      { id: 'i3', status: 'in_progress' },
-      { id: 'i4', status: 'canceled' },
+      { id: 'i1', status: 'todo', carryoverCount: 0 },
+      { id: 'i2', status: 'done', carryoverCount: 0 },
+      { id: 'i3', status: 'in_progress', carryoverCount: 1 },
+      { id: 'i4', status: 'canceled', carryoverCount: 0 },
     ]
     const { tx, calls } = fakeTx([cycleRow({}), cycles, issues])
     await mutators.cycle.complete.fn({ tx, args: { id: 'c1', updatedAt: 500 }, ctx: ADMIN })
@@ -192,18 +192,28 @@ describe('cycle.complete rollover', () => {
       expect(call.table).toBe('issue')
       expect(call.value.cycleId).toBe('c2')
       expect(call.value.rolledOverFromCycleId).toBe('c1')
+      expect(call.value.cycleAssignedAt).toBe(500)
     }
+    // Each carry increments the count, which is what makes "carried twice or more" a fact.
+    expect(moved.map((c) => c.value.carryoverCount)).toEqual([1, 2])
   })
 
   it('unassigns unfinished issues when no open successor exists', async () => {
     const cycles = [cycleRow({})]
-    const issues = [{ id: 'i1', status: 'todo' }]
+    const issues = [{ id: 'i1', status: 'todo', carryoverCount: 0 }]
     const { tx, calls } = fakeTx([cycleRow({}), cycles, issues])
     await mutators.cycle.complete.fn({ tx, args: { id: 'c1', updatedAt: 9 }, ctx: ADMIN })
     expect(calls[1]).toEqual({
       table: 'issue',
       verb: 'update',
-      value: { id: 'i1', cycleId: null, rolledOverFromCycleId: 'c1', updatedAt: 9 },
+      value: {
+        id: 'i1',
+        cycleId: null,
+        rolledOverFromCycleId: 'c1',
+        carryoverCount: 1,
+        cycleAssignedAt: 9,
+        updatedAt: 9,
+      },
     })
   })
 
@@ -235,7 +245,11 @@ describe('issue.setCycle', () => {
       ctx: ADMIN,
     })
     expect(calls).toEqual([
-      { table: 'issue', verb: 'update', value: { id: 'i1', cycleId: 'c1', updatedAt: 3 } },
+      {
+        table: 'issue',
+        verb: 'update',
+        value: { id: 'i1', cycleId: 'c1', cycleAssignedAt: 3, updatedAt: 3 },
+      },
     ])
   })
 
@@ -263,7 +277,11 @@ describe('issue.setCycle', () => {
       ctx: ADMIN,
     })
     expect(calls).toEqual([
-      { table: 'issue', verb: 'update', value: { id: 'i1', cycleId: null, updatedAt: 3 } },
+      {
+        table: 'issue',
+        verb: 'update',
+        value: { id: 'i1', cycleId: null, cycleAssignedAt: null, updatedAt: 3 },
+      },
     ])
   })
 })

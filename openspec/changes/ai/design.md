@@ -1,0 +1,124 @@
+# ai — design
+
+The verified SDK surface (Vercel AI SDK v7 `ai` 7.0.37 + `@ai-sdk/{anthropic,google,openai}` 4.0.x, all Apache-2.0; `runAgent`/tool loop shapes, `generateObject` typed output, `needsApproval`/`toolApproval` HITL, `stepCountIs`, the mock provider, and the volatile model/price tables) is in [`reference/ai-providers.md`](../../../reference/ai-providers.md); the build plan (the #9-vs-features split, the agent-as-actor model, the substrate, the injection architecture, the cycle-digest MVP scope) is in [`reference/research/ai-layer-plan.md`](../../../reference/research/ai-layer-plan.md); the digest content design is in [`reference/research/pmdigest-ai-design.md`](../../../reference/research/pmdigest-ai-design.md). Read those first — they are the source of truth for every SDK/model fact and design rationale cited here. This document decides how yapm assembles the primitives.
+
+## Context
+
+`connectors` (#8) shipped exactly the substrate #9 reuses: (a) a provider-neutral, **server-only** secrets/config surface — `connector_config` (per-workspace/per-provider `enabled` + `config` jsonb + status), `connector_secret` (AES-256-GCM `v1.<iv>.<tag>.<ciphertext>`, decrypted only in `apps/server`), whose accessors "treat `provider` as an open string" precisely so AI reuses them (`packages/schema/src/db/connector.ts`, `context.ts` comment); (b) the linked work graph (`pull_request`/`ci_check`/`review`/`deployment`/`issue_link`, team-scoped, synced) the digest reads; (c) the pg-boss cycle-maintenance scheduler that already drives `cycle.complete` on cycle close (`apps/server/src/jobs/{scheduler,cycles}.ts`) with a `SYSTEM_CTX = { userID: 'system', role: 'admin' }` system principal; (d) the `SecretCodec`, `SECRETS_ENCRYPTION_KEY` env, and the optional-env-disables-cleanly pattern (`optionalString`, `githubAppEnv`).
+
+The AuthContext + mutator/query authz model the agent rides on already exists and enforces server-side: `AuthContext { userID, role }`, `canWrite`/`canManage`, every mutator asserting against `ctx` with identity always from `ctx` (never args), `defineMutator(zodArgs, fn)` with exported arg schemas (`renameWorkspaceArgs`, `createIssueArgs`, …), `defineMutators({...})`, and `denyAll` on non-member queries.
+
+The constraints that bind this change: three containers (all AI runs in-process; pre-compute on the existing pg-boss; no Redis/new service); ZQL + mutators only in `packages/schema` (SDK calls + keys in `apps/server`); client-minted UUIDv7 at the call site; team-level metrics only (**schema-level** here); free-means-free (AI is BYO-key, never paywalled); Zod-validated optional env, absent ⇒ disabled; Biome; extend the drift test; the stack postdates training (verify Zero/SDK signatures against installed `.d.ts`).
+
+## Goals / Non-Goals
+
+**Goals:**
+- One swappable gateway seam (`runAgent`/`generateStructured`/`resolveModel`) wrapping the AI SDK, per-workspace BYO-key from the reused connector surface, absent ⇒ AI disabled and boot never crashes.
+- The agent-as-actor model: tools = mutators under the invoking user's `AuthContext` (the role ceiling is the primary injection defense), reads auto-run, writes `needsApproval`-gated HITL, bounded + audited server-side loop.
+- The shared substrate + injection architecture built **once**, proven by the digest: team-scoped narrowed query → grounded cite-or-omit typed output → evidence links → numbers-by-yapm → AI-off fallback; no egress, structured-only, team-level aggregation, name-validator.
+- A team-internal, read-only cycle digest pre-computed at cycle close, evidence-linked, keyboard-first, tokenized across all three themes, with a raw-evidence AI-off fallback.
+- Everything tested against the SDK mock provider — no live model call in CI.
+
+**Non-Goals:** the governed PM permission bridge, the retro features, auto-applied writes (HITL only), streaming digest UI, managed/hosted agent loops, a second secret store, any per-individual metrics table. See proposal Non-goals.
+
+## Decisions
+
+### 1. Gateway wrapper shape — three functions, AI SDK behind one seam
+
+All `ai`-package calls sit behind a narrow `apps/server` module (`src/ai/gateway.ts`) whose typed contract (input/output schemas, tool/registry types) lives in `packages/schema` so nothing UI- or SDK-shaped leaks into feature code — mirroring TECHSTACK's Zero-wrapping discipline. The seam exposes exactly:
+
+- `resolveModel(workspaceId, provider?) → { model, providerId, modelId } | null` — reads the workspace's `ai` `connector_config` + decrypts the provider key from `connector_secret`, constructs `createAnthropic({apiKey})` / `createGoogleGenerativeAI({apiKey})` / `createOpenAI({apiKey})` **per request from the decrypted secret** (never env-cached, never a browser-reachable place), and returns the configured `LanguageModel`. Returns `null` when AI is disabled/unconfigured for that workspace (callers then take the AI-off path).
+- `generateStructured(workspaceId, userCtx, { system, input, schema }) → { object, usage, cost }` — the substrate's grounded typed-output call (`generateObject` with a Zod schema); the digest's only entry point. Mounts **no tools** and leaves every provider-side external tool off.
+- `runAgent(workspaceId, userCtx, { system, messages, tools, activeTools }) → { messages, usage, cost, approvals }` — the tool-calling loop (`generateText` + `tool(...)` + `stopWhen: stepCountIs(n)`), bounded, HITL-gated (§3). Built and tested as foundation; the flagship digest does **not** use it (read-only, structured-only).
+
+The AI SDK is the gateway core (unifies text/tools/streaming/structured output across all three providers, all Apache-2.0, reuses yapm's Zod). Documented escape hatch: drop to the raw first-party SDK if `providerOptions` passthrough ever fights a needed per-provider feature; the LCD surface (text/tools/structured) is uniform, the tail is not fully typed.
+
+*Alternatives considered:* a hand-written three-adapter port behind a `LanguageModelPort` (rejected now — spends the velocity the AI SDK exists to save, no license/lock-in upside; kept as the documented fallback); Managed Agents / OpenAI-compat shims / LangChain (rejected — break self-hosted-acts-via-yapm-mutators, or heavy trees).
+
+### 2. Reuse the connector secrets surface — one `ai` config row + per-provider secret rows, no new table
+
+AI config is one `connector_config` row per workspace with `provider = "ai"`: the row's `enabled` column is the master AI toggle; its `config` jsonb holds `{ defaultProvider, models: { anthropic?, google?, openai? }, spendCapUsd? }`. Each provider's API key is a `connector_secret` under that config, `key ∈ { "anthropic", "google", "openai" }`, encrypted with the existing `SecretCodec`. This adds **no table, no crypto, no container** — it reuses `upsertConnectorConfig`/`getConnectorConfig`/`setConnectorSecret`/`getConnectorSecret`/`getRedactedConnectorStatus` verbatim (the accessors are already provider-agnostic and admin-gated). The single most important rule falls out for free: the key is read only in `apps/server`, decrypted into memory for one call, and **never enters a Zero-synced query or the SPA bundle** (the connector tables are excluded from the Zero schema). A provider with no stored key is simply absent from the picker; the master toggle off or no key at all ⇒ no agent tools mount, the AI UI is hidden, and every consumer shows its AI-off fallback.
+
+*Alternative considered:* a bespoke `ai_config`/`ai_secret` table pair (rejected — duplicates the connector surface the reference and #8 explicitly reserved for this).
+
+### 3. Agent-as-actor: tools = mutators under the caller's ceiling, writes HITL-gated
+
+One AI-SDK `tool` per yapm mutator; `inputSchema` **is** the mutator's existing exported Zod args schema (`createIssueArgs`, `setIssueStatusArgs`, …) — no parallel schema. The registry is **generated from `defineMutators`** so the model can never call anything a human couldn't. `execute` calls the *same* mutator function the human UI calls, inside one Zero transaction, passing an `AuthContext` **derived from the invoking user** → the role ceiling is automatic: a viewer's agent gets a viewer ctx → every write mutator throws → read-but-not-mutate; a member's agent writes but cannot manage. Identity is taken from `ctx`, never from model output. Reads are exposed as read-only tools over the named `queries`, each under `ctx` so `denyAll` masks out-of-scope data. **Writes default to `needsApproval: true`** → the loop pauses on a `ToolApprovalRequest` the user confirms in-UI before it runs; reads auto-run. Least-privilege per task via `activeTools` (a "summarize this cycle" run gets read tools only, never `member.changeRole`). The loop runs server-side on pg-boss bounded by `stepCountIs`; every agent-initiated mutation is audited (actor = agent, on-behalf-of = user). Client-minted UUIDv7s for any agent-created row are minted at the tool `execute` call site, never inside the mutator body (mutators re-run on rebase).
+
+Deferred (not required for v1 correctness): an optional `agentScopes` narrowing *below* the human's role. The flagship digest exercises none of the write path — it is read-only — so HITL is proven by tests (viewer-ctx agent cannot write; a write tool surfaces an approval request), not by a shipping write feature.
+
+### 4. The substrate contract — team-scoped query → cite-or-omit typed output → evidence → AI-off
+
+Built once as shared infra the digest (and later the retro/PM-bridge) template on:
+
+1. **Team-scoped narrowed query.** A dedicated `cycleFactsForTeam(teamId, cycleId)` read that emits **team-level aggregates only** — counts (shipped/carried/added-mid-cycle), CI conclusions, review medians, per-issue evidence bundles (issue + linked PR titles/labels + check conclusions + deploy state) — **with no `assignee`/`author`/`reviewer`/`user_id` dimension.** A separate, narrower shape than the general work-graph read, reusing yapm's already-team-level metric computations, so "team-level only" is inherited by construction.
+2. **Grounded, typed structured output — cite-evidence-or-omit.** Output is a Zod-typed object via `generateStructured` (sections + per-item `{ kind, summary, evidenceRefs[], confidence }`). A deterministic validator **rejects any item with empty `evidenceRefs`** — a claim the model cannot attach to a linked signal is dropped, enforceable *because* output is schema-typed.
+3. **Evidence links to work-graph entities.** Each emitted item links its issue/PR/check/deploy entity id (the reader opens it), never raw code. Trust = one-click verifiability.
+4. **Numbers computed by yapm, not the model.** Counts, labels, CI conclusions, review medians are computed by `cycleFactsForTeam`; the model only narrates them. Each item carries `confidence: high|medium|low`.
+5. **Graceful AI-off fallback (mandatory for every consumer).** AI off / no key / outage / spend-cap → render the raw linked evidence (issues + linked PRs + CI/deploy status + scope delta) as a plain evidence table — strictly more than the reader has today, never blocking. The AI narrative is an enhancement layer on a surface that stands alone.
+
+### 5. The injection architecture — break the lethal trifecta structurally, not by prompting
+
+Baked into the substrate (not per-feature policy), since the moment the AI reads attacker-influenceable text (PR bodies, commit messages, comments, CI logs from connectors) the lethal trifecta is live:
+
+- **No outbound network egress from the AI step.** The pipeline mounts no external-communication tools (no web/fetch/email/HTTP) and leaves every provider-side tool off (`urlContext`, `googleSearch`, `codeExecution`, `mcpServers`, `computerUse`). Output goes only to the in-yapm typed artifact. (Removes the exfiltration leg.)
+- **Structured output only.** A fixed Zod schema — no free-form channel to smuggle instructions-as-output.
+- **Numbers computed by yapm** (§4.4) — the model narrates verified facts, never originates consequential data.
+- **Team-level aggregation ⇒ structurally cannot name an individual.** The identity dimension is never in the model's context (§4.1); a deterministic **name-validator** rejects any output containing a workspace member's name/handle before it is shown, as a backstop.
+- **Permission ceiling is the primary defense** (§3): a fully injected agent can only do what the invoking user could, and writes are `needsApproval`-gated → worst case is a bad paragraph, never a bad action.
+- **External text is delimited, labeled untrusted data** — never concatenated into the system prompt as instructions; trusted operator authority uses the non-spoofable system channel only.
+- **Render-safety:** the artifact UI never auto-loads remote images/links from summarized content (the Markdown-image exfil class) — sanitized on render.
+
+### 6. The cycle-digest MVP — team-internal, read-only, pre-computed at cycle close
+
+The flagship is the cheapest complete exerciser of the whole pipeline and is deliberately **minimal**: **read-only** (it reads + summarizes; no mutator writes — proving the read pipeline + structured output + injection architecture without the HITL-write path) and **team-internal** (visible to the team that owns the cycle under the ordinary role ceiling — needs no disclosure model, no redaction, no `system` principal). It is a new team-scoped, Zero-synced `cycle_digest` artifact:
+
+- **Entity:** `cycle_digest` hangs off `cycle` (off `team`): `id`, `team_id`, `cycle_id`, `status ∈ {pending, ready, failed, ai_off}`, `content` jsonb (the typed sections + evidence-linked items), `model`, `provider`, `generated_at`, `input_token`/`output_token`, `estimated_cost_usd`. Team-scoped sync + permissions exactly like the other work-data entities (`whereExists` over the team roster, deny-by-empty, viewers read). It is **client-read-only**: never written by a client Zero mutator — the pre-compute job writes it server-side over the Zero `Transaction` write path (the `applyWorkGraphMutation` precedent), so a client can never forge a digest and the "numbers by yapm" guarantee holds.
+- **Pre-compute:** on cycle close, the existing pg-boss cycle-maintenance pass (which already calls `cycle.complete`) enqueues a digest job for the completed cycle under the `SYSTEM_CTX` system principal. The job runs `cycleFactsForTeam` → `generateStructured` (or, AI off / no key / spend-cap, writes an `ai_off` row) → validates (cite-or-omit + name-validator) → writes the `cycle_digest`. Bounded + rate-limited per workspace; nowhere near the sub-100ms interaction budget (it is batch, off the hot path). So the artifact is ready when the completed cycle is opened — the click feels instant.
+- **Render:** the cycle view shows the digest (evidence links open the issue/PR), the AI-generated + model + estimated-cost framing, and — when `status = ai_off` or absent — the raw linked-evidence table. Keyboard-first, tokenized across all three presets in light + dark.
+
+### 7. Model IDs/prices are volatile — a runtime table, never a constant
+
+`resolveModel` never hardcodes an ID. The admin picks a model per configured provider (validated live against the provider's models list at config time where available). A small, easy-to-update server-side **model+price table** drives spend estimation (usage × price), labeled "estimated"; a per-workspace running total accumulates; the optional `spendCapUsd` refuses to start a run past it. Default a workspace to a cheap/fast model (digest drafting is a bounded summarize-and-structure task).
+
+### 8. Optional AI env disables cleanly, mirroring connectors
+
+New env, all optional (`optionalString`): `AI_ANTHROPIC_API_KEY` / `AI_GOOGLE_API_KEY` / `AI_OPENAI_API_KEY` (instance-default provider keys for single-instance self-host that prefers env over DB-resident secrets, mirroring `githubAppEnv`), `AI_DEFAULT_PROVIDER` (which of the three is the instance default), and `AI_DIGEST_ON_CYCLE_CLOSE` (`true`/`false`, default `true`) gating the pre-compute job. UI-entered keys still use the existing `SECRETS_ENCRYPTION_KEY`. Absent all keys + no UI config ⇒ AI disabled: no gateway constructed for that workspace, no agent tools mount, the digest job writes `ai_off` (or is not scheduled), the AI UI shows "not configured" naming the vars, and boot never crashes. A configured provider with a malformed key fast-fails by name at use, not boot (keys are per-workspace/runtime).
+
+### 9. Testing against the SDK mock provider
+
+Every tier uses the AI SDK's mock provider (recorded responses) — no live model calls, no key needed to build/test, mirroring connectors' mocked-GitHub strategy. Unit: `resolveModel` selection, cite-or-omit validator, name-validator, spend math, tool-registry generation over `defineMutators`, tool-ceiling predicates, `cycleFactsForTeam` emits no identity dimension. Integration (live PG + zero-cache): admin config authz end-to-end, "key never in a synced query" assertion, agent-under-viewer-ctx cannot write, a write tool surfaces an approval request, the digest pre-compute job writes a team-scoped row from mocked model output. E2E (Playwright, mock provider): admin configures a key → toggles on → opens a completed cycle → sees the digest with evidence links; toggle off → AI-off evidence fallback renders; full keyboard flow; all three themes.
+
+## Risks / Trade-offs
+
+- **[Prompt injection via ingested PR/commit text]** → broken architecturally (§5): no egress + structured-only + numbers-by-yapm + team-level aggregation + name-validator + permission ceiling + `needsApproval` + `stepCountIs` + delimited untrusted text + render-safety. Residual (injection can bias the *narrative*) is contained to the accuracy problem, never a leak or an action.
+- **[Hallucinated "what shipped"]** → cite-evidence-or-omit + numbers-by-yapm + confidence flags + one-click verify; worst case is a wrong sentence the reader can disprove, never a wrong action (digest is read-only).
+- **[Cost surprise on the user's key]** → cheap-model default, estimated per-run + running-total display, optional spend cap; the batch/bounded nature keeps runs small; BYO-key means the user always controls spend.
+- **[Model-ID/price volatility]** → resolve live, updatable server-side table, labels "estimated"; never a constant (§7).
+- **[`providerOptions` passthrough tail not fully typed]** → validate the specific per-provider options used against each adapter's `*ProviderOptions` type; keep the raw-SDK escape hatch (§1).
+- **[Key leaking to a client]** → the connector secret tables are server-only/excluded from Zero; keys are decrypted only in `apps/server` for one call; an integration test asserts no synced query ever returns key material.
+- **[Digest job blocking / slow model call]** → runs on pg-boss off the hot path, bounded by `stepCountIs`, rate-limited per workspace; a failed run writes a `failed` row and the surface falls back to raw evidence — never blocks opening a cycle.
+
+## Migration Plan
+
+Forward-only migration `0010_ai` adds the single team-scoped `cycle_digest` table (synced) and its Zero schema entry; the drift test is extended. No new secrets table (AI config/keys reuse `connector_config`/`connector_secret`). No data backfill — digests are produced only when AI is configured and a cycle closes. With AI env absent and no UI config — the default — the change is inert: cycles complete exactly as before, the cycle view shows the raw-evidence fallback (or nothing new), boot is unaffected. Rollback is dropping `cycle_digest` (nothing else depends on it) and removing the catalog SDK deps.
+
+## Open Questions
+
+- **Exact `runAgent` HITL wiring** (`toolApproval` config vs per-tool `needsApproval` predicate, and how an approval round-trips through a pg-boss job vs an interactive Hono request) — resolve at implementation, unit-tested either way; the digest does not exercise it.
+- **Whether the model+price table ships as a checked-in JSON updated per release or is partly pulled from provider pricing endpoints** — start checked-in + easy to update (reference §4c); revisit if a provider exposes a stable pricing API.
+- **Name-validator matching strategy** (exact handle/display-name set from the workspace roster vs fuzzy) — start with the exact member name/handle set (deterministic, no false blocks on common words); tune with a feedback log later.
+- **Whether `cycleFactsForTeam` lives as a Zero synced query or a server-only Kysely read** — it feeds a server-side pg-boss job (no client), so a server-only read is simplest, but a synced-query shape would let an on-demand interactive variant reuse it; decide at implementation, keeping it in `packages/schema` either way.
+
+## Decisions made during implementation
+
+*(Gateway phase — the gateway + config + admin UI. The substrate `cycleFactsForTeam`/validators, the `cycle_digest` migration/sync, the pre-compute job, and the cycle-view render are later phases.)*
+
+- **Gateway is a factory with an injectable model factory.** `createAiGateway(deps)` returns `{ resolveModel, generateStructured, runAgent }`; `deps.modelFactory` defaults to constructing `createAnthropic`/`createGoogleGenerativeAI`/`createOpenAI` from the decrypted key, and is overridden in tests to return the SDK `MockLanguageModelV4` — so build/test needs no live call or key (constraint honored). Ambiguity resolved toward testability without leaking the `ai` package into feature code.
+- **AI-off is a `null` return, not a thrown error.** `resolveModel`/`generateStructured`/`runAgent` return `null` when AI is disabled/unconfigured, so every consumer takes its raw-evidence AI-off path uniformly. Spend-cap breach is the one deliberate throw (`AiSpendCapError`).
+- **Key precedence + env-only enable.** A per-workspace UI key (requires the codec) wins over the instance-default env key for the same provider. An `AI_DEFAULT_PROVIDER` env key alone enables AI even with no DB config row (single-instance self-host that prefers env over DB secrets), mirroring `githubAppEnv`.
+- **Spend: math + cap-refusal in the gateway; running-total accumulation is the consumer's.** `model-catalog.ts` holds the checked-in, clearly-volatile price table + pure `estimateCostUsd`/`exceedsSpendCap`; the gateway surfaces per-run `estimatedCostUsd` and refuses a run when a caller-provided `spendSoFarUsd` ≥ the cap. Persisting/accumulating the per-workspace running total is wired at the consumer (the digest pre-compute job), a later phase — the gateway provides the mechanism, not the store.
+- **Model IDs stay free strings.** `AiProvider = anthropic|google|openai` is enumerated in `context.ts`, but the per-provider chosen model is `z.partialRecord(provider, string)` and the admin UI is a text field — model IDs are runtime config, never a hardcoded dropdown (volatile per reference/ai-providers.md).
+- **Tool registry split: pure metadata in `packages/schema`, SDK wrapping in `apps/server`.** `zero/ai-tools.ts` derives one `MutatorToolSpec` per mutator from the `defineMutators` registry (paired with the mutator's own exported Zod args schema + a write/destructive classification), throwing on any coverage gap (a unit test asserts the throw never fires). `apps/server/src/ai/tools.ts` (`buildAgentTools`) wraps each spec in an AI-SDK `tool()` with `needsApproval`, mints call-site UUIDv7/timestamps, runs the mutator under the invoking `ctx` in a Zero transaction, and audits — keeping all `ai`-package imports out of `packages/schema`.
+- **Read-over-query tools deferred.** The injection-critical write path (agent-as-actor under the ceiling, HITL) is wired as foundation; exposing the named `queries` as auto-run read tools (running Zero queries server-side) is left to the agent/substrate phase. The digest flagship is read-only and structured-only, so it exercises neither.
+- **Admin surface + codec construction.** AI admin routes live at `/api/v1/ai`, mirroring the connectors admin surface and its `requireAdmin` middleware. The shared `SecretCodec` is constructed once in `index.ts` from `SECRETS_ENCRYPTION_KEY` and passed to the AI admin routes (and available to the gateway); absent codec ⇒ UI keys cannot be stored (the key route returns 400 and the UI shows a "set SECRETS_ENCRYPTION_KEY" notice), while env-default keys still work.

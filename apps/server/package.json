@@ -12,12 +12,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "catalog:",
+    "@ai-sdk/google": "catalog:",
+    "@ai-sdk/openai": "catalog:",
     "@better-auth/sso": "catalog:",
     "@hono/node-server": "catalog:",
     "@octokit/auth-app": "catalog:",
     "@octokit/webhooks": "catalog:",
     "@rocicorp/zero": "catalog:",
     "@yapm/schema": "workspace:*",
+    "ai": "catalog:",
     "better-auth": "catalog:",
     "hono": "catalog:",
     "jose": "catalog:",

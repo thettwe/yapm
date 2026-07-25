@@ -36,6 +36,14 @@ export const CONNECTOR_PROVIDERS = ['github'] as const
 
 export type ConnectorProvider = (typeof CONNECTOR_PROVIDERS)[number]
 
+// The BYO-key AI providers the gateway can construct. Stored as the `key` of a
+// `connector_secret` under the single `provider = "ai"` connector_config row (the AI change
+// reuses the connector surface — no new table). Model IDs are runtime config, never enumerated
+// here (they are volatile — see reference/ai-providers.md).
+export const AI_PROVIDERS = ['anthropic', 'google', 'openai'] as const
+
+export type AiProvider = (typeof AI_PROVIDERS)[number]
+
 export const CONNECTOR_STATUSES = ['disabled', 'pending', 'connected', 'error'] as const
 
 export type ConnectorStatus = (typeof CONNECTOR_STATUSES)[number]

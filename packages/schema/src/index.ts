@@ -1,5 +1,18 @@
 export { newId } from './id.js'
 export type {
+  ActiveToolOptions,
+  AgentAuditEntry,
+  MutatorToolSpec,
+  ToolKind,
+} from './zero/ai-tools.js'
+export {
+  activeMutatorTools,
+  agentAuditEntry,
+  buildMutatorToolSpecs,
+  mutatorToolNames,
+  needsApproval,
+} from './zero/ai-tools.js'
+export type {
   ConnectorContext,
   ConnectorDefinition,
   ConnectorHeaders,
@@ -8,6 +21,7 @@ export type {
   NormalizedDelivery,
 } from './zero/connector-framework.js'
 export type {
+  AiProvider,
   AuthContext,
   CiConclusion,
   ConnectorConfigData,
@@ -29,6 +43,7 @@ export type {
   WorkspaceRole,
 } from './zero/context.js'
 export {
+  AI_PROVIDERS,
   CI_CONCLUSIONS,
   CONNECTOR_LINK_SOURCES,
   CONNECTOR_PROVIDERS,

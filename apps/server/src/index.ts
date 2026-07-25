@@ -3,16 +3,19 @@ import { newId } from '@yapm/schema'
 import {
   assertReplicationHealthy,
   createDatabase,
+  createSecretCodec,
   lookupWorkspaceRole,
   migrateToLatest,
   pingDatabase,
   readReplicationStatus,
+  type SecretCodec,
   seedWorkspace,
 } from '@yapm/schema/db'
+import { createAiAdminRoutes } from './ai/admin-routes.js'
 import { createApp } from './app.js'
 import { createAuth } from './auth.js'
 import { createAuthRoutes } from './auth-routes.js'
-import { type Env, EnvValidationError, githubAppEnv, loadEnv } from './config/env.js'
+import { aiEnv, type Env, EnvValidationError, githubAppEnv, loadEnv } from './config/env.js'
 import { createConnectorAdminRoutes } from './connectors/admin-routes.js'
 import { createGithubConnector, githubConnector } from './connectors/github/index.js'
 import { createGithubWebhookRoute } from './connectors/github/routes.js'
@@ -126,6 +129,20 @@ async function main(): Promise<void> {
     githubMissingEnv,
   })
 
+  // The shared encrypted-secrets codec (reused for AI provider keys). Absent when
+  // SECRETS_ENCRYPTION_KEY is unset — UI-entered keys can't be stored, but env-default keys work.
+  const secretCodec: SecretCodec | null = env.SECRETS_ENCRYPTION_KEY
+    ? createSecretCodec(env.SECRETS_ENCRYPTION_KEY)
+    : null
+
+  const aiAdmin = createAiAdminRoutes({
+    auth,
+    db: database.db,
+    logger,
+    codec: secretCodec,
+    env: aiEnv(env),
+  })
+
   let cycleScheduler: CycleScheduler | undefined
   if (env.CYCLE_MAINTENANCE === 'true') {
     try {
@@ -152,6 +169,7 @@ async function main(): Promise<void> {
     authRoutes: createAuthRoutes({ auth, db: database.db, env, logger }),
     githubWebhook,
     connectorAdmin,
+    aiAdmin,
     zero: {
       dbProvider,
       resolveContext: createSessionContextResolver({

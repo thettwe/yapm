@@ -1,5 +1,22 @@
 export type { SecretCodec } from '../secrets/codec.js'
 export { createSecretCodec, decodeEncryptionKey, SecretCodecError } from '../secrets/codec.js'
+export type {
+  AiConfig,
+  AiConfigData,
+  RedactedAiStatus,
+  SetAiProviderKeyOptions,
+  UpsertAiConfigOptions,
+} from './ai-config.js'
+export {
+  AI_CONNECTOR_PROVIDER,
+  aiConfigDataSchema,
+  getAiConfig,
+  getAiProviderKey,
+  getRedactedAiStatus,
+  listConfiguredAiProviders,
+  setAiProviderKey,
+  upsertAiConfig,
+} from './ai-config.js'
 export type { Database, DatabaseOptions } from './client.js'
 export { createDatabase, pingDatabase } from './client.js'
 export type {

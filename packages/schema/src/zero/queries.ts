@@ -197,6 +197,17 @@ export const queries = defineQueries({
       teamScoped(zql.saved_view.where('teamId', args.teamId).orderBy('createdAt', 'asc'), ctx),
     ),
   },
+  digests: {
+    // Team-scoped, client-read-only cycle digests (written server-side only). A non-member gets an
+    // empty result via `teamScoped`; viewers read (the digest is team-internal under the ordinary
+    // role ceiling). `byCycle` narrows to one cycle for the cycle view; `byTeam` lists them.
+    byCycle: defineQuery(z.object({ cycleId: z.string() }), ({ args, ctx }) =>
+      teamScoped(zql.cycle_digest.where('cycleId', args.cycleId), ctx).one(),
+    ),
+    byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
+      teamScoped(zql.cycle_digest.where('teamId', args.teamId).orderBy('generatedAt', 'desc'), ctx),
+    ),
+  },
 })
 
 export const WORKSPACE_CURRENT_QUERY_NAME = 'workspace.current'
@@ -215,3 +226,5 @@ export const TRIAGE_INBOX_QUERY_NAME = 'triage.inbox'
 export const LABELS_BY_TEAM_QUERY_NAME = 'labels.byTeam'
 export const DEPLOYMENTS_BY_TEAM_QUERY_NAME = 'deployments.byTeam'
 export const SAVED_VIEWS_BY_TEAM_QUERY_NAME = 'savedViews.byTeam'
+export const DIGESTS_BY_CYCLE_QUERY_NAME = 'digests.byCycle'
+export const DIGESTS_BY_TEAM_QUERY_NAME = 'digests.byTeam'

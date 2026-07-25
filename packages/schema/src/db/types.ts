@@ -4,6 +4,7 @@ import type {
   ConnectorConfigData,
   ConnectorLinkSource,
   ConnectorStatus,
+  CycleDigestStatus,
   CycleStatus,
   DeploymentState,
   IssueGrouping,
@@ -16,6 +17,7 @@ import type {
   ThemePreset,
   WorkspaceRole,
 } from '../zero/context.js'
+import type { DigestContent } from '../zero/digest.js'
 import type { IssueFilter, IssueSort } from '../zero/filter.js'
 
 export type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>
@@ -328,6 +330,26 @@ export interface IssueLinkTable {
   created_at: Generated<Timestamp>
 }
 
+// The team-scoped, Zero-synced cycle-digest artifact (change 9). Written ONLY by the server-side
+// pre-compute job over the Zero write path (never a client mutator). `content` holds the typed
+// digest blob (null until ready / when AI is off); `estimated_cost_usd` is float8 (labeled
+// "estimated"). No `assignee`/`author`/`user_id` dimension — the blameless guarantee is schema-level.
+export interface CycleDigestTable {
+  id: string
+  team_id: string
+  cycle_id: string
+  status: Generated<CycleDigestStatus>
+  content: JsonOrNull<DigestContent>
+  provider: Nullable<string>
+  model: Nullable<string>
+  generated_at: TimestampOrNull
+  input_token: Nullable<number>
+  output_token: Nullable<number>
+  estimated_cost_usd: Nullable<number>
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
 // Owned by better-auth (created by its `getMigrations()` at boot), read-only here so
 // mutators/queries can join member profiles. camelCase columns and a `text` id are
 // better-auth's shape (reference/kysely-stack.md §5.4), not ours to change.
@@ -365,6 +387,7 @@ export interface DB {
   review: ReviewTable
   deployment: DeploymentTable
   issue_link: IssueLinkTable
+  cycle_digest: CycleDigestTable
   user: UserTable
 }
 
@@ -452,5 +475,9 @@ export type DeploymentUpdate = Updateable<DeploymentTable>
 
 export type IssueLink = Selectable<IssueLinkTable>
 export type NewIssueLink = Insertable<IssueLinkTable>
+
+export type CycleDigest = Selectable<CycleDigestTable>
+export type NewCycleDigest = Insertable<CycleDigestTable>
+export type CycleDigestUpdate = Updateable<CycleDigestTable>
 
 export type User = Selectable<UserTable>

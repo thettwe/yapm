@@ -6,16 +6,16 @@
 ## 2. Schema: config reuse, digest entity, drift
 
 - [x] 2.1 Add typed AI-config helpers in `packages/schema` that read/write the `provider = "ai"` `connector_config` row (`{ enabled, defaultProvider, models, spendCapUsd }`) and per-provider `connector_secret` keys through the EXISTING connector accessors — no new table, no new crypto.
-- [ ] 2.2 Forward-only migration `0010_ai` adding the team-scoped, synced `cycle_digest` table (`id`, `team_id`, `cycle_id`, `status`, `content` jsonb, `provider`, `model`, `generated_at`, `input_token`, `output_token`, `estimated_cost_usd`); add it to the hand-written `DB` interface and the Zero schema; the app boots and migrates cleanly.
-- [ ] 2.3 Extend the schema-drift test to cover `cycle_digest`; confirm the AI secret/config rows remain excluded from the Zero schema (reused connector tables).
-- [ ] 2.4 Add the team-scoped synced query for `cycle_digest` (membership `whereExists`, deny-by-empty, viewers read) and a server-only accessor to write it over the authoritative write path (client-read-only, no client mutator).
+- [x] 2.2 Forward-only migration `0010_ai` adding the team-scoped, synced `cycle_digest` table (`id`, `team_id`, `cycle_id`, `status`, `content` jsonb, `provider`, `model`, `generated_at`, `input_token`, `output_token`, `estimated_cost_usd`); add it to the hand-written `DB` interface and the Zero schema; the app boots and migrates cleanly.
+- [x] 2.3 Extend the schema-drift test to cover `cycle_digest`; confirm the AI secret/config rows remain excluded from the Zero schema (reused connector tables).
+- [x] 2.4 Add the team-scoped synced query for `cycle_digest` (membership `whereExists`, deny-by-empty, viewers read) and a server-only accessor to write it over the authoritative write path (client-read-only, no client mutator).
 
 ## 3. Schema: substrate contract (typed output, validators, team-facts query)
 
-- [ ] 3.1 Define the typed digest output schema (sections + per-item `{ kind, summary, evidenceRefs[], confidence }`) as a Zod schema in `packages/schema`.
-- [ ] 3.2 Implement the cite-evidence-or-omit validator (drops any item with empty `evidenceRefs`) as a pure function.
-- [ ] 3.3 Implement the deterministic name-validator (rejects output naming a workspace member's name/handle) as a pure function taking the roster.
-- [ ] 3.4 Implement `cycleFactsForTeam(teamId, cycleId)` emitting team-level aggregates + per-issue evidence bundles with NO assignee/author/reviewer/user dimension, reusing existing team-level metric computations; numbers computed here, not by any model.
+- [x] 3.1 Define the typed digest output schema (sections + per-item `{ kind, summary, evidenceRefs[], confidence }`) as a Zod schema in `packages/schema`.
+- [x] 3.2 Implement the cite-evidence-or-omit validator (drops any item with empty `evidenceRefs`) as a pure function.
+- [x] 3.3 Implement the deterministic name-validator (rejects output naming a workspace member's name/handle) as a pure function taking the roster.
+- [x] 3.4 Implement `cycleFactsForTeam(teamId, cycleId)` emitting team-level aggregates + per-issue evidence bundles with NO assignee/author/reviewer/user dimension, reusing existing team-level metric computations; numbers computed here, not by any model.
 
 ## 4. Schema: agent-as-actor tool registry
 
@@ -36,8 +36,8 @@
 
 ## 7. Server: cycle-digest pre-compute job
 
-- [ ] 7.1 On cycle close (in the existing pg-boss cycle-maintenance path), enqueue a digest job for the completed cycle under the system principal, gated by `AI_DIGEST_ON_CYCLE_CLOSE`.
-- [ ] 7.2 Implement the job: `cycleFactsForTeam` → `generateStructured` → cite-or-omit + name-validator → write a `ready` `cycle_digest`; write `ai_off` when AI is disabled/keyless/spend-capped, `failed` on error; bounded + rate-limited per workspace, off the hot path.
+- [x] 7.1 On cycle close (in the existing pg-boss cycle-maintenance path), enqueue a digest job for the completed cycle under the system principal, gated by `AI_DIGEST_ON_CYCLE_CLOSE`.
+- [x] 7.2 Implement the job: `cycleFactsForTeam` → `generateStructured` → cite-or-omit + name-validator → write a `ready` `cycle_digest`; write `ai_off` when AI is disabled/keyless/spend-capped, `failed` on error; bounded + rate-limited per workspace, off the hot path.
 
 ## 8. Web: admin AI settings + cycle-digest surface
 
@@ -48,18 +48,18 @@
 ## 9. Unit tests (Vitest, no DB)
 
 - [x] 9.1 `resolveModel` selection across providers + disabled/unconfigured returns null.
-- [ ] 9.2 Cite-evidence-or-omit validator drops uncited items; keeps cited ones.
-- [ ] 9.3 Name-validator rejects output naming a roster member; passes clean output.
+- [x] 9.2 Cite-evidence-or-omit validator drops uncited items; keeps cited ones.
+- [x] 9.3 Name-validator rejects output naming a roster member; passes clean output.
 - [x] 9.4 Spend math (usage × price) and spend-cap refusal.
 - [x] 9.5 Tool-registry generation over `defineMutators` (one tool per mutator, correct arg schema) + tool-ceiling/`activeTools` predicates.
-- [ ] 9.6 `cycleFactsForTeam` result carries no assignee/author/reviewer/user dimension.
+- [x] 9.6 `cycleFactsForTeam` result carries no assignee/author/reviewer/user dimension.
 
 ## 10. Integration tests (Vitest, live Postgres + zero-cache)
 
 - [x] 10.1 Admin AI config authz end-to-end (admin writes; member/viewer rejected; key never returned).
 - [x] 10.2 Assert no synced query ever returns an AI provider key/ciphertext (server-only surface).
-- [ ] 10.3 Agent under a viewer `AuthContext` cannot write (mutator rejects); a write tool surfaces an approval request rather than auto-applying.
-- [ ] 10.4 Digest pre-compute job (mock provider) writes a team-scoped `ready` `cycle_digest`; a non-member of the team cannot sync it; AI-off path writes `ai_off`.
+- [x] 10.3 Agent under a viewer `AuthContext` cannot write (mutator rejects); a write tool surfaces an approval request rather than auto-applying.
+- [x] 10.4 Digest pre-compute job (mock provider) writes a team-scoped `ready` `cycle_digest`; a non-member of the team cannot sync it; AI-off path writes `ai_off`.
 
 ## 11. E2E tests (Playwright, mock provider, real 3-container stack)
 

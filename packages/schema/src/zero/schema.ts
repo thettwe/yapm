@@ -12,6 +12,7 @@ import {
 import type {
   CiConclusion,
   ConnectorLinkSource,
+  CycleDigestStatus,
   CycleStatus,
   DeploymentState,
   IssueGrouping,
@@ -263,6 +264,27 @@ const issueLink = table('issue_link')
   })
   .primaryKey('issueId', 'pullRequestId')
 
+// The team-scoped, Zero-synced cycle-digest artifact (change 9). Written server-side ONLY (never a
+// client mutator), read team-scoped like the other work-data entities. `content` is the typed
+// digest blob (null until ready / when AI is off). No identity dimension.
+const cycleDigest = table('cycle_digest')
+  .columns({
+    id: string(),
+    teamId: string().from('team_id'),
+    cycleId: string().from('cycle_id'),
+    status: enumeration<CycleDigestStatus>(),
+    content: json().optional(),
+    provider: string().optional(),
+    model: string().optional(),
+    generatedAt: number().from('generated_at').optional(),
+    inputToken: number().from('input_token').optional(),
+    outputToken: number().from('output_token').optional(),
+    estimatedCostUsd: number().from('estimated_cost_usd').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
 const user = table('user')
   .columns({
     id: string(),
@@ -506,6 +528,19 @@ const cycleRelationships = relationships(cycle, ({ one, many }) => ({
   }),
 }))
 
+const cycleDigestRelationships = relationships(cycleDigest, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  cycle: one({
+    sourceField: ['cycleId'],
+    destField: ['id'],
+    destSchema: cycle,
+  }),
+}))
+
 const projectRelationships = relationships(project, ({ one, many }) => ({
   workspace: one({
     sourceField: ['workspaceId'],
@@ -596,6 +631,7 @@ export const schema = createSchema({
     review,
     deployment,
     issueLink,
+    cycleDigest,
     user,
   ],
   relationships: [
@@ -617,6 +653,7 @@ export const schema = createSchema({
     reviewRelationships,
     deploymentRelationships,
     issueLinkRelationships,
+    cycleDigestRelationships,
   ],
   enableLegacyMutators: false,
   enableLegacyQueries: false,

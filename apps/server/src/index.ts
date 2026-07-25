@@ -12,6 +12,7 @@ import {
   seedWorkspace,
 } from '@yapm/schema/db'
 import { createAiAdminRoutes } from './ai/admin-routes.js'
+import { createAiGateway } from './ai/gateway.js'
 import { createApp } from './app.js'
 import { createAuth } from './auth.js'
 import { createAuthRoutes } from './auth-routes.js'
@@ -143,6 +144,11 @@ async function main(): Promise<void> {
     env: aiEnv(env),
   })
 
+  // The BYO-key gateway (one swappable seam over the AI SDK). It resolves the provider/model/key
+  // per workspace at call time and returns null when AI is unconfigured, so it is safe to construct
+  // unconditionally: a digest job for an AI-less workspace simply writes `ai_off`.
+  const aiGateway = createAiGateway({ db: database.db, codec: secretCodec, env: aiEnv(env) })
+
   let cycleScheduler: CycleScheduler | undefined
   if (env.CYCLE_MAINTENANCE === 'true') {
     try {
@@ -151,6 +157,9 @@ async function main(): Promise<void> {
         dbProvider,
         logger,
         cron: env.CYCLE_MAINTENANCE_CRON,
+        // Pre-compute a cycle digest at close unless disabled. Per-workspace AI config is resolved
+        // at job time, so enabling AI via the admin UI takes effect without a restart.
+        ...(env.AI_DIGEST_ON_CYCLE_CLOSE === 'true' ? { digest: { gateway: aiGateway } } : {}),
       })
     } catch (error) {
       logger.error({ err: error }, 'failed to start the cycle maintenance scheduler')

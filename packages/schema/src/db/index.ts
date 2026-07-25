@@ -53,6 +53,8 @@ export {
   upsertConnectorConfig,
   upsertConnectorInstallation,
 } from './connector.js'
+export { getCycleDigestByCycle, getWorkspaceAiSpendUsd } from './cycle-digest.js'
+export { cycleFactsForTeam } from './cycle-facts.js'
 export type { AcceptInviteOptions, AcceptInviteRefusal, AcceptInviteResult } from './invite.js'
 export { acceptInvite } from './invite.js'
 export { lookupWorkspaceRole } from './membership.js'
@@ -96,6 +98,9 @@ export type {
   ConnectorSecretTable,
   ConnectorSecretUpdate,
   Cycle,
+  CycleDigest,
+  CycleDigestTable,
+  CycleDigestUpdate,
   CycleSequence,
   CycleSequenceTable,
   CycleTable,
@@ -125,6 +130,7 @@ export type {
   NewConnectorInstallation,
   NewConnectorSecret,
   NewCycle,
+  NewCycleDigest,
   NewDeployment,
   NewInvite,
   NewIssue,

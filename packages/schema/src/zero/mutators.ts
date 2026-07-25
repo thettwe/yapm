@@ -10,17 +10,35 @@ import {
   type CycleStatus,
   canManage,
   canWrite,
+  DEFAULT_VOTES_PER_PARTICIPANT,
   ISSUE_PRIORITIES,
   ISSUE_STATUSES,
   type IssueStatus,
   isAuthenticated,
   isMember,
+  MAX_VOTES_PER_PARTICIPANT,
+  MIN_VOTES_PER_PARTICIPANT,
   PROJECT_STATUSES,
+  RETRO_COLUMN_ACCENTS,
+  RETRO_FORMATS,
+  RETRO_PHASES,
+  RETRO_VOTE_TARGETS,
+  type RetroColumnAccent,
+  type RetroFormat,
+  type RetroPhase,
+  type RetroVoteTarget,
   THEME_PRESETS,
 } from './context.js'
 import { type CycleOrderRow, isUnfinished, nextCycleId } from './cycles.js'
 import { MutationError, MutationErrorCode } from './errors.js'
 import { issueFilterSchema, issueGroupingSchema, issueSortSchema } from './filter.js'
+import {
+  isAdjacentPhase,
+  isRetroWriteAllowed,
+  type RetroWriteOp,
+  retroColumnTemplate,
+} from './retro/phase.js'
+import { retroSeedRefSchema } from './retro/seed.js'
 import { zql } from './schema.js'
 
 export const WORKSPACE_NAME_MAX_LENGTH = 200
@@ -535,6 +553,10 @@ export const createIssue = defineMutator(createIssueArgs, async ({ tx, args, ctx
     rank: args.rank ?? null,
     needsTriage: args.needsTriage ?? false,
     creatorId: ctx.userID,
+    // A new issue starts with no cycle, so there is no assignment moment to stamp yet;
+    // `issue.setCycle` / `issue.routeIssue` / the rollover stamp it when a cycle is set.
+    carryoverCount: 0,
+    cycleAssignedAt: null,
     createdAt: args.createdAt,
     updatedAt: args.updatedAt,
   })
@@ -774,16 +796,22 @@ export const completeCycle = defineMutator(completeCycleArgs, async ({ tx, args,
   const issues = (await tx.run(zql.issue.where('cycleId', args.id))) as {
     id: string
     status: IssueStatus
+    carryoverCount: number
   }[]
   for (const issue of issues) {
     if (!isUnfinished(issue.status)) continue
     // Stamp the origin cycle as we re-point the issue so a completed cycle's carried set survives
     // the rollover: the cycle view reconstructs it from `rolledOverFromCycleId`, since the issue no
     // longer points at this cycle. Deterministic (args-derived) — no id minted in the mutator.
+    // The carryover count and the assignment stamp record what the cycle history cannot otherwise
+    // reconstruct ("carried twice or more", "added mid-cycle"); the status guard above is what keeps
+    // a re-run of the completion from incrementing twice.
     await tx.mutate.issue.update({
       id: issue.id,
       cycleId: target,
       rolledOverFromCycleId: args.id,
+      carryoverCount: (issue.carryoverCount ?? 0) + 1,
+      cycleAssignedAt: args.updatedAt,
       updatedAt: args.updatedAt,
     })
   }
@@ -812,9 +840,12 @@ export const setIssueCycle = defineMutator(setIssueCycleArgs, async ({ tx, args,
     }
   }
 
+  // The assignment moment is what makes "added mid-cycle" a fact rather than a `created_at`
+  // approximation; clearing the cycle clears it. Args-derived, so a rebase recomputes the same value.
   await tx.mutate.issue.update({
     id: args.id,
     cycleId: args.cycleId,
+    cycleAssignedAt: args.cycleId === null ? null : args.updatedAt,
     updatedAt: args.updatedAt,
   })
 })
@@ -1048,7 +1079,9 @@ export const routeIssue = defineMutator(routeIssueArgs, async ({ tx, args, ctx }
     needsTriage: false,
     ...(args.status === undefined ? {} : { status: args.status }),
     ...(args.assigneeId === undefined ? {} : { assigneeId: args.assigneeId }),
-    ...(args.cycleId === undefined ? {} : { cycleId: args.cycleId }),
+    ...(args.cycleId === undefined
+      ? {}
+      : { cycleId: args.cycleId, cycleAssignedAt: args.cycleId === null ? null : args.updatedAt }),
     updatedAt: args.updatedAt,
   })
 
@@ -1304,6 +1337,1176 @@ export const deleteSavedView = defineMutator(deleteSavedViewArgs, async ({ tx, a
   await tx.mutate.saved_view.delete({ id: args.id })
 })
 
+// ---------------------------------------------------------------------------------------------
+// Retrospective
+//
+// Two guarantees live here rather than in the UI, because optimistic local writes make a
+// client-only gate a suggestion:
+//   1. The phase machine. Every write re-reads the retro's phase and consults the one shared
+//      `isRetroWriteAllowed` predicate before applying, and `retro.setPhase` accepts only an
+//      adjacent target from the facilitator or an admin. A crafted mutation cannot skip or rewind.
+//   2. Anonymity. Nothing here ever writes an author onto a synced row for an anonymous retro. The
+//      card -> author binding is written by the SERVER publish pass into `retro_card_author`, a
+//      table absent from the Zero schema — see `server-mutators.ts`.
+// ---------------------------------------------------------------------------------------------
+
+export const RETRO_TITLE_MAX_LENGTH = 200
+export const RETRO_COLUMN_TITLE_MAX_LENGTH = 60
+export const RETRO_CARD_BODY_MAX_LENGTH = 1000
+export const RETRO_ACTION_BODY_MAX_LENGTH = 1000
+export const RETRO_GROUP_LABEL_MAX_LENGTH = 120
+export const RETRO_TIMER_MAX_DURATION_S = 4 * 60 * 60
+
+const retroPhaseSchema = z.enum(RETRO_PHASES)
+const retroFormatSchema = z.enum(RETRO_FORMATS)
+const retroVoteTargetSchema = z.enum(RETRO_VOTE_TARGETS)
+const retroAccentSchema = z.enum(RETRO_COLUMN_ACCENTS)
+const rankSchema = z
+  .string()
+  .min(1)
+  .max(256)
+  .regex(/^[0-9A-Za-z]+$/u)
+const seedRefArg = jsonArg(retroSeedRefSchema)
+const votesPerParticipantSchema = z
+  .number()
+  .int()
+  .min(MIN_VOTES_PER_PARTICIPANT)
+  .max(MAX_VOTES_PER_PARTICIPANT)
+
+// Card/action bodies are plain text and may be multi-line, so they are trimmed but never collapsed
+// the way `normalizeName` collapses a name.
+function assertRetroText(value: string, id: string, maxLength: number, subject: string): string {
+  const text = value.trim()
+  if (text.length === 0) {
+    throw new MutationError(`${subject} cannot be empty`, MutationErrorCode.invalidName, id)
+  }
+  if (text.length > maxLength) {
+    throw new MutationError(
+      `${subject} cannot be longer than ${maxLength} characters`,
+      MutationErrorCode.invalidName,
+      id,
+    )
+  }
+  return text
+}
+
+interface RetroRow {
+  id: string
+  teamId: string
+  title: string
+  cycleId: string | null
+  nextCycleId: string | null
+  format: RetroFormat
+  phase: RetroPhase
+  facilitatorId: string | null
+  isAnonymous: boolean
+  votesPerParticipant: number
+}
+
+function invalidPhase(phase: RetroPhase, id: string): MutationError {
+  return new MutationError(
+    `This retro is in the ${phase} phase, where that change is closed`,
+    MutationErrorCode.invalidPhase,
+    id,
+  )
+}
+
+// The retro's authority: `canWrite` runs in the caller first (so a viewer/non-member is rejected
+// before any existence check), then the row is read, team access is verified, and the phase is
+// consulted through the ONE shared predicate that also drives the UI's affordances. A generic
+// not-authorized covers both "missing" and "wrong team" so a retro's existence never leaks.
+async function loadRetroForWrite(
+  tx: Transaction,
+  ctx: AuthContext,
+  retroId: string,
+  op: RetroWriteOp | null,
+  errorId: string = retroId,
+): Promise<RetroRow> {
+  const retro = (await tx.run(zql.retro.where('id', retroId).one())) as RetroRow | undefined
+  if (!retro) throw notAuthorized(errorId)
+  await assertTeamAccess(tx, ctx, retro.teamId, errorId)
+  if (op !== null && !isRetroWriteAllowed(retro.phase, op)) throw invalidPhase(retro.phase, errorId)
+  return retro
+}
+
+// Phase, timer and facilitation are facilitator-or-admin. `facilitator_id` is null on an
+// auto-opened retro (the scheduler is not a person) — until someone claims it, only an admin can
+// run the retro, which is why `retro.claimFacilitator` is open to any non-viewer member.
+export function isRetroFacilitator(
+  retro: { facilitatorId: string | null },
+  ctx: AuthContext,
+): boolean {
+  return (
+    ctx.role === 'admin' || (retro.facilitatorId !== null && retro.facilitatorId === ctx.userID)
+  )
+}
+
+function assertRetroFacilitator(
+  retro: { facilitatorId: string | null },
+  ctx: AuthContext,
+  id: string,
+): void {
+  if (!isRetroFacilitator(retro, ctx)) throw notAuthorized(id)
+}
+
+interface RetroColumnRow {
+  id: string
+  retroId: string
+}
+
+async function loadRetroColumn(
+  tx: Transaction,
+  retroId: string,
+  columnId: string,
+  id: string,
+): Promise<RetroColumnRow> {
+  const column = (await tx.run(zql.retro_column.where('id', columnId).one())) as
+    | RetroColumnRow
+    | undefined
+  if (!column || column.retroId !== retroId) {
+    throw new MutationError(
+      'Column and retro must belong to each other',
+      MutationErrorCode.crossTeam,
+      id,
+    )
+  }
+  return column
+}
+
+interface RetroColumnArg {
+  id: string
+  key: string
+  title: string
+  accentToken: RetroColumnAccent
+  rank: string
+}
+
+// A client passes the ids and ranks it minted, but the SHAPE is the format's: keys, titles and
+// accents must match the template exactly and in order, so a known format name can never carry
+// injected columns.
+function assertColumnsMatchFormat(
+  format: RetroFormat,
+  columns: readonly RetroColumnArg[],
+  id: string,
+): void {
+  const template = retroColumnTemplate(format)
+  const mismatch =
+    columns.length !== template.length ||
+    template.some((expected, index) => {
+      const column = columns[index]
+      return (
+        column === undefined ||
+        column.key !== expected.key ||
+        column.title !== expected.title ||
+        column.accentToken !== expected.accentToken
+      )
+    })
+  if (mismatch) {
+    throw new MutationError(
+      `Columns do not match the ${format} format`,
+      MutationErrorCode.invalidKey,
+      id,
+    )
+  }
+}
+
+async function assertSameTeamCycle(
+  tx: Transaction,
+  teamId: string,
+  cycleId: string,
+  id: string,
+): Promise<void> {
+  const cycle = (await tx.run(zql.cycle.where('id', cycleId).one())) as
+    | { id: string; teamId: string }
+    | undefined
+  if (!cycle || cycle.teamId !== teamId) {
+    throw new MutationError(
+      'Cycle and retro must belong to the same team',
+      MutationErrorCode.crossTeam,
+      id,
+    )
+  }
+}
+
+const retroColumnArgs = z.object({
+  id: z.string().min(1),
+  key: z.string().min(1),
+  title: z.string().min(1).max(RETRO_COLUMN_TITLE_MAX_LENGTH),
+  accentToken: retroAccentSchema,
+  rank: rankSchema,
+})
+
+export const openRetroForCycleArgs = z.object({
+  id: z.string().min(1),
+  cycleId: z.string().min(1),
+  nextCycleId: z.string().min(1).nullable().optional(),
+  title: z.string().optional(),
+  format: retroFormatSchema,
+  isAnonymous: z.boolean().optional(),
+  votesPerParticipant: votesPerParticipantSchema.optional(),
+  columns: z.array(retroColumnArgs).min(1).max(8),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+})
+
+export type OpenRetroForCycleArgs = z.infer<typeof openRetroForCycleArgs>
+
+// Called by BOTH completion triggers — the Cycles view's Complete-cycle action and the maintenance
+// pass — each of which mints the retro and column ids at its own call site, because a mutator must
+// never mint an id. A cycle that already has a retro is left untouched, so the deliberate action
+// racing the scheduler still yields exactly one retro (the unique index on `cycle_id` is the
+// backstop). The retro opens in `brainstorm` with NO facilitator: the scheduler is not a person.
+export const openRetroForCycle = defineMutator(openRetroForCycleArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+
+  const cycle = (await tx.run(zql.cycle.where('id', args.cycleId).one())) as
+    | { id: string; teamId: string; name: string }
+    | undefined
+  if (!cycle) throw notAuthorized(args.id)
+  await assertTeamAccess(tx, ctx, cycle.teamId, args.id)
+
+  const existing = await tx.run(zql.retro.where('cycleId', args.cycleId).one())
+  if (existing) return
+
+  const title = assertValidName(
+    args.title ?? `${cycle.name} retrospective`,
+    args.id,
+    RETRO_TITLE_MAX_LENGTH,
+  )
+  assertColumnsMatchFormat(args.format, args.columns, args.id)
+  if (args.nextCycleId != null) {
+    await assertSameTeamCycle(tx, cycle.teamId, args.nextCycleId, args.id)
+  }
+
+  await tx.mutate.retro.insert({
+    id: args.id,
+    teamId: cycle.teamId,
+    cycleId: args.cycleId,
+    nextCycleId: args.nextCycleId ?? null,
+    title,
+    format: args.format,
+    phase: 'brainstorm',
+    facilitatorId: null,
+    isAnonymous: args.isAnonymous ?? false,
+    votesPerParticipant: args.votesPerParticipant ?? DEFAULT_VOTES_PER_PARTICIPANT,
+    timerEndsAt: null,
+    timerDurationS: null,
+    createdBy: ctx.userID,
+    closedAt: null,
+    createdAt: args.createdAt,
+    updatedAt: args.updatedAt,
+  })
+
+  for (const column of args.columns) {
+    await tx.mutate.retro_column.insert({
+      id: column.id,
+      retroId: args.id,
+      teamId: cycle.teamId,
+      key: column.key,
+      title: column.title,
+      accentToken: column.accentToken,
+      rank: column.rank,
+      createdAt: args.createdAt,
+      updatedAt: args.updatedAt,
+    })
+  }
+})
+
+export const configureRetroArgs = z.object({
+  id: z.string().min(1),
+  title: z.string().optional(),
+  isAnonymous: z.boolean().optional(),
+  votesPerParticipant: votesPerParticipantSchema.optional(),
+  format: retroFormatSchema.optional(),
+  columns: z.array(retroColumnArgs).min(1).max(8).optional(),
+  updatedAt: timestamp,
+})
+
+// `brainstorm` only, facilitator/admin only. Anonymity is therefore fixed BEFORE any card exists,
+// which is what makes the guarantee crisp: a retro's anonymity cannot be flipped once there is
+// something to attribute. Changing the format replaces the columns, so it is refused once any draft
+// or card exists (a client that cannot see other people's drafts will have its optimistic swap
+// rejected by the server, which is authoritative here).
+export const configureRetro = defineMutator(configureRetroArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const retro = await loadRetroForWrite(tx, ctx, args.id, 'configure')
+  assertRetroFacilitator(retro, ctx, args.id)
+
+  const title =
+    args.title === undefined
+      ? undefined
+      : assertValidName(args.title, args.id, RETRO_TITLE_MAX_LENGTH)
+
+  if (args.format !== undefined && args.format !== retro.format) {
+    if (args.columns === undefined) {
+      throw new MutationError(
+        'Changing the format requires its columns',
+        MutationErrorCode.invalidKey,
+        args.id,
+      )
+    }
+    assertColumnsMatchFormat(args.format, args.columns, args.id)
+
+    const drafts = await tx.run(zql.retro_draft.where('retroId', args.id))
+    const cards = await tx.run(zql.retro_card.where('retroId', args.id))
+    if (drafts.length > 0 || cards.length > 0) {
+      throw new MutationError(
+        'The format cannot change once the retro has cards',
+        MutationErrorCode.invalidPhase,
+        args.id,
+      )
+    }
+
+    const columns = (await tx.run(zql.retro_column.where('retroId', args.id))) as { id: string }[]
+    for (const column of columns) {
+      await tx.mutate.retro_column.delete({ id: column.id })
+    }
+    for (const column of args.columns) {
+      await tx.mutate.retro_column.insert({
+        id: column.id,
+        retroId: args.id,
+        teamId: retro.teamId,
+        key: column.key,
+        title: column.title,
+        accentToken: column.accentToken,
+        rank: column.rank,
+        createdAt: args.updatedAt,
+        updatedAt: args.updatedAt,
+      })
+    }
+  }
+
+  await tx.mutate.retro.update({
+    id: args.id,
+    ...(title === undefined ? {} : { title }),
+    ...(args.format === undefined ? {} : { format: args.format }),
+    ...(args.isAnonymous === undefined ? {} : { isAnonymous: args.isAnonymous }),
+    ...(args.votesPerParticipant === undefined
+      ? {}
+      : { votesPerParticipant: args.votesPerParticipant }),
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const deleteRetroArgs = z.object({ id: z.string().min(1) })
+
+// Facilitator/admin. Every child row cascades in Postgres, including the server-only author table.
+export const deleteRetro = defineMutator(deleteRetroArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const retro = await loadRetroForWrite(tx, ctx, args.id, null)
+  assertRetroFacilitator(retro, ctx, args.id)
+  await tx.mutate.retro.delete({ id: args.id })
+})
+
+export const claimRetroFacilitatorArgs = z.object({
+  id: z.string().min(1),
+  updatedAt: timestamp,
+})
+
+// Open to any non-viewer team member WHILE the seat is empty (an auto-opened retro has no
+// facilitator), and a no-op when the caller already holds it.
+export const claimRetroFacilitator = defineMutator(
+  claimRetroFacilitatorArgs,
+  async ({ tx, args, ctx }) => {
+    if (!canWrite(ctx)) throw notAuthorized(args.id)
+    const retro = await loadRetroForWrite(tx, ctx, args.id, 'facilitate')
+    if (retro.facilitatorId === ctx.userID) return
+    if (retro.facilitatorId !== null) throw notAuthorized(args.id)
+    await tx.mutate.retro.update({
+      id: args.id,
+      facilitatorId: ctx.userID,
+      updatedAt: args.updatedAt,
+    })
+  },
+)
+
+export const setRetroFacilitatorArgs = z.object({
+  id: z.string().min(1),
+  facilitatorId: z.string().min(1).nullable(),
+  updatedAt: timestamp,
+})
+
+export const setRetroFacilitator = defineMutator(
+  setRetroFacilitatorArgs,
+  async ({ tx, args, ctx }) => {
+    if (!canWrite(ctx)) throw notAuthorized(args.id)
+    const retro = await loadRetroForWrite(tx, ctx, args.id, 'facilitate')
+    assertRetroFacilitator(retro, ctx, args.id)
+    if (args.facilitatorId !== null) {
+      await assertTeamMember(tx, retro.teamId, args.facilitatorId, args.id)
+    }
+    await tx.mutate.retro.update({
+      id: args.id,
+      facilitatorId: args.facilitatorId,
+      updatedAt: args.updatedAt,
+    })
+  },
+)
+
+export const setRetroPhaseArgs = z.object({
+  id: z.string().min(1),
+  to: retroPhaseSchema,
+  updatedAt: timestamp,
+})
+
+export type SetRetroPhaseArgs = z.infer<typeof setRetroPhaseArgs>
+
+// Exactly one step forward or one step back, facilitator/admin only. A skip ("brainstorm ->
+// actions"), a long rewind ("closed -> brainstorm") and a same-phase write are all rejected.
+// Entering `closed` stamps `closed_at`; the one legal step back out of it clears it. Advancing
+// forward out of `brainstorm` also PUBLISHES every unpublished draft — that half runs only in the
+// server override, because a client sees only its own drafts and would publish a partial board.
+export const setRetroPhase = defineMutator(setRetroPhaseArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const retro = await loadRetroForWrite(tx, ctx, args.id, null)
+  assertRetroFacilitator(retro, ctx, args.id)
+  if (!isAdjacentPhase(retro.phase, args.to)) {
+    throw new MutationError(
+      `A retro moves one phase at a time, not ${retro.phase} to ${args.to}`,
+      MutationErrorCode.invalidPhase,
+      args.id,
+    )
+  }
+
+  await tx.mutate.retro.update({
+    id: args.id,
+    phase: args.to,
+    closedAt: args.to === 'closed' ? args.updatedAt : null,
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const startRetroTimerArgs = z.object({
+  id: z.string().min(1),
+  durationS: z.number().int().min(1).max(RETRO_TIMER_MAX_DURATION_S),
+  endsAt: timestamp,
+  updatedAt: timestamp,
+})
+
+export type StartRetroTimerArgs = z.infer<typeof startRetroTimerArgs>
+
+// The timer is durable state, never a tick: each client renders `endsAt - now` locally. The end is
+// taken from the call-site clock here so the optimistic render is instant, and RECOMPUTED from the
+// server clock in the override, which is authoritative and kills client skew.
+export const startRetroTimer = defineMutator(startRetroTimerArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const retro = await loadRetroForWrite(tx, ctx, args.id, 'timer')
+  assertRetroFacilitator(retro, ctx, args.id)
+  await tx.mutate.retro.update({
+    id: args.id,
+    timerEndsAt: args.endsAt,
+    timerDurationS: args.durationS,
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const stopRetroTimerArgs = z.object({
+  id: z.string().min(1),
+  updatedAt: timestamp,
+})
+
+export const stopRetroTimer = defineMutator(stopRetroTimerArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const retro = await loadRetroForWrite(tx, ctx, args.id, 'timer')
+  assertRetroFacilitator(retro, ctx, args.id)
+  await tx.mutate.retro.update({ id: args.id, timerEndsAt: null, updatedAt: args.updatedAt })
+})
+
+export const createRetroDraftArgs = z.object({
+  id: z.string().min(1),
+  retroId: z.string().min(1),
+  columnId: z.string().min(1),
+  body: z.string(),
+  rank: rankSchema,
+  seedRef: seedRefArg.nullable().optional(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+})
+
+// A draft is the PRIVATE brainstorm row: it carries its author and syncs only to them, which is what
+// lets "you cannot see other people's cards while writing your own" be a storage fact rather than a
+// UI courtesy. Its id and rank are minted at the call site and reused by the published card.
+export const createRetroDraft = defineMutator(createRetroDraftArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const retro = await loadRetroForWrite(tx, ctx, args.retroId, 'draft', args.id)
+  await loadRetroColumn(tx, args.retroId, args.columnId, args.id)
+  const body = assertRetroText(args.body, args.id, RETRO_CARD_BODY_MAX_LENGTH, 'A card')
+
+  await tx.mutate.retro_draft.insert({
+    id: args.id,
+    retroId: args.retroId,
+    teamId: retro.teamId,
+    columnId: args.columnId,
+    authorId: ctx.userID,
+    body,
+    rank: args.rank,
+    seedRef: args.seedRef ?? null,
+    publishedAt: null,
+    createdAt: args.createdAt,
+    updatedAt: args.updatedAt,
+  })
+})
+
+interface RetroDraftRow {
+  id: string
+  retroId: string
+  authorId: string
+  publishedAt: number | null
+}
+
+// Author-only, with NO admin bypass: an admin reading or rewriting someone's private draft would
+// break the same promise the self-scoped query keeps.
+async function loadOwnRetroDraft(
+  tx: Transaction,
+  ctx: AuthContext,
+  draftId: string,
+): Promise<RetroDraftRow> {
+  const draft = (await tx.run(zql.retro_draft.where('id', draftId).one())) as
+    | RetroDraftRow
+    | undefined
+  if (!draft) throw notAuthorized(draftId)
+  if (draft.authorId !== ctx.userID) throw notAuthorized(draftId)
+  if (draft.publishedAt !== null) {
+    throw new MutationError(
+      'A published card cannot be edited',
+      MutationErrorCode.invalidPhase,
+      draftId,
+    )
+  }
+  return draft
+}
+
+export const updateRetroDraftArgs = z.object({
+  id: z.string().min(1),
+  body: z.string().optional(),
+  columnId: z.string().min(1).optional(),
+  rank: rankSchema.optional(),
+  updatedAt: timestamp,
+})
+
+export const updateRetroDraft = defineMutator(updateRetroDraftArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const draft = await loadOwnRetroDraft(tx, ctx, args.id)
+  await loadRetroForWrite(tx, ctx, draft.retroId, 'draft', args.id)
+  if (args.columnId !== undefined) {
+    await loadRetroColumn(tx, draft.retroId, args.columnId, args.id)
+  }
+  const body =
+    args.body === undefined
+      ? undefined
+      : assertRetroText(args.body, args.id, RETRO_CARD_BODY_MAX_LENGTH, 'A card')
+
+  await tx.mutate.retro_draft.update({
+    id: args.id,
+    ...(body === undefined ? {} : { body }),
+    ...(args.columnId === undefined ? {} : { columnId: args.columnId }),
+    ...(args.rank === undefined ? {} : { rank: args.rank }),
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const deleteRetroDraftArgs = z.object({ id: z.string().min(1) })
+
+export const deleteRetroDraft = defineMutator(deleteRetroDraftArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const draft = await loadOwnRetroDraft(tx, ctx, args.id)
+  await loadRetroForWrite(tx, ctx, draft.retroId, 'draft', args.id)
+  await tx.mutate.retro_draft.delete({ id: args.id })
+})
+
+interface RetroCardRow {
+  id: string
+  retroId: string
+  columnId: string
+  groupId: string | null
+}
+
+interface RetroGroupRow {
+  id: string
+  retroId: string
+  columnId: string
+}
+
+// A vote's `target_id` is polymorphic, so it carries no FK and Postgres cannot cascade it: when a
+// target stops being votable — deleted, dissolved, or absorbed into a group — the mutator that did it
+// also removes the dots spent on it, or those dots would sit against the voters' budgets forever. On
+// the client this clears the caller's own votes (the only ones it can see); the authoritative pass
+// sees and clears them all.
+async function clearRetroVotesForTarget(tx: Transaction, targetId: string): Promise<void> {
+  const votes = (await tx.run(zql.retro_vote.where('targetId', targetId))) as { id: string }[]
+  for (const vote of votes) {
+    await tx.mutate.retro_vote.delete({ id: vote.id })
+  }
+  await tx.mutate.retro_vote_tally.delete({ targetId })
+}
+
+// A group exists to hold cards; the mutator that empties one dissolves it in the same write pass.
+async function dissolveEmptyGroup(tx: Transaction, groupId: string | null): Promise<void> {
+  if (groupId === null) return
+  const remaining = await tx.run(zql.retro_card.where('groupId', groupId))
+  if (remaining.length > 0) return
+  await clearRetroVotesForTarget(tx, groupId)
+  await tx.mutate.retro_group.delete({ id: groupId })
+}
+
+// A grouped card is voted on through its group, so joining one retires the card as a vote target.
+// Reachable whenever the facilitator steps back from `vote` to `group` to regroup: without this the
+// card keeps a tally row nothing can vote on and its dots stay charged against their voters.
+async function retireGroupedCardVotes(
+  tx: Transaction,
+  card: { id: string; groupId: string | null },
+  groupId: string | null,
+): Promise<void> {
+  if (groupId === null || card.groupId !== null) return
+  await clearRetroVotesForTarget(tx, card.id)
+}
+
+export const moveRetroCardArgs = z.object({
+  id: z.string().min(1),
+  columnId: z.string().min(1).optional(),
+  groupId: z.string().min(1).nullable(),
+  rank: rankSchema,
+  updatedAt: timestamp,
+})
+
+// The board's single-write move, reused verbatim: ONE row update carrying the fractional `rank` (and
+// the group/column reference when they changed), never renumbering siblings. The rank is minted at
+// the CALL SITE from the destination neighbours — recomputing it here would jump the card on rebase.
+export const moveRetroCard = defineMutator(moveRetroCardArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const card = (await tx.run(zql.retro_card.where('id', args.id).one())) as RetroCardRow | undefined
+  if (!card) throw notAuthorized(args.id)
+  await loadRetroForWrite(tx, ctx, card.retroId, 'group', args.id)
+
+  const columnId = args.columnId ?? card.columnId
+  if (args.columnId !== undefined) {
+    await loadRetroColumn(tx, card.retroId, args.columnId, args.id)
+  }
+  if (args.groupId !== null) {
+    const group = (await tx.run(zql.retro_group.where('id', args.groupId).one())) as
+      | RetroGroupRow
+      | undefined
+    if (!group || group.retroId !== card.retroId || group.columnId !== columnId) {
+      throw new MutationError(
+        'A card can only join a group in its own column',
+        MutationErrorCode.invalidTarget,
+        args.id,
+      )
+    }
+  }
+
+  await tx.mutate.retro_card.update({
+    id: args.id,
+    ...(args.columnId === undefined ? {} : { columnId: args.columnId }),
+    groupId: args.groupId,
+    rank: args.rank,
+    updatedAt: args.updatedAt,
+  })
+
+  await retireGroupedCardVotes(tx, card, args.groupId)
+
+  if (card.groupId !== null && card.groupId !== args.groupId) {
+    await dissolveEmptyGroup(tx, card.groupId)
+  }
+})
+
+export const createRetroGroupArgs = z.object({
+  id: z.string().min(1),
+  retroId: z.string().min(1),
+  columnId: z.string().min(1),
+  label: z.string().nullable().optional(),
+  rank: rankSchema,
+  cardIds: z.array(z.string().min(1)).max(50).optional(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+})
+
+// Dragging a card onto another forms a group: one client-minted group id, and each card's group
+// reference updated. Groups the cards left behind are dissolved if they are now empty.
+export const createRetroGroup = defineMutator(createRetroGroupArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const retro = await loadRetroForWrite(tx, ctx, args.retroId, 'group', args.id)
+  await loadRetroColumn(tx, args.retroId, args.columnId, args.id)
+  const label =
+    args.label == null
+      ? null
+      : assertRetroText(args.label, args.id, RETRO_GROUP_LABEL_MAX_LENGTH, 'A group label')
+
+  await tx.mutate.retro_group.insert({
+    id: args.id,
+    retroId: args.retroId,
+    teamId: retro.teamId,
+    columnId: args.columnId,
+    label,
+    rank: args.rank,
+    createdAt: args.createdAt,
+    updatedAt: args.updatedAt,
+  })
+
+  const vacated: (string | null)[] = []
+  for (const cardId of args.cardIds ?? []) {
+    const card = (await tx.run(zql.retro_card.where('id', cardId).one())) as
+      | RetroCardRow
+      | undefined
+    if (!card || card.retroId !== args.retroId || card.columnId !== args.columnId) {
+      throw new MutationError(
+        'A card can only join a group in its own column',
+        MutationErrorCode.invalidTarget,
+        args.id,
+      )
+    }
+    vacated.push(card.groupId)
+    await tx.mutate.retro_card.update({
+      id: cardId,
+      groupId: args.id,
+      updatedAt: args.updatedAt,
+    })
+    await retireGroupedCardVotes(tx, card, args.id)
+  }
+
+  for (const groupId of new Set(vacated)) {
+    if (groupId === null || groupId === args.id) continue
+    await dissolveEmptyGroup(tx, groupId)
+  }
+})
+
+export const labelRetroGroupArgs = z.object({
+  id: z.string().min(1),
+  label: z.string().nullable(),
+  updatedAt: timestamp,
+})
+
+export const labelRetroGroup = defineMutator(labelRetroGroupArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const group = (await tx.run(zql.retro_group.where('id', args.id).one())) as
+    | RetroGroupRow
+    | undefined
+  if (!group) throw notAuthorized(args.id)
+  await loadRetroForWrite(tx, ctx, group.retroId, 'group', args.id)
+  const label =
+    args.label === null
+      ? null
+      : assertRetroText(args.label, args.id, RETRO_GROUP_LABEL_MAX_LENGTH, 'A group label')
+  await tx.mutate.retro_group.update({ id: args.id, label, updatedAt: args.updatedAt })
+})
+
+export const dissolveRetroGroupArgs = z.object({
+  id: z.string().min(1),
+  updatedAt: timestamp,
+})
+
+export const dissolveRetroGroup = defineMutator(
+  dissolveRetroGroupArgs,
+  async ({ tx, args, ctx }) => {
+    if (!canWrite(ctx)) throw notAuthorized(args.id)
+    const group = (await tx.run(zql.retro_group.where('id', args.id).one())) as
+      | RetroGroupRow
+      | undefined
+    if (!group) throw notAuthorized(args.id)
+    await loadRetroForWrite(tx, ctx, group.retroId, 'group', args.id)
+
+    const cards = (await tx.run(zql.retro_card.where('groupId', args.id))) as { id: string }[]
+    for (const card of cards) {
+      await tx.mutate.retro_card.update({ id: card.id, groupId: null, updatedAt: args.updatedAt })
+    }
+    await clearRetroVotesForTarget(tx, args.id)
+    await tx.mutate.retro_group.delete({ id: args.id })
+  },
+)
+
+export const deleteRetroCardArgs = z.object({ id: z.string().min(1) })
+
+// A published card's body is editable by nobody — that is the price of anonymity being real — so
+// deletion is the only card write after publish. Allowed for the facilitator/admin (moderation) and
+// for the card's own author, proven WITHOUT any client learning an author: the caller's retained
+// draft row (self-synced, `author_id` written from ctx) is the client-checkable proof, and the server
+// override re-verifies the same claim against the server-only `retro_card_author` table.
+export const deleteRetroCard = defineMutator(deleteRetroCardArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const card = (await tx.run(zql.retro_card.where('id', args.id).one())) as RetroCardRow | undefined
+  if (!card) throw notAuthorized(args.id)
+  const retro = await loadRetroForWrite(tx, ctx, card.retroId, 'moderate', args.id)
+
+  if (!isRetroFacilitator(retro, ctx)) {
+    const ownDraft = await tx.run(
+      zql.retro_draft.where('id', args.id).where('authorId', ctx.userID).one(),
+    )
+    if (!ownDraft) throw notAuthorized(args.id)
+  }
+
+  await clearRetroVotesForTarget(tx, args.id)
+  await tx.mutate.retro_card.delete({ id: args.id })
+  await dissolveEmptyGroup(tx, card.groupId)
+})
+
+export const castRetroVoteArgs = z.object({
+  id: z.string().min(1),
+  retroId: z.string().min(1),
+  targetType: retroVoteTargetSchema,
+  targetId: z.string().min(1),
+  createdAt: timestamp,
+})
+
+export type CastRetroVoteArgs = z.infer<typeof castRetroVoteArgs>
+
+// One row is one dot; stacking dots on one target is allowed, bounded only by the total. The budget
+// is counted from the caller's OWN rows — a count the client has in full, so the UI self-limits and
+// the server is authoritative on a race. A vote targets the GROUP once the card is grouped, which
+// avoids auto-creating singleton groups (that would mint ids inside a mutator).
+//
+// The tally is written here only on the client, as the optimistic dot. The server override replaces
+// it with an ATOMIC SQL increment, because a read-then-write count loses updates when a whole team
+// votes at once.
+export const castRetroVote = defineMutator(castRetroVoteArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const retro = await loadRetroForWrite(tx, ctx, args.retroId, 'vote', args.id)
+
+  if (args.targetType === 'card') {
+    const card = (await tx.run(zql.retro_card.where('id', args.targetId).one())) as
+      | RetroCardRow
+      | undefined
+    if (!card || card.retroId !== args.retroId) {
+      throw new MutationError(
+        'That card is not in this retro',
+        MutationErrorCode.invalidTarget,
+        args.id,
+      )
+    }
+    if (card.groupId !== null) {
+      throw new MutationError(
+        'A grouped card is voted on through its group',
+        MutationErrorCode.invalidTarget,
+        args.id,
+      )
+    }
+  } else {
+    const group = (await tx.run(zql.retro_group.where('id', args.targetId).one())) as
+      | RetroGroupRow
+      | undefined
+    if (!group || group.retroId !== args.retroId) {
+      throw new MutationError(
+        'That group is not in this retro',
+        MutationErrorCode.invalidTarget,
+        args.id,
+      )
+    }
+  }
+
+  const mine = await tx.run(
+    zql.retro_vote.where('retroId', args.retroId).where('voterId', ctx.userID),
+  )
+  if (mine.length >= retro.votesPerParticipant) {
+    throw new MutationError(
+      `You have used all ${retro.votesPerParticipant} of your dots`,
+      MutationErrorCode.voteBudget,
+      args.id,
+    )
+  }
+
+  await tx.mutate.retro_vote.insert({
+    id: args.id,
+    retroId: args.retroId,
+    teamId: retro.teamId,
+    targetType: args.targetType,
+    targetId: args.targetId,
+    voterId: ctx.userID,
+    createdAt: args.createdAt,
+  })
+
+  if (tx.location === 'server') return
+  await bumpRetroVoteTally(tx, retro.teamId, args, 1)
+})
+
+interface VoteTallyTarget {
+  retroId: string
+  targetType: RetroVoteTarget
+  targetId: string
+  createdAt: number
+}
+
+// The optimistic tally write, keyed by the TARGET's own id so nothing is minted here.
+async function bumpRetroVoteTally(
+  tx: Transaction,
+  teamId: string,
+  target: VoteTallyTarget,
+  delta: 1 | -1,
+): Promise<void> {
+  const tally = (await tx.run(zql.retro_vote_tally.where('targetId', target.targetId).one())) as
+    | { targetId: string; count: number }
+    | undefined
+  const count = Math.max((tally?.count ?? 0) + delta, 0)
+  await tx.mutate.retro_vote_tally.upsert({
+    targetId: target.targetId,
+    retroId: target.retroId,
+    teamId,
+    targetType: target.targetType,
+    count,
+    createdAt: target.createdAt,
+    updatedAt: target.createdAt,
+  })
+}
+
+export const retractRetroVoteArgs = z.object({
+  id: z.string().min(1),
+  updatedAt: timestamp,
+})
+
+export type RetractRetroVoteArgs = z.infer<typeof retractRetroVoteArgs>
+
+interface RetroVoteRow {
+  id: string
+  retroId: string
+  targetType: RetroVoteTarget
+  targetId: string
+  voterId: string
+}
+
+// Voter-only, with NO admin bypass: who voted for what never leaves the server for anyone but the
+// voter, so nobody else can retract on their behalf either.
+export const retractRetroVote = defineMutator(retractRetroVoteArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const vote = (await tx.run(zql.retro_vote.where('id', args.id).one())) as RetroVoteRow | undefined
+  if (!vote) throw notAuthorized(args.id)
+  if (vote.voterId !== ctx.userID) throw notAuthorized(args.id)
+  const retro = await loadRetroForWrite(tx, ctx, vote.retroId, 'vote', args.id)
+
+  await tx.mutate.retro_vote.delete({ id: args.id })
+
+  if (tx.location === 'server') return
+  await bumpRetroVoteTally(
+    tx,
+    retro.teamId,
+    {
+      retroId: vote.retroId,
+      targetType: vote.targetType,
+      targetId: vote.targetId,
+      createdAt: args.updatedAt,
+    },
+    -1,
+  )
+})
+
+export const createRetroActionArgs = z.object({
+  id: z.string().min(1),
+  retroId: z.string().min(1),
+  body: z.string(),
+  assigneeId: z.string().min(1).nullable().optional(),
+  targetCycleId: z.string().min(1).nullable().optional(),
+  cardId: z.string().min(1).nullable().optional(),
+  groupId: z.string().min(1).nullable().optional(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+})
+
+export const createRetroAction = defineMutator(createRetroActionArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const retro = await loadRetroForWrite(tx, ctx, args.retroId, 'action', args.id)
+  const body = assertRetroText(args.body, args.id, RETRO_ACTION_BODY_MAX_LENGTH, 'An action')
+
+  if (args.assigneeId != null) {
+    await assertTeamMember(tx, retro.teamId, args.assigneeId, args.id)
+  }
+  if (args.targetCycleId != null) {
+    await assertSameTeamCycle(tx, retro.teamId, args.targetCycleId, args.id)
+  }
+  if (args.cardId != null) {
+    const card = (await tx.run(zql.retro_card.where('id', args.cardId).one())) as
+      | RetroCardRow
+      | undefined
+    if (!card || card.retroId !== args.retroId) {
+      throw new MutationError(
+        'That card is not in this retro',
+        MutationErrorCode.invalidTarget,
+        args.id,
+      )
+    }
+  }
+  if (args.groupId != null) {
+    const group = (await tx.run(zql.retro_group.where('id', args.groupId).one())) as
+      | RetroGroupRow
+      | undefined
+    if (!group || group.retroId !== args.retroId) {
+      throw new MutationError(
+        'That group is not in this retro',
+        MutationErrorCode.invalidTarget,
+        args.id,
+      )
+    }
+  }
+
+  await tx.mutate.retro_action.insert({
+    id: args.id,
+    retroId: args.retroId,
+    teamId: retro.teamId,
+    groupId: args.groupId ?? null,
+    cardId: args.cardId ?? null,
+    body,
+    assigneeId: args.assigneeId ?? null,
+    targetCycleId: args.targetCycleId ?? retro.nextCycleId,
+    issueId: null,
+    createdAt: args.createdAt,
+    updatedAt: args.updatedAt,
+  })
+})
+
+interface RetroActionRow {
+  id: string
+  retroId: string
+  body: string
+  assigneeId: string | null
+  targetCycleId: string | null
+  issueId: string | null
+}
+
+async function loadRetroActionForWrite(
+  tx: Transaction,
+  ctx: AuthContext,
+  actionId: string,
+  op: RetroWriteOp,
+): Promise<{ action: RetroActionRow; retro: RetroRow }> {
+  const action = (await tx.run(zql.retro_action.where('id', actionId).one())) as
+    | RetroActionRow
+    | undefined
+  if (!action) throw notAuthorized(actionId)
+  const retro = await loadRetroForWrite(tx, ctx, action.retroId, op, actionId)
+  return { action, retro }
+}
+
+export const updateRetroActionArgs = z.object({
+  id: z.string().min(1),
+  body: z.string().optional(),
+  assigneeId: z.string().min(1).nullable().optional(),
+  targetCycleId: z.string().min(1).nullable().optional(),
+  updatedAt: timestamp,
+})
+
+export const updateRetroAction = defineMutator(updateRetroActionArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const { retro } = await loadRetroActionForWrite(tx, ctx, args.id, 'action')
+
+  const body =
+    args.body === undefined
+      ? undefined
+      : assertRetroText(args.body, args.id, RETRO_ACTION_BODY_MAX_LENGTH, 'An action')
+  if (args.assigneeId != null) {
+    await assertTeamMember(tx, retro.teamId, args.assigneeId, args.id)
+  }
+  if (args.targetCycleId != null) {
+    await assertSameTeamCycle(tx, retro.teamId, args.targetCycleId, args.id)
+  }
+
+  await tx.mutate.retro_action.update({
+    id: args.id,
+    ...(body === undefined ? {} : { body }),
+    ...(args.assigneeId === undefined ? {} : { assigneeId: args.assigneeId }),
+    ...(args.targetCycleId === undefined ? {} : { targetCycleId: args.targetCycleId }),
+    updatedAt: args.updatedAt,
+  })
+})
+
+export const deleteRetroActionArgs = z.object({ id: z.string().min(1) })
+
+export const deleteRetroAction = defineMutator(deleteRetroActionArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadRetroActionForWrite(tx, ctx, args.id, 'action')
+  await tx.mutate.retro_action.delete({ id: args.id })
+})
+
+export const convertRetroActionToIssueArgs = z.object({
+  actionId: z.string().min(1),
+  issueId: z.string().min(1),
+  rank: rankSchema.nullable().optional(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+})
+
+export type ConvertRetroActionToIssueArgs = z.infer<typeof convertRetroActionToIssueArgs>
+
+function retroActionDescription(retroTitle: string, body: string): ReadonlyJSONValue {
+  const paragraphs = [`From the ${retroTitle} retrospective.`, body]
+  return {
+    type: 'doc',
+    content: paragraphs.map((text) => ({
+      type: 'paragraph',
+      content: [{ type: 'text', text }],
+    })),
+  }
+}
+
+// The loop that makes a retro part of the work graph instead of a forgotten doc: an action becomes a
+// REAL issue through the shared `issue.create` mutator function — same authorization, same
+// ctx-derived creator, same triage defaults, and (in the override) the same server-authoritative
+// per-team number — then through the shared `issue.setCycle` so it lands in the next cycle with its
+// assignment stamped. The new issue's id is minted at the CALL SITE. Idempotent: an already-converted
+// action is a no-op rather than a second issue.
+export const convertRetroActionToIssue = defineMutator(
+  convertRetroActionToIssueArgs,
+  async ({ tx, args, ctx }) => {
+    if (!canWrite(ctx)) throw notAuthorized(args.actionId)
+    const { action, retro } = await loadRetroActionForWrite(tx, ctx, args.actionId, 'convert')
+    if (action.issueId !== null) return
+
+    const firstLine = action.body.split('\n')[0] ?? action.body
+    const title = firstLine.trim().slice(0, ISSUE_TITLE_MAX_LENGTH)
+    const cycleId = action.targetCycleId ?? retro.nextCycleId
+
+    await createIssue.fn({
+      tx,
+      args: {
+        id: args.issueId,
+        teamId: retro.teamId,
+        title,
+        status: 'todo',
+        priority: 'no_priority',
+        assigneeId: action.assigneeId,
+        description: retroActionDescription(retro.title, action.body),
+        rank: args.rank ?? null,
+        needsTriage: false,
+        createdAt: args.createdAt,
+        updatedAt: args.updatedAt,
+      },
+      ctx,
+    })
+
+    if (cycleId !== null) {
+      await setIssueCycle.fn({
+        tx,
+        args: { id: args.issueId, cycleId, updatedAt: args.updatedAt },
+        ctx,
+      })
+    }
+
+    await tx.mutate.retro_action.update({
+      id: args.actionId,
+      issueId: args.issueId,
+      updatedAt: args.updatedAt,
+    })
+  },
+)
+
+export const retroPresenceHeartbeatArgs = z.object({
+  retroId: z.string().min(1),
+  focusTarget: z.string().min(1).nullable().optional(),
+  lastSeenAt: timestamp,
+})
+
+// Coarse, throttled, self-written from the verified ctx (never args) and pruned by the existing
+// maintenance pass — so "who's here" costs no sidecar service and no new job type.
+export const retroPresenceHeartbeat = defineMutator(
+  retroPresenceHeartbeatArgs,
+  async ({ tx, args, ctx }) => {
+    if (!canWrite(ctx)) throw notAuthorized(args.retroId)
+    const retro = await loadRetroForWrite(tx, ctx, args.retroId, 'presence')
+    await tx.mutate.retro_presence.upsert({
+      retroId: args.retroId,
+      userId: ctx.userID,
+      teamId: retro.teamId,
+      focusTarget: args.focusTarget ?? null,
+      lastSeenAt: args.lastSeenAt,
+    })
+  },
+)
+
 export const mutators = defineMutators({
   workspace: {
     rename: renameWorkspace,
@@ -1368,6 +2571,43 @@ export const mutators = defineMutators({
     update: updateSavedView,
     delete: deleteSavedView,
   },
+  retro: {
+    openForCycle: openRetroForCycle,
+    configure: configureRetro,
+    delete: deleteRetro,
+    claimFacilitator: claimRetroFacilitator,
+    setFacilitator: setRetroFacilitator,
+    setPhase: setRetroPhase,
+    startTimer: startRetroTimer,
+    stopTimer: stopRetroTimer,
+    convertActionToIssue: convertRetroActionToIssue,
+  },
+  retroDraft: {
+    create: createRetroDraft,
+    update: updateRetroDraft,
+    delete: deleteRetroDraft,
+  },
+  retroCard: {
+    move: moveRetroCard,
+    delete: deleteRetroCard,
+  },
+  retroGroup: {
+    create: createRetroGroup,
+    label: labelRetroGroup,
+    dissolve: dissolveRetroGroup,
+  },
+  retroVote: {
+    cast: castRetroVote,
+    retract: retractRetroVote,
+  },
+  retroAction: {
+    create: createRetroAction,
+    update: updateRetroAction,
+    delete: deleteRetroAction,
+  },
+  retroPresence: {
+    heartbeat: retroPresenceHeartbeat,
+  },
 })
 
 export const RENAME_WORKSPACE_MUTATOR_NAME = 'workspace.rename'
@@ -1396,3 +2636,26 @@ export const REMOVE_ISSUE_LABEL_MUTATOR_NAME = 'issue.removeLabel'
 export const CREATE_LABEL_MUTATOR_NAME = 'label.create'
 export const CREATE_COMMENT_MUTATOR_NAME = 'comment.create'
 export const CREATE_SAVED_VIEW_MUTATOR_NAME = 'savedView.create'
+export const OPEN_RETRO_FOR_CYCLE_MUTATOR_NAME = 'retro.openForCycle'
+export const CONFIGURE_RETRO_MUTATOR_NAME = 'retro.configure'
+export const DELETE_RETRO_MUTATOR_NAME = 'retro.delete'
+export const CLAIM_RETRO_FACILITATOR_MUTATOR_NAME = 'retro.claimFacilitator'
+export const SET_RETRO_FACILITATOR_MUTATOR_NAME = 'retro.setFacilitator'
+export const SET_RETRO_PHASE_MUTATOR_NAME = 'retro.setPhase'
+export const START_RETRO_TIMER_MUTATOR_NAME = 'retro.startTimer'
+export const STOP_RETRO_TIMER_MUTATOR_NAME = 'retro.stopTimer'
+export const CONVERT_RETRO_ACTION_MUTATOR_NAME = 'retro.convertActionToIssue'
+export const CREATE_RETRO_DRAFT_MUTATOR_NAME = 'retroDraft.create'
+export const UPDATE_RETRO_DRAFT_MUTATOR_NAME = 'retroDraft.update'
+export const DELETE_RETRO_DRAFT_MUTATOR_NAME = 'retroDraft.delete'
+export const MOVE_RETRO_CARD_MUTATOR_NAME = 'retroCard.move'
+export const DELETE_RETRO_CARD_MUTATOR_NAME = 'retroCard.delete'
+export const CREATE_RETRO_GROUP_MUTATOR_NAME = 'retroGroup.create'
+export const LABEL_RETRO_GROUP_MUTATOR_NAME = 'retroGroup.label'
+export const DISSOLVE_RETRO_GROUP_MUTATOR_NAME = 'retroGroup.dissolve'
+export const CAST_RETRO_VOTE_MUTATOR_NAME = 'retroVote.cast'
+export const RETRACT_RETRO_VOTE_MUTATOR_NAME = 'retroVote.retract'
+export const CREATE_RETRO_ACTION_MUTATOR_NAME = 'retroAction.create'
+export const UPDATE_RETRO_ACTION_MUTATOR_NAME = 'retroAction.update'
+export const DELETE_RETRO_ACTION_MUTATOR_NAME = 'retroAction.delete'
+export const RETRO_PRESENCE_HEARTBEAT_MUTATOR_NAME = 'retroPresence.heartbeat'

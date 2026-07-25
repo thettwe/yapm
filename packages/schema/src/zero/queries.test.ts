@@ -17,6 +17,10 @@ import {
   PROJECT_GET_QUERY_NAME,
   PROJECTS_ALL_QUERY_NAME,
   queries,
+  RETRO_DETAIL_QUERY_NAME,
+  RETRO_DRAFTS_MINE_QUERY_NAME,
+  RETRO_VOTES_MINE_QUERY_NAME,
+  RETROS_BY_TEAM_QUERY_NAME,
   SAVED_VIEWS_BY_TEAM_QUERY_NAME,
   TEAMS_ALL_QUERY_NAME,
   TRIAGE_INBOX_QUERY_NAME,
@@ -78,6 +82,10 @@ describe('the synced query registry', () => {
       [SAVED_VIEWS_BY_TEAM_QUERY_NAME, queries.savedViews.byTeam],
       [DIGESTS_BY_CYCLE_QUERY_NAME, queries.digests.byCycle],
       [DIGESTS_BY_TEAM_QUERY_NAME, queries.digests.byTeam],
+      [RETROS_BY_TEAM_QUERY_NAME, queries.retros.byTeam],
+      [RETRO_DETAIL_QUERY_NAME, queries.retros.detail],
+      [RETRO_DRAFTS_MINE_QUERY_NAME, queries.retroDrafts.mine],
+      [RETRO_VOTES_MINE_QUERY_NAME, queries.retroVotes.mine],
     ] as const) {
       expect(query.queryName).toBe(name)
       expect(mustGetQuery(queries, name)).toBe(query)
@@ -321,6 +329,81 @@ describe('team-scoped work-data queries', () => {
     expect(astOfArgs(queries.deployments.byTeam, { teamId: TEAM_ID }, undefined).where).toEqual(
       DENY_ALL_WHERE,
     )
+  })
+})
+
+describe('retro queries', () => {
+  const RETRO_ID = '019f8f00-0000-7000-8000-0000000000c1'
+
+  it('scopes retros.byTeam and retros.detail to the caller teams, denying non-members', () => {
+    for (const ctx of [MEMBER, VIEWER]) {
+      const list = astOfArgs(queries.retros.byTeam, { teamId: TEAM_ID }, ctx).where
+      expect(list).not.toEqual(DENY_ALL_WHERE)
+      expect(JSON.stringify(list)).toContain(ctx.userID)
+
+      const detail = astOfArgs(queries.retros.detail, { id: RETRO_ID }, ctx).where
+      expect(detail).not.toEqual(DENY_ALL_WHERE)
+      expect(JSON.stringify(detail)).toContain(ctx.userID)
+    }
+    for (const ctx of [NON_MEMBER, undefined]) {
+      expect(astOfArgs(queries.retros.byTeam, { teamId: TEAM_ID }, ctx).where).toEqual(
+        DENY_ALL_WHERE,
+      )
+      expect(astOfArgs(queries.retros.detail, { id: RETRO_ID }, ctx).where).toEqual(DENY_ALL_WHERE)
+    }
+  })
+
+  it('never reaches drafts, votes or a card author from the retro detail', () => {
+    const ast = astOfArgs(queries.retros.detail, { id: RETRO_ID }, MEMBER)
+    const serialized = JSON.stringify(ast)
+    // The board, the tallies, the actions and presence — and nothing that carries an author.
+    expect(serialized).toContain('retro_card')
+    expect(serialized).toContain('retro_vote_tally')
+    expect(serialized).not.toContain('retro_draft')
+    expect(serialized).not.toContain('"retro_vote"')
+    expect(serialized).not.toContain('retro_card_author')
+  })
+})
+
+describe('retro drafts and votes are self-scoped with no admin bypass', () => {
+  const RETRO_ID = '019f8f00-0000-7000-8000-0000000000c1'
+
+  it.each([
+    ['retroDrafts.mine', queries.retroDrafts.mine, 'authorId'],
+    ['retroVotes.mine', queries.retroVotes.mine, 'voterId'],
+  ] as const)('%s filters on the verified ctx.userID alone', (_name, query, field) => {
+    for (const ctx of [ADMIN, MEMBER, VIEWER]) {
+      const where = JSON.stringify(astOfArgs(query, { retroId: RETRO_ID }, ctx).where)
+      expect(where).toContain(field)
+      expect(where).toContain(ctx.userID)
+      // The deliberate deviation from `teamScoped`: an admin gets NO workspace-wide bypass here,
+      // because these rows carry the identity the anonymity and vote-privacy guarantees depend on.
+      for (const other of [ADMIN, MEMBER, VIEWER, NON_MEMBER].filter(
+        (candidate) => candidate.userID !== ctx.userID,
+      )) {
+        expect(where).not.toContain(other.userID)
+      }
+    }
+  })
+
+  it.each([
+    ['retroDrafts.mine', queries.retroDrafts.mine],
+    ['retroVotes.mine', queries.retroVotes.mine],
+  ] as const)('%s denies a non-member and an unauthenticated caller', (_name, query) => {
+    for (const ctx of [NON_MEMBER, undefined]) {
+      expect(astOfArgs(query, { retroId: RETRO_ID }, ctx).where).toEqual(DENY_ALL_WHERE)
+    }
+  })
+})
+
+describe('the Zero schema cannot name the card -> author table', () => {
+  it('has no retro_card_author table and no author column beyond the display one', () => {
+    const tables = tableShapes()
+    expect(tables.map((table) => table.serverName)).not.toContain('retro_card_author')
+
+    const card = tables.find((table) => table.serverName === 'retro_card')
+    expect(card?.columns.map((column) => column.serverName)).toContain('author_display_id')
+    expect(card?.columns.map((column) => column.serverName)).not.toContain('author_id')
   })
 })
 

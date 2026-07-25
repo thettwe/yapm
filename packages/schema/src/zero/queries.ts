@@ -208,6 +208,55 @@ export const queries = defineQueries({
       teamScoped(zql.cycle_digest.where('teamId', args.teamId).orderBy('generatedAt', 'desc'), ctx),
     ),
   },
+  retros: {
+    // Team-scoped like every other work-data query. Viewers read; non-members get an empty result.
+    byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
+      teamScoped(zql.retro.where('teamId', args.teamId).orderBy('createdAt', 'desc'), ctx),
+    ),
+    // The whole board in one query. Note what is NOT here: drafts and votes. Both carry the identity
+    // the anonymity and vote-privacy guarantees depend on, so they are reachable only through the
+    // self-filtered queries below — and the card -> author binding is not in the Zero schema at all,
+    // so no relationship can reach it. The related rows inherit the retro's team scope (they share
+    // its `team_id`), exactly like the linked-delivery subtree off an issue.
+    detail: defineQuery(z.object({ id: z.string() }), ({ args, ctx }) =>
+      teamScoped(
+        zql.retro
+          .where('id', args.id)
+          .related('cycle')
+          .related('nextCycle')
+          .related('columns', (columns) => columns.orderBy('rank', 'asc'))
+          .related('cards', (cards) => cards.orderBy('rank', 'asc'))
+          .related('groups', (groups) => groups.orderBy('rank', 'asc'))
+          .related('voteTallies')
+          .related('actions', (actions) => actions.related('issue').orderBy('createdAt', 'asc'))
+          .related('presence', (presence) => presence.related('user'))
+          .one(),
+        ctx,
+      ),
+    ),
+  },
+  retroDrafts: {
+    // SELF-SCOPED, and a deliberate deviation from `teamScoped`: a bare filter on the verified
+    // `ctx.userID` with NO workspace-admin bypass. `teamScoped` grants admins workspace-wide read,
+    // which is right for work data and WRONG here — a draft is what someone is still writing, and its
+    // author is the identity an anonymous retro must never reveal. Nobody but the author, ever.
+    mine: defineQuery(z.object({ retroId: z.string() }), ({ args, ctx }) => {
+      if (!isMember(ctx)) return denyAll(zql.retro_draft)
+      return zql.retro_draft
+        .where('retroId', args.retroId)
+        .where('authorId', ctx.userID)
+        .orderBy('rank', 'asc')
+    }),
+  },
+  retroVotes: {
+    // SELF-SCOPED for the same reason and with the same deviation: a voter sees their own dots (which
+    // is how the remaining-budget readout stays instant and offline-correct), and everyone else reads
+    // only `retro_vote_tally`. Who voted for what never leaves the server for anyone else.
+    mine: defineQuery(z.object({ retroId: z.string() }), ({ args, ctx }) => {
+      if (!isMember(ctx)) return denyAll(zql.retro_vote)
+      return zql.retro_vote.where('retroId', args.retroId).where('voterId', ctx.userID)
+    }),
+  },
 })
 
 export const WORKSPACE_CURRENT_QUERY_NAME = 'workspace.current'
@@ -228,3 +277,7 @@ export const DEPLOYMENTS_BY_TEAM_QUERY_NAME = 'deployments.byTeam'
 export const SAVED_VIEWS_BY_TEAM_QUERY_NAME = 'savedViews.byTeam'
 export const DIGESTS_BY_CYCLE_QUERY_NAME = 'digests.byCycle'
 export const DIGESTS_BY_TEAM_QUERY_NAME = 'digests.byTeam'
+export const RETROS_BY_TEAM_QUERY_NAME = 'retros.byTeam'
+export const RETRO_DETAIL_QUERY_NAME = 'retros.detail'
+export const RETRO_DRAFTS_MINE_QUERY_NAME = 'retroDrafts.mine'
+export const RETRO_VOTES_MINE_QUERY_NAME = 'retroVotes.mine'

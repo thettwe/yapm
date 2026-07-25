@@ -73,6 +73,8 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     rolled_over_from_cycle_id: { nullable: true, hasDefault: false },
     project_id: { nullable: true, hasDefault: false },
     needs_triage: { nullable: false, hasDefault: true },
+    carryover_count: { nullable: false, hasDefault: true },
+    cycle_assigned_at: { nullable: true, hasDefault: false },
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },
@@ -257,6 +259,121 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },
+  // The retro's nine team-scoped, Zero-synced tables: present in BOTH the Kysely DB interface and the
+  // Zero schema, so they must match Postgres on both axes.
+  retro: {
+    id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    cycle_id: { nullable: true, hasDefault: false },
+    next_cycle_id: { nullable: true, hasDefault: false },
+    title: { nullable: false, hasDefault: false },
+    format: { nullable: false, hasDefault: false },
+    phase: { nullable: false, hasDefault: true },
+    facilitator_id: { nullable: true, hasDefault: false },
+    is_anonymous: { nullable: false, hasDefault: true },
+    votes_per_participant: { nullable: false, hasDefault: true },
+    timer_ends_at: { nullable: true, hasDefault: false },
+    timer_duration_s: { nullable: true, hasDefault: false },
+    created_by: { nullable: false, hasDefault: false },
+    closed_at: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  retro_column: {
+    id: { nullable: false, hasDefault: false },
+    retro_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    key: { nullable: false, hasDefault: false },
+    title: { nullable: false, hasDefault: false },
+    accent_token: { nullable: false, hasDefault: false },
+    rank: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  retro_draft: {
+    id: { nullable: false, hasDefault: false },
+    retro_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    column_id: { nullable: false, hasDefault: false },
+    author_id: { nullable: false, hasDefault: false },
+    body: { nullable: false, hasDefault: false },
+    rank: { nullable: false, hasDefault: false },
+    seed_ref: { nullable: true, hasDefault: false },
+    published_at: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  retro_card: {
+    id: { nullable: false, hasDefault: false },
+    retro_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    column_id: { nullable: false, hasDefault: false },
+    group_id: { nullable: true, hasDefault: false },
+    body: { nullable: false, hasDefault: false },
+    rank: { nullable: false, hasDefault: false },
+    is_anonymous: { nullable: false, hasDefault: true },
+    author_display_id: { nullable: true, hasDefault: false },
+    seed_ref: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  retro_group: {
+    id: { nullable: false, hasDefault: false },
+    retro_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    column_id: { nullable: false, hasDefault: false },
+    label: { nullable: true, hasDefault: false },
+    rank: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  retro_vote: {
+    id: { nullable: false, hasDefault: false },
+    retro_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    target_type: { nullable: false, hasDefault: false },
+    target_id: { nullable: false, hasDefault: false },
+    voter_id: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+  },
+  retro_vote_tally: {
+    target_id: { nullable: false, hasDefault: false },
+    retro_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    target_type: { nullable: false, hasDefault: false },
+    count: { nullable: false, hasDefault: true },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  retro_action: {
+    id: { nullable: false, hasDefault: false },
+    retro_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    group_id: { nullable: true, hasDefault: false },
+    card_id: { nullable: true, hasDefault: false },
+    body: { nullable: false, hasDefault: false },
+    assignee_id: { nullable: true, hasDefault: false },
+    target_cycle_id: { nullable: true, hasDefault: false },
+    issue_id: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  retro_presence: {
+    retro_id: { nullable: false, hasDefault: false },
+    user_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    focus_target: { nullable: true, hasDefault: false },
+    last_seen_at: { nullable: false, hasDefault: true },
+  },
+  // THE ANONYMITY BOUNDARY. Server-only: in the Kysely DB interface and the migrations, and
+  // deliberately absent from the Zero schema (asserted below), so an anonymous card's author is
+  // unreachable by any synced query rather than merely unselected.
+  retro_card_author: {
+    card_id: { nullable: false, hasDefault: false },
+    retro_id: { nullable: false, hasDefault: false },
+    author_id: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+  },
   // better-auth owns this table; the drift test provisions it (see `createAuthUserTable`)
   // so the read-surface interface and Zero schema are still checked against its real shape
   // (reference/kysely-stack.md §5.4).
@@ -325,10 +442,32 @@ describe('server-only tables are excluded from the Zero schema', () => {
       'connector_config',
       'connector_secret',
       'connector_installation',
+      // The crux of the retro's anonymity guarantee: if this table ever appears in the Zero schema,
+      // an anonymous card's author becomes syncable and the guarantee is a lie. Merge-blocking.
+      'retro_card_author',
     ]) {
       expect(Object.keys(KYSELY_DB)).toContain(name)
       expect(zeroTables).not.toContain(name)
     }
+  })
+
+  it('keeps every author-shaped retro column out of the synced card and tally rows', () => {
+    const synced = tableShapes()
+    const card = synced.find((table) => table.serverName === 'retro_card')
+    expect(card).toBeDefined()
+    // `author_display_id` is the ONLY author-shaped column on a card, and it is null for an
+    // anonymous retro. Any other author column here would ship the identity to every client.
+    expect(
+      card?.columns.map((column) => column.serverName).filter((name) => name.includes('author')),
+    ).toEqual(['author_display_id'])
+
+    const tally = synced.find((table) => table.serverName === 'retro_vote_tally')
+    expect(tally).toBeDefined()
+    expect(
+      tally?.columns.filter(
+        (column) => column.serverName.includes('user') || column.serverName.includes('voter'),
+      ),
+    ).toEqual([])
   })
 })
 

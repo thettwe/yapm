@@ -26,7 +26,7 @@ Audiences: evaluators (why / the work-graph wedge), self-hosters (install, 3-con
 
 **Big-feature rule** — a change needs all three tiers iff it touches **≥2 of** {synced entity/schema, mutator, permission surface, signature UI}. Otherwise it is small: unit + integration only; do not add E2E reflexively.
 
-> Tracked gap: the Playwright E2E suite is not yet run in ongoing CI (only `scripts/smoke.mjs` is). The PR-review flow runs the full E2E suite before every merge, so merges are gated on it; a dedicated CI E2E job is a pending follow-up, to be added with local verification of the boot ordering (postgres → migrate → zero-cache → vite).
+> CI runs the full Playwright E2E suite as a dedicated `e2e` job (added with `connectors`) alongside the compose smoke test: fresh volumes on the e2e port (`YAPM_HOST_PORT=3210`), booting postgres → migrate → zero-cache → vite. The PR-review flow also runs the suite before every merge, so merges stay gated on it.
 
 ## 4. Every feature ships via a reviewed PR
 

@@ -1,0 +1,742 @@
+import { useQuery } from '@rocicorp/zero/react'
+import { useNavigate } from '@tanstack/react-router'
+import { queries, RETRO_PHASES, RETRO_PRESENCE_HEARTBEAT_MS, type RetroPhase } from '@yapm/schema'
+import { Avatar, AvatarFallback } from '@yapm/ui/components/avatar'
+import { Button } from '@yapm/ui/components/button'
+import { cn } from '@yapm/ui/lib/utils'
+import { ArrowLeftIcon, ArrowRightIcon, TimerIcon, TimerOffIcon, UserIcon } from 'lucide-react'
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMembership } from '@/auth/use-membership'
+import { useRetroApi } from '@/retro/api'
+import {
+  countdownSeconds,
+  formatCountdown,
+  isFacilitator,
+  livePresence,
+  nextPhase,
+  PHASE_HINT,
+  PHASE_LABEL,
+  previousPhase,
+  RETRO_FORMAT_LABEL,
+  type RetroActionData,
+  type RetroCardData,
+  type RetroColumnData,
+  type RetroDraftData,
+  type RetroGroupData,
+  type RetroPresenceData,
+  type RetroRowData,
+  type RetroTallyData,
+  type RetroVoteRowData,
+  remainingVotes,
+  retroCan,
+} from '@/retro/model'
+import { RetroActions } from '@/retro/retro-actions'
+import { RetroBoard } from '@/retro/retro-board'
+import { RetroCommandProvider, useRetroCommand } from '@/retro/retro-command'
+
+interface RelatedUser {
+  id: string
+  name?: string | null
+  email?: string | null
+  image?: string | null
+}
+
+export function RetroView({ teamId, retroId }: { teamId: string; retroId: string }) {
+  const [detail, detailResult] = useQuery(queries.retros.detail({ id: retroId }))
+  const [drafts] = useQuery(queries.retroDrafts.mine({ retroId }))
+  const [votes] = useQuery(queries.retroVotes.mine({ retroId }))
+  const [teams] = useQuery(queries.teams.all())
+  const [users] = useQuery(queries.users.all())
+  const [cycles] = useQuery(queries.cycles.byTeam({ teamId }))
+
+  const team = teams.find((candidate) => candidate.id === teamId)
+
+  const retro = useMemo<RetroRowData | null>(() => {
+    if (!detail) return null
+    return {
+      id: detail.id,
+      teamId: detail.teamId,
+      cycleId: detail.cycleId ?? null,
+      nextCycleId: detail.nextCycleId ?? null,
+      title: detail.title,
+      format: detail.format,
+      phase: detail.phase,
+      facilitatorId: detail.facilitatorId ?? null,
+      isAnonymous: detail.isAnonymous,
+      votesPerParticipant: detail.votesPerParticipant,
+      timerEndsAt: detail.timerEndsAt ?? null,
+      timerDurationS: detail.timerDurationS ?? null,
+      closedAt: detail.closedAt ?? null,
+      createdAt: detail.createdAt,
+    }
+  }, [detail])
+
+  const columns = useMemo<RetroColumnData[]>(
+    () =>
+      ((detail?.columns ?? []) as readonly RetroColumnData[]).map((column) => ({
+        id: column.id,
+        key: column.key,
+        title: column.title,
+        accentToken: column.accentToken,
+        rank: column.rank,
+      })),
+    [detail],
+  )
+
+  const cards = useMemo<RetroCardData[]>(
+    () =>
+      (
+        (detail?.cards ?? []) as readonly (RetroCardData & {
+          groupId?: string | null
+          authorDisplayId?: string | null
+        })[]
+      ).map((card) => ({
+        id: card.id,
+        columnId: card.columnId,
+        groupId: card.groupId ?? null,
+        body: card.body,
+        rank: card.rank,
+        isAnonymous: card.isAnonymous,
+        authorDisplayId: card.authorDisplayId ?? null,
+        createdAt: card.createdAt,
+      })),
+    [detail],
+  )
+
+  const groups = useMemo<RetroGroupData[]>(
+    () =>
+      ((detail?.groups ?? []) as readonly (RetroGroupData & { label?: string | null })[]).map(
+        (group) => ({
+          id: group.id,
+          columnId: group.columnId,
+          label: group.label ?? null,
+          rank: group.rank,
+        }),
+      ),
+    [detail],
+  )
+
+  const tallies = useMemo<RetroTallyData[]>(
+    () =>
+      ((detail?.voteTallies ?? []) as readonly RetroTallyData[]).map((tally) => ({
+        targetId: tally.targetId,
+        count: tally.count,
+      })),
+    [detail],
+  )
+
+  const actions = useMemo<RetroActionData[]>(
+    () =>
+      (
+        (detail?.actions ?? []) as readonly (RetroActionData & {
+          issue?: { id: string; number?: number | null; title: string; status: string } | null
+        })[]
+      ).map((action) => ({
+        id: action.id,
+        body: action.body,
+        assigneeId: action.assigneeId ?? null,
+        targetCycleId: action.targetCycleId ?? null,
+        issueId: action.issueId ?? null,
+        groupId: action.groupId ?? null,
+        cardId: action.cardId ?? null,
+        createdAt: action.createdAt,
+        issue: action.issue
+          ? {
+              id: action.issue.id,
+              number: action.issue.number ?? null,
+              title: action.issue.title,
+              status: action.issue.status,
+            }
+          : null,
+      })),
+    [detail],
+  )
+
+  const presence = useMemo<RetroPresenceData[]>(
+    () =>
+      (
+        (detail?.presence ?? []) as readonly {
+          userId: string
+          focusTarget?: string | null
+          lastSeenAt: number
+          user?: RelatedUser | null
+        }[]
+      ).map((row) => ({
+        userId: row.userId,
+        focusTarget: row.focusTarget ?? null,
+        lastSeenAt: row.lastSeenAt,
+        name: row.user?.name ?? row.user?.email ?? row.userId,
+      })),
+    [detail],
+  )
+
+  const myDrafts = useMemo<RetroDraftData[]>(
+    () =>
+      (drafts as readonly (RetroDraftData & { publishedAt?: number | null })[])
+        .filter((draft) => (draft.publishedAt ?? null) === null)
+        .map((draft) => ({
+          id: draft.id,
+          columnId: draft.columnId,
+          body: draft.body,
+          rank: draft.rank,
+          publishedAt: draft.publishedAt ?? null,
+        })),
+    [drafts],
+  )
+
+  const myVotes = useMemo<RetroVoteRowData[]>(
+    () =>
+      (votes as readonly RetroVoteRowData[]).map((vote) => ({
+        id: vote.id,
+        targetType: vote.targetType,
+        targetId: vote.targetId,
+        createdAt: vote.createdAt,
+      })),
+    [votes],
+  )
+
+  if (!retro || !team) {
+    return (
+      <p className="p-6 text-sm text-text-3" role="status">
+        {detailResult.type === 'complete'
+          ? 'This retrospective no longer exists.'
+          : 'Loading retrospective…'}
+      </p>
+    )
+  }
+
+  return (
+    <RetroShell
+      teamId={teamId}
+      teamKey={team.key}
+      retro={retro}
+      columns={columns}
+      cards={cards}
+      groups={groups}
+      tallies={tallies}
+      actions={actions}
+      presence={presence}
+      drafts={myDrafts}
+      votes={myVotes}
+      users={users as readonly RelatedUser[]}
+      teamMemberIds={((team.members ?? []) as readonly { userId: string }[]).map((m) => m.userId)}
+      cycles={(cycles as readonly { id: string; name: string }[]).map((cycle) => ({
+        id: cycle.id,
+        name: cycle.name,
+      }))}
+    />
+  )
+}
+
+interface RetroShellProps {
+  teamId: string
+  teamKey: string
+  retro: RetroRowData
+  columns: readonly RetroColumnData[]
+  cards: readonly RetroCardData[]
+  groups: readonly RetroGroupData[]
+  tallies: readonly RetroTallyData[]
+  actions: readonly RetroActionData[]
+  presence: readonly RetroPresenceData[]
+  drafts: readonly RetroDraftData[]
+  votes: readonly RetroVoteRowData[]
+  users: readonly RelatedUser[]
+  teamMemberIds: readonly string[]
+  cycles: readonly { id: string; name: string }[]
+}
+
+function RetroShell(props: RetroShellProps) {
+  const { retro, users, teamMemberIds } = props
+  const { userId, canWrite, canManage } = useMembership()
+  const { api, error, clearError } = useRetroApi(retro.id)
+  const facilitator = isFacilitator(retro, userId, canManage)
+
+  const members = useMemo(
+    () =>
+      teamMemberIds.map((id) => {
+        const user = users.find((candidate) => candidate.id === id)
+        return { id, name: user?.name ?? user?.email ?? id }
+      }),
+    [teamMemberIds, users],
+  )
+
+  const [composerColumnId, setComposerColumnId] = useState<string | null>(null)
+  const [actionComposer, setActionComposer] = useState(false)
+  const focusColumnRef = useRef<string | null>(null)
+
+  const openCardComposer = useCallback(() => {
+    setComposerColumnId(focusColumnRef.current ?? props.columns[0]?.id ?? null)
+  }, [props.columns])
+
+  return (
+    <RetroCommandProvider
+      retro={retro}
+      columns={props.columns}
+      cards={props.cards}
+      groups={props.groups}
+      members={members}
+      canWrite={canWrite}
+      facilitator={facilitator}
+      api={api}
+      onNewCard={openCardComposer}
+      onNewAction={() => setActionComposer(true)}
+    >
+      <RetroSurface
+        {...props}
+        api={api}
+        error={error}
+        clearError={clearError}
+        canWrite={canWrite}
+        facilitator={facilitator}
+        members={members}
+        composerColumnId={composerColumnId}
+        onComposerColumn={setComposerColumnId}
+        onOpenCardComposer={openCardComposer}
+        focusColumnRef={focusColumnRef}
+        actionComposerOpen={actionComposer}
+        onOpenActionComposer={() => setActionComposer(true)}
+        onCloseActionComposer={() => setActionComposer(false)}
+      />
+    </RetroCommandProvider>
+  )
+}
+
+interface RetroSurfaceProps extends RetroShellProps {
+  api: ReturnType<typeof useRetroApi>['api']
+  error: string | undefined
+  clearError: () => void
+  canWrite: boolean
+  facilitator: boolean
+  members: readonly { id: string; name: string }[]
+  composerColumnId: string | null
+  onComposerColumn: (columnId: string | null) => void
+  onOpenCardComposer: () => void
+  focusColumnRef: RefObject<string | null>
+  actionComposerOpen: boolean
+  onOpenActionComposer: () => void
+  onCloseActionComposer: () => void
+}
+
+function RetroSurface({
+  teamId,
+  teamKey,
+  retro,
+  columns,
+  cards,
+  groups,
+  tallies,
+  actions,
+  presence,
+  drafts,
+  votes,
+  users,
+  cycles,
+  api,
+  error,
+  clearError,
+  canWrite,
+  facilitator,
+  members,
+  composerColumnId,
+  onComposerColumn,
+  onOpenCardComposer,
+  focusColumnRef,
+  actionComposerOpen,
+  onOpenActionComposer,
+  onCloseActionComposer,
+}: RetroSurfaceProps) {
+  const navigate = useNavigate()
+  const command = useRetroCommand()
+  const [now, setNow] = useState(() => Date.now())
+
+  const authorOf = useCallback(
+    (id: string) => {
+      const user = users.find((candidate) => candidate.id === id)
+      return { name: user?.name ?? user?.email ?? id, image: user?.image ?? null }
+    },
+    [users],
+  )
+
+  // The timer never ticks over the wire: `timer_ends_at` is durable state and every client
+  // renders `endsAt - now` from its own clock. The interval is local and stops with the timer.
+  useEffect(() => {
+    if (retro.timerEndsAt === null) return
+    const handle = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(handle)
+  }, [retro.timerEndsAt])
+
+  // Presence is a coarse throttled heartbeat row, self-written from the verified ctx and pruned
+  // by the existing maintenance pass — no sidecar service, no new job type.
+  useEffect(() => {
+    if (!canWrite) return
+    void api.heartbeat(focusColumnRef.current)
+    const handle = window.setInterval(() => {
+      void api.heartbeat(focusColumnRef.current)
+    }, RETRO_PRESENCE_HEARTBEAT_MS)
+    return () => window.clearInterval(handle)
+  }, [api, canWrite])
+
+  const onFocusColumn = useCallback(
+    (columnId: string | null) => {
+      if (columnId === null || focusColumnRef.current === columnId) return
+      focusColumnRef.current = columnId
+      if (canWrite) void api.heartbeat(columnId)
+    },
+    [api, canWrite, focusColumnRef],
+  )
+
+  const forward = nextPhase(retro.phase)
+  const back = previousPhase(retro.phase)
+  const canFacilitate = facilitator && canWrite
+  const canAct = retroCan(retro.phase, 'action', { canWrite })
+
+  // Retro-wide shortcuts. Card/vote/group keys belong to the focused card and live on the board;
+  // these are the ones that act on the retro itself, so they are read at the window and ignored
+  // while a field or dialog owns the keyboard.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null
+      const editing =
+        target?.isContentEditable ||
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.closest('[role="dialog"]') != null
+      if (editing) return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+
+      if (event.key === ']' && canFacilitate && forward) {
+        event.preventDefault()
+        void api.setPhase(forward)
+        return
+      }
+      if (event.key === '[' && canFacilitate && back) {
+        event.preventDefault()
+        void api.setPhase(back)
+        return
+      }
+      if (event.key === 't' && canFacilitate && retroCan(retro.phase, 'timer', { canWrite })) {
+        event.preventDefault()
+        if (retro.timerEndsAt !== null) void api.stopTimer()
+        else command.openTimer()
+        return
+      }
+      if (event.key === 'a' && canAct) {
+        event.preventDefault()
+        onOpenActionComposer()
+        return
+      }
+      // `c` opens the composer in the column focus was last in, so capture works from the moment
+      // the retro loads — before anything on the board has been tabbed to.
+      if (event.key === 'c' && retroCan(retro.phase, 'draft', { canWrite })) {
+        event.preventDefault()
+        onOpenCardComposer()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [
+    api,
+    back,
+    canAct,
+    canFacilitate,
+    canWrite,
+    command,
+    forward,
+    onOpenActionComposer,
+    onOpenCardComposer,
+    retro.phase,
+    retro.timerEndsAt,
+  ])
+
+  const seconds = countdownSeconds(retro.timerEndsAt, now)
+  const live = livePresence(presence, now)
+  const remaining = remainingVotes(retro.votesPerParticipant, votes)
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header className="flex flex-col gap-3 border-b border-border px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-base font-semibold tracking-tight text-text-1">{retro.title}</h1>
+          <span className="rounded-full bg-bg-sidebar px-2 py-0.5 text-[11px] font-medium text-text-2">
+            {RETRO_FORMAT_LABEL[retro.format]}
+          </span>
+          {retro.isAnonymous ? (
+            <span
+              className="rounded-full bg-bg-sidebar px-2 py-0.5 text-[11px] font-medium text-text-2"
+              title="Cards in this retro carry no author on any synced row."
+            >
+              Anonymous
+            </span>
+          ) : null}
+          <div className="ml-auto flex items-center gap-2">
+            <PresenceStrip presence={live} />
+            <TimerControl
+              seconds={seconds}
+              running={retro.timerEndsAt !== null}
+              canControl={canFacilitate && retroCan(retro.phase, 'timer', { canWrite })}
+              onStart={() => command.openTimer()}
+              onStop={() => void api.stopTimer()}
+            />
+            <FacilitatorControl
+              retro={retro}
+              members={members}
+              facilitator={facilitator}
+              canWrite={canWrite}
+              onClaim={() => void api.claimFacilitator()}
+              onHandOff={() => command.openFacilitator()}
+            />
+          </div>
+        </div>
+
+        <PhaseStepper
+          phase={retro.phase}
+          canFacilitate={canFacilitate}
+          onStep={(to) => void api.setPhase(to)}
+        />
+
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-xs text-text-2">{PHASE_HINT[retro.phase]}</p>
+          {retro.phase === 'vote' ? (
+            <span className="font-mono text-xs text-text-2" data-testid="retro-vote-budget">
+              {remaining}/{retro.votesPerParticipant} dots left
+            </span>
+          ) : null}
+        </div>
+
+        {error !== undefined ? (
+          <div className="flex items-center gap-2 text-xs text-status-urgent" role="alert">
+            {error}
+            <Button size="xs" variant="ghost" onClick={clearError}>
+              Dismiss
+            </Button>
+          </div>
+        ) : null}
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        <RetroBoard
+          retro={retro}
+          columns={columns}
+          cards={cards}
+          groups={groups}
+          tallies={tallies}
+          drafts={drafts}
+          votes={votes}
+          authorOf={authorOf}
+          canWrite={canWrite}
+          facilitator={facilitator}
+          api={api}
+          composerColumnId={composerColumnId}
+          onComposerColumn={onComposerColumn}
+          onFocusColumn={onFocusColumn}
+          onFocusChange={command.setFocused}
+          onGroupWith={command.openGroupWith}
+          onActionFrom={(item) => {
+            if (!canAct) return
+            const body =
+              item.kind === 'group'
+                ? (item.label ?? item.cards[0]?.body ?? 'Cluster')
+                : item.card.body
+            void api.createAction(
+              body,
+              item.kind === 'group' ? { groupId: item.id } : { cardId: item.id },
+            )
+          }}
+        />
+
+        <RetroActions
+          retro={retro}
+          actions={actions}
+          members={members}
+          cycles={cycles}
+          teamKey={teamKey}
+          canWrite={canWrite}
+          composerOpen={actionComposerOpen}
+          onOpenComposer={onOpenActionComposer}
+          onCloseComposer={onCloseActionComposer}
+          api={api}
+          onOpenIssue={(issueId) => {
+            void navigate({
+              to: '/teams/$teamId/issues',
+              params: { teamId },
+              search: { open: issueId },
+            })
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function PhaseStepper({
+  phase,
+  canFacilitate,
+  onStep,
+}: {
+  phase: RetroPhase
+  canFacilitate: boolean
+  onStep: (to: RetroPhase) => void
+}) {
+  const current = RETRO_PHASES.indexOf(phase)
+  const forward = nextPhase(phase)
+  const back = previousPhase(phase)
+
+  return (
+    <nav className="flex items-center gap-1" aria-label="Retro phase">
+      {canFacilitate ? (
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label={back ? `Step back to ${PHASE_LABEL[back]}` : 'Step back'}
+          aria-keyshortcuts="["
+          disabled={back === null}
+          data-testid="retro-phase-back"
+          onClick={() => back && onStep(back)}
+        >
+          <ArrowLeftIcon />
+        </Button>
+      ) : null}
+      <ol className="flex items-center gap-0.5 rounded-control bg-bg-sidebar p-0.5">
+        {RETRO_PHASES.map((entry, index) => (
+          <li key={entry}>
+            <span
+              data-testid="retro-phase-step"
+              data-phase={entry}
+              aria-current={entry === phase ? 'step' : undefined}
+              className={cn(
+                'flex items-center gap-1.5 rounded-control px-2.5 py-1 text-xs font-medium transition-colors',
+                entry === phase
+                  ? 'bg-bg-elevated text-text-1 shadow-sm'
+                  : index < current
+                    ? 'text-text-2'
+                    : 'text-text-3',
+              )}
+            >
+              {PHASE_LABEL[entry]}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {canFacilitate ? (
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label={forward ? `Advance to ${PHASE_LABEL[forward]}` : 'Advance'}
+          aria-keyshortcuts="]"
+          disabled={forward === null}
+          data-testid="retro-phase-forward"
+          onClick={() => forward && onStep(forward)}
+        >
+          <ArrowRightIcon />
+        </Button>
+      ) : null}
+    </nav>
+  )
+}
+
+function PresenceStrip({ presence }: { presence: readonly RetroPresenceData[] }) {
+  if (presence.length === 0) return null
+  return (
+    <ul
+      className="flex items-center gap-1"
+      aria-label={`${presence.length} here`}
+      data-testid="retro-presence"
+    >
+      {presence.slice(0, 5).map((row) => (
+        <li key={row.userId}>
+          <Avatar size="xs" title={row.name}>
+            <AvatarFallback aria-label={row.name}>
+              {row.name
+                .split(/\s+/u)
+                .slice(0, 2)
+                .map((part) => part.charAt(0).toUpperCase())
+                .join('')}
+            </AvatarFallback>
+          </Avatar>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function TimerControl({
+  seconds,
+  running,
+  canControl,
+  onStart,
+  onStop,
+}: {
+  seconds: number | null
+  running: boolean
+  canControl: boolean
+  onStart: () => void
+  onStop: () => void
+}) {
+  if (running && seconds !== null) {
+    return (
+      <span className="flex items-center gap-1.5" data-testid="retro-timer">
+        <span
+          className="font-mono text-xs tabular-nums text-text-1"
+          role="timer"
+          aria-label={`${formatCountdown(seconds)} remaining`}
+        >
+          {formatCountdown(seconds)}
+        </span>
+        {canControl ? (
+          <Button size="icon-xs" variant="ghost" aria-label="Stop the timer" onClick={onStop}>
+            <TimerOffIcon />
+          </Button>
+        ) : null}
+      </span>
+    )
+  }
+  if (!canControl) return null
+  return (
+    <Button
+      size="icon-xs"
+      variant="ghost"
+      aria-label="Start a timer"
+      aria-keyshortcuts="t"
+      data-testid="retro-timer-start"
+      onClick={onStart}
+    >
+      <TimerIcon />
+    </Button>
+  )
+}
+
+function FacilitatorControl({
+  retro,
+  members,
+  facilitator,
+  canWrite,
+  onClaim,
+  onHandOff,
+}: {
+  retro: RetroRowData
+  members: readonly { id: string; name: string }[]
+  facilitator: boolean
+  canWrite: boolean
+  onClaim: () => void
+  onHandOff: () => void
+}) {
+  if (retro.facilitatorId === null) {
+    if (!canWrite) return <span className="text-[11.5px] text-text-3">No facilitator</span>
+    return (
+      <Button size="xs" variant="outline" data-testid="retro-claim-facilitator" onClick={onClaim}>
+        <UserIcon />
+        Run this retro
+      </Button>
+    )
+  }
+  const name = members.find((member) => member.id === retro.facilitatorId)?.name ?? 'another member'
+  if (!facilitator) {
+    return <span className="text-[11.5px] text-text-3">{name} is facilitating</span>
+  }
+  return (
+    <Button size="xs" variant="ghost" data-testid="retro-hand-off" onClick={onHandOff}>
+      <UserIcon />
+      You are facilitating
+    </Button>
+  )
+}

@@ -5,6 +5,7 @@ import {
   KanbanSquareIcon,
   ListIcon,
   MapIcon,
+  MessagesSquareIcon,
   RefreshCwIcon,
   RocketIcon,
 } from 'lucide-react'
@@ -15,15 +16,15 @@ const INACTIVE = 'text-text-3 hover:text-text-1'
 const LINK_CLASS =
   'flex items-center gap-1.5 rounded-control px-2.5 py-1 text-xs font-medium transition-colors'
 
-// The List ↔ Board ↔ Cycles ↔ Triage toggle: peer views of the same team-scoped issues. These
-// are route navigation links, not an ARIA tab widget (no tabpanel, no roving tabindex), so they
-// use a plain <nav> with aria-current marking the active view.
+// The List ↔ Board ↔ Cycles ↔ Triage ↔ Retros toggle: peer views of the same team-scoped work.
+// These are route navigation links, not an ARIA tab widget (no tabpanel, no roving tabindex), so
+// they use a plain <nav> with aria-current marking the active view.
 export function ViewSwitch({
   teamId,
   current,
 }: {
   teamId: string
-  current: 'list' | 'board' | 'cycles' | 'triage' | 'projects' | 'roadmap'
+  current: 'list' | 'board' | 'cycles' | 'triage' | 'projects' | 'roadmap' | 'retros'
 }) {
   return (
     <nav
@@ -65,6 +66,15 @@ export function ViewSwitch({
       >
         <InboxIcon className="size-3.5" />
         Triage
+      </Link>
+      <Link
+        to="/teams/$teamId/retros"
+        params={{ teamId }}
+        aria-current={current === 'retros' ? 'page' : undefined}
+        className={cn(LINK_CLASS, current === 'retros' ? ACTIVE : INACTIVE)}
+      >
+        <MessagesSquareIcon className="size-3.5" />
+        Retros
       </Link>
       <Link
         to="/teams/$teamId/projects"

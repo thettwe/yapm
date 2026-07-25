@@ -2,21 +2,30 @@ import type { ReadonlyJSONValue } from '@rocicorp/zero'
 import { useQuery, useZero } from '@rocicorp/zero/react'
 import { Link } from '@tanstack/react-router'
 import {
-  computeDeliverySignal,
-  computeDivergence,
+  type CiHealth,
+  ciHealthFromConclusion,
+  type DivergenceKind,
   ISSUE_PRIORITIES,
   ISSUE_STATUSES,
   type IssuePriority,
   type IssueStatus,
   mutators,
   newId,
+  type PullRequestState,
   queries,
+  type ReviewState,
 } from '@yapm/schema'
 import { Avatar, AvatarFallback, AvatarImage } from '@yapm/ui/components/avatar'
 import { Button } from '@yapm/ui/components/button'
 import { CommentCard } from '@yapm/ui/components/comment'
 import { DetailField, DetailSection, PropertyButton } from '@yapm/ui/components/detail-field'
-import { DivergenceFlag, RealityStripPlaceholder } from '@yapm/ui/components/issue-row'
+import {
+  DivergenceFlag,
+  formatReviewAge,
+  RealityStrip,
+  RealityStripPlaceholder,
+  type RealityStripProps,
+} from '@yapm/ui/components/issue-row'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@yapm/ui/components/menu'
 import { PriorityMark } from '@yapm/ui/components/priority-mark'
 import {
@@ -38,6 +47,12 @@ import {
 } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
+import {
+  DIVERGENCE_LABEL,
+  deliveryView,
+  type LinkedIssueRow,
+  linkedEntitiesFor,
+} from '@/issues/delivery'
 import {
   isPendingNumber,
   issueKey,
@@ -81,6 +96,53 @@ interface CommentRow {
   author?: { id: string; name?: string | null; email?: string | null; image?: string | null } | null
 }
 
+interface CiCheckRow {
+  id: string
+  name?: string | null
+  conclusion: string
+}
+
+interface ReviewRow {
+  id: string
+  author?: string | null
+  state: ReviewState
+  submittedAt: number
+}
+
+interface LinkedPrRow {
+  id: string
+  number: number
+  title?: string | null
+  state: PullRequestState
+  url?: string | null
+  repo: string
+  openedAt: number
+  mergedAt?: number | null
+  ciChecks?: readonly CiCheckRow[]
+  reviews?: readonly ReviewRow[]
+}
+
+interface IssueLinkDetailRow {
+  source: string
+  pullRequest?: LinkedPrRow | null
+}
+
+interface DeploymentRow {
+  id: string
+  repo: string
+  environment?: string | null
+  state: string
+  ref?: string | null
+  updatedAt: number
+}
+
+const PR_STATE_LABEL: Record<PullRequestState, string> = {
+  draft: 'Draft',
+  open: 'Open',
+  merged: 'Merged',
+  closed: 'Closed',
+}
+
 export function IssueDetailPanel({
   issueId,
   teamId,
@@ -117,6 +179,7 @@ export function IssueDetail({
   const [users] = useQuery(queries.users.all())
   const [labels] = useQuery(queries.labels.byTeam({ teamId }))
   const [cycles] = useQuery(queries.cycles.byTeam({ teamId }))
+  const [deployments] = useQuery(queries.deployments.byTeam({ teamId }))
   const { canWrite } = useMembership()
 
   const team = teams.find((candidate) => candidate.id === teamId)
@@ -163,6 +226,7 @@ export function IssueDetail({
         name: cycle.name,
         number: cycle.number ?? null,
       }))}
+      deployments={deployments as readonly DeploymentRow[]}
       canWrite={canWrite}
       onClose={onClose}
     />
@@ -189,6 +253,7 @@ interface IssueRecord {
   creator?: { id: string; name?: string | null; email?: string | null } | null
   labels?: readonly LabelRow[]
   comments?: readonly CommentRow[]
+  issueLinks?: readonly IssueLinkDetailRow[]
 }
 
 function DetailToolbar({ onClose, title }: { onClose?: () => void; title: string }) {
@@ -223,6 +288,7 @@ function IssueDetailBody({
   members,
   labelOptions,
   cycleOptions,
+  deployments,
   canWrite,
   onClose,
 }: {
@@ -232,6 +298,7 @@ function IssueDetailBody({
   members: readonly MemberOption[]
   labelOptions: readonly LabelRow[]
   cycleOptions: readonly CycleOption[]
+  deployments: readonly DeploymentRow[]
   canWrite: boolean
   onClose?: () => void
 }) {
@@ -240,8 +307,9 @@ function IssueDetailBody({
   const key = issueKey(teamKey, issue)
   const currentLabels = (issue.labels ?? []) as readonly LabelRow[]
   const currentLabelIds = new Set(currentLabels.map((label) => label.id))
-  const signal = computeDeliverySignal(issue, {})
-  const divergence = computeDivergence(issue.status, signal)
+  const issueLinks = (issue.issueLinks ?? []) as readonly IssueLinkDetailRow[]
+  const view = deliveryView(issue, linkedEntitiesFor(issueLinks as readonly LinkedIssueRow[]))
+  const divergence = view.divergence
 
   const [error, setError] = useState<string | undefined>(undefined)
 
@@ -330,7 +398,7 @@ function IssueDetailBody({
         >
           {key}
         </span>
-        {divergence ? <DivergenceFlag /> : null}
+        {divergence ? <DivergenceFlag label={DIVERGENCE_LABEL[divergence]} /> : null}
         {onClose ? (
           <span className="ml-auto flex items-center gap-1">
             {pending ? null : (
@@ -574,10 +642,12 @@ function IssueDetailBody({
             </DetailField>
 
             <DetailField label="Delivery">
-              <span className="flex items-center gap-2 text-[13px] text-text-3">
-                <RealityStripPlaceholder />
-                Not linked
-              </span>
+              <DeliveryDetail
+                strip={view.strip}
+                divergence={divergence}
+                links={issueLinks}
+                deployments={deployments}
+              />
             </DetailField>
           </DetailSection>
         </aside>
@@ -587,6 +657,126 @@ function IssueDetailBody({
         <div className="border-t border-border px-4 py-2 text-xs text-status-urgent" role="alert">
           {error}
         </div>
+      ) : null}
+    </div>
+  )
+}
+
+const CI_HEALTH_TONE: Record<CiHealth, string> = {
+  passing: 'bg-signal-sync',
+  failing: 'bg-status-urgent',
+  pending: 'bg-status-in-progress',
+}
+
+const CI_HEALTH_LABEL: Record<CiHealth, string> = {
+  passing: 'CI passing',
+  failing: 'CI failing',
+  pending: 'CI running',
+}
+
+function aggregateHealth(checks: readonly CiCheckRow[]): CiHealth | null {
+  if (checks.length === 0) return null
+  const healths = checks.map((check) => ciHealthFromConclusion(check.conclusion as never))
+  if (healths.includes('failing')) return 'failing'
+  if (healths.includes('pending')) return 'pending'
+  return 'passing'
+}
+
+function DeliveryDetail({
+  strip,
+  divergence,
+  links,
+  deployments,
+}: {
+  strip: RealityStripProps | null
+  divergence: DivergenceKind | null
+  links: readonly IssueLinkDetailRow[]
+  deployments: readonly DeploymentRow[]
+}) {
+  const prs = links.map((link) => link.pullRequest).filter((pr): pr is LinkedPrRow => pr != null)
+  const repos = new Set(prs.map((pr) => pr.repo))
+  const relatedDeploys = deployments.filter((deploy) => repos.has(deploy.repo))
+
+  if (strip === null && prs.length === 0) {
+    return (
+      <span className="flex items-center gap-2 text-[13px] text-text-3">
+        <RealityStripPlaceholder />
+        Not linked
+      </span>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {strip ? (
+        <div className="flex items-center gap-2">
+          <RealityStrip {...strip} />
+          {divergence ? (
+            <span className="flex items-center gap-1 text-[12px] text-status-urgent">
+              <DivergenceFlag label={DIVERGENCE_LABEL[divergence]} />
+              {DIVERGENCE_LABEL[divergence]}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      <ul className="flex flex-col gap-1.5">
+        {prs.map((pr) => {
+          const health = aggregateHealth(pr.ciChecks ?? [])
+          const latestReview = [...(pr.reviews ?? [])].sort(
+            (a, b) => b.submittedAt - a.submittedAt,
+          )[0]
+          return (
+            <li key={pr.id} className="flex items-center gap-2 text-[12.5px] text-text-2">
+              <span className="font-mono text-[11px] text-text-3">{PR_STATE_LABEL[pr.state]}</span>
+              {pr.url ? (
+                <a
+                  href={pr.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-control text-accent-strong outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  {pr.repo}#{pr.number}
+                  <ExternalLinkIcon className="size-3" aria-hidden="true" />
+                </a>
+              ) : (
+                <span className="font-mono text-[11px] text-text-2">
+                  {pr.repo}#{pr.number}
+                </span>
+              )}
+              {health ? (
+                <span className="inline-flex items-center gap-1 text-text-3">
+                  <span
+                    className={`size-1.5 rounded-full ${CI_HEALTH_TONE[health]}`}
+                    role="img"
+                    aria-label={CI_HEALTH_LABEL[health]}
+                  />
+                </span>
+              ) : null}
+              {latestReview ? (
+                <span className="text-text-3">
+                  {latestReview.state === 'approved'
+                    ? 'approved'
+                    : latestReview.state === 'changes_requested'
+                      ? 'changes requested'
+                      : 'reviewed'}{' '}
+                  {formatReviewAge(Date.now() - latestReview.submittedAt)} ago
+                </span>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
+
+      {relatedDeploys.length > 0 ? (
+        <ul className="flex flex-col gap-1">
+          {relatedDeploys.map((deploy) => (
+            <li key={deploy.id} className="flex items-center gap-2 text-[12px] text-text-3">
+              <span className="font-mono text-[11px]">{deploy.environment ?? 'deploy'}</span>
+              <span className="text-text-2">{deploy.state}</span>
+            </li>
+          ))}
+        </ul>
       ) : null}
     </div>
   )

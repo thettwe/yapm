@@ -184,6 +184,14 @@ export const queries = defineQueries({
       teamScoped(zql.label.where('teamId', args.teamId).orderBy('name', 'asc'), ctx),
     ),
   },
+  deployments: {
+    // Team-scoped deploy state for the issue-detail reality view. Deployments are repo/ref-
+    // anchored with no per-issue edge (design decision 4), so the detail matches them to a
+    // linked PR's repo client-side; the sync stays inside the team boundary either way.
+    byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
+      teamScoped(zql.deployment.where('teamId', args.teamId).orderBy('updatedAt', 'desc'), ctx),
+    ),
+  },
   savedViews: {
     byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
       teamScoped(zql.saved_view.where('teamId', args.teamId).orderBy('createdAt', 'asc'), ctx),
@@ -205,4 +213,5 @@ export const PROJECTS_ALL_QUERY_NAME = 'projects.all'
 export const PROJECT_GET_QUERY_NAME = 'projects.get'
 export const TRIAGE_INBOX_QUERY_NAME = 'triage.inbox'
 export const LABELS_BY_TEAM_QUERY_NAME = 'labels.byTeam'
+export const DEPLOYMENTS_BY_TEAM_QUERY_NAME = 'deployments.byTeam'
 export const SAVED_VIEWS_BY_TEAM_QUERY_NAME = 'savedViews.byTeam'

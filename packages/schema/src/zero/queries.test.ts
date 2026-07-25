@@ -4,6 +4,7 @@ import type { AuthContext } from './context.js'
 import { tableShapes } from './introspect.js'
 import {
   CYCLES_BY_TEAM_QUERY_NAME,
+  DEPLOYMENTS_BY_TEAM_QUERY_NAME,
   INVITES_ALL_QUERY_NAME,
   ISSUE_DETAIL_QUERY_NAME,
   ISSUES_BY_TEAM_QUERY_NAME,
@@ -71,6 +72,7 @@ describe('the synced query registry', () => {
       [PROJECT_GET_QUERY_NAME, queries.projects.get],
       [TRIAGE_INBOX_QUERY_NAME, queries.triage.inbox],
       [LABELS_BY_TEAM_QUERY_NAME, queries.labels.byTeam],
+      [DEPLOYMENTS_BY_TEAM_QUERY_NAME, queries.deployments.byTeam],
       [SAVED_VIEWS_BY_TEAM_QUERY_NAME, queries.savedViews.byTeam],
     ] as const) {
       expect(query.queryName).toBe(name)
@@ -268,6 +270,21 @@ describe('team-scoped work-data queries', () => {
       DENY_ALL_WHERE,
     )
     expect(astOfArgs(queries.savedViews.byTeam, { teamId: TEAM_ID }, NON_MEMBER).where).toEqual(
+      DENY_ALL_WHERE,
+    )
+  })
+
+  it('scopes deployments.byTeam to members and denies non-members', () => {
+    expect(astOfArgs(queries.deployments.byTeam, { teamId: TEAM_ID }, MEMBER).where).not.toEqual(
+      DENY_ALL_WHERE,
+    )
+    expect(astOfArgs(queries.deployments.byTeam, { teamId: TEAM_ID }, VIEWER).where).not.toEqual(
+      DENY_ALL_WHERE,
+    )
+    expect(astOfArgs(queries.deployments.byTeam, { teamId: TEAM_ID }, NON_MEMBER).where).toEqual(
+      DENY_ALL_WHERE,
+    )
+    expect(astOfArgs(queries.deployments.byTeam, { teamId: TEAM_ID }, undefined).where).toEqual(
       DENY_ALL_WHERE,
     )
   })

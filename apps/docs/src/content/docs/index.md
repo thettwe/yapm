@@ -18,3 +18,7 @@ runs as three containers you own.
 - [Projects & roadmap](/features/projects/) — lightweight, workspace-level projects with
   computed progress and a keyboard-first roadmap timeline across teams, at
   `/teams/<teamId>/projects` and `/teams/<teamId>/roadmap`.
+- [Delivery signals](/features/delivery-signals/) — every issue row shows delivery reality
+  (PR state, CI health, review age) derived from linked GitHub activity, with a divergence
+  flag when a human status disagrees with git. [Connect GitHub](/self-hosting/github-connector/)
+  to turn it on.

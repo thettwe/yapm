@@ -112,6 +112,44 @@ jobs:
       - name: Build
         run: pnpm turbo run build
 
+  e2e:
+    name: Playwright e2e
+    runs-on: ubuntu-latest
+    env:
+      YAPM_HOST_PORT: '3210'
+      DATABASE_URL: postgres://yapm:yapm@localhost:5440/yapm
+      E2E_ZERO_CACHE_URL: http://localhost:4848
+      VITE_ZERO_CACHE_URL: http://localhost:4848
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build packages (schema/ui dist the e2e stack imports)
+        run: pnpm turbo run build
+      - name: Install Playwright browser
+        run: pnpm --filter @yapm/web exec playwright install --with-deps chromium
+      - name: Start Postgres + zero-cache (fresh volumes, e2e port)
+        run: docker compose -f docker/docker-compose.dev.yml up -d --wait --wait-timeout 180 postgres zero-cache
+      - name: Run the Playwright suite
+        run: pnpm --filter @yapm/web e2e
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
+      - name: Compose logs
+        if: always()
+        run: docker compose -f docker/docker-compose.dev.yml logs --no-color
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/docker-compose.dev.yml down -v
+
   smoke:
     name: Compose smoke test
     runs-on: ubuntu-latest

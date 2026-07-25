@@ -2,6 +2,8 @@ import type { ReadonlyJSONValue } from '@rocicorp/zero'
 import { useQuery, useZero } from '@rocicorp/zero/react'
 import { useNavigate } from '@tanstack/react-router'
 import {
+  DELIVERY_PREDICATES,
+  type DeliveryPredicate,
   ISSUE_PRIORITIES,
   ISSUE_STATUSES,
   type IssueFilter,
@@ -16,7 +18,7 @@ import {
 } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { Input } from '@yapm/ui/components/input'
-import { IssueRow } from '@yapm/ui/components/issue-row'
+import { DivergenceFlag, IssueRow, RealityStrip } from '@yapm/ui/components/issue-row'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@yapm/ui/components/menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@yapm/ui/components/popover'
 import { PriorityMark } from '@yapm/ui/components/priority-mark'
@@ -42,6 +44,12 @@ import {
 import { useMembership } from '@/auth/use-membership'
 import { cycleKey } from '@/cycles/model'
 import { CommandProvider, useCommand } from '@/issues/command'
+import {
+  DIVERGENCE_LABEL,
+  deliveryView,
+  type LinkedIssueRow,
+  linkedEntitiesFor,
+} from '@/issues/delivery'
 import {
   buildGroups,
   DEFAULT_GROUPING,
@@ -69,6 +77,14 @@ const GROUPING_LABEL: Record<ListGrouping, string> = {
   cycle: 'Cycle',
   project: 'Project',
   none: 'No grouping',
+}
+
+// Reality-derived predicates, dormant until the delivery signal is real (this change). Where a
+// predicate has no linked data it simply matches nothing rather than being hidden.
+const DELIVERY_LABEL: Record<DeliveryPredicate, string> = {
+  'blocked-on-review': 'Blocked on review',
+  'failing-ci': 'Failing CI',
+  'merged-not-deployed': 'Merged, not deployed',
 }
 
 const SORT_LABEL: Record<IssueSortKey, string> = {
@@ -142,6 +158,7 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
               image: issue.assignee.image,
             }
           : null,
+        linked: linkedEntitiesFor((issue as { issueLinks?: readonly LinkedIssueRow[] }).issueLinks),
       })),
     [issuesRaw],
   )
@@ -494,6 +511,7 @@ function IssueGroupSection({
       {group.issues.map((issue, offset) => {
         const index = startIndex + offset
         const pending = isPendingNumber(issue)
+        const view = deliveryView(issue, issue.linked ?? {})
         return (
           <IssueRow
             key={issue.id}
@@ -510,6 +528,10 @@ function IssueGroupSection({
             labels={(issue.labels ?? []).map((label) => ({ name: label.name, color: label.color }))}
             date={formatRelative(issue.updatedAt)}
             selected={selection.has(issue.id)}
+            {...(view.strip ? { realityStrip: <RealityStrip {...view.strip} /> } : {})}
+            {...(view.divergence
+              ? { divergenceFlag: <DivergenceFlag label={DIVERGENCE_LABEL[view.divergence]} /> }
+              : {})}
             {...(issue.assignee
               ? {
                   assignee: {
@@ -669,6 +691,22 @@ function Toolbar({
             const real = value === UNASSIGNED ? null : value
             patch({ assigneeIds: toggle(filter.assigneeIds, real) })
           }}
+        />
+        <FilterMenu
+          label="Delivery"
+          options={DELIVERY_PREDICATES.map((predicate) => ({
+            value: predicate,
+            label: DELIVERY_LABEL[predicate],
+          }))}
+          selected={(filter.delivery ?? []) as readonly string[]}
+          onToggle={(value) =>
+            patch({
+              delivery: toggle(
+                filter.delivery as readonly DeliveryPredicate[] | undefined,
+                value as DeliveryPredicate,
+              ),
+            })
+          }
         />
         {labelOptions.length > 0 ? (
           <FilterMenu

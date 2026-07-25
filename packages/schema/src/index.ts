@@ -223,6 +223,7 @@ export {
 } from './zero/mutators.js'
 export {
   CYCLES_BY_TEAM_QUERY_NAME,
+  DEPLOYMENTS_BY_TEAM_QUERY_NAME,
   denyAll,
   INVITES_ALL_QUERY_NAME,
   ISSUE_DETAIL_QUERY_NAME,

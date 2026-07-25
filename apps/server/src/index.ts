@@ -13,6 +13,7 @@ import { createApp } from './app.js'
 import { createAuth } from './auth.js'
 import { createAuthRoutes } from './auth-routes.js'
 import { type Env, EnvValidationError, githubAppEnv, loadEnv } from './config/env.js'
+import { createConnectorAdminRoutes } from './connectors/admin-routes.js'
 import { createGithubConnector, githubConnector } from './connectors/github/index.js'
 import { createGithubWebhookRoute } from './connectors/github/routes.js'
 import { databaseCheck, replicationCheck } from './health.js'
@@ -106,6 +107,25 @@ async function main(): Promise<void> {
     enqueue: (delivery) => github.enqueue(delivery),
   })
 
+  const githubMissingEnv = (
+    [
+      ['GITHUB_APP_ID', env.GITHUB_APP_ID],
+      ['GITHUB_APP_PRIVATE_KEY', env.GITHUB_APP_PRIVATE_KEY],
+      ['GITHUB_APP_WEBHOOK_SECRET', env.GITHUB_APP_WEBHOOK_SECRET],
+      ['SECRETS_ENCRYPTION_KEY', env.SECRETS_ENCRYPTION_KEY],
+    ] as const
+  )
+    .filter(([, value]) => value === undefined)
+    .map(([name]) => name)
+
+  const connectorAdmin = createConnectorAdminRoutes({
+    auth,
+    db: database.db,
+    logger,
+    githubConfigured: github.enabled,
+    githubMissingEnv,
+  })
+
   let cycleScheduler: CycleScheduler | undefined
   if (env.CYCLE_MAINTENANCE === 'true') {
     try {
@@ -131,6 +151,7 @@ async function main(): Promise<void> {
     webDistDir: env.WEB_DIST_DIR,
     authRoutes: createAuthRoutes({ auth, db: database.db, env, logger }),
     githubWebhook,
+    connectorAdmin,
     zero: {
       dbProvider,
       resolveContext: createSessionContextResolver({

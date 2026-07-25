@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount } from './support'
+import { ADMIN, ensureAccount, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const DRAFT = '[data-testid="retro-draft"]'
@@ -30,7 +30,7 @@ async function enterApp(page: Page): Promise<void> {
   })
 }
 
-async function openTeam(page: Page): Promise<void> {
+async function openTeam(page: Page): Promise<string> {
   const teamName = unique('Retro team')
   await page.getByTestId('create-team').click()
   const dialog = page.getByRole('dialog')
@@ -42,6 +42,7 @@ async function openTeam(page: Page): Promise<void> {
   await teamLink.click()
   await page.getByRole('link', { name: 'Issues' }).click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
+  return teamName
 }
 
 async function createCycle(page: Page, name: string, startOffset: number, endOffset: number) {
@@ -81,6 +82,95 @@ async function openRetro(page: Page): Promise<void> {
 
 function phaseStep(page: Page, phase: string) {
   return page.locator(`[data-testid="retro-phase-step"][data-phase="${phase}"]`)
+}
+
+async function syncedUserId(page: Page): Promise<string> {
+  return await page.evaluate(async () => {
+    const response = await fetch('/api/zero/token', { credentials: 'include' })
+    const data = (await response.json()) as { userID: string }
+    return data.userID
+  })
+}
+
+interface ReplicaRow {
+  table: string
+  json: string
+}
+
+interface Replica {
+  /** Everything persisted, verbatim — for "this string is nowhere in the replica". */
+  raw: string
+  /** The same bytes decomposed into synced rows, each tagged with the table it belongs to. */
+  rows: ReplicaRow[]
+}
+
+// The client's ACTUAL replica, read out of IndexedDB rather than inferred from the DOM: the spec's
+// wording is "any client replica is inspected", and a DOM assertion cannot tell "not rendered" from
+// "not received". Zero persists its whole replica as a handful of B-tree chunks, so a per-record
+// check would be meaningless (everything co-occurs inside one chunk) — the walk therefore descends
+// into the chunks and lifts out each `e/<table>/<id>` entry as its own row, which is the granularity
+// the guarantee is about.
+async function readReplica(page: Page): Promise<Replica> {
+  return await page.evaluate(async () => {
+    const chunks: string[] = []
+    const rows: { table: string; json: string }[] = []
+
+    const visit = (node: unknown): void => {
+      if (Array.isArray(node)) {
+        const [key, value] = node
+        if (
+          typeof key === 'string' &&
+          key.startsWith('e/') &&
+          typeof value === 'object' &&
+          value !== null &&
+          !Array.isArray(value)
+        ) {
+          rows.push({ table: key.slice(2).split('/')[0] ?? '', json: JSON.stringify(value) })
+          return
+        }
+        for (const child of node) visit(child)
+        return
+      }
+      if (typeof node === 'object' && node !== null) {
+        for (const child of Object.values(node)) visit(child)
+      }
+    }
+
+    for (const info of await indexedDB.databases()) {
+      const name = info.name
+      if (name === undefined) continue
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(name)
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      const stores = [...db.objectStoreNames]
+      if (stores.length > 0) {
+        const transaction = db.transaction(stores, 'readonly')
+        for (const store of stores) {
+          const values = await new Promise<unknown[]>((resolve, reject) => {
+            const request = transaction.objectStore(store).getAll()
+            request.onsuccess = () => resolve(request.result as unknown[])
+            request.onerror = () => reject(request.error)
+          })
+          for (const value of values) {
+            chunks.push(JSON.stringify(value))
+            visit(value)
+          }
+        }
+      }
+      db.close()
+    }
+    for (const key of Object.keys(window.localStorage)) {
+      chunks.push(`${key}:${window.localStorage.getItem(key) ?? ''}`)
+    }
+    return { raw: chunks.join('\n'), rows }
+  })
+}
+
+async function replicaHolds(page: Page, needle: string): Promise<boolean> {
+  const { raw } = await readReplica(page)
+  return raw.includes(needle)
 }
 
 test('a whole retro runs end to end from the keyboard', async ({ page }) => {
@@ -277,5 +367,139 @@ test('the retro is correct across every preset in light and dark', async ({ page
         timeout: 20_000,
       })
     }
+  }
+})
+
+// THE TWO-CLIENT PASS (tasks 5.5): the anonymity guarantee as two real browsers see it.
+//
+// Client 1 is the bootstrap admin, who opens the retro, claims the seat and marks it anonymous.
+// Client 2 is a second account in its own browser context, on the team through a member invite.
+// The decisive assertions are made against client 2's REPLICA, not its DOM — during `brainstorm`
+// client 1's draft has not reached it at all, and after the facilitator advances, the card body is
+// there while nothing in the same record names its author.
+//
+// Note what is deliberately NOT asserted: that client 1's user id is absent from client 2's replica
+// outright. It is present, and must be — the workspace roster syncs to every member, which is what
+// renders an assignee picker, and so does "who is facilitating". The leak shape is an author bound
+// to CONTENT, so the assertion is made per synced row, by table.
+test('two clients: brainstorm stays private and advancing reveals a card with no author', async ({
+  page,
+  browser,
+}) => {
+  await enterApp(page)
+  const teamName = await openTeam(page)
+  await completedCycleWithRetro(page)
+  await openRetro(page)
+  const retroUrl = page.url()
+  const facilitatorId = await syncedUserId(page)
+
+  await page.getByTestId('retro-claim-facilitator').click()
+  const anonymity = page.getByTestId('retro-anonymity-toggle')
+  await expect(anonymity).toHaveAttribute('data-anonymous', 'false', { timeout: 20_000 })
+  await anonymity.click()
+  await expect(anonymity).toHaveAttribute('data-anonymous', 'true', { timeout: 20_000 })
+
+  // A member invite bound to this team, so accepting it also joins the team. `member` is the
+  // dialog's default role, which is what the second participant must be.
+  await page.goto('/')
+  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await page.getByTestId('create-invite').click()
+  const inviteDialog = page.getByRole('dialog')
+  await inviteDialog.getByLabel('Team (optional)').selectOption({ label: teamName })
+  await inviteDialog.getByRole('button', { name: 'Create invite' }).click()
+  const inviteLink = await page.getByTestId('invite-link').first().inputValue()
+
+  const participant = {
+    email: uniqueEmail('retro-participant'),
+    password: 'participant-password-1234',
+    name: `Retro Participant ${Date.now().toString(36)}`,
+  }
+  const context = await browser.newContext()
+  try {
+    const second = await context.newPage()
+    await second.goto(inviteLink)
+    await second.getByRole('button', { name: 'Create one' }).click()
+    await second.getByLabel('Name').fill(participant.name)
+    await second.getByLabel('Email').fill(participant.email)
+    await second.getByLabel('Password', { exact: true }).fill(participant.password)
+    await second.getByTestId('login-submit').click()
+    await expect(second.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+    await expect(second.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+      timeout: 30_000,
+    })
+
+    await second.goto(retroUrl)
+    await expect(second.locator('[data-retro-column]')).toHaveCount(3, { timeout: 20_000 })
+    await expect(second.getByText('Anonymous')).toBeVisible({ timeout: 20_000 })
+
+    const facilitatorCard = 'I did not feel safe raising this in standup'
+    const participantCard = 'Our estimates were fantasy again'
+
+    await page.goto(retroUrl)
+    await expect(page.locator('[data-retro-column]')).toHaveCount(3, { timeout: 20_000 })
+    await page.keyboard.press('c')
+    await page.getByTestId('retro-composer').fill(facilitatorCard)
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Escape')
+    await expect(page.locator(DRAFT)).toHaveCount(1, { timeout: 20_000 })
+
+    await second.keyboard.press('c')
+    await second.getByTestId('retro-composer').fill(participantCard)
+    await second.keyboard.press('Enter')
+    await second.keyboard.press('Escape')
+    await expect(second.locator(DRAFT)).toHaveCount(1, { timeout: 20_000 })
+
+    // Each client holds exactly its own draft and no card at all: during brainstorm there is
+    // nothing in `retro_card` yet, so there is nothing to hide.
+    await expect(second.locator(DRAFT)).toHaveText([participantCard])
+    await expect(second.locator(CARD)).toHaveCount(0)
+    await expect(page.locator(DRAFT)).toHaveText([facilitatorCard])
+    await expect(page.locator(CARD)).toHaveCount(0)
+
+    // The control, polled: Zero flushes its in-memory head to IndexedDB on its own schedule, so an
+    // absence read too early would mean nothing at all. Client 2's own draft has to land first —
+    // then the walk is demonstrably reading a populated replica.
+    await expect.poll(() => replicaHolds(second, participantCard), { timeout: 30_000 }).toBe(true)
+    const brainstorm = await readReplica(second)
+    // Client 1's draft has not arrived, in any form, anywhere in the persisted bytes.
+    expect(brainstorm.raw).not.toContain(facilitatorCard)
+    // And the only draft rows in this replica are its owner's.
+    const brainstormDrafts = brainstorm.rows.filter((row) => row.table === 'retro_draft')
+    expect(brainstormDrafts.length).toBe(1)
+    for (const row of brainstormDrafts) {
+      expect(row.json).toContain(participantCard)
+      expect(row.json).not.toContain(facilitatorId)
+    }
+    expect(brainstorm.rows.some((row) => row.table === 'retro_card')).toBe(false)
+
+    // Advance out of brainstorm. Publish is server-only, so the card arrives at both clients a sync
+    // tick later — with no author on the row, because the retro is anonymous.
+    await page.getByTestId('retro-phase-forward').click()
+    await expect(phaseStep(page, 'group')).toHaveAttribute('aria-current', 'step', {
+      timeout: 20_000,
+    })
+    await expect(second.locator(CARD)).toHaveCount(2, { timeout: 20_000 })
+    await expect(second.getByText(facilitatorCard)).toBeVisible({ timeout: 20_000 })
+
+    await expect.poll(() => replicaHolds(second, facilitatorCard), { timeout: 30_000 }).toBe(true)
+    const revealed = await readReplica(second)
+    const cards = revealed.rows.filter((row) => row.table === 'retro_card')
+    expect(cards.length).toBe(2)
+    expect(cards.some((row) => row.json.includes(facilitatorCard))).toBe(true)
+    for (const row of cards) {
+      expect(row.json).toContain('"authorDisplayId":null')
+      expect(row.json).not.toContain(facilitatorId)
+    }
+
+    // The general form of the guarantee, stated over the whole replica: no row of any table that
+    // carries retro CONTENT names the author. `retro` itself (who is facilitating, who opened it)
+    // and `retro_presence` (who is in the room) deliberately do, and neither binds a person to
+    // anything written — which is why the content tables are named exhaustively here.
+    const content = ['retro_card', 'retro_draft', 'retro_vote', 'retro_vote_tally', 'retro_group']
+    for (const row of revealed.rows.filter((entry) => content.includes(entry.table))) {
+      expect(row.json).not.toContain(facilitatorId)
+    }
+  } finally {
+    await context.close()
   }
 })

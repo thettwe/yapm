@@ -292,6 +292,24 @@ export function RetroCommandProvider({
                     Hand off facilitation…
                   </CommandItem>
                 ) : null}
+                {facilitator && retroCan(retro.phase, 'configure', { canWrite }) ? (
+                  <CommandItem
+                    value={
+                      retro.isAnonymous
+                        ? 'attribute cards to their authors anonymity off'
+                        : 'make this retro anonymous hide card authors'
+                    }
+                    onSelect={() => {
+                      void api.setAnonymous(!retro.isAnonymous)
+                      close()
+                    }}
+                  >
+                    <UserIcon />
+                    {retro.isAnonymous
+                      ? 'Attribute cards to their authors'
+                      : 'Make this retro anonymous'}
+                  </CommandItem>
+                ) : null}
                 {facilitator && retroCan(retro.phase, 'timer', { canWrite }) ? (
                   <>
                     <CommandItem value="start a timer" onSelect={() => start('timer')}>

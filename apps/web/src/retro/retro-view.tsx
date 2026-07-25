@@ -542,14 +542,13 @@ function RetroSurface({
           <span className="rounded-full bg-bg-sidebar px-2 py-0.5 text-[11px] font-medium text-text-2">
             {RETRO_FORMAT_LABEL[retro.format]}
           </span>
-          {retro.isAnonymous ? (
-            <span
-              className="rounded-full bg-bg-sidebar px-2 py-0.5 text-[11px] font-medium text-text-2"
-              title="Cards in this retro carry no author on any synced row."
-            >
-              Anonymous
-            </span>
-          ) : null}
+          <AnonymityControl
+            anonymous={retro.isAnonymous}
+            canConfigure={
+              canFacilitate && retroCan(retro.phase, 'configure', { canWrite, facilitator: true })
+            }
+            onToggle={(next) => void api.setAnonymous(next)}
+          />
           <div className="ml-auto flex items-center gap-2">
             <PresenceStrip presence={live} />
             <TimerControl
@@ -793,6 +792,47 @@ function TimerControl({
       onClick={onStart}
     >
       <TimerIcon />
+    </Button>
+  )
+}
+
+// Anonymity is a storage fact, not a display option, and it is fixed BEFORE any card exists — so
+// the control only exists while `configure` is allowed (brainstorm) and only for the facilitator.
+// Once the retro leaves brainstorm the badge remains as a statement of what the retro is.
+function AnonymityControl({
+  anonymous,
+  canConfigure,
+  onToggle,
+}: {
+  anonymous: boolean
+  canConfigure: boolean
+  onToggle: (next: boolean) => void
+}) {
+  const title = anonymous
+    ? 'Cards in this retro carry no author on any synced row.'
+    : 'Cards in this retro are attributed to whoever wrote them.'
+  if (!canConfigure) {
+    if (!anonymous) return null
+    return (
+      <span
+        className="rounded-full bg-bg-sidebar px-2 py-0.5 text-[11px] font-medium text-text-2"
+        title={title}
+      >
+        Anonymous
+      </span>
+    )
+  }
+  return (
+    <Button
+      size="xs"
+      variant={anonymous ? 'outline' : 'ghost'}
+      data-testid="retro-anonymity-toggle"
+      data-anonymous={anonymous}
+      aria-pressed={anonymous}
+      title={title}
+      onClick={() => onToggle(!anonymous)}
+    >
+      {anonymous ? 'Anonymous' : 'Attributed'}
     </Button>
   )
 }

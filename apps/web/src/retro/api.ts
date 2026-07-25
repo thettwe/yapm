@@ -35,6 +35,7 @@ export interface RetroApi {
   castVote: (targetType: RetroVoteTarget, targetId: string) => Promise<void>
   retractVote: (voteId: string) => Promise<void>
   setPhase: (to: RetroPhase) => Promise<void>
+  setAnonymous: (isAnonymous: boolean) => Promise<void>
   claimFacilitator: () => Promise<void>
   setFacilitator: (userId: string | null) => Promise<void>
   startTimer: (durationS: number) => Promise<void>
@@ -139,6 +140,12 @@ export function useRetroApi(retroId: string): RetroApiHandle {
         run(zero.mutate(mutators.retroVote.retract({ id: voteId, updatedAt: Date.now() }))),
       setPhase: (to) =>
         run(zero.mutate(mutators.retro.setPhase({ id: retroId, to, updatedAt: Date.now() }))),
+      setAnonymous: (isAnonymous) =>
+        run(
+          zero.mutate(
+            mutators.retro.configure({ id: retroId, isAnonymous, updatedAt: Date.now() }),
+          ),
+        ),
       claimFacilitator: () =>
         run(zero.mutate(mutators.retro.claimFacilitator({ id: retroId, updatedAt: Date.now() }))),
       setFacilitator: (userId) =>

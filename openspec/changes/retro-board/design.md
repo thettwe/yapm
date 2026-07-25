@@ -1,0 +1,177 @@
+## Context
+
+yapm has cycles with auto-rollover (change 5), a triage inbox (6), projects (7), a GitHub connector feeding a real work graph (8), and a BYO-key AI substrate whose first flagship is the team-internal cycle digest (9). What it does not have is the surface where a team *decides what to change* — and the whole retro category executes its own "Gather data" phase from human memory because no retro tool owns the delivery data.
+
+This change builds the retro that only yapm can build. The board is deliberately small and unremarkable; the differentiator is the **seed** and the **action → issue loop**. If we ship a generic sticky-note whiteboard we lose: Parabol owns credible OSS retro and Metro Retro/Miro own canvas polish. Research verdict and shape: `reference/research/retro-synthesis.md`; build plan: `retro-implementation.md`; panel contents: `retro-data-informed.md`; formats/landscape: `retro-formats.md`, `retro-competitive.md`; the seams to leave (and build nothing of): `retro-ai-facilitation.md`.
+
+Binding constraints, in force before any code: three containers (no new service — the existing Postgres and pg-boss only); all ZQL and all mutators in `packages/schema`, imported by both client and server; client-minted UUIDv7 at the **call site**, never inside a mutator body; row-level permissions deny by empty query and check auth **before** existence; tokenized styling correct in Warm/Focused/Editorial, light and dark, at AA; keyboard-first; sub-100ms; kysely 0.28.17, no kysely-codegen, no TS-Compiler-API tooling.
+
+The load-bearing verified fact from `reference/zero.md`: **Zero read permissions are filter-based and row-level. There is no column-level read permission and no `select()` — queries always return whole rows.** Zero also has **no aggregates** (`count`/`group by`). Both facts shape the entity model below far more than any product preference.
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- A retro whose "Gather data" phase is pre-filled from the work graph, degrading gracefully from *connectors present* to *cycles only* — and useful in the cycles-only case, which is every team on day one.
+- Anonymity that is true at the storage layer: a client must be **structurally unable** to learn who wrote an anonymous card, not merely not shown it.
+- A phase machine a crafted mutation cannot cheat.
+- Action items that are real issues in the next cycle, created through the same path and permissions as any other issue.
+- Auto-open at cycle close on the existing pg-boss pass; no new container, job type, or env var.
+- Team-level and blameless as a *schema* property, not a copy choice.
+
+**Non-Goals:** AI drafting/facilitation of any kind (later change); DORA/MTTR health metrics (Phase 3, seam only); collaborative rich-text or pixel cursors; per-individual anything; reveal-on-close; a template editor; formats beyond the four starters.
+
+## Decisions
+
+### D1 — Entity set and relationships
+
+Ten tables; nine synced, one server-only. All are team-scoped (`team_id` on every row) and permission-anchored on team membership, exactly as `cycle` is. Every ordering field is a fractional-index string (`rank`), reusing `packages/schema/src/zero/rank.ts` and the board's single-write move.
+
+| Table | Shape (beyond `team_id`, timestamps) | Sync |
+|---|---|---|
+| `retro` | `cycle_id` (nullable, **unique when set**), `next_cycle_id`, `title`, `format`, `phase`, `facilitator_id` (nullable), `is_anonymous`, `votes_per_participant`, `timer_ends_at`, `timer_duration_s`, `created_by`, `closed_at` | team-scoped |
+| `retro_column` | `retro_id`, `key`, `title`, `accent_token`, `rank` | team-scoped |
+| `retro_draft` | `retro_id`, `column_id`, `author_id`, `body`, `seed_ref` (json), `published_at` | **own rows only** (`author_id = ctx.userID`) |
+| `retro_card` | `retro_id`, `column_id`, `group_id`, `body`, `rank`, `is_anonymous`, `author_display_id` (nullable), `seed_ref` | team-scoped |
+| `retro_group` | `retro_id`, `column_id`, `label`, `rank` | team-scoped |
+| `retro_vote` | `retro_id`, `target_type`, `target_id`, `voter_id` | **own rows only** (`voter_id = ctx.userID`) |
+| `retro_vote_tally` | PK = `target_id`, `retro_id`, `target_type`, `count` | team-scoped |
+| `retro_action` | `retro_id`, `group_id`, `card_id`, `body`, `assignee_id`, `target_cycle_id`, `issue_id` | team-scoped |
+| `retro_presence` | PK (`retro_id`,`user_id`), `focus_target`, `last_seen_at` | team-scoped |
+| **`retro_card_author`** | PK `card_id`, `retro_id`, `author_id` | **NONE — absent from the Zero schema** |
+
+```
+team 1─* retro *─1 cycle (reflected)   retro *─1 cycle (next → action target)
+retro 1─* retro_column 1─* retro_card *─0..1 retro_group
+retro 1─* retro_draft   (private; publishes into retro_card, same id)
+retro 1─* retro_vote → (card | group)   retro_vote_tally keyed by that target
+retro 1─* retro_action ─0..1 issue ─1 cycle(next)
+retro 1─* retro_presence
+retro_card 1─1 retro_card_author  (server-only, never synced)
+```
+
+*Why a tally table:* Zero has no aggregates and a client cannot count rows it cannot see, so the per-target count must be a real row. Its primary key is the **target id** (a card or group id, already client-minted and unique), which means the vote mutators can `upsert` it without minting anything inside a mutator body.
+
+*Alternatives rejected:* a single `retro_item` table with a discriminator (loses FK integrity and makes the vote-target rule unexpressible); grouping by a `parent_card_id` self-reference (makes "a group with a label and its own rank" awkward and breaks the single-write move); columns as an enum in code (kills custom formats and per-column accent tokens for no gain, since rows cost nothing).
+
+### D2 — The anonymity boundary (the crux)
+
+**Constraint, restated precisely:** Zero syncs whole rows. If `author_id` is a column on a synced `retro_card`, every participant's browser has it in IndexedDB and anonymity is cosmetic. This is a privacy bug, not an implementation detail.
+
+**The model, in three parts:**
+
+1. **`retro_card_author(card_id → author_id)` is a server-only table, absent from the Zero schema entirely.** It is the authorization and moderation source of truth (may this caller delete this card?) and the audit record. The schema-drift test asserts its absence from the Zero schema, exactly as it already does for `issue_sequence` and `cycle_sequence`. Because no synced query can even *name* a table outside the Zero schema, the leak is structurally impossible rather than merely unwritten. It reaches zero-cache's trusted internal replica (Zero's default `FOR TABLES IN SCHEMA public` publication) and stops there — the same accepted boundary the connectors change documented for its secret tables.
+2. **An anonymous `retro_card` carries no author value.** `author_display_id` is written **only** for a non-anonymous retro; for an anonymous retro it is null on the synced row, so there is nothing to strip.
+3. **Private brainstorming lives in a separate table, not in a filtered view of the card.** `retro_draft` rows carry `author_id`, and their **only** synced query is `zql.retro_draft.where('authorId', ctx.userID)` — driven by the verified context, never by args, and with **no workspace-admin bypass** (an explicit deviation from the shared `teamScoped` helper, which grants admins workspace-wide read). You cannot receive another person's draft, so you cannot learn its author.
+
+**Why the draft table exists at all.** "Hide other people's cards during brainstorm" cannot be expressed as a read filter over `retro_card` without an author dimension **in the Zero schema** — ZQL filters can only reference schema tables, and putting the author back on the card is precisely the bug we are avoiding. A per-user opaque "slot" on the card row was considered and rejected: it clusters an author's cards under one pseudonym, which is a real deanonymization vector in a 2–20 person team. Splitting the private phase into its own table dissolves the conflict: during `brainstorm` nothing is in `retro_card` yet, so there is nothing to hide; after publish there is no author to leak.
+
+**Publish.** Advancing forward out of `brainstorm` publishes every unpublished draft: insert `retro_card` **with the draft's own id** (client-minted at the original call site — nothing is minted inside a mutator, and re-running is an idempotent upsert), set `author_display_id = is_anonymous ? null : author_id`, write `retro_card_author`, stamp `published_at`. Publish runs **only in the server override** (`tx.location === 'server'`), because a client's `tx.run` sees only its own drafts and would otherwise publish a partial board optimistically; the phase flip itself stays in the shared mutator so it is still instant.
+
+**Consequence, accepted deliberately:** a published anonymous card has no client-visible owner, so **body edits after publish are not offered to anyone**; deletion during `group`/`vote`/`discuss`/`actions` is facilitator/admin moderation, authorized server-side against `retro_card_author`. The author's own retained draft row is their personal record of what they wrote (and follows them across devices, since it syncs to them alone). This is simpler than a per-card ownership dance and it is what makes the guarantee auditable.
+
+**Votes.** `retro_vote` keeps `voter_id` because the budget needs it, and syncs **only to the voter** by the same self-filter. Everyone else sees the `retro_vote_tally` count. A client therefore gets an instant optimistic dot (its own row plus the tally increment — sub-100ms) while who voted for what never leaves the server for anyone but the voter. The alternative — a fully server-only vote table — was rejected because it makes voting wait on the network for both the dot and the remaining-budget readout.
+
+**Reveal-on-close is a non-goal.** Default is never reveal, and no code path copies `retro_card_author.author_id` onto a synced row.
+
+### D3 — Phase state machine, enforced in the server mutators
+
+`PHASES = ['brainstorm','group','vote','discuss','actions','closed']`, ordered.
+
+- `retro.setPhase({id, to})` accepts **only** an adjacent phase: exactly one step forward, or exactly one step back. Non-adjacent targets (including "skip to closed" and "rewind to brainstorm") are rejected with `MutationErrorCode.invalidPhase`. Entering `closed` stamps `closed_at`; the one legal step back out of it clears it.
+- Only the **facilitator or a workspace admin** may change phase. `facilitator_id` is nullable (an auto-opened retro has none until someone runs it): while null, any non-viewer team member may claim it via `retro.claimFacilitator`; `retro.setFacilitator` hands off.
+- **Every retro write mutator re-reads the retro's current phase and consults one pure predicate**, `isRetroWriteAllowed(phase, op)`, before applying. The predicate is exported from `packages/schema`, unit-tested exhaustively over the phase × operation matrix, and the same function drives the UI's affordances — so the UI and the authority can never disagree, and the UI is a convenience rather than the enforcement.
+
+| Phase | Allowed | Blocked |
+|---|---|---|
+| `brainstorm` | create/edit/delete own draft; configure format, anonymity, budget; timer; presence | cards, groups, votes, actions |
+| `group` | move a card, create/label/dissolve a group, reorder; facilitator card deletion | new drafts, votes, actions |
+| `vote` | cast/retract own vote within budget; facilitator card deletion | card/group edits, drafts, actions |
+| `discuss` | create/edit/delete actions; convert action → issue | drafts, cards, groups, votes |
+| `actions` | finalize actions (assignee, target cycle); convert action → issue | drafts, cards, groups, votes |
+| `closed` | read only; convert an already-created action → issue | everything else |
+
+Rationale for enforcing in the mutator rather than the UI: with optimistic local writes, a client-only gate is a suggestion. The server checks the retro's phase **at apply time**, so a write racing a phase advance is rejected and Zero rolls the optimistic write back. Anonymity is also settable only while `phase = 'brainstorm'` — before any card exists — which makes the guarantee crisp: a retro's anonymity is fixed before there is anything to attribute.
+
+### D4 — The voting budget rule
+
+One knob: `votes_per_participant`, default **3**, range 1–10, settable only during `brainstorm`. One `retro_vote` row is one dot; stacking multiple dots on the same target is allowed (classic dot voting), bounded only by the total. The budget is enforced by counting the caller's own rows in this retro — a count the client has in full, so the UI self-limits and the server is authoritative on a race (Zero rolls back the over-budget optimistic dot).
+
+**Target rule:** a vote targets a `group` if the card has been grouped, otherwise the `card` itself; the mutator rejects a vote on a grouped card. This avoids the alternative of auto-creating a singleton group per ungrouped card at the `group → vote` transition, which would mint ids inside a mutator — forbidden.
+
+### D5 — The data-seed panel, and what each section shows with no connectors
+
+One pure function in `packages/schema`, `buildRetroSeed(input): RetroSeed`, over synced rows (the cycle's issues, their linked PRs/reviews/CI checks, and up to three prior completed cycles of the same team). Pure and deterministic, so it is unit-testable and identical on client and server. It mirrors — and deliberately does not merge with — `cycle-facts.ts`, which is the *AI digest's* server-side narrowed read; the panel is a live client-side computation because it must be sub-100ms and correct offline.
+
+| Section | With connectors | **With no connectors (day one)** |
+|---|---|---|
+| **Delivered** (cycles only) | identical | **Fully populated**: shipped, carried out, carried in, carried **twice or more**, added mid-cycle, canceled, total — each with a sparkline against the prior cycles and a blameless caption |
+| **Flow** | median PR cycle time, median time-to-first-review, review rounds, issues with no linked PR, CI failing rate | Section renders a single quiet empty state naming exactly what would light it up ("Connect GitHub to see PR cycle time and review wait"). No zeros, no fake charts, no chart chrome. |
+| **Health** (DORA/MTTR) | — | **Not produced at all.** Phase 3. The `RetroSeed` type carries no health field; the seam is the section list being open for extension. |
+
+Two `issue` columns make Delivered honest rather than inferred: `carryover_count` (incremented by the existing `cycle.complete` rollover — deterministic, args-derived, idempotent under the existing status guard) gives "carried twice or more", and `cycle_assigned_at` (stamped by `issue.create`, `issue.setCycle`, and the rollover) gives "added mid-cycle" precisely, instead of the `created_at > start_date` approximation. "Removed from scope" needs an assignment event log and is a stated non-goal.
+
+**Guardrails encoded, not documented:** `RetroSeed` is a type with **no user field anywhere** — no assignee, author, reviewer, creator, or user id — so the panel physically cannot render a per-person number; a unit test walks the produced object graph and fails on any identity-shaped key. Speed and stability ship as a pair in Flow (cycle time next to CI failing rate). Captions are pure templates that narrate the system ("review wait was the largest slice of lead time this cycle"), never a person. Trends lead; absolutes are secondary.
+
+**Evidence-anchored cards:** a widget offers "add a card from this" which seeds a draft with `seed_ref` (`{kind:'issue'|'pull_request'|'ci_check'|'widget', id, label?}`, reusing `DigestEvidenceRef` from the AI change), and the card renders a chip linking back. That is the join no whiteboard tool can make, it costs one nullable json column, and it is the same grounding contract the later AI change needs.
+
+### D6 — The action → issue loop
+
+`retro.convertActionToIssue({ actionId, issueId, createdAt, updatedAt })` — **the new issue's id is minted at the call site** and passed in, like every other create.
+
+Server checks, in order: `canWrite`, team access, phase ∈ {`discuss`,`actions`,`closed`}, `issue_id IS NULL` (idempotent — a second call is a no-op, not a duplicate issue). It then calls the **shared `issue.create` mutator function** (`mutators.issue.create.fn({tx, args, ctx})`, the same composition `createServerMutators` already uses) with `teamId = retro.team_id`, `title` = the action body's first line, `cycleId = action.target_cycle_id ?? retro.next_cycle_id`, `assigneeId = action.assignee_id`, and a description linking back to the retro — then sets `retro_action.issue_id`. Its **server override claims the per-team issue number** in the same authoritative pass, so a converted action is indistinguishable from a hand-created issue: same triage defaults, same permissions, same reality strip, same auto-rollover.
+
+Rejected: a bespoke insert into `issue` (would silently skip numbering, triage defaults, and future create-path behavior) and returning the new id from the mutator (Zero mutators cannot return data).
+
+### D7 — Auto-open at cycle close, on the existing trigger
+
+A retro row needs an id, and ids are never minted inside a mutator — so `cycle.complete` cannot create one. Instead `retro.openForCycle({ id, cycleId, format, columns:[{id,key,title,accentToken,rank}] })` is called **by the same two call sites that already complete a cycle**: the Cycles view's Complete-cycle action (client mints the ids) and `runCycleMaintenance` (the job mints them — a job is a call site like any other). The mutator no-ops if the cycle already has a retro; a unique index on `retro.cycle_id` is the backstop, so the button racing the scheduler produces exactly one retro. Columns are validated against the named format template (a pure `RETRO_FORMATS` map), so a client cannot inject arbitrary columns under a known format name.
+
+The auto-opened retro has `facilitator_id = null` (the scheduler is not a person) and `next_cycle_id` resolved with the same deterministic `nextCycleId` the rollover already uses. The maintenance pass also prunes `retro_presence` rows older than five minutes — one extra delete in an existing job, no new job type and **no new env var** (`CYCLE_MAINTENANCE` still gates the pass).
+
+No opt-out toggle ships: a retro nobody opens is one empty row, and a knob would be a config-sandbox wart. An admin can delete it.
+
+### D8 — Timer and presence
+
+The timer is **durable state, never ticks**: `retro.startTimer({id, durationS})` sets `timer_ends_at`; each client renders `endsAt − now` locally with a local interval. The shared mutator computes the end from the call-site clock so the optimistic render is instant; the **server override recomputes it from the server clock**, which is authoritative and kills client skew. Facilitator/admin only. Presence is a coarse, throttled heartbeat row (every ~10s and on focus change, column-level granularity — no pixel cursors), self-write only (`user_id` from `ctx`), pruned by the maintenance pass. Both choices exist to keep the 3-container promise: no sidecar WebSocket service, no Redis.
+
+### D9 — Formats, keyboard, tokens
+
+Four starter formats as column-sets over one board engine: `wentwell_didnt_action` (default), `start_stop_continue`, `mad_sad_glad`, `4ls`. Sailboat/Starfish/KALM/DAKI and a template editor are deferred; the `retro_column`-as-rows model already supports custom formats, so only the editor UI is the deferred cost.
+
+Keyboard (mirroring the issue list's model, every entry also in the command palette): `c` new card in the focused column, `Enter` submit-and-stay, arrows move focus, `v` vote / `Shift+V` retract, `g` group with…, `a` new action, `⌘/Ctrl+Enter` convert action → issue, `]` / `[` advance / step back (facilitator), `t` timer, `Esc` leave the editor. Every surface fully operable without a pointer.
+
+Every color comes from a semantic token — `retro_column.accent_token` stores a **token key, never a hex** — and a converted action renders its issue's status with the existing status tokens so the retro looks like the tracker. Correct in Warm/Focused/Editorial, light and dark, at AA.
+
+### D10 — Seams the later `retro-ai-facilitation` change attaches to (build none of them)
+
+1. **`buildRetroSeed` / `RetroSeed`** is the agent's input contract: already team-level, already identity-free, already the thing the AI must not be given names in.
+2. **`retro_draft`** is the propose-not-decide write path — an AI actor drafts under the invoking user's `AuthContext` and its cards enter through the same publish step as a human's, with no new write surface.
+3. **`seed_ref`** on drafts/cards is the grounding/evidence link the AI change's cite-or-omit validator requires, reusing `DigestEvidenceRef`.
+4. **The phase machine and `isRetroWriteAllowed`** are the extension point for an agree/disagree ratification step: a future phase or per-card reaction slots into the ordered list and the matrix without touching any existing mutator's authority.
+5. **The AI-off fallback is already the product**: this change *is* the manual data-informed retro that the AI later drafts on top of, so "AI disabled" never degrades the ceremony.
+
+Nothing in this change calls a model, stores a model output, or adds an AI column.
+
+## Risks / Trade-offs
+
+- **Anonymity is one careless synced query away from being a lie** → the author lives in a table the Zero schema cannot name; an integration test enumerates **every** query in the registry, runs each with a non-author member's context, and asserts no result reveals an anonymous card's author; the drift test asserts `retro_card_author` stays out of the Zero schema. Both are merge-blocking.
+- **The self-filtered `retro_draft` / `retro_vote` queries must not use the shared `teamScoped` helper**, which grants workspace admins a bypass → they are written as bare `where('authorId'|'voterId', ctx.userID)` with a comment stating the deviation, and a test asserts an admin who is not the author receives nothing.
+- **Optimistic/authoritative divergence at publish** (a client sees only its own drafts) → publish is server-only; the phase flip stays optimistic, so the interaction is still instant and the rest of the cards arrive a sync tick later.
+- **Vote double-spend under optimism** → budget enforced server-side; the UI self-limits from the live count; Zero rolls the rejected dot back.
+- **Presence write churn** → coarse granularity, ~10s throttle, column-level focus only, pruned in the existing pass.
+- **A thin seed on day one** (no connectors ⇒ no Flow) → the Delivered section is fully populated from cycles alone and is the single most retro-relevant view; Flow's empty state names exactly what to connect rather than rendering hollow zeros.
+- **Ceremony sprawl** → the board is deliberately small (four formats, no canvas, no GIFs, no icebreakers); the wow is the panel, and every deferral is written down as a non-goal.
+- **Two new `issue` columns touch the hottest table in the schema** → both are additive and nullable-or-defaulted, written only by mutators that already write that row in the same transaction, and covered by the drift test.
+
+## Migration Plan
+
+Forward-only Kysely migration `0012_retro`, applied automatically at boot like every other: create the nine synced tables plus the server-only `retro_card_author`; add `issue.carryover_count` (not null, default 0) and `issue.cycle_assigned_at` (nullable); add the unique index on `retro.cycle_id` and the FK/lookup indexes the synced queries need (Zero derives its indexes from upstream, so they belong in Postgres). No backfill: existing completed cycles get no retrospective, and `carryover_count` starts at 0 for every issue, so early Delivered trends simply have fewer prior points. Rollback is a fresh-volume redeploy or a manual drop of the new tables/columns; nothing else reads them.
+
+## Open Questions
+
+None blocking. Deliberately deferred and recorded above: reveal-on-close, a template editor, additional formats, async/multi-day facilitation affordances, richer presence, and pin/unpin of panel widgets.
+
+## Decisions made during implementation
+
+<!-- Append here as ambiguities surface during apply: what was ambiguous, what was chosen, and why. -->

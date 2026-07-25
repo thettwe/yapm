@@ -1,12 +1,17 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely'
 import type {
+  CiConclusion,
   ConnectorConfigData,
+  ConnectorLinkSource,
   ConnectorStatus,
   CycleStatus,
+  DeploymentState,
   IssueGrouping,
   IssuePriority,
   IssueStatus,
   ProjectStatus,
+  PullRequestState,
+  ReviewState,
   RichTextDoc,
   ThemePreset,
   WorkspaceRole,
@@ -240,6 +245,89 @@ export interface ConnectorInstallationTable {
   updated_at: Timestamp
 }
 
+// Team-scoped, Zero-synced work-graph entities (change 8, part B). Each carries `team_id`
+// so it syncs under the same two-hop `teamScoped` predicate as its issue, and hangs off
+// `connector_installation` so an uninstall cascades it away. Provider-neutral: `provider`
+// records the source ('github'), never a provider-specific shape. `opened_at`/`merged_at`/
+// `submitted_at` are event timestamps, so plain `Timestamp` (settable on ingest), while
+// `created_at`/`updated_at` are DB-defaulted bookkeeping (`Generated<Timestamp>`).
+//
+// A pull request mirrored from a connector. `state` is the raw lifecycle (draft/open/merged/
+// closed); the reality strip's `approved` is derived from linked reviews, never stored here.
+export interface PullRequestTable {
+  id: string
+  team_id: string
+  installation_id: string
+  provider: string
+  repo: string
+  number: number
+  external_id: string
+  title: Nullable<string>
+  state: PullRequestState
+  url: Nullable<string>
+  head_sha: Nullable<string>
+  opened_at: Timestamp
+  merged_at: TimestampOrNull
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// A rolled-up CI conclusion for a PR's head (check_run/check_suite/legacy status).
+export interface CiCheckTable {
+  id: string
+  team_id: string
+  pull_request_id: string
+  provider: string
+  external_id: string
+  name: Nullable<string>
+  conclusion: CiConclusion
+  head_sha: Nullable<string>
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// A PR review (approve / changes-requested / comment / dismiss) with its submission time,
+// which feeds the reality strip's review-age and the derived `approved` PR state.
+export interface ReviewTable {
+  id: string
+  team_id: string
+  pull_request_id: string
+  provider: string
+  external_id: string
+  author: Nullable<string>
+  state: ReviewState
+  submitted_at: Timestamp
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// A deployment's latest state for a repo/ref/environment. Repo-anchored (not PR-anchored);
+// stored for the issue-detail deploy view. Not part of the fixed `DeliverySignal` shape.
+export interface DeploymentTable {
+  id: string
+  team_id: string
+  installation_id: string
+  provider: string
+  repo: string
+  external_id: string
+  ref: Nullable<string>
+  environment: Nullable<string>
+  state: DeploymentState
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// The issue <-> pull_request edge, established by the magic-word rule (branch name or PR
+// body). `team_id` is copied off the issue/PR (which share it) so the edge inherits the same
+// two-hop sync scope, mirroring `issue_label`. `source` records which rule fired.
+export interface IssueLinkTable {
+  issue_id: string
+  pull_request_id: string
+  team_id: string
+  source: ConnectorLinkSource
+  created_at: Generated<Timestamp>
+}
+
 // Owned by better-auth (created by its `getMigrations()` at boot), read-only here so
 // mutators/queries can join member profiles. camelCase columns and a `text` id are
 // better-auth's shape (reference/kysely-stack.md §5.4), not ours to change.
@@ -272,6 +360,11 @@ export interface DB {
   connector_config: ConnectorConfigTable
   connector_secret: ConnectorSecretTable
   connector_installation: ConnectorInstallationTable
+  pull_request: PullRequestTable
+  ci_check: CiCheckTable
+  review: ReviewTable
+  deployment: DeploymentTable
+  issue_link: IssueLinkTable
   user: UserTable
 }
 
@@ -340,5 +433,24 @@ export type ConnectorSecretUpdate = Updateable<ConnectorSecretTable>
 export type ConnectorInstallation = Selectable<ConnectorInstallationTable>
 export type NewConnectorInstallation = Insertable<ConnectorInstallationTable>
 export type ConnectorInstallationUpdate = Updateable<ConnectorInstallationTable>
+
+export type PullRequest = Selectable<PullRequestTable>
+export type NewPullRequest = Insertable<PullRequestTable>
+export type PullRequestUpdate = Updateable<PullRequestTable>
+
+export type CiCheck = Selectable<CiCheckTable>
+export type NewCiCheck = Insertable<CiCheckTable>
+export type CiCheckUpdate = Updateable<CiCheckTable>
+
+export type Review = Selectable<ReviewTable>
+export type NewReview = Insertable<ReviewTable>
+export type ReviewUpdate = Updateable<ReviewTable>
+
+export type Deployment = Selectable<DeploymentTable>
+export type NewDeployment = Insertable<DeploymentTable>
+export type DeploymentUpdate = Updateable<DeploymentTable>
+
+export type IssueLink = Selectable<IssueLinkTable>
+export type NewIssueLink = Insertable<IssueLinkTable>
 
 export type User = Selectable<UserTable>

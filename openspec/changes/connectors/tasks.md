@@ -9,17 +9,17 @@
 
 ## 2. Connector framework (provider-neutral)
 
-- [ ] 2.1 `ConnectorDefinition<Config, Secrets>` interface + `WorkGraphMutation` union in `packages/schema` (no UI/octokit deps)
-- [ ] 2.2 `applyWorkGraphMutation` — apply a `WorkGraphMutation[]` through the existing shared server mutators (same authz path) + unit tests
-- [ ] 2.3 `parseIssueRefs` pure function (magic-word `<TEAM_KEY>-<NUMBER>` from branch/body, case-insensitive, word-boundary) + unit tests
+- [x] 2.1 `ConnectorDefinition<Config, Secrets>` interface + `WorkGraphMutation` union in `packages/schema` (no UI/octokit deps)
+- [x] 2.2 `applyWorkGraphMutation` — apply a `WorkGraphMutation[]` through the existing shared server mutators (same authz path) + unit tests
+- [x] 2.3 `parseIssueRefs` pure function (magic-word `<TEAM_KEY>-<NUMBER>` from branch/body, case-insensitive, word-boundary) + unit tests
 
 ## 3. Work-graph entities + seam
 
-- [ ] 3.1 Migration `0009_connectors` (part B): team-scoped `pull_request`, `ci_check`, `review`, `deployment`, `issue_link` tables + indexes
-- [ ] 3.2 Kysely `DB` interface + Zero schema (tables, relationships to `team`/`issue`/`pull_request`) for the five synced entities
-- [ ] 3.3 Team-scoped synced queries for the delivery entities + issue detail/list `.related` linked entities; extend `LinkedEntities` assembler
-- [ ] 3.4 Wire real linked entities into `computeDeliverySignal`/`computeDivergence` (bodies + inputs only; signatures unchanged) + unit tests for state/divergence
-- [ ] 3.5 Extend the schema-drift test to every new table/column; verify against live Postgres
+- [x] 3.1 Migration `0009_connectors` (part B): team-scoped `pull_request`, `ci_check`, `review`, `deployment`, `issue_link` tables + indexes
+- [x] 3.2 Kysely `DB` interface + Zero schema (tables, relationships to `team`/`issue`/`pull_request`) for the five synced entities
+- [x] 3.3 Team-scoped synced queries for the delivery entities + issue detail/list `.related` linked entities; extend `LinkedEntities` assembler
+- [x] 3.4 Wire real linked entities into `computeDeliverySignal`/`computeDivergence` (bodies + inputs only; signatures unchanged) + unit tests for state/divergence
+- [x] 3.5 Extend the schema-drift test to every new table/column; verify against live Postgres
 
 ## 4. GitHub connector (apps/server)
 

@@ -25,6 +25,18 @@ export function teamScoped<TTable extends keyof Schema['tables'] & string, TRetu
   return scoped as unknown as Query<TTable, Schema, TReturn>
 }
 
+// The linked work-graph subtree the reality strip is computed over: each of an issue's
+// issue->PR links, its PR, and that PR's CI checks + reviews. Team-scoping is inherited — the
+// subtree is only ever reached through an already `teamScoped` issue, and every linked row
+// shares the issue's `team_id` (enforced at ingest), so it never widens past the boundary.
+function withLinkedDelivery<TTable extends keyof Schema['tables'] & string, TReturn>(
+  q: Query<TTable, Schema, TReturn>,
+): Query<TTable, Schema, TReturn> {
+  return (q as Query<'issue', Schema>).related('issueLinks', (link) =>
+    link.related('pullRequest', (pr) => pr.related('ciChecks').related('reviews')),
+  ) as unknown as Query<TTable, Schema, TReturn>
+}
+
 export const queries = defineQueries({
   workspace: {
     current: defineQuery(({ ctx }) => {
@@ -75,13 +87,15 @@ export const queries = defineQueries({
     // only in `triage.inbox` until accepted.
     byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
       teamScoped(
-        zql.issue
-          .where('teamId', args.teamId)
-          .where('needsTriage', false)
-          .related('assignee')
-          .related('labels')
-          .related('creator')
-          .orderBy('createdAt', 'desc'),
+        withLinkedDelivery(
+          zql.issue
+            .where('teamId', args.teamId)
+            .where('needsTriage', false)
+            .related('assignee')
+            .related('labels')
+            .related('creator')
+            .orderBy('createdAt', 'desc'),
+        ),
         ctx,
       ),
     ),
@@ -89,25 +103,30 @@ export const queries = defineQueries({
     mine: defineQuery(({ ctx }) => {
       if (!isMember(ctx)) return denyAll(zql.issue)
       return teamScoped(
-        zql.issue
-          .where('assigneeId', ctx.userID)
-          .where('needsTriage', false)
-          .related('assignee')
-          .related('labels')
-          .related('creator')
-          .orderBy('updatedAt', 'desc'),
+        withLinkedDelivery(
+          zql.issue
+            .where('assigneeId', ctx.userID)
+            .where('needsTriage', false)
+            .related('assignee')
+            .related('labels')
+            .related('creator')
+            .orderBy('updatedAt', 'desc'),
+        ),
         ctx,
       )
     }),
     detail: defineQuery(z.object({ id: z.string() }), ({ args, ctx }) =>
       teamScoped(
-        zql.issue
-          .where('id', args.id)
-          .related('assignee')
-          .related('creator')
-          .related('labels')
-          .related('comments', (comments) => comments.related('author').orderBy('createdAt', 'asc'))
-          .one(),
+        withLinkedDelivery(
+          zql.issue
+            .where('id', args.id)
+            .related('assignee')
+            .related('creator')
+            .related('labels')
+            .related('comments', (comments) =>
+              comments.related('author').orderBy('createdAt', 'asc'),
+            ),
+        ).one(),
         ctx,
       ),
     ),

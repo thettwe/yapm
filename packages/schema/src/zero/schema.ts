@@ -10,11 +10,16 @@ import {
   table,
 } from '@rocicorp/zero'
 import type {
+  CiConclusion,
+  ConnectorLinkSource,
   CycleStatus,
+  DeploymentState,
   IssueGrouping,
   IssuePriority,
   IssueStatus,
   ProjectStatus,
+  PullRequestState,
+  ReviewState,
   ThemePreset,
   WorkspaceRole,
 } from './context.js'
@@ -179,6 +184,85 @@ const savedView = table('saved_view')
   })
   .primaryKey('id')
 
+// Team-scoped work-graph entities (change 8). `installationId` is a synced column that
+// references the server-only `connector_installation` at the DB level but has no Zero
+// relationship to it — the row itself stays inside the team-scoped sync boundary.
+const pullRequest = table('pull_request')
+  .columns({
+    id: string(),
+    teamId: string().from('team_id'),
+    installationId: string().from('installation_id'),
+    provider: string(),
+    repo: string(),
+    number: number(),
+    externalId: string().from('external_id'),
+    title: string().optional(),
+    state: enumeration<PullRequestState>(),
+    url: string().optional(),
+    headSha: string().from('head_sha').optional(),
+    openedAt: number().from('opened_at'),
+    mergedAt: number().from('merged_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+const ciCheck = table('ci_check')
+  .columns({
+    id: string(),
+    teamId: string().from('team_id'),
+    pullRequestId: string().from('pull_request_id'),
+    provider: string(),
+    externalId: string().from('external_id'),
+    name: string().optional(),
+    conclusion: enumeration<CiConclusion>(),
+    headSha: string().from('head_sha').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+const review = table('review')
+  .columns({
+    id: string(),
+    teamId: string().from('team_id'),
+    pullRequestId: string().from('pull_request_id'),
+    provider: string(),
+    externalId: string().from('external_id'),
+    author: string().optional(),
+    state: enumeration<ReviewState>(),
+    submittedAt: number().from('submitted_at'),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+const deployment = table('deployment')
+  .columns({
+    id: string(),
+    teamId: string().from('team_id'),
+    installationId: string().from('installation_id'),
+    provider: string(),
+    repo: string(),
+    externalId: string().from('external_id'),
+    ref: string().optional(),
+    environment: string().optional(),
+    state: enumeration<DeploymentState>(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+const issueLink = table('issue_link')
+  .columns({
+    issueId: string().from('issue_id'),
+    pullRequestId: string().from('pull_request_id'),
+    teamId: string().from('team_id'),
+    source: enumeration<ConnectorLinkSource>(),
+    createdAt: number().from('created_at'),
+  })
+  .primaryKey('issueId', 'pullRequestId')
+
 const user = table('user')
   .columns({
     id: string(),
@@ -327,6 +411,86 @@ const issueRelationships = relationships(issue, ({ one, many }) => ({
     destField: ['issueId'],
     destSchema: comment,
   }),
+  issueLinks: many({
+    sourceField: ['id'],
+    destField: ['issueId'],
+    destSchema: issueLink,
+  }),
+}))
+
+const pullRequestRelationships = relationships(pullRequest, ({ one, many }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  ciChecks: many({
+    sourceField: ['id'],
+    destField: ['pullRequestId'],
+    destSchema: ciCheck,
+  }),
+  reviews: many({
+    sourceField: ['id'],
+    destField: ['pullRequestId'],
+    destSchema: review,
+  }),
+  issueLinks: many({
+    sourceField: ['id'],
+    destField: ['pullRequestId'],
+    destSchema: issueLink,
+  }),
+}))
+
+const ciCheckRelationships = relationships(ciCheck, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  pullRequest: one({
+    sourceField: ['pullRequestId'],
+    destField: ['id'],
+    destSchema: pullRequest,
+  }),
+}))
+
+const reviewRelationships = relationships(review, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  pullRequest: one({
+    sourceField: ['pullRequestId'],
+    destField: ['id'],
+    destSchema: pullRequest,
+  }),
+}))
+
+const deploymentRelationships = relationships(deployment, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+}))
+
+const issueLinkRelationships = relationships(issueLink, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  issue: one({
+    sourceField: ['issueId'],
+    destField: ['id'],
+    destSchema: issue,
+  }),
+  pullRequest: one({
+    sourceField: ['pullRequestId'],
+    destField: ['id'],
+    destSchema: pullRequest,
+  }),
 }))
 
 const cycleRelationships = relationships(cycle, ({ one, many }) => ({
@@ -427,6 +591,11 @@ export const schema = createSchema({
     issueLabel,
     comment,
     savedView,
+    pullRequest,
+    ciCheck,
+    review,
+    deployment,
+    issueLink,
     user,
   ],
   relationships: [
@@ -443,6 +612,11 @@ export const schema = createSchema({
     issueLabelRelationships,
     commentRelationships,
     savedViewRelationships,
+    pullRequestRelationships,
+    ciCheckRelationships,
+    reviewRelationships,
+    deploymentRelationships,
+    issueLinkRelationships,
   ],
   enableLegacyMutators: false,
   enableLegacyQueries: false,

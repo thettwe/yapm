@@ -78,6 +78,20 @@ export async function getConnectorConfig(
   return row ?? null
 }
 
+// System read by primary key: the webhook worker resolves an installation's parent config to
+// check its `enabled` flag before writing (a disabled connector drops non-lifecycle deliveries).
+export async function getConnectorConfigById(
+  db: Kysely<DB>,
+  id: string,
+): Promise<ConnectorConfig | null> {
+  const row = await db
+    .selectFrom('connector_config')
+    .selectAll()
+    .where('id', '=', id)
+    .executeTakeFirst()
+  return row ?? null
+}
+
 export async function listConnectorConfigs(
   db: Kysely<DB>,
   workspaceId: string,

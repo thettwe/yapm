@@ -3,13 +3,16 @@ import { type PriorityKind, PriorityMark } from '@yapm/ui/components/priority-ma
 import { StatusGlyph, type StatusKind } from '@yapm/ui/components/status-glyph'
 import { cn } from '@yapm/ui/lib/utils'
 import {
+  CheckIcon,
   GitMergeIcon,
   GitPullRequestArrowIcon,
   GitPullRequestClosedIcon,
   GitPullRequestDraftIcon,
   GitPullRequestIcon,
+  LoaderIcon,
   type LucideIcon,
   TriangleAlertIcon,
+  XIcon,
 } from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 
@@ -77,10 +80,13 @@ const PR_GLYPH: Record<PrGlyphState, { icon: LucideIcon; label: string; tone: st
   closed: { icon: GitPullRequestClosedIcon, label: 'PR closed', tone: 'text-text-3' },
 }
 
-const CI_DOT: Record<CiHealthState, { label: string; tone: string }> = {
-  passing: { label: 'CI passing', tone: 'bg-signal-sync' },
-  failing: { label: 'CI failing', tone: 'bg-status-urgent' },
-  pending: { label: 'CI running', tone: 'bg-status-in-progress' },
+// CI health carries a distinct GLYPH per state (check / x / spinner), not hue alone, so passing
+// vs failing vs pending is distinguishable without color — a WCAG 1.4.1 requirement for the
+// row's core reality signal. The tone token still reinforces the shape.
+const CI_GLYPH: Record<CiHealthState, { label: string; icon: LucideIcon; tone: string }> = {
+  passing: { label: 'CI passing', icon: CheckIcon, tone: 'text-signal-sync' },
+  failing: { label: 'CI failing', icon: XIcon, tone: 'text-status-urgent' },
+  pending: { label: 'CI running', icon: LoaderIcon, tone: 'text-status-in-progress' },
 }
 
 // Compact review-age label ("3d", "2h", "now"), rendered from the ms since the newest review
@@ -107,11 +113,12 @@ export interface RealityStripProps {
 // never shifts row alignment. Every color is a theme token; correct in all presets, light+dark.
 function RealityStrip({ pr, ci, reviewAgeMs }: RealityStripProps) {
   const prGlyph = pr ? PR_GLYPH[pr] : null
-  const ciDot = ci ? CI_DOT[ci] : null
+  const ciGlyph = ci ? CI_GLYPH[ci] : null
   const PrIcon = prGlyph?.icon
+  const CiIcon = ciGlyph?.icon
   const summary = [
     prGlyph?.label,
-    ciDot?.label,
+    ciGlyph?.label,
     reviewAgeMs != null ? `reviewed ${formatReviewAge(reviewAgeMs)} ago` : null,
   ]
     .filter(Boolean)
@@ -129,8 +136,8 @@ function RealityStrip({ pr, ci, reviewAgeMs }: RealityStripProps) {
       ) : (
         <span className="size-3.5 shrink-0" aria-hidden="true" />
       )}
-      {ciDot ? (
-        <span className={cn('size-1.5 shrink-0 rounded-full', ciDot.tone)} aria-hidden="true" />
+      {CiIcon && ciGlyph ? (
+        <CiIcon className={cn('size-3 shrink-0', ciGlyph.tone)} aria-hidden="true" />
       ) : null}
       {reviewAgeMs != null ? (
         <span className="truncate">{formatReviewAge(reviewAgeMs)}</span>

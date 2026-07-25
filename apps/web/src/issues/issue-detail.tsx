@@ -39,6 +39,8 @@ import { StatusGlyph } from '@yapm/ui/components/status-glyph'
 import {
   CheckIcon,
   ExternalLinkIcon,
+  LoaderIcon,
+  type LucideIcon,
   RefreshCwIcon,
   TagIcon,
   UserIcon,
@@ -662,16 +664,22 @@ function IssueDetailBody({
   )
 }
 
-const CI_HEALTH_TONE: Record<CiHealth, string> = {
-  passing: 'bg-signal-sync',
-  failing: 'bg-status-urgent',
-  pending: 'bg-status-in-progress',
+// A distinct glyph per CI state (check / x / spinner) so passing vs failing vs pending reads
+// without relying on hue (WCAG 1.4.1); the tone token reinforces the shape.
+const CI_HEALTH_GLYPH: Record<CiHealth, { icon: LucideIcon; tone: string; label: string }> = {
+  passing: { icon: CheckIcon, tone: 'text-signal-sync', label: 'CI passing' },
+  failing: { icon: XIcon, tone: 'text-status-urgent', label: 'CI failing' },
+  pending: { icon: LoaderIcon, tone: 'text-status-in-progress', label: 'CI running' },
 }
 
-const CI_HEALTH_LABEL: Record<CiHealth, string> = {
-  passing: 'CI passing',
-  failing: 'CI failing',
-  pending: 'CI running',
+function CiHealthMark({ health }: { health: CiHealth }) {
+  const glyph = CI_HEALTH_GLYPH[health]
+  const HealthIcon = glyph.icon
+  return (
+    <span className="inline-flex items-center gap-1 text-text-3">
+      <HealthIcon className={`size-3.5 ${glyph.tone}`} role="img" aria-label={glyph.label} />
+    </span>
+  )
 }
 
 function aggregateHealth(checks: readonly CiCheckRow[]): CiHealth | null {
@@ -744,15 +752,7 @@ function DeliveryDetail({
                   {pr.repo}#{pr.number}
                 </span>
               )}
-              {health ? (
-                <span className="inline-flex items-center gap-1 text-text-3">
-                  <span
-                    className={`size-1.5 rounded-full ${CI_HEALTH_TONE[health]}`}
-                    role="img"
-                    aria-label={CI_HEALTH_LABEL[health]}
-                  />
-                </span>
-              ) : null}
+              {health ? <CiHealthMark health={health} /> : null}
               {latestReview ? (
                 <span className="text-text-3">
                   {latestReview.state === 'approved'

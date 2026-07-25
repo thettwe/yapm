@@ -19,6 +19,7 @@ import type { Logger } from '../../logger.js'
 import type { ZeroDatabase } from '../../zero/db-provider.js'
 import { createGithubApp, type GithubApp, githubSecretsFromEnv } from './app.js'
 import { type GithubConnectorSecrets, githubConnector } from './connector.js'
+import { type KnownPullRequest, reconcileInstallation } from './reconcile.js'
 import { processGithubDelivery } from './worker.js'
 
 export const GITHUB_WEBHOOK_QUEUE = 'github-webhook'
@@ -124,10 +125,18 @@ export function createGithubConnector(options: GithubConnectorOptions): GithubCo
         continue
       }
 
+      // ETag writes are buffered here and flushed only AFTER the corresponding mutations are
+      // durably applied. Advancing an ETag before the apply lands would make the next sweep get
+      // a 304 and never heal a failed/partial apply, so a repo whose transaction throws is
+      // retried against its old ETag.
+      const pendingEtags = new Map<string, string>()
       const ctx: ConnectorContext = {
         client,
         getEtag: (resource) => getInstallationEtag(db, installation.id, resource),
-        setEtag: (resource, etag) => setInstallationEtag(db, installation.id, resource, etag),
+        setEtag: (resource, etag) => {
+          pendingEtags.set(resource, etag)
+          return Promise.resolve()
+        },
         log: logger,
       }
 
@@ -141,12 +150,34 @@ export function createGithubConnector(options: GithubConnectorOptions): GithubCo
           .where('id', '=', teamId)
           .executeTakeFirst()
         if (!team) continue
+
+        // Stored non-terminal PRs so reconcile can re-poll their checks/reviews even when the
+        // pulls list is unchanged (a dropped check never bumps the PR's updated_at).
+        const knownPulls = await db
+          .selectFrom('pull_request')
+          .select(['external_id', 'number', 'head_sha'])
+          .where('installation_id', '=', installation.id)
+          .where('repo', '=', repoFullName)
+          .where('state', 'in', ['draft', 'open'])
+          .execute()
+        const known: KnownPullRequest[] = knownPulls.map((pr) => ({
+          externalId: pr.external_id,
+          number: pr.number,
+          headSha: pr.head_sha,
+        }))
+
         const single: InstallationRecord = { ...record, repoMapping: { [repoFullName]: teamId } }
-        const mutations = await githubConnector.reconcile(single, ctx)
-        if (mutations.length === 0) continue
-        await dbProvider.transaction((tx) =>
-          applyWorkGraphMutations(tx, { teamId, now: Date.now() }, mutations),
-        )
+        pendingEtags.clear()
+        const mutations = await reconcileInstallation(single, ctx, known)
+        if (mutations.length > 0) {
+          await dbProvider.transaction((tx) =>
+            applyWorkGraphMutations(tx, { teamId, now: Date.now() }, mutations),
+          )
+        }
+        // Durable now: persist the ETags this repo advanced.
+        for (const [resource, etag] of pendingEtags) {
+          await setInstallationEtag(db, installation.id, resource, etag)
+        }
       }
       await recordConnectorSync(db, { configId, status: 'connected' })
     }
@@ -155,6 +186,8 @@ export function createGithubConnector(options: GithubConnectorOptions): GithubCo
   const reconcileOnce = async (): Promise<void> => {
     const configs = await listConnectorConfigsByProvider(db, GITHUB_PROVIDER)
     for (const config of configs) {
+      // Honor the admin Enable/Disable toggle: a disabled connector is never reconciled.
+      if (!config.enabled) continue
       await reconcileConfig(config.id)
     }
   }

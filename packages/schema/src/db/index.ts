@@ -18,6 +18,7 @@ export {
   findConnectorConfigByProvider,
   findConnectorInstallation,
   getConnectorConfig,
+  getConnectorConfigById,
   getConnectorInstallation,
   getConnectorSecret,
   getInstallationEtag,

@@ -43,6 +43,11 @@ export type WorkGraphMutation =
       readonly name: string | null
       readonly conclusion: CiConclusion
       readonly headSha: string | null
+      // The source event's own modification time (check_run completed/started, or the reconcile
+      // poll time), NOT wall clock. Persisted on the row's `updatedAt` so an out-of-order or
+      // redelivered older check cannot regress fresher terminal CI state — mirroring the
+      // pull_request guard below.
+      readonly sourceUpdatedAt: number
     }
   | {
       readonly kind: 'upsertReview'
@@ -65,6 +70,10 @@ export type WorkGraphMutation =
       readonly ref: string | null
       readonly environment: string | null
       readonly state: DeploymentState
+      // The source event's own modification time (deployment_status created/updated, or the
+      // reconcile poll time), NOT wall clock. Persisted on the row's `updatedAt` so an
+      // out-of-order or redelivered older deployment event cannot regress fresher deploy state.
+      readonly sourceUpdatedAt: number
     }
 
 // Resolution context supplied by the ingest worker: the team the repo maps to (from the
@@ -230,14 +239,17 @@ export async function applyWorkGraphMutation(
       if (!pr) return
       const existing = (await tx.run(
         zql.ci_check.where('pullRequestId', pr.id).where('externalId', mutation.externalId).one(),
-      )) as { id: string } | undefined
+      )) as { id: string; updatedAt: number } | undefined
       if (existing) {
+        // Ordering safety net: an out-of-order or redelivered older check must never overwrite
+        // fresher state. Equal timestamps proceed — the write is idempotent.
+        if (mutation.sourceUpdatedAt < existing.updatedAt) return
         await tx.mutate.ci_check.update({
           id: existing.id,
           name: mutation.name,
           conclusion: mutation.conclusion,
           headSha: mutation.headSha,
-          updatedAt: now,
+          updatedAt: mutation.sourceUpdatedAt,
         })
         return
       }
@@ -251,7 +263,7 @@ export async function applyWorkGraphMutation(
         conclusion: mutation.conclusion,
         headSha: mutation.headSha,
         createdAt: now,
-        updatedAt: now,
+        updatedAt: mutation.sourceUpdatedAt,
       })
       return
     }
@@ -293,15 +305,18 @@ export async function applyWorkGraphMutation(
           .where('installationId', mutation.installationId)
           .where('externalId', mutation.externalId)
           .one(),
-      )) as { id: string } | undefined
+      )) as { id: string; updatedAt: number } | undefined
       if (existing) {
+        // Ordering safety net: an out-of-order or redelivered older deployment event must never
+        // overwrite fresher state. Equal timestamps proceed — the write is idempotent.
+        if (mutation.sourceUpdatedAt < existing.updatedAt) return
         await tx.mutate.deployment.update({
           id: existing.id,
           repo: mutation.repo,
           ref: mutation.ref,
           environment: mutation.environment,
           state: mutation.state,
-          updatedAt: now,
+          updatedAt: mutation.sourceUpdatedAt,
         })
         return
       }
@@ -316,7 +331,7 @@ export async function applyWorkGraphMutation(
         environment: mutation.environment,
         state: mutation.state,
         createdAt: now,
-        updatedAt: now,
+        updatedAt: mutation.sourceUpdatedAt,
       })
       return
     }

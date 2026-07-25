@@ -218,6 +218,7 @@ describe('applyWorkGraphMutation — checks, reviews, deploys', () => {
       name: 'build',
       conclusion: 'success',
       headSha: 'abc123',
+      sourceUpdatedAt: CTX.now,
     }
     const { tx, calls } = fakeTx([
       { id: 'pr-1', teamId: 'team-9' }, // findPr
@@ -246,10 +247,50 @@ describe('applyWorkGraphMutation — checks, reviews, deploys', () => {
       name: null,
       conclusion: 'failure',
       headSha: null,
+      sourceUpdatedAt: CTX.now,
     }
     const { tx, calls } = fakeTx([undefined]) // findPr -> none
     await applyWorkGraphMutation(tx, CTX, mutation)
     expect(calls).toHaveLength(0)
+  })
+
+  it('skips a stale (out-of-order/redelivered older) CI check instead of regressing it', async () => {
+    const mutation: WorkGraphMutation = {
+      kind: 'upsertCiCheck',
+      id: newId(),
+      installationId: INSTALL,
+      provider: 'github',
+      prExternalId: 'PR_1',
+      externalId: 'CHECK_1',
+      name: 'build',
+      conclusion: 'failure',
+      headSha: 'abc123',
+      sourceUpdatedAt: 1_000,
+    }
+    const { tx, calls } = fakeTx([
+      { id: 'pr-1', teamId: 'team-1' }, // findPr
+      { id: 'check-existing', updatedAt: 9_000 }, // fresher existing check
+    ])
+    await applyWorkGraphMutation(tx, CTX, mutation)
+    expect(calls.some((c) => c.table === 'ci_check')).toBe(false)
+  })
+
+  it('skips a stale (out-of-order/redelivered older) deployment instead of regressing it', async () => {
+    const mutation: WorkGraphMutation = {
+      kind: 'upsertDeployment',
+      id: newId(),
+      installationId: INSTALL,
+      provider: 'github',
+      repo: 'acme/app',
+      externalId: 'DEPLOY_1',
+      ref: 'main',
+      environment: 'production',
+      state: 'pending',
+      sourceUpdatedAt: 1_000,
+    }
+    const { tx, calls } = fakeTx([{ id: 'deploy-existing', updatedAt: 9_000 }]) // fresher existing
+    await applyWorkGraphMutation(tx, CTX, mutation)
+    expect(calls.some((c) => c.table === 'deployment')).toBe(false)
   })
 
   it('is idempotent: a redelivered review updates rather than inserts', async () => {
@@ -286,6 +327,7 @@ describe('applyWorkGraphMutation — checks, reviews, deploys', () => {
       ref: 'main',
       environment: 'production',
       state: 'success',
+      sourceUpdatedAt: CTX.now,
     }
     const { tx, calls } = fakeTx([undefined]) // existing -> none
     await applyWorkGraphMutation(tx, CTX, mutation)

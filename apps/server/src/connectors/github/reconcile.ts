@@ -28,6 +28,8 @@ interface RestCheckRun {
   status: string
   conclusion?: string | null
   head_sha?: string | null
+  started_at?: string | null
+  completed_at?: string | null
 }
 
 interface RestDeployment {
@@ -40,6 +42,17 @@ interface RestDeployment {
 interface RestDeploymentStatus {
   state: string
   environment?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+// A stored, non-terminal PR the caller already knows about. Passed in so checks (and reviews)
+// can be re-polled to heal a dropped webhook even when the PR list itself is unchanged — a
+// completed check never bumps the PR's `updated_at`, so the pulls list stays 304.
+export interface KnownPullRequest {
+  externalId: string
+  number: number
+  headSha: string | null
 }
 
 export interface GithubRestClient {
@@ -65,6 +78,7 @@ export interface GithubRestClient {
         owner: string
         repo: string
         ref: string
+        headers: Record<string, string>
       }): Promise<GithubRestResponse<{ check_runs: RestCheckRun[] }>>
     }
     repos: {
@@ -127,6 +141,61 @@ async function conditionalGet<T>(
   return response
 }
 
+// Re-polls a single PR's children (CI checks + reviews). Checks are their OWN conditional GET
+// keyed per head SHA (`checks:<repo>:<sha>`), independent of the pulls-list ETag, so a dropped
+// check webhook is healed even when the PR record itself is unchanged (a completed check does
+// not bump the PR's `updated_at`). Reviews carry no ETag, so they are polled directly.
+async function pollPrChildren(
+  installation: InstallationRecord,
+  ctx: ConnectorContext,
+  client: GithubRestClient,
+  owner: string,
+  repo: string,
+  repoFullName: string,
+  prExternalId: string,
+  prNumber: number,
+  headSha: string | null,
+  now: number,
+  mutations: WorkGraphMutation[],
+): Promise<void> {
+  if (headSha) {
+    const checks = await conditionalGet(ctx, `checks:${repoFullName}:${headSha}`, (headers) =>
+      client.rest.checks.listForRef({ owner, repo, ref: headSha, headers }),
+    )
+    if (checks) {
+      for (const run of checks.data.check_runs) {
+        mutations.push({
+          kind: 'upsertCiCheck',
+          id: newId(),
+          installationId: installation.id,
+          provider: GITHUB_PROVIDER,
+          prExternalId,
+          externalId: String(run.id),
+          name: run.name ?? null,
+          conclusion: mapCiConclusion(run.status, run.conclusion),
+          headSha: run.head_sha ?? headSha,
+          sourceUpdatedAt: toEpochMs(run.completed_at ?? run.started_at, now),
+        })
+      }
+    }
+  }
+
+  const reviews = await client.rest.pulls.listReviews({ owner, repo, pull_number: prNumber })
+  for (const review of reviews.data) {
+    mutations.push({
+      kind: 'upsertReview',
+      id: newId(),
+      installationId: installation.id,
+      provider: GITHUB_PROVIDER,
+      prExternalId,
+      externalId: String(review.id),
+      author: review.user?.login ?? null,
+      state: mapReviewState(review.state),
+      submittedAt: toEpochMs(review.submitted_at, now),
+    })
+  }
+}
+
 async function reconcilePulls(
   installation: InstallationRecord,
   ctx: ConnectorContext,
@@ -136,7 +205,9 @@ async function reconcilePulls(
   repoFullName: string,
   now: number,
   mutations: WorkGraphMutation[],
+  knownPulls: readonly KnownPullRequest[],
 ): Promise<void> {
+  const polled = new Set<string>()
   const response = await conditionalGet(ctx, `pulls:${repoFullName}`, (headers) =>
     client.rest.pulls.list({
       owner,
@@ -148,60 +219,62 @@ async function reconcilePulls(
       headers,
     }),
   )
-  if (!response) return
 
-  for (const pr of response.data) {
-    const externalId = String(pr.id)
-    const headSha = pr.head?.sha ?? null
-    mutations.push({
-      kind: 'upsertPullRequest',
-      id: newId(),
-      installationId: installation.id,
-      provider: GITHUB_PROVIDER,
-      repo: repoFullName,
-      number: pr.number,
-      externalId,
-      title: pr.title ?? null,
-      state: derivePrState(pr),
-      url: pr.html_url ?? null,
-      headSha,
-      openedAt: toEpochMs(pr.created_at, now),
-      mergedAt: pr.merged_at ? toEpochMs(pr.merged_at, now) : null,
-      updatedAt: toEpochMs(pr.updated_at, now),
-      issueRefs: parseIssueRefs({ branch: pr.head?.ref, body: pr.body }),
-    })
-
-    if (headSha) {
-      const checks = await client.rest.checks.listForRef({ owner, repo, ref: headSha })
-      for (const run of checks.data.check_runs) {
-        mutations.push({
-          kind: 'upsertCiCheck',
-          id: newId(),
-          installationId: installation.id,
-          provider: GITHUB_PROVIDER,
-          prExternalId: externalId,
-          externalId: String(run.id),
-          name: run.name ?? null,
-          conclusion: mapCiConclusion(run.status, run.conclusion),
-          headSha: run.head_sha ?? headSha,
-        })
-      }
-    }
-
-    const reviews = await client.rest.pulls.listReviews({ owner, repo, pull_number: pr.number })
-    for (const review of reviews.data) {
+  if (response) {
+    for (const pr of response.data) {
+      const externalId = String(pr.id)
+      const headSha = pr.head?.sha ?? null
       mutations.push({
-        kind: 'upsertReview',
+        kind: 'upsertPullRequest',
         id: newId(),
         installationId: installation.id,
         provider: GITHUB_PROVIDER,
-        prExternalId: externalId,
-        externalId: String(review.id),
-        author: review.user?.login ?? null,
-        state: mapReviewState(review.state),
-        submittedAt: toEpochMs(review.submitted_at, now),
+        repo: repoFullName,
+        number: pr.number,
+        externalId,
+        title: pr.title ?? null,
+        state: derivePrState(pr),
+        url: pr.html_url ?? null,
+        headSha,
+        openedAt: toEpochMs(pr.created_at, now),
+        mergedAt: pr.merged_at ? toEpochMs(pr.merged_at, now) : null,
+        updatedAt: toEpochMs(pr.updated_at, now),
+        issueRefs: parseIssueRefs({ branch: pr.head?.ref, body: pr.body }),
       })
+      polled.add(externalId)
+      await pollPrChildren(
+        installation,
+        ctx,
+        client,
+        owner,
+        repo,
+        repoFullName,
+        externalId,
+        pr.number,
+        headSha,
+        now,
+        mutations,
+      )
     }
+  }
+
+  // Heal children for stored open PRs the (unchanged) list did not return, so a dropped check
+  // or review is corrected even when the PR record itself never changed.
+  for (const known of knownPulls) {
+    if (polled.has(known.externalId)) continue
+    await pollPrChildren(
+      installation,
+      ctx,
+      client,
+      owner,
+      repo,
+      repoFullName,
+      known.externalId,
+      known.number,
+      known.headSha,
+      now,
+      mutations,
+    )
   }
 }
 
@@ -212,6 +285,7 @@ async function reconcileDeployments(
   owner: string,
   repo: string,
   repoFullName: string,
+  now: number,
   mutations: WorkGraphMutation[],
 ): Promise<void> {
   const response = await conditionalGet(ctx, `deployments:${repoFullName}`, (headers) =>
@@ -237,6 +311,7 @@ async function reconcileDeployments(
       ref: deployment.ref ?? null,
       environment: latest?.environment ?? deployment.environment ?? null,
       state: latest ? mapDeploymentState(latest.state) : 'pending',
+      sourceUpdatedAt: toEpochMs(latest?.updated_at ?? latest?.created_at, now),
     })
   }
 }
@@ -244,6 +319,7 @@ async function reconcileDeployments(
 export async function reconcileInstallation(
   installation: InstallationRecord,
   ctx: ConnectorContext,
+  knownPulls: readonly KnownPullRequest[] = [],
 ): Promise<WorkGraphMutation[]> {
   const client = ctx.client as GithubRestClient
   const mutations: WorkGraphMutation[] = []
@@ -255,8 +331,18 @@ export async function reconcileInstallation(
     const owner = repoFullName.slice(0, slash)
     const repo = repoFullName.slice(slash + 1)
 
-    await reconcilePulls(installation, ctx, client, owner, repo, repoFullName, now, mutations)
-    await reconcileDeployments(installation, ctx, client, owner, repo, repoFullName, mutations)
+    await reconcilePulls(
+      installation,
+      ctx,
+      client,
+      owner,
+      repo,
+      repoFullName,
+      now,
+      mutations,
+      knownPulls,
+    )
+    await reconcileDeployments(installation, ctx, client, owner, repo, repoFullName, now, mutations)
   }
 
   return mutations

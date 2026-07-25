@@ -59,6 +59,8 @@ export interface GithubCheckRun {
   status: string
   conclusion?: string | null
   head_sha: string
+  started_at?: string | null
+  completed_at?: string | null
   pull_requests?: { id: number }[]
 }
 
@@ -74,6 +76,7 @@ export interface GithubCheckSuite {
   status: string
   conclusion?: string | null
   head_sha: string
+  updated_at?: string | null
   pull_requests?: { id: number }[]
 }
 
@@ -91,7 +94,12 @@ export interface DeploymentStatusEvent {
     environment?: string | null
     sha?: string | null
   }
-  deployment_status: { state: string; environment?: string | null }
+  deployment_status: {
+    state: string
+    environment?: string | null
+    created_at?: string | null
+    updated_at?: string | null
+  }
   repository: GithubRepository
   installation?: GithubInstallationRef
 }

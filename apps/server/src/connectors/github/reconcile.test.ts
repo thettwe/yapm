@@ -133,11 +133,10 @@ describe('reconcileInstallation', () => {
     ])
     expect(etags.get('pulls:acme/app')).toBe('W/"fresh"')
     expect(etags.get('deployments:acme/app')).toBe('W/"deploy-fresh"')
-    expect(client.rest.checks.listForRef).toHaveBeenCalledWith({
-      owner: 'acme',
-      repo: 'app',
-      ref: 'sha1',
-    })
+    expect(client.rest.checks.listForRef).toHaveBeenCalledWith(
+      expect.objectContaining({ owner: 'acme', repo: 'app', ref: 'sha1' }),
+    )
+    expect(etags.get('checks:acme/app:sha1')).toBeUndefined()
     expect(client.rest.repos.listDeploymentStatuses).toHaveBeenCalledWith({
       owner: 'acme',
       repo: 'app',

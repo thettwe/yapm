@@ -33,13 +33,13 @@ All presets and any custom accent MUST pass WCAG contrast in both light and dark
 
 Warm differentiates visually; these differentiate **structurally**. The thesis: **every other tracker's row shows *intention* (a status a human set); yapm's row shows *reality* (state derived from the linked PR ↔ CI ↔ deploy).** That is "reality over ritual" (VISION #3) expressed in the primary surface, and no competitor can copy it without rebuilding their data model.
 
-Committed to the issue-core design (build the layout/model now; git-derived signals populate with `github-sync`, change 8):
+Committed to the issue-core design (build the layout/model now; git-derived signals populate with `connectors`, change 8):
 
-1. **Reality strip (build now).** Each issue row reserves a compact delivery-signal slot beside status/priority/assignee — PR state (draft→open→approved→merged), a CI health dot, review age. Pre-github-sync it renders a quiet "not linked" state. The row is designed around this slot from day one so it is never bolted on.
-2. **Divergence flag (bake in the concept now).** A quiet marker when the human-set status disagrees with git reality (marked In Progress but PR merged; Done but deploy failed). Rides on the reality strip's data; fires once github-sync lands. yapm's single most defining glyph.
-3. **Reality-aware view/filter architecture (design now, populate later).** The saved-view and filter model must be able to query *derived delivery state*, not only status — so `blocked-on-review`, `failing-CI`, `merged-not-deployed` views can be added with github-sync. Do NOT ship those views empty in issue-core; just build the architecture to hold them.
+1. **Reality strip (build now).** Each issue row reserves a compact delivery-signal slot beside status/priority/assignee — PR state (draft→open→approved→merged), a CI health dot, review age. Pre-connectors it renders a quiet "not linked" state. The row is designed around this slot from day one so it is never bolted on.
+2. **Divergence flag (bake in the concept now).** A quiet marker when the human-set status disagrees with git reality (marked In Progress but PR merged; Done but deploy failed). Rides on the reality strip's data; fires once connectors lands. yapm's single most defining glyph.
+3. **Reality-aware view/filter architecture (design now, populate later).** The saved-view and filter model must be able to query *derived delivery state*, not only status — so `blocked-on-review`, `failing-CI`, `merged-not-deployed` views can be added with connectors. Do NOT ship those views empty in issue-core; just build the architecture to hold them.
 
-Deferred to github-sync (needs real data, would ship half-empty now):
+Deferred to connectors (needs real data, would ship half-empty now):
 
 4. **"Blocked on" axis** — who/what each issue waits on (assignee / reviewer / CI) as a dimension distinct from status. The data model may anticipate it; the UI waits.
 

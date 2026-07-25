@@ -11,6 +11,7 @@ import {
   deleteConnectorInstallation,
   findConnectorConfigByProvider,
   findConnectorInstallation,
+  getConnectorConfigById,
   resolveTeamForRepo,
   upsertConnectorInstallation,
 } from '@yapm/schema/db'
@@ -102,12 +103,36 @@ export async function processGithubDelivery(
     return
   }
 
+  // Honor the admin Enable/Disable toggle: a disabled connector ingests nothing. Lifecycle
+  // events are handled above so an uninstall still cleans up; only work-graph deliveries drop.
+  const config = await getConnectorConfigById(deps.db, installation.connector_config_id)
+  if (!config?.enabled) {
+    deps.logger.debug(
+      { installationKey: delivery.installationKey, eventType: delivery.eventType },
+      'github webhook for a disabled connector; dropping',
+    )
+    return
+  }
+
   const repo = repositoryFullName(delivery.payload)
   if (!repo) return
 
   const teamId = await resolveTeamForRepo(deps.db, installation.id, repo)
   if (!teamId) {
     deps.logger.debug({ repo }, 'github webhook for an unmapped repo; dropping')
+    return
+  }
+
+  // repo_mapping has no FK to team, so a mapping to a since-deleted team resolves to a truthy
+  // id whose row is gone. Applying would violate the work-graph team FK and dead-letter every
+  // delivery for the repo; drop it instead, mirroring the reconcile sweep's deleted-team skip.
+  const team = await deps.db
+    .selectFrom('team')
+    .select('id')
+    .where('id', '=', teamId)
+    .executeTakeFirst()
+  if (!team) {
+    deps.logger.debug({ repo, teamId }, 'github webhook for a deleted team; dropping')
     return
   }
 

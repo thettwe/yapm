@@ -108,6 +108,7 @@ function checkMutation(
   status: string,
   conclusion: string | null | undefined,
   headSha: string | null,
+  sourceUpdatedAt: number,
 ): WorkGraphMutation {
   return {
     kind: 'upsertCiCheck',
@@ -119,6 +120,7 @@ function checkMutation(
     name,
     conclusion: mapCiConclusion(status, conclusion),
     headSha,
+    sourceUpdatedAt,
   }
 }
 
@@ -168,6 +170,7 @@ export function mapGithubEvent(
           event.check_run.status,
           event.check_run.conclusion,
           event.check_run.head_sha ?? null,
+          toEpochMs(event.check_run.completed_at ?? event.check_run.started_at, now),
         ),
       ]
     }
@@ -184,6 +187,7 @@ export function mapGithubEvent(
           event.check_suite.status,
           event.check_suite.conclusion,
           event.check_suite.head_sha ?? null,
+          toEpochMs(event.check_suite.updated_at, now),
         ),
       ]
     }
@@ -200,6 +204,10 @@ export function mapGithubEvent(
           ref: event.deployment.ref ?? null,
           environment: event.deployment_status.environment ?? event.deployment.environment ?? null,
           state: mapDeploymentState(event.deployment_status.state),
+          sourceUpdatedAt: toEpochMs(
+            event.deployment_status.updated_at ?? event.deployment_status.created_at,
+            now,
+          ),
         },
       ]
     }

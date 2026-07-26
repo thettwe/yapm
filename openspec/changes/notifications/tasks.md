@@ -162,63 +162,72 @@ complete and useful before any mail code exists (groups 8–12); email is additi
 
 ## 8. Dependencies and `packages/email`
 
-- [ ] 8.1 Add to the pnpm catalog in `pnpm-workspace.yaml` (**never a direct version in a
+- [x] 8.1 Add to the pnpm catalog in `pnpm-workspace.yaml` (**never a direct version in a
       package.json**): `nodemailer` (^9.0.3, MIT-0, zero runtime dependencies),
       `@types/nodemailer`, `@react-email/render`, `@react-email/components`. `react`/`react-dom`
       and `react-email` are already in the catalog. Run `pnpm check:catalog`.
-- [ ] 8.2 **Verify before writing templates** (design D8): read the installed
+      *Done, minus `@react-email/components`: the whole `@react-email/*` component family is
+      deprecated on npm (react-email v6 folded it into the `react-email` package). Only
+      `@react-email/render` was added — see design DI-14.*
+- [x] 8.2 **Verify before writing templates** (design D8): read the installed
       `node_modules/@react-email/render/**/*.d.ts` and confirm the render signature and the
       plain-text option under TS7 + `moduleResolution: nodenext` + `verbatimModuleSyntax`. If JSX
       proves hostile, fall back to `React.createElement`, then to plain template functions — nothing
       outside this package changes in any case. Record what was found in design.md's decision log.
-- [ ] 8.3 Scaffold `packages/email` (`@yapm/email`): package.json referencing everything as
+- [x] 8.3 Scaffold `packages/email` (`@yapm/email`): package.json referencing everything as
       `catalog:`, a tsconfig extending `@yapm/config/tsconfig/node` with the `jsx` (and, if needed,
       `lib`) setting isolated here, and `react-email` as a devDependency for `email dev` preview.
       Add it to the Turborepo pipeline if it needs anything beyond the defaults.
-- [ ] 8.4 Define `RenderedMessage` (`{subject, html, text}`) and implement
+- [x] 8.4 Define `RenderedMessage` (`{subject, html, text}`) and implement
       `renderNotificationDigest(input)` and `renderInvite(input)` — text produced from the **same**
       render call as the HTML. The package imports no transport and reads no environment.
-- [ ] 8.5 **Test**: `packages/email` unit tests asserting subject, that every link is built from the
+- [x] 8.5 **Test**: `packages/email` unit tests asserting subject, that every link is built from the
       supplied public base URL, that no comment body appears anywhere, and that HTML and text name
       the same subjects. No network, no server.
+- [x] 8.6 Copy `packages/email/package.json` in `docker/Dockerfile` beside the other workspace
+      manifests, and add `scripts/check-image-manifests.mjs` (wired into CI's `boundary-guard` job
+      and `pnpm check:image-manifests`) so a workspace package missing from that hand-maintained
+      list fails by name instead of silently producing an image that cannot build — design DI-22.
+- [x] 8.7 Add the `specs/monorepo-workspace/spec.md` delta: the current-behaviour spec's package
+      list is exhaustive and `packages/email` makes it false — design DI-23.
 
 ## 9. Configuration
 
-- [ ] 9.1 Extend `apps/server/src/config/env.ts`: `PUBLIC_URL` (optional string URL),
+- [x] 9.1 Extend `apps/server/src/config/env.ts`: `PUBLIC_URL` (optional string URL),
       `EMAIL_FROM` (optional), `RESEND_API_KEY` (optional), `NOTIFICATION_EMAIL_CRON`
       (default `*/2 * * * *`), `NOTIFICATION_RETENTION_DAYS` (default `30`),
       `NOTIFICATION_RETENTION_CRON` (default `7 3 * * *`). Add a `.check()` refinement — the
       `GITHUB_APP_VARS` precedent — requiring `EMAIL_FROM` **and** `PUBLIC_URL` when either
       transport is set, failing boot by name. Add every variable to `EXPECTED_FORMAT`.
-- [ ] 9.2 Add a `mailEnv(env)` helper mirroring `githubAppEnv`/`aiEnv`: returns the selected
+- [x] 9.2 Add a `mailEnv(env)` helper mirroring `githubAppEnv`/`aiEnv`: returns the selected
       transport config or `null`, applying the Resend-over-SMTP precedence (design D7).
-- [ ] 9.3 Sharpen the `WEB_ORIGIN` documentation (design D12) — **do not change the Zod default**;
+- [x] 9.3 Sharpen the `WEB_ORIGIN` documentation (design D12) — **do not change the Zod default**;
       correct `.env.example`'s comment to explain that 5173 is the `pnpm dev` SPA origin and 3000 is
       the same-origin compose deployment, and that `PUBLIC_URL` is the variable email uses.
-- [ ] 9.4 Update `.env.example` with the new variables, each commented, and the `SMTP_URL` comment
+- [x] 9.4 Update `.env.example` with the new variables, each commented, and the `SMTP_URL` comment
       updated now that it is actually consumed.
-- [ ] 9.5 **Test**: `apps/server/src/config/env.test.ts` — no transport boots clean; a transport
+- [x] 9.5 **Test**: `apps/server/src/config/env.test.ts` — no transport boots clean; a transport
       without `EMAIL_FROM` fails naming it; a transport without `PUBLIC_URL` fails naming it; both
       transports set selects Resend; a malformed `PUBLIC_URL` fails naming it.
 
 ## 10. The mailer seam and its two implementations
 
-- [ ] 10.1 **Verify before writing** (design D9): typecheck a minimal
+- [x] 10.1 **Verify before writing** (design D9): typecheck a minimal
       `nodemailer.createTransport(url).sendMail(...)` against the installed `@types/nodemailer`,
       whose major trails nodemailer's. If they are incompatible, write the local `.d.ts` covering
       `createTransport`/`sendMail` and record it in design.md's decision log.
-- [ ] 10.2 Write `apps/server/src/mail/mailer.ts` — the `Mailer`, `OutboundMessage` and
+- [x] 10.2 Write `apps/server/src/mail/mailer.ts` — the `Mailer`, `OutboundMessage` and
       `RenderedMessage` types. Transport-neutral by construction: recipients + a rendered message,
       nothing else.
-- [ ] 10.3 Write `apps/server/src/mail/smtp.ts` — `SmtpMailer` over `SMTP_URL`, constructed with an
+- [x] 10.3 Write `apps/server/src/mail/smtp.ts` — `SmtpMailer` over `SMTP_URL`, constructed with an
       injectable `createTransport` so tests need no server.
-- [ ] 10.4 Write `apps/server/src/mail/resend.ts` — `ResendMailer`: one authenticated JSON POST to
+- [x] 10.4 Write `apps/server/src/mail/resend.ts` — `ResendMailer`: one authenticated JSON POST to
       `https://api.resend.com/emails` via an injectable `fetch`; non-2xx throws with status and
       body. **No SDK.**
-- [ ] 10.5 Write `apps/server/src/mail/index.ts` — `createMailer(env)` returning `Mailer | null`
+- [x] 10.5 Write `apps/server/src/mail/index.ts` — `createMailer(env)` returning `Mailer | null`
       with the D7 precedence table, one info log when email is disabled, one warn log naming the
       ignored variable when both are set.
-- [ ] 10.6 **Test**: `apps/server/src/mail/*.test.ts` — both implementations driven through doubles
+- [x] 10.6 **Test**: `apps/server/src/mail/*.test.ts` — both implementations driven through doubles
       assert the same `RenderedMessage` reaches the transport; `createMailer` returns `null` with no
       config; a transport error propagates as a rejected promise the caller can catch. **No real
       network call, no credentials, in CI or locally.**

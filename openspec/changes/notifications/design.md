@@ -758,3 +758,175 @@ The badge itself is a `Link`, not a button with an `onClick`: it is in the tab o
 `href` a middle-click or a screen-reader link list can use, and its accessible name is the model's
 one sentence (`Inbox, N unread`, `99+` past the cap) with the visible pill marked `aria-hidden` so
 the count is announced once.
+
+### DI-14 — `@react-email/components` is deprecated on npm; only `@react-email/render` is used
+
+*Not anticipated:* task 8.1 names `@react-email/components@1.0.12` for the catalog. Installing it
+prints `deprecated @react-email/components@1.0.12` plus 20 deprecated sub-packages
+(`@react-email/body`, `@react-email/html`, `@react-email/tailwind`, …). The cause is visible in
+the installed tree: **react-email v6 folded every component into the single `react-email` package**
+— `node_modules/react-email/dist/index.d.mts` exports `Body`, `Button`, `Container`, `Head`,
+`Html`, `Tailwind`, `Text` and the rest, and ends with `export * from "@react-email/render"`. The
+split `@react-email/*` packages are the v5-and-earlier layout, which is why the whole family is
+deprecated. `@react-email/render` itself is **not** deprecated. D8's reading of the catalog entry
+was right about `react-email@^6.9.0` being the preview CLI and wrong that it is *only* that.
+
+Neither of the two obvious moves is right. Depending on `@react-email/components` means shipping a
+deprecated package family that also drags in a **second copy of `@react-email/render`** (it pins
+2.0.6 while we want 2.1.0) plus `tailwindcss` and `prismjs`. Depending on `react-email` at runtime
+means putting esbuild, socket.io, chokidar, `@babel/traverse` and prismjs into the server's runtime
+tree to render two emails.
+
+*Chosen:* `packages/email` depends on **`@react-email/render` alone** and writes the templates with
+plain intrinsic JSX. `react-email` stays a devDependency for `email dev` preview, which is the only
+thing it is needed for. The cost of dropping the components is close to zero and was checked rather
+than assumed: `<Html>` compiles to `jsx("html", {dir, lang, ...props})` and `<Container>`,
+`<Section>` and friends are the same thin sugar over a `<table>` or `<div>` with inline styles —
+`src/layout.tsx` writes that markup directly. This honours H2 (render with react-email; the
+renderer *is* `@react-email/render`) while adding one non-deprecated runtime dependency instead of
+twenty-one deprecated ones.
+
+**Task 14.4 must reflect this**: TECHSTACK's version-baseline line ("react-email 1.x") is wrong in
+two ways now — the ecosystem is at 6.x, and the package the server actually depends on is
+`@react-email/render` 2.1.0, with `react-email` 6.9.x as a dev-only preview tool.
+
+### DI-15 — Verified: JSX renders under TS7 + nodenext + verbatimModuleSyntax, but `render` is async
+
+*Task 8.2, verified against the installed `.d.ts` rather than assumed.*
+`node_modules/@react-email/render/dist/node/index.d.mts` declares:
+
+```ts
+declare const render: (node: React.ReactNode, options?: Options) => Promise<string>
+declare function toPlainText(html: string, options?: HtmlToTextOptions): string
+```
+
+Three findings:
+
+1. **JSX is not hostile.** `jsx: "react-jsx"` plus `lib: ["ES2024", "DOM"]` in
+   `packages/email/tsconfig.json` typechecks and emits clean ESM (`import { jsx as _jsx } from
+   "react/jsx-runtime"`), and the built `dist/index.js` runs under Node 24 without a loader. Neither
+   escape hatch (`React.createElement`, then plain template functions) was needed. Both tsconfig
+   settings are isolated to this package and never enter `apps/server`'s tsconfig, which was the
+   whole reason for a separate package.
+2. **`render` returns a `Promise`.** D8 wrote `renderAssignmentDigest(input): RenderedMessage`;
+   the real signature forces `renderNotificationDigest(input): Promise<RenderedMessage>`. Every
+   caller is already async (a pg-boss worker, an invite route), so this costs nothing, but the
+   signature in D8 is wrong as written.
+3. **The plain-text part is derived from the rendered HTML, not from a second render.** D8 proposed
+   `render(el, {plainText: true})`. That is a *second* render pass — internally it renders to HTML
+   and then converts. `renderMessage` in `src/render.ts` renders once and calls the exported
+   `toPlainText(html)` on that exact string, which is strictly stronger than what D8 asked for: the
+   two parts do not merely come from the same call, they come from the same *string*. Verified
+   identical output between the two routes before choosing.
+
+The renamed template is `renderNotificationDigest` (tasks.md 8.4) rather than D8's
+`renderAssignmentDigest`, because the digest carries ambient kinds too under `email_notifications:
+'all'`.
+
+### DI-16 — `RenderedMessage` is defined once, in `@yapm/email`, and re-exported by `mailer.ts`
+
+*Not anticipated:* D7 declares `RenderedMessage` in `apps/server/src/mail/mailer.ts` and D8 declares
+it in `packages/email`. Two structurally identical types that must never drift is the kind of
+duplication that drifts.
+
+*Chosen:* `packages/email/src/message.ts` owns it — the renderer is what produces one — and
+`apps/server/src/mail/mailer.ts` re-exports it, so `import type { RenderedMessage } from './mailer.js'`
+still reads exactly as D7 wrote it. The dependency arrow points transport → renderer, which is the
+harmless direction: `packages/email` still imports no transport, reads no environment and makes no
+network call. The alternative (a third package holding one interface) is not worth a workspace entry.
+
+### DI-17 — Verified: `@types/nodemailer@8.0.1` is compatible with `nodemailer@9.0.3`
+
+*Task 10.1, the concern D9 raised because the types' major trails the runtime's.* A minimal
+`createTransport(url).sendMail({from, to, subject, html, text})` typechecks under the app's strict
+config with no error, and the named ESM import resolves at runtime against the CJS package
+(`createTransport('smtp://…')` yields an `SMTPTransport`). **No local `.d.ts` was needed** and the
+fallback D9 designed was not used.
+
+`SmtpMailer` nonetheless declares its own two-method `SmtpTransport` interface rather than importing
+nodemailer's `Transporter`. That is not distrust of the types — it is what makes the injected test
+double a five-line object literal instead of a mock of a 40-member class, and it keeps the one
+nodemailer type in the seam down to `createTransport`'s return.
+
+### DI-18 — `mailEnv` returns `from` and `publicUrl` as non-optional, and that is load-bearing
+
+The schema refinement fails boot when either `EMAIL_FROM` or `PUBLIC_URL` is missing alongside a
+transport, so by the time `mailEnv` runs, a configured transport *implies* both are present. Typing
+them non-optional on `MailEnv` moves that guarantee into the type: the mailer and the sweep cannot
+be written to handle an absent From address or an absent base URL, because those states are
+unrepresentable. The `undefined` early return in `mailEnv` is therefore unreachable in practice and
+exists only so the function is total.
+
+`MailEnv` also carries `ignored: 'SMTP_URL' | null` rather than leaving `createMailer` to re-derive
+the both-set case from the raw env. Selection and the reason for the warning are one decision, made
+in one place, and the precedence table in D7 is testable without a logger.
+
+### DI-19 — Emails use literal colours, and this is the one place tokens cannot reach
+
+Every other surface in the repo reads design tokens. Email clients strip `<style>` blocks and do not
+resolve CSS custom properties, so an email must carry literal hex in inline `style` attributes.
+`packages/email/src/theme.ts` holds the Warm-light token values copied from
+`packages/ui/src/styles/globals.css`, in one file, named after the tokens they came from, so the
+copy is visible and auditable rather than scattered through the templates. Email has no theme
+switcher and no dark-mode variant to be correct in — there is one rendering, and the medium is why.
+
+### DI-20 — What this stage deliberately does not do
+
+`packages/email` and `apps/server/src/mail` are a seam with **no caller**: nothing schedules a sweep,
+nothing sends an invite, `createMailer` is not yet called from `apps/server/src/index.ts`. That is
+the stage boundary (tasks 11 and 12 own the callers), and it is why every test here drives a double
+— there is no code path in this stage that can reach the network, in CI or locally.
+
+### DI-21 — Compose forwards the three mail variables, because otherwise the config just built is unreachable
+
+*Not anticipated:* `docker/docker-compose.yml` forwards `SMTP_URL` but the app container receives no
+variable it does not list. Documenting `EMAIL_FROM` and `PUBLIC_URL` in `.env.example` as *required
+when a transport is set*, while compose forwards only `SMTP_URL`, would have produced a boot failure
+for the self-hoster who follows the documentation exactly: the app sees `SMTP_URL` and neither of
+its companions, and fast-fails naming them.
+
+*Chosen:* `RESEND_API_KEY`, `EMAIL_FROM` and `PUBLIC_URL` are forwarded beside the existing
+`SMTP_URL`, all with the `${VAR:-}` empty default that the whole optional-provider block uses (empty
+is treated as unset by `optionalString`, so the default stays "email off").
+
+The three `NOTIFICATION_*` variables are **deliberately not** forwarded yet. They are consumed by
+the scheduler, which task 11 builds, and the `${VAR:-}` idiom would actively break them: an empty
+`NOTIFICATION_EMAIL_CRON` fails `z.string().min(1)` and an empty `NOTIFICATION_RETENTION_DAYS`
+coerces to `0` and fails `.min(1)` — so forwarding them needs the literal defaults spelled out in
+compose, which belongs with the code that reads them. `turbo.json`'s `dev` `passThroughEnv` gains the
+same three mail variables for the same reason, beside the `SMTP_URL` already there.
+
+### DI-22 — A new workspace package is also a Dockerfile change, and now a guarded one
+
+*Not anticipated:* `docker/Dockerfile` enumerates every workspace manifest by hand (lines 12–19)
+before `pnpm install --frozen-lockfile`, so the image can install dependencies in a cached layer
+before the source arrives. Adding `packages/email` without adding its manifest to that list does not
+fail the install — pnpm simply installs nothing for a package it cannot see, leaving no
+`@react-email/render`, no `react-dom` for the email package, and a dangling
+`apps/server/node_modules/@yapm/email` symlink. `COPY . .` then brings the source in with no second
+install, and `pnpm turbo run build --filter=@yapm/server` fails on `@yapm/email#build` — an
+unresolvable `extends` and an unresolvable import. This breaks the compose smoke-test job and the
+published image, while every local gate stays green, because a local `pnpm install` sees the whole
+workspace.
+
+*Chosen:* `COPY packages/email/package.json ./packages/email/` beside the others, plus
+`scripts/check-image-manifests.mjs` — the root cause is a hand-maintained list with nothing
+verifying it, and the same omission would recur the next time a package is added. The guard scans
+`apps/*` and `packages/*` for manifests and asserts each appears in the Dockerfile above the install
+line, failing with the exact `COPY` line to add. It has no dependencies, runs in the existing
+`boundary-guard` CI job (which needs no install), and is exposed as `pnpm check:image-manifests`.
+Reverting only the `COPY` line makes it fail naming `packages/email/package.json`, which is how it
+was verified.
+
+### DI-23 — `monorepo-workspace`'s layout requirement is a closed list, so it needs a delta
+
+*Not anticipated:* `openspec/specs/monorepo-workspace/spec.md:7` enumerates the workspace's packages
+exhaustively. Adding `packages/email` makes that sentence false, and no delta in this change
+corrected it — archiving would have left the current-behaviour spec wrong about the repository's own
+shape.
+
+*Chosen:* a `specs/monorepo-workspace/spec.md` delta modifying that requirement to include
+`packages/email`, and stating the constraint the package exists to hold: it renders messages only —
+no transport, no environment, no `packages/schema` — which is what keeps its JSX/DOM compiler
+settings out of `apps/server` (D8, DI-15). It also gains the scenario DI-22's guard now makes true,
+so the image invariant is spec'd rather than living only in a script.

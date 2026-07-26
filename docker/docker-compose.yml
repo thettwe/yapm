@@ -53,7 +53,12 @@ services:
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       YAPM_BOOTSTRAP_ADMIN_EMAIL: ${YAPM_BOOTSTRAP_ADMIN_EMAIL:-}
+      # Outbound email. Empty for both transports means email is cleanly off. Setting either makes
+      # EMAIL_FROM and PUBLIC_URL required; boot fails naming whichever is missing.
       SMTP_URL: ${SMTP_URL:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      PUBLIC_URL: ${PUBLIC_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

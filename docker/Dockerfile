@@ -13,6 +13,7 @@ COPY apps/web/package.json ./apps/web/
 COPY apps/server/package.json ./apps/server/
 COPY apps/docs/package.json ./apps/docs/
 COPY packages/schema/package.json ./packages/schema/
+COPY packages/email/package.json ./packages/email/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/api/package.json ./packages/api/
 COPY packages/config/package.json ./packages/config/

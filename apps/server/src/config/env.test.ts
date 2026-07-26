@@ -1,10 +1,17 @@
 import { randomBytes } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { aiEnv, EnvValidationError, githubAppEnv, loadEnv } from './env.js'
+import { aiEnv, EnvValidationError, githubAppEnv, loadEnv, mailEnv } from './env.js'
 
 const VALID = {
   DATABASE_URL: 'postgres://yapm:yapm@localhost:5432/yapm',
 } satisfies NodeJS.ProcessEnv
+
+const SMTP = 'smtp://user:pass@relay.example.com:587'
+
+const MAIL_REQUIRED = {
+  EMAIL_FROM: 'yapm <notifications@example.com>',
+  PUBLIC_URL: 'https://yapm.example.com',
+}
 
 const APP_TRIPLET = {
   GITHUB_APP_ID: '123456',
@@ -164,5 +171,126 @@ describe('loadEnv', () => {
     const env = loadEnv({ ...VALID, AI_GOOGLE_API_KEY: '   ' })
     expect(env.AI_GOOGLE_API_KEY).toBeUndefined()
     expect(aiEnv(env).keys.google).toBeUndefined()
+  })
+})
+
+describe('mailEnv', () => {
+  it('boots clean with no transport configured and leaves email off', () => {
+    const env = loadEnv({ ...VALID })
+
+    expect(env.SMTP_URL).toBeUndefined()
+    expect(env.RESEND_API_KEY).toBeUndefined()
+    expect(mailEnv(env)).toBeNull()
+  })
+
+  it('applies the notification sweep defaults', () => {
+    const env = loadEnv({ ...VALID })
+
+    expect(env.NOTIFICATION_EMAIL_CRON).toBe('*/2 * * * *')
+    expect(env.NOTIFICATION_RETENTION_DAYS).toBe(30)
+    expect(env.NOTIFICATION_RETENTION_CRON).toBe('7 3 * * *')
+  })
+
+  it('selects SMTP when only SMTP_URL is set', () => {
+    const env = loadEnv({ ...VALID, ...MAIL_REQUIRED, SMTP_URL: SMTP })
+
+    expect(mailEnv(env)).toEqual({
+      transport: 'smtp',
+      url: SMTP,
+      from: MAIL_REQUIRED.EMAIL_FROM,
+      publicUrl: MAIL_REQUIRED.PUBLIC_URL,
+      ignored: null,
+    })
+  })
+
+  it('selects Resend when only RESEND_API_KEY is set', () => {
+    const env = loadEnv({ ...VALID, ...MAIL_REQUIRED, RESEND_API_KEY: 're_test' })
+
+    expect(mailEnv(env)).toEqual({
+      transport: 'resend',
+      apiKey: 're_test',
+      from: MAIL_REQUIRED.EMAIL_FROM,
+      publicUrl: MAIL_REQUIRED.PUBLIC_URL,
+      ignored: null,
+    })
+  })
+
+  it('selects Resend and names SMTP_URL as ignored when both are set', () => {
+    const env = loadEnv({
+      ...VALID,
+      ...MAIL_REQUIRED,
+      RESEND_API_KEY: 're_test',
+      SMTP_URL: SMTP,
+    })
+
+    expect(mailEnv(env)).toEqual({
+      transport: 'resend',
+      apiKey: 're_test',
+      from: MAIL_REQUIRED.EMAIL_FROM,
+      publicUrl: MAIL_REQUIRED.PUBLIC_URL,
+      ignored: 'SMTP_URL',
+    })
+  })
+
+  it('fails boot naming EMAIL_FROM when a transport is set without it', () => {
+    try {
+      loadEnv({ ...VALID, PUBLIC_URL: MAIL_REQUIRED.PUBLIC_URL, SMTP_URL: SMTP })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      expect(error).toBeInstanceOf(EnvValidationError)
+      const issues = (error as EnvValidationError).issues
+      expect(issues.map((issue) => issue.variable)).toEqual(['EMAIL_FROM'])
+      expect(issues[0]?.message).toContain('SMTP_URL')
+      expect(issues[0]?.expected).toContain('required when SMTP_URL or RESEND_API_KEY is set')
+    }
+  })
+
+  it('fails boot naming PUBLIC_URL when a transport is set without it', () => {
+    try {
+      loadEnv({ ...VALID, EMAIL_FROM: MAIL_REQUIRED.EMAIL_FROM, RESEND_API_KEY: 're_test' })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      const issues = (error as EnvValidationError).issues
+      expect(issues.map((issue) => issue.variable)).toEqual(['PUBLIC_URL'])
+      expect(issues[0]?.message).toContain('RESEND_API_KEY')
+    }
+  })
+
+  it('names both when a transport is set with neither', () => {
+    try {
+      loadEnv({ ...VALID, SMTP_URL: SMTP })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      const issues = (error as EnvValidationError).issues
+      expect(issues.map((issue) => issue.variable)).toEqual(['EMAIL_FROM', 'PUBLIC_URL'])
+    }
+  })
+
+  it('rejects a malformed PUBLIC_URL naming the variable', () => {
+    try {
+      loadEnv({ ...VALID, ...MAIL_REQUIRED, PUBLIC_URL: 'yapm.example.com', SMTP_URL: SMTP })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      expect(error).toBeInstanceOf(EnvValidationError)
+      const issues = (error as EnvValidationError).issues
+      expect(issues[0]?.variable).toBe('PUBLIC_URL')
+      expect(issues[0]?.expected).toContain('browsable base URL')
+    }
+  })
+
+  it('treats whitespace-only mail variables as unset, so a blank compose var disables email', () => {
+    const env = loadEnv({ ...VALID, SMTP_URL: '   ', RESEND_API_KEY: '  ', EMAIL_FROM: ' ' })
+
+    expect(env.SMTP_URL).toBeUndefined()
+    expect(mailEnv(env)).toBeNull()
+  })
+
+  it('rejects a NOTIFICATION_RETENTION_DAYS of zero', () => {
+    try {
+      loadEnv({ ...VALID, NOTIFICATION_RETENTION_DAYS: '0' })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      expect((error as EnvValidationError).issues[0]?.variable).toBe('NOTIFICATION_RETENTION_DAYS')
+    }
   })
 })

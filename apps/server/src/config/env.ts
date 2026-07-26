@@ -54,6 +54,17 @@ const GITHUB_APP_VARS = [
   'GITHUB_APP_WEBHOOK_SECRET',
 ] as const
 
+// A mail transport cannot send without a From address, and an email full of localhost links is a
+// silent failure no test catches — so both are required as soon as EITHER transport is configured,
+// on the GITHUB_APP_VARS precedent. Not required otherwise: unconfigured email is cleanly off.
+const MAIL_REQUIRED_VARS = ['EMAIL_FROM', 'PUBLIC_URL'] as const
+const MAIL_TRANSPORT_VARS = ['RESEND_API_KEY', 'SMTP_URL'] as const
+
+const optionalHttpUrl = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined),
+  z.string().url().optional(),
+)
+
 export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -94,8 +105,22 @@ export const envSchema = z
     GITHUB_CLIENT_SECRET: optionalString,
     // First authenticated user becomes admin; set to bind that to a specific verified email.
     YAPM_BOOTSTRAP_ADMIN_EMAIL: optionalString,
-    // Reserved for outbound email (verification, invite delivery); unset disables email.
+    // Outbound email. Two transports, both optional; neither configured cleanly disables email —
+    // the in-app inbox works fully without one, and boot never fails for want of a mailer.
+    // SMTP_URL reaches every relay that issues SMTP credentials (Mailgun, Resend, Postmark,
+    // SendGrid, SES, Mailjet); RESEND_API_KEY exists because some hosts block outbound SMTP ports
+    // entirely, and on those an HTTPS sender is the only path out. Resend wins when both are set.
     SMTP_URL: optionalString,
+    RESEND_API_KEY: optionalString,
+    EMAIL_FROM: optionalString,
+    // The browsable base URL a human clicks in an email. Deliberately NOT BETTER_AUTH_URL (the
+    // origin better-auth signs against) or WEB_ORIGIN (the CORS-trusted SPA origin) — overloading
+    // either is how those two came to disagree.
+    PUBLIC_URL: optionalHttpUrl,
+    // The notification email sweep and the retention sweep, both on the existing pg-boss instance.
+    NOTIFICATION_EMAIL_CRON: z.string().min(1).default('*/2 * * * *'),
+    NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+    NOTIFICATION_RETENTION_CRON: z.string().min(1).default('7 3 * * *'),
     // Connectors (GitHub App). All optional: absent env cleanly DISABLES the connector, never
     // crashes boot. SECRETS_ENCRYPTION_KEY encrypts connector secrets entered via the admin UI;
     // env-provided App credentials do not require it.
@@ -140,6 +165,21 @@ export const envSchema = z
       }
     }
   })
+  .check((ctx) => {
+    const value = ctx.value
+    const transport = MAIL_TRANSPORT_VARS.find((name) => value[name] !== undefined)
+    if (transport === undefined) return
+    for (const name of MAIL_REQUIRED_VARS) {
+      if (value[name] === undefined) {
+        ctx.issues.push({
+          code: 'custom',
+          input: value[name],
+          path: [name],
+          message: `is required when ${transport} is set (an email transport needs a From address and a public base URL)`,
+        })
+      }
+    }
+  })
 
 export type Env = Omit<z.infer<typeof envSchema>, 'WEB_DIST_DIR'> & {
   WEB_DIST_DIR: string
@@ -162,12 +202,26 @@ export const EXPECTED_FORMAT: Record<string, string> = {
   BETTER_AUTH_SECRET: 'a random string (openssl rand -base64 32); change in production',
   BETTER_AUTH_URL:
     'the server base URL better-auth signs/verifies against, e.g. http://localhost:3000',
-  WEB_ORIGIN: 'the browser origin of the SPA, e.g. http://localhost:5173 in dev',
+  WEB_ORIGIN:
+    'the SPA browser origin trusted for CORS, e.g. http://localhost:5173 with `pnpm dev` (Vite) or your app origin when the app serves the built SPA same-origin',
   GITHUB_CLIENT_ID: 'a GitHub OAuth/App client id, or unset to disable GitHub sign-in',
   GITHUB_CLIENT_SECRET: 'the matching GitHub client secret, or unset to disable GitHub sign-in',
   YAPM_BOOTSTRAP_ADMIN_EMAIL:
     'the email that becomes the first admin, or unset for first-user-wins',
-  SMTP_URL: 'smtp://user:pass@host:port for outbound email, or unset to disable email',
+  SMTP_URL:
+    'smtp://user:pass@host:587 for outbound email over an SMTP relay, or unset (ignored when RESEND_API_KEY is also set)',
+  RESEND_API_KEY:
+    'a Resend API key to send over HTTPS instead of SMTP (for hosts that block outbound SMTP ports), or unset',
+  EMAIL_FROM:
+    'the From address outbound email is sent as, e.g. yapm <notifications@example.com>; required when SMTP_URL or RESEND_API_KEY is set',
+  PUBLIC_URL:
+    'the browsable base URL used to build email deep links, e.g. https://yapm.example.com; required when SMTP_URL or RESEND_API_KEY is set',
+  NOTIFICATION_EMAIL_CRON:
+    "a cron expression for the notification email sweep, e.g. '*/2 * * * *' for every two minutes",
+  NOTIFICATION_RETENTION_DAYS:
+    'an integer number of days to keep notifications before deleting them, e.g. 30',
+  NOTIFICATION_RETENTION_CRON:
+    "a cron expression for the notification retention sweep, e.g. '7 3 * * *' for 03:07 daily",
   SECRETS_ENCRYPTION_KEY:
     'base64-encoded 32 random bytes (openssl rand -base64 32) to encrypt connector secrets at rest, or unset',
   GITHUB_APP_ID:
@@ -282,4 +336,43 @@ export function aiEnv(env: Env): AiEnv {
   if (env.AI_GOOGLE_API_KEY) keys.google = env.AI_GOOGLE_API_KEY
   if (env.AI_OPENAI_API_KEY) keys.openai = env.AI_OPENAI_API_KEY
   return { keys, defaultProvider: env.AI_DEFAULT_PROVIDER ?? null }
+}
+
+export type MailEnv =
+  | {
+      transport: 'resend'
+      apiKey: string
+      from: string
+      publicUrl: string
+      ignored: 'SMTP_URL' | null
+    }
+  | { transport: 'smtp'; url: string; from: string; publicUrl: string; ignored: null }
+
+// The selected mail transport from env, or null when email is off, mirroring `githubAppEnv`.
+//
+// Resend wins the tie deliberately: an operator who added RESEND_API_KEY on top of an existing
+// SMTP_URL has almost certainly done so because their host blocks outbound SMTP, which is the whole
+// reason the HTTPS sender exists. Refusing to boot on a config where neither value is malformed
+// would be a footgun on upgrade, so the ambiguity resolves to a documented precedence plus one warn
+// log naming the ignored variable.
+//
+// `from` and `publicUrl` are non-optional here because the env schema's mail refinement already
+// failed boot if either was missing alongside a transport — a non-null result is complete.
+export function mailEnv(env: Env): MailEnv | null {
+  const from = env.EMAIL_FROM
+  const publicUrl = env.PUBLIC_URL
+  if (from === undefined || publicUrl === undefined) return null
+  if (env.RESEND_API_KEY) {
+    return {
+      transport: 'resend',
+      apiKey: env.RESEND_API_KEY,
+      from,
+      publicUrl,
+      ignored: env.SMTP_URL ? 'SMTP_URL' : null,
+    }
+  }
+  if (env.SMTP_URL) {
+    return { transport: 'smtp', url: env.SMTP_URL, from, publicUrl, ignored: null }
+  }
+  return null
 }

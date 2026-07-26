@@ -775,3 +775,152 @@ bite, not just for green: perturbing `comment.edit`'s event key to `${args.id}:$
 fails step 3, and turning `autoSubscribeMentioned`'s `do nothing` into a `do update set state` fails
 step 4. Both perturbations were reverted; the two crux steps fail for the two plausible wrong
 implementations and for nothing else.
+
+### I16 — `MentionCandidate` carries one field the brief did not spell: `matchOnly`
+
+The prop shape given for the surface is `{id, name, email?, image?, eligible: boolean, reason?}`, and
+D4 asks for two things those six fields cannot express together: an off-team **admin is eligible**
+(so `eligible: false` is a lie about them) yet must be **held back until the query names them and
+ranked last** (so they are not an ordinary default candidate either). Three bands, two states.
+
+So `MentionCandidate` gains `matchOnly?: boolean`. It is named as a **list behaviour**, not as a
+role — "not offered until the query prefix-matches; ranks after every default candidate" — which is
+what keeps `packages/ui` ignorant of teams and permissions the way the brief requires. The word
+"admin" appears nowhere in `mention-match.ts`; `apps/web/src/issues/mentionables.ts` is the only
+place that knows an admin is the reason a candidate is held back.
+
+### I17 — Matching has three tiers, not two, because a surname is a prefix people expect to work
+
+"Prefix ranked above substring" under-specifies the case that actually decides whether a typeahead
+feels right: `@lov` against *Ada Lovelace*. Whole-name prefix only would rank her as a substring hit
+behind anyone whose given name starts with those letters; substring only would surface an off-team
+admin on `@a`. So `hitTier` is: full-name/email-local prefix (0) > word-start prefix (1) >
+substring (2), and the held-back and ineligible bands require tier ≤ 1 — a mid-word hit is never
+enough to surface somebody the list is deliberately not offering.
+
+Tokens split on whitespace, `.`, `_`, `+` and `-`, so `ada.lovelace@…` matches on either half.
+Ordering is by locale-independent string comparison rather than `localeCompare`: ICU data varies by
+host, and a typeahead whose order depends on where it runs cannot be unit-tested.
+
+### I18 — The author is not offered in their own `@` list
+
+Unspecified. A self-mention is silent by design (the fan-out drops the actor), so offering yourself
+is offering something that provably does nothing — the exact failure H6 names as the worst outcome
+for a communication feature. The list therefore omits the viewer. A self-mention written by hand or
+pasted still stores and renders normally; only the offer is withheld.
+
+### I19 — The active row is a wash plus a rule, not accent-coloured ink, and a token test now says why
+
+`bg-accent-soft` + `text-accent-strong` is the repo's existing selection idiom (command palette,
+editor toolbar). Composited properly — `--accent-soft` is an rgba wash in four of the six presets —
+`--accent-strong` over it measures **3.94–3.95** in *focused dark*, *editorial light* and one other:
+below AA for normal-size text. The typeahead's spec requires AA for the active row in all three
+presets, light and dark, so the mention list keeps `text-1`/`text-2` ink and signals the active row
+with the wash plus a 2px `--accent-strong` left rule. The mention chip made the same call.
+
+`styles/contrast.test.ts` gained an alpha-compositing helper and now asserts text-1/text-2 over the
+soft-accent selection in every preset, so the claim is enforced rather than asserted.
+
+**The pre-existing instances are a finding, not something this change fixed:** `CommandItem`
+(`command-palette.tsx`) and the rich-text toolbar's active button use the sub-AA pairing today. They
+are out of this change's scope and are recorded here rather than quietly bundled in.
+
+### I20 — The read-only renderer takes a `mentionNames` map, and no lookup means no chip
+
+The `mentions` capability spec requires the displayed name to be resolved from the live `user` row
+by id — that is what makes a rename propagate and a crafted `label` unable to spoof a colleague. The
+brief for the surface did not name a prop for it, so one was added: `mentionNames?: ReadonlyMap<
+string, string>` on both `RichTextEditor` and `RichTextRenderer`, built in `apps/web` from the
+`queries.users.all` rows the surface already holds. A plain id→name map keeps `packages/ui` ignorant
+of queries.
+
+The default is the safe one: with **no** lookup supplied, nothing resolves and every mention renders
+as inert plain `@label` rather than as a chip. Safe by construction rather than by opting in — a
+consumer that forgets the map gets degraded rendering, not an unverified name presented as fact.
+`RichTextRenderer` lists the map in its `useEditor` deps so a rename reaches documents already on
+screen; `RichTextEditor` reads it through a ref instead, because rebuilding a live editor would
+destroy the draft.
+
+### I21 — `packages/ui` gains a jsdom lane, opt-in per file rather than package-wide
+
+I3 deferred this to "whoever first needs a component test here", and task 10.10 is that caller. The
+package's vitest project stays `environment: 'node'` and the two component test files declare
+`// @vitest-environment jsdom` in a docblock: `styles/contrast.test.ts` reads `globals.css` through
+`import.meta.url`, which jsdom rewrites to an `http:` URL and breaks. `globals: true` is set because
+Testing Library registers its between-test DOM cleanup only when the globals are enabled.
+
+### I22 — Editor-root ARIA is set imperatively, and that is the correct choice here
+
+`aria-expanded`, `aria-controls` and `aria-activedescendant` go on ProseMirror's contenteditable via
+`editor.view.dom.setAttribute` in an effect, not through `editorProps.attributes`. Moving the active
+option with an arrow key dispatches **no transaction**, so a state-derived attribute would go stale
+exactly while a screen-reader user is navigating. It is safe: the root's attributes come from an
+outer node decoration and `patchAttributes` only removes attributes a *previous decoration* set, so
+these three survive every redraw. Verified by reading `prosemirror-view@1.42.1`, not assumed.
+
+Biome's `useAriaPropsSupportedByRole` objects to `aria-expanded` on `role="textbox"`. Suppressed with
+a reason: ARIA 1.2 reserves the triple for `combobox`, but swapping a multi-line contenteditable's
+role while the user is typing is worse for assistive tech than the well-trodden
+textbox-plus-activedescendant shape that GitHub and Slack ship.
+
+### I23 — The popup is a React portal into a plugin-owned element
+
+`props.mount(element)` needs a real DOM node at `onStart`, which fires inside a ProseMirror
+transaction — before any React ref for a conditionally-rendered popup would exist, and reparenting a
+React-rendered node under the plugin would break React's sibling bookkeeping. So the component owns
+a detached `div` created once, renders the `MentionList` into it with `createPortal`, and hands the
+*element* to the plugin. React owns the contents; the plugin owns where it lives.
+
+`container` is passed as the CSS selector `#yapm-rte-<uid>` rather than an element, because
+`resolveContainer` runs at mount time while the suggestion options are built at plugin-construction
+time, when the wrapper ref is still null. `useId()` yields `:r0:`, which is a legal id but not a
+legal bare selector, so the colons are stripped.
+
+### I24 — What was verified in a browser-shaped environment, and what was not
+
+Following I4 and I14: a throwaway jsdom probe was written against the real pinned TipTap graph, run,
+and deleted (task 12 owns the permanent browser check). Ten assertions, all passing:
+
+1. Typing `@` opens a `role="listbox"` **inside the editor wrapper**, with `aria-expanded="true"`,
+   `aria-controls` naming it, and `aria-activedescendant` resolving to an element in that same
+   subtree — the body-portal failure mode D13 warns about would fail this.
+2. The unfiltered list offers only the two eligible defaults; the held-back and ineligible people
+   are absent.
+3. `@cas` surfaces the ineligible colleague as a single `aria-disabled="true"` option carrying its
+   reason.
+4. ArrowDown then Enter inserts `{type:'mention', attrs:{id:'bo',…}}`, closes the popup, flips
+   `aria-expanded` back to `false`, and renders the chip as `@Bo Nguyen`.
+5. **Cmd+Enter accepts the option and `onSubmit` is not called.**
+6. **Escape reports handled (so ProseMirror calls `preventDefault()`), closes the popup, and
+   `onCancel` is NOT called — the draft text is still in the editor.** This is the live `main`
+   defect, exercised at the seam jsdom *can* express.
+7. Enter on the ineligible option inserts nothing, leaves the popup open, and the live region reads
+   "Casey Stone cannot be mentioned…".
+8. `mail someone@example.com now` never opens the popup.
+9. `@` typed under the `code` mark never opens the popup.
+10. The read-only renderer shows `@Ada Lovelace` for a node whose stored label is `STALE` (the
+    anti-spoof property), renders no `href` and no `tabindex`, opens no popup, and round-trips the
+    node; an id resolving to nobody renders as inert `@Former Colleague` with no chip class.
+
+Two jsdom limitations had to be worked around in the probe and are **not** product defects:
+`Selection.prototype.collapseToEnd` throws with no range because jsdom never places a caret in a
+contenteditable (the mention extension's own insert command calls it), and `scrollIntoView` after
+the insert hits `getClientRects` on a text node. Both are absent in a real browser. What the probe
+could *not* judge is placement, flip behaviour near a viewport edge, and whether the thing feels
+Linear-grade — which is exactly the list already flagged for a human.
+
+### I25 — The issue-detail chunk cost, measured rather than waved through
+
+Task 14.5's number, taken here because this is the stage that adds the weight. Same machine, same
+`vite build`, this stage's tree stashed and restored to get the baseline:
+
+| | raw | gzip |
+|---|---|---|
+| before (`issue-detail-f_y-3CPw.js`) | 402.63 kB | 126.83 kB |
+| after (`issue-detail-Cqg7dfAG.js`) | 424.38 kB | 134.24 kB |
+| **delta** | **+21.75 kB** | **+7.41 kB** |
+
++7.4 kB gzip on a route-level chunk that already carries the whole ProseMirror editor, for the
+mention node, the suggestion plugin, Floating UI's positioning and the listbox. It rides an existing
+lazy chunk rather than the entry bundle, and no interaction on it newly waits on the network — the
+typeahead filters rows already in IndexedDB and returns an array. Recorded rather than assumed.

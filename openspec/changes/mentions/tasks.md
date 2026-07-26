@@ -217,59 +217,59 @@ surface on top of a proven substrate.
 
 ## 10. `packages/ui`: the mention extension and the listbox
 
-- [ ] 10.1 Create `packages/ui/src/components/mention-list.tsx` — a bespoke listbox, **not** cmdk
+- [x] 10.1 Create `packages/ui/src/components/mention-list.tsx` — a bespoke listbox, **not** cmdk
       (its `Command.Input` steals focus and focus must stay in the editor). `role="listbox"` with
       `role="option"` children carrying stable ids, an active row, a disabled row with a stated
       reason, an empty state naming the query, and a polite live region announcing match count / the
       empty state / the disabled reason. Every colour, font, radius and spacing value from theme
       tokens; AA in all three presets, light and dark.
-- [ ] 10.2 Create `packages/ui/src/lib/mention-match.ts` — the deterministic matcher: case- and
+- [x] 10.2 Create `packages/ui/src/lib/mention-match.ts` — the deterministic matcher: case- and
       diacritic-insensitive, prefix ranked above substring, over display name and email local part,
       **team members ranked above admins-by-role**, stable alphabetical tiebreak, and ineligible
       workspace users surfaced as disabled entries with a reason (design D4/D14).
-- [ ] 10.3 Register the `mention` node in `richTextExtensions`
+- [x] 10.3 Register the `mention` node in `richTextExtensions`
       (`packages/ui/src/components/rich-text.tsx:26`) so **both** `RichTextEditor` and
       `RichTextRenderer` parse and render it. Use `renderText` + `renderHTML` (**not** the
       deprecated `renderLabel`), a locally-created `new PluginKey('yapm-mention')` (**`MentionPluginKey`
       is not exported** by 3.28.0), and the array form `suggestions: [ … ]` with exactly one entry
       (the H8 seam).
-- [ ] 10.4 Neutralise the suggestion plugin in the read-only renderer with `allow: () => false` —
+- [x] 10.4 Neutralise the suggestion plugin in the read-only renderer with `allow: () => false` —
       `addProseMirrorPlugins` always instantiates at least one, so it cannot be switched off.
-- [ ] 10.5 Suggestion configuration: `items()` returns an **array, never a promise** (this is the
+- [x] 10.5 Suggestion configuration: `items()` returns an **array, never a promise** (this is the
       whole sub-100ms story); explicit `allowedPrefixes` so `foo@bar.com` never opens the popup; an
       `allow` predicate rejecting `codeBlock` and inline `code`; managed mounting via
       `props.mount(element)` with `container` set to the **editor wrapper** — not a body portal,
       which would break both `POPUP_SELECTOR` (`apps/web/src/lib/keyboard.ts:17`) and the
       `aria-activedescendant` IDREF.
-- [ ] 10.6 The keyboard contract (design D13 table): ↑/↓ move, Home/End jump, Enter and Tab accept,
+- [x] 10.6 The keyboard contract (design D13 table): ↑/↓ move, Home/End jump, Enter and Tab accept,
       Cmd/Ctrl+Enter accepts rather than submits, Escape dismisses **only** the popup via
       `exitSuggestion(view, MENTION_PLUGIN_KEY)`. The editor gains `aria-expanded`,
       `aria-controls`, `aria-activedescendant`.
-- [ ] 10.7 Add the data-agnostic `mentionables?: MentionCandidate[]` prop (`{id, name, email?,
+- [x] 10.7 Add the data-agnostic `mentionables?: MentionCandidate[]` prop (`{id, name, email?,
       image?, eligible: boolean, reason?}`) to `RichTextEditor`. `packages/ui` stays ignorant of
       teams, queries and permissions.
-- [ ] 10.8 Render a mention chip as a **non-interactive** `<span>` with an accessible name, styled
+- [x] 10.8 Render a mention chip as a **non-interactive** `<span>` with an accessible name, styled
       from tokens — no link, no tab stop (design D10). An unresolvable or ineligible id renders as
       inert plain `@Name`.
-- [ ] 10.9 **Test**: `packages/ui/src/lib/mention-match.test.ts` — diacritics, prefix-over-substring,
+- [x] 10.9 **Test**: `packages/ui/src/lib/mention-match.test.ts` — diacritics, prefix-over-substring,
       email local part, team-before-admin ordering, stable tiebreak, ineligible entries.
-- [ ] 10.10 **Test**: a `mention-list` component test — arrow/Home/End movement, `aria-activedescendant`
+- [x] 10.10 **Test**: a `mention-list` component test — arrow/Home/End movement, `aria-activedescendant`
       tracking the active option, a disabled option reachable but not insertable, the empty state.
-- [ ] 10.11 Ladle stories for `MentionList` and for `RichTextEditor` with mentionables, across all
+- [x] 10.11 Ladle stories for `MentionList` and for `RichTextEditor` with mentionables, across all
       three presets in light and dark.
 
 ## 11. `apps/web`: wiring and the follow control
 
-- [ ] 11.1 In `apps/web/src/issues/issue-detail.tsx`, build `mentionables` from the `MemberOption[]`
+- [x] 11.1 In `apps/web/src/issues/issue-detail.tsx`, build `mentionables` from the `MemberOption[]`
       the surface **already** assembles for the assignee menu (line ~190) plus workspace admins from
       `queries.members.all`, marking each candidate eligible or not with its reason. No new query.
       Pass it to the description editor, the comment composer and the comment editor.
-- [ ] 11.2 Add the Follow / Following control to the detail meta column, reading
+- [x] 11.2 Add the Follow / Following control to the detail meta column, reading
       `queries.subscriptions.mine({issueId})` and calling `issueSubscription.follow`/`.unfollow`.
       `aria-pressed`, keyboard-reachable, optimistic. When following, state that updates will arrive
       and how to stop — an auto-subscription must be reversible **from the thing that created it**.
-- [ ] 11.3 No follower count and no subscriber list anywhere, for anyone, admins included.
-- [ ] 11.4 **Test**: `apps/web` component tests — the control reflects the synced row, toggles
+- [x] 11.3 No follower count and no subscriber list anywhere, for anyone, admins included.
+- [x] 11.4 **Test**: `apps/web` component tests — the control reflects the synced row, toggles
       optimistically, and is operable by keyboard alone.
 
 ## 12. E2E

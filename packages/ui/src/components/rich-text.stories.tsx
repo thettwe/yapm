@@ -1,4 +1,5 @@
 import type { JSONContent } from '@tiptap/react'
+import type { MentionCandidate } from '@yapm/ui/lib/mention-match'
 import { RichTextEditor, RichTextRenderer } from './rich-text'
 import { PresetGrid } from './story-presets'
 
@@ -68,6 +69,61 @@ export function ReadOnly() {
   return (
     <PresetGrid>
       <RichTextRenderer value={sample} />
+    </PresetGrid>
+  )
+}
+
+const MENTIONABLES: MentionCandidate[] = [
+  { id: 'ada', name: 'Ada Lovelace', email: 'ada@yapm.dev', eligible: true },
+  { id: 'bo', name: 'Bo Nguyen', email: 'bo@yapm.dev', eligible: true },
+  { id: 'zoe', name: 'Zoë Chen', email: 'zoe@yapm.dev', eligible: true },
+  { id: 'admin', name: 'Ravi Admin', email: 'ravi@yapm.dev', eligible: true, matchOnly: true },
+  {
+    id: 'casey',
+    name: 'Casey Stone',
+    email: 'casey@yapm.dev',
+    eligible: false,
+    reason: "Not on this team — can't be mentioned here",
+  },
+]
+
+const MENTION_NAMES = new Map(MENTIONABLES.map((person) => [person.id, person.name]))
+
+const mentioned: JSONContent = {
+  type: 'doc',
+  content: [
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: 'Handing the reconnect loop to ' },
+        { type: 'mention', attrs: { id: 'ada', label: 'Ada L.', mentionSuggestionChar: '@' } },
+        { type: 'text', text: ' — ' },
+        { type: 'mention', attrs: { id: 'gone', label: 'Former Colleague' } },
+        { type: 'text', text: ' has left, so their name renders inert.' },
+      ],
+    },
+  ],
+}
+
+export function WithMentions() {
+  return (
+    <PresetGrid>
+      <RichTextEditor
+        ariaLabel="Add a comment"
+        placeholder="Type @ to mention a teammate…"
+        minHeight="6rem"
+        defaultValue={mentioned}
+        mentionables={MENTIONABLES}
+        mentionNames={MENTION_NAMES}
+      />
+    </PresetGrid>
+  )
+}
+
+export function MentionsReadOnly() {
+  return (
+    <PresetGrid>
+      <RichTextRenderer value={mentioned} mentionNames={MENTION_NAMES} />
     </PresetGrid>
   )
 }

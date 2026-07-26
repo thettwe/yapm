@@ -111,10 +111,15 @@ export function groupNotificationEmails(
       title: copy.title,
       summary: copy.summary,
       path: notificationSubjectPath(row),
-      // A mention did two things, and the email says both: it told you, and it subscribed you to
-      // the thread. The kind is the only thing this seam knows that the template does not, so the
-      // branch lives here and the wording lives with the template.
-      ...(row.kind === 'mention' ? { footnote: MENTION_FOLLOW_FOOTNOTE } : {}),
+      // A mention usually does two things, and the email says both: it told you, and it subscribed
+      // you to the thread. The footnote is a DISCLOSURE, so it is attached to the fact rather than
+      // to the kind — a person who unfollowed the issue is still mentioned, still emailed, and by
+      // the sticky-unfollow design still does not follow it, so telling them they now do would be
+      // false in the one place they cannot check it. The row's own subscription state is the only
+      // thing that settles it; the wording lives with the template.
+      ...(row.kind === 'mention' && row.subscriptionState === 'subscribed'
+        ? { footnote: MENTION_FOLLOW_FOOTNOTE }
+        : {}),
     })
     batches.set(row.recipientId, existing)
   }

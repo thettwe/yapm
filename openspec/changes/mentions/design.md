@@ -1102,3 +1102,35 @@ how many names it holds, was the one being lost. `RichTextEditor` now renders a 
 `role="status"` region for its whole life, outside the popup portal, fed
 `popup === null ? '' : mentionAnnouncement(popup)`. The list component is unchanged otherwise, and
 its test harness — which stands in for the editor — owns the region exactly as the editor does.
+
+### I37 — The follow sentence is attached to the subscription, not to the kind
+
+I31 hung `MENTION_FOLLOW_FOOTNOTE` on `kind === 'mention'`, which is right for every mention except
+the one the sticky unfollow exists for: mention somebody who turned the issue off and they are
+notified, emailed, and — correctly — **not** re-subscribed, while the email tells them "You now
+follow this issue". The one claim in that message the recipient cannot check from their inbox was
+the false one, and by design it would stay false however many times they were mentioned.
+
+The footnote is a **disclosure of a subscription**, so it is now conditioned on the subscription.
+`pendingNotificationEmails` left-joins `issue_subscription` on its primary key
+`(issue_id = notification.subject_id, user_id = notification.recipient_id)` and carries
+`subscriptionState` on the row; `groupNotificationEmails` attaches the sentence only for
+`kind === 'mention' && subscriptionState === 'subscribed'`. Left, and on the primary key, so the
+join can add no row and drop none. Rewording the constant to be true in both states was the cheaper
+option and was rejected: a sentence vague enough to survive both states stops disclosing the thing
+it exists to disclose. An unfollowed recipient's mention email now simply carries no footnote —
+there is no subscription to tell them about.
+
+### I38 — The unhydrated follow control stays focusable, and a failed query says so
+
+I35's `disabled` was too blunt an instrument for "not settled yet". A native `disabled` button
+leaves the tab order and drops its `aria-describedby`, so the hint explaining what the control is
+waiting for is announced to nobody, and a keyboard user's tab stop appears and disappears under
+them as zero-cache answers. `aria-disabled` carries the same "not actionable" semantics while
+keeping both; the `if (!settled) return` guard, not the attribute, is what has always prevented a
+mis-fire, and omitting `aria-pressed` still asserts nothing.
+
+`result.type === 'error'` is the sharper half of the same bug: a query that failed is not a query
+that is still loading, and rendering it as a permanent "Checking whether you follow this issue…"
+left the control inert forever with no way out. The error state now words itself and renders Zero's
+own `retry()` as a button beside the control, matching the outage surface in `authenticated.tsx`.

@@ -68,7 +68,9 @@ second inbox and no second preference. Two things about them are worth reading h
 - **A mention is emailed at the default preference**, because it is addressed at you personally.
   You are notified at most once per comment and at most once per issue description, whatever
   sequence of edits follows; editing a comment to add somebody notifies only the person added. The
-  email says, in one line, that you now follow the issue and can stop from the issue page.
+  email says, in one line, that you now follow the issue and can stop from the issue page — and
+  says it only when the mention actually subscribed you, so a mention on an issue you unfollowed
+  never claims otherwise.
 - **A comment that names you tells you once.** You get the mention, not also the ambient "commented"
   row for the same comment — even if you were already following the issue or are its assignee.
 - **Being mentioned makes you follow the issue**, so later comments on it reach your inbox even when

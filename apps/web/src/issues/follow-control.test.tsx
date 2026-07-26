@@ -3,7 +3,8 @@ import { beforeEach, expect, test, vi } from 'vitest'
 
 const zero = vi.hoisted(() => ({
   row: undefined as { state: string } | undefined,
-  resultType: 'complete' as 'complete' | 'unknown',
+  resultType: 'complete' as 'complete' | 'unknown' | 'error',
+  retry: vi.fn(),
   listeners: new Set<() => void>(),
   mutate: vi.fn(
     (_mutation: { mutator: { mutatorName: string }; args: Record<string, unknown> }) => ({
@@ -28,13 +29,21 @@ vi.mock('@rocicorp/zero/react', async () => {
         },
         () => zero.row,
       ),
-      { type: zero.resultType },
+      zero.resultType === 'error'
+        ? { type: 'error', retry: zero.retry, refetch: zero.retry, error: { type: 'app' } }
+        : { type: zero.resultType },
     ],
     useZero: () => ({ mutate: zero.mutate }),
   }
 })
 
-import { FOLLOWING_HINT, FollowControl, NOT_FOLLOWING_HINT, PENDING_HINT } from './follow-control'
+import {
+  FOLLOWING_HINT,
+  FollowControl,
+  NOT_FOLLOWING_HINT,
+  PENDING_HINT,
+  UNAVAILABLE_HINT,
+} from './follow-control'
 
 function mutatorNames(): string[] {
   return zero.mutate.mock.calls.map((call) => call[0].mutator.mutatorName)
@@ -49,6 +58,7 @@ function sync(row: { state: string } | undefined) {
 
 beforeEach(() => {
   zero.mutate.mockClear()
+  zero.retry.mockClear()
   zero.row = undefined
   zero.resultType = 'complete'
 })
@@ -56,17 +66,52 @@ beforeEach(() => {
 // "No row yet" and "no subscription" look identical, and a subscriber opening the issue on a fresh
 // client hits the first one. Rendering it as Follow / aria-pressed=false tells them something false
 // about their own state and offers a button that would unfollow them.
-test('before the query has hydrated the control asserts nothing about following', () => {
+//
+// `aria-disabled`, not `disabled`: a native `disabled` button leaves the tab order and stops
+// carrying its description, so the hint saying WHY it is not actionable is announced to nobody and
+// the tab stop appears from under a keyboard user the moment zero-cache answers. The guard inside
+// the handler — asserted here — is what makes the press harmless.
+test('before the query has hydrated the control asserts nothing, stays focusable, and cannot fire', () => {
   zero.resultType = 'unknown'
   render(<FollowControl issueId="issue-1" />)
 
   const button = screen.getByRole('button')
   expect(button).not.toHaveAttribute('aria-pressed')
-  expect(button).toBeDisabled()
+  expect(button).toHaveAttribute('aria-disabled', 'true')
+  expect(button).not.toBeDisabled()
+  expect(button).not.toHaveAttribute('tabindex', '-1')
+  expect(button).toHaveAccessibleDescription(PENDING_HINT)
   expect(screen.getByText(PENDING_HINT)).toBeInTheDocument()
+
+  button.focus()
+  expect(button).toHaveFocus()
 
   fireEvent.click(button)
   expect(mutatorNames()).toEqual([])
+})
+
+// A query that FAILED is not a query that is still loading. Left as "unsettled" the control sat on
+// a permanent "checking…" with no way out, so a transient sync error made following an issue
+// impossible until a reload.
+test('a failed query says so, offers a retry, and still refuses to mutate', () => {
+  zero.resultType = 'error'
+  render(<FollowControl issueId="issue-1" />)
+
+  const control = screen.getByRole('button', { name: 'Updates' })
+  expect(screen.queryByText(PENDING_HINT)).toBeNull()
+  expect(screen.getByRole('alert')).toHaveTextContent(UNAVAILABLE_HINT)
+  expect(control).toHaveAccessibleDescription(UNAVAILABLE_HINT)
+
+  fireEvent.click(control)
+  expect(mutatorNames()).toEqual([])
+
+  const retry = screen.getByRole('button', { name: 'Retry' })
+  expect(retry.tagName).toBe('BUTTON')
+  retry.focus()
+  expect(retry).toHaveFocus()
+
+  fireEvent.click(retry)
+  expect(zero.retry).toHaveBeenCalledTimes(1)
 })
 
 test('with no synced row the control offers to follow and says what that does', () => {

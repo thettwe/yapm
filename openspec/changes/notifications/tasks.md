@@ -140,24 +140,24 @@ complete and useful before any mail code exists (groups 8–12); email is additi
 
 ## 7. Web: the inbox, the badge, the palette, the preference
 
-- [ ] 7.1 Add `apps/web/src/notifications/model.ts` — pure row-shaping and grouping over the synced
+- [x] 7.1 Add `apps/web/src/notifications/model.ts` — pure row-shaping and grouping over the synced
       rows, plus the unread count and its "99+" cap. Unit-test it.
-- [ ] 7.2 Add `apps/web/src/notifications/inbox-view.tsx`: workspace-wide list, newest first,
+- [x] 7.2 Add `apps/web/src/notifications/inbox-view.tsx`: workspace-wide list, newest first,
       `j`/`k`/Down/Up move focus (the `data-index` model from `triage-view.tsx:88-112`),
       Enter/Right opens the subject and marks read, `e` toggles read. Every colour and font via
       tokens; AA in Warm/Focused/Editorial, light and dark. No body excerpts.
-- [ ] 7.3 Add the `/inbox` route (`apps/web/src/routes/inbox.tsx`) inside `Authenticated` +
+- [x] 7.3 Add the `/inbox` route (`apps/web/src/routes/inbox.tsx`) inside `Authenticated` +
       `AppShell`, matching the cross-team `issues.mine` precedent.
-- [ ] 7.4 Add the unread badge to `apps/web/src/components/app-shell.tsx`, reading the **same**
+- [x] 7.4 Add the unread badge to `apps/web/src/components/app-shell.tsx`, reading the **same**
       `queries.notifications.mine` subscription the inbox uses (design D18), with the accessible
       name "Inbox, N unread" and a keyboard-reachable link to `/inbox`.
-- [ ] 7.5 Add the palette rows to `apps/web/src/issues/command.tsx`: "Go to inbox" in the existing
+- [x] 7.5 Add the palette rows to `apps/web/src/issues/command.tsx`: "Go to inbox" in the existing
       Navigate group and "Mark all notifications as read" as an action. Do **not** touch the
       existing "Jump to issue" group — the later `search` change owns it.
-- [ ] 7.6 Add the email-notifications control beside the theme preference
+- [x] 7.6 Add the email-notifications control beside the theme preference
       (`apps/web/src/components/theme-controls.tsx` or its sibling surface), fully keyboard-operable,
       writing through `preference.set`.
-- [ ] 7.7 **Test**: `apps/web` unit tests for the model and for the badge's accessible name;
+- [x] 7.7 **Test**: `apps/web` unit tests for the model and for the badge's accessible name;
       `pnpm turbo lint typecheck test` green.
 
 ## 8. Dependencies and `packages/email`

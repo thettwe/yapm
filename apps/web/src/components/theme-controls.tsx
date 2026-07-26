@@ -1,4 +1,9 @@
-import { isParseableColor, THEME_PRESETS } from '@yapm/schema'
+import {
+  EMAIL_NOTIFICATION_MODES,
+  type EmailNotificationMode,
+  isParseableColor,
+  THEME_PRESETS,
+} from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { Input } from '@yapm/ui/components/input'
 import { Label } from '@yapm/ui/components/label'
@@ -15,6 +20,14 @@ const PRESET_LABELS: Record<Preset, string> = {
   editorial: 'Editorial',
 }
 
+// The preference governs EMAIL only — the in-app inbox is unconditional — and the labels have
+// to say so, or "None" reads as "stop notifying me".
+const EMAIL_MODE_LABELS: Record<EmailNotificationMode, string> = {
+  all: 'Email everything',
+  assigned_only: 'Email what needs me',
+  none: 'No email',
+}
+
 const HEX_FALLBACK = '#c15a38'
 
 function isHex(value: string): boolean {
@@ -22,7 +35,16 @@ function isHex(value: string): boolean {
 }
 
 export function ThemeControls() {
-  const { theme, mode, accent, setTheme, setAccent, toggleMode } = useTheme()
+  const {
+    theme,
+    mode,
+    accent,
+    emailNotifications,
+    setTheme,
+    setAccent,
+    setEmailNotifications,
+    toggleMode,
+  } = useTheme()
   const [draft, setDraft] = useState(accent ?? '')
 
   useEffect(() => {
@@ -113,6 +135,28 @@ export function ThemeControls() {
               Reset to preset accent
             </Button>
           ) : null}
+
+          <div className="flex flex-col gap-1.5 border-t border-border pt-3">
+            <Label className="flex-col items-start gap-1.5 text-xs text-text-2">
+              Email notifications
+              <Select
+                data-testid="email-notifications"
+                value={emailNotifications}
+                onChange={(event) =>
+                  setEmailNotifications(event.currentTarget.value as EmailNotificationMode)
+                }
+              >
+                {EMAIL_NOTIFICATION_MODES.map((value) => (
+                  <option key={value} value={value}>
+                    {EMAIL_MODE_LABELS[value]}
+                  </option>
+                ))}
+              </Select>
+            </Label>
+            <p className="text-[11px] text-text-3">
+              Your inbox always shows everything. This only changes what is emailed.
+            </p>
+          </div>
         </div>
       </PopoverContent>
     </Popover>

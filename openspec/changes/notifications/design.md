@@ -683,3 +683,78 @@ Not a decision, but the thing most likely to have gone wrong. `zero-cache` 1.8.0
 the migrated database on the isolated stack: it computed an initial download state for
 `notification` with all twelve columns and reported `replication status OK` with zero `ERROR`-level
 log lines. The four-column primary key needed nothing special.
+
+### DI-8 — The one subscription is a hook, not a convention
+
+*Ambiguous:* D18 requires the shell badge and the `/inbox` list to read **one**
+`notifications.mine` subscription, but two components calling `useQuery` separately satisfies that
+only because Zero dedupes — a property no test asserts and a future third caller could quietly rely
+on or break.
+
+*Chosen:* `apps/web/src/notifications/use-inbox.ts` is the single call site. The badge and the view
+both call `useInbox()`, and the rule ("never open a second `notifications.mine`") is written where
+the query is opened rather than in a doc. The dedupe still does the work; the hook makes the
+requirement inspectable.
+
+### DI-9 — Enter is the row button's own activation, not a list keybinding
+
+*Ambiguous:* the spec asks for both Enter and Right to open the focused row. `triage-view.tsx`
+handles Enter in the container's `onKeyDown` because its rows are `IssueRow` divs. A `<button>` row
+fires `click` natively on Enter, so handling Enter in the container as well would open — and mark
+read — twice per press.
+
+*Chosen:* the inbox row is a real `<button>`, so Enter and Space activate it through the platform;
+the container handles only `j`/`k`/Down/Up, Right and `e`. A test asserts activation produces
+exactly one mutation. The row therefore needs no `role`, and its accessible name is its own text.
+
+### DI-10 — Day grouping, and why the `data-index` sequence is computed rather than counted
+
+*Not anticipated by the tasks, which say only "row-shaping and grouping":* the inbox groups by
+calendar day (Today / Yesterday / Earlier), empty buckets dropped. Grouping introduces headings
+between rows, so `data-index` is taken from a `Map` of the flat, already-ordered row list rather
+than from a counter incremented during render — the cursor sequence then cannot depend on render
+order, and a heading can never make `j` skip a row.
+
+### DI-11 — The email preference rides the existing Appearance popover, and its trigger keeps its name
+
+*Ambiguous:* task 7.6 says "beside the theme preference (`theme-controls.tsx` or its sibling
+surface)". That popover is titled "Appearance" and its trigger is labelled "Appearance settings" —
+a name two shipped e2e specs already select by (`theme.spec.ts:65`, `triage.spec.ts:172`).
+
+*Chosen:* the control is added as a separated block inside the same popover, and **neither the
+trigger label nor the popover title is renamed**, because that is the only per-user preference
+surface in the app and renaming it would regress two passing specs for a cosmetic gain. The block
+carries its own explanatory line — "Your inbox always shows everything. This only changes what is
+emailed." — which is D13's in-app-is-unconditional rule stated where a user can act on it. The
+value is read straight off the synced `user_preference` row (optimistic, so the select moves in the
+same frame) and written through `preference.set` with the theme fields the mutator requires,
+`emailNotifications` omitted by every other caller so DI-4's preservation rule holds.
+
+### DI-12 — "Mark all notifications as read" gets its own palette group
+
+*Ambiguous:* the palette spec says the two commands go "in its existing navigate and action
+groups". "Go to inbox" fits the existing Navigate group exactly. Every existing *action* group
+(`Issue`, `Triage`) is gated on a selected issue, and marking your own inbox read has nothing to do
+with whatever issues the palette happens to be pointed at — putting it there would hide the command
+whenever nothing is selected.
+
+*Chosen:* a small always-visible `Notifications` group holding the one command. The existing
+`Jump to issue` group is untouched — the later `search` change owns it.
+
+### DI-13 — The badge is a link, and lives only in `AppShell`
+
+*Not anticipated:* `AppShell` is not the only header. The team-scoped routes
+(`teams.$teamId.issues.index.tsx` and its siblings) each compose their own header from the same
+four components rather than using the shell, so the badge added to `AppShell` appears on `/`,
+`/inbox`, `/invite` and the settings routes but not on the team boards.
+
+*Chosen:* the assignment scopes this stage to `app-shell.tsx`, and that is what was changed —
+touching six route headers to duplicate the badge is a wider edit than this stage owns, and the
+palette's "Go to inbox" already reaches the inbox by keyboard from a team route. **The e2e stage
+(13.1) must therefore assert the badge on a shell route, or first hoist those headers.** Flagged
+rather than silently assumed.
+
+The badge itself is a `Link`, not a button with an `onClick`: it is in the tab order, it has a real
+`href` a middle-click or a screen-reader link list can use, and its accessible name is the model's
+one sentence (`Inbox, N unread`, `99+` past the cap) with the visible pill marked `aria-hidden` so
+the count is announced once.

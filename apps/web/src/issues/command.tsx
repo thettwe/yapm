@@ -22,6 +22,8 @@ import {
 import { StatusGlyph } from '@yapm/ui/components/status-glyph'
 import {
   ArrowRightIcon,
+  BellIcon,
+  CheckCheckIcon,
   CheckIcon,
   CircleDotIcon,
   InboxIcon,
@@ -230,6 +232,13 @@ export function CommandProvider({
     [runAll, targetIds, zero],
   )
 
+  // The same shared mutator the inbox's own control calls, so the palette path is authorized and
+  // applied identically — and self-scoped by construction: the recipient comes from the verified
+  // context, so there is no way to spell "somebody else's inbox" here.
+  const markAllNotificationsRead = useCallback(() => {
+    void runAll([zero.mutate(mutators.notification.markAllRead({ readAt: Date.now() }))])
+  }, [runAll, zero])
+
   const createIssue = useCallback(
     (title: string) => {
       const now = Date.now()
@@ -303,6 +312,11 @@ export function CommandProvider({
                     void navigate({ to: '/' })
                     close()
                   }}
+                  onNavigateInbox={() => {
+                    void navigate({ to: '/inbox' })
+                    close()
+                  }}
+                  onMarkAllNotificationsRead={markAllNotificationsRead}
                   onCreate={() => start('create', [])}
                   onStatus={() => start('status', targetIds)}
                   onAssign={() => start('assign', targetIds)}
@@ -371,6 +385,8 @@ function RootPage({
   onOpenIssue,
   onNavigateTeam,
   onNavigateHome,
+  onNavigateInbox,
+  onMarkAllNotificationsRead,
   onCreate,
   onStatus,
   onAssign,
@@ -389,6 +405,8 @@ function RootPage({
   onOpenIssue: (issue: IssueRowData) => void
   onNavigateTeam: (id: string) => void
   onNavigateHome: () => void
+  onNavigateInbox: () => void
+  onMarkAllNotificationsRead: () => void
   onCreate: () => void
   onStatus: () => void
   onAssign: () => void
@@ -452,7 +470,22 @@ function RootPage({
           </CommandItem>
         </CommandGroup>
       ) : null}
+      {/* Not gated on a selected issue: marking your own inbox read is never about the issues
+          the palette happens to be pointed at. */}
+      <CommandGroup heading="Notifications">
+        <CommandItem
+          value="mark all notifications as read inbox"
+          onSelect={onMarkAllNotificationsRead}
+        >
+          <CheckCheckIcon />
+          Mark all notifications as read
+        </CommandItem>
+      </CommandGroup>
       <CommandGroup heading="Navigate">
+        <CommandItem value="go to inbox notifications" onSelect={onNavigateInbox}>
+          <BellIcon />
+          Go to inbox
+        </CommandItem>
         <CommandItem value="go to workspace overview" onSelect={onNavigateHome}>
           <ArrowRightIcon />
           Go to workspace overview

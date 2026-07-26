@@ -277,6 +277,24 @@ export const queries = defineQueries({
         .limit(NOTIFICATION_SYNC_LIMIT)
     }),
   },
+  subscriptions: {
+    // SELF-SCOPED WITH NO ADMIN BYPASS — the `retroDrafts.mine` shape again, NOT `teamScoped`.
+    //
+    // Scoping to ONE ISSUE is what bounds the synced set: at most one row for the issue currently
+    // open, so this needs no `.limit()` and no retention story. A `mine` list over every issue would
+    // grow forever, and truncating it would render an old subscription as "not following" and hide
+    // its unfollow control — the mail trap again, by accident.
+    //
+    // THE ABSENCE OF ANY OTHER QUERY OVER THIS TABLE IS THE POINT. There is no watcher list and no
+    // follower count for anybody, admins included; the only way to learn who follows an issue is a
+    // server-side read inside the fan-out. The non-surveillance property of this change is expressed
+    // as missing code rather than as a policy, so adding a second query here would silently undo it.
+    mine: defineQuery(z.object({ issueId: z.string() }), ({ args, ctx }) => {
+      if (!isMember(ctx)) return denyAll(zql.issue_subscription).one()
+      const q = zql.issue_subscription.where('issueId', args.issueId).where('userId', ctx.userID)
+      return q.one()
+    }),
+  },
   retroVotes: {
     // SELF-SCOPED for the same reason and with the same deviation: a voter sees their own dots (which
     // is how the remaining-budget readout stays instant and offline-correct), and everyone else reads
@@ -311,3 +329,4 @@ export const RETRO_DETAIL_QUERY_NAME = 'retros.detail'
 export const RETRO_DRAFTS_MINE_QUERY_NAME = 'retroDrafts.mine'
 export const RETRO_VOTES_MINE_QUERY_NAME = 'retroVotes.mine'
 export const NOTIFICATIONS_MINE_QUERY_NAME = 'notifications.mine'
+export const SUBSCRIPTIONS_MINE_QUERY_NAME = 'subscriptions.mine'

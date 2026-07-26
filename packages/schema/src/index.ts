@@ -1,4 +1,12 @@
 export { newId } from './id.js'
+export type { MentionRenderMode, RichTextToPlainTextOptions } from './rich-text/plaintext.js'
+export {
+  extractMentionIds,
+  MENTION_LABEL_MAX_LENGTH,
+  MENTION_NODE_TYPE,
+  richTextToPlainText,
+  sanitizeRichText,
+} from './rich-text/plaintext.js'
 export type {
   ActiveToolOptions,
   AgentAuditEntry,
@@ -47,6 +55,7 @@ export type {
   ReviewState,
   RichTextDoc,
   SortDirection,
+  SubscriptionState,
   ThemePreset,
   WorkspaceRole,
 } from './zero/context.js'
@@ -88,6 +97,7 @@ export {
   RETRO_PRESENCE_STALE_MS,
   RETRO_VOTE_TARGETS,
   REVIEW_STATES,
+  SUBSCRIPTION_STATES,
   THEME_PRESETS,
   WORKSPACE_ROLES,
 } from './zero/context.js'
@@ -419,6 +429,7 @@ export {
   RETRO_VOTES_MINE_QUERY_NAME,
   RETROS_BY_TEAM_QUERY_NAME,
   SAVED_VIEWS_BY_TEAM_QUERY_NAME,
+  SUBSCRIPTIONS_MINE_QUERY_NAME,
   TEAMS_ALL_QUERY_NAME,
   TRIAGE_INBOX_QUERY_NAME,
   teamScoped,

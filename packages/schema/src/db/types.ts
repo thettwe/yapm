@@ -21,6 +21,7 @@ import type {
   RetroVoteTarget,
   ReviewState,
   RichTextDoc,
+  SubscriptionState,
   ThemePreset,
   WorkspaceRole,
 } from '../zero/context.js'
@@ -536,6 +537,23 @@ export interface NotificationTable {
   created_at: Timestamp
 }
 
+// One row per (issue, person) standing intent. THE TWO-COLUMN NATURAL KEY IS THE PRIMARY KEY, so
+// nothing is minted anywhere in the subscription path and `on conflict do nothing` is answered by
+// the PK index itself. `state` rather than row existence is what makes an unfollow stick: the
+// auto-subscribe insert can create a subscription but can never resurrect one somebody turned off.
+export interface IssueSubscriptionTable {
+  issue_id: string
+  user_id: string
+  team_id: string
+  state: Generated<SubscriptionState>
+  // `Timestamp` rather than `Generated<Timestamp>` for the same reason `notification.created_at`
+  // uses it: DB-defaulted and omittable on insert, but a writer inside a mutation sets it from that
+  // mutation's own timestamp rather than from `now()`, so the value is deterministic under rebase.
+  // `created_at` also orders the subscriber fan-out, oldest-following first.
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
 // Owned by better-auth (created by its `getMigrations()` at boot), read-only here so
 // mutators/queries can join member profiles. camelCase columns and a `text` id are
 // better-auth's shape (reference/kysely-stack.md §5.4), not ours to change.
@@ -585,6 +603,7 @@ export interface DB {
   retro_action: RetroActionTable
   retro_presence: RetroPresenceTable
   notification: NotificationTable
+  issue_subscription: IssueSubscriptionTable
   user: UserTable
 }
 
@@ -711,5 +730,9 @@ export type NewRetroPresence = Insertable<RetroPresenceTable>
 export type Notification = Selectable<NotificationTable>
 export type NewNotification = Insertable<NotificationTable>
 export type NotificationUpdate = Updateable<NotificationTable>
+
+export type IssueSubscription = Selectable<IssueSubscriptionTable>
+export type NewIssueSubscription = Insertable<IssueSubscriptionTable>
+export type IssueSubscriptionUpdate = Updateable<IssueSubscriptionTable>
 
 export type User = Selectable<UserTable>

@@ -189,10 +189,20 @@ interface NotificationTrigger {
   readonly needsPriorCommenters: boolean
 }
 
-// PRIVATE to this module, deliberately (design D6). `mentions` does NOT register here: its
-// recipient computation is a document diff rather than a subject-involvement rule, and forcing it
-// through this map buys nothing. It binds to the exported `recordNotifications` instead.
-const NOTIFICATION_TRIGGERS: Record<NotificationKind, NotificationTrigger> = {
+// The kinds whose recipients are computed from SUBJECT INVOLVEMENT — who is assigned, who created
+// it, who commented before. Narrower than `NotificationKind` on purpose: `'mention'` is not here,
+// because a mention's recipients are a DOCUMENT DIFF and a subscriber's are a STORED EDGE, and
+// neither is knowable from the issue row this map's `recipients` functions are handed.
+//
+// Written as an `Extract` rather than a `Partial<Record<…>>` so the exhaustiveness below keeps
+// meaning what it says: a new involvement-driven kind still fails to compile until it is
+// registered, while a kind that is deliberately produced elsewhere is excluded STRUCTURALLY rather
+// than by a runtime lookup that could return undefined.
+type InvolvementNotificationKind = Extract<NotificationKind, 'issue_assigned' | 'issue_commented'>
+
+// PRIVATE to this module, deliberately (design D6). `mentions` does NOT register here: it binds to
+// the exported `recordNotifications` instead.
+const NOTIFICATION_TRIGGERS: Record<InvolvementNotificationKind, NotificationTrigger> = {
   issue_assigned: {
     subjectType: 'issue',
     recipients: (input) =>
@@ -222,7 +232,7 @@ interface IssueSubjectRow {
 }
 
 interface FanOutInput {
-  readonly kind: NotificationKind
+  readonly kind: InvolvementNotificationKind
   readonly issueId: string
   readonly actorId: string
   // Deterministic in the triggering mutation's own args — `String(args.updatedAt)` for an

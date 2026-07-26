@@ -154,7 +154,7 @@ export type ConnectorLinkSource = (typeof CONNECTOR_LINK_SOURCES)[number]
 // What a person can be told about. Deliberately NOT constrained in Postgres (see
 // `0013_notifications`): adding `'mention'` must cost a union member and a copy string, not a
 // migration in a different change. This union and the Zod arg schemas are the validation.
-export const NOTIFICATION_KINDS = ['issue_assigned', 'issue_commented'] as const
+export const NOTIFICATION_KINDS = ['issue_assigned', 'issue_commented', 'mention'] as const
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]
 
@@ -173,10 +173,13 @@ export type EmailNotificationMode = (typeof EMAIL_NOTIFICATION_MODES)[number]
 export const DEFAULT_EMAIL_NOTIFICATION_MODE: EmailNotificationMode = 'assigned_only'
 
 // ACTIONABLE = addressed at a person; everything else is ambient. `assigned_only` (the default)
-// emails exactly this set, `all` emails every kind, `none` emails nothing. A later `mention` kind
-// gets email by adding one entry here — no schema change, no new preference value.
+// emails exactly this set, `all` emails every kind, `none` emails nothing.
+//
+// `'mention'` IS IN AND `'issue_commented'` IS OUT, and that pair of memberships is the whole
+// "being mentioned emails you once, the thread it subscribed you to never does" rule — derived from
+// the existing classification rather than asserted by a special case anywhere in the delivery sweep.
 export const ACTIONABLE_NOTIFICATION_KINDS: ReadonlySet<NotificationKind> =
-  new Set<NotificationKind>(['issue_assigned'])
+  new Set<NotificationKind>(['issue_assigned', 'mention'])
 
 export function isActionableNotification(kind: NotificationKind): boolean {
   return ACTIONABLE_NOTIFICATION_KINDS.has(kind)
@@ -187,6 +190,14 @@ export function isActionableNotification(kind: NotificationKind): boolean {
 // per-user table that grows forever is a hydration cost on every client, and the retention sweep is
 // the other half of that bound.
 export const NOTIFICATION_SYNC_LIMIT = 100
+
+// A standing intent to be told about one issue, and the reason it is a state rather than a row that
+// exists or does not: unfollow must be STICKY. Deleting the row would let the next `@` re-subscribe
+// somebody who deliberately left, which is a worse failure than never having offered an unfollow.
+// The set is closed and owned entirely by this change, so `0014_mentions` puts a CHECK on it too.
+export const SUBSCRIPTION_STATES = ['subscribed', 'unsubscribed'] as const
+
+export type SubscriptionState = (typeof SUBSCRIPTION_STATES)[number]
 
 export const ISSUE_GROUPINGS = ['status', 'assignee', 'priority', 'label', 'none'] as const
 

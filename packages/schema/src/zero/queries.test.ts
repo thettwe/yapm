@@ -23,6 +23,7 @@ import {
   RETRO_VOTES_MINE_QUERY_NAME,
   RETROS_BY_TEAM_QUERY_NAME,
   SAVED_VIEWS_BY_TEAM_QUERY_NAME,
+  SUBSCRIPTIONS_MINE_QUERY_NAME,
   TEAMS_ALL_QUERY_NAME,
   TRIAGE_INBOX_QUERY_NAME,
   teamScoped,
@@ -87,6 +88,7 @@ describe('the synced query registry', () => {
       [RETRO_DETAIL_QUERY_NAME, queries.retros.detail],
       [RETRO_DRAFTS_MINE_QUERY_NAME, queries.retroDrafts.mine],
       [NOTIFICATIONS_MINE_QUERY_NAME, queries.notifications.mine],
+      [SUBSCRIPTIONS_MINE_QUERY_NAME, queries.subscriptions.mine],
       [RETRO_VOTES_MINE_QUERY_NAME, queries.retroVotes.mine],
     ] as const) {
       expect(query.queryName).toBe(name)
@@ -446,6 +448,89 @@ describe('the inbox is self-scoped with no workspace-admin bypass', () => {
   it('bounds the synced set', () => {
     const ast = astOf(queries.notifications.mine, MEMBER) as { limit?: number }
     expect(ast.limit).toBe(NOTIFICATION_SYNC_LIMIT)
+  })
+})
+
+// The subscription query is the only synced read of `issue_subscription` that exists, and that is
+// the non-surveillance property of the mentions change expressed as an absence of code. These
+// assertions are what would fail if somebody later "helpfully" added a watcher list.
+describe('subscriptions.mine is self-scoped, per-issue, with no admin bypass', () => {
+  const ISSUE_ID = '019f8f00-0000-7000-8000-0000000000d1'
+
+  it('filters on the verified ctx.userID alone, for every role including admin', () => {
+    for (const ctx of [ADMIN, MEMBER, VIEWER]) {
+      const where = JSON.stringify(
+        astOfArgs(queries.subscriptions.mine, { issueId: ISSUE_ID }, ctx).where,
+      )
+      expect(where).toContain('userId')
+      expect(where).toContain(ctx.userID)
+      for (const other of [ADMIN, MEMBER, VIEWER, NON_MEMBER].filter(
+        (candidate) => candidate.userID !== ctx.userID,
+      )) {
+        expect(where).not.toContain(other.userID)
+      }
+    }
+  })
+
+  it('takes the user from the context and the issue from the argument, never the reverse', () => {
+    const where = JSON.stringify(
+      astOfArgs(queries.subscriptions.mine, { issueId: MEMBER.userID }, MEMBER).where,
+    )
+    // An argument that happens to look like a user id lands on `issueId`; the `userId` predicate is
+    // still the context's, so no argument can widen this query to another person's row.
+    expect(where).toContain('issueId')
+    expect(where).toContain('userId')
+  })
+
+  it('carries no team-membership predicate at all — not even the admin branch', () => {
+    const serialized = JSON.stringify(
+      astOfArgs(queries.subscriptions.mine, { issueId: ISSUE_ID }, ADMIN),
+    )
+    expect(serialized).not.toContain('team_membership')
+    expect(
+      JSON.stringify(astOfArgs(queries.subscriptions.mine, { issueId: ISSUE_ID }, ADMIN).where),
+    ).toEqual(
+      JSON.stringify(
+        astOfArgs(queries.subscriptions.mine, { issueId: ISSUE_ID }, MEMBER).where,
+      ).replace(MEMBER.userID, ADMIN.userID),
+    )
+  })
+
+  it('denies a non-member and an unauthenticated caller by an empty query', () => {
+    for (const ctx of [NON_MEMBER, undefined]) {
+      expect(astOfArgs(queries.subscriptions.mine, { issueId: ISSUE_ID }, ctx).where).toEqual(
+        DENY_ALL_WHERE,
+      )
+    }
+  })
+
+  it('is the only query in the registry that reads issue_subscription', () => {
+    // Every argument name any query in the registry takes, so this walk covers all of them rather
+    // than skipping the ones that would throw on validation.
+    const args = {
+      issueId: ISSUE_ID,
+      id: ISSUE_ID,
+      retroId: ISSUE_ID,
+      cycleId: ISSUE_ID,
+      teamId: TEAM_ID,
+    }
+    const readers: string[] = []
+
+    for (const [group, entries] of Object.entries(queries as Record<string, unknown>)) {
+      if (typeof entries !== 'object' || entries === null) continue
+      for (const [name, query] of Object.entries(entries as Record<string, unknown>)) {
+        const fn = (query as { fn?: unknown }).fn
+        if (typeof fn !== 'function') continue
+        const built = (fn as (input: { args: unknown; ctx: AuthContext }) => { ast: unknown })({
+          args,
+          ctx: ADMIN,
+        })
+        if (JSON.stringify(built.ast).includes('issue_subscription'))
+          readers.push(`${group}.${name}`)
+      }
+    }
+
+    expect(readers).toEqual(['subscriptions.mine'])
   })
 })
 

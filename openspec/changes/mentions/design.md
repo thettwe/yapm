@@ -623,3 +623,64 @@ duplicate later stages:
 The store backs this up: exactly one `@tiptap/core@3.28.0`, one `@tiptap/pm@3.28.0`, one
 `prosemirror-model@1.25.11` and one `@floating-ui/dom@1.8.0` in `node_modules/.pnpm`. Check 2 is
 where the MentionSurface stage picks up.
+
+### I5 — `NOTIFICATION_TRIGGERS` is narrowed to an involvement subset rather than left exhaustive
+
+Adding `'mention'` to `NotificationKind` breaks `Record<NotificationKind, NotificationTrigger>` at
+`server-mutators.ts:195` the instant task 6.1 lands, and D6 forbids resolving it the obvious way (an
+entry in the map). Three options: register a stub, weaken to `Partial<Record<…>>`, or narrow the key.
+
+Narrowed:
+`type InvolvementNotificationKind = Extract<NotificationKind, 'issue_assigned' | 'issue_commented'>`,
+used for both the map's key and `FanOutInput.kind`. A stub would make the private map claim
+ownership of a producer it does not have; `Partial<Record<…>>` would make `NOTIFICATION_TRIGGERS[kind]`
+possibly-undefined at the lookup site and turn a compile-time guarantee into a runtime guard. The
+`Extract` keeps exhaustiveness meaning what it says — a new *involvement-driven* kind still fails to
+compile until it is registered — while excluding `mention` structurally. `fanOut` is now
+uncallable with `'mention'`, which is the intended shape: the mention producer binds to
+`recordNotifications` and cannot accidentally acquire involvement recipients.
+
+### I6 — `sanitizeRichText` is shape-preserving-generic, because the mutators hold a `ReadonlyJSONValue`
+
+`mutators.ts` types a document as `ReadonlyJSONValue` (`richTextSchema`, line 90), whose object
+member allows `undefined` values. A `sanitizeRichText(doc: RichTextDoc): RichTextDoc` signature is
+therefore not callable from the four write paths that need it, and a hand-rolled JSON type in
+`rich-text/plaintext.ts` would be assignable in one direction only.
+
+So the signature is `sanitizeRichText<TDoc>(doc: TDoc): TDoc`, working over `unknown` internally.
+The claim it makes is true — the sanitizer is shape-preserving and total on malformed input, which
+the unit tests assert — and it keeps the walkers importing nothing at all, which is the property
+that lets this file live in `packages/schema` at all. The alternative, importing
+`ReadonlyJSONValue` from `@rocicorp/zero` into the walker module, would tie a pure-JSON recursion to
+the sync engine for a type alias.
+
+### I7 — `richTextToPlainText` trims each line rather than only collapsing blank ones
+
+Not specified either way. A stripped mention or an empty nesting level leaves trailing spaces the
+author never typed (`'Blocked on '`), so each block's line is trimmed and empty lines are dropped
+before joining. Intra-line spacing is untouched — `'ask '` + a stripped mention + `' first'` stays
+`'ask  first'` — because collapsing that would edit the author's own text rather than the walker's
+artefact. Deterministic either way; this is the version whose output a notification excerpt or a
+search index can use unmodified.
+
+### I8 — Two pre-existing tests were the forcing functions, and both were extended rather than routed around
+
+`queries.anonymity.pg.test.ts` walks the whole query registry and fails on any query it has no
+argument fixture for, so `subscriptions.mine` had to be added there (`{issueId: deliveryIssueId}`) —
+which is the right outcome: the new synced table is now swept by the identity-leak walk alongside
+the inbox. `notifications/copy.test.ts` already loops over `NOTIFICATION_KINDS` asserting non-blank
+copy, so the `mention` case was covered the moment the union grew; an explicit assertion on the exact
+string was added anyway, because the loop proves only that it is not empty.
+
+`queries.test.ts` additionally gains an assertion that `subscriptions.mine` is the **only** query in
+the registry whose AST names `issue_subscription`. D11's non-surveillance property is an absence of
+code, and an absence is not self-enforcing — that test is what makes adding a watcher list fail
+rather than merely being noticed in review.
+
+### I9 — Timestamps on `issue_subscription` are `Timestamp`, not `Generated<Timestamp>`
+
+Both columns are DB-defaulted and omittable on insert, but `created_at` orders the subscriber
+fan-out (oldest-following first, D9) and both are written from the triggering mutation's own
+timestamp so the value is deterministic under rebase. `notification.created_at` made the same call
+for the same reason. `state` stays `Generated<SubscriptionState>` because the auto-subscribe insert
+genuinely omits it and lets the column default carry the meaning.

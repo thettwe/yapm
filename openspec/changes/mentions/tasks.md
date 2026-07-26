@@ -62,7 +62,7 @@ surface on top of a proven substrate.
 
 ## 4. Schema: the `issue_subscription` table
 
-- [ ] 4.1 Write `packages/schema/src/migrations/0014_mentions.ts`: create `issue_subscription` with
+- [x] 4.1 Write `packages/schema/src/migrations/0014_mentions.ts`: create `issue_subscription` with
       `issue_id uuid not null references issue(id) on delete cascade`, `user_id text not null` (no
       FK — `user` is better-auth's table, matching `notification`),
       `team_id uuid not null references team(id) on delete cascade`,
@@ -73,59 +73,59 @@ surface on top of a proven substrate.
       exists rather than row-existence (D3 — a `DELETE`-based unfollow reopens the mail trap), and
       why `state` **does** get a CHECK while `notification.kind` does not (closed value set, owned
       entirely by this change).
-- [ ] 4.2 Same migration: a partial index `(issue_id) where state = 'subscribed'` for the fan-out
+- [x] 4.2 Same migration: a partial index `(issue_id) where state = 'subscribed'` for the fan-out
       read, and `(team_id, user_id)` + `(user_id)` for the two membership cleanups.
-- [ ] 4.3 Register `0014_mentions` in `packages/schema/src/migrations/index.ts`.
-- [ ] 4.4 Extend the hand-written Kysely `DB` interface in `packages/schema/src/db/types.ts` with
+- [x] 4.3 Register `0014_mentions` in `packages/schema/src/migrations/index.ts`.
+- [x] 4.4 Extend the hand-written Kysely `DB` interface in `packages/schema/src/db/types.ts` with
       `IssueSubscriptionTable` (+ `IssueSubscription`/`NewIssueSubscription`/
       `IssueSubscriptionUpdate`); export from `packages/schema/src/db/index.ts`.
-- [ ] 4.5 Extend `packages/schema/src/db/schema-drift.test.ts`: add `issue_subscription` and assert
+- [x] 4.5 Extend `packages/schema/src/db/schema-drift.test.ts`: add `issue_subscription` and assert
       the **two-column primary key in order** and the `state` check constraint.
-- [ ] 4.6 **Test**: `pnpm --filter @yapm/schema test` with `DATABASE_URL` set — migrations test and
+- [x] 4.6 **Test**: `pnpm --filter @yapm/schema test` with `DATABASE_URL` set — migrations test and
       drift test green against live Postgres.
 
 ## 5. The pure document walkers
 
-- [ ] 5.1 Create `packages/schema/src/rich-text/plaintext.ts` with `richTextToPlainText(doc,
+- [x] 5.1 Create `packages/schema/src/rich-text/plaintext.ts` with `richTextToPlainText(doc,
       options?)`, `extractMentionIds(doc)` and `sanitizeRichText(doc)`. Pure recursion over the
       document JSON, **no TipTap or ProseMirror import** — that is what keeps
       `scripts/check-boundaries.mjs` and CLAUDE.md #3 satisfied, and it is the reason the file has
       this shape. Expect a second consumer: `search` extends this file next.
-- [ ] 5.2 `richTextToPlainText` takes a `mentions` mode: `'label'` (default — `@` plus the resolved
+- [x] 5.2 `richTextToPlainText` takes a `mentions` mode: `'label'` (default — `@` plus the resolved
       display name from a supplied name map, falling back to the stored label) and `'strip'`
       (mention nodes omitted entirely). Carry the design-D15 rule as a comment on the option: any
       caller feeding document text to a model MUST use `'strip'`.
-- [ ] 5.3 `extractMentionIds` returns ids in document order, deduplicated, `[]` for a document with
+- [x] 5.3 `extractMentionIds` returns ids in document order, deduplicated, `[]` for a document with
       no mention nodes — which is what makes every pre-existing document retroactively silent.
-- [ ] 5.4 `sanitizeRichText` normalises each mention node to `{id, label, mentionSuggestionChar}`,
+- [x] 5.4 `sanitizeRichText` normalises each mention node to `{id, label, mentionSuggestionChar}`,
       drops unknown attrs, trims and length-caps `label`, degrades a node with a missing/empty `id`
       to plain text, and **keeps** `mentionSuggestionChar` (design D10). Pure and deterministic —
       mints nothing.
-- [ ] 5.5 Export all three from `packages/schema/src/index.ts`.
-- [ ] 5.6 **Test**: `packages/schema/src/rich-text/plaintext.test.ts` — nested lists/blockquotes,
+- [x] 5.5 Export all three from `packages/schema/src/index.ts`.
+- [x] 5.6 **Test**: `packages/schema/src/rich-text/plaintext.test.ts` — nested lists/blockquotes,
       duplicate mentions, a mention with no id, unknown attrs, an oversized label, `'strip'` vs
       `'label'`, a document with no mentions, and a malformed document that is not a `doc`.
-- [ ] 5.7 **Test**: `node scripts/check-boundaries.mjs` green.
+- [x] 5.7 **Test**: `node scripts/check-boundaries.mjs` green.
 
 ## 6. Zero schema, the new kind, and the self-scoped query
 
-- [ ] 6.1 `packages/schema/src/zero/context.ts`: add `'mention'` to `NOTIFICATION_KINDS`, add it to
+- [x] 6.1 `packages/schema/src/zero/context.ts`: add `'mention'` to `NOTIFICATION_KINDS`, add it to
       `ACTIONABLE_NOTIFICATION_KINDS` (design D8 — this single line *is* the "mention emails once,
       subscription activity never does" rule), and add `SUBSCRIPTION_STATES` +
       `SubscriptionState`.
-- [ ] 6.2 `packages/schema/src/zero/notifications/copy.ts`: add the `mention` case —
+- [x] 6.2 `packages/schema/src/zero/notifications/copy.ts`: add the `mention` case —
       "*Actor* mentioned you in *ENG-42*". The `switch` is exhaustive over the union, so this will
       not typecheck until it is added, which is the intended forcing function.
-- [ ] 6.3 `packages/schema/src/zero/schema.ts`: add the `issue_subscription` table with
+- [x] 6.3 `packages/schema/src/zero/schema.ts`: add the `issue_subscription` table with
       `.primaryKey('issueId','userId')` and `.from()` column mappings; relationships to `issue` and
       `user`; register both in `createSchema`.
-- [ ] 6.4 `packages/schema/src/zero/queries.ts`: add `queries.subscriptions.mine({issueId})` —
+- [x] 6.4 `packages/schema/src/zero/queries.ts`: add `queries.subscriptions.mine({issueId})` —
       `isMember` gate, `denyAll` otherwise, `.where('issueId', args.issueId).where('userId',
       ctx.userID)`, `.one()`. **No `teamScoped`, no admin bypass**, modelled on `retroDrafts.mine`
       (`queries.ts:238`). Export `SUBSCRIPTIONS_MINE_QUERY_NAME`. Carry the design-D11 reason as a
       comment: scoping to one issue is what bounds the synced set with no `.limit()`, and the
       absence of any other query over this table is the non-surveillance property.
-- [ ] 6.5 **Test**: extend `packages/schema/src/zero/queries.test.ts` — the new query denies a
+- [x] 6.5 **Test**: extend `packages/schema/src/zero/queries.test.ts` — the new query denies a
       non-member by empty query, filters on the verified `ctx.userID` and not on an argument, and an
       admin gets no other user's row. Extend `notifications/copy.test.ts` for the new case.
 

@@ -392,6 +392,16 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     email_sent_at: { nullable: true, hasDefault: false },
     created_at: { nullable: false, hasDefault: true },
   },
+  // The durable standing intent behind auto-subscribe: in BOTH the Kysely DB interface and the Zero
+  // schema, so it is checked on both axes. `state`, `created_at` and `updated_at` are DB-defaulted.
+  issue_subscription: {
+    issue_id: { nullable: false, hasDefault: false },
+    user_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    state: { nullable: false, hasDefault: true },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
   user: {
     id: { nullable: false, hasDefault: false },
     name: { nullable: false, hasDefault: false },
@@ -430,6 +440,22 @@ if (DATABASE_URL === undefined && process.env.CI) {
 interface PrimaryKeyRow {
   table_name: string
   columns: string[]
+}
+
+interface CheckConstraintRow {
+  definition: string
+}
+
+async function checkConstraints(db: Kysely<DB>, table: string): Promise<string[]> {
+  const { rows } = await sql<CheckConstraintRow>`
+    select pg_get_constraintdef(c.oid) as definition
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    join pg_namespace n on n.oid = t.relnamespace
+    where c.contype = 'c' and n.nspname = 'public' and t.relname = ${table}
+  `.execute(db)
+
+  return rows.map((row) => row.definition)
 }
 
 async function primaryKeys(db: Kysely<DB>): Promise<Map<string, string[]>> {
@@ -617,6 +643,28 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
       'subject_id',
       'event_key',
     ])
+  })
+
+  // Same reasoning one table over, and one addition. The two-column natural key is what keeps the
+  // subscription path from minting anything, and the `state` CHECK is the other half of the
+  // anti-mail-trap mechanism: it is what stops a later change quietly reintroducing a third state
+  // or replacing the sticky `unsubscribed` row with a DELETE.
+  it('keeps the issue_subscription natural key as a two-column primary key, in order', () => {
+    expect(pkByTable.get('issue_subscription')).toEqual(['issue_id', 'user_id'])
+  })
+
+  it('constrains issue_subscription.state in Postgres, unlike notification.kind', async () => {
+    const definitions = await checkConstraints(database.db, 'issue_subscription')
+    const normalized = definitions.map((definition) => definition.replaceAll(/\s+/gu, ' '))
+
+    expect(normalized.some((definition) => definition.includes('state'))).toBe(true)
+    for (const state of ['subscribed', 'unsubscribed']) {
+      expect(normalized.join(' ')).toContain(`'${state}'`)
+    }
+
+    // The deliberate contrast, asserted rather than merely commented: `kind` must stay widenable
+    // for the price of a TypeScript union member, so it carries no CHECK.
+    expect(await checkConstraints(database.db, 'notification')).toEqual([])
   })
 })
 

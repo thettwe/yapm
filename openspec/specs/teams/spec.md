@@ -5,9 +5,9 @@ TBD - created by archiving change workspace-auth. Update Purpose after archive.
 ## Requirements
 ### Requirement: Team entity and membership
 
-The workspace SHALL contain zero or more `team` rows, each with a human name and a short key (an uppercase identifier reserved for future issue keying), and a `team_membership` edge recording which users belong to which teams. A team MAY be archived (soft-hidden) without deletion. Team membership SHALL carry no per-team role — the workspace role is the sole capability axis.
+The workspace SHALL contain zero or more `team` rows, each with a human name and a short key (the uppercase identifier that prefixes the team's issue keys, e.g. `ENG-42`), and a `team_membership` edge recording which users belong to which teams. A team MAY be archived (soft-hidden) without deletion. Team membership SHALL carry no per-team role — the workspace role is the sole capability axis.
 
-Work-graph placement: `team` hangs off the single `workspace`; `team_membership` connects `user` to `team` and is the visibility edge that future work-data changes (issue-core onward) SHALL join against so that a user syncs only the work of teams they belong to. Sync/permission story: any member SHALL read all (non-archived) teams and all `team_membership` rows in the workspace, so the team list is browsable and rosters are visible; an authenticated non-member SHALL read none. Only an `admin` SHALL create, rename, or archive a team and manage arbitrary members' team rosters; any member MAY add or remove **itself** on a team it can see (self-serve join/leave). Reads are denied by empty query; write authorization is checked before existence.
+Work-graph placement: `team` hangs off the single `workspace`; `team_membership` connects `user` to `team` and is the visibility edge every work-data query joins against so that a user syncs only the work of teams they belong to. Sync/permission story: any member SHALL read all (non-archived) teams and all `team_membership` rows in the workspace, so the team list is browsable and rosters are visible; an authenticated non-member SHALL read none. Only an `admin` SHALL create, rename, or archive a team and manage arbitrary members' team rosters; any member MAY add or remove **itself** on a team it can see (self-serve join/leave). Reads are denied by empty query; write authorization is checked before existence.
 
 #### Scenario: Member browses teams
 
@@ -38,6 +38,8 @@ Work-graph placement: `team` hangs off the single `workspace`; `team_membership`
 
 A member SHALL be able to join and leave any team it can see; an admin SHALL additionally be able to add or remove any user to/from any team. A `viewer` MAY join a team to scope its read access but SHALL NOT gain any write capability by doing so.
 
+Removing a user from a team — whether by an admin or by the user leaving — SHALL additionally **delete that user's notifications whose team is the team being left**, in the same server-authoritative transaction as the membership removal, and SHALL leave that user's notifications for **other** teams intact. The deletion SHALL happen server-side because the acting user can never read another user's notifications and therefore cannot delete them optimistically. Deleting a team SHALL remove every notification for that team, for every recipient, by database cascade.
+
 #### Scenario: Member joins a team
 
 - **WHEN** a member joins a visible team
@@ -48,10 +50,20 @@ A member SHALL be able to join and leave any team it can see; an admin SHALL add
 - **WHEN** a member on a team leaves it
 - **THEN** its own `team_membership` row is removed without admin action
 
+#### Scenario: Leaving a team deletes only that team's notifications
+
+- **WHEN** a member belonging to teams T1 and T2, holding notifications from both, leaves T1
+- **THEN** their T1 notifications are deleted and their T2 notifications remain readable in their inbox
+
 #### Scenario: Admin manages another user's membership
 
 - **WHEN** an admin adds another user to a team
 - **THEN** that user's `team_membership` row is created
+
+#### Scenario: Admin removing a team member deletes that member's team notifications
+
+- **WHEN** an admin removes another user from a team
+- **THEN** that user's notifications for that team are deleted, even though the admin can never read them
 
 #### Scenario: Joining a team grants a viewer no write power
 

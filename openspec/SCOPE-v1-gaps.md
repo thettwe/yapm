@@ -185,7 +185,7 @@ and `export const routeIssue` sets it directly, independent of `assignIssue` —
 `packages/schema/src/zero/mutators.ts`. So `notifications` has more fan-out sites than the three it
 first named, with `routeIssue`'s assignee path routed through the same `issue_assigned` trigger
 entry. In scope, not an open question. The authoritative site list is the D5 trigger table in
-`openspec/changes/notifications/design.md` — it is the one place that counts them.
+`openspec/changes/archive/2026-07-26-notifications/design.md` — it is the one place that counts them.
 
 ### 1.7 Delivery-time membership re-check — `notifications` owns it, and it changes its own answer
 

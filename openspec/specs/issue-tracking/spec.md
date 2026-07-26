@@ -7,7 +7,7 @@ TBD - created by archiving change issue-core. Update Purpose after archive.
 
 The system SHALL provide an `issue` entity carrying a title, an optional rich `description` (a TipTap-v3 document stored as JSON), a `status`, a `priority`, an optional `assignee`, a `creator`, an optional server-assigned per-team `number`, and created/updated timestamps. Every issue SHALL belong to exactly one `team` via a `team_id` reference. The primary key SHALL be a client-minted UUIDv7 generated at the mutator call site, never inside a mutator body.
 
-Work-graph placement: `issue` is the tracking root and hangs off `team`, which hangs off the single `workspace`; it is the entity every later work-graph edge (PR link, CI run, deploy) will attach to. Sync/permission story: an issue SHALL sync only to members of its team (a `whereExists` over the team's roster driven by the verified `ctx.userID`); an authenticated non-member and any caller who does not belong to the issue's team SHALL read nothing, denied by an empty query with no leak of existence. Writes SHALL be permitted to admins and members of the issue's team and rejected for viewers and non-members, with authorization checked before any existence check.
+Work-graph placement: `issue` is the tracking root and hangs off `team`, which hangs off the single `workspace`; it is the entity the work-graph delivery edges (the `issue_link` edge to `pull_request`, and through it `ci_check` and `review`) attach to. Sync/permission story: an issue SHALL sync only to members of its team (a `whereExists` over the team's roster driven by the verified `ctx.userID`); an authenticated non-member and any caller who does not belong to the issue's team SHALL read nothing, denied by an empty query with no leak of existence. Writes SHALL be permitted to admins and members of the issue's team and rejected for viewers and non-members, with authorization checked before any existence check.
 
 #### Scenario: Member creates an issue in their team
 
@@ -110,28 +110,38 @@ Work-graph placement: `comment` hangs off `issue` (and transitively off `team`).
 
 ### Requirement: Reality-strip and divergence computation seam
 
-The system SHALL model the issue-row's delivery signal (reality strip) and divergence flag as pure derived values computed in `packages/schema`, not as stored columns on `issue`. A `computeDeliverySignal(issue, linkedEntities)` function SHALL return a typed delivery signal or null, and a `computeDivergence(status, signal)` function SHALL return a typed divergence marker or null. In this change there are no linked git entities, so the delivery signal SHALL always be null (the reality strip renders its quiet "not linked" state) and the divergence flag SHALL always be dormant. No git-shaped columns (PR state, CI status) SHALL be added to `issue`; delivery reality is modeled as future linked entities, so that `connectors` can populate the signal by changing only these functions and their inputs, leaving the issue schema, rows, queries, and filter model unchanged.
+The system SHALL model the issue-row's delivery signal (reality strip) and divergence flag as pure derived values computed in `packages/schema`, not as stored columns on `issue`. A `computeDeliverySignal(issue, linkedEntities)` function SHALL return a typed delivery signal or null, and a `computeDivergence(status, signal)` function SHALL return a typed divergence marker or null. With the `connectors` change, real linked git entities (pull requests, checks, reviews, deployments) now exist, so `linkedEntities` is populated from an issue's linked delivery entities and `computeDeliverySignal` returns a **non-null** signal (PR state, CI health, review age) for a linked issue, while an unlinked issue still yields null and the quiet "not linked" state. `computeDivergence` SHALL return a marker when the human-set status disagrees with git reality (e.g. In Progress but PR merged; Done but CI failing). No git-shaped columns (PR state, CI status) SHALL be added to `issue`; delivery reality SHALL remain modeled as linked entities so that the seam's exported signatures stay unchanged and only their inputs become non-empty.
 
-Work-graph placement: the seam is a computation over `issue` and its (future) linked work-graph entities; it introduces no new synced entity in this change. Permission story: the computation runs over already-permitted synced rows and adds no new visibility surface.
+Work-graph placement: the seam is a computation over `issue` and its linked work-graph entities (defined in the work-graph capability). Permission story: the computation runs over already-permitted, team-scoped synced rows and adds no new visibility surface.
+
+#### Scenario: Reality strip renders a linked issue's real state
+
+- **WHEN** an issue linked to a pull request and its checks is rendered in the list or detail
+- **THEN** `computeDeliverySignal` returns a non-null signal and the reality-strip slot shows PR state, CI health, and review age
 
 #### Scenario: Reality strip renders the unlinked state
 
 - **WHEN** an issue with no linked git entities is rendered in the list or detail
 - **THEN** `computeDeliverySignal` returns null and the reality-strip slot shows the quiet "not linked" placeholder
 
+#### Scenario: Divergence flag fires when status disagrees with git
+
+- **WHEN** an issue is marked In Progress while its linked PR is merged, or Done while its CI is failing
+- **THEN** `computeDivergence` returns the corresponding marker and the divergence flag is shown
+
 #### Scenario: Divergence flag is dormant without delivery state
 
-- **WHEN** any issue is evaluated for divergence in this change
+- **WHEN** an issue with no linked git entities is evaluated for divergence
 - **THEN** `computeDivergence` returns null and no divergence flag is shown, regardless of the human-set status
 
 #### Scenario: No git columns on the issue
 
 - **WHEN** the issue schema is inspected
-- **THEN** it carries no PR/CI/deploy columns, and the delivery signal is available only through the computation seam
+- **THEN** it carries no PR/CI/deploy columns, and the delivery signal is available only through the computation seam over linked entities
 
 ### Requirement: Reality-aware filter and saved-view model
 
-The system SHALL define a typed, structured `IssueFilter` with intention axes (status, priority, assignee including an explicit unassigned option, label, and free text) AND a reserved delivery axis for derived delivery predicates (e.g. blocked-on-review, failing-CI, merged-not-deployed). Intention predicates SHALL filter synced issue rows; delivery predicates SHALL evaluate through the delivery-signal computation seam and, in this change, match nothing (the signal is always null). The system SHALL persist a `saved_view` entity carrying a name, an `IssueFilter`, a grouping, and a sort. No default reality-derived views (blocked-on-review, failing-CI, merged-not-deployed) SHALL be shipped in this change; only the model that can hold them.
+The system SHALL define a typed, structured `IssueFilter` with intention axes (status, priority, assignee including an explicit unassigned option, label, and free text) AND a delivery axis for derived delivery predicates (blocked-on-review, failing-CI, merged-not-deployed). Intention predicates SHALL filter synced issue rows; delivery predicates SHALL evaluate through the delivery-signal computation seam over an issue's linked entities. With the `connectors` change the delivery signal is real, so all three delivery predicates SHALL be offered as selectable filter controls and evaluated through the seam; where a predicate has no data to consult — an issue with no linked delivery state, or merged-not-deployed, for which no issue↔deployment edge is modelled — it SHALL match nothing rather than the control being hidden. The system SHALL persist a `saved_view` entity carrying a name, an `IssueFilter`, a grouping, and a sort.
 
 Work-graph placement: `saved_view` hangs off `team` as a shared, team-visible configuration entity. Sync/permission story: saved views SHALL sync to all members of their team; creating and editing SHALL be gated by team-scoped `canWrite`; deleting SHALL require the view's creator or an admin; viewers SHALL read shared views but never create, edit, or delete them.
 
@@ -140,10 +150,10 @@ Work-graph placement: `saved_view` hangs off `team` as a shared, team-visible co
 - **WHEN** a member applies a filter by status, assignee, label, or priority
 - **THEN** the synced issue rows are narrowed accordingly, evaluated locally without a network round-trip
 
-#### Scenario: Delivery-only filter yields empty by construction
+#### Scenario: Delivery-only filter narrows by derived signal
 
-- **WHEN** a filter sets only a reserved delivery predicate and no intention predicate
-- **THEN** the result is empty because the delivery signal is always null in this change, and no such view is shipped as a default
+- **WHEN** a filter sets only a delivery predicate and no intention predicate
+- **THEN** the list shows the issues whose computed delivery signal matches that predicate, and is empty — rather than the control being hidden — when no issue has linked delivery state
 
 #### Scenario: Saved view persists and syncs to the team
 
@@ -158,6 +168,8 @@ Work-graph placement: `saved_view` hangs off `team` as a shared, team-visible co
 ### Requirement: Issue mutations via shared mutators
 
 All issue, label, comment, and saved-view writes SHALL flow through custom mutators defined once in `packages/schema` and imported by both client (optimistic) and server (authoritative). The mutator set SHALL cover creating and updating issues, changing status, setting priority, assigning/unassigning, adding/removing labels, creating/editing/deleting comments, and managing labels and saved views. Every mutator SHALL enforce team-scoped role authorization from the verified `ctx` before any existence check, set owner/creator/author fields from `ctx` (never args), and mint any created row's UUIDv7 at the call site. Assignee changes SHALL validate that the assignee is a member of the issue's team.
+
+Any feature that creates an issue on a user's behalf — including converting a retrospective action item — SHALL do so by calling the **same shared issue-creation mutator**, inheriting its authorization, its `ctx`-derived creator, its triage and status defaults, and its server-authoritative per-team numbering. A parallel insert into the issue table SHALL NOT exist.
 
 Work-graph placement: these mutators are the sole write path into the team-scoped work-graph entities. Permission story: viewers and non-members are rejected for every write; author/creator-scoped operations additionally require ownership-or-admin.
 
@@ -175,4 +187,104 @@ Work-graph placement: these mutators are the sole write path into the team-scope
 
 - **WHEN** a viewer or non-member attempts any issue, label, comment, or saved-view write
 - **THEN** the mutator rejects it as not authorized without revealing whether the target row exists
+
+#### Scenario: A derived creation path reuses the shared create mutator
+
+- **WHEN** a retrospective action item is converted into an issue
+- **THEN** the issue is created through the shared issue-creation mutator and is indistinguishable from a hand-created issue — same authorization, same defaults, and a server-assigned per-team number
+
+### Requirement: Issue ordering rank and single-write move mutator
+
+The `issue` entity SHALL carry a nullable `rank` (a fractional-index `text` value, byte-collated) that orders issues within a status column on the board. A shared `issue.move` mutator SHALL set the target issue's `rank` and, when the destination column differs, its `status`, in a single-row update that never renumbers siblings. `issue.move` SHALL be team-scoped and role-gated identically to the other issue write mutators (authorization checked before existence; viewers and non-members rejected), and it SHALL accept the fractional index as an argument computed by the caller rather than computing it inside the mutator body.
+
+Work-graph placement: an ordering field and move operation on the existing `issue` entity. Sync/permission story: `rank` replicates under the existing team scope; the move is gated by `canWrite`.
+
+#### Scenario: A member moves an issue
+
+- **WHEN** a team member invokes `issue.move` with a target status and a call-site-computed rank
+- **THEN** the issue's `rank` (and `status` if changed) updates and no other issue is written
+
+#### Scenario: A viewer cannot move an issue
+
+- **WHEN** a viewer or non-member invokes `issue.move`
+- **THEN** it is rejected as not-authorized before any row is read or written
+
+#### Scenario: Existing issues are backfilled with ranks
+
+- **WHEN** the board-view migration runs against a database with existing issues
+- **THEN** each issue receives a fractional-index `rank` within its status group, matching the list's default order, with distinct byte-ordered keys
+
+### Requirement: Issue carries a nullable cycle reference
+
+An issue SHALL carry a nullable `cycleId` referencing a cycle in the same team. It SHALL be settable and clearable through the shared `issue.setCycle` mutator, which SHALL reject a cycle in a different team and SHALL be gated exactly as other issue writes (viewers rejected). Deleting a cycle SHALL null the `cycleId` of its issues (`ON DELETE SET NULL`), never deleting the issues.
+
+Work-graph placement: a nullable `issue.cycle_id` edge to `cycle`. Permission story: `canWrite` + team access; cross-team assignment rejected.
+
+#### Scenario: An issue can be assigned to and cleared from a cycle
+
+- **WHEN** a member assigns an issue to a same-team cycle and later clears it
+- **THEN** the issue's `cycleId` is set then unset, and a cross-team cycle is rejected
+
+#### Scenario: Deleting a cycle preserves its issues
+
+- **WHEN** a cycle that has issues is deleted
+- **THEN** those issues remain and their `cycleId` becomes null
+
+### Requirement: Issue carries an orthogonal triage flag
+
+An issue SHALL carry a `needs_triage` boolean (`NOT NULL DEFAULT false`), orthogonal to its status. It SHALL be settable through `issue.create` (optional `needsTriage`) and `issue.flagTriage`, and cleared through `issue.acceptTriage`, `issue.declineTriage`, and `issue.routeIssue`. Each triage mutator SHALL be gated exactly as other issue writes (viewers rejected, team-scoped, cross-team routed fields rejected). Issues with `needs_triage = true` SHALL be excluded from `issues.byTeam` and `issues.mine` and returned only by `triage.inbox`.
+
+Work-graph placement: a boolean flag on `issue`, orthogonal to `status`. Permission story: `canWrite` + team access; routed assignee/cycle/label validated same-team.
+
+#### Scenario: Triage issues are held out of the normal list
+
+- **WHEN** an issue has `needs_triage = true`
+- **THEN** it is absent from `issues.byTeam` and `issues.mine` and present in `triage.inbox`, and clearing the flag returns it to the normal list
+
+#### Scenario: Routing applies same-team fields atomically
+
+- **WHEN** a writer routes an inbox issue with a status, a same-team assignee, a same-team cycle, and same-team labels
+- **THEN** the flag clears and all fields apply in one optimistic write, and any cross-team field is rejected
+
+### Requirement: An issue can belong to a project
+
+The system SHALL add a nullable `project_id` to `issue`, referencing a workspace-level project with `ON DELETE SET NULL`, written only through the `issue.setProject` shared mutator. Setting or clearing the project SHALL be `canWrite`-gated and run the issue's team-scoped write gate; the referenced project SHALL only be required to exist in the workspace. Existing issues SHALL be unaffected (`project_id` null).
+
+Work-graph placement: the issue↔project edge, orthogonal to team, cycle, status, and triage. Permission story: written under the issue's existing team-scoped write permission; the project entity itself is workspace-level.
+
+#### Scenario: An issue starts with no project
+
+- **WHEN** the migration adds `project_id`
+- **THEN** every existing issue has `project_id = null` and behaves exactly as before
+
+#### Scenario: Assigning and clearing a project
+
+- **WHEN** a writer sets an issue's project and later clears it
+- **THEN** `project_id` is set then returns to null, each write gated by the issue's team-scoped permission
+
+#### Scenario: A deleted project unassigns the issue
+
+- **WHEN** an issue's project is deleted
+- **THEN** the issue's `project_id` becomes null and the issue is otherwise unchanged
+
+### Requirement: Issue carries cycle-carryover facts
+
+The system SHALL record, on the `issue` row, two facts that its cycle history cannot otherwise reconstruct: a non-negative `carryover_count` incremented every time the issue is rolled over by a completing cycle, and a nullable `cycle_assigned_at` stamped whenever the issue is placed in (or moved between) cycles, including by rollover. Both SHALL be written only by the mutators that already write the row in the same transaction, SHALL be derived from mutator arguments so that a rebase or a retried mutation is deterministic, and SHALL NOT be settable directly by a client as a standalone write.
+
+Work-graph placement: both are attributes of `issue` on the `issue`↔`cycle` edge, feeding the retrospective's team-level Delivered panel ("carried twice or more", "added mid-cycle"). Permission story: unchanged — they sync with the issue under the team scope and carry no identity dimension.
+
+#### Scenario: A twice-carried issue is distinguishable
+
+- **WHEN** an issue is rolled over by two consecutive completing cycles
+- **THEN** its carryover count is 2 and the retro's Delivered panel can report it as carried twice or more
+
+#### Scenario: Mid-cycle scope is precise
+
+- **WHEN** an issue is assigned to a cycle after that cycle has started
+- **THEN** its cycle-assignment timestamp records that moment and the Delivered panel reports it as added mid-cycle
+
+#### Scenario: Rollover stays idempotent
+
+- **WHEN** a cycle completion runs twice for the same cycle
+- **THEN** the carryover count is incremented exactly once
 

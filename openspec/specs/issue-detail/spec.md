@@ -5,14 +5,24 @@ TBD - created by archiving change issue-core. Update Purpose after archive.
 ## Requirements
 ### Requirement: Issue detail surface
 
-The system SHALL provide an issue detail surface (a route and/or panel) that displays a single issue's key, title, status, priority, assignee, labels, description, and comment thread, rendered strictly against theme tokens and reading from a team-scoped synced query. The surface SHALL show the reality-strip and divergence-flag seams for the issue (the quiet "not linked" state in this change). It SHALL distinguish a still-loading issue from a genuinely-missing one, only showing "not found" once the query result is complete.
+The system SHALL provide an issue detail surface (a route and/or panel) that displays a single issue's key, title, status, priority, assignee, labels, description, and comment thread, rendered strictly against theme tokens and reading from a team-scoped synced query. The surface SHALL show the reality-strip and divergence-flag seams for the issue: for a linked issue it SHALL show the live PR state, CI health, review age, and the recent deployments of the linked pull requests' repositories, plus the divergence flag when the human-set status disagrees with git reality; for an unlinked issue it SHALL show the quiet "not linked" state. It SHALL distinguish a still-loading issue from a genuinely-missing one, only showing "not found" once the query result is complete.
 
-Work-graph placement: a view over a single team-scoped `issue` and its related `comment`, `issue_label`, `assignee`, and `creator`. Sync/permission story: the detail synced query returns the issue only to members of its team, denied by empty query otherwise, so a non-member cannot distinguish a private issue from a nonexistent one.
+Work-graph placement: a view over a single team-scoped `issue`, its related `comment`, `issue_label`, `assignee`, and `creator`, and its linked delivery entities (`pull_request` via `issue_link`, and through it `ci_check` and `review`; `deployment` carries no per-issue edge and is read team-scoped, matched to the issue by the linked pull requests' repositories). Sync/permission story: the detail synced query returns the issue and its team-scoped linked entities only to members of its team, denied by empty query otherwise, so a non-member cannot distinguish a private issue from a nonexistent one.
 
 #### Scenario: Member opens an issue
 
 - **WHEN** a member opens an issue in their team
-- **THEN** the detail surface shows its key, title, status, priority, assignee, labels, description, and comments, with the reality strip in its unlinked state
+- **THEN** the detail surface shows its key, title, status, priority, assignee, labels, description, and comments, with the reality-strip and divergence-flag seams rendered
+
+#### Scenario: Member opens a linked issue
+
+- **WHEN** a member opens an issue in their team that is linked to a pull request
+- **THEN** the detail surface shows its key, title, status, priority, assignee, labels, description, comments, and the reality strip with live PR state, CI health, review age, and the recent deployments of those pull requests' repositories
+
+#### Scenario: Member opens an unlinked issue
+
+- **WHEN** a member opens an issue with no linked git entities
+- **THEN** the detail surface shows the reality strip in its unlinked state
 
 #### Scenario: Missing versus loading is distinguished
 
@@ -26,7 +36,7 @@ Work-graph placement: a view over a single team-scoped `issue` and its related `
 
 ### Requirement: Rich description editing
 
-The detail surface SHALL edit the issue description in a TipTap-v3 rich-text editor, persisting the document as JSON through the shared update mutator with optimistic application. Editing SHALL be last-write-wins (no real-time collaboration in this change). Description editing SHALL be reachable and operable by keyboard.
+The detail surface SHALL edit the issue description in a TipTap-v3 rich-text editor, persisting the document as JSON through the shared update mutator with optimistic application. Editing SHALL be last-write-wins; there is no real-time collaborative editing of a description. Description editing SHALL be reachable and operable by keyboard.
 
 Work-graph placement: the description is an attribute of the team-scoped `issue`. Permission story: editing is gated by team-scoped `canWrite`; viewers may read the rendered description but cannot edit it.
 

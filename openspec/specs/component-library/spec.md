@@ -38,7 +38,7 @@ TBD - created by archiving change design-system. Update Purpose after archive.
 
 ### Requirement: Command-palette shell
 
-`packages/ui` SHALL provide a command-palette shell — an accent-highlighted, keyboard-first overlay with a search input, a filtered result list with grouping, an empty state, and keyboard hints — styled to the active theme's tokens. This change ships the shell only (structure, styling, keyboard behavior) with placeholder items; real commands are wired by a later change. The palette MUST open, filter as the user types, move selection with arrow keys, activate the selected item with Enter, and dismiss with Escape — all without a pointer.
+`packages/ui` SHALL provide a command-palette shell — an accent-highlighted, keyboard-first overlay with a search input, a filtered result list with grouping, an empty state, and keyboard hints — styled to the active theme's tokens. The primitive is the shell only (structure, styling, keyboard behavior); it carries no commands of its own — the app wires the real command set onto it (see the command-palette capability). The palette MUST open, filter as the user types, move selection with arrow keys, activate the selected item with Enter, and dismiss with Escape — all without a pointer.
 
 #### Scenario: Keyboard-only palette use
 
@@ -52,12 +52,12 @@ TBD - created by archiving change design-system. Update Purpose after archive.
 
 ### Requirement: Issue-row primitive with reserved reality-strip and divergence-flag slots
 
-`packages/ui` SHALL provide an issue-row primitive styled to the Warm mockup's density and layout (priority · status · key · title · a reserved reality-strip slot · labels · cycle · date · assignee · a divergence-flag slot), reading tokens only. The reality-strip slot and the divergence-flag slot SHALL be first-class reserved slots present from the start (rendering a quiet placeholder / empty state now); `issue-core` and `github-sync` populate them later. The row MUST support hover, keyboard-focus, and selected states drawn from the accent tokens, and MUST be focusable and operable by keyboard.
+`packages/ui` SHALL provide an issue-row primitive styled to the Warm mockup's density and layout (priority · status · key · title · a reserved reality-strip slot · labels · cycle · date · assignee · a divergence-flag slot), reading tokens only. The reality-strip slot and the divergence-flag slot SHALL be first-class slots the primitive always lays out, rendering a quiet placeholder / empty state when nothing is passed; the issue-list and issue-detail surfaces populate them from the delivery-signal computation seam, which the connector-fed work-graph entities make non-null. The row MUST support hover, keyboard-focus, and selected states drawn from the accent tokens, and MUST be focusable and operable by keyboard.
 
 #### Scenario: Reserved slots are present but quiet
 
 - **WHEN** an issue-row primitive renders with no linked delivery data
-- **THEN** the reality-strip slot and the divergence-flag slot are present in the layout in a quiet placeholder/empty state, and the row layout does not shift when they are later populated
+- **THEN** the reality-strip slot and the divergence-flag slot are present in the layout in a quiet placeholder/empty state, and the row layout does not shift when they are populated
 
 #### Scenario: Row states use accent tokens
 

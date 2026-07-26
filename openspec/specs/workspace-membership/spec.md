@@ -7,7 +7,7 @@ TBD - created by archiving change workspace-auth. Update Purpose after archive.
 
 The instance SHALL have exactly one `workspace` row (the instance root), and access to it SHALL be modeled by a `workspace_member` row per user carrying a role of `admin`, `member`, or `viewer`. Presence of a `workspace_member` row SHALL be what grants a user access to the instance; the role SHALL determine capability. The `viewer` role SHALL be free and unlimited — no seat cap, no count, and no upgrade prompt may ever apply to it (nor to any role).
 
-Work-graph placement: `workspace` is the instance root every other entity (member, team, and every future issue/PR/deploy) hangs off; `workspace_member` is the authorization edge between `user` (identity) and the workspace. Sync/permission story: any member (role ≠ null) SHALL read the single `workspace` row and all `workspace_member` and member `user`-profile rows (assignee/mention pickers need them); an authenticated non-member SHALL read none of them. Only an `admin` SHALL rename the workspace or change/remove members; a member MAY remove only its own membership (leave). Reads are denied by returning an empty query; write authorization is checked before any existence check.
+Work-graph placement: `workspace` is the instance root every other entity (member, team, and every issue, PR, check, and deploy) hangs off; `workspace_member` is the authorization edge between `user` (identity) and the workspace. Sync/permission story: any member (role ≠ null) SHALL read the single `workspace` row and all `workspace_member` and member `user`-profile rows (assignee/mention pickers need them); an authenticated non-member SHALL read none of them. Only an `admin` SHALL rename the workspace or change/remove members; a member MAY remove only its own membership (leave). Reads are denied by returning an empty query; write authorization is checked before any existence check.
 
 #### Scenario: Member reads the workspace and roster
 
@@ -52,6 +52,8 @@ On a fresh instance with no `workspace_member` rows, the first user to complete 
 
 An `admin` SHALL be able to list members, change a member's role, and remove a member; a member SHALL be able to leave (remove its own membership). Removing a member SHALL revoke their access (their subsequent reads return empty). An admin MUST NOT be able to remove or demote the last remaining admin, so the instance can never be left unadministered.
 
+Removing a member — whether by an admin or by the member leaving — SHALL additionally **delete every notification addressed to that user**, across every team, in the same server-authoritative transaction as the membership removal. The deletion SHALL happen server-side because the acting user can never read another user's notifications and therefore cannot delete them optimistically.
+
 #### Scenario: Admin changes a role
 
 - **WHEN** an admin changes a member's role from `member` to `viewer`
@@ -62,6 +64,11 @@ An `admin` SHALL be able to list members, change a member's role, and remove a m
 - **WHEN** an admin removes a member
 - **THEN** the member's `workspace_member` row is deleted and their subsequent workspace reads return empty
 
+#### Scenario: Removing a member deletes their notifications
+
+- **WHEN** an admin removes a member who had notifications from several teams
+- **THEN** every notification addressed to that user is deleted, in the same transaction as the membership removal
+
 #### Scenario: Last admin is protected
 
 - **WHEN** an admin attempts to remove or demote the only remaining admin
@@ -70,7 +77,7 @@ An `admin` SHALL be able to list members, change a member's role, and remove a m
 #### Scenario: Member leaves
 
 - **WHEN** a `member` or `viewer` chooses to leave
-- **THEN** their own membership is removed without requiring admin action
+- **THEN** their own membership is removed without requiring admin action, and every notification addressed to them is deleted
 
 ### Requirement: Access gate for non-members
 

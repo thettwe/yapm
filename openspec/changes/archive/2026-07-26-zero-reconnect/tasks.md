@@ -1,0 +1,79 @@
+## 1. Reproduce and instrument
+
+- [x] 1.1 Bring up an isolated stack for this change — `docker compose -p yapm-zr -f docker/docker-compose.dev.yml up -d` with `POSTGRES_HOST_PORT=5441 ZERO_CACHE_HOST_PORT=4849 YAPM_HOST_PORT=3001`, `DATABASE_URL=postgres://yapm:yapm@localhost:5441/yapm`, `VITE_ZERO_CACHE_URL=http://localhost:4849` — and confirm the app boots and syncs. Never run a bare `down`; tear down only with `-p yapm-zr … down -v`.
+- [x] 1.2 Reproduce the failure deterministically: sign in, then force the expired-credential path (temporarily shorten `SYNC_TOKEN_EXPIRATION`, or mint and inject a stale JWT) and capture the zero-cache log line `InvalidConnectionRequest: "No validated connection is available for shared query work."` plus the client's `error` state. Record the transcript in `design.md` under "Decisions made during implementation" if the observed sequence differs from the root-cause chain. *(The observed sequence does differ; the transcript and the reason are in `design.md` → C12.)*
+
+## 2. Server: credential rejection protocol
+
+- [x] 2.1 Widen `apps/server/src/zero/context.ts` to report a three-way outcome — authenticated / credential absent / credential rejected — without changing the resolved `AuthContext` shape any caller already consumes.
+- [x] 2.2 In `apps/server/src/zero/routes.ts`, return `401 {error:'unauthorized'}` from `/query` and `/mutate` when the credential is *rejected*, before invoking `handleQueryRequest`/`handleMutateRequest`; keep `200 + userID: null` when it is *absent*; keep a non-auth resolver failure as a 500. App still boots and syncs.
+- [x] 2.3 Verify against the live stack that an expired token now yields a client `needs-auth` (not a group-wide `InvalidConnectionRequest`), and that a signed-out client is unaffected. *(Re-verified independently as a matched pair; counts in `design.md` → C17.)*
+- [x] 2.4 Pass a log level derived from the configured pino logger to `handleQueryRequest`/`handleMutateRequest`, so Zero's own console `LogContext` stops ignoring `LOG_LEVEL`. Unblocks a quiet test run; see `design.md` → C16.
+
+## 3. Server: token expiry hint
+
+- [x] 3.1 Extend `issueSyncToken` in `apps/server/src/auth.ts` to return the token together with its `exp`, read via the existing local JWKS verification — no new dependency and no hardcoded copy of `SYNC_TOKEN_EXPIRATION`.
+- [x] 3.2 Add `expiresAt` (epoch seconds) to the `/api/zero/token` response in `apps/server/src/auth-routes.ts`, additively — existing fields and status codes unchanged.
+
+## 4. Client: session fetch with three outcomes
+
+- [x] 4.1 Replace `fetchSyncSession()`'s boolean-ish result in `apps/web/src/zero/provider.tsx` with a discriminated `session | no-session | unavailable` result: `no-session` only on HTTP 401/403; `unavailable` on a thrown error, abort/timeout, any other non-OK status, or a malformed body; add `AbortSignal.timeout(10_000)`.
+- [x] 4.2 Make `unavailable` preserve the previous session state instead of collapsing to `LOGGED_OUT`, and expose an `unavailable` flag on `useSyncSession()` so surfaces can distinguish "signed out" from "cannot reach the server". App behaves identically on the happy path.
+
+## 5. Client: recovery state machine
+
+- [x] 5.1 Add the pure backoff scheduler (base 1s, factor 2, cap 30s, full jitter, reset on success) as a standalone testable unit in `apps/web/src/zero/`.
+- [x] 5.2 Replace `SyncAuthRefresher` with a `SyncRecovery` component mounted inside `ZeroProvider` that owns every re-mint: act on `needs-auth` and `error` (re-mint, then `zero.connection.connect({auth})` via `useZero()`); on `disconnected` past a 20s grace, re-mint only (never call `connect()` — it does not reconnect from `disconnected`); do nothing on `connecting`/`closed`; reset the schedule on `connected`.
+- [x] 5.3 Handle the identical-token case: when the re-minted JWT equals the current one and the state is terminal, call `zero.connection.connect()` explicitly, because an unchanged `auth` prop makes `ZeroProvider` a no-op and would leave the client parked.
+- [x] 5.4 Route `useSyncControl().refresh()` (membership changes) through the same scheduler so a role change and a reconnect can never run two token fetches concurrently; its existing contract and call sites are unchanged.
+- [x] 5.5 Reset the schedule only once `connected` has *held* for `CONNECTION_SETTLED_MS`, not on arrival: Zero reports `connected` on socket open, before zero-cache validates, so a refused connection flaps through it and was restarting the backoff every cycle. See `design.md` → C17.
+
+## 6. Client: proactive refresh
+
+- [x] 6.1 Consume `expiresAt` and schedule a re-mint at 75% of the remaining lifetime, clamped to [60s, 30min]; fall back to a fixed 45-minute timer when the field is absent.
+- [x] 6.2 Re-check on `visibilitychange → visible` and on `online`, re-minting when more than half the lifetime has elapsed; ensure timers and listeners are cleaned up on unmount and never stack.
+
+## 7. Client: visible reconnecting state
+
+- [x] 7.1 Extend `apps/web/src/zero/connection.ts` so the summary carries the recovery state (`idle | retrying | waiting`) and recovery-aware labels (`Reconnecting…`, `Offline — retrying`, `Sign-in expired — reconnecting`, `Sync error — retrying`) alongside the existing `state`/`writable`/`detail` fields.
+- [x] 7.2 Rework `apps/web/src/components/connection-status.tsx`: polite live region for the label, a keyboard-operable **Retry now** `<button>` once the delay reaches the top of the range or recovery has failed for >15s, a new `data-recovery` attribute for tests, and the existing `data-connection` values left untouched so no current e2e assertion changes.
+- [x] 7.3 Replace the hardcoded `bg-emerald-500`/`bg-amber-500` dots with `--color-status-*` tokens (`bg-status-done` / `bg-status-in-progress` / `bg-status-urgent` / `bg-muted-foreground`); verify in all three presets, light and dark.
+- [x] 7.4 Replace `authenticated.tsx`'s indefinite "Loading…" with an actionable state once a credential request has come back `unavailable`: same `role="status"` + Retry treatment, still redirecting to `/login` only on a real `no-session`.
+
+## 8. Unit tests (Vitest, no DB)
+
+- [x] 8.1 Backoff scheduler: delays stay within `[0, min(cap, base·2^n)]`, grow, never exceed the cap, and reset to base after a success.
+- [x] 8.2 Recovery action table: `needs-auth`/`error` re-mint and connect; `disconnected` re-mints only after the grace and never calls `connect()`; `connecting`/`closed` do nothing; `connected` resets the schedule.
+- [x] 8.3 Identical-token fallback calls `zero.connection.connect()` when the state is terminal and the minted token is unchanged.
+- [x] 8.4 Session classifier: 401/403 → `no-session`; 500, 404, thrown error, abort/timeout, malformed body → `unavailable`; valid body → `session`.
+- [x] 8.5 Proactive-refresh scheduling from `expiresAt` (75% clamped to [60s, 30min]), the missing-`expiresAt` fallback, and the visibility/online re-check threshold.
+- [x] 8.6 Connection summary maps every Zero state × recovery state to the right label, `writable` flag, and `data-recovery` value.
+- [x] 8.7 A `needs-auth → connecting → connected → needs-auth` cycle that never holds still climbs the backoff to the cap, and a connection that does hold still resets it.
+
+## 9. Integration tests (Vitest, live Postgres)
+
+- [x] 9.1 `/api/zero/query` and `/api/zero/mutate`: presented-but-invalid bearer → 401 with no `QueryResponse` body; absent credential → 200 with `userID: null`; valid credential → 200 with the verified subject. *(`/mutate` carries `?schema=…&appID=…` and the test provisions Zero's bookkeeping tables, so the assertions reach a real mutator — see `design.md` → C13.)*
+- [x] 9.2 A non-auth resolver failure still surfaces as a server error, not a 401.
+- [x] 9.3 `/api/zero/token` returns `expiresAt` in the future and consistent with the configured token lifetime, alongside the unchanged `token`/`userID`/`role`.
+
+## 10. Reconnection e2e (Playwright)
+
+- [x] 10.1 Add `apps/web/e2e/reconnect.spec.ts`: sign in, install a page-lifetime sentinel, drop the connection (`context.setOffline` and/or `page.routeWebSocket` against the zero-cache URL), assert the pill reports reconnecting with `data-recovery`, restore, then assert `data-connection="connected"`, data converging, and the sentinel intact — proving no page reload. *(Five specs: a refused socket, the two protocol failures Zero parks in, and the two credential-request failures. The probe is both sentinel and heartbeat; see `design.md` → C18.)*
+- [x] 10.2 Add the credential-failure case: `page.route('**/api/zero/token', …)` fails the request, assert the user stays signed in on the retry surface (never `/login`), then let it succeed and assert full recovery — including via the keyboard-only **Retry now** path. *(Plus the hung-request case, which the 10s timeout has to abandon.)*
+- [x] 10.3 Confirm the new spec runs in the existing CI `e2e` job with no new service, port, or job. *(`pnpm --filter @yapm/web e2e` picks the file up from `testDir`; the only env it reads, `E2E_ZERO_CACHE_URL`, the job already sets.)*
+
+## 11. Documentation
+
+- [x] 11.1 Add `apps/docs/src/content/docs/self-hosting/sync-recovery.md` — the connection states a user can see, automatic re-mint + bounded backoff, the 1h sync-token lifetime and proactive refresh, and what to check when it stays reconnecting (zero-cache logs, `ZERO_QUERY_URL` reachability from the container, clock skew) — and register it in the Starlight sidebar in `apps/docs/astro.config.mjs`.
+- [x] 11.2 Update `reference/zero.md` with the facts harvested from the 1.8.0 sources for this change: the `/query` validation round trip and `server-validated` userID matching, the background-connection requirement for shared query work, `connect()`'s terminal-state-only rule, and the 401-vs-200 rejection contract restated at the endpoint level.
+- [x] 11.3 Update `ROADMAP.md` with a row for this change, and `PROCESS.md` §3 so the E2E tier explicitly lists reconnection/recovery; update `README.md` only where this change makes it stale. No `TECHSTACK.md` change (no version change) — TECHSTACK's only sync-connection claim ("Zero rejects writes while offline, so disconnection must be visible in the UI") is what this change makes *more* true. **`.env.example` and both compose files did change**, contrary to this task's original wording: the review fix pass (12.6) added the optional `ZERO_LOG_LEVEL` passthrough so an operator can raise zero-cache's log level while diagnosing a connection that will not settle, documented on the new sync-recovery page. It is a zero-cache variable forwarded by compose, not app config, so the app's Zod env schema is still untouched.
+- [x] 11.4 `pnpm --filter @yapm/docs build` passes.
+
+## 12. Verification
+
+- [x] 12.1 `pnpm turbo lint typecheck test build` passes; `node scripts/check-boundaries.mjs` and `node scripts/check-catalog.mjs` pass. *(Run with `--force`, no cache: 14/14 tasks green. With a live Postgres the server suite is 127/127 — the 33 integration tests that skip without a database all pass, including the new §9 ones.)*
+- [x] 12.2 The compose smoke test passes against the isolated `yapm-zr` project/ports. *(Prod three-container stack built and run as `yapm-zr-smoke` on 3004/4852; `smoke ok` — SPA served, sign-up accepted, Zero sync connected. `BETTER_AUTH_URL`/`WEB_ORIGIN` must be moved with the port or sign-up fails "Invalid origin"; that is the port override, not the image.)*
+- [x] 12.3 Manual close-the-loop on the live stack. *(Measured against the prod stack; numbers in `design.md` → C20. 60s `zero-cache` outage: 2 token requests 20s apart, a 100ms heartbeat logging 601 ticks in 60s against ~600 ideal, pill `disconnected`/`waiting` reading "Offline — retrying" with **Retry now** offered; restart recovered in ~5s with the page-lifetime sentinel intact. Not done: idling out the real 1h token lifetime in wall-clock time — that path is covered by the credential-rejection e2e and the §8.5 proactive-refresh unit tests instead.)*
+- [x] 12.4 Walk every scenario in this change's specs and confirm each is true. *(All 57 Playwright tests observed green in this worktree, and every scenario in both spec deltas maps to a passing test — the endpoint scenarios to §9's integration tests, the recovery/UI scenarios to `reconnect.spec.ts`, the calm-retry scenario to the C20 measurement. C19 records the one scenario that holds only for a client that stays `disconnected` without redialling; C20 is new here.)*
+- [x] 12.5 Tear down with `docker compose -p yapm-zr -f docker/docker-compose.dev.yml down -v` (and the `yapm-zr-smoke` prod project alongside it).
+- [x] 12.6 Review fix pass (`design.md` → C21–C24: forced `refresh()`, the `pending` + `unavailable` retry loop, the hidden-tab disconnect, the pill's focus handoff and the accent-fill contrast; plus `ZERO_LOG_LEVEL` forwarded by both compose files). Re-run locally: `pnpm turbo run typecheck`, `pnpm lint`, `pnpm turbo run test`, `node scripts/check-boundaries.mjs`. **Not re-run locally after these edits:** `build`, the Playwright suite (including the new keyboard **Retry now** assertion in `reconnect.spec.ts`) and the compose smoke test — all four are covered by CI on this branch.

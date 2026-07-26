@@ -51,3 +51,66 @@ Work-graph placement: interaction-only. Permission story: unchanged.
 - **WHEN** a user opens the palette by shortcut, types to filter, moves with Arrow keys, and presses Enter
 - **THEN** the highlighted command executes, and pressing Escape instead closes the palette and returns focus to the previously focused element, with no pointer interaction
 
+### Requirement: Command palette offers triage actions
+
+The command palette SHALL offer Accept, Decline, Route, and Send-to-triage on the focused or selected issue(s), gated to writers. These actions SHALL dispatch the corresponding shared mutators and SHALL be absent for viewers.
+
+Work-graph placement: palette actions over the ambient issue target. Permission story: rendered and dispatched only for `canWrite`.
+
+#### Scenario: Writer triages from the palette
+
+- **WHEN** a writer opens the palette on an inbox issue and picks Accept
+- **THEN** the issue is accepted and leaves the inbox
+
+#### Scenario: Viewer sees no triage actions
+
+- **WHEN** a viewer opens the palette on an issue
+- **THEN** no triage actions are offered
+
+### Requirement: The command palette can move issues to a project
+
+The system SHALL add a writer-gated "Move to project" action to the command palette, operating on the focused or selected issue(s), offering every workspace project plus a "No project" option, and committing through `issue.setProject`. The action SHALL be hidden and never written for a viewer.
+
+Work-graph placement: a palette action invoking the issue↔project mutator. Permission story: gated to writers via `useMembership().canWrite`.
+
+#### Scenario: Move the focused issue to a project
+
+- **WHEN** a writer opens the palette on a focused issue, chooses "Move to project", and picks a project
+- **THEN** the issue's `project_id` is set optimistically and syncs
+
+#### Scenario: Clear an issue's project from the palette
+
+- **WHEN** a writer chooses "No project" for a focused issue
+- **THEN** the issue's `project_id` becomes null
+
+#### Scenario: A viewer sees no project action
+
+- **WHEN** a viewer opens the command palette
+- **THEN** no "Move to project" action is offered
+
+### Requirement: The palette reaches the inbox
+
+The command palette SHALL offer, in its existing navigate and action groups, a command to go to the
+inbox and a command to mark all of the caller's notifications read. Both SHALL be reachable and
+executable entirely by keyboard, through the palette's existing open-filter-move-execute flow, and
+the mark-all command SHALL invoke the same shared `packages/schema` mutator the inbox surface uses,
+so it is authorized and applied identically.
+
+These commands SHALL be self-scoped like every notification surface: they act on the caller's own
+inbox and offer no way to view or act on anyone else's.
+
+Work-graph placement: interaction-only; the palette introduces no entity. Permission story: the
+navigate command exposes nothing, and the mark-all command is gated by the same self-scoped mutator
+authorization as any other notification write.
+
+#### Scenario: Reach the inbox from the palette by keyboard
+
+- **WHEN** a member opens the palette, types to filter to the inbox command, and presses Enter
+- **THEN** the inbox surface opens, with no pointer interaction
+
+#### Scenario: Mark everything read from the palette
+
+- **WHEN** a member with unread notifications executes the mark-all-read command from the palette
+- **THEN** every unread notification of theirs becomes read via the shared mutator, the unread badge
+  clears, and no other user's notifications are affected
+

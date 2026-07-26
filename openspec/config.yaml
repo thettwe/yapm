@@ -15,7 +15,7 @@ context: |
   both hand-written and CI drift-tested; no kysely-codegen, it breaks under TS7);
   better-auth on its native Kysely layer (SSO free, never paywalled); TipTap v3.
   Monorepo: pnpm 11 workspaces + catalogs, Turborepo; apps/{web,server,docs},
-  packages/{schema,ui,api,config}.
+  packages/{schema,ui,api,config,email}.
 
   Hard constraints every spec must respect:
   - Self-host = exactly 3 containers (app, zero-cache, postgres). No Redis, no

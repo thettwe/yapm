@@ -32,3 +32,6 @@ runs as three containers you own.
   assignments and comments on issues you are involved in, with an unread badge and optional batched
   email. No admin, of any role, can read your inbox. Turn mail on with
   [Email delivery](/self-hosting/email/).
+- [Mentions](/features/mentions/) — type `@` in a description or comment to pull a teammate in,
+  from a list that opens instantly and offline, tells you when a name cannot be reached, and
+  subscribes the person you named to the issue — reversibly, from the issue itself.

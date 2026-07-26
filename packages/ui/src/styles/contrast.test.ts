@@ -58,6 +58,26 @@ function hex(tokens: Record<string, string>, name: string): string {
   return value
 }
 
+// Several presets define `--accent-soft` as an rgba wash rather than an opaque colour, so its
+// effective contrast is only knowable against the surface it is painted on.
+function over(value: string, surface: string): string {
+  const rgba = value.match(/rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)(?:[\s,/]+([\d.]+))?\s*\)/)
+  if (rgba === null) {
+    expect(value).toMatch(HEX)
+    return value
+  }
+  const alpha = rgba[4] === undefined ? 1 : Number(rgba[4])
+  const base = surface.replace('#', '')
+  const channel = (index: number): string => {
+    const top = Number(rgba[index + 1])
+    const bottom = Number.parseInt(base.slice(index * 2, index * 2 + 2), 16)
+    return Math.round(top * alpha + bottom * (1 - alpha))
+      .toString(16)
+      .padStart(2, '0')
+  }
+  return `#${channel(0)}${channel(1)}${channel(2)}`
+}
+
 describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   const surfaces = ['--bg', '--bg-elevated', '--bg-sidebar'] as const
 
@@ -72,6 +92,17 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
 
   it('muted text on the base surface stays legible (>= 3.0 large-text AA)', () => {
     expect(contrastRatio(hex(t, '--text-3'), hex(t, '--bg'))).toBeGreaterThanOrEqual(AA_LARGE - 0.5)
+  })
+
+  // The mention typeahead's active row. It carries text-1/text-2 rather than accent-strong
+  // because `--accent-strong` over the soft-accent wash lands at ~3.9 in three of the six presets
+  // — a highlighted row a screen reader announces but a sighted user cannot read is the same bug
+  // twice, so the highlight is the wash and the ink stays the readable pair.
+  it('primary and secondary text on the soft-accent selection meets AA (>= 4.5)', () => {
+    const row = over(t['--accent-soft'] ?? '', hex(t, '--bg-elevated'))
+    for (const text of ['--text-1', '--text-2'] as const) {
+      expect(contrastRatio(hex(t, text), row), text).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
   })
 
   it('on-accent text on the accent fill meets AA (>= 4.5)', () => {

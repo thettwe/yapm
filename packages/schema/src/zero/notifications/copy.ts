@@ -35,6 +35,8 @@ function titleFor(kind: NotificationKind, actor: string, subject: string): strin
       return `${actor} assigned you ${subject}`
     case 'issue_commented':
       return `${actor} commented on ${subject}`
+    case 'mention':
+      return `${actor} mentioned you in ${subject}`
   }
 }
 

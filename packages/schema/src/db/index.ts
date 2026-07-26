@@ -67,6 +67,16 @@ export type {
   InviteEmailTarget,
 } from './invite.js'
 export { acceptInvite, inviteEmailTarget } from './invite.js'
+export type {
+  AutoSubscribeRow,
+  DeleteSubscriptionsForTeamMemberOptions,
+} from './issue-subscription.js'
+export {
+  autoSubscribeMentioned,
+  deleteSubscriptionsForMember,
+  deleteSubscriptionsForTeamMember,
+  subscribersOfIssue,
+} from './issue-subscription.js'
 export { lookupWorkspaceRole } from './membership.js'
 export type { MigrationOutcome } from './migrate.js'
 export { createMigrator, migrateToLatest } from './migrate.js'
@@ -146,6 +156,9 @@ export type {
   IssueLinkTable,
   IssueSequence,
   IssueSequenceTable,
+  IssueSubscription,
+  IssueSubscriptionTable,
+  IssueSubscriptionUpdate,
   IssueTable,
   IssueUpdate,
   Label,
@@ -163,6 +176,7 @@ export type {
   NewIssue,
   NewIssueLabel,
   NewIssueLink,
+  NewIssueSubscription,
   NewLabel,
   NewNotification,
   NewPullRequest,

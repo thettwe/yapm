@@ -30,11 +30,18 @@ scenario as a side effect. Highest debt-per-line of the three.
 
 **`mentions` second, and only second.** Its entire value proposition is "a new `kind` through an
 existing seam, plus a TipTap extension". Built before `notifications` it has to invent a write path
-that then gets reconciled; built after, it ships **no migration and no Zero schema change at all** —
+that then gets reconciled; built after, the *mention* half ships with no migration at all —
 verified: `issue.description` is `json().optional()` and `comment.body` is `json()`
 (`packages/schema/src/zero/schema.ts:104`, `:175`), so a mention is a node inside a document that
-already syncs under the existing `teamScoped` predicate. That makes it the cheapest big feature in
-the backlog, and *only the ordering makes it cheap*.
+already syncs under the existing `teamScoped` predicate.
+
+> **SUPERSEDED, 2026-07-25 — the maintainer answered H7 (§6) "yes".** A mention **auto-subscribes**
+> the mentioned person to the issue's later activity, and that cannot be derived from `notification`
+> rows: they carry `NOTIFICATION_RETENTION_DAYS` (30) retention, so a derived subscription would
+> expire silently. `mentions` therefore ships a durable `issue_subscription` table, a forward-only
+> migration, a Zero schema change and a sticky unfollow. The "cheapest big feature in the backlog"
+> conclusion no longer holds; the *ordering* argument does, and is unaffected. Re-derived from
+> scratch in `openspec/changes/mentions/design.md`.
 
 **`search` last**, for two reasons that are not "it is the biggest".
 
@@ -51,8 +58,13 @@ Rejected alternative: `search` first, on the grounds that it is the most-used fe
 palette work is independent. Rejected because of (1) — the cost lands as a behavioural change to
 shipped code rather than as an ordering choice.
 
-Migration numbers are assigned here so two flows do not both claim `0013`:
-**`0013_notifications`**, **`0014_search`**. `mentions` ships no migration (see §2.4).
+Migration numbers are assigned here so two flows do not both claim the same number:
+**`0013_notifications`**, **`0014_mentions`**, **`0015_search`**.
+
+> **Renumbered, 2026-07-25.** This originally read "`0014_search`; `mentions` ships no migration".
+> The H7 answer gave `mentions` a migration, and it built first, so it took `0014` and `search`
+> moves to `0015`. Two changes claiming `0014` is a collision at boot, which is why the number
+> lives here rather than in either change.
 
 ---
 
@@ -102,6 +114,12 @@ Because `mentions` lands *before* `search`, `mentions` ships this file first —
 branch it needs (`{type:'mention'}` → `@` + resolved name) plus the plain-text node walk. `search`
 then extends the same file for its own needs. One file, one owner at a time, no retrofit.
 `mentions` also ships `extractMentionIds(doc): string[]` beside it.
+
+> **Shipped in change 12.** `packages/schema/src/rich-text/plaintext.ts` exports
+> `richTextToPlainText(doc, options?)`, `extractMentionIds(doc)` and `sanitizeRichText(doc)`, with
+> unit tests over nested lists, blockquotes, duplicate and malformed mentions. It imports nothing.
+> `richTextToPlainText` takes a `mentions: 'label' | 'strip'` mode — see §1.9 for why `'strip'` is
+> mandatory on any model-facing path. `search` extends this file rather than adding a second one.
 
 ### 1.3 The command palette — `search` owns results, `notifications` owns actions
 
@@ -203,6 +221,19 @@ text to a model must strip mention nodes first.
 
 This also constrains `search`: `search_document.body` contains those same names. `search` must never
 be a data source for an AI path.
+
+> **Run, and clean, 2026-07-25 (change 12).** `packages/schema/src/zero/{digest,cycle-facts,
+> ai-tools}.ts` and `packages/schema/src/db/cycle-facts.ts` read **neither** `issue.description` nor
+> `comment.body`. The only hits in `apps/server/src/ai/*` are an HTTP request `body` and the word
+> "description" inside a tool-description string handed to the model — neither is a document read.
+> No blocker; the hazard is created and the rule now ships with it.
+>
+> **The rule, in its enforceable form.** `packages/schema/src/rich-text/plaintext.ts` exposes
+> `richTextToPlainText(doc, { mentions: 'strip' })`. **Any caller that feeds document text to a
+> language model MUST use `'strip'`** — the default `'label'` mode resolves names and would put a
+> colleague inside the model's context. Carried as a comment on the option, as a scenario in the
+> `mentions` capability spec ("Model-facing reads must strip mention nodes"), and inherited by
+> `search` and by every later AI change.
 
 ### 1.10 Not overlaps, checked and cleared
 
@@ -471,11 +502,17 @@ reaches the inbox.
   `aria-activedescendant` has a valid same-subtree IDREF.
 - **Keyboard contract**: ↑/↓ move, Home/End jump, Enter and Tab select, Escape closes **only** the
   popup. Concretely — `RichTextEditor`'s wrapper `onKeyDown` (`rich-text.tsx:120-129`) currently
-  fires `onCancel` on Escape and `onSubmit` on Cmd/Ctrl+Enter **unconditionally**. It must skip both
-  branches when `event.defaultPrevented` is set, because ProseMirror's `handleKeyDown` calls
-  `preventDefault()` when the suggestion handler returns true but does **not** stop React bubbling.
-  Without this, Escape inside an open mention popup destroys the comment draft and closes the detail
-  Sheet. **Verified against the current file; this is a real collision, not a hypothetical.**
+  fires `onCancel` on Escape and `onSubmit` on Cmd/Ctrl+Enter **unconditionally**. Without a guard,
+  Escape inside an open mention popup destroys the comment draft and closes the detail Sheet.
+  **Verified against the current file; this is a real collision, not a hypothetical.**
+  > **The prescribed fix was wrong — corrected during the build, see
+  > `openspec/changes/mentions/design.md` I26/I27.** This said "skip both branches when
+  > `event.defaultPrevented` is set". `prosemirror-view@1.42`'s `captureKeyDown` returns true for
+  > keyCode 13 and 27 **unconditionally**, so that flag is set on every Enter and every Escape
+  > inside any editor and the guard is *always* taken — silently disabling `onCancel` and
+  > `onSubmit` on every rich-text surface in the app. What shipped answers "did an inner surface
+  > act on this key?" by **native-event identity**, and also calls `stopPropagation()`, because
+  > Base UI's `useDismiss` checks neither `defaultPrevented` nor the event's origin.
 - **ARIA**: editor gets `aria-expanded`/`aria-controls`/`aria-activedescendant`; popup is
   `role="listbox"` with `role="option"` children; a polite live region announces match count and the
   empty state. Tokenized, AA in all three presets, light and dark.
@@ -535,13 +572,21 @@ No `#123` issue mentions or backlinks, no `@team`/`@here` group mentions, no lab
 triggers — the extension's `suggestions: []` array holds more trigger chars later, but exactly one
 ships. No mentions in issue titles, retro cards, or project descriptions (plain-text `string()`
 columns; a different change). No "invite/add this person to the team" from the popup — mentioning
-someone never grants access. No mention-based subscribe/follow. **No `mention` table, no synced
+someone never grants access. ~~No mention-based subscribe/follow.~~ (**Reversed by the H7 answer:**
+auto-subscribe, a durable `issue_subscription` entity and a sticky unfollow are all in scope.)
+**No `mention` table, no synced
 mention edge, no "issues that mention me" filter** — the inbox is `notifications`' surface and
 duplicating it creates a second source of truth for something derivable from the doc. No
 autocomplete over deactivated accounts or bots. No hovercard, no user profile route. No
 un-mention/retraction when a mention is deleted — sent is sent. No Yjs interaction.
 
 #### Schema
+
+> **SUPERSEDED by the H7 answer (§6).** The paragraph below is true of the *mention* itself and
+> false of the change as built. Auto-subscribe added a durable `issue_subscription` table
+> (composite primary key `(issue_id, user_id)`, no generated id), migration **`0014_mentions`**, a
+> Zero schema change, a self-scoped `subscriptions.mine` query, and drift-test coverage. Everything
+> the paragraph says about *the mention node* still holds.
 
 **Zero new tables, zero new columns, no Zero schema change, no migration, and therefore no change
 to the CI drift test.** Verified against `packages/schema/src/zero/schema.ts:104` and `:175`. What
@@ -664,7 +709,7 @@ degradation reads), `mentions` (the plaintext walker — §1.2).
   a deterministic merge/dedupe. It **consumes** `rich-text/plaintext.ts` from `mentions` (§1.2)
   rather than shipping its own extractor, so the local pass and the server index can never disagree
   about what a document contains.
-- **Migration `0014_search`**: a server-only `search_document(id, entity_type, team_id, issue_id,
+- **Migration `0015_search`** (renumbered from `0014` — `mentions` took `0014_mentions`, see §0): a server-only `search_document(id, entity_type, team_id, issue_id,
   title text, body text, needs_triage, updated_at)` sidecar with a GIN **expression** index over
   `to_tsvector(<cfg>, setweight(title,'A') || setweight(body,'B'))`, a btree on `team_id`, and a
   btree on `issue_id` for cascade cleanup. Added to the hand-written Kysely `DB` and to `KYSELY_DB`
@@ -1067,14 +1112,24 @@ cheap to change later.*
 says no: the typeahead never offers them and the server never emits an event. The alternative —
 mention implies an access grant, the way Linear's guest/subscriber model works — is a permission-model
 decision with real security weight. *Blocks: `mentions`.*
+> **ANSWERED — not possible.** Enforced server-side, mirroring `teamScoped` including its admin
+> bypass. Eligibility is split from candidacy (see §2.2's amendments), and the UI **states why** a
+> matched name is unavailable rather than silently doing nothing. Built in change 12.
 
 **H7 — Whether a mention auto-subscribes the mentioned person to subsequent activity.** This directly
 sets how much mail a self-hoster's relay sends. Scoped as **no** (a mention notifies once), but it is
 a product decision. *Blocks: `mentions`.*
+> **ANSWERED — yes, and this reversed several conclusions in §0 and §2.2.** A durable
+> `issue_subscription` table with migration `0014_mentions` and a Zero schema change; a **sticky**
+> unfollow shipped in the same change, not deferred; and subscription activity classified as
+> **in-app only** — which follows from the H1 answer rather than being a new rule. Built in change
+> 12.
 
 **H8 — Whether `@` should ever address a group (`@team`, `@here`).** A non-goal here. If the answer is
 "never", say so in VISION-adjacent terms; if it is "later", the trigger-array architecture must stay.
 *Informs: `mentions`.*
+> **ANSWERED — later, keep the seam.** None of it built; the trigger config and the recipient path
+> are array-shaped end to end so a group target is an added producer, not a signature change.
 
 **H9 — The text-search configuration: `'simple'` vs `'english'`.** Not a technical choice. It decides
 whether yapm's search is language-neutral or quietly English-optimized. `'english'` ranks better for

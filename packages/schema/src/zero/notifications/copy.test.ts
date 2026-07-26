@@ -25,6 +25,17 @@ describe('notificationCopy', () => {
     ).toBe('Dana commented on ENG-42')
   })
 
+  it('names the actor and the issue key for a mention', () => {
+    expect(
+      notificationCopy({
+        kind: 'mention',
+        actorName: 'Dana',
+        subjectKey: 'ENG-42',
+        subjectTitle: 'Flaky login redirect',
+      }),
+    ).toEqual({ title: 'Dana mentioned you in ENG-42', summary: 'Flaky login redirect' })
+  })
+
   it('falls back to a generic subject when the issue has no number yet', () => {
     expect(
       notificationCopy({

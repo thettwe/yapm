@@ -1,4 +1,12 @@
 export { newId } from './id.js'
+export type { MentionRenderMode, RichTextToPlainTextOptions } from './rich-text/plaintext.js'
+export {
+  extractMentionIds,
+  MENTION_LABEL_MAX_LENGTH,
+  MENTION_NODE_TYPE,
+  richTextToPlainText,
+  sanitizeRichText,
+} from './rich-text/plaintext.js'
 export type {
   ActiveToolOptions,
   AgentAuditEntry,
@@ -47,6 +55,7 @@ export type {
   ReviewState,
   RichTextDoc,
   SortDirection,
+  SubscriptionState,
   ThemePreset,
   WorkspaceRole,
 } from './zero/context.js'
@@ -88,6 +97,7 @@ export {
   RETRO_PRESENCE_STALE_MS,
   RETRO_VOTE_TARGETS,
   REVIEW_STATES,
+  SUBSCRIPTION_STATES,
   THEME_PRESETS,
   WORKSPACE_ROLES,
 } from './zero/context.js'
@@ -170,6 +180,7 @@ export type {
   CreateCycleArgs,
   CreateIssueArgs,
   CreateProjectArgs,
+  FollowIssueArgs,
   MarkAllNotificationsReadArgs,
   MarkNotificationReadArgs,
   OpenRetroForCycleArgs,
@@ -178,6 +189,7 @@ export type {
   SetPreferenceArgs,
   SetRetroPhaseArgs,
   StartRetroTimerArgs,
+  UnfollowIssueArgs,
 } from './zero/mutators.js'
 export {
   ACCEPT_TRIAGE_MUTATOR_NAME,
@@ -277,8 +289,11 @@ export {
   editComment,
   editCommentArgs,
   FLAG_TRIAGE_MUTATOR_NAME,
+  FOLLOW_ISSUE_MUTATOR_NAME,
   flagTriage,
   flagTriageArgs,
+  followIssue,
+  followIssueArgs,
   ISSUE_TITLE_MAX_LENGTH,
   isParseableColor,
   isRetroFacilitator,
@@ -367,11 +382,14 @@ export {
   stopRetroTimerArgs,
   TEAM_KEY_MAX_LENGTH,
   TEAM_NAME_MAX_LENGTH,
+  UNFOLLOW_ISSUE_MUTATOR_NAME,
   UPDATE_CYCLE_MUTATOR_NAME,
   UPDATE_ISSUE_MUTATOR_NAME,
   UPDATE_PROJECT_MUTATOR_NAME,
   UPDATE_RETRO_ACTION_MUTATOR_NAME,
   UPDATE_RETRO_DRAFT_MUTATOR_NAME,
+  unfollowIssue,
+  unfollowIssueArgs,
   updateCycle,
   updateCycleArgs,
   updateIssue,
@@ -419,6 +437,7 @@ export {
   RETRO_VOTES_MINE_QUERY_NAME,
   RETROS_BY_TEAM_QUERY_NAME,
   SAVED_VIEWS_BY_TEAM_QUERY_NAME,
+  SUBSCRIPTIONS_MINE_QUERY_NAME,
   TEAMS_ALL_QUERY_NAME,
   TRIAGE_INBOX_QUERY_NAME,
   teamScoped,

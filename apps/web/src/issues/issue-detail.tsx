@@ -30,6 +30,7 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from '@yapm/ui/components/me
 import { PriorityMark } from '@yapm/ui/components/priority-mark'
 import {
   isRichTextEmpty,
+  type MentionCandidate,
   RichTextEditor,
   RichTextRenderer,
   type RichTextValue,
@@ -55,6 +56,8 @@ import {
   type LinkedIssueRow,
   linkedEntitiesFor,
 } from '@/issues/delivery'
+import { FollowControl } from '@/issues/follow-control'
+import { buildMentionables, mentionNamesFrom } from '@/issues/mentionables'
 import {
   isPendingNumber,
   issueKey,
@@ -182,7 +185,10 @@ export function IssueDetail({
   const [labels] = useQuery(queries.labels.byTeam({ teamId }))
   const [cycles] = useQuery(queries.cycles.byTeam({ teamId }))
   const [deployments] = useQuery(queries.deployments.byTeam({ teamId }))
-  const { canWrite } = useMembership()
+  // Already synced by `useMembership`, so reading it here costs no new subscription and no
+  // network round trip — it is what tells the `@` list which non-members are workspace admins.
+  const [workspaceMembers] = useQuery(queries.members.all())
+  const { canWrite, userId } = useMembership()
 
   const team = teams.find((candidate) => candidate.id === teamId)
   const teamKey = team?.key ?? ''
@@ -198,6 +204,20 @@ export function IssueDetail({
       }
     })
   }, [team, users])
+
+  // The same `MemberOption[]` the assignee menu is built from, widened with the workspace roster.
+  const mentionables = useMemo(
+    () =>
+      buildMentionables({
+        teamMembers: members,
+        workspaceMembers,
+        users,
+        selfId: userId,
+      }),
+    [members, workspaceMembers, users, userId],
+  )
+
+  const mentionNames = useMemo(() => mentionNamesFrom(users), [users])
 
   if (!issue) {
     const complete = result.type === 'complete'
@@ -218,6 +238,8 @@ export function IssueDetail({
       teamId={teamId}
       teamKey={teamKey}
       members={members}
+      mentionables={mentionables}
+      mentionNames={mentionNames}
       labelOptions={labels.map((label) => ({
         id: label.id,
         name: label.name,
@@ -288,6 +310,8 @@ function IssueDetailBody({
   teamId,
   teamKey,
   members,
+  mentionables,
+  mentionNames,
   labelOptions,
   cycleOptions,
   deployments,
@@ -298,6 +322,8 @@ function IssueDetailBody({
   teamId: string
   teamKey: string
   members: readonly MemberOption[]
+  mentionables: readonly MentionCandidate[]
+  mentionNames: ReadonlyMap<string, string>
   labelOptions: readonly LabelRow[]
   cycleOptions: readonly CycleOption[]
   deployments: readonly DeploymentRow[]
@@ -437,10 +463,15 @@ function IssueDetailBody({
                 placeholder="Add a description…"
                 minHeight="7rem"
                 defaultValue={(issue.description as RichTextValue | null) ?? null}
+                mentionables={mentionables}
+                mentionNames={mentionNames}
                 onChange={saveDescription}
               />
             ) : issue.description ? (
-              <RichTextRenderer value={issue.description as RichTextValue} />
+              <RichTextRenderer
+                value={issue.description as RichTextValue}
+                mentionNames={mentionNames}
+              />
             ) : (
               <p className="text-sm text-text-3">No description.</p>
             )}
@@ -450,6 +481,8 @@ function IssueDetailBody({
             issueId={issue.id}
             comments={(issue.comments ?? []) as readonly CommentRow[]}
             canWrite={canWrite}
+            mentionables={mentionables}
+            mentionNames={mentionNames}
           />
         </div>
 
@@ -651,6 +684,13 @@ function IssueDetailBody({
                 deployments={deployments}
               />
             </DetailField>
+
+            {/* Available to viewers too: a viewer can be mentioned, so a viewer is auto-subscribed
+                and must be able to stop. Gating this on `canWrite` would trap the one role that
+                cannot escape it. */}
+            <DetailField label="Updates">
+              <FollowControl issueId={issue.id} />
+            </DetailField>
           </DetailSection>
         </aside>
       </div>
@@ -849,10 +889,14 @@ function CommentThread({
   issueId,
   comments,
   canWrite,
+  mentionables,
+  mentionNames,
 }: {
   issueId: string
   comments: readonly CommentRow[]
   canWrite: boolean
+  mentionables: readonly MentionCandidate[]
+  mentionNames: ReadonlyMap<string, string>
 }) {
   const zero = useZero()
   const { userId, canManage } = useMembership()
@@ -925,6 +969,8 @@ function CommentThread({
                     autoFocus
                     minHeight="3rem"
                     defaultValue={comment.body as RichTextValue}
+                    mentionables={mentionables}
+                    mentionNames={mentionNames}
                     onSubmit={(doc) => {
                       void run(
                         zero.mutate(
@@ -940,14 +986,24 @@ function CommentThread({
                     onCancel={() => setEditingId(null)}
                   />
                 ) : (
-                  <RichTextRenderer value={comment.body as RichTextValue} />
+                  <RichTextRenderer
+                    value={comment.body as RichTextValue}
+                    mentionNames={mentionNames}
+                  />
                 )}
               </CommentCard>
             )
           })
         )}
 
-        {canWrite ? <CommentComposer onPost={post} onError={setError} /> : null}
+        {canWrite ? (
+          <CommentComposer
+            onPost={post}
+            onError={setError}
+            mentionables={mentionables}
+            mentionNames={mentionNames}
+          />
+        ) : null}
         {error !== undefined ? (
           <p className="text-xs text-status-urgent" role="alert">
             {error}
@@ -961,9 +1017,13 @@ function CommentThread({
 function CommentComposer({
   onPost,
   onError,
+  mentionables,
+  mentionNames,
 }: {
   onPost: (doc: RichTextValue) => Promise<string | undefined>
   onError: (message: string | undefined) => void
+  mentionables: readonly MentionCandidate[]
+  mentionNames: ReadonlyMap<string, string>
 }) {
   const [draft, setDraft] = useState<RichTextValue | null>(null)
   const [seq, setSeq] = useState(0)
@@ -986,6 +1046,8 @@ function CommentComposer({
         ariaLabel="Add a comment"
         placeholder="Leave a comment…"
         minHeight="3rem"
+        mentionables={mentionables}
+        mentionNames={mentionNames}
         onChange={setDraft}
         onSubmit={submit}
       />

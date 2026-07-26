@@ -35,6 +35,7 @@ import {
   dissolveRetroGroupArgs,
   editCommentArgs,
   flagTriageArgs,
+  followIssueArgs,
   labelRetroGroupArgs,
   markAllNotificationsReadArgs,
   markNotificationReadArgs,
@@ -61,6 +62,7 @@ import {
   setRetroPhaseArgs,
   startRetroTimerArgs,
   stopRetroTimerArgs,
+  unfollowIssueArgs,
   updateCycleArgs,
   updateIssueArgs,
   updateProjectArgs,
@@ -100,6 +102,12 @@ const MUTATOR_TOOL_KINDS: Record<string, ToolKind> = {
   // user's rows — and marking read destroys nothing.
   'notification.markRead': 'write',
   'notification.markAllRead': 'write',
+  // Self-scoped in exactly the same structural way — the subscriber half of the key comes from the
+  // verified ctx, so an agent can only ever follow or unfollow on behalf of the user it is acting
+  // as. `unfollow` is a plain write rather than destructive because it writes a state and deletes
+  // nothing: `follow` puts it back.
+  'issueSubscription.follow': 'write',
+  'issueSubscription.unfollow': 'write',
   'member.changeRole': 'destructive',
   'member.remove': 'destructive',
   'team.create': 'write',
@@ -173,6 +181,8 @@ const MUTATOR_TOOL_ARGS: Record<string, z.ZodType> = {
   'preference.set': setPreferenceArgs,
   'notification.markRead': markNotificationReadArgs,
   'notification.markAllRead': markAllNotificationsReadArgs,
+  'issueSubscription.follow': followIssueArgs,
+  'issueSubscription.unfollow': unfollowIssueArgs,
   'member.changeRole': changeMemberRoleArgs,
   'member.remove': removeMemberArgs,
   'team.create': createTeamArgs,

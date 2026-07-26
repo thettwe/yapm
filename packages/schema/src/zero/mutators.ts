@@ -5,6 +5,7 @@ import {
   type Transaction,
 } from '@rocicorp/zero'
 import * as z from 'zod'
+import { sanitizeRichText } from '../rich-text/plaintext.js'
 import {
   type AuthContext,
   type CycleStatus,
@@ -32,6 +33,7 @@ import {
   type RetroFormat,
   type RetroPhase,
   type RetroVoteTarget,
+  type SubscriptionState,
   THEME_PRESETS,
 } from './context.js'
 import { type CycleOrderRow, isUnfinished, nextCycleId } from './cycles.js'
@@ -177,11 +179,11 @@ interface IssueRow {
   teamId: string
 }
 
-// Load an existing issue for a write. The role-capability gate (`canWrite`) must run in the
-// caller before this so a viewer/non-member is rejected before any existence check; here the
-// row is read and a generic not-authorized is thrown for both "missing" and "wrong team" so
-// a private issue's existence never leaks.
-async function loadIssueForWrite(
+// Load an existing issue and assert the caller's TEAM ACCESS — the admin bypass included. This is
+// the READ predicate: it decides who can see the issue, and therefore also who can be mentioned on
+// it and who can follow it. The row is read and a generic not-authorized is thrown for both
+// "missing" and "wrong team", so a private issue's existence never leaks.
+async function loadIssueForTeamAccess(
   tx: Transaction,
   ctx: AuthContext,
   issueId: string,
@@ -190,6 +192,16 @@ async function loadIssueForWrite(
   if (!issue) throw notAuthorized(issueId)
   await assertTeamAccess(tx, ctx, issue.teamId, issueId)
   return issue
+}
+
+// The same two steps for a WRITE. The role-capability gate (`canWrite`) must run in the caller
+// before this so a viewer/non-member is rejected before any existence check.
+async function loadIssueForWrite(
+  tx: Transaction,
+  ctx: AuthContext,
+  issueId: string,
+): Promise<IssueRow> {
+  return await loadIssueForTeamAccess(tx, ctx, issueId)
 }
 
 function assertParseableColor(color: string, id: string): string {
@@ -587,6 +599,66 @@ interface UnreadNotificationRow {
   eventKey: string
 }
 
+export const followIssueArgs = z.object({
+  issueId: z.string().min(1),
+  updatedAt: timestamp,
+})
+
+export type FollowIssueArgs = z.infer<typeof followIssueArgs>
+
+export const unfollowIssueArgs = followIssueArgs
+
+export type UnfollowIssueArgs = z.infer<typeof unfollowIssueArgs>
+
+interface IssueSubscriptionRow {
+  createdAt: number
+}
+
+// GATED ON READ, NOT WRITE, and that is the whole reason this helper exists rather than a call to
+// `loadIssueForWrite`. `canWrite` excludes viewers, while mention eligibility is a READ predicate —
+// so a viewer on the team can be mentioned and is therefore auto-subscribed. Gating the follow
+// mutators on write, the reflex for anything named "mutator", would hand that viewer a subscription
+// and no way to end it: the exact mail trap this change exists to avoid, aimed at the one role that
+// cannot escape it.
+//
+// Nothing is minted. The natural key `(issueId, ctx.userID)` is fully known at the call site, and
+// the user half comes from the VERIFIED CONTEXT and never from args — which is what makes a caller
+// structurally unable to touch somebody else's subscription. `createdAt` is carried over from the
+// existing row rather than restamped, because it orders the subscriber fan-out.
+async function setIssueSubscriptionState(
+  tx: Transaction,
+  ctx: AuthContext | undefined,
+  args: FollowIssueArgs,
+  state: SubscriptionState,
+): Promise<void> {
+  if (!isMember(ctx)) throw notAuthorized(args.issueId)
+  const issue = await loadIssueForTeamAccess(tx, ctx, args.issueId)
+
+  const existing = (await tx.run(
+    zql.issue_subscription.where('issueId', args.issueId).where('userId', ctx.userID).one(),
+  )) as IssueSubscriptionRow | undefined
+
+  await tx.mutate.issue_subscription.upsert({
+    issueId: args.issueId,
+    userId: ctx.userID,
+    teamId: issue.teamId,
+    state,
+    createdAt: existing?.createdAt ?? args.updatedAt,
+    updatedAt: args.updatedAt,
+  })
+}
+
+export const followIssue = defineMutator(followIssueArgs, async ({ tx, args, ctx }) => {
+  await setIssueSubscriptionState(tx, ctx, args, 'subscribed')
+})
+
+// An explicit unfollow STICKS: it writes a state, it does not delete the row, so the next `@`
+// cannot resurrect it (`autoSubscribeMentioned` is an `on conflict do nothing`). Re-following
+// afterwards is an ordinary upsert — the user asking is different from the system assuming.
+export const unfollowIssue = defineMutator(unfollowIssueArgs, async ({ tx, args, ctx }) => {
+  await setIssueSubscriptionState(tx, ctx, args, 'unsubscribed')
+})
+
 export const createIssueArgs = z.object({
   id: z.string().min(1),
   teamId: z.string().min(1),
@@ -616,6 +688,12 @@ export type CreateIssueArgs = z.infer<typeof createIssueArgs>
 // rank computed inside would change between the optimistic and authoritative runs). `rank`
 // densely ranks the destination column from creation so a board move always lands
 // position-faithfully; null is tolerated only as a transient pre-sync value.
+//
+// `sanitizeRichText` runs HERE, in the shared body, and likewise in `issue.update`,
+// `comment.create` and `comment.edit` — the four paths that store a rich-text document. In a server
+// override the optimistic document and the authoritative one would differ and rebase would visibly
+// rewrite the user's text. Safe inside a mutator body because it is a pure function of `args` and
+// mints nothing.
 export const createIssue = defineMutator(createIssueArgs, async ({ tx, args, ctx }) => {
   if (!canWrite(ctx)) throw notAuthorized(args.id)
   await assertTeamAccess(tx, ctx, args.teamId, args.id)
@@ -629,7 +707,7 @@ export const createIssue = defineMutator(createIssueArgs, async ({ tx, args, ctx
     id: args.id,
     teamId: args.teamId,
     title,
-    description: args.description ?? null,
+    description: sanitizeRichText(args.description ?? null),
     status: args.status,
     priority: args.priority,
     assigneeId: args.assigneeId ?? null,
@@ -664,7 +742,7 @@ export const updateIssue = defineMutator(updateIssueArgs, async ({ tx, args, ctx
   await tx.mutate.issue.update({
     id: args.id,
     ...(title === undefined ? {} : { title }),
-    ...(args.description === undefined ? {} : { description: args.description }),
+    ...(args.description === undefined ? {} : { description: sanitizeRichText(args.description) }),
     updatedAt: args.updatedAt,
   })
 })
@@ -1302,7 +1380,7 @@ export const createComment = defineMutator(createCommentArgs, async ({ tx, args,
     issueId: args.issueId,
     teamId: issue.teamId,
     authorId: ctx.userID,
-    body: args.body,
+    body: sanitizeRichText(args.body),
     createdAt: args.createdAt,
     updatedAt: args.updatedAt,
   })
@@ -1333,7 +1411,11 @@ export const editCommentArgs = z.object({
 export const editComment = defineMutator(editCommentArgs, async ({ tx, args, ctx }) => {
   if (!isMember(ctx)) throw notAuthorized(args.id)
   await loadCommentForAuthor(tx, ctx, args.id)
-  await tx.mutate.comment.update({ id: args.id, body: args.body, updatedAt: args.updatedAt })
+  await tx.mutate.comment.update({
+    id: args.id,
+    body: sanitizeRichText(args.body),
+    updatedAt: args.updatedAt,
+  })
 })
 
 export const deleteCommentArgs = z.object({ id: z.string().min(1) })
@@ -2615,6 +2697,10 @@ export const mutators = defineMutators({
     markRead: markNotificationRead,
     markAllRead: markAllNotificationsRead,
   },
+  issueSubscription: {
+    follow: followIssue,
+    unfollow: unfollowIssue,
+  },
   member: {
     changeRole: changeMemberRole,
     remove: removeMember,
@@ -2715,6 +2801,8 @@ export const RENAME_WORKSPACE_MUTATOR_NAME = 'workspace.rename'
 export const SET_PREFERENCE_MUTATOR_NAME = 'preference.set'
 export const MARK_NOTIFICATION_READ_MUTATOR_NAME = 'notification.markRead'
 export const MARK_ALL_NOTIFICATIONS_READ_MUTATOR_NAME = 'notification.markAllRead'
+export const FOLLOW_ISSUE_MUTATOR_NAME = 'issueSubscription.follow'
+export const UNFOLLOW_ISSUE_MUTATOR_NAME = 'issueSubscription.unfollow'
 export const CREATE_ISSUE_MUTATOR_NAME = 'issue.create'
 export const UPDATE_ISSUE_MUTATOR_NAME = 'issue.update'
 export const SET_ISSUE_STATUS_MUTATOR_NAME = 'issue.setStatus'

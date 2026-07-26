@@ -538,6 +538,10 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
       // recipient and an actor, so if it ever synced past its recipient it would put one person's
       // id in front of another with no `IDENTITY_BY_DESIGN` entry to excuse it.
       'notifications.mine': undefined,
+      // Self-scoped and per-issue. Swept by the same walk because a subscription row carries a
+      // user id: if it ever synced past its owner, this issue's follower list would become
+      // readable, which is exactly the surveillance surface the mentions change refuses to build.
+      'subscriptions.mine': { issueId: deliveryIssueId },
     }
   }
 

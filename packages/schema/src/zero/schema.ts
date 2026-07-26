@@ -28,6 +28,7 @@ import type {
   RetroPhase,
   RetroVoteTarget,
   ReviewState,
+  SubscriptionState,
   ThemePreset,
   WorkspaceRole,
 } from './context.js'
@@ -458,6 +459,21 @@ const notification = table('notification')
     createdAt: number().from('created_at'),
   })
   .primaryKey('recipientId', 'kind', 'subjectId', 'eventKey')
+
+// The natural key IS the primary key here too, so the follow/unfollow mutators mint nothing and
+// address a row by `(issueId, ctx.userID)` — the user half always coming from the verified context,
+// never from args. `state` rather than row existence is what makes an unfollow survive the next
+// mention; see `0014_mentions`.
+const issueSubscription = table('issue_subscription')
+  .columns({
+    issueId: string().from('issue_id'),
+    userId: string().from('user_id'),
+    teamId: string().from('team_id'),
+    state: enumeration<SubscriptionState>(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('issueId', 'userId')
 
 const user = table('user')
   .columns({
@@ -1015,6 +1031,19 @@ const notificationRelationships = relationships(notification, ({ one }) => ({
   }),
 }))
 
+const issueSubscriptionRelationships = relationships(issueSubscription, ({ one }) => ({
+  issue: one({
+    sourceField: ['issueId'],
+    destField: ['id'],
+    destSchema: issue,
+  }),
+  user: one({
+    sourceField: ['userId'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+}))
+
 export const schema = createSchema({
   tables: [
     workspace,
@@ -1046,6 +1075,7 @@ export const schema = createSchema({
     retroAction,
     retroPresence,
     notification,
+    issueSubscription,
     user,
   ],
   relationships: [
@@ -1078,6 +1108,7 @@ export const schema = createSchema({
     retroActionRelationships,
     retroPresenceRelationships,
     notificationRelationships,
+    issueSubscriptionRelationships,
   ],
   enableLegacyMutators: false,
   enableLegacyQueries: false,

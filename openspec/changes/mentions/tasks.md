@@ -16,47 +16,47 @@ surface on top of a proven substrate.
 
 ## 1. Pre-flight — blocking, before a line of code
 
-- [ ] 1.1 **AI-substrate contamination check (scope §1.9, design D15).** Run
+- [x] 1.1 **AI-substrate contamination check (scope §1.9, design D15).** Run
       `grep -rn "description\|\bbody\b"` over `packages/schema/src/zero/digest.ts`,
       `packages/schema/src/zero/cycle-facts.ts`, `packages/schema/src/db/cycle-facts.ts`,
       `packages/schema/src/zero/ai-tools.ts` and `apps/server/src/ai/*.ts`. Confirm no AI read path
       touches `issue.description` or `comment.body`. **If any does, that is a blocker resolved in
       this change, not a footnote** — record the finding and the resolution in design.md's
       "Decisions made during implementation".
-- [ ] 1.2 Confirm the seam this change binds to still exists as designed: `recordNotifications` is
+- [x] 1.2 Confirm the seam this change binds to still exists as designed: `recordNotifications` is
       exported from `@yapm/schema/server`, `notification.kind` carries no CHECK constraint, and
       `ACTIONABLE_NOTIFICATION_KINDS` is a plain TypeScript set. If any has drifted, fix it in
       `notifications`' spec rather than inventing a second write path here.
-- [ ] 1.3 Re-verify the TipTap API against the **installed** `.d.ts` once group 2 lands (design D17
+- [x] 1.3 Re-verify the TipTap API against the **installed** `.d.ts` once group 2 lands (design D17
       was verified against the published tarballs): `MentionPluginKey` is not exported,
       `renderLabel` is deprecated, `MentionOptions.suggestions` is an array, `SuggestionProps.mount`
       and `exitSuggestion` exist. Do not write these from memory.
 
 ## 2. Dependencies: pin the whole TipTap graph together
 
-- [ ] 2.1 In `pnpm-workspace.yaml`, change `@tiptap/pm`, `@tiptap/react` and `@tiptap/starter-kit`
+- [x] 2.1 In `pnpm-workspace.yaml`, change `@tiptap/pm`, `@tiptap/react` and `@tiptap/starter-kit`
       from `^3.28.0` to **exactly `3.28.0`**, and add `@tiptap/extension-mention: 3.28.0`,
       `@tiptap/suggestion: 3.28.0` and `@floating-ui/dom: ^1.8.0`. The exact pins are load-bearing:
       the new packages' peer ranges on `@tiptap/core`/`@tiptap/pm` are exact, and a split resolution
       duplicates the ProseMirror `model` and fails at **runtime** with `RangeError: Adding different
       instances of a keyed plugin`, which typecheck cannot see.
-- [ ] 2.2 Add `@tiptap/extension-mention`, `@tiptap/suggestion` and `@floating-ui/dom` to
+- [x] 2.2 Add `@tiptap/extension-mention`, `@tiptap/suggestion` and `@floating-ui/dom` to
       `packages/ui/package.json` as `catalog:` references. `@floating-ui/dom` is an explicit
       dependency rather than a transitive hoist because `@tiptap/suggestion` peer-requires it.
-- [ ] 2.3 `pnpm install`, then confirm `node_modules/.pnpm` contains exactly one `@tiptap/core` and
+- [x] 2.3 `pnpm install`, then confirm `node_modules/.pnpm` contains exactly one `@tiptap/core` and
       one `@tiptap/pm` instance.
-- [ ] 2.4 **Test**: `pnpm turbo lint typecheck test build` green, and the existing rich-text editor
+- [x] 2.4 **Test**: `pnpm turbo lint typecheck test build` green, and the existing rich-text editor
       still works in the running app. This group lands on its own so a resolution regression is
       attributable to it and nothing else.
 
 ## 3. The keyboard-collision fix, on its own
 
-- [ ] 3.1 In `packages/ui/src/components/rich-text.tsx`, add `if (event.defaultPrevented) return`
+- [x] 3.1 In `packages/ui/src/components/rich-text.tsx`, add `if (event.defaultPrevented) return`
       at the top of the wrapper `onKeyDown` (currently lines 120-129, which fire `onCancel` on
       Escape and `onSubmit` on Cmd/Ctrl+Enter unconditionally). Carry a comment stating the
       constraint the code cannot express: ProseMirror's `handleKeyDown` calls `preventDefault()` for
       a key an extension handled but does **not** stop React's synthetic bubbling.
-- [ ] 3.2 **Test**: extend `packages/ui/src/components/rich-text.test.ts` — a key event with
+- [x] 3.2 **Test**: extend `packages/ui/src/components/rich-text.test.ts` — a key event with
       `defaultPrevented` set fires neither `onCancel` nor `onSubmit`; an ordinary Escape and an
       ordinary Cmd+Enter still do.
 

@@ -65,6 +65,36 @@ const contentClass = cn(
   '[&_strong]:font-semibold [&_hr]:my-4 [&_hr]:border-border',
 )
 
+export interface RichTextKeyEvent {
+  key: string
+  metaKey: boolean
+  ctrlKey: boolean
+  defaultPrevented: boolean
+  preventDefault: () => void
+}
+
+// ProseMirror's `handleKeyDown` calls `preventDefault()` on a key one of the editor's own
+// extensions already consumed, but it does NOT stop React's synthetic bubbling — the event still
+// reaches this wrapper. Without the `defaultPrevented` bail-out an inner surface that handles
+// Escape to dismiss itself would also cancel the draft, and one that handles Cmd+Enter to commit a
+// choice would also submit it: two effects from one keystroke, the second of them destructive.
+export function handleRichTextKeyDown(
+  event: RichTextKeyEvent,
+  handlers: { onSubmit?: (() => void) | undefined; onCancel?: (() => void) | undefined },
+): void {
+  if (event.defaultPrevented) return
+
+  if (handlers.onSubmit && event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+    event.preventDefault()
+    handlers.onSubmit()
+    return
+  }
+  if (handlers.onCancel && event.key === 'Escape') {
+    event.preventDefault()
+    handlers.onCancel()
+  }
+}
+
 export interface RichTextEditorProps {
   defaultValue?: JSONContent | null
   editable?: boolean
@@ -118,15 +148,10 @@ export function RichTextEditor({
   }, [editor, editable])
 
   function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (onSubmit && event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault()
-      if (editor) onSubmit(editor.getJSON())
-      return
-    }
-    if (onCancel && event.key === 'Escape') {
-      event.preventDefault()
-      onCancel()
-    }
+    handleRichTextKeyDown(event, {
+      onSubmit: onSubmit && editor ? () => onSubmit(editor.getJSON()) : undefined,
+      onCancel,
+    })
   }
 
   return (

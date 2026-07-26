@@ -21,6 +21,7 @@ catalog:
   '@dnd-kit/core': ^6.3.1
   '@dnd-kit/sortable': ^10.0.0
   '@dnd-kit/utilities': ^3.2.2
+  '@floating-ui/dom': ^1.8.0
   '@fontsource-variable/figtree': ^5.3.0
   '@fontsource-variable/fraunces': ^5.3.0
   '@fontsource-variable/geist': ^5.3.0
@@ -43,9 +44,15 @@ catalog:
   '@tanstack/router-plugin': ^1.168.23
   '@testing-library/jest-dom': ^7.0.0
   '@testing-library/react': ^16.3.2
-  '@tiptap/pm': ^3.28.0
-  '@tiptap/react': ^3.28.0
-  '@tiptap/starter-kit': ^3.28.0
+  # Every TipTap package is pinned to the same exact version, not a caret range. The mention and
+  # suggestion packages carry EXACT peer ranges on `@tiptap/core` and `@tiptap/pm`, so a split
+  # resolution duplicates the ProseMirror `model` package and throws
+  # `RangeError: Adding different instances of a keyed plugin` at runtime — invisible to typecheck.
+  '@tiptap/extension-mention': 3.28.0
+  '@tiptap/pm': 3.28.0
+  '@tiptap/react': 3.28.0
+  '@tiptap/starter-kit': 3.28.0
+  '@tiptap/suggestion': 3.28.0
   '@types/node': ^24.13.3
   '@types/nodemailer': ^8.0.1
   '@types/pg': ^8.20.0

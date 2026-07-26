@@ -545,3 +545,81 @@ not actionable); and no per-document mention ceiling ships (D9).
 ## Decisions made during implementation
 
 <!-- Appended during the build phase: what was ambiguous, what was chosen, and why. -->
+
+### I1 — Pre-flight re-run (task 1.1/1.2): both clean, nothing to resolve
+
+`grep -rn "description\|\bbody\b"` over `packages/schema/src/zero/{digest,cycle-facts,ai-tools}.ts`,
+`packages/schema/src/db/cycle-facts.ts` and `apps/server/src/ai/*.ts` returns **zero hits in the
+three schema files and in `db/cycle-facts.ts`**. The only hits are in `apps/server/src/ai`, and none
+of them is a document read: `admin-routes.ts` and its test use `body` for the *HTTP request body* of
+the AI-config endpoint, and `tools.ts:85` uses the word `description` inside a tool-description
+string handed to the model. D15 stands unamended — no AI read path touches `issue.description` or
+`comment.body`, so this change creates the hazard and the `'strip'` rule (task 5.2) is the only
+thing standing between it and a future violation.
+
+The seam is also unchanged: `recordNotifications` is re-exported from `@yapm/schema/server`
+(`zero/server-mutators.ts:55`, and `"./server"` maps to it in `packages/schema/package.json`),
+`notification.kind` is `addColumn('kind', 'text', col => col.notNull())` with no CHECK
+(`0013_notifications.ts:28`), and `ACTIONABLE_NOTIFICATION_KINDS` is a plain
+`ReadonlySet<NotificationKind>` (`zero/context.ts:178`) whose comment already names `mention`.
+
+### I2 — D17 re-verified against the installed `.d.ts`; all four facts hold, one gap found
+
+Re-read from `node_modules/.pnpm/@tiptap+extension-mention@3.28.0…/dist/index.d.ts` and
+`@tiptap+suggestion@3.28.0…/dist/index.d.ts` after `pnpm install`, not from the tarballs and not
+from memory. `MentionPluginKey` is absent from the export list (`Mention`, `MentionNodeAttrs`,
+`MentionOptions`, default) and survives only in the `@default` JSDoc; `renderLabel` is
+`@deprecated use renderText and renderHTML instead` and optional while `renderText`/`renderHTML` are
+required; `suggestions` is `Array<Omit<SuggestionOptions, 'editor'>>`; `SuggestionProps.mount` is a
+required `SuggestionMount` and `exitSuggestion(view, pluginKeyRef?)` is exported. D17 needs no
+correction.
+
+One fact D17 does not carry, discovered while proving the graph resolves: **`@tiptap/core` is not
+resolvable from `packages/ui`.** It is a peer of the TipTap packages, not a declared dependency, and
+pnpm's strict layout means `import { Editor } from '@tiptap/core'` fails at resolution inside this
+workspace. Import `Editor` and the core types from `@tiptap/react`, which re-exports them, rather
+than adding a dependency whose only purpose would be to make an import path look tidier.
+
+### I3 — The `defaultPrevented` guard ships as an exported pure function, not an inline `if`
+
+Task 3.1 asks for `if (event.defaultPrevented) return` at the top of the wrapper `onKeyDown`, and
+task 3.2 asks `rich-text.test.ts` to prove that a pre-handled key **fires neither callback**. Those
+two are in tension: `onKeyDown` is a closure inside `RichTextEditor`, and `packages/ui`'s vitest
+project is `environment: 'node'` with `include: ['src/**/*.test.ts']` and no jsdom, no
+`@testing-library/react` and no setup file — so there is no way to reach that closure from the test
+the task names.
+
+Standing up a jsdom project in `packages/ui` to test a five-line guard would be a bigger, less
+reviewable change than the guard itself, and it belongs to whoever first needs a component test
+here (task 10.10 will). So the decision the handler makes moved into an exported
+`handleRichTextKeyDown(event, {onSubmit, onCancel})` that takes a structural `RichTextKeyEvent`
+rather than a React synthetic event. The guard is genuinely the first statement of the wrapper's
+handler, the *callbacks* are what the test asserts on rather than a proxy for them, and the function
+names nothing mention-specific — it is one half of the layered Escape contract whose other half
+(`exitSuggestion`, task 10.6) produces the prevented event.
+
+Two behaviours changed in the move, both deliberate:
+
+- A pre-handled key no longer reaches `preventDefault()` **either**. Calling it on an event an inner
+  surface already prevented is a no-op, but not calling it keeps the guard's meaning single: this
+  keystroke is not ours.
+- In the one-render window where `useEditor` has not yet returned an editor, Cmd+Enter previously
+  called `preventDefault()` and then silently did nothing. It now does nothing at all. The
+  alternative — submitting `EMPTY_DOC` — would invent a document the user never wrote.
+
+### I4 — The pin was proved at runtime, not just at install time
+
+`pnpm turbo lint typecheck test build` cannot see the failure mode the exact pins exist to prevent,
+so two throwaway jsdom checks were run and then deleted rather than left as permanent tests that
+duplicate later stages:
+
+1. `RichTextEditor` mounts under the pinned graph, renders its content, fires `onCancel` on an
+   ordinary Escape and does **not** fire it on an Escape carrying `defaultPrevented`.
+2. `Mention.configure({suggestions: [{char: '@', pluginKey: new PluginKey('yapm-mention'), items:
+   () => []}]})` instantiates alongside `StarterKit` in a live `Editor` **without** throwing
+   `RangeError: Adding different instances of a keyed plugin`, and registers a `mention` node in the
+   schema.
+
+The store backs this up: exactly one `@tiptap/core@3.28.0`, one `@tiptap/pm@3.28.0`, one
+`prosemirror-model@1.25.11` and one `@floating-ui/dom@1.8.0` in `node_modules/.pnpm`. Check 2 is
+where the MentionSurface stage picks up.

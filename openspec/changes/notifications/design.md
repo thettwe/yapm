@@ -130,7 +130,8 @@ its own notifications (`reference/zero.md` §5.7). Three properties make it safe
 
 The sites are however many places set an assignee, not however many the scope named. Two of them
 are easy to miss and both were found by reading the code rather than assumed: `issue.routeIssue`
-(`mutators.ts:1030-1047`) carries **its own** `assigneeId` and sets it directly, independent of
+(`export const routeIssue` in `packages/schema/src/zero/mutators.ts`) carries **its own**
+`assigneeId` and sets it directly, independent of
 `assignIssue`; and `retro.convertActionToIssue` calls the *shared* `issue.create` function, so it
 never passes through the override that owns the fan-out (DI-44).
 
@@ -465,7 +466,8 @@ deliberate, rare action and buys a single definition of "who may mark read".
 
 `notification.team_id` is a denormalised copy of the owning issue's team, and it is only sound
 because **an issue can never change team**. `routeIssue` refuses it explicitly
-(`mutators.ts:1041-1042`: "Team reassignment is deliberately not routable"). This change owns the
+(the doc comment on `export const routeIssue` in `packages/schema/src/zero/mutators.ts`: "Team
+reassignment is deliberately not routable"). This change owns the
 guard — a comment on the column and an **integration test asserting no mutator mutates
 `issue.team_id`** — and the later `search` change cites it rather than duplicating it.
 

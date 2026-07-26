@@ -146,7 +146,8 @@ and it makes `search`'s already-correct instinct the uniform rule.
 
 `notification.team_id` and `search_document.team_id` are both denormalised copies of the owning
 issue's team, and both are only sound because **an issue can never change team**. Verified:
-`routeIssue` refuses it explicitly (`packages/schema/src/zero/mutators.ts:1041-1042` — "Team
+`routeIssue` refuses it explicitly (the doc comment on `export const routeIssue` in
+`packages/schema/src/zero/mutators.ts` — "Team
 reassignment is deliberately not routable (it collides with the per-team number and the team-scoped
 sync scope)").
 
@@ -161,11 +162,12 @@ team.
 `notifications` listed as open: "does `routeIssue` fire an assignment notification, and is its
 assignee path shared with `issue.assign` or duplicated?"
 
-**Answered by reading the code: it is duplicated.** `routeIssueArgs` carries its own
-`assigneeId` (`mutators.ts:1030-1037`) and `routeIssue` sets it directly (`:1047`), independent of
-`assignIssue` (`:619`). So `notifications` has **four** fan-out sites, not three:
-`issue.create`, `issue.assign`, `issue.routeIssue`, `comment.create` — with `routeIssue`'s assignee
-path routed through the same `issue_assigned` trigger entry. In scope, not an open question.
+**Answered by reading the code: it is duplicated.** `routeIssueArgs` carries its own `assigneeId`
+and `export const routeIssue` sets it directly, independent of `assignIssue` — all three in
+`packages/schema/src/zero/mutators.ts`. So `notifications` has more fan-out sites than the three it
+first named, with `routeIssue`'s assignee path routed through the same `issue_assigned` trigger
+entry. In scope, not an open question. The authoritative site list is the D5 trigger table in
+`openspec/changes/notifications/design.md` — it is the one place that counts them.
 
 ### 1.7 Delivery-time membership re-check — `notifications` owns it, and it changes its own answer
 
@@ -1010,8 +1012,8 @@ not forbid a person finding their own work or being told about it. Say it, do no
 - `search`'s `needs_triage` deferral — **amended**: must be decided in the spec, not left to the
   implementation.
 - `search`'s timeout behaviour — **amended** to close a status oracle.
-- `notifications`' `routeIssue` open question — **resolved into scope** as a fourth trigger site
-  (§1.6).
+- `notifications`' `routeIssue` open question — **resolved into scope** as an additional trigger
+  site (§1.6).
 - `notifications`' AppShell-badge open question — **resolved: approved**, one shared subscription.
 
 ---

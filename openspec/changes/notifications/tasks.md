@@ -2,7 +2,7 @@
 
 **Big-feature rule (PROCESS.md §3): all three tiers.** This change touches **4 of 4** of {synced
 entity/schema, mutator, permission surface, signature UI} — a new synced `notification` table plus a
-`user_preference` column; four server-mutator fan-out sites and three new shared mutators; a
+`user_preference` column; five server-mutator fan-out sites and three new shared mutators; a
 self-scoped query whose *whole point* is that it has no admin bypass; and a new `/inbox` route with
 a shell badge and palette entries. The threshold is ≥2, so E2E is required rather than reflexive,
 and it earns its place: the falsifiable check's supporting half is a **two-browser-context** test
@@ -107,7 +107,7 @@ complete and useful before any mail code exists (groups 8–12); email is additi
 - [x] 4.7 Wire the fan-out into `createServerMutators()` at **every** assignee-setting site (D5),
       each behind `if (tx.location !== 'server') return`: `issue.create` (after
       `claimNextIssueNumber`, so `subject_key` has a number), `issue.assign`, **`issue.routeIssue`**
-      (the duplicated assignee path at `mutators.ts:1030-1047` — do not miss it),
+      (the duplicated assignee path in `export const routeIssue` — do not miss it),
       **`retro.convertActionToIssue`** (calls the shared `issue.create` function, so it never
       reaches the override — DI-44), and `comment.create` (bounded prior-commenter read). Intersect
       the recipient set with current team membership before writing (DI-41).

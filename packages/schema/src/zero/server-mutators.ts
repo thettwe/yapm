@@ -360,10 +360,11 @@ export function createServerMutators() {
           assigneeId: args.assigneeId,
         })
       }),
-      // THE FOURTH SITE, and the one that gets silently missed: `routeIssue` carries its OWN
-      // `assigneeId` and sets it directly, independent of `issue.assign` (mutators.ts:1030-1047).
-      // Being routed to somebody out of triage is an assignment like any other, so it notifies like
-      // one. `undefined` means the route did not touch the assignee — nobody is told anything.
+      // THE DUPLICATED ASSIGNEE PATH, and the one that gets silently missed: `routeIssue`
+      // (`export const routeIssue` in mutators.ts) carries its OWN `assigneeId` and sets it
+      // directly, never going through `issue.assign`. Being routed to somebody out of triage is an
+      // assignment like any other, so it notifies like one. `undefined` means the route did not
+      // touch the assignee — nobody is told anything.
       routeIssue: defineMutator(routeIssueArgs, async ({ tx, args, ctx }) => {
         await mutators.issue.routeIssue.fn({ tx, args, ctx })
         if (tx.location !== 'server') return

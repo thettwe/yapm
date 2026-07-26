@@ -34,10 +34,12 @@ never a boot failure).
   constraint. Compound primary keys are supported by Zero and used in production by zbugs.
 - **Two kinds, fanned out only on the server-authoritative pass**, behind
   `if (tx.location !== 'server') return`: `issue_assigned` (from `issue.create` carrying an
-  assignee, `issue.assign`, **and `issue.routeIssue`, which carries its own duplicated assignee
-  path** — a fourth trigger site, in scope, not an oversight) and `issue_commented` (from
-  `comment.create`; recipients = assignee ∪ creator ∪ prior commenters, deduped, minus the
-  actor, capped).
+  assignee, `issue.assign`, **`issue.routeIssue`, which carries its own duplicated assignee path**,
+  **and `retro.convertActionToIssue`, which calls the shared `issue.create` function and so never
+  reaches the override that owns the fan-out** — both in scope, neither an oversight) and
+  `issue_commented` (from `comment.create`; recipients = assignee ∪ creator ∪ prior commenters,
+  deduped, minus the actor, capped). Five sites in total; the authoritative list is design.md's
+  D5 trigger table.
 - **`recordNotifications(db, events)` exported from `@yapm/schema/server`** as the public write
   seam — one multi-row `insert … on conflict do nothing` inside the caller's transaction. The
   `NOTIFICATION_TRIGGERS` kind→recipients/copy map stays **private to this change**. The later

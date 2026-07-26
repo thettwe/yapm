@@ -45,6 +45,20 @@ describe('commentRecipients', () => {
     ).toEqual(['user-b'])
   })
 
+  // One entry per comment arrives, so a repeat commenter appears twice. They belong where their
+  // NEWEST comment puts them: keeping the first position would report them as having stopped
+  // participating when they are in fact the last person who spoke.
+  it('orders a repeat commenter by their most recent comment', () => {
+    expect(
+      commentRecipients({
+        assigneeId: null,
+        creatorId: null,
+        priorCommenterIds: ['user-d', 'user-e', 'user-d'],
+        actorId: ACTOR,
+      }),
+    ).toEqual(['user-e', 'user-d'])
+  })
+
   it('dedupes a person who is assignee, creator and a prior commenter at once', () => {
     expect(
       commentRecipients({
@@ -101,5 +115,23 @@ describe('commentRecipients', () => {
     expect(recipients).not.toContain('user-1')
     expect(recipients).toContain(`user-${NOTIFICATION_RECIPIENT_CAP - 1}`)
     expect(recipients).toContain(`user-${NOTIFICATION_RECIPIENT_CAP - 2}`)
+  })
+
+  // The truncation boundary is where first-seen dedupe does real damage: the earliest commenter on
+  // the thread has just commented again, so they are the most recent participant there is, yet
+  // first-seen order leaves them pinned at index 0 — the first slot the cap discards.
+  it('keeps a repeat commenter whose newest comment crosses the truncation boundary', () => {
+    const many = Array.from({ length: NOTIFICATION_RECIPIENT_CAP + 20 }, (_, i) => `user-${i}`)
+    const recipients = commentRecipients({
+      assigneeId: null,
+      creatorId: null,
+      priorCommenterIds: [...many, 'user-0'],
+      actorId: ACTOR,
+    })
+    expect(recipients).toHaveLength(NOTIFICATION_RECIPIENT_CAP)
+    expect(recipients.at(-1)).toBe('user-0')
+    // The twenty dropped shift up by one, because user-0 no longer occupies the oldest slot.
+    expect(recipients).not.toContain('user-20')
+    expect(recipients[0]).toBe('user-21')
   })
 })

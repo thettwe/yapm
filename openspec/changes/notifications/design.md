@@ -1106,3 +1106,75 @@ than `packages/schema` does — `apps/web` declares no kysely dependency of its 
 in a package that has no business depending on kysely, which is a build-graph change and not a test
 change. Recorded so the next person does not rediscover it. The new spec was typechecked once by
 hand under a temporary `include` and is clean; its real gate is that it runs.
+
+### DI-36 — `reference/email.md` exists, because the DI log is archived and the trap is not
+
+*Not anticipated by task 14:* DI-14, DI-15 and DI-17 hold three genuinely non-obvious, post-cutoff
+facts — the whole `@react-email/*` component family is deprecated because v6 folded it into
+`react-email`; `render` returns a `Promise`; `@types/nodemailer@8` really is compatible with
+`nodemailer@9`. All three were discovered by reading installed `.d.ts` files after a plausible
+guess had already been written. They live in a change design log that gets archived, while
+PROCESS §5 says the verified API references for work live in `reference/`.
+
+*Chosen:* harvest them into `reference/email.md`, in the same verified-claims-only shape as
+`connectors.md` and `ai-providers.md`, and add it to PROCESS §5's list. Every claim in it was
+re-read from this repo's own `node_modules` while writing it rather than transcribed from the DI
+entries — the installed `@react-email/render@2.1.0` `.d.mts` export line, `nodemailer@9.0.3`'s
+empty `dependencies` and `MIT-0` license, and the two co-installed copies of
+`@react-email/render` (2.0.6 via a component package, 2.1.0 direct) that DI-14 predicted.
+
+### DI-37 — The user docs state the badge-coverage gap rather than describing the intent
+
+*Ambiguous:* task 14.1 asks the feature page to document "the keyboard map" and the spec says the
+badge is "in the application shell". DI-13 and DI-32 established that `AppShell` covers five routes
+(`/`, `/inbox`, `/teams/$teamId/`, `/settings/ai`, `/settings/connectors`) and that the nine team
+work surfaces hand-roll their own header. Writing "an unread badge in the header" would have been
+true of the spec and false of the product a user opens.
+
+*Chosen:* the feature page carries a short note naming exactly which surfaces show the badge, which
+do not, and the keyboard route (`⌘K → Go to inbox`) that reaches the inbox from the ones that do
+not — plus the fact that hoisting the header is a separate change. Documenting a known gap costs a
+paragraph; a docs page that overclaims costs the reader their trust in the rest of it, and the gap
+would be reported as a bug against a page that said otherwise.
+
+### DI-38 — TECHSTACK's version baseline gains two rows rather than an edited "Others" line
+
+*Ambiguous:* task 14.4 says correct line 75's "react-email 1.x" and add `nodemailer` to the
+baseline. Line 75 is the `| Others | latest stable |` catch-all, and "react-email 6.x" in that list
+would still be wrong in the way that matters: the package `apps/server` actually depends on at
+runtime is `@react-email/render` 2.1.x, and `react-email` 6.9.x is a dev-only preview CLI whose
+component exports must **not** be reached for. One version string cannot say that.
+
+*Chosen:* `react-email` and `nodemailer` become their own baseline rows carrying the runtime/dev
+split, the deprecation, the async `render`, and the `@types/nodemailer` major skew; `react-email` is
+dropped from the `Others` catch-all. The Email decision row is rewritten for the two-transport seam,
+and the repository-structure tree gains `packages/email` with the constraint that justifies it —
+the `monorepo-workspace` spec delta (DI-23) asserts the same thing, and the tree was the other place
+in the repo that enumerated packages exhaustively.
+
+### DI-39 — The docs made a promise the schema did not keep, so the schema was changed
+
+*Ambiguous:* the email page asserted that a malformed transport value "fails boot immediately,
+naming the variable and the expected format". That was false for every variable the section covers.
+`SMTP_URL`, `RESEND_API_KEY` and `EMAIL_FROM` were all bare `optionalString`; only `PUBLIC_URL`
+behaved as described. The change's own spec (`email-delivery`, "A malformed transport setting fails
+fast") asserted the same unimplemented thing, so softening the sentence would have shipped a
+documented scenario that nothing satisfies — the exact failure mode this change was built to close
+in `invitations` §24-25.
+
+*Chosen:* implement the promise where a format exists, and state plainly where none does.
+
+- **`SMTP_URL`** is now checked for a `smtp:`/`smtps:` scheme in `envSchema`. Reference §3.3 records
+  the measurement that motivates it: `nodemailer@9.0.3` duck-types its argument, so *any*
+  unrecognised string — including a well-formed `https://` URL — throws
+  `TypeError: Cannot create property 'mailer' on string …`, naming neither the variable nor the
+  format, after boot and from inside the transport.
+- **`EMAIL_FROM`** must contain an address, bare or in angle brackets. Deliberately loose — this is
+  not RFC 5322, it only rules out the value that both transports accept and every provider rejects
+  at send time, in their log rather than ours.
+- **`RESEND_API_KEY`** gets no check and the docs now say why. It is an opaque credential with no
+  syntax; validating a vendor's `re_` prefix would be a guess that breaks when they change it. A
+  wrong key is a caught, logged 401 on the first sweep, and the rows stay unstamped for the next.
+
+The alternative — editing the sentence alone — was rejected: it leaves the spec scenario unmet and
+leaves an operator's typo surfacing as a property error about something called `mailer`.

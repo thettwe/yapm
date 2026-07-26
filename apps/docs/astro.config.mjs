@@ -18,6 +18,7 @@ export default defineConfig({
             { label: 'Delivery signals', slug: 'features/delivery-signals' },
             { label: 'Cycle digest', slug: 'features/cycle-digest' },
             { label: 'Retrospectives', slug: 'features/retrospectives' },
+            { label: 'Notifications', slug: 'features/notifications' },
           ],
         },
         {
@@ -25,6 +26,7 @@ export default defineConfig({
           items: [
             { label: 'Connect GitHub', slug: 'self-hosting/github-connector' },
             { label: 'Enable AI', slug: 'self-hosting/ai-setup' },
+            { label: 'Email delivery', slug: 'self-hosting/email' },
             { label: 'Sync connection & recovery', slug: 'self-hosting/sync-recovery' },
           ],
         },

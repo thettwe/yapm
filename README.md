@@ -18,8 +18,9 @@ code-review health are just views, not a $30/developer/month add-on.
 > incoming issues; and lightweight projects with a roadmap timeline — all self-hostable in three
 > containers; a first-party GitHub connector that ingests PR, CI, and deploy state into the
 > work graph so every issue row shows delivery reality; a BYO-key, provider-agnostic AI
-> foundation whose first feature is a team-internal, evidence-linked cycle digest; and a
-> data-seeded retrospective that opens with the cycle's own delivery facts already gathered.
+> foundation whose first feature is a team-internal, evidence-linked cycle digest; a
+> data-seeded retrospective that opens with the cycle's own delivery facts already gathered; and
+> a per-user notification inbox with optional batched email.
 > Direction is settled in [VISION.md](VISION.md), [TECHSTACK.md](TECHSTACK.md), and
 > [ROADMAP.md](ROADMAP.md).
 
@@ -66,16 +67,24 @@ a **data-seeded retrospective**, opened automatically when a cycle closes, whose
 is already filled in from the team's own cycles (and from PR/CI data when a connector is
 configured), with **anonymity guaranteed at the storage layer** — the card→author binding lives in
 a server-only table the sync schema cannot name — and actions that become real, numbered issues in
-the next cycle.
+the next cycle · a keyboard-first **notification inbox** at `/inbox` with an unread badge, for
+assignments (including triage routing) and comments on issues you're involved in — written only on
+the server so a rebased optimistic mutation can never duplicate or re-send one, readable **only by
+its recipient with no admin bypass**, and optionally emailed as one batched, debounced digest per
+person through a provider-neutral mailer (SMTP **or** Resend over HTTPS, for hosts that block
+outbound SMTP), cleanly disabled when neither is configured.
 
 ## What's next
 
-**BYO-key AI agents** that read and act through the same permissions as a human — the foundation
-(gateway, agent-as-actor tools, the AI-over-work-graph substrate) is in; a governed PM-facing
-digest and an **AI-facilitated** retro — drafting themes and candidate actions on top of the
-retrospective that already ships — build on it next. Then DORA and review-health metrics computed
-from the graph — team-level only, never individual scorecards. More connectors (GitLab, …) slot
-into the same framework with no feature-code change.
+**`@`-mentions** in descriptions and comments, arriving as one more notification kind through the
+write seam the inbox already ships, and **search** — instant over already-synced rows, then
+complete via Postgres full-text, with no new container. Then **BYO-key AI agents** that read and
+act through the same permissions as a human — the foundation (gateway, agent-as-actor tools, the
+AI-over-work-graph substrate) is in; a governed PM-facing digest and an **AI-facilitated** retro —
+drafting themes and candidate actions on top of the retrospective that already ships — build on it
+next. Then DORA and review-health metrics computed from the graph — team-level only, never
+individual scorecards. More connectors (GitLab, …) slot into the same framework with no
+feature-code change.
 
 ## Quickstart
 

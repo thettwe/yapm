@@ -43,7 +43,7 @@ Client reads run as ZQL queries against a local IndexedDB replica — instant, a
 | **Attachments** | Local filesystem volume; optional S3-compatible | MinIO-as-requirement is how Plane/Huly bloat their compose. `STORAGE_*` env flips to any S3-compatible endpoint for cloud/scale. |
 | **Search** | Postgres FTS (`tsvector` + `pg_trgm`) | No Elasticsearch, ever (Huly's sprawl). Bonus: recent data is already client-side via Zero — instant local filtering for free. |
 | **Rich text** | TipTap (MIT core) | ProseMirror family (what Linear uses); markdown shortcuts; Yjs-ready for Phase 2 collaborative prose. *Rejected: Lexical* (weaker Yjs story). |
-| **Email** | Bring-your-own SMTP + react-email | Self-hosters expect SMTP env vars; templates in React like everything else; sending via pg-boss jobs. |
+| **Email** | Provider-neutral `Mailer` seam + two transports (SMTP via nodemailer, Resend via `fetch`); react-email templates in `packages/email` | Same framework-plus-implementations shape as the connector `ConnectorDefinition`: the interface is *"send this rendered message to these recipients"* — no `Transporter`, no envelope, no MIME — so a third transport is one file. `SMTP_URL` already reaches Mailgun/Resend/Mailjet/Postmark/SendGrid/SES (they all issue relay credentials) and is the default; the HTTPS transport exists because **some hosts block outbound SMTP ports entirely**, where SMTP cannot be made to work at all — one authenticated JSON POST, **no vendor SDK** (`resend` drags postal-mime + standardwebhooks for a dozen lines of `fetch`). Templates render **once**, above the transport, in `packages/email` — which imports no transport and reads no env, so its JSX/DOM compiler settings never enter `apps/server`. Both transports take an injectable send mechanism, so CI needs no SMTP server and no API key. Sending rides the existing pg-boss instance — no new container, no second scheduler. Absent config = cleanly off, never a boot failure. *Rejected: the Resend SDK; a mail container.* |
 | **Validation** | Zod | One schema language for env config, API bodies, and OpenAPI generation (hono zod-openapi). |
 | **Client UI state** | Zustand, sparingly | Zero owns all data state; Zustand only for ephemeral UI (palette, selection, panels). |
 | **Images** | sharp | Avatar/attachment thumbnails in the app container. |
@@ -72,7 +72,9 @@ Client reads run as ZQL queries against a local IndexedDB replica — instant, a
 | ai (Vercel AI SDK) | **7.0.x** | `@ai-sdk/{anthropic,google,openai}` 4.0.x adapters; all Apache-2.0; server-only |
 | TipTap | 3.x | v3 extensions only — never mix v2/v3 packages |
 | Astro / Starlight | 7.x / 0.41.x | |
-| Others | latest stable | react-email 1.x, octokit 5.x, pino 10.x, sharp 0.35.x, zustand 5.x, cmdk 1.1.x |
+| react-email | **`@react-email/render` 2.1.x** (runtime) + `react-email` 6.9.x (dev-only) | react-email **v6 folded every component into the single `react-email` package**, and the whole split `@react-email/*` component family (`@react-email/components` and its ~20 sub-packages) is **deprecated on npm**. `packages/email` therefore depends on `@react-email/render` alone — the renderer, not deprecated — and writes intrinsic JSX directly; `react-email` stays a devDependency for `email dev` preview only, since at runtime it would drag esbuild, socket.io, chokidar and prismjs in to render two messages. `render()` returns a **`Promise<string>`**; plain text comes from `toPlainText(html)` on that same string, not a second render pass |
+| nodemailer | 9.0.x | MIT-0, **zero runtime dependencies**. `@types/nodemailer` 8.0.x — its major trails the runtime's, and the pair is verified compatible; no local `.d.ts` needed |
+| Others | latest stable | octokit 5.x, pino 10.x, sharp 0.35.x, zustand 5.x, cmdk 1.1.x |
 
 **TypeScript 7 adoption notes** (why it's a clean win for this stack):
 - Vite/Rolldown and Vitest strip types themselves — TS7 touches only `tsc --noEmit` type-checks and the editor LSP, not the build pipeline. Biome has its own parser; Kysely/Zod/Hono/TanStack Router ship plain `.d.ts` — all unaffected.
@@ -94,6 +96,8 @@ yapm/
 │  │                #   hand-written Zero schema, Zod validators, shared mutators
 │  ├─ ui/           # design-system components (Radix + Tailwind), keyboard primitives
 │  ├─ api/          # OpenAPI spec + typed client, generated from server routes
+│  ├─ email/        # react-email templates → {subject, html, text}. No transport, no env,
+│  │                #   no schema dep — which is what keeps its JSX/DOM tsconfig out of server/
 │  └─ config/       # shared tsconfig, Biome config, Tailwind preset
 ├─ docker/          # Dockerfile + docker-compose.yml — the 3-container promise lives here
 ├─ .github/         # ci.yml (lint → typecheck → test → e2e), release.yml (multi-arch GHCR)

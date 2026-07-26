@@ -65,6 +65,49 @@ const optionalHttpUrl = z.preprocess(
   z.string().url().optional(),
 )
 
+// nodemailer takes the URL apart itself and throws an opaque `TypeError: Cannot create property
+// 'mailer' on string` on a non-URL, naming neither the variable nor the format — so the scheme is
+// checked here, at boot, before a listener exists. smtps:// is implicit TLS, smtp:// is STARTTLS.
+const optionalSmtpUrl = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined),
+  z
+    .string()
+    .check((ctx) => {
+      let url: URL
+      try {
+        url = new URL(ctx.value)
+      } catch {
+        ctx.issues.push({
+          code: 'custom',
+          input: ctx.value,
+          message: 'must be a URL',
+        })
+        return
+      }
+      if (url.protocol !== 'smtp:' && url.protocol !== 'smtps:') {
+        ctx.issues.push({
+          code: 'custom',
+          input: ctx.value,
+          message: `must use the smtp:// or smtps:// scheme, got "${url.protocol}//"`,
+        })
+      }
+    })
+    .optional(),
+)
+
+// A From with no address in it is accepted by both transports and rejected by the provider at send
+// time, in their log rather than ours. Deliberately loose — this asserts only that an address is
+// present, bare or in angle brackets, not RFC 5322.
+const MAIL_FROM_ADDRESS = /(^|<)[^<>@\s,]+@[^<>@\s,]+(>|$)/
+
+const optionalMailFrom = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined),
+  z
+    .string()
+    .regex(MAIL_FROM_ADDRESS, 'must contain an email address, bare or in angle brackets')
+    .optional(),
+)
+
 export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -110,9 +153,12 @@ export const envSchema = z
     // SMTP_URL reaches every relay that issues SMTP credentials (Mailgun, Resend, Postmark,
     // SendGrid, SES, Mailjet); RESEND_API_KEY exists because some hosts block outbound SMTP ports
     // entirely, and on those an HTTPS sender is the only path out. Resend wins when both are set.
-    SMTP_URL: optionalString,
+    // SMTP_URL and EMAIL_FROM have a checkable shape and are checked at boot. RESEND_API_KEY is an
+    // opaque credential with no syntax to verify — a wrong key surfaces as a caught, logged 401 on
+    // the first send, never as a crash.
+    SMTP_URL: optionalSmtpUrl,
     RESEND_API_KEY: optionalString,
-    EMAIL_FROM: optionalString,
+    EMAIL_FROM: optionalMailFrom,
     // The browsable base URL a human clicks in an email. Deliberately NOT BETTER_AUTH_URL (the
     // origin better-auth signs against) or WEB_ORIGIN (the CORS-trusted SPA origin) — overloading
     // either is how those two came to disagree.

@@ -278,6 +278,71 @@ describe('mailEnv', () => {
     }
   })
 
+  // Left unchecked, a non-URL reaches nodemailer, which throws `TypeError: Cannot create property
+  // 'mailer' on string` — naming neither the variable nor the format.
+  it('rejects a SMTP_URL that is not a URL, naming the variable and the format', () => {
+    try {
+      loadEnv({ ...VALID, ...MAIL_REQUIRED, SMTP_URL: 'not-a-url' })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      expect(error).toBeInstanceOf(EnvValidationError)
+      const issues = (error as EnvValidationError).issues
+      expect(issues[0]?.variable).toBe('SMTP_URL')
+      expect(issues[0]?.message).toContain('must be a URL')
+      expect(issues[0]?.expected).toContain('smtp://user:pass@host:587')
+    }
+  })
+
+  it('rejects a SMTP_URL on the wrong scheme, naming the scheme it got', () => {
+    try {
+      loadEnv({ ...VALID, ...MAIL_REQUIRED, SMTP_URL: 'https://relay.example.com:587' })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      const issues = (error as EnvValidationError).issues
+      expect(issues[0]?.variable).toBe('SMTP_URL')
+      expect(issues[0]?.message).toContain('smtp:// or smtps://')
+      expect(issues[0]?.message).toContain('https://')
+    }
+  })
+
+  it('accepts an smtps:// URL for implicit TLS', () => {
+    const env = loadEnv({
+      ...VALID,
+      ...MAIL_REQUIRED,
+      SMTP_URL: 'smtps://user:pass@relay.example.com:465',
+    })
+
+    expect(env.SMTP_URL).toBe('smtps://user:pass@relay.example.com:465')
+  })
+
+  it('rejects an EMAIL_FROM with no address in it', () => {
+    try {
+      loadEnv({
+        ...VALID,
+        PUBLIC_URL: MAIL_REQUIRED.PUBLIC_URL,
+        EMAIL_FROM: 'yapm',
+        SMTP_URL: SMTP,
+      })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      const issues = (error as EnvValidationError).issues
+      expect(issues[0]?.variable).toBe('EMAIL_FROM')
+      expect(issues[0]?.message).toContain('must contain an email address')
+      expect(issues[0]?.expected).toContain('notifications@example.com')
+    }
+  })
+
+  it('accepts a bare EMAIL_FROM address as well as a display-name form', () => {
+    const env = loadEnv({
+      ...VALID,
+      PUBLIC_URL: MAIL_REQUIRED.PUBLIC_URL,
+      EMAIL_FROM: 'notifications@example.com',
+      SMTP_URL: SMTP,
+    })
+
+    expect(env.EMAIL_FROM).toBe('notifications@example.com')
+  })
+
   it('treats whitespace-only mail variables as unset, so a blank compose var disables email', () => {
     const env = loadEnv({ ...VALID, SMTP_URL: '   ', RESEND_API_KEY: '  ', EMAIL_FROM: ' ' })
 

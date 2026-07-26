@@ -209,6 +209,14 @@ complete and useful before any mail code exists (groups 8–12); email is additi
 - [x] 9.5 **Test**: `apps/server/src/config/env.test.ts` — no transport boots clean; a transport
       without `EMAIL_FROM` fails naming it; a transport without `PUBLIC_URL` fails naming it; both
       transports set selects Resend; a malformed `PUBLIC_URL` fails naming it.
+- [x] 9.6 Validate the shape of the transport variables that **have** one, so the
+      `email-delivery` scenario "a malformed transport setting fails fast" is actually met and the
+      docs stop promising something the schema did not do (design DI-39): `SMTP_URL` must parse as a
+      URL on the `smtp:`/`smtps:` scheme — otherwise nodemailer throws an opaque
+      `TypeError: Cannot create property 'mailer' on string …` after boot (reference/email.md §3.3)
+      — and `EMAIL_FROM` must contain an address. `RESEND_API_KEY` stays unchecked and the docs say
+      why. **Test**: both `SMTP_URL` failures and the `EMAIL_FROM` failure name the variable and its
+      expected format; `smtps://` and a bare From address are accepted.
 
 ## 10. The mailer seam and its two implementations
 
@@ -279,21 +287,21 @@ complete and useful before any mail code exists (groups 8–12); email is additi
 
 ## 14. Documentation
 
-- [ ] 14.1 `apps/docs/src/content/docs/features/notifications.md` — what triggers a notification and
+- [x] 14.1 `apps/docs/src/content/docs/features/notifications.md` — what triggers a notification and
       what deliberately does not, the keyboard map, read/unread and retention, the per-user email
       preference and its actionable-only default, that **no admin can read your inbox**, and that a
       notification shows the issue title **as it was** (design D3 — say it here or it gets reported
       as a bug).
-- [ ] 14.2 `apps/docs/src/content/docs/self-hosting/email.md` — the two transports and when to pick
+- [x] 14.2 `apps/docs/src/content/docs/self-hosting/email.md` — the two transports and when to pick
       which (including "your host blocks outbound SMTP"), the precedence when both are set, every
       new variable, `PUBLIC_URL` and why it is required, and that unconfigured email is cleanly off.
-- [ ] 14.3 Add both pages to the Starlight sidebar in `apps/docs/astro.config.mjs` and link from the
+- [x] 14.3 Add both pages to the Starlight sidebar in `apps/docs/astro.config.mjs` and link from the
       docs home.
-- [ ] 14.4 Root docs: `README.md` (status + feature list), `ROADMAP.md` (the change row →
+- [x] 14.4 Root docs: `README.md` (status + feature list), `ROADMAP.md` (the change row →
       delivered), `TECHSTACK.md` — the Email row rewritten for the two-transport seam, **the
       version-baseline line 75 error "react-email 1.x" corrected**, and `nodemailer` added to the
       baseline. `.env.example` is covered by 9.3–9.4.
-- [ ] 14.5 `pnpm --filter @yapm/docs build` passes, and the documented configuration matches the Zod
+- [x] 14.5 `pnpm --filter @yapm/docs build` passes, and the documented configuration matches the Zod
       schema with no drift.
 
 ## 15. Verification

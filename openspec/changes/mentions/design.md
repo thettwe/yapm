@@ -925,6 +925,10 @@ mention node, the suggestion plugin, Floating UI's positioning and the listbox. 
 lazy chunk rather than the entry bundle, and no interaction on it newly waits on the network — the
 typeahead filters rows already in IndexedDB and returns an array. Recorded rather than assumed.
 
+Re-measured on the integrated branch: **424.69 kB raw / 134.33 kB gzip**. The 0.31 kB above the
+figure in the table is the follow control, which landed in group 11 after this measurement was
+taken; the delta and the conclusion are unchanged.
+
 ### I26 — Task 3.1's `defaultPrevented` guard is wrong, and the E2E is what found it
 
 The plan (task 3.1, and the scope's trap note) said to bail out of the rich-text wrapper's

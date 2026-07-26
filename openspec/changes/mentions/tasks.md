@@ -315,15 +315,27 @@ surface on top of a proven substrate.
 
 ## 14. Verification
 
-- [ ] 14.1 `pnpm turbo lint typecheck test build` green.
-- [ ] 14.2 `node scripts/check-boundaries.mjs` green — `packages/schema` still imports no editor
-      package.
-- [ ] 14.3 Integration suite green with `DATABASE_URL` set, including the drift test.
-- [ ] 14.4 Compose smoke test green on the assigned ports; migration `0014` applies on a fresh
-      volume.
-- [ ] 14.5 Record the issue-detail chunk's size delta against the sub-100ms posture rather than
-      assuming it is free.
-- [ ] 14.6 Walk every scenario in `openspec/changes/mentions/specs/**` and confirm each is true.
+- [x] 14.1 `pnpm turbo lint typecheck test build` green — 17/17 tasks, then re-run with `--force`
+      (0 cached) so the result is observed rather than replayed from the cache.
+- [x] 14.2 `node scripts/check-boundaries.mjs` green — `packages/schema` still imports no editor
+      package. `node scripts/check-catalog.mjs` green too: 9 manifests, 82 cataloged entries.
+- [x] 14.3 Integration suite green with `DATABASE_URL` set: 38 files / 524 tests in
+      `@yapm/schema`, including `schema-drift` (both new `issue_subscription` assertions) and all
+      five `mutators.mentions.pg` cases. Full Playwright suite green against the live stack —
+      **67 passed**, this change's specs plus every prior one.
+- [x] 14.4 Compose smoke test green on the assigned ports (`yapm-mn-prod`, app 3004, zero-cache
+      4852): the prod image served the SPA, sign-up succeeded and Zero sync reached `connected`.
+      `0014_mentions` applied at boot on a fresh volume, and `/readyz` reported
+      `wal_level=logical` with an active replication slot. Compose still defines exactly three
+      services: `postgres`, `yapm`, `zero-cache`.
+- [x] 14.5 Recorded in design.md I25 (+21.75 kB raw / **+7.41 kB gzip**), re-measured at integrate
+      at 424.69 kB raw / 134.33 kB gzip — 0.31 kB above the stage-11 figure, from the follow
+      control landing after the measurement. The posture is unchanged: a lazy route chunk that
+      already carries ProseMirror, and no interaction on it newly waits on the network.
+- [x] 14.6 Walked all 84 scenarios across the eight spec files; each is true. Re-ran the AI
+      contamination pre-flight (task 1.1) as a blocking gate at integrate — the only
+      `description`/`body` hits under the AI paths are HTTP request bodies and a tool's own
+      description string, so no model-facing read touches either document column.
 - [ ] 14.7 Flag for a human (design.md "How we will know this worked"): whether the typeahead feels
       Linear-grade, whether the unavailable-name copy reads as helpful rather than accusatory, and
       whether auto-subscribe's volume is right in practice. None of the three is agent-checkable.

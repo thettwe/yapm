@@ -1,3 +1,4 @@
+import { MENTION_FOLLOW_FOOTNOTE } from '@yapm/email'
 import { newId } from '@yapm/schema'
 import type { Database, NotificationEvent } from '@yapm/schema/db'
 import { createDatabase, migrateToLatest, recordNotifications } from '@yapm/schema/db'
@@ -51,6 +52,10 @@ describe.skipIf(DATABASE_URL === undefined)('notification delivery sweep (live d
   const otherTeamId = newId()
   const actorId = `actor-${newId()}`
   const recipientId = `recipient-${newId()}`
+  // A real issue row, because a subscription is keyed to one: `issue_subscription.issue_id` carries
+  // an FK, so the join the follow line depends on can only be exercised against an issue that
+  // exists. Every other test here is free to invent a subject id.
+  const issueId = newId()
   let teamMembershipId: string
 
   const event = (overrides: Partial<NotificationEvent> = {}): NotificationEvent => ({
@@ -114,9 +119,21 @@ describe.skipIf(DATABASE_URL === undefined)('notification delivery sweep (live d
       .insertInto('team_membership')
       .values({ id: teamMembershipId, team_id: teamId, user_id: recipientId })
       .execute()
+    await database.db
+      .insertInto('issue')
+      .values({
+        id: issueId,
+        team_id: teamId,
+        title: 'Ship the inbox',
+        status: 'todo',
+        priority: 'no_priority',
+        creator_id: actorId,
+      })
+      .execute()
   }, 30_000)
 
   afterEach(async () => {
+    await database.db.deleteFrom('issue_subscription').where('user_id', '=', recipientId).execute()
     await database.db.deleteFrom('notification').where('recipient_id', '=', recipientId).execute()
     await database.db.deleteFrom('user_preference').where('user_id', '=', recipientId).execute()
     await database.db.deleteFrom('workspace_member').where('user_id', '=', recipientId).execute()
@@ -222,6 +239,47 @@ describe.skipIf(DATABASE_URL === undefined)('notification delivery sweep (live d
     expect(sent[0]?.message.text).toContain('mentioned you')
     expect(result.recipients).toBe(1)
     expect(await unsent()).toHaveLength(0)
+  })
+
+  // THE FOLLOW LINE IS A JOIN, NOT A FIELD. No notification row carries the recipient's
+  // subscription: `subscriptionState` is produced by a LEFT JOIN on `(issue_id, user_id)`, and a
+  // join keyed wrongly — on the actor, on the wrong column, or matching nothing at all — still
+  // yields a perfectly well-formed email that is wrong in the one sentence its reader cannot check.
+  // Hand-feeding the field to the pure grouper proves the wording and nothing about the join.
+  it('tells a mentioned subscriber that the mention subscribed them', async () => {
+    const { mailer, sent } = recordingMailer()
+    await database.db
+      .insertInto('issue_subscription')
+      .values({ issue_id: issueId, user_id: recipientId, team_id: teamId, state: 'subscribed' })
+      .execute()
+    await recordNotifications(database.db, [
+      event({ kind: 'mention', eventKey: 'mention-followed', subjectId: issueId }),
+    ])
+
+    await sweep(mailer)
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.message.text).toContain(MENTION_FOLLOW_FOOTNOTE)
+  })
+
+  // The sticky unfollow, told truthfully: somebody who turned this issue off is still mentioned and
+  // still emailed, and by design still does not follow it — so the email must not say they now do.
+  it('never claims a mention subscribed somebody who had unfollowed the issue', async () => {
+    const { mailer, sent } = recordingMailer()
+    await database.db
+      .insertInto('issue_subscription')
+      .values({ issue_id: issueId, user_id: recipientId, team_id: teamId, state: 'unsubscribed' })
+      .execute()
+    await recordNotifications(database.db, [
+      event({ kind: 'mention', eventKey: 'mention-unfollowed', subjectId: issueId }),
+    ])
+
+    await sweep(mailer)
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.message.text).toContain('mentioned you')
+    expect(sent[0]?.message.text).not.toContain(MENTION_FOLLOW_FOOTNOTE)
+    expect(sent[0]?.message.html).not.toContain(MENTION_FOLLOW_FOOTNOTE)
   })
 
   it('excludes a notification already read in-app', async () => {

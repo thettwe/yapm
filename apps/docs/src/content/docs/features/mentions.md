@@ -92,9 +92,11 @@ the live user record every time the document is rendered. So:
 Being mentioned gives you exactly one [notification](/features/notifications/) —
 `Ada mentioned you in ENG-42` — and, if your instance has email configured and you have not read it
 in the app first, one email. Mentions are emailed at the **default** email preference, because a
-mention is addressed at you personally. That email states in one line that you now follow the issue
-and can stop from the issue page; it carries no unsubscribe link, because the control is the
-issue's own [Follow button](#the-follow-control) inside the app.
+mention is addressed at you personally. When the mention subscribed you, that email states in one
+line that you now follow the issue and can stop from the issue page; it carries no unsubscribe link,
+because the control is the issue's own [Follow button](#the-follow-control) inside the app. If you
+had already unfollowed the issue, the mention still reaches you and the line is absent — an
+unfollow stays an unfollow, so the email never claims a subscription you do not have.
 
 A comment that names you gives you the mention and **not** also the ambient "commented" row for the
 same comment — being the assignee, or already following the issue, does not double it up.

@@ -32,6 +32,7 @@ function pending(overrides: Partial<PendingNotificationEmail> = {}): PendingNoti
     email: 'b@example.com',
     name: 'Bee',
     mode: 'assigned_only',
+    subscriptionState: null,
     createdAt: new Date(1000),
     ...overrides,
   }
@@ -115,13 +116,30 @@ describe('groupNotificationEmails', () => {
   // else, because no other kind subscribes anybody to anything.
   it('marks a mention item with the follow footnote and leaves every other kind without one', () => {
     const [batch] = groupNotificationEmails([
-      pending({ kind: 'mention', eventKey: 'comment-1' }),
-      pending({ kind: 'issue_assigned', eventKey: '1000' }),
+      pending({ kind: 'mention', eventKey: 'comment-1', subscriptionState: 'subscribed' }),
+      pending({ kind: 'issue_assigned', eventKey: '1000', subscriptionState: 'subscribed' }),
     ])
 
     expect(batch?.items[0]?.title).toBe('Ada mentioned you in ENG-12')
     expect(batch?.items[0]?.footnote).toBe(MENTION_FOLLOW_FOOTNOTE)
     expect(batch?.items[1]?.footnote).toBeUndefined()
+  })
+
+  // Unfollow is sticky: mentioning somebody who turned this issue off notifies them and does NOT
+  // re-subscribe them. The footnote is a disclosure of a subscription, so on that recipient it
+  // would be a claim about their own state that they cannot check from their inbox and that is
+  // false.
+  it('omits the follow footnote when the mentioned recipient does not follow the issue', () => {
+    const [unsubscribed] = groupNotificationEmails([
+      pending({ kind: 'mention', eventKey: 'comment-1', subscriptionState: 'unsubscribed' }),
+    ])
+    const [noRow] = groupNotificationEmails([
+      pending({ kind: 'mention', eventKey: 'comment-2', subscriptionState: null }),
+    ])
+
+    expect(unsubscribed?.items[0]?.title).toBe('Ada mentioned you in ENG-12')
+    expect(unsubscribed?.items[0]?.footnote).toBeUndefined()
+    expect(noRow?.items[0]?.footnote).toBeUndefined()
   })
 
   it('emails only actionable kinds under the default assigned_only mode', () => {

@@ -299,6 +299,18 @@ const propose = RESUME
   { label: 'propose:write', phase: 'Propose', effort: 'high' },
 )
 
+// Fail here rather than letting a dead Propose cascade. Without this, a Propose agent that dies on a
+// transient API error returns null, Plan then has nothing to plan from and also returns null, and the
+// run aborts with "Plan phase produced no stages" — which points at the wrong phase and reads like a
+// planning bug rather than an outage. Observed exactly once, on a 529.
+if (!propose) {
+  throw new Error(
+    `change-build-flow: the ${RESUME ? 'resume assessment' : 'Propose'} phase produced nothing — the agent died ` +
+      `before returning (transient API error, or it exhausted its context). Nothing was committed; re-run the ` +
+      `workflow unchanged.`,
+  )
+}
+
 phase('Plan')
 const plan = await agent(
   `${PREAMBLE}\n\n## Plan phase\nRead ${REPO}/openspec/changes/${CHANGE}/tasks.md, proposal.md and design.md, then ` +
@@ -330,8 +342,19 @@ const plan = await agent(
   { label: 'plan:stages', phase: 'Plan', schema: PLAN_SCHEMA, effort: 'high' },
 )
 
-if (!plan || !plan.stages || plan.stages.length === 0) {
-  throw new Error('change-build-flow: Plan phase produced no stages')
+if (!plan) {
+  throw new Error(
+    `change-build-flow: the Plan agent died before returning (transient API error, or it exhausted its context). ` +
+      `Propose succeeded, so openspec/changes/${CHANGE}/ may already be committed on ${BRANCH} — re-run with ` +
+      `resume: true rather than from scratch.`,
+  )
+}
+if (!plan.stages || plan.stages.length === 0) {
+  throw new Error(
+    `change-build-flow: the Plan agent returned zero stages for ${CHANGE}. That is a planning failure, not a crash — ` +
+      `check that openspec/changes/${CHANGE}/tasks.md actually contains implementation sections beyond tests, docs ` +
+      `and verification.`,
+  )
 }
 log(`Plan: ${plan.stages.length} stages — ${plan.stages.map((s) => s.name).join(' → ')}`)
 log(`Test tiers: ${plan.testTiers}`)

@@ -1178,3 +1178,19 @@ in `invitations` §24-25.
 
 The alternative — editing the sentence alone — was rejected: it leaves the spec scenario unmet and
 leaves an operator's typo surfacing as a property error about something called `mailer`.
+
+### DI-40 — Two source files were literally binary; the NUL separator became an escape
+
+*Ambiguous:* nothing — this was a defect found in the Integrate pass. `db/notification.ts` and
+`web/src/notifications/model.ts` each joined the composite key's parts with a **literal 0x00 byte**
+typed into the source. The runtime semantics were right (NUL cannot occur in a uuid, a kind or an
+event key, so it is the one separator that cannot collide), but a source file containing a NUL is
+not a text file: `git diff` reported both as `Bin 0 -> N bytes`, so 416 lines of the change's
+central write seam and read model would have reached review with no diff, no line comments and no
+`git blame`.
+
+*Chosen:* keep the NUL separator, write it as `\u0000`. Byte-for-byte identical at runtime — the
+escape is resolved by the parser — and both files are UTF-8 text again, diffable and reviewable.
+
+*Why not change the separator:* a printable separator would have to be a character that cannot
+appear in any key part, and defending that claim costs more than an escape sequence does.

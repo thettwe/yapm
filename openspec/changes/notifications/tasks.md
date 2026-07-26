@@ -306,13 +306,25 @@ complete and useful before any mail code exists (groups 8–12); email is additi
 
 ## 15. Verification
 
-- [ ] 15.1 `pnpm turbo lint typecheck test build` green.
-- [ ] 15.2 `pnpm check:catalog` and `pnpm check:boundaries` green — no direct dependency versions,
+- [x] 15.1 `pnpm turbo lint typecheck test build` green — 917 unit/integration tests across six
+      packages, run against a live Postgres on a fresh volume.
+- [x] 15.2 `pnpm check:catalog` and `pnpm check:boundaries` green — no direct dependency versions,
       no ZQL or mutator definition outside `packages/schema`, no package importing an app.
-- [ ] 15.3 The compose smoke test passes against the isolated project/ports, proving zero-cache
-      replicates cleanly past the new table with its compound primary key.
-- [ ] 15.4 Walk every scenario in `specs/notifications/spec.md` and `specs/email-delivery/spec.md`
-      and confirm each is true of the built system.
-- [ ] 15.5 Record anything the specs did not anticipate under
+      `check:image-manifests` green too, which is what catches `packages/email` missing from the
+      Dockerfile's pre-install copy list.
+- [x] 15.3 The compose smoke test passes against the isolated project/ports, proving zero-cache
+      replicates cleanly past the new table with its compound primary key. The full Playwright
+      suite (65 tests, this change's two specs plus every prior one) passes against the isolated
+      stack, and the three-container production image boots, applies `0013_notifications`, and
+      syncs. **The e2e suite requires a fresh database**: re-running it against the volume left by
+      a previous run fails eight theme/auth assertions, because the fixed `admin@example.test`
+      account's persisted `user_preference` row overwrites the localStorage theme the preset tests
+      set. That is a pre-existing property of the suite, unchanged by this change, and matches how
+      CI runs it.
+- [x] 15.4 Walked every scenario in `specs/notifications/spec.md` and `specs/email-delivery/spec.md`.
+      The three that only a live boot can show were observed in the production image: email
+      unconfigured logs "Email is disabled …" and boots; retention still schedules with no mailer;
+      and `SMTP_URL` without `PUBLIC_URL` fails boot naming `PUBLIC_URL`.
+- [x] 15.5 Record anything the specs did not anticipate under
       `## Decisions made during implementation` in `design.md` — what was ambiguous, what was
-      chosen, why.
+      chosen, why. (DI-40 records the literal-NUL defect found and fixed in this pass.)

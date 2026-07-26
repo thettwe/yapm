@@ -8,7 +8,7 @@
 > Context anchors from the repo:
 > - `board-view` is roadmap change #4; issue-core (#3) **deliberately deferred** the ordering
 >   column: "Manual drag-reordering / a `sort_order` column — belongs to board-view."
->   (`openspec/changes/issue-core/design.md:22`, `:96`, `proposal.md:43`).
+>   (`openspec/changes/archive/2026-07-24-issue-core/design.md:22`, `:96`, `proposal.md:43`).
 > - Statuses are a **fixed** enum `backlog | todo | in_progress | in_review | done | canceled`
 >   (issue-core D6) → the board's columns are fixed and known at build time.
 > - Stack constraints (TECHSTACK.md): React 19.2, Vite 8 (Rolldown), TS7 (`tsc --noEmit` only —
@@ -547,4 +547,4 @@ focus on `<body>` after a move.
 - ARIA APG patterns (no kanban pattern; Grid/Listbox/Feed): <https://www.w3.org/WAI/ARIA/apg/patterns/>.
 - fractional indexing technique background: <https://observablehq.com/@dgreensp/implementing-fractional-indexing> (author's writeup; API confirmed from installed v4 `.d.ts`).
 - yapm repo: `TECHSTACK.md`, `DESIGN.md`, `ROADMAP.md`, `reference/zero.md` (§5 mutators),
-  `openspec/changes/issue-core/{design.md,proposal.md}`.
+  `openspec/changes/archive/2026-07-24-issue-core/{design.md,proposal.md}`.

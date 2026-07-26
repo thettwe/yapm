@@ -10,7 +10,7 @@ if (DATABASE_URL === undefined) {
     [
       'DATABASE_URL is required to run the sync end-to-end tests.',
       'These tests need the same three pieces the app needs: Postgres (wal_level=logical),',
-      'zero-cache, and the yapm server. See openspec/changes/foundation/zero-operations.md.',
+      'zero-cache, and the yapm server. See openspec/changes/archive/2026-07-23-foundation/zero-operations.md.',
     ].join('\n'),
   )
 }

@@ -51,12 +51,20 @@ that a client-location transaction writes none. The write SHALL happen through t
 Kysely transaction as the mutation that caused it, so notification rows and the change that caused
 them commit or roll back together.
 
-The system SHALL fan out from exactly four trigger sites: `issue.create` when it carries an
+The system SHALL fan out from exactly five trigger sites: `issue.create` when it carries an
 assignee, `issue.assign` when the new assignee is non-null, `issue.routeIssue` when it sets an
-assignee, and `comment.create`. Assignment recipients SHALL be the assignee minus the actor.
-Comment recipients SHALL be the union of the issue's assignee, its creator and its prior
+assignee, `retro.convertActionToIssue` when the converted action carries an owner — which calls the
+shared `issue.create` function directly and therefore never reaches the `issue.create` override
+that owns the fan-out — and `comment.create`. Assignment recipients SHALL be the assignee minus the
+actor. Comment recipients SHALL be the union of the issue's assignee, its creator and its prior
 commenters, deduplicated, minus the actor, and capped at a bounded maximum. The recipient
 computation SHALL be a pure exported function.
+
+The computed recipient set SHALL then be intersected with current `team_membership` of the issue's
+team, inside the same transaction, before any row is written: involvement outlives membership, and
+a row addressed at someone who has left the team would sync them an issue key and title they no
+longer have access to. Where the cap truncates the set, it SHALL drop the least-recent
+participants rather than the most-recent ones.
 
 All rows for one triggering mutation SHALL be written in a **single** multi-row insert with
 conflict-ignoring semantics, and the prior-commenter read SHALL be bounded, so that an issue with
@@ -67,6 +75,19 @@ very many distinct commenters cannot turn a one-row update into an unbounded tra
 - **WHEN** a member routes a triage issue and sets an assignee in the same call
 - **THEN** the assignee receives an `issue_assigned` notification, identically to being assigned
   through `issue.assign`
+
+#### Scenario: Converting a retro action with an owner notifies that owner
+
+- **WHEN** a retro action carrying an owner is converted into an issue
+- **THEN** that owner receives exactly one `issue_assigned` notification, even though the
+  conversion reaches the shared `issue.create` function rather than its server override
+
+#### Scenario: An ex-team-member involved in an issue is not notified
+
+- **WHEN** a comment is added to an issue whose creator, standing assignee or prior commenter has
+  since been removed from the issue's team
+- **THEN** no notification row is written for that person, the recipient set having been
+  intersected with current team membership before the insert
 
 #### Scenario: A client-location transaction writes nothing
 

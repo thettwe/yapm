@@ -493,11 +493,15 @@ describe.skipIf(DATABASE_URL === undefined)('notification fan-out against Postgr
           insert into team_membership (id, team_id, user_id) values (${newId()}, ${teamId}, ${id})
         `.execute(database.db)
       }
-      // Created by A, who is also the actor below, so the creator slot is filtered out as a
-      // self-notification and the cap falls purely on the commenter list.
+      // Created by B and assigned to C, neither of whom is the actor: those two hold slots out of
+      // the SAME budget as the commenters, which is what makes this a test of which end the union
+      // is truncated at rather than only of which end the read is taken from.
       await sql`
-        insert into issue (id, team_id, number, title, status, priority, creator_id)
-        values (${busyIssueId}, ${teamId}, 11, 'Long thread', 'todo', 'no_priority', ${A.userID})
+        insert into issue (id, team_id, number, title, status, priority, creator_id, assignee_id)
+        values (
+          ${busyIssueId}, ${teamId}, 11, 'Long thread', 'todo', 'no_priority',
+          ${B.userID}, ${C.userID}
+        )
       `.execute(database.db)
       for (const [index, id] of commenters.entries()) {
         await sql`
@@ -528,10 +532,14 @@ describe.skipIf(DATABASE_URL === undefined)('notification fan-out against Postgr
         }>`select recipient_id from notification where subject_id = ${busyIssueId}`,
       )
       const recipients = new Set(told.map((row) => row.recipient_id))
-      const dropped = commenters.slice(0, 10)
-      const kept = commenters.slice(10)
+      // Ten fall off the bounded read; two more fall off the union because the assignee and the
+      // creator spend slots of the same budget. Both losses come off the least-recent end.
+      const dropped = commenters.slice(0, 12)
+      const kept = commenters.slice(12)
 
       expect(recipients.size).toBe(NOTIFICATION_RECIPIENT_CAP)
+      expect(recipients.has(B.userID)).toBe(true)
+      expect(recipients.has(C.userID)).toBe(true)
       for (const id of kept) expect(recipients.has(id)).toBe(true)
       for (const id of dropped) expect(recipients.has(id)).toBe(false)
     })

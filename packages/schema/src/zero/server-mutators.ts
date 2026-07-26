@@ -255,6 +255,10 @@ async function fanOut(tx: Transaction, input: FanOutInput): Promise<void> {
   // discussing it now. The reverse restores the documented oldest-first ordering WITHIN the
   // selected set, so the row order a test asserts on is unchanged.
   //
+  // `commentRecipients` then truncates from the OLDEST end of this list, because the assignee and
+  // the creator spend slots out of the same budget — this read alone cannot keep the cap off the
+  // live end of the thread.
+  //
   // The ACTOR'S OWN comments are excluded from the read rather than filtered out of its result:
   // they can never be recipients, and the comment that triggered this fan-out is by construction
   // the newest one on the issue — so leaving them in spends slots of a bounded window on rows that

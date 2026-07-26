@@ -104,13 +104,15 @@ complete and useful before any mail code exists (groups 8–12); email is additi
 - [x] 4.6 Add the private `NOTIFICATION_TRIGGERS` map and a `fanOut` helper inside
       `server-mutators.ts`: read `team.key` and the issue's `number` to compose `subject_key`, build
       events, call `recordNotifications` through `serverDb(tx)`.
-- [x] 4.7 Wire the fan-out into `createServerMutators()` at **all four** sites, each behind
-      `if (tx.location !== 'server') return`: `issue.create` (after `claimNextIssueNumber`, so
-      `subject_key` has a number), `issue.assign`, **`issue.routeIssue`** (the duplicated assignee
-      path at `mutators.ts:1030-1047` — do not miss it), and `comment.create` (bounded prior-commenter
-      read).
+- [x] 4.7 Wire the fan-out into `createServerMutators()` at **every** assignee-setting site (D5),
+      each behind `if (tx.location !== 'server') return`: `issue.create` (after
+      `claimNextIssueNumber`, so `subject_key` has a number), `issue.assign`, **`issue.routeIssue`**
+      (the duplicated assignee path at `mutators.ts:1030-1047` — do not miss it),
+      **`retro.convertActionToIssue`** (calls the shared `issue.create` function, so it never
+      reaches the override — DI-44), and `comment.create` (bounded prior-commenter read). Intersect
+      the recipient set with current team membership before writing (DI-41).
 - [x] 4.8 **Test**: `packages/schema/src/zero/server-mutators.test.ts` — the fan-out is skipped for a
-      client-location transaction at every one of the four sites.
+      client-location transaction at every one of those sites.
 
 ## 5. Membership removal deletes notifications
 

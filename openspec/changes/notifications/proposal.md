@@ -88,7 +88,8 @@ never a boot failure).
 ### New Capabilities
 
 - `notifications`: the per-recipient `notification` entity and its natural-key identity; the
-  server-authoritative fan-out across four trigger sites and its idempotency guarantee; the
+  server-authoritative fan-out across every assignee-setting site (D5, DI-44), its write-time
+  membership intersection (DI-41) and its idempotency guarantee; the
   `recordNotifications` write seam; the self-scoped inbox query with no admin bypass; read/unread
   mutators; the keyboard-first `/inbox` surface, unread badge and palette entries; the
   per-user email preference; batched, debounced, read-suppressed email delivery with a

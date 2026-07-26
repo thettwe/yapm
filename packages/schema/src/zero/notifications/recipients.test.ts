@@ -78,6 +78,28 @@ describe('commentRecipients', () => {
       actorId: ACTOR,
     })
     expect(recipients).toHaveLength(NOTIFICATION_RECIPIENT_CAP)
-    expect(recipients[0]).toBe('user-0')
+    // Truncated from the OLDEST end: the twenty who stopped commenting go, not the twenty talking.
+    expect(recipients[0]).toBe('user-20')
+    expect(recipients.at(-1)).toBe(`user-${NOTIFICATION_RECIPIENT_CAP + 19}`)
+  })
+
+  // The slots the assignee and the creator take come out of the same budget. Capping the union
+  // front-to-back down an oldest-first list therefore drops the two NEWEST commenters — the people
+  // currently in the thread — which is the exact failure the desc-then-reverse read exists to
+  // prevent, reintroduced one layer up.
+  it('spends the assignee and creator slots on the least-recent commenters', () => {
+    const many = Array.from({ length: NOTIFICATION_RECIPIENT_CAP }, (_, i) => `user-${i}`)
+    const recipients = commentRecipients({
+      assigneeId: 'user-assignee',
+      creatorId: 'user-creator',
+      priorCommenterIds: many,
+      actorId: ACTOR,
+    })
+    expect(recipients).toHaveLength(NOTIFICATION_RECIPIENT_CAP)
+    expect(recipients.slice(0, 2)).toEqual(['user-assignee', 'user-creator'])
+    expect(recipients).not.toContain('user-0')
+    expect(recipients).not.toContain('user-1')
+    expect(recipients).toContain(`user-${NOTIFICATION_RECIPIENT_CAP - 1}`)
+    expect(recipients).toContain(`user-${NOTIFICATION_RECIPIENT_CAP - 2}`)
   })
 })

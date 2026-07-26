@@ -113,7 +113,7 @@ rows, not merely that a non-recipient member does.
 membership loses their inbox outright rather than watching it drain. Under D11 their rows are
 deleted anyway, so the two agree.
 
-### D5 — The fan-out runs only on the authoritative pass, at four trigger sites.
+### D5 — The fan-out runs only on the authoritative pass, at every assignee-setting site.
 
 Guarded by `if (tx.location !== 'server') return`, exactly the pattern already carrying
 `issue.create`'s per-team number (`server-mutators.ts:159-164`), and exactly what zbugs does for
@@ -128,16 +128,23 @@ its own notifications (`reference/zero.md` §5.7). Three properties make it safe
    rows and the change that caused them commit or roll back together.
 3. **It is idempotent anyway**, by D1.
 
-The four sites, and why there are four rather than three: `issue.routeIssue` (`mutators.ts:1030-1047`)
-carries **its own** `assigneeId` and sets it directly, independent of `assignIssue` — a duplicated
-assignee path that must fan out too. Verified by reading the code, not assumed.
+The sites are however many places set an assignee, not however many the scope named. Two of them
+are easy to miss and both were found by reading the code rather than assumed: `issue.routeIssue`
+(`mutators.ts:1030-1047`) carries **its own** `assigneeId` and sets it directly, independent of
+`assignIssue`; and `retro.convertActionToIssue` calls the *shared* `issue.create` function, so it
+never passes through the override that owns the fan-out (DI-44).
 
 | Trigger | Kind | Recipients | `event_key` |
 |---|---|---|---|
 | `issue.create` (with `assigneeId`) | `issue_assigned` | the assignee, minus the actor | `String(args.updatedAt)` |
 | `issue.assign` (non-null `assigneeId`) | `issue_assigned` | the assignee, minus the actor | `String(args.updatedAt)` |
 | `issue.routeIssue` (with `assigneeId`) | `issue_assigned` | the assignee, minus the actor | `String(args.updatedAt)` |
+| `retro.convertActionToIssue` (action with an owner) | `issue_assigned` | the owner, minus the actor | `String(args.updatedAt)` |
 | `comment.create` | `issue_commented` | assignee ∪ creator ∪ prior commenters, deduped, minus the actor, capped | the comment id |
+
+Every one of those recipient sets is then intersected with current membership of the issue's team
+before anything is written (DI-41), and the comment cap truncates the union from the least-recent
+end (DI-44).
 
 On `issue.create` the order inside the override is: shared mutator → `claimNextIssueNumber` →
 `issue.update` with the number → fan out. The number must exist before `subject_key` is composed.
@@ -573,9 +580,10 @@ for a different, specific defect.
 
 **Supporting, and also falsifiable:**
 
-- *Idempotency of the whole four-site surface* — the same test file runs `issue.create` with an
-  assignee, `issue.routeIssue` with an assignee, and `comment.create`, each twice, asserting one
-  row per event and that `routeIssue` is not silently missed.
+- *Idempotency of the whole trigger surface* — the same test file runs `issue.create` with an
+  assignee, `issue.routeIssue` with an assignee, `retro.convertActionToIssue` with an owner, and
+  `comment.create`, each twice, asserting one row per event and that neither of the two
+  easy-to-miss sites (D5) is silently absent.
 - *Leaver deletion (D11)* — removing B from team T deletes B's T-scoped rows and leaves B's rows
   for another team intact; removing B from the workspace deletes all of them.
 - *The `team_id` invariant (D16)* — an integration test asserting no mutator mutates
@@ -1252,3 +1260,23 @@ oldest-first ordering still holds *within* the selected set, so no assertion abo
 changes. The retro-conversion trigger site (`retro.convertActionToIssue`, which calls the shared
 `issue.create` function and so never reaches the override that owns the fan-out) got its own
 fan-out in the same pass.
+
+### DI-45 — The cap is applied after the union, so it falls on the least-recent participants
+
+*Not anticipated:* DI-44 fixed the *read* but not the *union*. `commentRecipients` fed
+`[assignee, creator, ...commenters]` through a helper that stopped pushing at
+`NOTIFICATION_RECIPIENT_CAP`, so the assignee and the creator took their two slots off the front and
+the two entries that fell off the back were the last two of an oldest-first commenter list — the two
+people most recently in the thread. The desc-then-reverse read kept the cap off the live end of the
+conversation; filling the budget front-to-back put it straight back.
+
+*Chosen:* the dedupe helper is uncapped, and `commentRecipients` truncates the commenter portion
+from its **oldest** end with whatever budget the assignee and creator leave. Which end of an
+over-long list is safe to discard is the caller's knowledge, not a shared helper's, so the helper no
+longer pretends to have it. `assignmentRecipients` is structurally incapable of exceeding the cap
+and needs nothing. The bounded read stays at `NOTIFICATION_RECIPIENT_CAP` rows — it can never yield
+more distinct authors than the union can hold.
+
+*Proved by:* a unit case in `recipients.test.ts` that gives the issue an assignee and a creator and
+asserts the two dropped commenters are the least recent, and the Postgres cap case, whose busy issue
+is now created by B and assigned to C so that the two fixed slots are actually spent.

@@ -1,3 +1,4 @@
+import { MENTION_FOLLOW_FOOTNOTE } from '@yapm/email'
 import type { DB, PendingNotificationEmail } from '@yapm/schema/db'
 import type { Kysely } from 'kysely'
 import type { PgBoss } from 'pg-boss'
@@ -108,6 +109,19 @@ describe('groupNotificationEmails', () => {
     ])
 
     expect(JSON.stringify(batches)).not.toContain('body')
+  })
+
+  // A mention subscribes you to the thread, so its email has to say so — and say it on nothing
+  // else, because no other kind subscribes anybody to anything.
+  it('marks a mention item with the follow footnote and leaves every other kind without one', () => {
+    const [batch] = groupNotificationEmails([
+      pending({ kind: 'mention', eventKey: 'comment-1' }),
+      pending({ kind: 'issue_assigned', eventKey: '1000' }),
+    ])
+
+    expect(batch?.items[0]?.title).toBe('Ada mentioned you in ENG-12')
+    expect(batch?.items[0]?.footnote).toBe(MENTION_FOLLOW_FOOTNOTE)
+    expect(batch?.items[1]?.footnote).toBeUndefined()
   })
 
   it('emails only actionable kinds under the default assigned_only mode', () => {

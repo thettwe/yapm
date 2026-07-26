@@ -11,7 +11,12 @@ import {
 import StarterKit from '@tiptap/starter-kit'
 import { exitSuggestion, type SuggestionOptions, type SuggestionProps } from '@tiptap/suggestion'
 import { Button } from '@yapm/ui/components/button'
-import { MentionList, mentionOptionId, nextMentionIndex } from '@yapm/ui/components/mention-list'
+import {
+  MentionList,
+  mentionAnnouncement,
+  mentionOptionId,
+  nextMentionIndex,
+} from '@yapm/ui/components/mention-list'
 import { type MentionCandidate, matchMentions } from '@yapm/ui/lib/mention-match'
 import { cn } from '@yapm/ui/lib/utils'
 import {
@@ -532,6 +537,15 @@ export function RichTextEditor({
         ) : null}
         <EditorContent editor={editor} className={contentClass} style={{ minHeight }} />
       </div>
+      {/* PERSISTENT, and outside the popup's portal. A polite region that appears with its text
+          already in it is not reliably spoken — assistive technology announces CHANGES to a region
+          that was already there — so the very first announcement, the one that tells a screen-reader
+          user the list opened and how many names it holds, is the one a region mounted with the
+          popup would lose. This node exists for the editor's whole life and only its content
+          changes. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {popup === null ? '' : mentionAnnouncement(popup)}
+      </span>
       {popupElement !== null && popup !== null
         ? createPortal(
             <MentionList
@@ -539,7 +553,6 @@ export function RichTextEditor({
               items={popup.items}
               query={popup.query}
               activeIndex={popup.activeIndex}
-              rejectedCount={popup.rejectedCount}
               loading={popup.loading}
               onSelect={(index) => mention.accept(index)}
               onActiveChange={mention.setActive}

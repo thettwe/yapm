@@ -92,7 +92,12 @@ the live user record every time the document is rendered. So:
 Being mentioned gives you exactly one [notification](/features/notifications/) —
 `Ada mentioned you in ENG-42` — and, if your instance has email configured and you have not read it
 in the app first, one email. Mentions are emailed at the **default** email preference, because a
-mention is addressed at you personally.
+mention is addressed at you personally. That email states in one line that you now follow the issue
+and can stop from the issue page; it carries no unsubscribe link, because the control is the
+issue's own [Follow button](#the-follow-control) inside the app.
+
+A comment that names you gives you the mention and **not** also the ambient "commented" row for the
+same comment — being the assignee, or already following the issue, does not double it up.
 
 **You are notified at most once per comment and at most once per issue description**, whatever
 sequence of edits happens afterwards:
@@ -119,7 +124,10 @@ you to never emails you at the default preference. (Choosing *Email everything* 
 
 Every issue's detail view carries a **Follow / Following** control in its property sidebar, under
 **Updates**. It is a normal keyboard-reachable button, it announces its pressed state, and it
-toggles optimistically — nothing waits on the network.
+toggles optimistically — nothing waits on the network. In the instant before your own subscription
+has arrived on a client that has never seen this issue, it says **Updates** and is inert rather than
+guessing: it would rather tell you nothing than tell you that you are not following something you
+are.
 
 - **Follow** — *"Follow to get updates on this issue in your inbox."*
 - **Following** — *"Updates on this issue reach your inbox. Select to stop."*

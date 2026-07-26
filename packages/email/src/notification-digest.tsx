@@ -4,6 +4,17 @@ import { renderMessage } from './render.js'
 import { palette } from './theme.js'
 import { absoluteUrl } from './url.js'
 
+// The one extra line a mention carries, because being mentioned did something beyond telling you:
+// it subscribed you to the thread. An email that leaves that unsaid is a subscription somebody
+// acquired without being told, which is the mail trap this feature exists to avoid. The wording
+// lives here, with the template that renders it, and the sender decides which items get it — this
+// package deliberately knows no notification kinds.
+//
+// It is a SENTENCE, not a link: no signed unsubscribe URL and no `List-Unsubscribe` header. The
+// control is the issue's own Follow button, inside the app's permission model.
+export const MENTION_FOLLOW_FOOTNOTE =
+  'You now follow this issue — you can stop from the issue page.'
+
 export interface NotificationDigestItem {
   // Already worded by `notificationCopy` in @yapm/schema, so the inbox row and this email can never
   // describe the same event differently.
@@ -11,6 +22,9 @@ export interface NotificationDigestItem {
   readonly summary: string
   // App-relative, resolved against `publicUrl`. Never absolute — see `absoluteUrl`.
   readonly path: string
+  // Per-item consequence line, rendered under the summary when present. `MENTION_FOLLOW_FOOTNOTE`
+  // is the only one that ships.
+  readonly footnote?: string
 }
 
 export interface NotificationDigestInput {
@@ -67,6 +81,11 @@ export function NotificationDigest({ publicUrl, items }: NotificationDigestInput
                 <div style={{ color: palette.text2, fontSize: '14px', marginTop: '2px' }}>
                   {item.summary}
                 </div>
+                {item.footnote === undefined ? null : (
+                  <div style={{ color: palette.text2, fontSize: '13px', marginTop: '2px' }}>
+                    {item.footnote}
+                  </div>
+                )}
               </td>
             </tr>
           ))}

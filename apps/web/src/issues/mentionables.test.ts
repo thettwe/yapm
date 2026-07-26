@@ -1,5 +1,10 @@
 import { expect, test } from 'vitest'
-import { buildMentionables, mentionNamesFrom, NOT_ON_TEAM_REASON } from './mentionables'
+import {
+  buildMentionables,
+  mentionNamesFor,
+  mentionNamesFrom,
+  NOT_ON_TEAM_REASON,
+} from './mentionables'
 
 const USERS = [
   { id: 'ada', name: 'Ada Lovelace', email: 'ada@yapm.dev' },
@@ -59,6 +64,29 @@ test('the author is never offered, because a self-mention notifies nobody', () =
 
 test('a team member is listed once even though they are also a workspace member', () => {
   expect(build().filter((candidate) => candidate.id === 'ada')).toHaveLength(1)
+})
+
+// Built from the whole roster instead, a mention of somebody who cannot read the issue resolves
+// and renders as a full chip — so only the "resolves to nobody" half of "unresolvable or
+// ineligible renders inert" would ship, and the ineligible half would look like it worked.
+test('the rendered-name map covers only the people who can read the issue', () => {
+  const names = mentionNamesFor({
+    teamMembers: [
+      { id: 'ada', name: 'Ada Lovelace' },
+      { id: 'bo', name: 'Bo Nguyen' },
+      { id: 'me', name: 'Me Myself' },
+    ],
+    workspaceMembers: WORKSPACE,
+    users: USERS,
+    selfId: 'me',
+  })
+
+  expect(names.get('ada')).toBe('Ada Lovelace')
+  // The admin is eligible even off the team, so their mentions still resolve.
+  expect(names.get('ravi')).toBe('Ravi Shah')
+  expect(names.get('me')).toBe('Me Myself')
+  // Not on the team and not an admin: absent, so the renderer degrades to inert `@label` text.
+  expect(names.has('casey')).toBe(false)
 })
 
 test('names resolve from the live user rows, falling back to email then id', () => {

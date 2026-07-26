@@ -51,14 +51,18 @@ surface on top of a proven substrate.
 
 ## 3. The keyboard-collision fix, on its own
 
-- [x] 3.1 In `packages/ui/src/components/rich-text.tsx`, add `if (event.defaultPrevented) return`
-      at the top of the wrapper `onKeyDown` (currently lines 120-129, which fire `onCancel` on
-      Escape and `onSubmit` on Cmd/Ctrl+Enter unconditionally). Carry a comment stating the
-      constraint the code cannot express: ProseMirror's `handleKeyDown` calls `preventDefault()` for
-      a key an extension handled but does **not** stop React's synthetic bubbling.
-- [x] 3.2 **Test**: extend `packages/ui/src/components/rich-text.test.ts` — a key event with
-      `defaultPrevented` set fires neither `onCancel` nor `onSubmit`; an ordinary Escape and an
-      ordinary Cmd+Enter still do.
+- [x] 3.1 In `packages/ui/src/components/rich-text.tsx`, stop the wrapper `onKeyDown` (currently
+      lines 120-129) from firing `onCancel` on Escape and `onSubmit` on Cmd/Ctrl+Enter for a key an
+      inner surface already acted on. **Superseded during group 12 — see design.md I26/I27.** The
+      `event.defaultPrevented` guard this task originally specified is wrong:
+      `prosemirror-view`'s `captureKeyDown` returns true for keyCode 13 and 27 unconditionally, so
+      the flag is ALWAYS set inside an editor and the guard silently disables both callbacks
+      everywhere. What ships is a `consumed` flag answered by native-event identity, plus
+      `stopPropagation()` in both directions because Base UI's dialog dismissal checks neither
+      `defaultPrevented` nor origin. Carry the constraint as a comment; only the E2E can see it.
+- [x] 3.2 **Test**: extend `packages/ui/src/components/rich-text.test.ts` — a key event marked
+      `consumed` fires neither `onCancel` nor `onSubmit` and is stopped; an ordinary Escape and an
+      ordinary Cmd+Enter still fire and are also stopped; a key nobody consumed keeps bubbling.
 
 ## 4. Schema: the `issue_subscription` table
 
@@ -200,7 +204,7 @@ surface on top of a proven substrate.
 
 ## 9. The falsifiable check
 
-- [ ] 9.1 Write `packages/schema/src/zero/mutators.mentions.pg.test.ts` exactly as design.md
+- [x] 9.1 Write `packages/schema/src/zero/mutators.mentions.pg.test.ts` exactly as design.md
       "How we will know this worked" specifies: team **T** {A, B, E}, non-member **C**, non-team
       admin **D**. Assert in order — (1) a comment mentioning B, C, D, A yields exactly two `mention`
       rows (B, D) and two `subscribed` rows; (2) an edit adding E yields exactly one new row;
@@ -208,11 +212,11 @@ surface on top of a proven substrate.
       re-added — B stays `unsubscribed`; (5) E comments — D is notified, B is not, and a subscriber
       who is also the assignee gets exactly one row; (6) the whole sequence under
       `tx.location === 'client'` writes nothing. `describe.skipIf(DATABASE_URL === undefined)`.
-- [ ] 9.2 Add the agent-path assertion from design D15: a comment created through the agent tool
+- [x] 9.2 Add the agent-path assertion from design D15: a comment created through the agent tool
       path with a mention of an ineligible person produces no notification.
-- [ ] 9.3 Add the description-path variant: `issue.update` adding a mention notifies once, and a
+- [x] 9.3 Add the description-path variant: `issue.update` adding a mention notifies once, and a
       second `issue.update` re-saving the same description notifies nobody.
-- [ ] 9.4 **Test**: `pnpm --filter @yapm/schema test` with `DATABASE_URL` set — green. **The feature
+- [x] 9.4 **Test**: `pnpm --filter @yapm/schema test` with `DATABASE_URL` set — green. **The feature
       is now provably correct with no UI at all.**
 
 ## 10. `packages/ui`: the mention extension and the listbox
@@ -274,15 +278,15 @@ surface on top of a proven substrate.
 
 ## 12. E2E
 
-- [ ] 12.1 Write `apps/web/e2e/mentions.spec.ts`: in the issue-detail comment box, type `@`, assert
+- [x] 12.1 Write `apps/web/e2e/mentions.spec.ts`: in the issue-detail comment box, type `@`, assert
       the listbox appears with `aria-activedescendant` set to an element **inside the editor
       wrapper**, press ↓ then Enter, assert a chip is inserted.
-- [ ] 12.2 **The non-negotiable assertion**: type `@` again, press Escape, and assert the popup
+- [x] 12.2 **The non-negotiable assertion**: type `@` again, press Escape, and assert the popup
       closed **while the comment draft text and the detail Sheet are both still open**. This is the
       `defaultPrevented` bug, it is a live defect on `main`, and jsdom cannot express it.
-- [ ] 12.3 Assert the mentioned teammate's inbox shows one mention notification, and that the issue
+- [x] 12.3 Assert the mentioned teammate's inbox shows one mention notification, and that the issue
       then shows them as following with a working unfollow.
-- [ ] 12.4 **Test**: the e2e suite green against the real three-container stack.
+- [x] 12.4 **Test**: the e2e suite green against the real three-container stack.
 
 ## 13. Documentation
 

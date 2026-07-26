@@ -49,10 +49,17 @@ first and last, Enter and Tab SHALL accept the active option, and Escape SHALL d
 While the popup is closed, the editor's existing shortcuts SHALL behave exactly as before: the
 submit shortcut submits and Escape cancels.
 
-The editor's wrapper-level shortcut handler SHALL ignore any keyboard event that has already been
-handled, because the editor core marks a handled key as prevented without stopping the event from
-propagating to React. Without this, dismissing the popup also fires cancel — discarding the whole
-draft and closing the surrounding surface.
+The editor's wrapper-level shortcut handler SHALL ignore any keyboard event the popup has already
+acted on, and SHALL identify those events by which event the popup consumed rather than by whether
+the editor core marked the key as prevented — the core marks **every** submit and cancel key as
+prevented whether or not anything handled it, so a guard on that flag disables both shortcuts
+outright. Without the distinction, either dismissing the popup also fires cancel (discarding the
+whole draft) or cancel never fires at all.
+
+A key the editor or its popup consumed SHALL stop at the editor, because the surrounding dialog's
+dismissal does not consult the prevented flag: declining to act is not enough to keep the surface
+open. A key nobody consumed SHALL continue to propagate, so shortcuts owned by surfaces above the
+editor keep working from inside it.
 
 #### Scenario: Escape dismisses the popup without discarding the draft
 

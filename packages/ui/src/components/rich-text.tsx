@@ -163,28 +163,53 @@ export interface RichTextKeyEvent {
   key: string
   metaKey: boolean
   ctrlKey: boolean
-  defaultPrevented: boolean
+  /**
+   * Whether a surface INSIDE this editor already acted on this exact keystroke — today, the mention
+   * typeahead.
+   *
+   * NOT `event.defaultPrevented`, and that distinction is the whole point.
+   * `prosemirror-view`'s `captureKeyDown` returns true for keyCode 13 and 27 unconditionally
+   * (`prosemirror-view@1.42`, "Enter, Esc"), so the view calls `preventDefault()` on EVERY Enter
+   * and EVERY Escape whether or not an extension handled them. A guard built on that flag is
+   * therefore always taken, and silently disables both callbacks on every editor in the app.
+   * Verified in a real browser; it is invisible to jsdom and to typecheck alike.
+   */
+  consumed: boolean
   preventDefault: () => void
+  stopPropagation: () => void
 }
 
-// ProseMirror's `handleKeyDown` calls `preventDefault()` on a key one of the editor's own
-// extensions already consumed, but it does NOT stop React's synthetic bubbling — the event still
-// reaches this wrapper. Without the `defaultPrevented` bail-out an inner surface that handles
-// Escape to dismiss itself would also cancel the draft, and one that handles Cmd+Enter to commit a
-// choice would also submit it: two effects from one keystroke, the second of them destructive.
+// ProseMirror does not stop React's synthetic bubbling for a key one of its own plugins handled, so
+// a keystroke the mention typeahead consumed still reaches this wrapper — and, above it, whatever
+// dialog the editor happens to live in. Two effects from one keystroke, the second of them
+// destructive: Escape dismisses the popup AND discards the draft, Cmd+Enter accepts the highlighted
+// name AND posts the half-written comment.
+//
+// Base UI's dismissal (`useDismiss`, @base-ui/react 1.6) is the second half of the same problem: it
+// closes a Dialog from handlers that check neither `defaultPrevented` nor the event's origin, so
+// merely declining to act is not enough — the event has to be stopped.
+//
+// One rule, both directions: A KEY THIS EDITOR CONSUMED, OR THAT SOMETHING INSIDE IT CONSUMED,
+// STOPS HERE. A key nobody consumed keeps bubbling untouched, which is what leaves Cmd+K and every
+// other shortcut above this surface working.
 export function handleRichTextKeyDown(
   event: RichTextKeyEvent,
   handlers: { onSubmit?: (() => void) | undefined; onCancel?: (() => void) | undefined },
 ): void {
-  if (event.defaultPrevented) return
+  if (event.consumed) {
+    event.stopPropagation()
+    return
+  }
 
   if (handlers.onSubmit && event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
     event.preventDefault()
+    event.stopPropagation()
     handlers.onSubmit()
     return
   }
   if (handlers.onCancel && event.key === 'Escape') {
     event.preventDefault()
+    event.stopPropagation()
     handlers.onCancel()
   }
 }
@@ -203,6 +228,11 @@ interface MentionHost {
   element: HTMLElement | null
   read: () => MentionPopupState | null
   write: (next: MentionPopupState | null) => void
+  // Records the exact native event the typeahead just acted on. Identity rather than a boolean
+  // flag, and not a "is the popup open" check: Escape tears the popup down synchronously inside
+  // ProseMirror's own handler, so by the time React dispatches the same event to the wrapper the
+  // popup is already gone and any state-derived answer would be "nothing was open".
+  consume: (event: KeyboardEvent) => void
 }
 
 interface MentionController {
@@ -300,25 +330,30 @@ function createMentionController(host: MentionHost): MentionController {
           host.write(null)
         },
         onKeyDown: ({ view, event }) => {
-          // Escape dismisses the POPUP AND NOTHING ELSE. Returning true makes ProseMirror call
-          // `preventDefault()`, which is what the wrapper's `defaultPrevented` guard reads to stand
-          // down — without it, dismissing the list also discards the whole draft.
-          if (event.key === 'Escape' || event.key === 'Esc') {
-            exitSuggestion(view, MENTION_PLUGIN_KEY)
-            return true
-          }
-          const state = host.read()
-          if (state === null) return false
+          // Escape dismisses the POPUP AND NOTHING ELSE. Every `true` returned here is also
+          // recorded against this exact event, which is what the wrapper reads to stand down —
+          // without it, dismissing the list also discards the whole draft and the panel holding it.
+          const handled = ((): boolean => {
+            if (event.key === 'Escape' || event.key === 'Esc') {
+              exitSuggestion(view, MENTION_PLUGIN_KEY)
+              return true
+            }
+            const state = host.read()
+            if (state === null) return false
 
-          const moved = nextMentionIndex(event.key, state.activeIndex, state.items.length)
-          if (moved !== null) {
-            host.write({ ...state, activeIndex: moved, rejectedCount: 0 })
-            return true
-          }
-          // Cmd/Ctrl+Enter lands here too, so the submit shortcut accepts the option instead of
-          // posting a half-written comment.
-          if (event.key === 'Enter' || event.key === 'Tab') return accept(state.activeIndex)
-          return false
+            const moved = nextMentionIndex(event.key, state.activeIndex, state.items.length)
+            if (moved !== null) {
+              host.write({ ...state, activeIndex: moved, rejectedCount: 0 })
+              return true
+            }
+            // Cmd/Ctrl+Enter lands here too, so the submit shortcut accepts the option instead of
+            // posting a half-written comment.
+            if (event.key === 'Enter' || event.key === 'Tab') return accept(state.activeIndex)
+            return false
+          })()
+
+          if (handled) host.consume(event)
+          return handled
         },
       }),
     },
@@ -373,6 +408,7 @@ export function RichTextEditor({
 
   const [popup, setPopup] = useState<MentionPopupState | null>(null)
   const popupRef = useRef<MentionPopupState | null>(null)
+  const consumedEventRef = useRef<KeyboardEvent | null>(null)
   const [popupElement] = useState<HTMLElement | null>(() => {
     if (typeof document === 'undefined') return null
     const element = document.createElement('div')
@@ -392,6 +428,9 @@ export function RichTextEditor({
         write: (next) => {
           popupRef.current = next
           setPopup(next)
+        },
+        consume: (event) => {
+          consumedEventRef.current = event
         },
       }),
     [wrapperId, popupElement],
@@ -454,10 +493,20 @@ export function RichTextEditor({
   }, [editor, popup, listboxId])
 
   function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    handleRichTextKeyDown(event, {
-      onSubmit: onSubmit && editor ? () => onSubmit(editor.getJSON()) : undefined,
-      onCancel,
-    })
+    handleRichTextKeyDown(
+      {
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        consumed: consumedEventRef.current === event.nativeEvent,
+        preventDefault: () => event.preventDefault(),
+        stopPropagation: () => event.stopPropagation(),
+      },
+      {
+        onSubmit: onSubmit && editor ? () => onSubmit(editor.getJSON()) : undefined,
+        onCancel,
+      },
+    )
   }
 
   return (

@@ -924,3 +924,75 @@ Task 14.5's number, taken here because this is the stage that adds the weight. S
 mention node, the suggestion plugin, Floating UI's positioning and the listbox. It rides an existing
 lazy chunk rather than the entry bundle, and no interaction on it newly waits on the network — the
 typeahead filters rows already in IndexedDB and returns an array. Recorded rather than assumed.
+
+### I26 — Task 3.1's `defaultPrevented` guard is wrong, and the E2E is what found it
+
+The plan (task 3.1, and the scope's trap note) said to bail out of the rich-text wrapper's
+`onKeyDown` when `event.defaultPrevented` is set. That reasoning assumed ProseMirror calls
+`preventDefault()` **for a key an extension handled**. It does not. `prosemirror-view@1.42`'s
+`captureKeyDown` ends with:
+
+```js
+else if (code == 13 || code == 27) { // Enter, Esc
+    return true;
+}
+```
+
+and the view calls `event.preventDefault()` whenever `handleKeyDown` **or** `captureKeyDown` returns
+true. So **every Enter and every Escape inside any ProseMirror editor arrives at the wrapper with
+`defaultPrevented === true`**, handled or not. The guard as specified is therefore always taken, and
+it silently disabled `onCancel` and `onSubmit` on every rich-text surface in the app — "Escape
+cancels this edit" and "⌘↵ sends" both dead, with no error and nothing to see in review.
+
+Neither typecheck nor jsdom can see this: it is a property of the real view's key pipeline. The E2E
+found it on its first run, at the comment editor, which is exactly the surface task 3.1 was written
+to protect.
+
+**What ships instead.** `RichTextKeyEvent.defaultPrevented` is replaced by `consumed`, and the
+editor answers it by **event identity**: the mention suggestion's `onKeyDown` records the native
+`KeyboardEvent` it acted on, and the wrapper asks `consumedEventRef.current === event.nativeEvent`.
+Identity rather than a boolean, and deliberately not an "is the popup open" check — Escape tears the
+popup down synchronously inside ProseMirror's own handler, so by the time React dispatches the same
+event the popup is already gone and any state-derived answer reads "nothing was open".
+
+### I27 — Standing down is not enough: the consumed key has to be stopped
+
+The second half of the same defect, and also E2E-only. Base UI's dismissal
+(`useDismiss`, `@base-ui/react@1.6`) closes a `Dialog` from handlers that check **neither**
+`defaultPrevented` nor the event's origin. So a wrapper that merely declines to act still loses the
+whole Sheet: the first E2E run dismissed the mention popup with Escape and took the issue-detail
+panel — and the draft inside it — with it. Exactly the outcome the change exists to prevent, reached
+by a different route than the one the plan anticipated.
+
+`handleRichTextKeyDown` therefore calls `stopPropagation()` in **both** directions, and the rule is
+one rule: *a key this editor consumed, or that something inside it consumed, stops here.* A key
+nobody consumed keeps bubbling untouched, which is what leaves ⌘K and every other shortcut above the
+editor working — asserted in `rich-text.test.ts` rather than assumed.
+
+### I28 — The E2E's control moved from the Sheet to the comment editor's own cancel
+
+The first draft of `mentions.spec.ts` used "with no popup open, Escape closes the detail Sheet" as
+the control that makes the non-negotiable assertion non-vacuous. Measured, that is not true of this
+app: an Escape typed into the comment **composer** does not close the panel, with no mention
+involvement at all, because the composer has no cancel of its own and the event is stopped before
+Base UI's document listener. Asserting it would have been asserting a behaviour this change neither
+provides nor owes.
+
+The control is now the comment **editor**, which does have `onCancel`, and it is a strictly better
+one because it is one surface showing the whole contract: with the popup open Escape dismisses only
+the popup and the edit survives; with the popup closed the very same key cancels the edit and takes
+nothing else with it. Both halves are user-visible, and the pair fails if either direction of I26/I27
+regresses.
+
+### I29 — What the two E2E tests were run against, and how they were falsified
+
+Run live against the real three-container stack on the assigned ports (Postgres 5444, zero-cache
+4852, app 3004), not written and left for later. Both green, and the **whole** 67-test Playwright
+suite green afterwards — the `rich-text.tsx` change touches every editor in the app, so re-running
+only the new spec would have proved nothing about the ones it could break.
+
+Falsified rather than assumed: reverting `consumed` to a constant `false` fails the draft-survival
+assertion; the `defaultPrevented` version fails the edit-cancel control; and `mutators.mentions.pg.test.ts`
+was falsified five times over — a per-save comment `event_key`, a per-save description `event_key`,
+`do update` in place of `do nothing`, a decorated subscriber `event_key`, dropping the admin bypass,
+and removing the `tx.location` guard each fail a different assertion, and no other.

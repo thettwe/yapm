@@ -108,6 +108,25 @@ describe.skipIf(DATABASE_URL === undefined)('notification fan-out against Postgr
     return (await apply(async (tx) => await tx.run(query as never))) as unknown as InboxRow[]
   }
 
+  // Seeded directly rather than through a mention, because what is under test is the CLEANUP, and
+  // an insert is the shortest honest way to put a row in front of it.
+  async function subscribe(issue: string, team: string, userId: string): Promise<void> {
+    await sql`
+      insert into issue_subscription (issue_id, user_id, team_id, state)
+      values (${issue}::uuid, ${userId}, ${team}::uuid, 'subscribed')
+      on conflict (issue_id, user_id) do nothing
+    `.execute(database.db)
+  }
+
+  async function subscriptionTeams(userId: string): Promise<string[]> {
+    const found = await rows(
+      sql<{
+        team_id: string
+      }>`select team_id from issue_subscription where user_id = ${userId} order by team_id`,
+    )
+    return found.map((row) => row.team_id)
+  }
+
   async function notificationCount(): Promise<number> {
     const result = await rows(
       sql<{ n: string }>`select count(*) as n from notification where team_id in (${sql.join([
@@ -433,6 +452,11 @@ describe.skipIf(DATABASE_URL === undefined)('notification fan-out against Postgr
         insert into issue (id, team_id, number, title, status, priority, creator_id, assignee_id)
         values (${leftBehindId}, ${teamId}, 9, 'Filed before B left', 'todo', 'no_priority', ${B.userID}, ${A.userID})
       `.execute(database.db)
+      // B is also FOLLOWING it, so the subscriber producer is exercised as well as the involvement
+      // one: a subscription can outlive the membership that authorised it, and the fan-out re-checks
+      // rather than trusting the stored edge — which is what makes the cleanup a tidy-up rather than
+      // the thing standing between an ex-member and the thread.
+      await subscribe(leftBehindId, teamId, B.userID)
       await sql`delete from team_membership where id = ${bTeamMembershipId}`.execute(database.db)
     })
 
@@ -451,7 +475,10 @@ describe.skipIf(DATABASE_URL === undefined)('notification fan-out against Postgr
         }),
       )
 
+      // Neither as the creator nor as a follower: the subscription row is still there and still
+      // says `subscribed`, and it still reaches nobody.
       expect(await inbox(B)).toEqual([])
+      expect(await subscriptionTeams(B.userID)).toEqual([teamId])
       // An intersection, not a blanket refusal: A is the assignee and still in the team.
       const forA = await inbox(A)
       expect(forA).toHaveLength(1)
@@ -587,7 +614,12 @@ describe.skipIf(DATABASE_URL === undefined)('notification fan-out against Postgr
           ctx: A,
         }),
       )
+      // And a standing subscription in each, which outlives notification retention and therefore
+      // has to be cleaned up by the same two mutators rather than left to expire.
+      await subscribe(issueId, teamId, B.userID)
+      await subscribe(otherIssueId, otherTeamId, B.userID)
       expect(await inbox(B)).toHaveLength(2)
+      expect(await subscriptionTeams(B.userID)).toHaveLength(2)
     })
 
     it('leaving ONE team deletes only that team’s rows', async () => {
@@ -597,6 +629,9 @@ describe.skipIf(DATABASE_URL === undefined)('notification fan-out against Postgr
       const remaining = await inbox(B)
       expect(remaining).toHaveLength(1)
       expect(remaining[0]?.teamId).toBe(otherTeamId)
+      // The subscription cleanup makes the same distinction, and it is the reason
+      // `issue_subscription.team_id` is denormalised at all.
+      expect(await subscriptionTeams(B.userID)).toEqual([otherTeamId])
     })
 
     it('leaving the WORKSPACE deletes every row, across every team', async () => {
@@ -610,6 +645,7 @@ describe.skipIf(DATABASE_URL === undefined)('notification fan-out against Postgr
           }>`select count(*) as n from notification where recipient_id = ${B.userID}`,
         ),
       ).toEqual([{ n: '0' }])
+      expect(await subscriptionTeams(B.userID)).toEqual([])
     })
   })
 

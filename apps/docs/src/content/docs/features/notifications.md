@@ -40,9 +40,13 @@ Three rules apply to every row in that table:
   On a thread past the cap it is the **most recent** participants who are kept — the people
   currently discussing it, not whoever commented once at the start. The follower set is capped by
   the same number, oldest subscription first.
-- **Only current members of the issue's team are notified.** Involvement outlives membership: you
-  can have created an issue, or been its assignee, in a team you have since left. Membership is
-  checked when the notification is written, and again when it is emailed.
+- **You are only notified about issues you can still read.** That is current members of the issue's
+  team, plus workspace admins — an admin can read every issue in the workspace, which is why one can
+  be [`@`-mentioned](/features/mentions/) on an issue outside their teams. The **involvement** kinds
+  are narrower: assignment, and a comment reaching the assignee, the creator or a prior commenter,
+  reach current members of the issue's team only. Involvement outlives membership — you can have
+  created an issue, or been its assignee, in a team you have since left — so the check is made when
+  the notification is written, and the same check is made again when it is emailed.
 
 Notifications are written **only on the server**, inside the same database transaction as the
 change that caused them, and they are keyed by what happened rather than by a generated id. So the
@@ -63,7 +67,12 @@ second inbox and no second preference. Two things about them are worth reading h
 
 - **A mention is emailed at the default preference**, because it is addressed at you personally.
   You are notified at most once per comment and at most once per issue description, whatever
-  sequence of edits follows; editing a comment to add somebody notifies only the person added.
+  sequence of edits follows; editing a comment to add somebody notifies only the person added. The
+  email says, in one line, that you now follow the issue and can stop from the issue page — and
+  says it only when the mention actually subscribed you, so a mention on an issue you unfollowed
+  never claims otherwise.
+- **A comment that names you tells you once.** You get the mention, not also the ambient "commented"
+  row for the same comment — even if you were already following the issue or are its assignee.
 - **Being mentioned makes you follow the issue**, so later comments on it reach your inbox even when
   nobody names you. That activity is **in-app only** — it is ambient, so the default preference
   never emails it. Unfollow from the **Following** control on the issue itself; the decision sticks,
@@ -137,8 +146,9 @@ recipient** covering everything that has accumulated. Four things bound it, and 
 - Everything waiting for one person becomes a single message, not one per event.
 - **A notification you have already read in the app is never emailed.** Reading your inbox is what
   stops the mail.
-- Team membership is re-checked at delivery time as well as at write time. Leave a team and you
-  stop being emailed about it, even about notifications written while you were still a member.
+- Access is re-checked at delivery time as well as at write time, by the same rule — on the issue's
+  team, or a workspace admin. Leave a team and you stop being emailed about it, even about
+  notifications written while you were still a member.
 
 Email carries the same words as the inbox row and the same absence of body content, and links back
 to the issue on your instance's own public URL.

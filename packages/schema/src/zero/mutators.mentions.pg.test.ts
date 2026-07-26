@@ -377,6 +377,37 @@ describe.skipIf(DATABASE_URL === undefined)('mention fan-out against Postgres', 
     // kind, or a key the subscriber producer decorates, is the obvious alternative and doubles this.
     expect(commented.filter((row) => row.recipient_id === A.userID)).toHaveLength(1)
     for (const row of commented) expect(row.event_key).toBe(secondCommentId)
+
+    // 5b. THE OTHER HALF OF "ONE COMMENT, ONE ROW". A comment that names an existing subscriber
+    // reaches them twice unless the ambient producers are told to stand down: `mention` and
+    // `issue_commented` are different kinds, so they are different primary keys and nothing
+    // collapses them. Reading the subscriber set before subscribing anyone only covers the person
+    // who was not already following.
+    const thirdCommentId = newId()
+    await apply((tx) =>
+      mutators.comment.create.fn({
+        tx,
+        args: {
+          id: thirdCommentId,
+          issueId,
+          body: doc('over to ', D),
+          createdAt: 10_000,
+          updatedAt: 10_000,
+        },
+        ctx: E,
+      }),
+    )
+
+    const forThird = (await notifications()).filter((row) => row.event_key === thirdCommentId)
+    // D was already subscribed AND is named by this comment: the mention, and nothing else.
+    expect(forThird.filter((row) => row.recipient_id === D.userID).map((row) => row.kind)).toEqual([
+      'mention',
+    ])
+    // A follows and is the assignee and the creator, and is not named — the ambient row still
+    // reaches them, so the exclusion is targeted rather than a blanket suppression.
+    expect(forThird.filter((row) => row.recipient_id === A.userID).map((row) => row.kind)).toEqual([
+      'issue_commented',
+    ])
   })
 
   // 6. The optimistic pass. The mutation lands; not one row of fan-out does.

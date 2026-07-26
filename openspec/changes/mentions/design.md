@@ -1025,3 +1025,112 @@ adding copy to `packages/email` in the documentation stage would put product cod
 this change's other stages ran. It is one branch in one template plus a test: the `mention` case
 appends "You now follow this issue — you can stop from the issue page." The Close-phase spec walk
 (task 14.6) will hit it, which is the correct place for it to be caught.
+
+**Closed in I31.** The sentence ships; both pages now say so.
+
+### I31 — The follow sentence is a per-item `footnote`, not a `kind` on the digest item
+
+I30's gap, closed. The obvious shape is `NotificationDigestItem.kind: NotificationKind` plus a
+branch in the template — and it would make `packages/email` depend on `@yapm/schema`, which today
+depends on nothing but React and the renderer. That drags `@rocicorp/zero` into the email package
+for the sake of a type alias, and it inverts the item's existing contract: every field on it is
+already **pre-worded** by the sender precisely so the inbox row and the email cannot describe one
+event differently.
+
+So the item gains an optional `footnote`, rendered under the summary when present, and
+`packages/email` exports the one string that ships — `MENTION_FOLLOW_FOOTNOTE`. The kind is the only
+thing `groupNotificationEmails` knows that the template does not, so the branch lives there and the
+wording lives with the template that renders it. Asserted on both sides: the grouping test proves a
+`mention` row gets it and an `issue_assigned` row does not, and the render test proves the sentence
+reaches the HTML and the text part exactly once.
+
+### I32 — Delivery-time authorisation had to become the same disjunction as write-time
+
+`pendingNotificationEmails` reached current membership with an `inner join team_membership`, which
+was exactly right while every notification's recipient was a team member. This change makes a
+**workspace admin off the issue's team** mentionable (D4), so the sweep's join could never select
+their row: the mention was written in-app, the spec and both docs pages promised the email, and no
+email could ever be sent — silently, forever, with an unread row sitting in the table.
+
+The predicate is now the write-time one, spelled in SQL: `exists` a current `team_membership` for
+`(notification.team_id, recipient)` **or** `exists` a current `workspace_member` with
+`role = 'admin'` for that recipient. The ex-member case that the join existed for is unchanged and
+is now asserted with the ex-member *also* carrying a plain `workspace_member` row, so the admin arm
+cannot pass anybody it should not.
+
+### I33 — A comment that names you produces the mention, and not the ambient row as well
+
+I12 chose to read the subscriber set *before* the mention fan-out subscribes anyone, so that a
+first-time mentionee is not handed both rows for the comment that named them. That ordering only
+covers the person who was not already following: somebody already subscribed, or the assignee, is
+reached by an ambient producer for the same comment and receives two inbox rows — `mention` and
+`issue_commented` — of which the second says strictly less than the first. Different kinds are
+different primary keys, so nothing collapses them.
+
+`comment.create` therefore computes `addedMentionIds(null, args.body, ctx.userID)` **once** and
+passes it as an exclusion set to **both** ambient producers (involvement and subscriber). Ordering
+is kept as well — it is still the plainer reading of "subsequent activity" — but it is no longer
+load-bearing. Using the raw diff rather than the eligible subset is safe by containment: involvement
+recipients are team members and subscriber recipients pass the same eligibility predicate, so anyone
+excluded who could have received an ambient row necessarily receives the mention row instead.
+
+### I34 — The rendered-name map is scoped to the issue's readers, not to the workspace roster
+
+`mentionNames` was built from `queries.users.all`, so a mention of somebody who cannot read the
+issue resolved and rendered as a full chip — only the "resolves to nobody" half of the spec's
+*"An unresolvable or ineligible mention renders inert"* actually shipped. The eligibility
+disjunction is now a named function (`eligibleMentionIds`) used by both `buildMentionables` and a
+new `mentionNamesFor`, which is what the surface calls; an id absent from the map falls through to
+`mentionRenderAttrs`' existing safe default. One predicate, two consumers, and the call site can no
+longer forget the filter because the unfiltered builder is not the one it reaches for.
+
+### I35 — The follow control asserts nothing until its query has hydrated
+
+`useQuery` returning no row means "no row **yet**" as readily as "no subscription", and the control
+read the two as the same thing — so a subscriber opening an issue for the first time on a client
+briefly saw **Follow** with `aria-pressed="false"`, and a button that would have unfollowed them.
+It now takes the second element of `useQuery` and renders a disabled, unpressed, neutrally-hinted
+control until `result.type === 'complete'`. Nothing about the settled path changes, so the optimistic
+toggle is still instant.
+
+### I36 — The typeahead's live region is owned by the editor, not by the popup
+
+The polite region lived inside `MentionList`, which mounts and unmounts with the popup — so it was
+inserted with its text already present, and a region that appears fully-formed has no *change* for
+assistive technology to announce. The opening announcement, the one that says the list is there and
+how many names it holds, was the one being lost. `RichTextEditor` now renders a persistent
+`role="status"` region for its whole life, outside the popup portal, fed
+`popup === null ? '' : mentionAnnouncement(popup)`. The list component is unchanged otherwise, and
+its test harness — which stands in for the editor — owns the region exactly as the editor does.
+
+### I37 — The follow sentence is attached to the subscription, not to the kind
+
+I31 hung `MENTION_FOLLOW_FOOTNOTE` on `kind === 'mention'`, which is right for every mention except
+the one the sticky unfollow exists for: mention somebody who turned the issue off and they are
+notified, emailed, and — correctly — **not** re-subscribed, while the email tells them "You now
+follow this issue". The one claim in that message the recipient cannot check from their inbox was
+the false one, and by design it would stay false however many times they were mentioned.
+
+The footnote is a **disclosure of a subscription**, so it is now conditioned on the subscription.
+`pendingNotificationEmails` left-joins `issue_subscription` on its primary key
+`(issue_id = notification.subject_id, user_id = notification.recipient_id)` and carries
+`subscriptionState` on the row; `groupNotificationEmails` attaches the sentence only for
+`kind === 'mention' && subscriptionState === 'subscribed'`. Left, and on the primary key, so the
+join can add no row and drop none. Rewording the constant to be true in both states was the cheaper
+option and was rejected: a sentence vague enough to survive both states stops disclosing the thing
+it exists to disclose. An unfollowed recipient's mention email now simply carries no footnote —
+there is no subscription to tell them about.
+
+### I38 — The unhydrated follow control stays focusable, and a failed query says so
+
+I35's `disabled` was too blunt an instrument for "not settled yet". A native `disabled` button
+leaves the tab order and drops its `aria-describedby`, so the hint explaining what the control is
+waiting for is announced to nobody, and a keyboard user's tab stop appears and disappears under
+them as zero-cache answers. `aria-disabled` carries the same "not actionable" semantics while
+keeping both; the `if (!settled) return` guard, not the attribute, is what has always prevented a
+mis-fire, and omitting `aria-pressed` still asserts nothing.
+
+`result.type === 'error'` is the sharper half of the same bug: a query that failed is not a query
+that is still loading, and rendering it as a permanent "Checking whether you follow this issue…"
+left the control inert forever with no way out. The error state now words itself and renders Zero's
+own `retry()` as a button beside the control, matching the outage surface in `authenticated.tsx`.

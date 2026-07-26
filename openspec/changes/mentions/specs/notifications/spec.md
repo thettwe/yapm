@@ -14,8 +14,11 @@ the recipient in the subject, used identically by the inbox row and the email so
 describe the same event differently.
 
 The mention email SHALL state, in one sentence, that the recipient now follows the issue and can
-stop from the issue page. It SHALL NOT carry a signed unsubscribe link or an unsubscribe header; the
-link goes to the application.
+stop from the issue page, **when and only when the recipient actually follows it**. A mention of
+somebody who has unfollowed the issue SHALL still be emailed and SHALL omit that sentence, because
+unfollow is sticky and the sentence is a disclosure of a subscription rather than a description of
+the kind. It SHALL NOT carry a signed unsubscribe link or an unsubscribe header; the link goes to
+the application.
 
 #### Scenario: A mention is emailed at the default preference
 
@@ -35,9 +38,14 @@ link goes to the application.
 
 #### Scenario: The mention email says how to stop following
 
-- **WHEN** a mention email is rendered
+- **WHEN** a mention email is rendered for a recipient the mention subscribed
 - **THEN** it states that the recipient now follows the issue and that they can unfollow from the
   issue page
+
+#### Scenario: The mention email claims no subscription an unfollow revoked
+
+- **WHEN** a mention email is rendered for a recipient who had unfollowed that issue
+- **THEN** the email is still sent and carries no sentence claiming they now follow the issue
 
 ### Requirement: A second producer of comment notifications, deduplicated by the primary key
 

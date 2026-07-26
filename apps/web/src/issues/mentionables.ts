@@ -28,6 +28,34 @@ export function mentionDisplayName(user: MentionUserRow | undefined, fallback: s
   return user?.name ?? user?.email ?? fallback
 }
 
+export interface MentionScope {
+  teamMembers: readonly MentionTeamMember[]
+  workspaceMembers: readonly MentionMemberRow[]
+  selfId: string | null
+}
+
+/**
+ * WHO CAN READ THIS ISSUE, and therefore who may be mentioned on it: a member of the issue's team,
+ * or a workspace admin. The client's copy of the server's `eligibleMentionees` predicate, kept in
+ * one place because two surfaces need it — the typeahead, which must not offer a name the server
+ * would drop, and the renderer, which must not resolve a name for somebody who cannot read the
+ * document containing it.
+ *
+ * The viewer is included: a self-mention notifies nobody but still stores and renders normally.
+ */
+export function eligibleMentionIds({
+  teamMembers,
+  workspaceMembers,
+  selfId,
+}: MentionScope): ReadonlySet<string> {
+  const ids = new Set(teamMembers.map((member) => member.id))
+  for (const member of workspaceMembers) {
+    if (member.role === 'admin') ids.add(member.userId)
+  }
+  if (selfId !== null) ids.add(selfId)
+  return ids
+}
+
 /**
  * Every person the `@` list may know about on this issue, in three bands.
  *
@@ -46,13 +74,9 @@ export function buildMentionables({
   workspaceMembers,
   users,
   selfId,
-}: {
-  teamMembers: readonly MentionTeamMember[]
-  workspaceMembers: readonly MentionMemberRow[]
-  users: readonly MentionUserRow[]
-  selfId: string | null
-}): MentionCandidate[] {
+}: MentionScope & { users: readonly MentionUserRow[] }): MentionCandidate[] {
   const onTeam = new Set(teamMembers.map((member) => member.id))
+  const eligible = eligibleMentionIds({ teamMembers, workspaceMembers, selfId })
   const byId = new Map(users.map((user) => [user.id, user]))
   const candidates: MentionCandidate[] = []
 
@@ -71,14 +95,16 @@ export function buildMentionables({
   for (const member of workspaceMembers) {
     if (onTeam.has(member.userId) || member.userId === selfId) continue
     const user = byId.get(member.userId)
-    const admin = member.role === 'admin'
+    // Eligible off the team means an admin, from the one predicate above rather than from a second
+    // reading of `role` that could drift away from it.
+    const canMention = eligible.has(member.userId)
     candidates.push({
       id: member.userId,
       name: mentionDisplayName(user, member.userId),
       email: user?.email ?? undefined,
       image: user?.image ?? undefined,
-      eligible: admin,
-      ...(admin ? { matchOnly: true } : { reason: NOT_ON_TEAM_REASON }),
+      eligible: canMention,
+      ...(canMention ? { matchOnly: true } : { reason: NOT_ON_TEAM_REASON }),
     })
   }
 
@@ -92,4 +118,18 @@ export function buildMentionables({
  */
 export function mentionNamesFrom(users: readonly MentionUserRow[]): ReadonlyMap<string, string> {
   return new Map(users.map((user) => [user.id, mentionDisplayName(user, user.id)]))
+}
+
+/**
+ * The same map, narrowed to the people who can read THIS issue — which is the form every render
+ * surface wants. Built from the whole workspace roster instead, a mention of somebody who cannot
+ * read the issue resolves and renders as a full chip, so only half of "an unresolvable OR
+ * ineligible mention renders inert" would ship. An id absent from the map falls through to the
+ * renderer's existing safe default: inert `@label` text, no chip.
+ */
+export function mentionNamesFor(
+  scope: MentionScope & { users: readonly MentionUserRow[] },
+): ReadonlyMap<string, string> {
+  const eligible = eligibleMentionIds(scope)
+  return mentionNamesFrom(scope.users.filter((user) => eligible.has(user.id)))
 }

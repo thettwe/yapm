@@ -5,5 +5,9 @@ export type {
   NotificationDigestInput,
   NotificationDigestItem,
 } from './notification-digest.js'
-export { notificationDigestSubject, renderNotificationDigest } from './notification-digest.js'
+export {
+  MENTION_FOLLOW_FOOTNOTE,
+  notificationDigestSubject,
+  renderNotificationDigest,
+} from './notification-digest.js'
 export { absoluteUrl } from './url.js'

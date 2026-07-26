@@ -2,11 +2,14 @@ import { useQuery, useZero } from '@rocicorp/zero/react'
 import { mutators, queries } from '@yapm/schema'
 import { PropertyButton } from '@yapm/ui/components/detail-field'
 import { BellIcon, BellOffIcon } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { RetryButton } from '@/components/retry-button'
 import { runMutation } from '@/lib/mutation'
 
 export const FOLLOWING_HINT = 'Updates on this issue reach your inbox. Select to stop.'
 export const NOT_FOLLOWING_HINT = 'Follow to get updates on this issue in your inbox.'
+export const PENDING_HINT = 'Checking whether you follow this issue…'
+export const UNAVAILABLE_HINT = 'Couldn’t check whether you follow this issue.'
 
 interface SubscriptionRow {
   state?: string | null
@@ -23,43 +26,81 @@ interface SubscriptionRow {
  */
 export function FollowControl({ issueId }: { issueId: string }) {
   const zero = useZero()
-  const [subscription] = useQuery(queries.subscriptions.mine({ issueId }))
+  const [subscription, result] = useQuery(queries.subscriptions.mine({ issueId }))
   const [error, setError] = useState<string | undefined>(undefined)
+  const followRef = useRef<HTMLButtonElement>(null)
 
+  // AN UNHYDRATED QUERY IS NOT AN ANSWER. Until the row has actually arrived, "no row" and "no
+  // subscription" are indistinguishable, and defaulting to "not following" tells a subscriber
+  // opening the issue on a fresh client that they are not following it — and offers them a button
+  // that would then unfollow rather than follow. So the control asserts nothing: no `aria-pressed`
+  // for a screen reader to read out, and no press to mis-fire.
+  //
+  // `aria-disabled`, NOT `disabled`. A native `disabled` button leaves the tab order and its
+  // `aria-describedby` goes unannounced, so the hint saying what the control is waiting for reaches
+  // nobody and a keyboard user's tab stop appears from under them when zero-cache answers. The
+  // `if (!settled) return` guard below — not the attribute — is what prevents a mis-fire.
+  const settled = result.type === 'complete'
+  // A FAILED QUERY IS NOT A SLOW ONE. Left as "unsettled" it renders a permanent "checking…" and an
+  // inert control with no way out, so the error states itself and offers Zero's own retry.
+  const failed = result.type === 'error'
   const following = (subscription as SubscriptionRow | undefined)?.state === 'subscribed'
 
   const toggle = useCallback(async () => {
+    if (!settled) return
     const args = { issueId, updatedAt: Date.now() }
     const write = following
       ? zero.mutate(mutators.issueSubscription.unfollow(args))
       : zero.mutate(mutators.issueSubscription.follow(args))
     setError(await runMutation(write))
-  }, [following, issueId, zero])
+  }, [following, issueId, settled, zero])
 
-  const hint = following ? FOLLOWING_HINT : NOT_FOLLOWING_HINT
+  const hint = !settled ? PENDING_HINT : following ? FOLLOWING_HINT : NOT_FOLLOWING_HINT
+  // One region, mounted for the component's whole life and empty until there is something to say —
+  // a live region inserted with its text already present has no CHANGE to announce (design I36),
+  // which is exactly how an error that appears once goes unheard.
+  const alert = error ?? (failed ? UNAVAILABLE_HINT : '')
 
   return (
     <span className="flex min-w-0 flex-col gap-0.5">
-      <PropertyButton
-        aria-pressed={following}
-        aria-describedby={`follow-hint-${issueId}`}
-        onClick={() => void toggle()}
-      >
-        {following ? (
-          <BellIcon className="size-3.5 text-accent-strong" />
-        ) : (
-          <BellOffIcon className="size-3.5 text-text-3" />
-        )}
-        {following ? 'Following' : 'Follow'}
-      </PropertyButton>
-      <span id={`follow-hint-${issueId}`} className="text-[11px] text-text-2">
-        {hint}
+      <span className="flex min-w-0 items-center gap-1">
+        <PropertyButton
+          ref={followRef}
+          {...(settled ? { 'aria-pressed': following } : { 'aria-disabled': true })}
+          aria-describedby={failed ? `follow-alert-${issueId}` : `follow-hint-${issueId}`}
+          // `aria-disabled` carries no styling of its own — PropertyButton dresses only the native
+          // `disabled:` variant — so without this the inert control renders at full strength and
+          // still lights up under the pointer, promising an action the handler guard refuses.
+          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
+          onClick={() => void toggle()}
+        >
+          {following ? (
+            <BellIcon className="size-3.5 text-accent-strong" />
+          ) : (
+            <BellOffIcon className="size-3.5 text-text-3" />
+          )}
+          {!settled ? 'Updates' : following ? 'Following' : 'Follow'}
+        </PropertyButton>
+        {/* Recovery is exactly the moment this button vanishes, and the keyboard user who pressed
+            it is still standing on it — so it hands focus back to the control it belongs to. */}
+        {result.type === 'error' ? (
+          <RetryButton
+            onRetry={result.retry}
+            fallbackRef={followRef}
+            className="rounded-control px-1 py-0.5 font-ui text-[11px] text-accent-strong hover:bg-bg-hover focus-visible:bg-bg-hover focus-visible:ring-accent"
+          >
+            Retry
+          </RetryButton>
+        ) : null}
       </span>
-      {error !== undefined ? (
-        <span className="text-[11px] text-status-urgent" role="alert">
-          {error}
+      {failed ? null : (
+        <span id={`follow-hint-${issueId}`} className="text-[11px] text-text-2">
+          {hint}
         </span>
-      ) : null}
+      )}
+      <span id={`follow-alert-${issueId}`} className="text-[11px] text-status-urgent" role="alert">
+        {alert}
+      </span>
     </span>
   )
 }

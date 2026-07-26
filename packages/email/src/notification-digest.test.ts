@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { notificationDigestSubject, renderNotificationDigest } from './notification-digest.js'
+import {
+  MENTION_FOLLOW_FOOTNOTE,
+  notificationDigestSubject,
+  renderNotificationDigest,
+} from './notification-digest.js'
 
 const PUBLIC_URL = 'https://yapm.example.com'
 
@@ -13,6 +17,13 @@ const commented = {
   title: 'Grace commented on ENG-13',
   summary: 'Digest job double-sends on rebase',
   path: '/teams/team-1/issues?open=issue-2',
+}
+
+const mentioned = {
+  title: 'Ada mentioned you in ENG-14',
+  summary: 'Reconnect loop freezes the board',
+  path: '/teams/team-1/issues?open=issue-3',
+  footnote: MENTION_FOLLOW_FOOTNOTE,
 }
 
 function hrefs(html: string): string[] {
@@ -104,6 +115,28 @@ describe('renderNotificationDigest', () => {
         `You are receiving this because you are involved in this work. To change what yapm emails you, open yapm ${PUBLIC_URL}/inbox and use Appearance settings.`,
       ].join('\n'),
     )
+  })
+
+  // Being mentioned subscribed you to the thread. An email that reports the mention and says
+  // nothing about the subscription hands somebody a subscription they were never told about — and
+  // the only way out is a control they have not been pointed at.
+  it('says a mention now follows the issue, and says it on no other kind', async () => {
+    const message = await renderNotificationDigest({
+      publicUrl: PUBLIC_URL,
+      items: [mentioned, assigned],
+    })
+
+    expect(message.html).toContain(MENTION_FOLLOW_FOOTNOTE)
+    expect(message.text).toContain(MENTION_FOLLOW_FOOTNOTE)
+    // Once, under the mention — not once per item in the digest.
+    expect(message.text.split(MENTION_FOLLOW_FOOTNOTE)).toHaveLength(2)
+
+    const withoutMention = await renderNotificationDigest({
+      publicUrl: PUBLIC_URL,
+      items: [assigned],
+    })
+    expect(withoutMention.html).not.toContain(MENTION_FOLLOW_FOOTNOTE)
+    expect(withoutMention.text).not.toContain('follow this issue')
   })
 
   // The footer has to name the surface that actually carries the control. Every link in this

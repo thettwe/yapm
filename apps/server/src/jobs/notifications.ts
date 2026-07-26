@@ -1,5 +1,5 @@
 import type { NotificationDigestItem } from '@yapm/email'
-import { renderNotificationDigest } from '@yapm/email'
+import { MENTION_FOLLOW_FOOTNOTE, renderNotificationDigest } from '@yapm/email'
 import {
   ACTIONABLE_NOTIFICATION_KINDS,
   isActionableNotification,
@@ -111,6 +111,15 @@ export function groupNotificationEmails(
       title: copy.title,
       summary: copy.summary,
       path: notificationSubjectPath(row),
+      // A mention usually does two things, and the email says both: it told you, and it subscribed
+      // you to the thread. The footnote is a DISCLOSURE, so it is attached to the fact rather than
+      // to the kind — a person who unfollowed the issue is still mentioned, still emailed, and by
+      // the sticky-unfollow design still does not follow it, so telling them they now do would be
+      // false in the one place they cannot check it. The row's own subscription state is the only
+      // thing that settles it; the wording lives with the template.
+      ...(row.kind === 'mention' && row.subscriptionState === 'subscribed'
+        ? { footnote: MENTION_FOLLOW_FOOTNOTE }
+        : {}),
     })
     batches.set(row.recipientId, existing)
   }

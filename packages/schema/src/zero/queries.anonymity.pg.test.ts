@@ -534,6 +534,10 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
       'retros.detail': { id: anonymousRetroId },
       'retroDrafts.mine': { retroId: anonymousRetroId },
       'retroVotes.mine': { retroId: anonymousRetroId },
+      // Self-scoped like the two above and swept by the same walk: a notification carries both a
+      // recipient and an actor, so if it ever synced past its recipient it would put one person's
+      // id in front of another with no `IDENTITY_BY_DESIGN` entry to excuse it.
+      'notifications.mine': undefined,
     }
   }
 

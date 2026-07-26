@@ -7,9 +7,12 @@ import type {
   CycleDigestStatus,
   CycleStatus,
   DeploymentState,
+  EmailNotificationMode,
   IssueGrouping,
   IssuePriority,
   IssueStatus,
+  NotificationKind,
+  NotificationSubjectType,
   ProjectStatus,
   PullRequestState,
   RetroColumnAccent,
@@ -96,6 +99,9 @@ export interface UserPreferenceTable {
   user_id: string
   theme: Generated<ThemePreset>
   accent: Nullable<string>
+  // Governs EMAIL only, never the in-app inbox row. CHECK-constrained in Postgres, unlike
+  // `notification.kind` — a closed value set this change owns entirely.
+  email_notifications: Generated<EmailNotificationMode>
   created_at: Generated<Timestamp>
   updated_at: Generated<Timestamp>
 }
@@ -508,6 +514,28 @@ export interface RetroPresenceTable {
   last_seen_at: Generated<Timestamp>
 }
 
+// One row per person per event. The FOUR-COLUMN NATURAL KEY IS THE PRIMARY KEY — nothing is
+// minted anywhere in the notification path, so a mutator re-run during rebase can neither
+// duplicate a row nor change one, and `on conflict do nothing` is answered by the PK index itself.
+// `subject_key`/`subject_title` are snapshots, not joins (design D3).
+export interface NotificationTable {
+  recipient_id: string
+  actor_id: string
+  kind: NotificationKind
+  team_id: string
+  subject_type: NotificationSubjectType
+  subject_id: string
+  subject_key: Nullable<string>
+  subject_title: string
+  event_key: string
+  read_at: TimestampOrNull
+  email_sent_at: TimestampOrNull
+  // `Timestamp` (not `Generated<Timestamp>`) for the same reason `connector_config` uses it: the
+  // column is DB-defaulted and omittable on insert, but the fan-out sets it from the triggering
+  // mutation's own timestamp rather than from `now()`.
+  created_at: Timestamp
+}
+
 // Owned by better-auth (created by its `getMigrations()` at boot), read-only here so
 // mutators/queries can join member profiles. camelCase columns and a `text` id are
 // better-auth's shape (reference/kysely-stack.md §5.4), not ours to change.
@@ -556,6 +584,7 @@ export interface DB {
   retro_vote_tally: RetroVoteTallyTable
   retro_action: RetroActionTable
   retro_presence: RetroPresenceTable
+  notification: NotificationTable
   user: UserTable
 }
 
@@ -678,5 +707,9 @@ export type NewRetroAction = Insertable<RetroActionTable>
 
 export type RetroPresence = Selectable<RetroPresenceTable>
 export type NewRetroPresence = Insertable<RetroPresenceTable>
+
+export type Notification = Selectable<NotificationTable>
+export type NewNotification = Insertable<NotificationTable>
+export type NotificationUpdate = Updateable<NotificationTable>
 
 export type User = Selectable<UserTable>

@@ -616,3 +616,70 @@ Anything genuinely ambiguous that surfaces during implementation goes below, per
 ## Decisions made during implementation
 
 *(Appended during the build. Each entry: what was ambiguous, what was chosen, why.)*
+
+### DI-1 — `notification.created_at` is typed `Timestamp`, not `Generated<Timestamp>`
+
+*Ambiguous:* the fan-out sets `created_at` from the triggering mutation's own timestamp, but every
+other `created_at` in the hand-written `DB` interface is `Generated<Timestamp>`, which kysely 0.28
+resolves to an insert type of `ColumnType<…>` rather than `Date` — a plain `Date` will not compile.
+
+*Chosen:* `created_at: Timestamp`, following the precedent already established (and already
+commented) on `connector_config`: "`Timestamp` (not `Generated<Timestamp>`) so these DB-defaulted
+columns stay omittable on insert yet settable on update". The Postgres default is unchanged, and the
+drift test's `hasDefault: true` entry is what actually asserts it.
+
+### DI-2 — `NOTIFICATION_SYNC_LIMIT` lives in `context.ts`, not `queries.ts`
+
+*Ambiguous:* task 3.2 requires `markAllRead` to loop "bounded by the same limit the query uses",
+which naïvely means `mutators.ts` importing from `queries.ts`.
+
+*Chosen:* the constant lives in `context.ts` beside the other shared enums and limits, and both
+`queries.ts` and `mutators.ts` import it. Same single definition, no new edge from the mutator layer
+to the query layer.
+
+### DI-3 — "run it twice" means "attempt it twice" for the two insert-shaped triggers
+
+*Ambiguous:* the falsifiable check says to run each of the four triggers twice with identical args.
+`issue.assign` and `issue.routeIssue` are update-shaped and genuinely re-runnable, but `issue.create`
+and `comment.create` insert a row keyed on a call-site-minted id, so a second identical application
+cannot get past its own insert — in any mutator in this repo, not just these two.
+
+*Chosen:* the test attempts both twice (the second attempt's transaction rolls back whole) and
+asserts exactly one notification row afterwards, with the reason written at the helper. The natural
+key's idempotency under a genuinely repeated authoritative write is then asserted directly at the
+seam — `recordNotifications` called twice with the same event, and once with the event duplicated
+inside a single statement, both yielding one row. Falsifiability was confirmed by mutation: removing
+`routeIssue`'s fan-out fails exactly one assertion, removing `issue.assign`'s rebase guard fails
+exactly one, and replacing the recipient filter with `teamScoped` fails the admin assertion.
+
+### DI-4 — `setPreference` preserves an omitted `emailNotifications` rather than resetting it
+
+*Ambiguous:* the field is written "on both insert and update defaulting to `assigned_only`", but the
+theme control shares this one mutator and does not send the field.
+
+*Chosen:* insert writes `args.emailNotifications ?? 'assigned_only'`; update writes
+`args.emailNotifications ?? existing.emailNotifications ?? 'assigned_only'`. Changing your theme can
+never silently re-enable email you turned off. Both paths are covered by unit tests.
+
+### DI-5 — Two registries had to admit the new surface, and both are the point of having them
+
+*Not anticipated:* `ai-tools.ts` fails its own test if any registered mutator has no tool spec, and
+`queries.anonymity.pg.test.ts` fails if any registered query is missing from its walk. Both fired.
+
+*Chosen:* `notification.markRead` / `markAllRead` are classified `write` (they are structurally
+self-scoped and destroy nothing), and `notifications.mine` joins the anonymity walk — where it earns
+its place, since a notification carries both a recipient id and an actor id and has no
+`IDENTITY_BY_DESIGN` entry to excuse either reaching anyone else.
+
+### DI-6 — A third index, on `team_id`
+
+*Not anticipated:* tasks 1.1 named the unread index and the delivery-sweep index. `team.removeMember`
+deletes by `(recipient_id, team_id)` — answered by the PK's leading column — but the `on delete
+cascade` from `team` scans by `team_id` alone. `notification_team_id_idx` was added for it.
+
+### DI-7 — Verified: zero-cache replicates the compound primary key cleanly
+
+Not a decision, but the thing most likely to have gone wrong. `zero-cache` 1.8.0 was started against
+the migrated database on the isolated stack: it computed an initial download state for
+`notification` with all twelve columns and reported `replication status OK` with zero `ERROR`-level
+log lines. The four-column primary key needed nothing special.

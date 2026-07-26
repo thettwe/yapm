@@ -1,6 +1,6 @@
 import { mustGetQuery } from '@rocicorp/zero'
 import { describe, expect, it } from 'vitest'
-import type { AuthContext } from './context.js'
+import { type AuthContext, NOTIFICATION_SYNC_LIMIT } from './context.js'
 import { tableShapes } from './introspect.js'
 import {
   CYCLES_BY_TEAM_QUERY_NAME,
@@ -13,6 +13,7 @@ import {
   ISSUES_MINE_QUERY_NAME,
   LABELS_BY_TEAM_QUERY_NAME,
   MEMBERS_ALL_QUERY_NAME,
+  NOTIFICATIONS_MINE_QUERY_NAME,
   PREFERENCES_MINE_QUERY_NAME,
   PROJECT_GET_QUERY_NAME,
   PROJECTS_ALL_QUERY_NAME,
@@ -85,6 +86,7 @@ describe('the synced query registry', () => {
       [RETROS_BY_TEAM_QUERY_NAME, queries.retros.byTeam],
       [RETRO_DETAIL_QUERY_NAME, queries.retros.detail],
       [RETRO_DRAFTS_MINE_QUERY_NAME, queries.retroDrafts.mine],
+      [NOTIFICATIONS_MINE_QUERY_NAME, queries.notifications.mine],
       [RETRO_VOTES_MINE_QUERY_NAME, queries.retroVotes.mine],
     ] as const) {
       expect(query.queryName).toBe(name)
@@ -393,6 +395,57 @@ describe('retro drafts and votes are self-scoped with no admin bypass', () => {
     for (const ctx of [NON_MEMBER, undefined]) {
       expect(astOfArgs(query, { retroId: RETRO_ID }, ctx).where).toEqual(DENY_ALL_WHERE)
     }
+  })
+})
+
+// The inbox is the sharpest test of the deviation, because the mistake that breaks it — writing
+// `teamScoped(...)` instead of a bare ctx filter — is one line and looks completely normal.
+describe('the inbox is self-scoped with no workspace-admin bypass', () => {
+  it('filters on the verified ctx.userID alone, for every role including admin', () => {
+    for (const ctx of [ADMIN, MEMBER, VIEWER]) {
+      const where = JSON.stringify(astOf(queries.notifications.mine, ctx).where)
+      expect(where).toContain('recipientId')
+      expect(where).toContain(ctx.userID)
+      for (const other of [ADMIN, MEMBER, VIEWER, NON_MEMBER].filter(
+        (candidate) => candidate.userID !== ctx.userID,
+      )) {
+        expect(where).not.toContain(other.userID)
+      }
+    }
+  })
+
+  it('carries no team-membership predicate at all — not even the admin branch', () => {
+    const serialized = JSON.stringify(astOf(queries.notifications.mine, ADMIN))
+    // `teamScoped` compiles to a correlated EXISTS over `team_membership`. Its absence for an admin
+    // is the point: an admin's inbox query is identical to everybody else's, and returns only their
+    // own rows.
+    expect(serialized).not.toContain('team_membership')
+    expect(JSON.stringify(astOf(queries.notifications.mine, ADMIN).where)).toEqual(
+      JSON.stringify(astOf(queries.notifications.mine, MEMBER).where).replace(
+        MEMBER.userID,
+        ADMIN.userID,
+      ),
+    )
+  })
+
+  it('denies a non-member and an unauthenticated caller by an empty query', () => {
+    for (const ctx of [NON_MEMBER, undefined]) {
+      expect(astOf(queries.notifications.mine, ctx).where).toEqual(DENY_ALL_WHERE)
+    }
+  })
+
+  it('reaches the actor for a display name but never the issue', () => {
+    // No `issue` relationship exists on the table (design D3): joining the subject off a
+    // self-scoped query would need re-scoping to avoid widening reads, and a notification whose
+    // issue fell out of scope would render blank. The snapshots render instead.
+    const serialized = JSON.stringify(astOf(queries.notifications.mine, MEMBER))
+    expect(serialized).toContain('"user"')
+    expect(serialized).not.toContain('"issue"')
+  })
+
+  it('bounds the synced set', () => {
+    const ast = astOf(queries.notifications.mine, MEMBER) as { limit?: number }
+    expect(ast.limit).toBe(NOTIFICATION_SYNC_LIMIT)
   })
 })
 

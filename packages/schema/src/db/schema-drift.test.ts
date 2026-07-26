@@ -55,6 +55,7 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     user_id: { nullable: false, hasDefault: false },
     theme: { nullable: false, hasDefault: true },
     accent: { nullable: true, hasDefault: false },
+    email_notifications: { nullable: false, hasDefault: true },
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },
@@ -377,6 +378,20 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
   // better-auth owns this table; the drift test provisions it (see `createAuthUserTable`)
   // so the read-surface interface and Zero schema are still checked against its real shape
   // (reference/kysely-stack.md §5.4).
+  notification: {
+    recipient_id: { nullable: false, hasDefault: false },
+    actor_id: { nullable: false, hasDefault: false },
+    kind: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    subject_type: { nullable: false, hasDefault: false },
+    subject_id: { nullable: false, hasDefault: false },
+    subject_key: { nullable: true, hasDefault: false },
+    subject_title: { nullable: false, hasDefault: false },
+    event_key: { nullable: false, hasDefault: false },
+    read_at: { nullable: true, hasDefault: false },
+    email_sent_at: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+  },
   user: {
     id: { nullable: false, hasDefault: false },
     name: { nullable: false, hasDefault: false },
@@ -589,6 +604,19 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
     }
 
     expect(problems, problems.join('\n')).toEqual([])
+  })
+
+  // Called out on its own because the whole notification design rests on it: the natural key IS the
+  // primary key, IN THIS ORDER, so nothing is minted, `on conflict do nothing` needs no separate
+  // unique index, and a mutator re-run during rebase can neither duplicate nor alter a row. The
+  // generic check above would also catch a change, but not explain why it matters.
+  it('keeps the notification natural key as a four-column primary key, in order', () => {
+    expect(pkByTable.get('notification')).toEqual([
+      'recipient_id',
+      'kind',
+      'subject_id',
+      'event_key',
+    ])
   })
 })
 

@@ -15,9 +15,12 @@ import type {
   CycleDigestStatus,
   CycleStatus,
   DeploymentState,
+  EmailNotificationMode,
   IssueGrouping,
   IssuePriority,
   IssueStatus,
+  NotificationKind,
+  NotificationSubjectType,
   ProjectStatus,
   PullRequestState,
   RetroColumnAccent,
@@ -91,6 +94,7 @@ const userPreference = table('user_preference')
     userId: string().from('user_id'),
     theme: enumeration<ThemePreset>(),
     accent: string().optional(),
+    emailNotifications: enumeration<EmailNotificationMode>().from('email_notifications'),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })
@@ -433,6 +437,27 @@ const retroPresence = table('retro_presence')
     lastSeenAt: number().from('last_seen_at'),
   })
   .primaryKey('retroId', 'userId')
+
+// The natural key IS the primary key, so nothing is minted anywhere in the notification path and a
+// rebased mutator cannot duplicate a row. `markRead` addresses a row by these four columns, and the
+// recipient component always comes from the verified `ctx.userID` — which makes the mutator
+// STRUCTURALLY unable to name somebody else's row rather than relying on a `where` clause.
+const notification = table('notification')
+  .columns({
+    recipientId: string().from('recipient_id'),
+    actorId: string().from('actor_id'),
+    kind: enumeration<NotificationKind>(),
+    teamId: string().from('team_id'),
+    subjectType: enumeration<NotificationSubjectType>().from('subject_type'),
+    subjectId: string().from('subject_id'),
+    subjectKey: string().from('subject_key').optional(),
+    subjectTitle: string().from('subject_title'),
+    eventKey: string().from('event_key'),
+    readAt: number().from('read_at').optional(),
+    emailSentAt: number().from('email_sent_at').optional(),
+    createdAt: number().from('created_at'),
+  })
+  .primaryKey('recipientId', 'kind', 'subjectId', 'eventKey')
 
 const user = table('user')
   .columns({
@@ -973,6 +998,23 @@ const retroPresenceRelationships = relationships(retroPresence, ({ one }) => ({
   }),
 }))
 
+// NO `issue` RELATIONSHIP, deliberately (design D3). Joining the subject off a self-scoped query
+// would need the `teamScoped` predicate on the related issue to avoid widening reads past the team
+// boundary, and a notification whose issue fell out of scope would then render blank. The
+// denormalised `subjectKey`/`subjectTitle` snapshots render with no permission subtlety at all.
+const notificationRelationships = relationships(notification, ({ one }) => ({
+  actor: one({
+    sourceField: ['actorId'],
+    destField: ['id'],
+    destSchema: user,
+  }),
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+}))
+
 export const schema = createSchema({
   tables: [
     workspace,
@@ -1003,6 +1045,7 @@ export const schema = createSchema({
     retroVoteTally,
     retroAction,
     retroPresence,
+    notification,
     user,
   ],
   relationships: [
@@ -1034,6 +1077,7 @@ export const schema = createSchema({
     retroVoteTallyRelationships,
     retroActionRelationships,
     retroPresenceRelationships,
+    notificationRelationships,
   ],
   enableLegacyMutators: false,
   enableLegacyQueries: false,

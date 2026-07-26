@@ -36,6 +36,8 @@ import {
   editCommentArgs,
   flagTriageArgs,
   labelRetroGroupArgs,
+  markAllNotificationsReadArgs,
+  markNotificationReadArgs,
   moveIssueArgs,
   moveRetroCardArgs,
   mutators,
@@ -93,6 +95,11 @@ export interface MutatorToolSpec {
 const MUTATOR_TOOL_KINDS: Record<string, ToolKind> = {
   'workspace.rename': 'write',
   'preference.set': 'write',
+  // Read state on somebody's own inbox. The mutator is structurally self-scoped (the recipient
+  // comes from the verified ctx), so an agent acting on behalf of a user can only ever touch that
+  // user's rows — and marking read destroys nothing.
+  'notification.markRead': 'write',
+  'notification.markAllRead': 'write',
   'member.changeRole': 'destructive',
   'member.remove': 'destructive',
   'team.create': 'write',
@@ -164,6 +171,8 @@ const MUTATOR_TOOL_KINDS: Record<string, ToolKind> = {
 const MUTATOR_TOOL_ARGS: Record<string, z.ZodType> = {
   'workspace.rename': renameWorkspaceArgs,
   'preference.set': setPreferenceArgs,
+  'notification.markRead': markNotificationReadArgs,
+  'notification.markAllRead': markAllNotificationsReadArgs,
   'member.changeRole': changeMemberRoleArgs,
   'member.remove': removeMemberArgs,
   'team.create': createTeamArgs,

@@ -14,7 +14,7 @@ complete and useful before any mail code exists (groups 8–12); email is additi
 
 ## 1. Schema: the notification table and its natural key
 
-- [ ] 1.1 Write `packages/schema/src/migrations/0013_notifications.ts`: create `notification` with
+- [x] 1.1 Write `packages/schema/src/migrations/0013_notifications.ts`: create `notification` with
       `recipient_id text not null`, `actor_id text not null`, `kind text not null`,
       `team_id uuid not null references team(id) on delete cascade`, `subject_type text not null`,
       `subject_id uuid not null`, `subject_key text`, `subject_title text not null`,
@@ -26,116 +26,116 @@ complete and useful before any mail code exists (groups 8–12); email is additi
       `recipient_id`/`actor_id` (the `user` table is better-auth's, matching `retro.facilitator_id`).
       Add the partial index `(recipient_id, created_at desc) where read_at is null`, and an index
       supporting the delivery sweep's `(read_at, email_sent_at, created_at)` predicate.
-- [ ] 1.2 In the same migration add `user_preference.email_notifications text not null default
+- [x] 1.2 In the same migration add `user_preference.email_notifications text not null default
       'assigned_only'` **with** a CHECK on `('all','assigned_only','none')` — the deliberate contrast
       with 1.1's absent CHECK; note both reasons in the migration header.
-- [ ] 1.3 Register `0013_notifications` in `packages/schema/src/migrations/index.ts`.
-- [ ] 1.4 Extend the hand-written Kysely `DB` interface in `packages/schema/src/db/types.ts` with
+- [x] 1.3 Register `0013_notifications` in `packages/schema/src/migrations/index.ts`.
+- [x] 1.4 Extend the hand-written Kysely `DB` interface in `packages/schema/src/db/types.ts` with
       `NotificationTable` (+ `Notification`/`NewNotification`/`NotificationUpdate`) and the new
       `user_preference` column; export the types from `packages/schema/src/db/index.ts`.
-- [ ] 1.5 Extend `packages/schema/src/db/schema-drift.test.ts`: add `notification` to `KYSELY_DB`
+- [x] 1.5 Extend `packages/schema/src/db/schema-drift.test.ts`: add `notification` to `KYSELY_DB`
       with the new `user_preference` column, and assert the **compound primary key** matches (the
       test already introspects `pg_index`; make sure the four-column key is asserted in order).
-- [ ] 1.6 **Test**: `pnpm --filter @yapm/schema test` with `DATABASE_URL` set — migrations test and
+- [x] 1.6 **Test**: `pnpm --filter @yapm/schema test` with `DATABASE_URL` set — migrations test and
       drift test green against a live database.
 
 ## 2. Zero schema, kinds, and the self-scoped query
 
-- [ ] 2.1 Add to `packages/schema/src/zero/context.ts`: `NOTIFICATION_KINDS`
+- [x] 2.1 Add to `packages/schema/src/zero/context.ts`: `NOTIFICATION_KINDS`
       (`issue_assigned | issue_commented`) + `NotificationKind`, `NOTIFICATION_SUBJECT_TYPES`
       (`issue`) + `NotificationSubjectType`, `EMAIL_NOTIFICATION_MODES`
       (`all | assigned_only | none`) + `EmailNotificationMode`, and
       `ACTIONABLE_NOTIFICATION_KINDS` (design D13 — the set `assigned_only` emails; `mentions` adds
       one entry here and nothing else).
-- [ ] 2.2 Add the `notification` table to `packages/schema/src/zero/schema.ts` with
+- [x] 2.2 Add the `notification` table to `packages/schema/src/zero/schema.ts` with
       `.primaryKey('recipientId', 'kind', 'subjectId', 'eventKey')` and column `.from()` mappings;
       add an `actor` → `user` relationship and a `team` → `team` relationship. **No `issue`
       relationship** (design D3). Register the table and its relationships in `createSchema`. Add
       `emailNotifications` to the `user_preference` table.
-- [ ] 2.3 Add `queries.notifications.mine` to `packages/schema/src/zero/queries.ts`, modelled on
+- [x] 2.3 Add `queries.notifications.mine` to `packages/schema/src/zero/queries.ts`, modelled on
       `retroDrafts.mine` (`queries.ts:238`) — bare `ctx.userID` filter, `isMember` gate,
       `denyAll` otherwise, **no `teamScoped`, no admin bypass**, `.related('actor')`,
       `.orderBy('createdAt','desc')`, `.limit(100)`. Export
       `NOTIFICATIONS_MINE_QUERY_NAME`. Carry the design-D4 reason as a comment.
-- [ ] 2.4 **Test**: unit coverage in `packages/schema/src/zero/queries.test.ts` for the new query's
+- [x] 2.4 **Test**: unit coverage in `packages/schema/src/zero/queries.test.ts` for the new query's
       gating; `pnpm turbo typecheck` green.
 
 ## 3. Shared mutators: read state and the email preference
 
-- [ ] 3.1 Add `markNotificationReadArgs` (`{kind, subjectId, eventKey, readAt: number | null}`) and
+- [x] 3.1 Add `markNotificationReadArgs` (`{kind, subjectId, eventKey, readAt: number | null}`) and
       `notification.markRead` to `packages/schema/src/zero/mutators.ts`: gate on `isAuthenticated`,
       then `tx.mutate.notification.update({recipientId: ctx.userID, ...})` — recipient from the
       verified context, never args, which is what makes it structurally self-scoped (design D1).
-- [ ] 3.2 Add `markAllNotificationsReadArgs` (`{readAt: number}`) and
+- [x] 3.2 Add `markAllNotificationsReadArgs` (`{readAt: number}`) and
       `notification.markAllRead`: gate, then loop the caller's unread rows via `tx.run`, bounded by
       the same limit the query uses.
-- [ ] 3.3 Extend `setPreferenceArgs` with an optional `emailNotifications` and have `setPreference`
+- [x] 3.3 Extend `setPreferenceArgs` with an optional `emailNotifications` and have `setPreference`
       write it on both insert and update, defaulting to `assigned_only` on first insert.
-- [ ] 3.4 Register `notification: {markRead, markAllRead}` in the `mutators` registry and export the
+- [x] 3.4 Register `notification: {markRead, markAllRead}` in the `mutators` registry and export the
       mutator-name constants beside the existing ones.
-- [ ] 3.5 **Test**: `packages/schema/src/zero/mutators.test.ts` — `markRead` rejects an
+- [x] 3.5 **Test**: `packages/schema/src/zero/mutators.test.ts` — `markRead` rejects an
       unauthenticated caller; a caller's args cannot address another recipient (the written row's
       recipient is always `ctx.userID`); `setPreference` round-trips the new field and rejects an
       invalid mode.
 
 ## 4. The write seam and the server-authoritative fan-out
 
-- [ ] 4.1 Write `packages/schema/src/zero/notifications/recipients.ts` — pure, no DB:
+- [x] 4.1 Write `packages/schema/src/zero/notifications/recipients.ts` — pure, no DB:
       `assignmentRecipients({assigneeId, actorId})` and
       `commentRecipients({assigneeId, creatorId, priorCommenterIds, actorId})` returning a
       deduplicated, actor-excluded, cap-bounded array; export `NOTIFICATION_RECIPIENT_CAP`.
-- [ ] 4.2 **Test**: `recipients.test.ts` — excludes the actor, dedupes overlapping
+- [x] 4.2 **Test**: `recipients.test.ts` — excludes the actor, dedupes overlapping
       assignee/creator/commenter, preserves a stable order, enforces the cap, returns empty for a
       self-assignment and for a null assignee.
-- [ ] 4.3 Write `packages/schema/src/zero/notifications/copy.ts` — pure kind → title/summary copy
+- [x] 4.3 Write `packages/schema/src/zero/notifications/copy.ts` — pure kind → title/summary copy
       used by both the inbox row and the email template. **No comment-body excerpt anywhere**
       (design/proposal non-goal). Unit-test it.
-- [ ] 4.4 Write `packages/schema/src/db/notification.ts` (mirroring `db/cycle-digest.ts`):
+- [x] 4.4 Write `packages/schema/src/db/notification.ts` (mirroring `db/cycle-digest.ts`):
       the `NotificationEvent` type and **`recordNotifications(db, events)`** — one multi-row
       `insert … on conflict do nothing`, no-op on empty. Add the sweep/retention/deletion accessors
       here too (`markAllNotificationsRead`, `deleteNotificationsForMember`,
       `deleteNotificationsForTeamMember`, `pendingNotificationEmails`, `stampNotificationsEmailed`,
       `deleteNotificationsOlderThan`) so every Kysely statement over the table lives in one file.
       Export from `packages/schema/src/db/index.ts`.
-- [ ] 4.5 **Re-export `recordNotifications` and `NotificationEvent` from
+- [x] 4.5 **Re-export `recordNotifications` and `NotificationEvent` from
       `packages/schema/src/zero/server-mutators.ts`**, which is what `@yapm/schema/server` resolves
       to. This is the public seam `mentions` binds to (design D6) — it must exist and be exported
       here even though this change is its only caller.
-- [ ] 4.6 Add the private `NOTIFICATION_TRIGGERS` map and a `fanOut` helper inside
+- [x] 4.6 Add the private `NOTIFICATION_TRIGGERS` map and a `fanOut` helper inside
       `server-mutators.ts`: read `team.key` and the issue's `number` to compose `subject_key`, build
       events, call `recordNotifications` through `serverDb(tx)`.
-- [ ] 4.7 Wire the fan-out into `createServerMutators()` at **all four** sites, each behind
+- [x] 4.7 Wire the fan-out into `createServerMutators()` at **all four** sites, each behind
       `if (tx.location !== 'server') return`: `issue.create` (after `claimNextIssueNumber`, so
       `subject_key` has a number), `issue.assign`, **`issue.routeIssue`** (the duplicated assignee
       path at `mutators.ts:1030-1047` — do not miss it), and `comment.create` (bounded prior-commenter
       read).
-- [ ] 4.8 **Test**: `packages/schema/src/zero/server-mutators.test.ts` — the fan-out is skipped for a
+- [x] 4.8 **Test**: `packages/schema/src/zero/server-mutators.test.ts` — the fan-out is skipped for a
       client-location transaction at every one of the four sites.
 
 ## 5. Membership removal deletes notifications
 
-- [ ] 5.1 Add a `member.remove` server override: after the shared mutator, on the server only,
+- [x] 5.1 Add a `member.remove` server override: after the shared mutator, on the server only,
       delete **every** notification whose recipient is the removed user (design D11).
-- [ ] 5.2 Add a `team.removeMember` server override: delete that user's notifications whose
+- [x] 5.2 Add a `team.removeMember` server override: delete that user's notifications whose
       `team_id` is the team being left, and **only** those.
-- [ ] 5.3 **Test**: unit coverage that both overrides are server-guarded and no-op on the client.
+- [x] 5.3 **Test**: unit coverage that both overrides are server-guarded and no-op on the client.
 
 ## 6. The falsifiable check
 
-- [ ] 6.1 Write `packages/schema/src/zero/mutators.notification.pg.test.ts`, gated by
+- [x] 6.1 Write `packages/schema/src/zero/mutators.notification.pg.test.ts`, gated by
       `describe.skipIf(DATABASE_URL === undefined)`. Seed workspace + team T + admin A + members B
       and C (all in T). Run `issue.assign` **twice with identical args**, then assert the five
       checks from design "How we will know this worked": (1) B sees exactly one row with the right
       shape, (2) C sees zero, (3) **admin A sees zero**, (4) a client-location transaction writes
       zero rows, (5) `markAllRead` as B stamps only B's rows.
-- [ ] 6.2 Extend the same file: `issue.create` with an assignee, `issue.routeIssue` with an
+- [x] 6.2 Extend the same file: `issue.create` with an assignee, `issue.routeIssue` with an
       assignee, and `comment.create`, each run twice, each asserting exactly one row per event — so
       `routeIssue` cannot be silently missed.
-- [ ] 6.3 Extend the same file with the leaver cases: removing B from T deletes B's T rows and keeps
+- [x] 6.3 Extend the same file with the leaver cases: removing B from T deletes B's T rows and keeps
       B's rows for a second team; removing B from the workspace deletes all of them.
-- [ ] 6.4 Add the `team_id` invariant guard test (design D16): assert no mutator mutates
+- [x] 6.4 Add the `team_id` invariant guard test (design D16): assert no mutator mutates
       `issue.team_id`.
-- [ ] 6.5 **Run it**: `DATABASE_URL=postgres://yapm:yapm@localhost:5443/yapm pnpm --filter
+- [x] 6.5 **Run it**: `DATABASE_URL=postgres://yapm:yapm@localhost:5443/yapm pnpm --filter
       @yapm/schema test` — all green.
 
 ## 7. Web: the inbox, the badge, the palette, the preference

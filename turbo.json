@@ -27,11 +27,17 @@
         "BETTER_AUTH_URL",
         "DATABASE_URL",
         "DATABASE_POOL_MAX",
+        "EMAIL_FROM",
         "GITHUB_CLIENT_ID",
         "GITHUB_CLIENT_SECRET",
         "HOST",
         "LOG_LEVEL",
+        "NOTIFICATION_EMAIL_CRON",
+        "NOTIFICATION_RETENTION_CRON",
+        "NOTIFICATION_RETENTION_DAYS",
         "PORT",
+        "PUBLIC_URL",
+        "RESEND_API_KEY",
         "SEED_WORKSPACE_NAME",
         "SERVER_ORIGIN",
         "SMTP_URL",
@@ -53,7 +59,7 @@
     "test": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"],
-      "passThroughEnv": ["DATABASE_URL", "CI"]
+      "env": ["DATABASE_URL", "CI"]
     },
     "e2e": {
       "dependsOn": ["^build"],

@@ -86,14 +86,30 @@ test.describe('theme preference', () => {
     await page.keyboard.press('Enter')
     await expect.poll(async () => (await rootTheme(page)).accent).toBe('#22aa55')
 
+    // The email preference rides the same popover and the same `preference.set` mutator, and it is
+    // the ONLY field here with no localStorage cache behind it — so surviving a reload proves the
+    // mutator wrote it and the synced row came back, not that a bootstrap cache replayed it.
+    const emailSelect = page.getByLabel('Email notifications')
+    await emailSelect.focus()
+    await emailSelect.selectOption('none')
+    await expect(emailSelect).toHaveValue('none')
+
     // The preference is cached (bootstrap source of truth) and synced via the mutator.
     const cached = await page.evaluate((key) => localStorage.getItem(key), CACHE_KEY)
     expect(cached).toContain('focused')
     expect(cached).toContain('#22aa55')
+    expect(cached).not.toContain('none')
 
     // Reload: the theme + accent survive with no pointer interaction and no flash.
     await page.reload()
+    await expectInApp(page)
     await expect.poll(async () => (await rootTheme(page)).theme).toBe('focused')
     await expect.poll(async () => (await rootTheme(page)).accent).toBe('#22aa55')
+
+    // And so does the email preference, read straight back off the synced row.
+    const triggerAgain = page.getByRole('button', { name: 'Appearance settings' })
+    await triggerAgain.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByLabel('Email notifications')).toHaveValue('none')
   })
 })

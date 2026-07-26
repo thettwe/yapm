@@ -1,6 +1,12 @@
 import { defineQueries, defineQuery, type Query, type Schema } from '@rocicorp/zero'
 import * as z from 'zod'
-import { type AuthContext, canManage, isAuthenticated, isMember } from './context.js'
+import {
+  type AuthContext,
+  canManage,
+  isAuthenticated,
+  isMember,
+  NOTIFICATION_SYNC_LIMIT,
+} from './context.js'
 import { zql } from './schema.js'
 
 export function denyAll<
@@ -248,6 +254,29 @@ export const queries = defineQueries({
         .orderBy('rank', 'asc')
     }),
   },
+  notifications: {
+    // SELF-SCOPED WITH NO WORKSPACE-ADMIN BYPASS, and that is the deviation worth naming: this is
+    // the `retroDrafts.mine` shape, NOT `teamScoped`. `teamScoped` hands workspace admins
+    // everything, which is right for work data and catastrophic for an inbox — nobody but the
+    // recipient reads a notification, not a teammate and not an admin (design D4, H4). Written as
+    // `teamScoped` this looks completely normal in review, which is why the falsifiable check
+    // asserts an ADMIN gets zero rows rather than merely a non-recipient member.
+    //
+    // `isMember` rather than `isAuthenticated`, matching `issues.mine`: a user demoted out of
+    // membership loses their inbox outright. Their rows are deleted anyway (design D11), so the
+    // two agree.
+    //
+    // `.limit()` is load-bearing, not hygiene: a per-user table that grows forever is a hydration
+    // cost on every client, and the retention sweep is the other half of that bound.
+    mine: defineQuery(({ ctx }) => {
+      if (!isMember(ctx)) return denyAll(zql.notification)
+      return zql.notification
+        .where('recipientId', ctx.userID)
+        .related('actor')
+        .orderBy('createdAt', 'desc')
+        .limit(NOTIFICATION_SYNC_LIMIT)
+    }),
+  },
   retroVotes: {
     // SELF-SCOPED for the same reason and with the same deviation: a voter sees their own dots (which
     // is how the remaining-budget readout stays instant and offline-correct), and everyone else reads
@@ -281,3 +310,4 @@ export const RETROS_BY_TEAM_QUERY_NAME = 'retros.byTeam'
 export const RETRO_DETAIL_QUERY_NAME = 'retros.detail'
 export const RETRO_DRAFTS_MINE_QUERY_NAME = 'retroDrafts.mine'
 export const RETRO_VOTES_MINE_QUERY_NAME = 'retroVotes.mine'
+export const NOTIFICATIONS_MINE_QUERY_NAME = 'notifications.mine'

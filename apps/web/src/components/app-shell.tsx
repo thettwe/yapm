@@ -6,6 +6,7 @@ import { ConnectionStatus } from '@/components/connection-status'
 import { Switcher } from '@/components/switcher'
 import { ThemeControls } from '@/components/theme-controls'
 import { UserMenu } from '@/components/user-menu'
+import { InboxBadge } from '@/notifications/inbox-badge'
 import { useConnectionSummary } from '@/zero/connection'
 
 export function AppShell({ current, children }: { current: string; children: ReactNode }) {
@@ -19,6 +20,7 @@ export function AppShell({ current, children }: { current: string; children: Rea
         <Switcher current={current} />
         <div className="flex-1" />
         <ConnectionStatus connection={connection} />
+        <InboxBadge />
         <ThemeControls />
         <UserMenu
           {...(session?.user.name ? { name: session.user.name } : {})}

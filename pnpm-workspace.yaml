@@ -34,6 +34,7 @@ catalog:
   '@octokit/auth-app': ^8.2.0
   '@octokit/webhooks': ^14.2.0
   '@playwright/test': ^1.61.1
+  '@react-email/render': ^2.1.0
   '@rocicorp/zero': ^1.8.0
   '@tailwindcss/vite': ^4.3.3
   '@tanstack/react-router': ^1.170.18
@@ -46,6 +47,7 @@ catalog:
   '@tiptap/react': ^3.28.0
   '@tiptap/starter-kit': ^3.28.0
   '@types/node': ^24.13.3
+  '@types/nodemailer': ^8.0.1
   '@types/pg': ^8.20.0
   '@types/react': ^19.2.17
   '@types/react-dom': ^19.2.3
@@ -57,6 +59,9 @@ catalog:
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   cmdk: ^1.1.1
+  # pg-boss's own cron parser, pinned to the same range it depends on, so a cron this validates at
+  # boot is exactly a cron pg-boss will accept at schedule time.
+  cron-parser: ^5.6.2
   fractional-indexing: ^4.0.0
   hono: ^4.12.31
   jose: ^6.2.4
@@ -64,6 +69,7 @@ catalog:
   kysely: 0.28.17
   lefthook: ^2.1.10
   lucide-react: ^1.26.0
+  nodemailer: ^9.0.3
   octokit: ^5.0.5
   pg: ^8.22.0
   pg-boss: ^12.26.2

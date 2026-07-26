@@ -43,7 +43,7 @@ open PR → **parallel 3-lens review** (correctness+security, constraints+tests,
 ## 5. Parallelism & the working-tree rule
 
 - **Never run two repo-mutating workflows in the same working tree concurrently** — their `git add -A && commit` steps corrupt each other. Safe concurrency = scratchpad-only work (research/planning) alongside one repo workflow, or separate git **worktrees** for genuinely disjoint tracks.
-- The verified API references for upcoming work live in [`reference/`](reference/) (`connectors.md`, `ai-providers.md`, `board-dnd.md`, plus the stack refs). Read the relevant one before implementing — the stack postdates model training data.
+- The verified API references for upcoming work live in [`reference/`](reference/) (`connectors.md`, `ai-providers.md`, `board-dnd.md`, `email.md`, plus the stack refs). Read the relevant one before implementing — the stack postdates model training data.
 
 ## 6. Constraints that never bend
 

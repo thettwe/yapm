@@ -60,11 +60,33 @@ export {
   getWorkspaceAiSpendUsd,
 } from './cycle-digest.js'
 export { cycleFactsForTeam } from './cycle-facts.js'
-export type { AcceptInviteOptions, AcceptInviteRefusal, AcceptInviteResult } from './invite.js'
-export { acceptInvite } from './invite.js'
+export type {
+  AcceptInviteOptions,
+  AcceptInviteRefusal,
+  AcceptInviteResult,
+  InviteEmailTarget,
+} from './invite.js'
+export { acceptInvite, inviteEmailTarget } from './invite.js'
 export { lookupWorkspaceRole } from './membership.js'
 export type { MigrationOutcome } from './migrate.js'
 export { createMigrator, migrateToLatest } from './migrate.js'
+export type {
+  DeleteNotificationsForTeamMemberOptions,
+  MarkAllNotificationsReadOptions,
+  NotificationEvent,
+  NotificationKey,
+  PendingNotificationEmail,
+  PendingNotificationEmailsOptions,
+} from './notification.js'
+export {
+  deleteNotificationsForMember,
+  deleteNotificationsForTeamMember,
+  deleteNotificationsOlderThan,
+  markAllNotificationsRead,
+  pendingNotificationEmails,
+  recordNotifications,
+  stampNotificationsEmailed,
+} from './notification.js'
 export type { ReplicationSlot, ReplicationStatus } from './replication.js'
 export {
   assertReplicationHealthy,
@@ -142,6 +164,7 @@ export type {
   NewIssueLabel,
   NewIssueLink,
   NewLabel,
+  NewNotification,
   NewPullRequest,
   NewReview,
   NewSavedView,
@@ -149,6 +172,9 @@ export type {
   NewTeamMembership,
   NewWorkspace,
   NewWorkspaceMember,
+  Notification,
+  NotificationTable,
+  NotificationUpdate,
   PullRequest,
   PullRequestTable,
   PullRequestUpdate,

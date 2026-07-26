@@ -10,6 +10,7 @@ import {
   changeMemberRole,
   createInvite,
   createTeam,
+  markNotificationReadArgs,
   mutators,
   normalizeTeamKey,
   normalizeWorkspaceName,
@@ -18,6 +19,7 @@ import {
   renameTeam,
   renameWorkspace,
   revokeInvite,
+  setPreferenceArgs,
   WORKSPACE_NAME_MAX_LENGTH,
 } from './mutators.js'
 
@@ -484,6 +486,7 @@ describe('setPreference mutator', () => {
           userId: MEMBER.userID,
           theme: 'focused',
           accent: '#3366ff',
+          emailNotifications: 'assigned_only',
           createdAt: a.updatedAt,
           updatedAt: a.updatedAt,
         },
@@ -505,7 +508,13 @@ describe('setPreference mutator', () => {
       {
         table: 'user_preference',
         verb: 'update',
-        value: { id: existingId, theme: 'editorial', accent: null, updatedAt: 1_784_820_335_919 },
+        value: {
+          id: existingId,
+          theme: 'editorial',
+          accent: null,
+          emailNotifications: 'assigned_only',
+          updatedAt: 1_784_820_335_919,
+        },
       },
     ])
   })
@@ -532,6 +541,111 @@ describe('setPreference mutator', () => {
     expect(calls).toEqual([])
     expect(runQueue).toHaveLength(1)
   })
+
+  it('round-trips the email-notification mode on insert and on update', async () => {
+    const first = args({ emailNotifications: 'none' })
+    const insert = fakeTx([undefined])
+    await mutators.preference.set.fn({ tx: insert.tx, args: first, ctx: MEMBER })
+    expect(insert.calls[0]?.value.emailNotifications).toBe('none')
+
+    const existingId = newId()
+    const update = fakeTx([
+      {
+        id: existingId,
+        userId: MEMBER.userID,
+        theme: 'warm',
+        accent: null,
+        emailNotifications: 'none',
+      },
+    ])
+    await mutators.preference.set.fn({
+      tx: update.tx,
+      args: args({ emailNotifications: 'all' }),
+      ctx: MEMBER,
+    })
+    expect(update.calls[0]?.value.emailNotifications).toBe('all')
+  })
+
+  // Omitting the field must not silently reset somebody's choice — the theme control does not send
+  // it, and it shares this one mutator.
+  it('preserves the stored mode when the arg is omitted', async () => {
+    const existingId = newId()
+    const { tx, calls } = fakeTx([
+      {
+        id: existingId,
+        userId: MEMBER.userID,
+        theme: 'warm',
+        accent: null,
+        emailNotifications: 'none',
+      },
+    ])
+    await mutators.preference.set.fn({ tx, args: args(), ctx: MEMBER })
+    expect(calls[0]?.value.emailNotifications).toBe('none')
+  })
+
+  it('rejects an invalid mode at the args boundary', () => {
+    expect(setPreferenceArgs.safeParse({ ...args(), emailNotifications: 'weekly' }).success).toBe(
+      false,
+    )
+  })
+})
+
+describe('notification read-state mutators', () => {
+  const EVENT = { kind: 'issue_assigned', subjectId: newId(), eventKey: '1000' } as const
+
+  it('writes the recipient from the verified ctx, never from args', async () => {
+    const { tx, calls } = fakeTx()
+    await mutators.notification.markRead.fn({
+      tx,
+      // A caller can supply the other three key columns; there is no fourth arg to supply, which
+      // is exactly what makes addressing somebody else's row impossible rather than merely denied.
+      args: { ...EVENT, readAt: 1_784_820_335_919 },
+      ctx: MEMBER,
+    })
+    expect(calls).toEqual([
+      {
+        table: 'notification',
+        verb: 'update',
+        value: { ...EVENT, recipientId: MEMBER.userID, readAt: 1_784_820_335_919 },
+      },
+    ])
+    expect(Object.keys(markNotificationReadArgs.shape)).not.toContain('recipientId')
+  })
+
+  it('rejects an unauthenticated caller with no write', async () => {
+    const { tx, calls } = fakeTx()
+    const error = await capture(
+      mutators.notification.markRead.fn({ tx, args: { ...EVENT, readAt: 1 }, ctx: undefined }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it('stamps every unread row it read, each addressed to the caller', async () => {
+    const rows = [
+      { kind: 'issue_assigned', subjectId: 'issue-1', eventKey: '1' },
+      { kind: 'issue_commented', subjectId: 'issue-2', eventKey: 'comment-1' },
+    ]
+    const { tx, calls } = fakeTx([rows])
+    await mutators.notification.markAllRead.fn({ tx, args: { readAt: 7 }, ctx: MEMBER })
+    expect(calls).toEqual(
+      rows.map((row) => ({
+        table: 'notification',
+        verb: 'update',
+        value: { ...row, recipientId: MEMBER.userID, readAt: 7 },
+      })),
+    )
+  })
+
+  it('rejects an unauthenticated markAllRead before reading anything', async () => {
+    const { tx, calls, runQueue } = fakeTx([[]])
+    const error = await capture(
+      mutators.notification.markAllRead.fn({ tx, args: { readAt: 7 }, ctx: undefined }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+    expect(runQueue).toHaveLength(1)
+  })
 })
 
 describe('the mutator registry', () => {
@@ -540,6 +654,8 @@ describe('the mutator registry', () => {
     for (const name of [
       'workspace.rename',
       'preference.set',
+      'notification.markRead',
+      'notification.markAllRead',
       'member.changeRole',
       'member.remove',
       'team.create',

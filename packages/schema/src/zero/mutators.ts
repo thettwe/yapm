@@ -10,7 +10,9 @@ import {
   type CycleStatus,
   canManage,
   canWrite,
+  DEFAULT_EMAIL_NOTIFICATION_MODE,
   DEFAULT_VOTES_PER_PARTICIPANT,
+  EMAIL_NOTIFICATION_MODES,
   ISSUE_PRIORITIES,
   ISSUE_STATUSES,
   type IssueStatus,
@@ -18,6 +20,9 @@ import {
   isMember,
   MAX_VOTES_PER_PARTICIPANT,
   MIN_VOTES_PER_PARTICIPANT,
+  NOTIFICATION_KINDS,
+  NOTIFICATION_SYNC_LIMIT,
+  type NotificationKind,
   PROJECT_STATUSES,
   RETRO_COLUMN_ACCENTS,
   RETRO_FORMATS,
@@ -463,6 +468,9 @@ export const setPreferenceArgs = z.object({
   id: z.string().min(1),
   theme: z.enum(THEME_PRESETS),
   accent: z.string().nullable(),
+  // Optional so every existing caller (the theme control) keeps working unchanged; omitting it
+  // preserves whatever mode the row already carries rather than resetting it.
+  emailNotifications: z.enum(EMAIL_NOTIFICATION_MODES).optional(),
   updatedAt: timestamp,
 })
 
@@ -489,6 +497,8 @@ export const setPreference = defineMutator(setPreferenceArgs, async ({ tx, args,
       id: existing.id,
       theme: args.theme,
       accent: args.accent,
+      emailNotifications:
+        args.emailNotifications ?? existing.emailNotifications ?? DEFAULT_EMAIL_NOTIFICATION_MODE,
       updatedAt: args.updatedAt,
     })
     return
@@ -499,10 +509,83 @@ export const setPreference = defineMutator(setPreferenceArgs, async ({ tx, args,
     userId: ctx.userID,
     theme: args.theme,
     accent: args.accent,
+    emailNotifications: args.emailNotifications ?? DEFAULT_EMAIL_NOTIFICATION_MODE,
     createdAt: args.updatedAt,
     updatedAt: args.updatedAt,
   })
 })
+
+export const markNotificationReadArgs = z.object({
+  kind: z.enum(NOTIFICATION_KINDS),
+  subjectId: z.string().min(1),
+  eventKey: z.string().min(1),
+  readAt: timestamp.nullable(),
+})
+
+export type MarkNotificationReadArgs = z.infer<typeof markNotificationReadArgs>
+
+// The row is addressed by its four primary-key columns, and the RECIPIENT COMPONENT COMES FROM THE
+// VERIFIED ctx, never from args. That is what makes this structurally self-scoped: there is no
+// `where` clause to forget, because a caller has no way to name a row that is not their own. With a
+// surrogate id it would have been an authorization check somebody could drop in review.
+//
+// Gated on authentication rather than membership: a demoted user's rows are deleted anyway (design
+// D11), and someone dismissing their own leftovers is never the thing to refuse.
+export const markNotificationRead = defineMutator(
+  markNotificationReadArgs,
+  async ({ tx, args, ctx }) => {
+    if (!isAuthenticated(ctx)) throw notAuthorized(args.subjectId)
+
+    await tx.mutate.notification.update({
+      recipientId: ctx.userID,
+      kind: args.kind,
+      subjectId: args.subjectId,
+      eventKey: args.eventKey,
+      readAt: args.readAt,
+    })
+  },
+)
+
+export const markAllNotificationsReadArgs = z.object({
+  readAt: timestamp,
+})
+
+export type MarkAllNotificationsReadArgs = z.infer<typeof markAllNotificationsReadArgs>
+
+// The shared half of "mark everything read": a bounded loop over the caller's own unread rows,
+// which is what makes the action optimistic and instant. On the client that loop only ever sees the
+// rows `notifications.mine` synced, so the server override adds one raw statement for the rest
+// (design D15) — the authorization lives here, once.
+export const markAllNotificationsRead = defineMutator(
+  markAllNotificationsReadArgs,
+  async ({ tx, args, ctx }) => {
+    if (!isAuthenticated(ctx)) throw notAuthorized(MARK_ALL_NOTIFICATIONS_READ_MUTATOR_NAME)
+
+    const unread = (await tx.run(
+      zql.notification
+        .where('recipientId', ctx.userID)
+        .where('readAt', 'IS', null)
+        .orderBy('createdAt', 'desc')
+        .limit(NOTIFICATION_SYNC_LIMIT),
+    )) as UnreadNotificationRow[]
+
+    for (const row of unread) {
+      await tx.mutate.notification.update({
+        recipientId: ctx.userID,
+        kind: row.kind,
+        subjectId: row.subjectId,
+        eventKey: row.eventKey,
+        readAt: args.readAt,
+      })
+    }
+  },
+)
+
+interface UnreadNotificationRow {
+  kind: NotificationKind
+  subjectId: string
+  eventKey: string
+}
 
 export const createIssueArgs = z.object({
   id: z.string().min(1),
@@ -2528,6 +2611,10 @@ export const mutators = defineMutators({
   preference: {
     set: setPreference,
   },
+  notification: {
+    markRead: markNotificationRead,
+    markAllRead: markAllNotificationsRead,
+  },
   member: {
     changeRole: changeMemberRole,
     remove: removeMember,
@@ -2626,6 +2713,8 @@ export const mutators = defineMutators({
 
 export const RENAME_WORKSPACE_MUTATOR_NAME = 'workspace.rename'
 export const SET_PREFERENCE_MUTATOR_NAME = 'preference.set'
+export const MARK_NOTIFICATION_READ_MUTATOR_NAME = 'notification.markRead'
+export const MARK_ALL_NOTIFICATIONS_READ_MUTATOR_NAME = 'notification.markAllRead'
 export const CREATE_ISSUE_MUTATOR_NAME = 'issue.create'
 export const UPDATE_ISSUE_MUTATOR_NAME = 'issue.update'
 export const SET_ISSUE_STATUS_MUTATOR_NAME = 'issue.setStatus'

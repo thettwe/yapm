@@ -57,7 +57,7 @@ import {
   linkedEntitiesFor,
 } from '@/issues/delivery'
 import { FollowControl } from '@/issues/follow-control'
-import { buildMentionables, mentionNamesFrom } from '@/issues/mentionables'
+import { buildMentionables, mentionNamesFor } from '@/issues/mentionables'
 import {
   isPendingNumber,
   issueKey,
@@ -217,7 +217,18 @@ export function IssueDetail({
     [members, workspaceMembers, users, userId],
   )
 
-  const mentionNames = useMemo(() => mentionNamesFrom(users), [users])
+  // Scoped to the people who can read this issue, not to the whole roster: a mention of somebody
+  // who cannot read it must render as inert text rather than as a resolved chip.
+  const mentionNames = useMemo(
+    () =>
+      mentionNamesFor({
+        teamMembers: members,
+        workspaceMembers,
+        users,
+        selfId: userId,
+      }),
+    [members, workspaceMembers, users, userId],
+  )
 
   if (!issue) {
     const complete = result.type === 'complete'

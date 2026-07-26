@@ -80,7 +80,8 @@ export interface MentionListProps {
   items: readonly MentionCandidate[]
   query: string
   activeIndex: number
-  rejectedCount?: number
+  // `rejectedCount` is deliberately absent: it only ever changed what was ANNOUNCED, and the live
+  // region belongs to the editor (see above), not to a component that unmounts with the popup.
   loading?: boolean
   label?: string
   onSelect: (index: number) => void
@@ -93,13 +94,18 @@ export interface MentionListProps {
  * focus has to stay in the editor for the caret to keep moving while the list is open. So this
  * component takes no focus at all — it is driven entirely by `activeIndex` from the editor, and
  * the editor points `aria-activedescendant` at the active row.
+ *
+ * THE LIVE REGION IS NOT HERE, deliberately. A polite region inserted with its text already in it
+ * is not reliably announced — assistive technology watches an EXISTING node for changes — and this
+ * component is mounted and unmounted with the popup, so the opening announcement is exactly the one
+ * that would be lost. The owner (`RichTextEditor`) renders a persistent region outside the popup
+ * and feeds it `mentionAnnouncement`.
  */
 export function MentionList({
   id,
   items,
   query,
   activeIndex,
-  rejectedCount = 0,
   loading = false,
   label = 'Mention a teammate',
   onSelect,
@@ -180,10 +186,6 @@ export function MentionList({
       {items.length === 0 && !loading ? (
         <p className="px-2 py-2 text-[13px] text-text-2">{mentionEmptyStateText(query)}</p>
       ) : null}
-
-      <span role="status" aria-live="polite" className="sr-only">
-        {mentionAnnouncement({ items, query, activeIndex, rejectedCount, loading })}
-      </span>
     </div>
   )
 }

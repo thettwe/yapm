@@ -274,6 +274,9 @@ interface FanOutInput {
   // status or a cycle and no assignee at all, and reading the row would then notify the standing
   // assignee about nothing. Omitted for a comment, where the issue's current assignee is right.
   readonly assigneeId?: string | null
+  // People this event addresses BY NAME, who therefore must not also receive the ambient row for
+  // it. See `comment.create`.
+  readonly exclude?: ReadonlySet<string>
 }
 
 // The fan-out. Runs on the authoritative pass only — every call site is behind
@@ -317,12 +320,15 @@ async function fanOut(tx: Transaction, input: FanOutInput): Promise<void> {
         .reverse()
     : []
 
-  const candidates = trigger.recipients({
-    actorId: input.actorId,
-    assigneeId: input.assigneeId === undefined ? issue.assigneeId : input.assigneeId,
-    creatorId: issue.creatorId,
-    priorCommenterIds,
-  })
+  const exclude = input.exclude ?? new Set<string>()
+  const candidates = trigger
+    .recipients({
+      actorId: input.actorId,
+      assigneeId: input.assigneeId === undefined ? issue.assigneeId : input.assigneeId,
+      creatorId: issue.creatorId,
+      priorCommenterIds,
+    })
+    .filter((candidate) => !exclude.has(candidate))
   if (candidates.length === 0) return
 
   // INVOLVEMENT IS NOT MEMBERSHIP. A creator, a standing assignee or a prior commenter can have
@@ -438,6 +444,9 @@ interface SubscriberFanOutInput {
   readonly actorId: string
   readonly eventKey: string
   readonly at: number
+  // Anybody this comment names by name. They get the `mention` row instead; the ambient one would
+  // say strictly less about the same comment.
+  readonly exclude?: ReadonlySet<string>
 }
 
 // The subscription producer, and the second reason `notifications`' natural-key-as-primary-key
@@ -450,11 +459,12 @@ interface SubscriberFanOutInput {
 // a different kind is a different primary key, so the overlap would double.
 async function fanOutToSubscribers(tx: Transaction, input: SubscriberFanOutInput): Promise<void> {
   const db = serverDb(tx)
+  const exclude = input.exclude ?? new Set<string>()
   // Bounded by the same constant the recipient set is, for the same reason: this read is inside the
   // triggering mutation's transaction. Past the cap the longest-following are kept.
   const subscribers = (
     await subscribersOfIssue(db, input.issueId, NOTIFICATION_RECIPIENT_CAP)
-  ).filter((userId) => userId !== input.actorId)
+  ).filter((userId) => userId !== input.actorId && !exclude.has(userId))
   if (subscribers.length === 0) return
 
   const issue = (await tx.run(zql.issue.where('id', input.issueId).one())) as
@@ -582,12 +592,21 @@ export function createServerMutators() {
         await mutators.comment.create.fn({ tx, args, ctx })
         if (tx.location !== 'server') return
         if (ctx === undefined) return
+        // ONE COMMENT, ONE ROW PER PERSON. Whoever this comment names by name gets the `mention`
+        // row and NOT the ambient one: the two carry different kinds, so the primary key cannot
+        // collapse them, and "Ada mentioned you" already says everything "Ada commented" would.
+        // Computed once, from the same diff the mention fan-out runs, and applied to BOTH ambient
+        // producers — the involvement one reaches a mentioned assignee, the subscriber one reaches
+        // a mentioned person who was already following. Ordering alone only covers the person who
+        // is neither.
+        const named = new Set(addedMentionIds(null, args.body, ctx.userID))
         await fanOut(tx, {
           kind: 'issue_commented',
           issueId: args.issueId,
           actorId: ctx.userID,
           eventKey: args.id,
           at: args.createdAt,
+          exclude: named,
         })
         // SUBSCRIBERS ARE READ BEFORE THE MENTION FAN-OUT SUBSCRIBES ANYONE. Ordered the other way,
         // somebody mentioned by this very comment would be subscribed and then immediately handed
@@ -597,6 +616,7 @@ export function createServerMutators() {
           actorId: ctx.userID,
           eventKey: args.id,
           at: args.createdAt,
+          exclude: named,
         })
         await fanOutMentions(tx, {
           issueId: args.issueId,

@@ -7,6 +7,7 @@ import { runMutation } from '@/lib/mutation'
 
 export const FOLLOWING_HINT = 'Updates on this issue reach your inbox. Select to stop.'
 export const NOT_FOLLOWING_HINT = 'Follow to get updates on this issue in your inbox.'
+export const PENDING_HINT = 'Checking whether you follow this issue…'
 
 interface SubscriptionRow {
   state?: string | null
@@ -23,25 +24,33 @@ interface SubscriptionRow {
  */
 export function FollowControl({ issueId }: { issueId: string }) {
   const zero = useZero()
-  const [subscription] = useQuery(queries.subscriptions.mine({ issueId }))
+  const [subscription, result] = useQuery(queries.subscriptions.mine({ issueId }))
   const [error, setError] = useState<string | undefined>(undefined)
 
+  // AN UNHYDRATED QUERY IS NOT AN ANSWER. Until the row has actually arrived, "no row" and "no
+  // subscription" are indistinguishable, and defaulting to "not following" tells a subscriber
+  // opening the issue on a fresh client that they are not following it — and offers them a button
+  // that would then unfollow rather than follow. So the control asserts nothing: no `aria-pressed`
+  // for a screen reader to read out, and no press to mis-fire.
+  const settled = result.type === 'complete'
   const following = (subscription as SubscriptionRow | undefined)?.state === 'subscribed'
 
   const toggle = useCallback(async () => {
+    if (!settled) return
     const args = { issueId, updatedAt: Date.now() }
     const write = following
       ? zero.mutate(mutators.issueSubscription.unfollow(args))
       : zero.mutate(mutators.issueSubscription.follow(args))
     setError(await runMutation(write))
-  }, [following, issueId, zero])
+  }, [following, issueId, settled, zero])
 
-  const hint = following ? FOLLOWING_HINT : NOT_FOLLOWING_HINT
+  const hint = !settled ? PENDING_HINT : following ? FOLLOWING_HINT : NOT_FOLLOWING_HINT
 
   return (
     <span className="flex min-w-0 flex-col gap-0.5">
       <PropertyButton
-        aria-pressed={following}
+        disabled={!settled}
+        {...(settled ? { 'aria-pressed': following } : {})}
         aria-describedby={`follow-hint-${issueId}`}
         onClick={() => void toggle()}
       >
@@ -50,7 +59,7 @@ export function FollowControl({ issueId }: { issueId: string }) {
         ) : (
           <BellOffIcon className="size-3.5 text-text-3" />
         )}
-        {following ? 'Following' : 'Follow'}
+        {!settled ? 'Updates' : following ? 'Following' : 'Follow'}
       </PropertyButton>
       <span id={`follow-hint-${issueId}`} className="text-[11px] text-text-2">
         {hint}

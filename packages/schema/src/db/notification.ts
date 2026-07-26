@@ -153,9 +153,13 @@ export interface PendingNotificationEmail extends NotificationKey {
 //   2. `email_sent_at is null` — sent once, ever.
 //   3. The debounce and the 24-hour window, so a burst becomes one message and enabling email does
 //      not mail a month of history.
-//   4. An INNER JOIN to CURRENT `team_membership` — membership can change between the write and the
-//      send, and the denormalised `subject_title` would otherwise outlive the membership that
-//      authorised it.
+//   4. A CURRENT-ACCESS predicate — membership can change between the write and the send, and the
+//      denormalised `subject_title` would otherwise outlive the access that authorised it. It is
+//      the SAME disjunction the write side uses (`eligibleMentionees`, `teamScoped`): a current
+//      member of the notification's team, OR a current workspace admin, who can read every issue in
+//      the workspace. A bare join to `team_membership` would drop an off-team admin's mention row
+//      on the floor — written in-app, never emailed, with nothing to see. A plain ex-member still
+//      matches neither arm and is still never emailed.
 //
 // The actor is LEFT-joined for its display name only: `notificationCopy` is what words the email,
 // and it needs the same actor name the inbox row shows. Left, not inner, because `actor_id` carries
@@ -184,11 +188,6 @@ export async function pendingNotificationEmails(
   return await db
     .selectFrom('notification')
     .innerJoin('user', 'user.id', 'notification.recipient_id')
-    .innerJoin('team_membership', (join) =>
-      join
-        .onRef('team_membership.team_id', '=', 'notification.team_id')
-        .onRef('team_membership.user_id', '=', 'notification.recipient_id'),
-    )
     .leftJoin('user as actor', 'actor.id', 'notification.actor_id')
     .leftJoin('user_preference', 'user_preference.user_id', 'notification.recipient_id')
     .select([
@@ -209,6 +208,25 @@ export async function pendingNotificationEmails(
     ])
     .where('notification.read_at', 'is', null)
     .where('notification.email_sent_at', 'is', null)
+    // The write-time predicate, mirrored: on the team, or an admin of the workspace.
+    .where((eb) =>
+      eb.or([
+        eb.exists(
+          eb
+            .selectFrom('team_membership')
+            .select('team_membership.id')
+            .whereRef('team_membership.team_id', '=', 'notification.team_id')
+            .whereRef('team_membership.user_id', '=', 'notification.recipient_id'),
+        ),
+        eb.exists(
+          eb
+            .selectFrom('workspace_member')
+            .select('workspace_member.id')
+            .whereRef('workspace_member.user_id', '=', 'notification.recipient_id')
+            .where('workspace_member.role', '=', 'admin'),
+        ),
+      ]),
+    )
     .where(sql<SqlBool>`${mode} <> 'none' and (${mode} = 'all' or ${actionable})`)
     // `created_at` is a DB-defaulted (`Generated<Timestamp>`) column whose operand typing does not
     // accept a plain `Date` under this project's TS config; a raw predicate compares it cleanly.

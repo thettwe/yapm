@@ -3,6 +3,7 @@ import { beforeEach, expect, test, vi } from 'vitest'
 
 const zero = vi.hoisted(() => ({
   row: undefined as { state: string } | undefined,
+  resultType: 'complete' as 'complete' | 'unknown',
   listeners: new Set<() => void>(),
   mutate: vi.fn(
     (_mutation: { mutator: { mutatorName: string }; args: Record<string, unknown> }) => ({
@@ -27,13 +28,13 @@ vi.mock('@rocicorp/zero/react', async () => {
         },
         () => zero.row,
       ),
-      { type: 'complete' },
+      { type: zero.resultType },
     ],
     useZero: () => ({ mutate: zero.mutate }),
   }
 })
 
-import { FOLLOWING_HINT, FollowControl, NOT_FOLLOWING_HINT } from './follow-control'
+import { FOLLOWING_HINT, FollowControl, NOT_FOLLOWING_HINT, PENDING_HINT } from './follow-control'
 
 function mutatorNames(): string[] {
   return zero.mutate.mock.calls.map((call) => call[0].mutator.mutatorName)
@@ -49,6 +50,23 @@ function sync(row: { state: string } | undefined) {
 beforeEach(() => {
   zero.mutate.mockClear()
   zero.row = undefined
+  zero.resultType = 'complete'
+})
+
+// "No row yet" and "no subscription" look identical, and a subscriber opening the issue on a fresh
+// client hits the first one. Rendering it as Follow / aria-pressed=false tells them something false
+// about their own state and offers a button that would unfollow them.
+test('before the query has hydrated the control asserts nothing about following', () => {
+  zero.resultType = 'unknown'
+  render(<FollowControl issueId="issue-1" />)
+
+  const button = screen.getByRole('button')
+  expect(button).not.toHaveAttribute('aria-pressed')
+  expect(button).toBeDisabled()
+  expect(screen.getByText(PENDING_HINT)).toBeInTheDocument()
+
+  fireEvent.click(button)
+  expect(mutatorNames()).toEqual([])
 })
 
 test('with no synced row the control offers to follow and says what that does', () => {

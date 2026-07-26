@@ -119,6 +119,7 @@ describe.skipIf(DATABASE_URL === undefined)('notification delivery sweep (live d
   afterEach(async () => {
     await database.db.deleteFrom('notification').where('recipient_id', '=', recipientId).execute()
     await database.db.deleteFrom('user_preference').where('user_id', '=', recipientId).execute()
+    await database.db.deleteFrom('workspace_member').where('user_id', '=', recipientId).execute()
     await database.db
       .insertInto('team_membership')
       .values({ id: teamMembershipId, team_id: teamId, user_id: recipientId })
@@ -185,12 +186,42 @@ describe.skipIf(DATABASE_URL === undefined)('notification delivery sweep (live d
       .deleteFrom('team_membership')
       .where('id', '=', teamMembershipId)
       .executeTakeFirst()
+    // Still an ordinary member of the workspace: the admin arm of the access predicate must not
+    // hand an email to somebody who merely still has an account.
+    await database.db
+      .insertInto('workspace_member')
+      .values({ id: newId(), workspace_id: workspaceId, user_id: recipientId, role: 'member' })
+      .execute()
 
     const result = await sweep(mailer)
 
     expect(sent).toHaveLength(0)
     expect(result.recipients).toBe(0)
     expect(await unsent()).toHaveLength(1)
+  })
+
+  // THE OFF-TEAM ADMIN. Mention eligibility is a READ predicate — a workspace admin can read every
+  // issue in the workspace, so an admin who is not on the issue's team is mentionable and gets an
+  // in-app row. A send-time check that only knows about `team_membership` can never select that
+  // row, so the mention is written, promised as emailed, and silently never sent.
+  it('emails an off-team workspace admin who was mentioned', async () => {
+    const { mailer, sent } = recordingMailer()
+    await database.db
+      .deleteFrom('team_membership')
+      .where('id', '=', teamMembershipId)
+      .executeTakeFirst()
+    await database.db
+      .insertInto('workspace_member')
+      .values({ id: newId(), workspace_id: workspaceId, user_id: recipientId, role: 'admin' })
+      .execute()
+    await recordNotifications(database.db, [event({ kind: 'mention', eventKey: 'mentioned' })])
+
+    const result = await sweep(mailer)
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.message.text).toContain('mentioned you')
+    expect(result.recipients).toBe(1)
+    expect(await unsent()).toHaveLength(0)
   })
 
   it('excludes a notification already read in-app', async () => {

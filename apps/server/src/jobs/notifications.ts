@@ -1,5 +1,5 @@
 import type { NotificationDigestItem } from '@yapm/email'
-import { renderNotificationDigest } from '@yapm/email'
+import { MENTION_FOLLOW_FOOTNOTE, renderNotificationDigest } from '@yapm/email'
 import {
   ACTIONABLE_NOTIFICATION_KINDS,
   isActionableNotification,
@@ -111,6 +111,10 @@ export function groupNotificationEmails(
       title: copy.title,
       summary: copy.summary,
       path: notificationSubjectPath(row),
+      // A mention did two things, and the email says both: it told you, and it subscribed you to
+      // the thread. The kind is the only thing this seam knows that the template does not, so the
+      // branch lives here and the wording lives with the template.
+      ...(row.kind === 'mention' ? { footnote: MENTION_FOLLOW_FOOTNOTE } : {}),
     })
     batches.set(row.recipientId, existing)
   }

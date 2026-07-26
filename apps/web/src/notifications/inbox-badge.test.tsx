@@ -73,4 +73,8 @@ test('the badge is a keyboard-reachable link to the inbox', async () => {
 
   expect(badge.tagName).toBe('A')
   expect(badge).toHaveAttribute('href', '/inbox')
+  // A navigation control announces as a link, not as a button: wearing the button styling must
+  // not drag the button role along with it.
+  expect(screen.getByRole('link', { name: 'Inbox, 1 unread' })).toBe(badge)
+  expect(screen.queryByRole('button')).toBeNull()
 })

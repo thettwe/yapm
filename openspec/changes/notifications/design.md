@@ -1042,3 +1042,67 @@ the ones that behaviour hides, and it is how a genuinely failing suite passed a 
 `passThroughEnv`, a no-database run after a database run is `>>> FULL TURBO`; with `env` it is a
 real cache miss that re-executes the suite. The cost is more cache misses on a variable that
 genuinely changes what the tests do, which is the point.
+
+### DI-32 — The e2e badge assertion sits on a shell route; the palette entry is asserted from a team route
+
+*DI-13 flagged this for the e2e stage, and the flag was right.* The badge lives in `AppShell`, which
+covers `/`, `/inbox` and the settings routes; the command palette lives in `issue-list.tsx`, which is
+mounted only on the team issue list — a route that composes its own header and therefore has no
+badge. There is no single surface on which "the badge lights up" and "Cmd-K → Go to inbox" can both
+be observed.
+
+*Chosen:* split the claim across the two tests rather than move UI in a test stage.
+`notifications.spec.ts` test 1 parks the recipient on `/` for the cross-client badge assertion and
+reaches `/inbox` by focusing the badge link and pressing Enter — keyboard-only, and the path a
+person on a shell surface actually takes. Test 2 drives both palette entries from the team issue
+list, where the palette exists. Task 13.1's literal script (badge, then Cmd-K) is covered between
+the two, and neither test pretends to a surface that does not exist.
+
+The underlying gap stands and is worth a follow-up: nine team routes hand-roll the same header out
+of `Switcher` / `ConnectionStatus` / `ThemeControls` / `UserMenu`, so the most-used surfaces in the
+product show no unread count. Hoisting them onto `AppShell` is a separate change; duplicating the
+badge into nine files is not the fix.
+
+### DI-33 — The badge wears the button styling instead of being a `Button`
+
+*Found by the e2e run, not by review.* `InboxBadge` was `<Button render={<Link/>}>`, and Base UI's
+button answers that with a console error on every render — "A component that acts as a button
+expected a native `<button>` because the `nativeButton` prop is true" — which, for a component in
+the app shell, is on the console of every page in the product. The offered remedy,
+`nativeButton={false}`, is worse: it hands a navigation control the button role.
+
+*Chosen:* render a plain `Link` carrying `buttonVariants({ variant: 'ghost', size: 'icon-sm' })`.
+Identical pixels, no Base UI button semantics, and the element stays an anchor with an `href`. The
+unit test now pins the role (`link`, and no `button` in the subtree); the detector is in the e2e,
+because Base UI's dev warning does not fire under jsdom — asserted there against the recipient's
+console output, scoped by component name so the pre-existing complaint from `issue-detail.tsx`
+(untouched by this branch, present on `main`) is neither fixed nor hidden here.
+
+### DI-34 — `readReplica` moved to `e2e/replica.ts`, shared by retro and notifications
+
+The IndexedDB replica walk `retro.spec.ts` introduced for the anonymity guarantee is exactly what
+H4 needs: proving a workspace admin never *receives* another user's notification row, rather than
+merely never renders it. Copying 80 lines of a subtle B-tree walk into a second spec would have been
+the worse of the two risks.
+
+*Chosen:* a verbatim extraction to `apps/web/e2e/replica.ts`, imported by both. `retro.spec.ts`'s
+six tests were re-run green afterwards, so the move is proved rather than assumed.
+
+The notifications spec adds a **positive** control the retro spec did not need: before asserting the
+admin's replica holds no `notification` rows, it asserts the recipient's replica *does*. Without it,
+"no notification rows" would also be satisfied by a walk that cannot see notifications at all.
+
+### DI-35 — `apps/web/e2e` is not typechecked, and cannot cheaply be made so
+
+`apps/web/tsconfig.json` includes `src`, `vite.config.ts` and `vitest.config.ts` — not `e2e`. So no
+Playwright spec in this repo is covered by `pnpm turbo typecheck`, this change's included. Adding
+`e2e` to `include` was tried and produces one error, in the pre-existing `e2e/db.ts`: a
+`cycle_digest` insert whose `created_at: Date` is rejected against
+`ValueExpression<DB, 'cycle_digest', Timestamp | undefined>`. That target type is the non-distributed
+branch of Kysely's `Generated<S>`, which means `apps/web` resolves a *different* copy of `kysely`
+than `packages/schema` does — `apps/web` declares no kysely dependency of its own.
+
+*Chosen:* leave the include list alone. Fixing it means reconciling a duplicate `kysely` resolution
+in a package that has no business depending on kysely, which is a build-graph change and not a test
+change. Recorded so the next person does not rediscover it. The new spec was typechecked once by
+hand under a temporary `include` and is clean; its real gate is that it runs.

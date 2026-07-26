@@ -267,11 +267,14 @@ complete and useful before any mail code exists (groups 8–12); email is additi
 
 ## 13. E2E
 
-- [ ] 13.1 Write `apps/web/e2e/notifications.spec.ts`: two browser contexts, A and B. A assigns an
+- [x] 13.1 Write `apps/web/e2e/notifications.spec.ts`: two browser contexts, A and B. A assigns an
       issue to B. With **no reload**, B's header badge reads "Inbox, 1 unread"; B reaches `/inbox`
       by keyboard only (Cmd-K → "Go to inbox"), presses `j` then Enter, lands on the issue, and the
       badge clears.
-- [ ] 13.2 Run it against the isolated stack (project `yapm-nt`, ports 5443/4851/3003) and confirm
+      *Split across two tests, because the badge lives in `AppShell` and the palette lives in
+      `issue-list.tsx` and no route has both — see design DI-32. Test 1 also proves H4 against the
+      admin's IndexedDB replica; test 2 adds the comment trigger and the no-body-leak guarantee.*
+- [x] 13.2 Run it against the isolated stack (project `yapm-nt`, ports 5443/4851/3003) and confirm
       green.
 
 ## 14. Documentation

@@ -290,26 +290,28 @@ surface on top of a proven substrate.
 
 ## 13. Documentation
 
-- [ ] 13.1 New `apps/docs/src/content/docs/features/mentions.md`: how to mention, that the list is
+- [x] 13.1 New `apps/docs/src/content/docs/features/mentions.md`: how to mention, that the list is
       the issue's team (and why an admin appears only on an explicit match), why a name can be
       unavailable and what the message means, that renames propagate, that being mentioned subscribes
       you, how to unfollow, and that unfollowing is permanent for that issue.
-- [ ] 13.2 Add it to the Starlight sidebar in `apps/docs/astro.config.mjs` under Features.
-- [ ] 13.3 Update `apps/docs/src/content/docs/features/notifications.md`: the new `mention` kind,
+- [x] 13.2 Add it to the Starlight sidebar in `apps/docs/astro.config.mjs` under Features.
+- [x] 13.3 Update `apps/docs/src/content/docs/features/notifications.md`: the new `mention` kind,
       that mentions are emailed at the default preference while subscription activity is not, and
       the auto-subscribe/unfollow rule.
-- [ ] 13.4 Update `README.md` — the feature list gains mentions; "What's next" loses them.
-- [ ] 13.5 Update `ROADMAP.md` — row 12's status, **and** its now-false "No tables, no columns, no
+- [x] 13.4 Update `README.md` — the feature list gains mentions; "What's next" loses them.
+- [x] 13.5 Update `ROADMAP.md` — row 12's status, **and** its now-false "No tables, no columns, no
       migration" claim, which the H7 answer superseded.
-- [ ] 13.6 Update `TECHSTACK.md` — the TipTap version baseline (all five packages pinned exactly at
+- [x] 13.6 Update `TECHSTACK.md` — the TipTap version baseline (all five packages pinned exactly at
       `3.28.0`) and the two new packages.
-- [ ] 13.7 Update `openspec/SCOPE-v1-gaps.md` §0 and §2.2 in place: `mentions` takes `0014_mentions`
+- [x] 13.7 Update `openspec/SCOPE-v1-gaps.md` §0 and §2.2 in place: `mentions` takes `0014_mentions`
       and `search` moves to `0015_search`; the "no migration, no Zero schema change" conclusion is
       superseded by the maintainer's H7 answer. **Not optional** — two changes claiming `0014` is a
       collision at boot.
-- [ ] 13.8 No new environment variables, so `.env.example` and the config reference are untouched —
-      confirm rather than assume.
-- [ ] 13.9 **Test**: `pnpm --filter @yapm/docs build` green.
+- [x] 13.8 No new environment variables, so `.env.example` and the config reference are untouched —
+      confirm rather than assume. Confirmed: `git diff origin/main...HEAD -- apps/server/src/config
+      .env.example` is empty, so the Zod schema and `.env.example` are both unchanged and cannot
+      have drifted.
+- [x] 13.9 **Test**: `pnpm --filter @yapm/docs build` green.
 
 ## 14. Verification
 

@@ -24,17 +24,22 @@ Two properties are worth stating before the mechanics, because they are what the
 | An issue is assigned | The new assignee |
 | A [triage](/features/triage/) issue is routed with an assignee | The assignee |
 | A [retrospective](/features/retrospectives/) action with an owner is converted to an issue | The owner |
-| Someone comments on an issue | Its assignee, its creator, and everyone who commented before |
+| You are [`@`-mentioned](/features/mentions/) in a description or a comment | The person mentioned |
+| Someone comments on an issue | Its assignee, its creator, everyone who commented before, and everyone [following](/features/mentions/#following-an-issue) it |
 
-Two rules apply to every row in that table:
+Three rules apply to every row in that table:
 
-- **The actor is never notified about their own action.** Assigning an issue to yourself, or
-  commenting on an issue you are assigned, notifies nobody.
+- **The actor is never notified about their own action.** Assigning an issue to yourself, commenting
+  on an issue you are assigned, or mentioning yourself, notifies nobody.
 - **Recipients are deduplicated.** If you are the assignee *and* the creator *and* a prior
-  commenter, one comment produces one notification. The comment recipient set is also capped (at
+  commenter *and* a follower, one comment produces one notification. Deduplication is the database's
+  own primary key rather than a merge step, so the two independent producers of a comment
+  notification — involvement and [following](/features/mentions/#following-an-issue) — cannot
+  double-notify anyone regardless of which runs first. The comment recipient set is also capped (at
   50) so a thread with hundreds of participants cannot turn one comment into an unbounded write.
   On a thread past the cap it is the **most recent** participants who are kept — the people
-  currently discussing it, not whoever commented once at the start.
+  currently discussing it, not whoever commented once at the start. The follower set is capped by
+  the same number, oldest subscription first.
 - **Only current members of the issue's team are notified.** Involvement outlives membership: you
   can have created an issue, or been its assignee, in a team you have since left. Membership is
   checked when the notification is written, and again when it is emailed.
@@ -51,8 +56,18 @@ reordering, project and cycle lifecycle events, and retro activity produce **no*
 Every one of those is visible where the work is, and the fastest way to make an inbox worthless is
 to fill it with things nobody acts on.
 
-`@`-mentions are not implemented yet. They are the next change, and they arrive as a new
-notification kind through the same machinery — no new inbox, no new preference, no schema change.
+### Mentions and following
+
+[`@`-mentions](/features/mentions/) arrive through the same machinery as everything above — no
+second inbox and no second preference. Two things about them are worth reading here:
+
+- **A mention is emailed at the default preference**, because it is addressed at you personally.
+  You are notified at most once per comment and at most once per issue description, whatever
+  sequence of edits follows; editing a comment to add somebody notifies only the person added.
+- **Being mentioned makes you follow the issue**, so later comments on it reach your inbox even when
+  nobody names you. That activity is **in-app only** — it is ambient, so the default preference
+  never emails it. Unfollow from the **Following** control on the issue itself; the decision sticks,
+  and a later mention will not quietly put you back on the thread.
 
 ## The inbox
 
@@ -134,8 +149,8 @@ Open **Appearance settings** (the palette icon in the header) and set **Email no
 
 | Setting | What is emailed |
 |---|---|
-| **Email what needs me** *(default)* | Things addressed at you — assignments, and mentions once those exist |
-| **Email everything** | The above plus ambient activity, such as comments on issues you are involved in |
+| **Email what needs me** *(default)* | Things addressed at you — assignments and [mentions](/features/mentions/) |
+| **Email everything** | The above plus ambient activity, such as comments on issues you are involved in or following |
 | **No email** | Nothing |
 
 **The preference governs email only.** Turning email off never costs you the notification: the
@@ -148,13 +163,20 @@ Notifications older than **30 days** are deleted by a scheduled sweep. The windo
 by your operator (`NOTIFICATION_RETENTION_DAYS`), and the sweep runs whether or not email is
 configured — retention is what keeps the synced set small, not an email feature.
 
+[Issue subscriptions](/features/mentions/#following-an-issue) are **not** swept. They are stored
+separately and durably for exactly this reason: a subscription derived from notification rows would
+silently expire after 30 days, and an issue you follow would stop reaching you with no event to
+explain it.
+
 ## Leaving a team or the workspace
 
 When someone's membership is removed, their notifications are **deleted**, not kept:
 
-- **Leaving one team** deletes that person's notifications for that team, and leaves their
-  notifications for other teams intact.
-- **Leaving the workspace** deletes every notification addressed to them.
+- **Leaving one team** deletes that person's notifications *and* their
+  [issue subscriptions](/features/mentions/#following-an-issue) for that team, and leaves both
+  intact for other teams.
+- **Leaving the workspace** deletes every notification addressed to them and every issue
+  subscription they hold.
 - **Deleting a team** removes every notification for it, for every recipient.
 
 This runs on the server, in the same transaction as the membership change — the admin doing the

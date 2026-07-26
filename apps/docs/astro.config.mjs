@@ -19,6 +19,7 @@ export default defineConfig({
             { label: 'Cycle digest', slug: 'features/cycle-digest' },
             { label: 'Retrospectives', slug: 'features/retrospectives' },
             { label: 'Notifications', slug: 'features/notifications' },
+            { label: 'Mentions', slug: 'features/mentions' },
           ],
         },
         {

@@ -996,3 +996,28 @@ assertion; the `defaultPrevented` version fails the edit-cancel control; and `mu
 was falsified five times over — a per-save comment `event_key`, a per-save description `event_key`,
 `do update` in place of `do nothing`, a decorated subscriber `event_key`, dropping the admin bypass,
 and removing the `tx.location` guard each fail a different assertion, and no other.
+
+### I30 — One spec scenario is not implemented, and the docs stage declined to paper over it
+
+`openspec/changes/mentions/specs/notifications/spec.md` requires: *"The mention email SHALL state, in
+one sentence, that the recipient now follows the issue and can stop from the issue page"*, with the
+scenario **"The mention email says how to stop following"**.
+
+**It does not ship.** `packages/email/src/notification-digest.tsx` renders every notification kind
+through the same `notificationCopy()` line with no per-kind branch, and neither it nor
+`apps/server/src/jobs/notifications.ts` was touched by this change — `grep -n "kind\|follow"` over
+the template returns nothing. So a mention email says `Ada mentioned you in ENG-42` and stops there.
+
+Two options were open to the docs stage: document the sentence as if it existed, or leave it out and
+report the gap. It is left out. The
+[Mentions](../../../apps/docs/src/content/docs/features/mentions.md) page says a mention produces one
+email and puts "how to stop following" where it is actually true — on the issue's own Follow control
+— and the [Notifications](../../../apps/docs/src/content/docs/features/notifications.md) page makes
+the same claim in the same shape. Nothing on either page is false today, and nothing on either page
+has to be retracted when the sentence is added.
+
+This is a **build gap, not a docs decision**, and it is recorded here rather than fixed here because
+adding copy to `packages/email` in the documentation stage would put product code outside the review
+this change's other stages ran. It is one branch in one template plus a test: the `mention` case
+appends "You now follow this issue — you can stop from the issue page." The Close-phase spec walk
+(task 14.6) will hit it, which is the correct place for it to be caught.

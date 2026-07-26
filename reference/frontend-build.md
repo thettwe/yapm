@@ -1773,7 +1773,101 @@ and `LEFTHOOK=0 git commit …` to bypass.
 
 ---
 
-## 11. Source URLs
+## 11. TipTap 3.28 — editor, mention extension, suggestion plugin
+
+Added 2026-07-25 while building `mentions`. Every claim below was read from the **installed**
+`.d.ts` under `node_modules/.pnpm/` after `pnpm install`, or observed at runtime in a real browser —
+not from the published docs and not from memory. TipTap v3's API differs from v2 in exactly the
+places an agent is most likely to guess.
+
+### 11.1 Pin the whole graph to one exact version
+
+```yaml
+# pnpm-workspace.yaml — catalog
+'@tiptap/extension-mention': 3.28.0
+'@tiptap/pm': 3.28.0
+'@tiptap/react': 3.28.0
+'@tiptap/starter-kit': 3.28.0
+'@tiptap/suggestion': 3.28.0
+'@floating-ui/dom': ^1.8.0
+```
+
+🚩 **Caret ranges are a runtime bug here, not a style preference.** `@tiptap/extension-mention` and
+`@tiptap/suggestion` declare **exact** peer ranges on `@tiptap/core` and `@tiptap/pm`. A split
+resolution installs two `prosemirror-model` instances and the editor throws
+`RangeError: Adding different instances of a keyed plugin` **the first time an editor mounts**.
+`tsc --noEmit`, `biome ci` and `vite build` all pass. Verify with one `@tiptap/core` and one
+`@tiptap/pm` directory in `node_modules/.pnpm`.
+
+⚠️ **`@floating-ui/dom` must be a direct dependency** of the package that configures suggestion —
+`@tiptap/suggestion` peer-requires it, and pnpm's strict layout will not hoist it.
+
+⚠️ **`@tiptap/core` is not resolvable from a workspace package that does not declare it.** It is a
+peer of the TipTap packages, not a dependency. Import `Editor` and the core types from
+`@tiptap/react`, which re-exports them, rather than adding `@tiptap/core` to make an import path
+look tidier.
+
+### 11.2 `@tiptap/extension-mention@3.28.0` — what the `.d.ts` actually exports
+
+| Fact | Detail |
+|---|---|
+| Exports | `Mention`, `MentionNodeAttrs`, `MentionOptions`, and the default export |
+| 🚩 `MentionPluginKey` | **Not exported.** It survives only in `@default`/`@example` JSDoc tags on `MentionOptions.suggestions`. Create your own — `new PluginKey('yapm-mention')` — and pass it as the suggestion's `pluginKey`. (`@tiptap/suggestion` *does* export a `SuggestionPluginKey`; it is a different key and is not a substitute) |
+| 🚩 `renderLabel` | `@deprecated use renderText and renderHTML instead`, and optional. `renderText` and `renderHTML` are required |
+| 🚩 `suggestions` (plural) | `MentionOptions.suggestions` is `Array<Omit<SuggestionOptions, 'editor'>>`. v2's singular `suggestion` object is gone. One trigger = an array of one |
+| Node attrs | `MentionNodeAttrs` is `{ id, label, mentionSuggestionChar }` |
+
+⚠️ `addProseMirrorPlugins` **always instantiates at least one suggestion plugin** — there is no
+"off". To register the node in a read-only renderer (so mention nodes parse and render) without a
+live typeahead, keep the extension and neutralise the plugin with `allow: () => false`.
+
+### 11.3 `@tiptap/suggestion@3.28.0`
+
+| Fact | Detail |
+|---|---|
+| `SuggestionProps.mount` | **Required**, of type `SuggestionMount`. 3.28 manages the popup element for you: `const unmount = props.mount(element)` in `onStart`, call `unmount()` in `onExit`. The manual `tippy.js` dance every pre-3.28 example shows is obsolete |
+| `exitSuggestion(view, pluginKeyRef?)` | Exported. The safe, recommended way to dismiss the popup — it removes the suggestion decorations without touching the document or causing mapping errors. Better than the hand-rolled transaction older examples use |
+| `items()` | `(props: { query, editor, signal: AbortSignal }) => I[] \| Promise<I[]>`. Return an **array** if the data is already local: that is what keeps the typeahead off the network. `minQueryLength`, `debounce` and `initialItems` exist for the async case |
+| `allowedPrefixes` | Set it explicitly, or `foo@bar.com` typed in prose opens the popup mid-word |
+
+### 11.4 🚩 `event.defaultPrevented` is useless for "did an inner surface handle this key?"
+
+The single most expensive thing learned here, and it is invisible to jsdom, to `typecheck` and to
+every unit test.
+
+`prosemirror-view@1.42`'s `captureKeyDown` returns `true` for **keyCode 13 and 27 unconditionally**
+("Enter, Esc"). The view therefore calls `preventDefault()` on **every** Enter and **every** Escape
+inside **any** ProseMirror editor, whether or not an extension handled the key.
+
+So the obvious wrapper guard —
+
+```ts
+// WRONG. Always taken inside an editor; silently disables both callbacks everywhere.
+if (event.defaultPrevented) return
+```
+
+— is not a guard at all. Answer the question by **native-event identity** instead: have the
+suggestion's `onKeyDown` record the exact `KeyboardEvent` it acted on, and have the wrapper compare
+`recorded === event.nativeEvent`. Do not derive it from "is the popup open": `exitSuggestion` tears
+the popup down *synchronously* inside ProseMirror's own handler, so by the time React dispatches the
+same event to the wrapper, any state-derived answer is "nothing was open".
+
+⚠️ **ProseMirror does not stop React's synthetic bubbling** for a key one of its own plugins
+handled. Declining to act is not enough — call `stopPropagation()`, because a dialog above the
+editor may close on a key it never inspected. (Base UI's `useDismiss`, `@base-ui/react` 1.6, checks
+neither `defaultPrevented` nor the event's origin.)
+
+### 11.5 ARIA: mount into the editor wrapper, not a body portal
+
+Set the suggestion's `container` to the **editor wrapper** element. A `document.body` portal looks
+identical to a sighted developer and breaks two things at once: `aria-activedescendant` stops being
+a legal same-subtree IDREF, and any view-level "is a popup open?" ancestor check
+(`closest('[role="listbox"]')` and friends) stops matching, so single-letter shortcuts fire while
+the user is typing a name.
+
+---
+
+## 12. Source URLs
 
 - TypeScript 7 — <https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/>
 - TypeScript 6 deprecations — <https://devblogs.microsoft.com/typescript/announcing-typescript-6-0/>
@@ -1805,3 +1899,6 @@ and `LEFTHOOK=0 git commit …` to bypass.
 - Biome big projects / monorepo — <https://biomejs.dev/guides/big-projects/>
 - lefthook configuration — <https://lefthook.dev/configuration/index.html>
 - lefthook commitlint example — <https://github.com/evilmartians/lefthook/blob/master/docs/examples/commitlint.md>
+- TipTap mention extension — <https://tiptap.dev/docs/editor/extensions/nodes/mention>
+- TipTap suggestion utility — <https://tiptap.dev/docs/editor/api/utilities/suggestion>
+- prosemirror-view `captureKeyDown` — <https://github.com/ProseMirror/prosemirror-view/blob/master/src/capturekeys.ts>

@@ -32,6 +32,18 @@ function inviteLink(token: string): string {
   return `${window.location.origin}/invite?token=${encodeURIComponent(token)}`
 }
 
+// Delivery is a courtesy on top of a completed invite: the row exists, the link above is already
+// copyable, and an instance with no mail transport answers `sent: false`. So this is fire-and-
+// forget by design — a failed send must never turn a successful invite into an error.
+function requestInviteEmail(inviteId: string): void {
+  void fetch('/api/invites/send', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ inviteId }),
+  }).catch(() => undefined)
+}
+
 function inviteStatus(invite: InviteRow, now: number): 'revoked' | 'expired' | 'active' {
   if (invite.revokedAt != null) return 'revoked'
   if (invite.expiresAt < now) return 'expired'
@@ -171,10 +183,11 @@ function CreateInviteDialog() {
     setBusy(true)
     const trimmedEmail = email.trim()
     const now = Date.now()
+    const inviteId = newId()
     const failure = await runMutation(
       zero.mutate(
         mutators.invite.create({
-          id: newId(),
+          id: inviteId,
           workspaceId: workspace.id,
           token: crypto.randomUUID(),
           role,
@@ -190,6 +203,7 @@ function CreateInviteDialog() {
       setError(failure)
       return
     }
+    if (trimmedEmail !== '') requestInviteEmail(inviteId)
     reset()
     setOpen(false)
   }

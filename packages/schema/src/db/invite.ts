@@ -24,6 +24,43 @@ export type AcceptInviteResult =
     }
   | { ok: false; reason: AcceptInviteRefusal }
 
+export interface InviteEmailTarget {
+  readonly id: string
+  readonly token: string
+  // Null for a shareable link, which has nobody to mail.
+  readonly email: string | null
+  readonly workspaceName: string
+  // Null when the inviter's account has no display name — never their email address, which would
+  // leak an admin's address to someone who is not yet a member.
+  readonly inviterName: string | null
+  readonly revokedAt: Date | null
+  readonly expiresAt: Date
+}
+
+// Everything the invite email needs, and nothing else. Read after the invite row is durable, so
+// rendering can never race the write that created it.
+export async function inviteEmailTarget(
+  db: Kysely<DB>,
+  inviteId: string,
+): Promise<InviteEmailTarget | undefined> {
+  const row = await db
+    .selectFrom('invite')
+    .innerJoin('workspace', 'workspace.id', 'invite.workspace_id')
+    .leftJoin('user as inviter', 'inviter.id', 'invite.created_by')
+    .select([
+      'invite.id as id',
+      'invite.token as token',
+      'invite.email as email',
+      'workspace.name as workspaceName',
+      'inviter.name as inviterName',
+      'invite.revoked_at as revokedAt',
+      'invite.expires_at as expiresAt',
+    ])
+    .where('invite.id', '=', inviteId)
+    .executeTakeFirst()
+  return row
+}
+
 function normalizeEmail(email: string | null | undefined): string | undefined {
   const trimmed = email?.trim().toLowerCase()
   return trimmed === undefined || trimmed.length === 0 ? undefined : trimmed

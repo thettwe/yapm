@@ -6,11 +6,19 @@ import { fromKysely, PgBoss } from 'pg-boss'
 import { runCycleDigest } from '../ai/digest.js'
 import type { AiGateway } from '../ai/gateway.js'
 import type { Logger } from '../logger.js'
+import type { Mailer } from '../mail/index.js'
 import type { ZeroDatabase } from '../zero/db-provider.js'
 import { type CycleMaintenanceOptions, runCycleMaintenance } from './cycles.js'
+import {
+  NOTIFICATION_EMAIL_QUEUE,
+  NOTIFICATION_RETENTION_QUEUE,
+  runNotificationEmailSweep,
+  runNotificationRetention,
+} from './notifications.js'
 
 export const CYCLE_MAINTENANCE_QUEUE = 'cycle-maintenance'
 export const CYCLE_DIGEST_QUEUE = 'cycle-digest'
+export { NOTIFICATION_EMAIL_QUEUE, NOTIFICATION_RETENTION_QUEUE } from './notifications.js'
 
 // The manual-completion sweep bound: a cycle completed by hand (through the shared `cycle.complete`
 // mutator, which the scheduler never re-selects) is picked up for a digest by the next maintenance
@@ -19,7 +27,7 @@ export const CYCLE_DIGEST_QUEUE = 'cycle-digest'
 const MANUAL_COMPLETION_SWEEP_WINDOW_MS = 60 * 60 * 1000
 const MANUAL_COMPLETION_SWEEP_LIMIT = 25
 
-export interface CycleScheduler {
+export interface Scheduler {
   stop: () => Promise<void>
 }
 
@@ -29,12 +37,36 @@ export interface DigestSchedulerOptions {
   gateway: AiGateway
 }
 
-export interface StartCycleSchedulerOptions {
+export interface CycleSchedulerOptions {
+  cron: string
+  digest?: DigestSchedulerOptions
+}
+
+// Present ⇒ the delivery sweep is registered. Absent ⇒ it is not, and retention still is: the two
+// are gated separately because retention is what bounds the synced set, not an email feature.
+export interface NotificationEmailSchedulerOptions {
+  mailer: Mailer
+  publicUrl: string
+  cron: string
+}
+
+export interface NotificationSchedulerOptions {
+  retentionDays: number
+  retentionCron: string
+  email?: NotificationEmailSchedulerOptions
+}
+
+// Both blocks are independently optional, extending the shape `digest?:` already used. Turning off
+// cycle maintenance therefore no longer silently turns off notification retention.
+export interface StartSchedulerOptions {
   db: Kysely<DB>
   dbProvider: ZeroDatabase
   logger: Logger
-  cron: string
-  digest?: DigestSchedulerOptions
+  cycles?: CycleSchedulerOptions
+  notifications?: NotificationSchedulerOptions
+  // Injected by tests so the queue topology — which queues exist, and on what cron — is assertable
+  // without a database or real polling. Mirrors the GitHub connector's `boss?:`.
+  boss?: PgBoss
 }
 
 interface CycleDigestJobData {
@@ -43,20 +75,47 @@ interface CycleDigestJobData {
 }
 
 // pg-boss runs on the same Postgres (the third container — no new service). It installs its
-// own `pgboss` schema on start, independent of the Kysely migrator. The scheduled job is a
-// singleton across replicas (pg-boss dedupes the cron enqueue), and the worker drives the
-// idempotent maintenance pass, so it is safe to run the app multi-replica. When a gateway is
-// supplied, cycle close also enqueues a bounded, off-the-hot-path digest job per completed cycle.
-export async function startCycleScheduler(
-  options: StartCycleSchedulerOptions,
-): Promise<CycleScheduler> {
-  const { db, dbProvider, logger, cron, digest } = options
+// own `pgboss` schema on start, independent of the Kysely migrator. The scheduled jobs are
+// singletons across replicas (pg-boss dedupes the cron enqueue), and the workers drive idempotent
+// passes, so it is safe to run the app multi-replica. When a gateway is supplied, cycle close also
+// enqueues a bounded, off-the-hot-path digest job per completed cycle.
+//
+// ONE PgBoss instance and ONE `boss.start()` in this file, whatever is enabled. A third instance in
+// the process (beside this one and the GitHub connector's) is three concurrent installs of the
+// `pgboss` schema on a fresh volume — a boot race invisible in dev and ugly exactly once, on a
+// self-hoster's first `docker compose up`.
+export async function startScheduler(options: StartSchedulerOptions): Promise<Scheduler> {
+  const { db, dbProvider, logger, cycles, notifications } = options
+
+  const boss = options.boss ?? new PgBoss({ db: fromKysely(db), schema: 'pgboss' })
+  if (options.boss === undefined) {
+    boss.on('error', (error) => logger.error({ err: error }, 'pg-boss error'))
+    await boss.start()
+  }
+
+  if (cycles) await registerCycleJobs({ boss, db, dbProvider, logger, cycles })
+  if (notifications) await registerNotificationJobs({ boss, db, logger, notifications })
+
+  return {
+    stop: async () => {
+      await boss.stop({ graceful: true })
+    },
+  }
+}
+
+interface RegisterCycleJobsOptions {
+  boss: PgBoss
+  db: Kysely<DB>
+  dbProvider: ZeroDatabase
+  logger: Logger
+  cycles: CycleSchedulerOptions
+}
+
+async function registerCycleJobs(options: RegisterCycleJobsOptions): Promise<void> {
+  const { boss, db, dbProvider, logger } = options
+  const { cron, digest } = options.cycles
   const mutators = createServerMutators()
 
-  const boss = new PgBoss({ db: fromKysely(db), schema: 'pgboss' })
-  boss.on('error', (error) => logger.error({ err: error }, 'pg-boss error'))
-
-  await boss.start()
   await boss.createQueue(CYCLE_MAINTENANCE_QUEUE)
 
   // The digest pre-compute worker: one structured-output call per completed cycle, off the hot
@@ -128,12 +187,47 @@ export async function startCycleScheduler(
 
   await boss.schedule(CYCLE_MAINTENANCE_QUEUE, cron)
   logger.info({ cron }, 'cycle maintenance scheduled')
+}
 
-  return {
-    stop: async () => {
-      await boss.stop({ graceful: true })
-    },
-  }
+interface RegisterNotificationJobsOptions {
+  boss: PgBoss
+  db: Kysely<DB>
+  logger: Logger
+  notifications: NotificationSchedulerOptions
+}
+
+// Retention is registered unconditionally; the delivery sweep only when a mailer exists, so an
+// instance with email off queues nothing that could sit retrying against a transport it has not got.
+async function registerNotificationJobs(options: RegisterNotificationJobsOptions): Promise<void> {
+  const { boss, db, logger } = options
+  const { retentionDays, retentionCron, email } = options.notifications
+
+  await boss.createQueue(NOTIFICATION_RETENTION_QUEUE)
+  await boss.work(NOTIFICATION_RETENTION_QUEUE, async () => {
+    await runNotificationRetention({ db, retentionDays, logger, now: Date.now() })
+  })
+  await boss.schedule(NOTIFICATION_RETENTION_QUEUE, retentionCron)
+  logger.info({ cron: retentionCron, retentionDays }, 'notification retention scheduled')
+
+  if (!email) return
+
+  await boss.createQueue(NOTIFICATION_EMAIL_QUEUE)
+  await boss.work(NOTIFICATION_EMAIL_QUEUE, async () => {
+    // The sweep contains its own transport failures and never rejects, so this worker cannot
+    // disturb the cycle or connector jobs sharing the process.
+    await runNotificationEmailSweep({
+      db,
+      mailer: email.mailer,
+      publicUrl: email.publicUrl,
+      logger,
+      now: Date.now(),
+    })
+  })
+  await boss.schedule(NOTIFICATION_EMAIL_QUEUE, email.cron)
+  logger.info(
+    { cron: email.cron, transport: email.mailer.transport },
+    'notification email delivery scheduled',
+  )
 }
 
 interface SweepManualCompletionsOptions {

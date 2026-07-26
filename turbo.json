@@ -32,6 +32,9 @@
         "GITHUB_CLIENT_SECRET",
         "HOST",
         "LOG_LEVEL",
+        "NOTIFICATION_EMAIL_CRON",
+        "NOTIFICATION_RETENTION_CRON",
+        "NOTIFICATION_RETENTION_DAYS",
         "PORT",
         "PUBLIC_URL",
         "RESEND_API_KEY",
@@ -56,7 +59,7 @@
     "test": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"],
-      "passThroughEnv": ["DATABASE_URL", "CI"]
+      "env": ["DATABASE_URL", "CI"]
     },
     "e2e": {
       "dependsOn": ["^build"],

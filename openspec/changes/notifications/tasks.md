@@ -234,22 +234,22 @@ complete and useful before any mail code exists (groups 8–12); email is additi
 
 ## 11. One scheduler, two new queues
 
-- [ ] 11.1 Refactor `apps/server/src/jobs/scheduler.ts`: `startCycleScheduler` →
+- [x] 11.1 Refactor `apps/server/src/jobs/scheduler.ts`: `startCycleScheduler` →
       `startScheduler`, `StartCycleSchedulerOptions` → `StartSchedulerOptions` with independently
       gated `cycles?:` and `notifications?:` blocks, extending the shape `digest?:` already uses
       (`scheduler.ts:37`). **Exactly one `PgBoss` instance and one `boss.start()` in the process** —
       do not add a third (design D10).
-- [ ] 11.2 Update `apps/server/src/index.ts`: start the scheduler when **cycles OR notifications**
+- [x] 11.2 Update `apps/server/src/index.ts`: start the scheduler when **cycles OR notifications**
       is enabled, so `CYCLE_MAINTENANCE=false` no longer silently disables notification retention.
-- [ ] 11.3 Add the `notification-email` queue + worker (registered only when a mailer exists):
+- [x] 11.3 Add the `notification-email` queue + worker (registered only when a mailer exists):
       select unread + unemailed + past the 2-minute debounce + younger than 24h, **joined to current
       `team_membership`**, to `user_preference` for the mode and `user` for the address; filter by
       the actionable/ambient classification (design D13); group per recipient into one message;
       render via `@yapm/email`; send via the `Mailer`; stamp `email_sent_at` on exactly the rows
       sent. Catch and log transport failures inside the job, leaving rows unstamped.
-- [ ] 11.4 Add the `notification-retention` queue + worker, **always registered**, bounded delete
+- [x] 11.4 Add the `notification-retention` queue + worker, **always registered**, bounded delete
       past `NOTIFICATION_RETENTION_DAYS`.
-- [ ] 11.5 **Test**: `apps/server/src/jobs/*.test.ts` — the sweep with a `null` mailer completes,
+- [x] 11.5 **Test**: `apps/server/src/jobs/*.test.ts` — the sweep with a `null` mailer completes,
       throws nothing and stamps nothing; a recipient who lost team membership between write and
       sweep is excluded; an already-read notification is excluded; several notifications for one
       recipient become one message; a throwing transport leaves rows unstamped and does not throw
@@ -257,10 +257,10 @@ complete and useful before any mail code exists (groups 8–12); email is additi
 
 ## 12. The invite email, through the seam
 
-- [ ] 12.1 Wire invite creation to render `renderInvite` and send through the shared `Mailer`,
+- [x] 12.1 Wire invite creation to render `renderInvite` and send through the shared `Mailer`,
       building the accept link from `PUBLIC_URL`. With no mailer the invite still succeeds and the
       link is still presented — sending is simply skipped.
-- [ ] 12.2 **Test**: an invite with no mailer sends nothing and still returns its link; an invite
+- [x] 12.2 **Test**: an invite with no mailer sends nothing and still returns its link; an invite
       with a mailer double hands the rendered message to the transport. This closes
       `openspec/specs/invitations/spec.md`'s "WHEN SMTP is configured … THEN the invite email is
       sent" scenario, false for nine changes.

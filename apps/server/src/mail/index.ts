@@ -4,6 +4,8 @@ import type { Mailer } from './mailer.js'
 import { createResendMailer } from './resend.js'
 import { createSmtpMailer } from './smtp.js'
 
+export type { SendInviteEmailOptions, SendInviteEmailResult } from './invite.js'
+export { sendInviteEmail } from './invite.js'
 export type { Mailer, OutboundMessage, RenderedMessage } from './mailer.js'
 export { createResendMailer, type FetchLike, ResendSendError } from './resend.js'
 export type { CreateSmtpTransport, SmtpTransport } from './smtp.js'

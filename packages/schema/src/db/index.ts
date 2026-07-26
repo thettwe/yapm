@@ -60,8 +60,13 @@ export {
   getWorkspaceAiSpendUsd,
 } from './cycle-digest.js'
 export { cycleFactsForTeam } from './cycle-facts.js'
-export type { AcceptInviteOptions, AcceptInviteRefusal, AcceptInviteResult } from './invite.js'
-export { acceptInvite } from './invite.js'
+export type {
+  AcceptInviteOptions,
+  AcceptInviteRefusal,
+  AcceptInviteResult,
+  InviteEmailTarget,
+} from './invite.js'
+export { acceptInvite, inviteEmailTarget } from './invite.js'
 export { lookupWorkspaceRole } from './membership.js'
 export type { MigrationOutcome } from './migrate.js'
 export { createMigrator, migrateToLatest } from './migrate.js'

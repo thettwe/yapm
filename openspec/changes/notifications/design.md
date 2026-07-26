@@ -930,3 +930,115 @@ shape.
 no transport, no environment, no `packages/schema` — which is what keeps its JSX/DOM compiler
 settings out of `apps/server` (D8, DI-15). It also gains the scenario DI-22's guard now makes true,
 so the image invariant is spec'd rather than living only in a script.
+
+### DI-24 — The delivery sweep needs the actor's name, so the source query left-joins `user` twice
+
+*Not anticipated:* `pendingNotificationEmails` (task 4.4) selected `actor_id` but no actor name,
+while `notificationCopy` — the single wording seam the inbox row and the email share — takes
+`actorName`. Every email would have read "Someone assigned you ENG-42" while the inbox row for the
+same event read "Ada assigned you ENG-42": the two describing the same event differently, which is
+the exact failure the shared copy function exists to prevent.
+
+*Chosen:* a second, **left** join to `user as actor`, selecting `actor.name as actorName`. Left
+rather than inner because `actor_id` carries no foreign key (D11) — a vanished actor must degrade
+the copy to "Someone", never drop the notification. The change is confined to the one file that owns
+every Kysely statement over the table.
+
+### DI-25 — `notifications?:` carries an optional `email?:` block rather than a nullable mailer
+
+D10 sketched `NotificationSchedulerOptions` as flat — `{ mailer, publicUrl, emailCron,
+retentionDays, retentionCron }` — which makes "email is off" representable four different ways
+(null mailer, absent public URL, or either of the two in combination) and leaves the reader to work
+out which combinations the scheduler actually honours.
+
+*Chosen:* the same recursion the block itself uses. `notifications?:` carries `retentionDays` and
+`retentionCron` unconditionally and an optional `email?: { mailer, publicUrl, cron }`; the delivery
+queue is registered exactly when that inner block is present. Retention's independence from email —
+the thing D10 was most concerned to preserve — is then structural rather than a rule to remember.
+
+`runNotificationEmailSweep` nonetheless still accepts `mailer: Mailer | null` and `publicUrl: string
+| null` and returns a zero result for either, which is what the "sweep with a null mailer completes,
+throws nothing and stamps nothing" test drives. That is defence in depth, not dead code: it is
+proved with a database proxy that throws on any property access, so the assertion is that the sweep
+did not reach the database *at all*, which no amount of type-level gating could establish.
+
+### DI-26 — `startScheduler` takes an injectable `boss?:`, mirroring the GitHub connector
+
+Queue topology — which queues exist, on what cron, and which are absent because a mailer is not
+configured — is the part of task 11 most likely to regress and the part hardest to see. The GitHub
+connector already solved this: `boss?: PgBoss` in its options, defaulted to a real instance, doubled
+in tests by a nine-line object literal.
+
+The same seam here proves "retention registers with no mailer, and no delivery queue does" without a
+database and without real polling. `boss.start()` is called only when the scheduler constructed the
+instance, exactly as `ownsBoss` guards it in the connector — so D10's "exactly one `boss.start()` in
+this file" holds, and an injected already-started boss is never started twice.
+
+### DI-27 — Invite email is a delivery-only REST route, not a mutator side effect
+
+*Not anticipated by any decision:* invites are created by the shared `invite.create` mutator, and
+nothing in D1–D18 says where the send happens. The obvious-looking place — a server-mutator override
+beside the notification fan-out — is wrong for two reasons. A mutator override runs *inside* the
+sync push transaction, so an SMTP handshake would hold a database transaction open for the length of
+a network round trip; and a transaction that rolls back after the send has mailed an invitation to a
+row that does not exist.
+
+*Chosen:* `POST /api/invites/send`, beside the existing `/api/invites/accept`, admin-gated by
+`lookupWorkspaceRole` before it reads the invite. The client calls it after `runMutation` has
+resolved the mutation's **authoritative** apply, so the row is durable and there is no race. Failure
+is contained twice over: the route catches transport errors and answers `sent: false`, and the
+client fires it without awaiting, because the invite has already succeeded and its link is already
+on screen. A shareable link (`email` null) has nobody to mail and is answered `sent: false` without
+touching the mailer.
+
+The response's `link` is the link *the email carried* — it is null when nothing was sent, including
+when no `PUBLIC_URL` is configured. The admin's copyable link is unaffected either way: the invites
+panel builds it from the browser's own origin and always has, which is what makes
+"invite creation never depends on email" true by construction rather than by promise.
+
+### DI-28 — Compose spells the three `NOTIFICATION_*` defaults literally
+
+DI-21 deliberately deferred forwarding these to this stage, because the `${VAR:-}` idiom the rest of
+the optional block uses would actively break them: an empty `NOTIFICATION_EMAIL_CRON` fails
+`z.string().min(1)` and an empty `NOTIFICATION_RETENTION_DAYS` coerces to `0` and fails `.min(1)`.
+
+*Chosen:* `${NOTIFICATION_EMAIL_CRON:-*/2 * * * *}` and friends — the Zod defaults repeated as
+compose defaults, quoted so the cron's `*` cannot be read as a YAML alias. The duplication is real
+and is the lesser evil: the alternative is a stack that fails to boot on an unset variable that the
+application itself declares optional. `turbo.json`'s `dev` `passThroughEnv` gains the same three.
+
+### DI-29 — This stage adds no per-person signal, and the sweep is where it would have crept in
+
+The delivery sweep is the one place in this change that reads *across* recipients, so it is the
+place a per-person aggregate would have been easiest to introduce. It records none: the sweep logs
+counts (`recipients`, `notifications`, `failures`) with no identity attached, stamps `email_sent_at`
+on the notification rows themselves, and writes nothing anywhere else. There is no send log, no
+open/read signal, no per-person delivery table — nothing that could be aggregated into the
+scorecard constraint #8 forbids, and nothing an admin could query if they tried.
+
+### DI-30 — The send route enforces invite validity, rather than trusting the caller's id
+
+`inviteEmailTarget` selects `revoked_at` and `expires_at`, but the first cut of
+`POST /api/invites/send` read neither: an admin could post the id of a revoked or expired invite and
+the route would happily render and mail an accept link that `acceptInvite` already refuses
+(`db/invite.ts:87-88`). Not an escalation — the link is dead on arrival — but mailing a dead link is
+worse than not mailing, and it left two selected columns as dead fields.
+
+*Chosen:* gate the route on both fields, answering `{ ok: true, sent: false, link: null }` — the
+same "nothing to send" shape the shareable-link branch already returns — rather than 404. The row
+plainly exists in the admin's own invite list, so claiming it does not would be a lie; and the
+route's contract is delivery, not existence. Two live-db cases cover it, and reverting only the
+guard fails both (the expired one mails a real link).
+
+### DI-31 — `test` hashes `DATABASE_URL`, because `passThroughEnv` made the gate lie
+
+`turbo.json` listed `DATABASE_URL` and `CI` under the `test` task's `passThroughEnv`, which forwards
+a variable to the task but — by design — excludes it from the cache key. So a `turbo run test` with
+a database and one without hashed identically: the second replayed the first's result and reported
+`>>> FULL TURBO`, without running a single DB-gated test. The pg suites this change adds are exactly
+the ones that behaviour hides, and it is how a genuinely failing suite passed a green gate.
+
+*Chosen:* move both to `env`, which forwards *and* hashes. Verified against turbo 2.10.6: with
+`passThroughEnv`, a no-database run after a database run is `>>> FULL TURBO`; with `env` it is a
+real cache miss that re-executes the suite. The cost is more cache misses on a variable that
+genuinely changes what the tests do, which is the point.

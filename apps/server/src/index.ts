@@ -16,13 +16,21 @@ import { createAiGateway } from './ai/gateway.js'
 import { createApp } from './app.js'
 import { createAuth } from './auth.js'
 import { createAuthRoutes } from './auth-routes.js'
-import { aiEnv, type Env, EnvValidationError, githubAppEnv, loadEnv } from './config/env.js'
+import {
+  aiEnv,
+  type Env,
+  EnvValidationError,
+  githubAppEnv,
+  loadEnv,
+  mailEnv,
+} from './config/env.js'
 import { createConnectorAdminRoutes } from './connectors/admin-routes.js'
 import { createGithubConnector, githubConnector } from './connectors/github/index.js'
 import { createGithubWebhookRoute } from './connectors/github/routes.js'
 import { databaseCheck, replicationCheck } from './health.js'
-import { type CycleScheduler, startCycleScheduler } from './jobs/scheduler.js'
+import { type Scheduler, startScheduler } from './jobs/scheduler.js'
 import { createLogger, type Logger } from './logger.js'
+import { createMailer } from './mail/index.js'
 import { createSessionContextResolver } from './zero/context.js'
 import { createZeroDatabase } from './zero/db-provider.js'
 
@@ -149,21 +157,43 @@ async function main(): Promise<void> {
   // unconditionally: a digest job for an AI-less workspace simply writes `ai_off`.
   const aiGateway = createAiGateway({ db: database.db, codec: secretCodec, env: aiEnv(env) })
 
-  let cycleScheduler: CycleScheduler | undefined
-  if (env.CYCLE_MAINTENANCE === 'true') {
-    try {
-      cycleScheduler = await startCycleScheduler({
-        db: database.db,
-        dbProvider,
-        logger,
-        cron: env.CYCLE_MAINTENANCE_CRON,
-        // Pre-compute a cycle digest at close unless disabled. Per-workspace AI config is resolved
-        // at job time, so enabling AI via the admin UI takes effect without a restart.
-        ...(env.AI_DIGEST_ON_CYCLE_CLOSE === 'true' ? { digest: { gateway: aiGateway } } : {}),
-      })
-    } catch (error) {
-      logger.error({ err: error }, 'failed to start the cycle maintenance scheduler')
-    }
+  // Null when neither transport is configured. Null is not a degraded state: the inbox is complete
+  // without it, invite links stay copyable, and no delivery job is registered.
+  const mailer = createMailer(env, logger)
+  const mail = mailEnv(env)
+
+  const cycles =
+    env.CYCLE_MAINTENANCE === 'true'
+      ? {
+          cron: env.CYCLE_MAINTENANCE_CRON,
+          // Pre-compute a cycle digest at close unless disabled. Per-workspace AI config is
+          // resolved at job time, so enabling AI via the admin UI takes effect without a restart.
+          ...(env.AI_DIGEST_ON_CYCLE_CLOSE === 'true' ? { digest: { gateway: aiGateway } } : {}),
+        }
+      : undefined
+
+  // Notification retention is always wanted — it is what bounds the synced set, not an email
+  // feature — so the scheduler starts whenever EITHER block is enabled. CYCLE_MAINTENANCE=false
+  // (which the e2e stack sets, for deterministic timing) no longer silently disables it.
+  const notifications = {
+    retentionDays: env.NOTIFICATION_RETENTION_DAYS,
+    retentionCron: env.NOTIFICATION_RETENTION_CRON,
+    ...(mailer && mail
+      ? { email: { mailer, publicUrl: mail.publicUrl, cron: env.NOTIFICATION_EMAIL_CRON } }
+      : {}),
+  }
+
+  let scheduler: Scheduler | undefined
+  try {
+    scheduler = await startScheduler({
+      db: database.db,
+      dbProvider,
+      logger,
+      ...(cycles ? { cycles } : {}),
+      notifications,
+    })
+  } catch (error) {
+    logger.error({ err: error }, 'failed to start the background job scheduler')
   }
 
   const app = createApp({
@@ -175,7 +205,13 @@ async function main(): Promise<void> {
       ),
     ],
     webDistDir: env.WEB_DIST_DIR,
-    authRoutes: createAuthRoutes({ auth, db: database.db, env, logger }),
+    authRoutes: createAuthRoutes({
+      auth,
+      db: database.db,
+      env,
+      logger,
+      ...(mailer && mail ? { mail: { mailer, publicUrl: mail.publicUrl } } : {}),
+    }),
     githubWebhook,
     connectorAdmin,
     aiAdmin,
@@ -198,7 +234,7 @@ async function main(): Promise<void> {
   installShutdownHandlers({
     server,
     close: async () => {
-      if (cycleScheduler) await cycleScheduler.stop()
+      if (scheduler) await scheduler.stop()
       await github.stop()
       await database.close()
     },

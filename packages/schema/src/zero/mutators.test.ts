@@ -32,7 +32,7 @@ const WORKSPACE_ID = '019f8f00-0000-7000-8000-000000000000'
 
 interface RecordedCall {
   table: string
-  verb: 'insert' | 'update' | 'delete'
+  verb: 'insert' | 'update' | 'delete' | 'upsert'
   value: Record<string, unknown>
 }
 
@@ -51,6 +51,10 @@ function fakeTx(runResults: unknown[] = []) {
     },
     delete: (value: Record<string, unknown>) => {
       calls.push({ table, verb: 'delete', value })
+      return Promise.resolve()
+    },
+    upsert: (value: Record<string, unknown>) => {
+      calls.push({ table, verb: 'upsert', value })
       return Promise.resolve()
     },
   })
@@ -648,6 +652,201 @@ describe('notification read-state mutators', () => {
   })
 })
 
+const ISSUE_ID = '019f8f00-0000-7000-8000-0000000000ff'
+const TEAM_ID = '019f8f00-0000-7000-8000-0000000000ee'
+const AT = 1_784_820_335_919
+
+const issueRow = { id: ISSUE_ID, teamId: TEAM_ID }
+const viewerMembership = { id: 'membership-1', teamId: TEAM_ID, userId: VIEWER.userID }
+
+describe('issueSubscription.follow / issueSubscription.unfollow', () => {
+  const args = { issueId: ISSUE_ID, updatedAt: AT }
+
+  it('lets a VIEWER on the team follow — eligibility is a read predicate, so canWrite is the wrong gate', async () => {
+    const { tx, calls } = fakeTx([issueRow, viewerMembership, undefined])
+
+    await mutators.issueSubscription.follow.fn({ tx, args, ctx: VIEWER })
+
+    expect(calls).toEqual([
+      {
+        table: 'issue_subscription',
+        verb: 'upsert',
+        value: {
+          issueId: ISSUE_ID,
+          userId: VIEWER.userID,
+          teamId: TEAM_ID,
+          state: 'subscribed',
+          createdAt: AT,
+          updatedAt: AT,
+        },
+      },
+    ])
+  })
+
+  it('unfollows by writing a state, never by deleting the row', async () => {
+    const { tx, calls } = fakeTx([issueRow, viewerMembership, { createdAt: 1_784_000_000_000 }])
+
+    await mutators.issueSubscription.unfollow.fn({ tx, args, ctx: VIEWER })
+
+    expect(calls).toEqual([
+      {
+        table: 'issue_subscription',
+        verb: 'upsert',
+        value: {
+          issueId: ISSUE_ID,
+          userId: VIEWER.userID,
+          teamId: TEAM_ID,
+          state: 'unsubscribed',
+          // Carried over, not restamped: `createdAt` orders the subscriber fan-out.
+          createdAt: 1_784_000_000_000,
+          updatedAt: AT,
+        },
+      },
+    ])
+  })
+
+  it('takes an admin’s team access from the bypass, reading no membership', async () => {
+    const { tx, calls, runQueue } = fakeTx([issueRow, undefined])
+
+    await mutators.issueSubscription.follow.fn({ tx, args, ctx: ADMIN })
+
+    expect(runQueue).toHaveLength(0)
+    expect(calls[0]?.value).toMatchObject({ userId: ADMIN.userID, state: 'subscribed' })
+  })
+
+  it('rejects a non-member before reading anything at all', async () => {
+    const { tx, calls, runQueue } = fakeTx([issueRow, viewerMembership, undefined])
+
+    const error = await capture(mutators.issueSubscription.follow.fn({ tx, args, ctx: NON_MEMBER }))
+
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+    expect(runQueue).toHaveLength(3)
+  })
+
+  it('rejects a workspace member who is not on the issue’s team, generically', async () => {
+    const { tx, calls } = fakeTx([issueRow, undefined])
+
+    const error = await capture(mutators.issueSubscription.follow.fn({ tx, args, ctx: MEMBER }))
+
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it('rejects a missing issue with the same generic error, so existence never leaks', async () => {
+    const { tx, calls } = fakeTx([undefined])
+
+    const error = await capture(mutators.issueSubscription.follow.fn({ tx, args, ctx: MEMBER }))
+
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it('writes ctx.userID even when args try to name somebody else', async () => {
+    const rogue = { issueId: ISSUE_ID, updatedAt: AT, userId: 'user-somebody-else' }
+    const { tx, calls } = fakeTx([issueRow, viewerMembership, undefined])
+
+    await mutators.issueSubscription.follow.fn({ tx, args: rogue, ctx: VIEWER })
+
+    expect(calls[0]?.value.userId).toBe(VIEWER.userID)
+  })
+})
+
+describe('sanitizeRichText on every document write path', () => {
+  // A mention carrying junk attrs and whitespace, plus one with no id at all — which can never be
+  // resolved, permission-checked or notified, so it is not a mention.
+  const dirty = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'mention',
+            attrs: { id: '  user-b  ', label: '  Bea  ', href: 'https://elsewhere', rogue: 1 },
+          },
+          { type: 'mention', attrs: { label: 'Ghost' } },
+        ],
+      },
+    ],
+  }
+  const clean = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'mention', attrs: { id: 'user-b', label: 'Bea', mentionSuggestionChar: '@' } },
+          { type: 'text', text: '@Ghost' },
+        ],
+      },
+    ],
+  }
+
+  it('normalises the document issue.create stores', async () => {
+    const { tx, calls } = fakeTx([{ id: 'membership-2', teamId: TEAM_ID, userId: MEMBER.userID }])
+
+    await mutators.issue.create.fn({
+      tx,
+      args: {
+        id: ISSUE_ID,
+        teamId: TEAM_ID,
+        title: 'Ship it',
+        status: 'todo',
+        priority: 'medium',
+        description: dirty,
+        createdAt: AT,
+        updatedAt: AT,
+      },
+      ctx: MEMBER,
+    })
+
+    expect(calls[0]?.value.description).toEqual(clean)
+  })
+
+  it('normalises the document issue.update stores', async () => {
+    const { tx, calls } = fakeTx([
+      issueRow,
+      { id: 'membership-2', teamId: TEAM_ID, userId: MEMBER.userID },
+    ])
+
+    await mutators.issue.update.fn({
+      tx,
+      args: { id: ISSUE_ID, description: dirty, updatedAt: AT },
+      ctx: MEMBER,
+    })
+
+    expect(calls[0]?.value.description).toEqual(clean)
+  })
+
+  it('normalises the document comment.create stores', async () => {
+    const { tx, calls } = fakeTx([
+      issueRow,
+      { id: 'membership-2', teamId: TEAM_ID, userId: MEMBER.userID },
+    ])
+
+    await mutators.comment.create.fn({
+      tx,
+      args: { id: 'comment-1', issueId: ISSUE_ID, body: dirty, createdAt: AT, updatedAt: AT },
+      ctx: MEMBER,
+    })
+
+    expect(calls[0]?.value.body).toEqual(clean)
+  })
+
+  it('normalises the document comment.edit stores', async () => {
+    const { tx, calls } = fakeTx([{ id: 'comment-1', authorId: MEMBER.userID }])
+
+    await mutators.comment.edit.fn({
+      tx,
+      args: { id: 'comment-1', body: dirty, updatedAt: AT },
+      ctx: MEMBER,
+    })
+
+    expect(calls[0]?.value.body).toEqual(clean)
+  })
+})
+
 describe('the mutator registry', () => {
   it('registers every mutator under the name the client and server resolve', () => {
     expect(mutators.workspace.rename.mutatorName).toBe('workspace.rename')
@@ -656,6 +855,8 @@ describe('the mutator registry', () => {
       'preference.set',
       'notification.markRead',
       'notification.markAllRead',
+      'issueSubscription.follow',
+      'issueSubscription.unfollow',
       'member.changeRole',
       'member.remove',
       'team.create',

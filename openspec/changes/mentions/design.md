@@ -684,3 +684,94 @@ fan-out (oldest-following first, D9) and both are written from the triggering mu
 timestamp so the value is deterministic under rebase. `notification.created_at` made the same call
 for the same reason. `state` stays `Generated<SubscriptionState>` because the auto-subscribe insert
 genuinely omits it and lets the column default carry the meaning.
+
+### I10 — Follow/unfollow reads the existing row so `created_at` survives a re-follow
+
+Task 7.2 says "upsert `{issueId, userId, teamId, state}`", but the Zero table has six required
+columns, so an upsert must supply `createdAt` too — and a naive `createdAt: args.updatedAt` restamps
+it on every explicit follow. `created_at` is what orders `subscribersOfIssue` (oldest-following
+first, D9), so restamping would silently reorder who survives the cap.
+
+The mutator therefore reads its own row first (`issue_subscription` where `issueId` and
+`ctx.userID`) and passes `existing?.createdAt ?? args.updatedAt` into a single upsert. Still one
+write statement, still idempotent under rebase, still nothing minted. An `insert`/`update` branch
+was rejected: the insert arm would throw if the row appeared between the read and the write, which
+`autoSubscribeMentioned` running in another transaction can genuinely cause.
+
+On the client the read is served by `subscriptions.mine`, which the issue detail surface syncs; if
+it is not synced the optimistic pass guesses `createdAt = updatedAt` and the authoritative pass
+corrects it. Nothing renders `createdAt`, so the divergence is invisible.
+
+### I11 — `loadIssueForWrite` is split, and the read half is what the follow mutators use
+
+`loadIssueForWrite` never checked `canWrite` — it reads the issue and calls `assertTeamAccess`, and
+its doc comment says the capability gate belongs to the caller. That is exactly the READ predicate
+D18 wants, but calling a function named `…ForWrite` from a mutator deliberately gated on read would
+read as the bug D18 exists to prevent.
+
+So the body moved to `loadIssueForTeamAccess` and `loadIssueForWrite` now delegates to it. One
+implementation, two names, each stating which gate its callers owe. No call site changed behaviour.
+
+### I12 — Subscribers are read BEFORE the mention fan-out subscribes anyone
+
+Unspecified in §8.7. Ordered the other way, somebody mentioned by a comment would be auto-subscribed
+and then immediately handed an ambient `issue_commented` row for the very comment that named them —
+two inbox rows for one event, one of which says nothing the other did not. Reading the subscriber
+set first makes it a snapshot of who was following *when the comment arrived*, which is also the
+plainer reading of "subsequent activity".
+
+The two rows are not collapsible by the primary key (different `kind`), so this is an ordering
+decision rather than something the schema could absorb.
+
+### I13 — `issueSubscription.follow`/`.unfollow` had to be classified in the AI tool registry
+
+`ai-tools.ts` derives its tool set from `defineMutators` and throws on any mutator it has no
+classification for, so registering the new group broke four tests until both were added. That is the
+registry working as designed rather than an incidental fix — a new mutator cannot silently become or
+fail to become an agent tool.
+
+Both are `write`, not `destructive`, for the reason `notification.markRead` is: the mutators are
+structurally self-scoped (the user half of the key comes from the verified context), so an agent can
+only ever follow or unfollow on behalf of the person it is acting as, and `unfollow` writes a state
+rather than deleting anything — `follow` puts it back.
+
+### I14 — The falsifiable check was run as a throwaway and deleted, not left behind
+
+Task 9.1 owns `mutators.mentions.pg.test.ts`, and this stage is 7–8, so leaving a second permanent
+pg test would collide with it. Following I4's precedent, the whole sequence was written as a
+throwaway, run against live Postgres, and deleted:
+
+1. A creates an issue in T and comments mentioning B, C, D and A → exactly two `mention` rows (B and
+   D) and two `subscribed` rows. None for C (cannot read the issue), none for A (self-mention).
+2. Edit keeping B and adding E → exactly one new `mention` row.
+3. Re-save the identical body → zero new rows. **The `event_key` step.**
+4. B unfollows; the mention is removed and re-added → B is still `unsubscribed`. **The sticky-
+   unfollow step.**
+5. A follows explicitly, then E comments → D (subscribed, uninvolved) gets one `issue_commented`
+   row, B gets none, and A — creator *and* subscriber, i.e. the D5 overlap — gets exactly one row
+   rather than two.
+6. `issue.update` adding a description mention notifies once; a second identical `issue.update`
+   notifies nobody.
+7. The same writes under `tx.location === 'client'` add zero notification rows and zero subscription
+   rows.
+
+All seven passed. The `member.remove` / `team.removeMember` subscription cleanups are exercised by
+the pre-existing leaver cases in `mutators.notification.pg.test.ts`, which now run both deletes.
+
+### I15 — The dedup key in `autoSubscribeMentioned` uses a printable delimiter
+
+The first pass wrote the collapse key as `${issueId}<U+0000>${userId}` with a **raw NUL byte** in the
+source. It compiled and behaved correctly, and it broke two things that are not about behaviour: git
+classified `db/issue-subscription.ts` as binary, so the file's whole diff — including both membership
+cleanups and the `on conflict do nothing` that makes an unfollow stick — would have been unreviewable,
+and `grep` skipped the file entirely, defeating the "every Kysely statement over this table is in one
+greppable file" property the header comment claims.
+
+The delimiter is now `:`. Unambiguous because `issue_id` is a uuid and can contain no colon, so the
+split point is fixed by the left component's shape. Behaviour is identical.
+
+The falsifiable sequence in I14 was re-run in this pass against live Postgres and re-checked for
+bite, not just for green: perturbing `comment.edit`'s event key to `${args.id}:${args.updatedAt}`
+fails step 3, and turning `autoSubscribeMentioned`'s `do nothing` into a `do update set state` fails
+step 4. Both perturbations were reverted; the two crux steps fail for the two plausible wrong
+implementations and for nothing else.

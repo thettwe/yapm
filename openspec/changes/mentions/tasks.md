@@ -131,12 +131,12 @@ surface on top of a proven substrate.
 
 ## 7. Shared mutators: the sanitizer, follow and unfollow
 
-- [ ] 7.1 Wire `sanitizeRichText` into the **shared** bodies of `issue.create`, `issue.update`,
+- [x] 7.1 Wire `sanitizeRichText` into the **shared** bodies of `issue.create`, `issue.update`,
       `comment.create` and `comment.edit` in `packages/schema/src/zero/mutators.ts`, so the
       optimistic and authoritative documents are identical and rebase never visibly rewrites the
       user's text. Safe inside a mutator body because it is a pure function of `args` and mints
       nothing.
-- [ ] 7.2 Add `followIssueArgs` / `unfollowIssueArgs` (`{issueId, updatedAt}`) and
+- [x] 7.2 Add `followIssueArgs` / `unfollowIssueArgs` (`{issueId, updatedAt}`) and
       `issueSubscription.follow` / `.unfollow` shared mutators. **Gate on `canRead`/`isMember`, NOT
       `canWrite`** (design D18): `canWrite` excludes viewers (`context.ts:234`), and a viewer can be
       mentioned — eligibility is a read predicate — so gating on write would auto-subscribe viewers
@@ -146,41 +146,41 @@ surface on top of a proven substrate.
       **The user component comes from the verified context, never from args** — that is what makes a
       caller structurally unable to touch another person's subscription. Nothing is minted; the
       natural key is known at the call site.
-- [ ] 7.3 Register both under a `issueSubscription:` group in the exported `mutators` object.
-- [ ] 7.4 **Test**: extend `packages/schema/src/zero/mutators.test.ts` — **a viewer on the team can
+- [x] 7.3 Register both under a `issueSubscription:` group in the exported `mutators` object.
+- [x] 7.4 **Test**: extend `packages/schema/src/zero/mutators.test.ts` — **a viewer on the team can
       follow and unfollow**; a non-member is rejected without revealing the issue's existence; the
       `userId` written is `ctx.userID` even when args attempt to name someone else; the sanitizer
       runs on all four document write paths.
 
 ## 8. Server-authoritative: eligibility, the diff, and the fan-outs
 
-- [ ] 8.1 Create `packages/schema/src/zero/mentions/diff.ts` — pure: `addedMentionIds(previous,
+- [x] 8.1 Create `packages/schema/src/zero/mentions/diff.ts` — pure: `addedMentionIds(previous,
       next, actorId)` returning the newly-added ids in document order, minus the actor, truncated to
       `NOTIFICATION_RECIPIENT_CAP`. Truncate from the **end** so the notified set is the one the
       author wrote first (design D9). Array-shaped in and out (H8 seam).
-- [ ] 8.2 Create `packages/schema/src/zero/mentions/eligibility.ts` —
+- [x] 8.2 Create `packages/schema/src/zero/mentions/eligibility.ts` —
       `eligibleMentionees(tx, teamId, candidateIds) → Promise<Set<string>>`: two bounded `tx.run`
       reads (`team_membership` for the team, `workspace_member` where role is admin), intersected
       with the candidate list. **Batched, not per-candidate** — N round trips inside the triggering
       transaction is exactly the lock-holding pattern the cap exists to prevent. Mirrors
       `teamScoped`/`assertTeamAccess` including the admin bypass; denies by omission, never by an
       error that distinguishes unknown from disallowed.
-- [ ] 8.3 Create `packages/schema/src/db/issue-subscription.ts` — **every** Kysely statement over
+- [x] 8.3 Create `packages/schema/src/db/issue-subscription.ts` — **every** Kysely statement over
       the table in one file, mirroring `db/notification.ts`: `autoSubscribeMentioned(db, rows)`
       (one multi-row `insert … on conflict (issue_id,user_id) do nothing` — the do-nothing is the
       sticky-unsubscribe mechanism, comment it as such), `subscribersOfIssue(db, issueId, limit)`
       (`state='subscribed'`, `order by created_at asc`, capped),
       `deleteSubscriptionsForMember(db, userId)` and
       `deleteSubscriptionsForTeamMember(db, {userId, teamId})`.
-- [ ] 8.4 Re-export the write seam from `packages/schema/src/zero/server-mutators.ts` alongside
+- [x] 8.4 Re-export the write seam from `packages/schema/src/zero/server-mutators.ts` alongside
       `recordNotifications`, so `@yapm/schema/server` stays the one server entry point and Kysely
       never reaches the client bundle.
-- [ ] 8.5 Add a `fanOutMentions(tx, {issueId, actorId, eventKey, at, previousDoc, nextDoc})` helper
+- [x] 8.5 Add a `fanOutMentions(tx, {issueId, actorId, eventKey, at, previousDoc, nextDoc})` helper
       in `server-mutators.ts`: diff → eligibility → `recordNotifications` with kind `'mention'` →
       `autoSubscribeMentioned` for the same survivors. All inside the existing transaction, behind
       the caller's `tx.location === 'server'` guard. **`NOTIFICATION_TRIGGERS` is not touched**
       (design D6).
-- [ ] 8.6 Wire the four mention trigger sites, each reading the previous document inside the same
+- [x] 8.6 Wire the four mention trigger sites, each reading the previous document inside the same
       transaction with the `before` pattern `retro.setPhase` uses: `issue.create` (previous = empty;
       extend the existing override, after the number is claimed so `subject_key` reads `ENG-42`),
       **`issue.update` (new override)**, `comment.create` (extend the existing override), and
@@ -188,14 +188,14 @@ surface on top of a proven substrate.
       literal `'description'` for an issue description. `retro.convertActionToIssue` is **not** a
       trigger site — `retroActionDescription` builds its document from plain strings; verified, and
       worth a one-line comment so the next reader does not re-derive it.
-- [ ] 8.7 Add the subscriber fan-out to the `comment.create` override: `subscribersOfIssue` →
+- [x] 8.7 Add the subscriber fan-out to the `comment.create` override: `subscribersOfIssue` →
       `eligibleMentionees` (so a departed member stops receiving activity before cleanup runs) →
       `recordNotifications` with kind **`'issue_commented'`** and `eventKey: args.id`, i.e. the
       **same natural key** the involvement fan-out emits, so the primary key collapses the overlap
       to one row (design D5). Exclude the actor.
-- [ ] 8.8 Add subscription cleanup to the existing `member.remove` and `team.removeMember`
+- [x] 8.8 Add subscription cleanup to the existing `member.remove` and `team.removeMember`
       overrides, beside the notification cleanup they already do.
-- [ ] 8.9 **Test**: unit coverage for `diff.ts` (added-only, actor dropped, cap truncation from the
+- [x] 8.9 **Test**: unit coverage for `diff.ts` (added-only, actor dropped, cap truncation from the
       correct end, empty previous, identical docs) and for `eligibility.ts`'s pure parts.
 
 ## 9. The falsifiable check

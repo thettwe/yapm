@@ -7,6 +7,12 @@ import {
 } from '@rocicorp/zero'
 import { type Kysely, sql } from 'kysely'
 import {
+  autoSubscribeMentioned,
+  deleteSubscriptionsForMember,
+  deleteSubscriptionsForTeamMember,
+  subscribersOfIssue,
+} from '../db/issue-subscription.js'
+import {
   deleteNotificationsForMember,
   deleteNotificationsForTeamMember,
   markAllNotificationsRead as markAllNotificationsReadInDb,
@@ -16,6 +22,8 @@ import {
 import type { DB } from '../db/types.js'
 import type { AuthContext, NotificationKind, NotificationSubjectType } from './context.js'
 import { MutationError, MutationErrorCode } from './errors.js'
+import { addedMentionIds } from './mentions/diff.js'
+import { eligibleMentionees } from './mentions/eligibility.js'
 import {
   assignIssueArgs,
   castRetroVoteArgs,
@@ -24,6 +32,7 @@ import {
   createCycleArgs,
   createIssueArgs,
   deleteRetroCardArgs,
+  editCommentArgs,
   isRetroFacilitator,
   markAllNotificationsReadArgs,
   mutators,
@@ -33,6 +42,7 @@ import {
   routeIssueArgs,
   setRetroPhaseArgs,
   startRetroTimerArgs,
+  updateIssueArgs,
 } from './mutators.js'
 import {
   assignmentRecipients,
@@ -47,10 +57,17 @@ import {
 } from './retro/server-writes.js'
 import { zql } from './schema.js'
 
-// THE PUBLIC WRITE SEAM. `@yapm/schema/server` resolves to this module, so re-exporting
-// `recordNotifications` here is what makes `mentions` able to add a trigger type without reopening
-// this change — it binds to this, never to the private trigger map below. It must exist and be
-// exported even though this change is currently its only caller.
+// THE PUBLIC WRITE SEAMS, both of them. `@yapm/schema/server` resolves to this module, so a
+// re-export here is what keeps it the ONE server entry point — Kysely never reaches the client
+// bundle, and a later change binds to these rather than reaching into `db/` or into the private
+// trigger map below. (Biome sorts these blocks by module path; the two belong together.)
+export type { AutoSubscribeRow } from '../db/issue-subscription.js'
+export {
+  autoSubscribeMentioned,
+  deleteSubscriptionsForMember,
+  deleteSubscriptionsForTeamMember,
+  subscribersOfIssue,
+} from '../db/issue-subscription.js'
 export type { NotificationEvent } from '../db/notification.js'
 export { recordNotifications } from '../db/notification.js'
 
@@ -231,6 +248,19 @@ interface IssueSubjectRow {
   creatorId: string
 }
 
+// `ENG-42`, or null rather than a half-formed key: the row still renders from its title alone.
+// Read last, after the recipient set is known to be non-empty, so a fan-out that tells nobody costs
+// no extra statement inside the triggering transaction.
+async function issueSubjectKey(
+  tx: Transaction,
+  issue: { teamId: string; number: number | null },
+): Promise<string | null> {
+  const team = (await tx.run(zql.team.where('id', issue.teamId).one())) as
+    | { id: string; key: string }
+    | undefined
+  return team === undefined || issue.number === null ? null : `${team.key}-${issue.number}`
+}
+
 interface FanOutInput {
   readonly kind: InvolvementNotificationKind
   readonly issueId: string
@@ -310,12 +340,7 @@ async function fanOut(tx: Transaction, input: FanOutInput): Promise<void> {
   const recipients = candidates.filter((candidate) => members.has(candidate))
   if (recipients.length === 0) return
 
-  const team = (await tx.run(zql.team.where('id', issue.teamId).one())) as
-    | { id: string; key: string }
-    | undefined
-  // Null rather than a half-formed key: the row still renders from its title alone.
-  const subjectKey =
-    team === undefined || issue.number === null ? null : `${team.key}-${issue.number}`
+  const subjectKey = await issueSubjectKey(tx, issue)
 
   const events: NotificationEvent[] = recipients.map((recipientId) => ({
     recipientId,
@@ -333,6 +358,135 @@ async function fanOut(tx: Transaction, input: FanOutInput): Promise<void> {
   await recordNotifications(serverDb(tx), events)
 }
 
+// THE EVENT KEY FOR A DESCRIPTION MENTION, and the reason the "edit adds a mention, re-save adds
+// nothing" requirement holds. A constant, deliberately: `String(args.updatedAt)` changes on every
+// save, so removing and re-adding a mention would notify a second time — exactly what the
+// requirement forbids. With a sentinel, a description is a single lifetime event per person.
+//
+// It cannot collide with a comment's key: comment ids are UUIDv7, `subject_id` is the issue in both
+// cases, and the two key spaces are therefore disjoint by shape.
+const ISSUE_DESCRIPTION_EVENT_KEY = 'description'
+
+interface MentionFanOutInput {
+  readonly issueId: string
+  readonly actorId: string
+  readonly eventKey: string
+  readonly at: number
+  // The document as stored BEFORE this write, read inside the same transaction. Anybody already
+  // mentioned there has been told; the diff against `nextDoc` is what makes an edit notify once.
+  readonly previousDoc: unknown
+  readonly nextDoc: unknown
+}
+
+// The mention producer. It binds to the exported `recordNotifications` and NOT to
+// `NOTIFICATION_TRIGGERS` (design D6): that map computes recipients from subject involvement, while
+// a mention's recipients are a document diff — nothing the issue row could tell it.
+//
+// Diff -> eligibility -> notify -> subscribe, all inside the caller's transaction and behind the
+// caller's `tx.location === 'server'` guard, so the rows commit or roll back with the write that
+// caused them.
+async function fanOutMentions(tx: Transaction, input: MentionFanOutInput): Promise<void> {
+  const added = addedMentionIds(input.previousDoc, input.nextDoc, input.actorId)
+  if (added.length === 0) return
+
+  const issue = (await tx.run(zql.issue.where('id', input.issueId).one())) as
+    | IssueSubjectRow
+    | undefined
+  if (issue === undefined) return
+
+  // MENTIONING SOMEBODY WHO CANNOT READ THE ISSUE IS NOT POSSIBLE, and it is enforced here rather
+  // than in the typeahead: the document is user-controlled JSON, so a paste, a stale client or an
+  // API call would sail straight past a UI-only check.
+  const eligible = await eligibleMentionees(tx, issue.teamId, added)
+  const recipients = added.filter((id) => eligible.has(id))
+  if (recipients.length === 0) return
+
+  const subjectKey = await issueSubjectKey(tx, issue)
+  const db = serverDb(tx)
+
+  await recordNotifications(
+    db,
+    recipients.map((recipientId) => ({
+      recipientId,
+      actorId: input.actorId,
+      kind: 'mention' as const,
+      teamId: issue.teamId,
+      subjectType: 'issue' as const,
+      subjectId: input.issueId,
+      subjectKey,
+      subjectTitle: issue.title,
+      eventKey: input.eventKey,
+      createdAt: input.at,
+    })),
+  )
+
+  // Being mentioned subscribes you to the issue's later activity. Same survivors as the
+  // notification, so nobody is subscribed to a thread they were never told about.
+  await autoSubscribeMentioned(
+    db,
+    recipients.map((userId) => ({
+      issueId: input.issueId,
+      userId,
+      teamId: issue.teamId,
+      at: input.at,
+    })),
+  )
+}
+
+interface SubscriberFanOutInput {
+  readonly issueId: string
+  readonly actorId: string
+  readonly eventKey: string
+  readonly at: number
+}
+
+// The subscription producer, and the second reason `notifications`' natural-key-as-primary-key
+// decision pays rent (design D5). It emits kind `'issue_commented'` with `subjectId: issueId` and
+// `eventKey: comment.id` — BYTE-IDENTICAL natural keys to the ones the involvement fan-out produces
+// for the same comment — so a subscriber who is also the assignee gets exactly one inbox row and
+// the second insert is absorbed by the primary key.
+//
+// A separate `issue_activity` kind would have been the obvious alternative and is precisely wrong:
+// a different kind is a different primary key, so the overlap would double.
+async function fanOutToSubscribers(tx: Transaction, input: SubscriberFanOutInput): Promise<void> {
+  const db = serverDb(tx)
+  // Bounded by the same constant the recipient set is, for the same reason: this read is inside the
+  // triggering mutation's transaction. Past the cap the longest-following are kept.
+  const subscribers = (
+    await subscribersOfIssue(db, input.issueId, NOTIFICATION_RECIPIENT_CAP)
+  ).filter((userId) => userId !== input.actorId)
+  if (subscribers.length === 0) return
+
+  const issue = (await tx.run(zql.issue.where('id', input.issueId).one())) as
+    | IssueSubjectRow
+    | undefined
+  if (issue === undefined) return
+
+  // The same predicate a fresh mention is checked against, so somebody who left the team stops
+  // receiving the thread in the window before the membership-removal cleanup runs.
+  const eligible = await eligibleMentionees(tx, issue.teamId, subscribers)
+  const recipients = subscribers.filter((userId) => eligible.has(userId))
+  if (recipients.length === 0) return
+
+  const subjectKey = await issueSubjectKey(tx, issue)
+
+  await recordNotifications(
+    db,
+    recipients.map((recipientId) => ({
+      recipientId,
+      actorId: input.actorId,
+      kind: 'issue_commented' as const,
+      teamId: issue.teamId,
+      subjectType: 'issue' as const,
+      subjectId: input.issueId,
+      subjectKey,
+      subjectTitle: issue.title,
+      eventKey: input.eventKey,
+      createdAt: input.at,
+    })),
+  )
+}
+
 // Server-authoritative overrides layered over the shared client mutators. Each one adds exactly the
 // work a client cannot do correctly — claim a gapless per-team number, publish every participant's
 // drafts, increment a tally atomically, or stamp the server clock — and nothing else: the
@@ -347,7 +501,17 @@ export function createServerMutators() {
         if (tx.location !== 'server') return
         const number = await claimNextIssueNumber(serverDb(tx), args.teamId)
         await tx.mutate.issue.update({ id: args.id, number, updatedAt: args.updatedAt })
-        if (args.assigneeId == null || ctx === undefined) return
+        if (ctx === undefined) return
+        // A new issue has no prior description, so the whole mention set is newly added.
+        await fanOutMentions(tx, {
+          issueId: args.id,
+          actorId: ctx.userID,
+          eventKey: ISSUE_DESCRIPTION_EVENT_KEY,
+          at: args.updatedAt,
+          previousDoc: null,
+          nextDoc: args.description ?? null,
+        })
+        if (args.assigneeId == null) return
         await fanOut(tx, {
           kind: 'issue_assigned',
           issueId: args.id,
@@ -355,6 +519,28 @@ export function createServerMutators() {
           eventKey: String(args.updatedAt),
           at: args.updatedAt,
           assigneeId: args.assigneeId,
+        })
+      }),
+      // The description's mention trigger. `before` is read ahead of the shared mutator, in the
+      // same transaction, because the shared mutator is what overwrites it — the pattern
+      // `retro.setPhase` uses.
+      update: defineMutator(updateIssueArgs, async ({ tx, args, ctx }) => {
+        const before =
+          tx.location === 'server'
+            ? ((await tx.run(zql.issue.where('id', args.id).one())) as
+                | { id: string; description: unknown }
+                | undefined)
+            : undefined
+        await mutators.issue.update.fn({ tx, args, ctx })
+        if (tx.location !== 'server') return
+        if (ctx === undefined || args.description === undefined || before === undefined) return
+        await fanOutMentions(tx, {
+          issueId: args.id,
+          actorId: ctx.userID,
+          eventKey: ISSUE_DESCRIPTION_EVENT_KEY,
+          at: args.updatedAt,
+          previousDoc: before.description,
+          nextDoc: args.description,
         })
       }),
       assign: defineMutator(assignIssueArgs, async ({ tx, args, ctx }) => {
@@ -403,6 +589,46 @@ export function createServerMutators() {
           eventKey: args.id,
           at: args.createdAt,
         })
+        // SUBSCRIBERS ARE READ BEFORE THE MENTION FAN-OUT SUBSCRIBES ANYONE. Ordered the other way,
+        // somebody mentioned by this very comment would be subscribed and then immediately handed
+        // an ambient "commented" row for the same comment they were just told about by name.
+        await fanOutToSubscribers(tx, {
+          issueId: args.issueId,
+          actorId: ctx.userID,
+          eventKey: args.id,
+          at: args.createdAt,
+        })
+        await fanOutMentions(tx, {
+          issueId: args.issueId,
+          actorId: ctx.userID,
+          eventKey: args.id,
+          at: args.createdAt,
+          previousDoc: null,
+          nextDoc: args.body,
+        })
+      }),
+      // `event_key` is the COMMENT'S id here too, not the edit's timestamp, and that is the crux of
+      // the change: the key is stable across every edit of one comment, so the previous-vs-next
+      // diff decides who is new and the composite primary key absorbs everyone who is not. Editing
+      // to add a mention notifies once; re-saving the identical body notifies nobody.
+      edit: defineMutator(editCommentArgs, async ({ tx, args, ctx }) => {
+        const before =
+          tx.location === 'server'
+            ? ((await tx.run(zql.comment.where('id', args.id).one())) as
+                | { id: string; issueId: string; body: unknown }
+                | undefined)
+            : undefined
+        await mutators.comment.edit.fn({ tx, args, ctx })
+        if (tx.location !== 'server') return
+        if (ctx === undefined || before === undefined) return
+        await fanOutMentions(tx, {
+          issueId: before.issueId,
+          actorId: ctx.userID,
+          eventKey: args.id,
+          at: args.updatedAt,
+          previousDoc: before.body,
+          nextDoc: args.body,
+        })
       }),
     },
     notification: {
@@ -435,6 +661,7 @@ export function createServerMutators() {
         await mutators.member.remove.fn({ tx, args, ctx })
         if (tx.location !== 'server' || target === undefined) return
         await deleteNotificationsForMember(serverDb(tx), target.userId)
+        await deleteSubscriptionsForMember(serverDb(tx), target.userId)
       }),
     },
     team: {
@@ -452,6 +679,10 @@ export function createServerMutators() {
         if (tx.location !== 'server' || membership === undefined) return
         await deleteNotificationsForTeamMember(serverDb(tx), {
           recipientId: membership.userId,
+          teamId: membership.teamId,
+        })
+        await deleteSubscriptionsForTeamMember(serverDb(tx), {
+          userId: membership.userId,
           teamId: membership.teamId,
         })
       }),
@@ -502,6 +733,10 @@ export function createServerMutators() {
       // it never reaches the `issue.create` OVERRIDE above, where the fan-out lives. An action
       // carrying an owner therefore produced an assigned issue nobody was told about. The fan-out
       // runs here, after the number is claimed, so the notification carries `ENG-42` like any other.
+      //
+      // NOT a mention trigger site: `retroActionDescription` builds the issue's description from
+      // plain strings, so it can never contain a mention node. Verified, and stated here so the
+      // next reader does not re-derive it.
       convertActionToIssue: defineMutator(
         convertRetroActionToIssueArgs,
         async ({ tx, args, ctx }) => {

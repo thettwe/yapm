@@ -1194,3 +1194,61 @@ escape is resolved by the parser — and both files are UTF-8 text again, diffab
 
 *Why not change the separator:* a printable separator would have to be a character that cannot
 appear in any key part, and defending that claim costs more than an escape sequence does.
+
+### DI-41 — Involvement is re-checked against membership at write time, not only at send time
+
+*Ambiguous:* D11 deletes a leaver's rows for the team they left, and the delivery sweep INNER JOINs
+current `team_membership` — between them these read as complete. They are not. A comment's
+recipients are computed from *involvement* (creator, standing assignee, prior commenters), and
+involvement outlives membership for anyone who leaves a team without anything being deleted for the
+issues they were involved in but not yet notified about. `notifications.mine` carries no team
+predicate, so such a row syncs and renders the team's issue key and title.
+
+*Chosen:* `fanOut` intersects its computed recipient set with current membership of
+`issue.team_id`, inside the same transaction, before writing anything. The read is bounded by the
+same `NOTIFICATION_RECIPIENT_CAP` that bounds the recipient set, so it costs one extra bounded
+`IN` query per notified event. The write-time guarantee now matches the delivery-time one.
+
+*Why not a team predicate on the query instead:* it would have to be a correlated `whereExists`
+over `team_membership` on every inbox row for every client, forever, to compensate for a row that
+should not have been written. The cheaper and more honest fix is to not write it.
+
+### DI-42 — The email footer names Appearance settings rather than gaining a deep link
+
+*Ambiguous:* the digest footer said "change your email preferences in yapm" over a link to
+`/inbox`, which has no email-preference control on it — the control lives in the Appearance popover
+(DI-11). Two ways to close it: make the footer honest, or teach `/inbox` a `?settings=email` search
+param that opens the popover.
+
+*Chosen:* the footer now reads "To change what yapm emails you, open yapm and use Appearance
+settings", linking to the inbox. The deep link would couple a shell-level component's open state to
+one route's search params and needs its own focus-management story; naming the surface costs a
+sentence and is true today. The link still lands somewhere useful — the inbox is the notification
+surface an email has a stable path to.
+
+### DI-43 — `cron-parser` is promoted to a direct dependency so cron is validated at boot
+
+*Not anticipated:* pg-boss parses a cron expression at `schedule()` time, deep inside scheduler
+registration — whose failure `index.ts` catches and logs so the app still serves requests. A typo in
+any `*_CRON` therefore booted a healthy-looking instance with retention and email delivery silently
+unregistered.
+
+*Chosen:* `cron-parser` (already in the tree as pg-boss's own dependency) becomes a direct
+dependency of `apps/server`, pinned in the catalog to the same range, and every cron env var is
+parsed at boot with pg-boss's exact options (`strict: false`). What env accepts is therefore exactly
+what pg-boss accepts — no second, divergent notion of a valid cron. Separately, `startScheduler`
+registers the cycle and notification blocks in independent `try`/`catch` and returns its handle
+regardless, so one failing block can neither cancel the other nor leak a started boss instance.
+
+### DI-44 — The prior-commenter read takes the NEWEST comments within the cap
+
+*Not anticipated:* the bounded prior-commenter read was ordered `createdAt asc`, so once a thread
+passed `NOTIFICATION_RECIPIENT_CAP` comments the cap fell on the wrong end — the people currently
+discussing an issue stopped being notified while whoever commented once at the start kept being
+notified forever.
+
+*Chosen:* read `desc` and reverse the resulting author list. Equally bounded, and the documented
+oldest-first ordering still holds *within* the selected set, so no assertion about row order
+changes. The retro-conversion trigger site (`retro.convertActionToIssue`, which calls the shared
+`issue.create` function and so never reaches the override that owns the fan-out) got its own
+fan-out in the same pass.

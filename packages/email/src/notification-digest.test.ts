@@ -101,9 +101,30 @@ describe('renderNotificationDigest', () => {
         'Digest job double-sends on rebase',
         '',
         `Open your inbox ${PUBLIC_URL}/inbox`,
-        `You are receiving this because you are involved in this work. Change your email preferences in yapm ${PUBLIC_URL}/inbox.`,
+        `You are receiving this because you are involved in this work. To change what yapm emails you, open yapm ${PUBLIC_URL}/inbox and use Appearance settings.`,
       ].join('\n'),
     )
+  })
+
+  // The footer has to name the surface that actually carries the control. Every link in this
+  // message resolves to `/inbox`, which has no email-preference control on it, so a footer
+  // promising "change your email preferences here" was pointing at the wrong page.
+  it('names Appearance settings — where the email preference actually lives — rather than promising the link carries it', async () => {
+    const message = await renderNotificationDigest({ publicUrl: PUBLIC_URL, items: [assigned] })
+
+    expect(message.text).toContain('Appearance settings')
+    expect(message.html).toContain('Appearance settings')
+  })
+
+  // A light-only literal palette with no declared scheme is what dark-mode clients auto-invert,
+  // and their heuristics invert backgrounds without inverting every inline colour — dark text on a
+  // dark card. Both names are load-bearing: Apple Mail and Outlook read `supported-color-schemes`.
+  it('declares a light color scheme so a dark-mode client does not partially invert the palette', async () => {
+    const message = await renderNotificationDigest({ publicUrl: PUBLIC_URL, items: [assigned] })
+
+    expect(message.html).toMatch(/<meta[^>]+name="color-scheme"[^>]*>/)
+    expect(message.html).toMatch(/<meta[^>]+name="supported-color-schemes"[^>]*>/)
+    expect(message.html).toContain('content="light"')
   })
 
   it('titles the digest with the count when several notifications are batched', async () => {

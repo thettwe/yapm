@@ -93,8 +93,28 @@ export async function startScheduler(options: StartSchedulerOptions): Promise<Sc
     await boss.start()
   }
 
-  if (cycles) await registerCycleJobs({ boss, db, dbProvider, logger, cycles })
-  if (notifications) await registerNotificationJobs({ boss, db, logger, notifications })
+  // The two blocks are registered INDEPENDENTLY, and neither can cancel the other. One `boss`
+  // instance is shared, so a single `await` chain made an unrelated failure in the cycle block —
+  // one bad cron, one queue name pg-boss refuses — silently take notification retention and email
+  // delivery with it, while the caller's own catch left the started boss running with no handle to
+  // stop it. Registration failures are logged and survived; the handle is returned regardless.
+  if (cycles) {
+    try {
+      await registerCycleJobs({ boss, db, dbProvider, logger, cycles })
+    } catch (error) {
+      logger.error({ err: error }, 'cycle job registration failed; other scheduled jobs continue')
+    }
+  }
+  if (notifications) {
+    try {
+      await registerNotificationJobs({ boss, db, logger, notifications })
+    } catch (error) {
+      logger.error(
+        { err: error },
+        'notification job registration failed; other scheduled jobs continue',
+      )
+    }
+  }
 
   return {
     stop: async () => {

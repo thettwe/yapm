@@ -6,6 +6,7 @@ import { recordNotifications } from '../db/notification.js'
 import type { DB } from '../db/types.js'
 import { newId } from '../id.js'
 import type { AuthContext } from './context.js'
+import { NOTIFICATION_RECIPIENT_CAP } from './notifications/recipients.js'
 import { queries } from './queries.js'
 import { createServerMutators } from './server-mutators.js'
 import {
@@ -39,8 +40,9 @@ if (DATABASE_URL === undefined && process.env.CI) {
 //   * "a client-location transaction writes zero" fails if the fan-out escapes the rebase guard.
 //   * "markAllRead stamps only the caller's rows" fails if the recipient is ever taken from args.
 //
-// The supporting half runs all four trigger sites, so `issue.routeIssue` — a duplicated assignee
-// path that is easy to miss — cannot be silently absent.
+// The supporting half runs every trigger site, so `issue.routeIssue` — a duplicated assignee path
+// that is easy to miss — and `retro.convertActionToIssue` — which calls the SHARED `issue.create`
+// function and therefore bypasses the override that owns the fan-out — cannot be silently absent.
 describe.skipIf(DATABASE_URL === undefined)('notification fan-out against Postgres', () => {
   const database: Database = createDatabase({ connectionString: DATABASE_URL ?? '' })
   const mutators = createServerMutators()
@@ -291,7 +293,7 @@ describe.skipIf(DATABASE_URL === undefined)('notification fan-out against Postgr
     expect(issue[0]?.assignee_id).toBe(B.userID)
   })
 
-  describe('all four trigger sites', () => {
+  describe('every trigger site', () => {
     it('issue.create with an assignee yields exactly one row, with the claimed number', async () => {
       const createdId = newId()
       const args = {
@@ -379,6 +381,159 @@ describe.skipIf(DATABASE_URL === undefined)('notification fan-out against Postgr
         }),
       )
       expect((await inbox(C)).length).toBe(2)
+    })
+
+    // THE FIFTH SITE, and the one the four above cannot cover: `retro.convertActionToIssue` calls
+    // the SHARED `issue.create` function directly rather than the override that owns the fan-out,
+    // so an action carrying an owner produced an assigned issue nobody was told about.
+    it('retro.convertActionToIssue with an owner yields exactly one row, with the claimed number', async () => {
+      const retroId = newId()
+      const actionId = newId()
+      const convertedId = newId()
+      await sql`
+        insert into retro (id, team_id, title, format, phase, created_by)
+        values (${retroId}, ${teamId}, 'Cycle retro', 'mad_sad_glad', 'actions', ${A.userID})
+      `.execute(database.db)
+      await sql`
+        insert into retro_action (id, retro_id, team_id, body, assignee_id)
+        values (${actionId}, ${retroId}, ${teamId}, 'Cut the reconnect backoff', ${B.userID})
+      `.execute(database.db)
+
+      const args = { actionId, issueId: convertedId, createdAt: 11_000, updatedAt: 11_000 }
+      await attempt(() =>
+        apply((tx) => mutators.retro.convertActionToIssue.fn({ tx, args, ctx: A })),
+      )
+      // Idempotent by the action's own `issue_id`, so a second pass converts nothing and tells
+      // nobody a second time.
+      await attempt(() =>
+        apply((tx) => mutators.retro.convertActionToIssue.fn({ tx, args, ctx: A })),
+      )
+
+      const received = (await inbox(B)).filter((row) => row.subjectId === convertedId)
+      expect(received).toHaveLength(1)
+      expect(received[0]?.kind).toBe('issue_assigned')
+      // The fan-out runs AFTER the per-team number is claimed here too.
+      expect(received[0]?.subjectKey).not.toBeNull()
+
+      await sql`delete from retro where id = ${retroId}`.execute(database.db)
+    })
+  })
+
+  // INVOLVEMENT IS NOT MEMBERSHIP. A comment's recipients are computed from involvement — creator,
+  // standing assignee, prior commenters — every one of which can outlive the membership that
+  // authorised it. The row carries the team's issue key and title, and `notifications.mine` has no
+  // team predicate, so without a membership re-check at WRITE time an ex-team-member syncs and
+  // reads work they no longer have access to. Delivery already re-checks at send time; this is the
+  // same guarantee, one step earlier.
+  describe('a recipient who has left the issue’s team', () => {
+    const leftBehindId = newId()
+
+    beforeEach(async () => {
+      await sql`
+        insert into issue (id, team_id, number, title, status, priority, creator_id, assignee_id)
+        values (${leftBehindId}, ${teamId}, 9, 'Filed before B left', 'todo', 'no_priority', ${B.userID}, ${A.userID})
+      `.execute(database.db)
+      await sql`delete from team_membership where id = ${bTeamMembershipId}`.execute(database.db)
+    })
+
+    it('is not told about a comment on an issue they created', async () => {
+      await apply((tx) =>
+        mutators.comment.create.fn({
+          tx,
+          args: {
+            id: newId(),
+            issueId: leftBehindId,
+            body: { type: 'doc', content: [] },
+            createdAt: 10_000,
+            updatedAt: 10_000,
+          },
+          ctx: C,
+        }),
+      )
+
+      expect(await inbox(B)).toEqual([])
+      // An intersection, not a blanket refusal: A is the assignee and still in the team.
+      const forA = await inbox(A)
+      expect(forA).toHaveLength(1)
+      expect(forA[0]?.kind).toBe('issue_commented')
+    })
+  })
+
+  // WHICH END THE CAP FALLS ON. The prior-commenter read is bounded, so on a thread longer than the
+  // cap it has to keep the people currently discussing the issue and drop the ones who stopped.
+  // Read oldest-first it does exactly the opposite: whoever commented once at the very start is
+  // notified forever and everyone in the live conversation is silently dropped.
+  describe('a thread longer than the recipient cap', () => {
+    const busyIssueId = newId()
+    const commenters = Array.from(
+      { length: NOTIFICATION_RECIPIENT_CAP + 10 },
+      (_, index) => `chatty-${index}-${newId()}`,
+    )
+
+    beforeAll(async () => {
+      for (const id of commenters) {
+        await sql`
+          insert into "user" (id, name, email, "emailVerified")
+          values (${id}, ${id}, ${`${id}@example.test`}, true)
+        `.execute(database.db)
+      }
+    }, 60_000)
+
+    afterAll(async () => {
+      for (const id of commenters) {
+        await sql`delete from "user" where id = ${id}`.execute(database.db)
+      }
+    })
+
+    beforeEach(async () => {
+      // Team membership only: the fan-out's own membership intersection is what these have to
+      // satisfy, and none of them reads an inbox here.
+      for (const id of commenters) {
+        await sql`
+          insert into team_membership (id, team_id, user_id) values (${newId()}, ${teamId}, ${id})
+        `.execute(database.db)
+      }
+      // Created by A, who is also the actor below, so the creator slot is filtered out as a
+      // self-notification and the cap falls purely on the commenter list.
+      await sql`
+        insert into issue (id, team_id, number, title, status, priority, creator_id)
+        values (${busyIssueId}, ${teamId}, 11, 'Long thread', 'todo', 'no_priority', ${A.userID})
+      `.execute(database.db)
+      for (const [index, id] of commenters.entries()) {
+        await sql`
+          insert into comment (id, issue_id, team_id, author_id, body, created_at)
+          values (${newId()}, ${busyIssueId}, ${teamId}, ${id}, '{}'::jsonb, ${new Date(1_000 + index)})
+        `.execute(database.db)
+      }
+    }, 60_000)
+
+    it('tells the newest participants and drops the ones who stopped commenting', async () => {
+      await apply((tx) =>
+        mutators.comment.create.fn({
+          tx,
+          args: {
+            id: newId(),
+            issueId: busyIssueId,
+            body: { type: 'doc', content: [] },
+            createdAt: 20_000,
+            updatedAt: 20_000,
+          },
+          ctx: A,
+        }),
+      )
+
+      const told = await rows(
+        sql<{
+          recipient_id: string
+        }>`select recipient_id from notification where subject_id = ${busyIssueId}`,
+      )
+      const recipients = new Set(told.map((row) => row.recipient_id))
+      const dropped = commenters.slice(0, 10)
+      const kept = commenters.slice(10)
+
+      expect(recipients.size).toBe(NOTIFICATION_RECIPIENT_CAP)
+      for (const id of kept) expect(recipients.has(id)).toBe(true)
+      for (const id of dropped) expect(recipients.has(id)).toBe(false)
     })
   })
 

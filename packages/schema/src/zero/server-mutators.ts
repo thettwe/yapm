@@ -248,23 +248,52 @@ async function fanOut(tx: Transaction, input: FanOutInput): Promise<void> {
   const trigger = NOTIFICATION_TRIGGERS[input.kind]
   // Bounded by the same constant that caps the recipient set, because this read happens inside the
   // triggering mutation's transaction — an unbounded one would hold locks on a busy issue.
+  //
+  // NEWEST-first then reversed, not oldest-first: the cap has to fall on the people who stopped
+  // participating, never on the people currently in the thread. Read oldest-first, a thread past
+  // the cap notifies whoever commented once at the very start forever and silently drops everyone
+  // discussing it now. The reverse restores the documented oldest-first ordering WITHIN the
+  // selected set, so the row order a test asserts on is unchanged.
+  //
+  // The ACTOR'S OWN comments are excluded from the read rather than filtered out of its result:
+  // they can never be recipients, and the comment that triggered this fan-out is by construction
+  // the newest one on the issue — so leaving them in spends slots of a bounded window on rows that
+  // are certain to be discarded.
   const priorCommenterIds = trigger.needsPriorCommenters
     ? (
         (await tx.run(
           zql.comment
             .where('issueId', input.issueId)
-            .orderBy('createdAt', 'asc')
+            .where('authorId', '!=', input.actorId)
+            .orderBy('createdAt', 'desc')
             .limit(NOTIFICATION_RECIPIENT_CAP),
         )) as { authorId: string }[]
-      ).map((comment) => comment.authorId)
+      )
+        .map((comment) => comment.authorId)
+        .reverse()
     : []
 
-  const recipients = trigger.recipients({
+  const candidates = trigger.recipients({
     actorId: input.actorId,
     assigneeId: input.assigneeId === undefined ? issue.assigneeId : input.assigneeId,
     creatorId: issue.creatorId,
     priorCommenterIds,
   })
+  if (candidates.length === 0) return
+
+  // INVOLVEMENT IS NOT MEMBERSHIP. A creator, a standing assignee or a prior commenter can have
+  // left the issue's team since, and the row carries that team's issue key and title — so the
+  // write-time check has to be the same one the delivery sweep makes at send time: current
+  // membership of `issue.team_id`. Without it a workspace member who left the team still syncs
+  // `notifications.mine` and reads a key and a title they no longer have access to.
+  //
+  // Bounded: `candidates` is already capped at NOTIFICATION_RECIPIENT_CAP, and `team_membership` is
+  // unique on (team_id, user_id), so this reads at most that many rows inside the open transaction.
+  const memberships = (await tx.run(
+    zql.team_membership.where('teamId', issue.teamId).where('userId', 'IN', candidates),
+  )) as { userId: string }[]
+  const members = new Set(memberships.map((membership) => membership.userId))
+  const recipients = candidates.filter((candidate) => members.has(candidate))
   if (recipients.length === 0) return
 
   const team = (await tx.run(zql.team.where('id', issue.teamId).one())) as
@@ -452,6 +481,12 @@ export function createServerMutators() {
       // A converted action's issue claims the same per-team number as any hand-created issue, in the
       // same authoritative pass, so the two are indistinguishable. Skipped when the action was
       // already converted (the shared mutator returned without creating anything).
+      //
+      // THE FIFTH TRIGGER SITE. The conversion calls the SHARED `issue.create` function directly
+      // (mutators.ts), which is the whole point — same authorization, same defaults — but that means
+      // it never reaches the `issue.create` OVERRIDE above, where the fan-out lives. An action
+      // carrying an owner therefore produced an assigned issue nobody was told about. The fan-out
+      // runs here, after the number is claimed, so the notification carries `ENG-42` like any other.
       convertActionToIssue: defineMutator(
         convertRetroActionToIssueArgs,
         async ({ tx, args, ctx }) => {
@@ -462,11 +497,20 @@ export function createServerMutators() {
           if (tx.location !== 'server') return
           if (before === undefined || before.issueId !== null) return
           const issue = (await tx.run(zql.issue.where('id', args.issueId).one())) as
-            | { id: string; teamId: string }
+            | { id: string; teamId: string; assigneeId: string | null }
             | undefined
           if (issue === undefined) return
           const number = await claimNextIssueNumber(serverDb(tx), issue.teamId)
           await tx.mutate.issue.update({ id: args.issueId, number, updatedAt: args.updatedAt })
+          if (issue.assigneeId === null || ctx === undefined) return
+          await fanOut(tx, {
+            kind: 'issue_assigned',
+            issueId: args.issueId,
+            actorId: ctx.userID,
+            eventKey: String(args.updatedAt),
+            at: args.updatedAt,
+            assigneeId: issue.assigneeId,
+          })
         },
       ),
     },

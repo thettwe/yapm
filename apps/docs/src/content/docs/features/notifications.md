@@ -23,6 +23,7 @@ Two properties are worth stating before the mechanics, because they are what the
 | An issue is created with an assignee | The assignee |
 | An issue is assigned | The new assignee |
 | A [triage](/features/triage/) issue is routed with an assignee | The assignee |
+| A [retrospective](/features/retrospectives/) action with an owner is converted to an issue | The owner |
 | Someone comments on an issue | Its assignee, its creator, and everyone who commented before |
 
 Two rules apply to every row in that table:
@@ -32,6 +33,11 @@ Two rules apply to every row in that table:
 - **Recipients are deduplicated.** If you are the assignee *and* the creator *and* a prior
   commenter, one comment produces one notification. The comment recipient set is also capped (at
   50) so a thread with hundreds of participants cannot turn one comment into an unbounded write.
+  On a thread past the cap it is the **most recent** participants who are kept — the people
+  currently discussing it, not whoever commented once at the start.
+- **Only current members of the issue's team are notified.** Involvement outlives membership: you
+  can have created an issue, or been its assignee, in a team you have since left. Membership is
+  checked when the notification is written, and again when it is emailed.
 
 Notifications are written **only on the server**, inside the same database transaction as the
 change that caused them, and they are keyed by what happened rather than by a generated id. So the
@@ -116,8 +122,8 @@ recipient** covering everything that has accumulated. Four things bound it, and 
 - Everything waiting for one person becomes a single message, not one per event.
 - **A notification you have already read in the app is never emailed.** Reading your inbox is what
   stops the mail.
-- Team membership is re-checked at delivery time, not at write time. Leave a team and you stop
-  being emailed about it, even about notifications written while you were still a member.
+- Team membership is re-checked at delivery time as well as at write time. Leave a team and you
+  stop being emailed about it, even about notifications written while you were still a member.
 
 Email carries the same words as the inbox row and the same absence of body content, and links back
 to the issue on your instance's own public URL.

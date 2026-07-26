@@ -36,14 +36,18 @@ export function NotificationDigest({ publicUrl, items }: NotificationDigestInput
     items.length === 1 ? 'You have a notification' : `You have ${items.length} notifications`
   return (
     <Layout
+      // The footer NAMES THE CONTROL, not just the app. `/inbox` is where the link can land — it
+      // is the only notification surface an email has a stable path to — but the email preference
+      // lives in the Appearance popover, so a footer reading "change your email preferences here"
+      // sent people to a page with no such control. Say where it actually is.
       footer={
         <>
-          You are receiving this because you are involved in this work. Change your email
-          preferences in{' '}
+          You are receiving this because you are involved in this work. To change what yapm emails
+          you, open{' '}
           <a href={inboxUrl} style={{ color: palette.text2 }}>
             yapm
-          </a>
-          .
+          </a>{' '}
+          and use Appearance settings.
         </>
       }
       heading={heading}

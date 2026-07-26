@@ -16,6 +16,14 @@ export function Layout({ preview, heading, footer, children }: LayoutProps) {
       <head>
         <meta content="text/html; charset=UTF-8" httpEquiv="Content-Type" />
         <meta content="width=device-width" name="viewport" />
+        {/* The palette below is a light-only set of literals — an email cannot carry the app's
+            token layer, so there is no dark variant to switch to. Declaring the scheme is what
+            stops a dark-mode client (Apple Mail, Outlook, Gmail on Android) from auto-inverting
+            it: those heuristics invert backgrounds but not every inline colour, and the result is
+            dark-grey text on a dark-grey card. Both names are needed — `supported-color-schemes`
+            is the one Apple Mail and Outlook read. */}
+        <meta content="light" name="color-scheme" />
+        <meta content="light" name="supported-color-schemes" />
         <title>{heading}</title>
       </head>
       <body

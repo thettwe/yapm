@@ -69,6 +69,7 @@ Client reads run as ZQL queries against a local IndexedDB replica — instant, a
 | Vitest / Playwright | 4.1.x / 1.61.x | Vitest ≥4.1 required for Vite 8 |
 | Biome | 2.5.x | |
 | pg-boss / better-auth | 12.x / 1.6.x | |
+| cron-parser | 5.6.x | pg-boss's own cron parser, promoted from transitive to a **direct** dependency of `apps/server` and pinned to the same range, so every `*_CRON` env var is validated at boot by exactly the parser that will later run it. Without it a typo boots a healthy instance whose sweeps are silently unregistered — pg-boss only parses at `schedule()` time. No new runtime weight: it is already installed |
 | ai (Vercel AI SDK) | **7.0.x** | `@ai-sdk/{anthropic,google,openai}` 4.0.x adapters; all Apache-2.0; server-only |
 | TipTap | 3.x | v3 extensions only — never mix v2/v3 packages |
 | Astro / Starlight | 7.x / 0.41.x | |

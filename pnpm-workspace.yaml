@@ -59,6 +59,9 @@ catalog:
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   cmdk: ^1.1.1
+  # pg-boss's own cron parser, pinned to the same range it depends on, so a cron this validates at
+  # boot is exactly a cron pg-boss will accept at schedule time.
+  cron-parser: ^5.6.2
   fractional-indexing: ^4.0.0
   hono: ^4.12.31
   jose: ^6.2.4

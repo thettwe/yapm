@@ -45,6 +45,11 @@ required, and boot fails naming whichever is missing.
 | `NOTIFICATION_RETENTION_DAYS` | `30` | How long a notification is kept before it is deleted |
 | `NOTIFICATION_RETENTION_CRON` | `7 3 * * *` | When the retention sweep runs (03:07 daily) |
 
+Every cron variable is parsed at boot with the same parser the scheduler uses, and a value that
+cannot be parsed **fails boot naming the variable**. A typo used to boot a healthy-looking instance
+with the sweep silently unregistered, which is the worst possible failure for a job you only notice
+by its absence.
+
 ```bash
 # .env — SMTP
 SMTP_URL=smtp://apikey:re_xxxxxxxx@smtp.resend.com:587
@@ -118,6 +123,11 @@ person into **one** message; sends it; and stamps exactly the rows it sent.
 
 The debounce is a constant relative to the cron rather than a variable of its own, so lengthening
 `NOTIFICATION_EMAIL_CRON` needs no matching adjustment.
+
+One sweep is bounded to 500 notifications, and that ceiling is applied to rows that are genuinely
+emailable — the membership and preference checks are part of the selection, not a filter applied to
+its results. A person who has turned email off therefore consumes none of the budget, however much
+has accumulated for them, and cannot delay anyone else's message.
 
 Four independent brakes keep this from becoming a mail storm — the per-event natural key that makes
 a repeated mutation write one row, the debounce, per-recipient batching, and (the most effective

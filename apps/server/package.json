@@ -24,6 +24,7 @@
     "@yapm/schema": "workspace:*",
     "ai": "catalog:",
     "better-auth": "catalog:",
+    "cron-parser": "catalog:",
     "hono": "catalog:",
     "jose": "catalog:",
     "kysely": "catalog:",

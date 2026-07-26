@@ -4,6 +4,7 @@ import { createDatabase, migrateToLatest, recordNotifications } from '@yapm/sche
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Mailer, OutboundMessage } from '../mail/index.js'
 import {
+  NOTIFICATION_EMAIL_BATCH_LIMIT,
   NOTIFICATION_EMAIL_DEBOUNCE_MS,
   NOTIFICATION_EMAIL_MAX_AGE_MS,
   runNotificationEmailSweep,
@@ -276,6 +277,115 @@ describe.skipIf(DATABASE_URL === undefined)('notification delivery sweep (live d
 
     expect(first.sent).toHaveLength(1)
     expect(second.sent).toHaveLength(0)
+  })
+})
+
+// THE BATCH BUDGET BELONGS TO ROWS THAT CAN ACTUALLY BE EMAILED. Filtered in TypeScript AFTER the
+// sweep's LIMIT, a recipient who has turned email off consumes the entire budget with rows that are
+// then discarded — and, being discarded, never stamped, so they consume it again on the next tick
+// and every tick after it. One such recipient starves everyone else for the whole recency window.
+describe.skipIf(DATABASE_URL === undefined)('notification email batch budget (live db)', () => {
+  let database: Database
+  const workspaceId = newId()
+  const teamId = newId()
+  const actorId = `budget-actor-${newId()}`
+  // Sorts BEFORE the quiet recipient, because the sweep orders by `recipient_id`: the noisy backlog
+  // is therefore reached first, which is precisely the arrangement that starved the other one.
+  const noisyId = `aaaa-budget-${newId()}`
+  const quietId = `zzzz-budget-${newId()}`
+
+  beforeAll(async () => {
+    database = createDatabase({ connectionString: DATABASE_URL ?? '' })
+    await migrateToLatest(database.db)
+    await database.db
+      .insertInto('workspace')
+      .values({ id: workspaceId, name: 'Budget WS' })
+      .execute()
+    await database.db
+      .insertInto('team')
+      .values({
+        id: teamId,
+        workspace_id: workspaceId,
+        name: 'Budget',
+        key: `B${Date.now() % 10000}`,
+      })
+      .execute()
+    await database.db
+      .insertInto('user')
+      .values([
+        { id: actorId, name: 'Ada', email: `${actorId}@example.com`, emailVerified: true },
+        { id: noisyId, name: 'Noisy', email: `${noisyId}@example.com`, emailVerified: true },
+        { id: quietId, name: 'Quiet', email: `${quietId}@example.com`, emailVerified: true },
+      ])
+      .execute()
+    await database.db
+      .insertInto('team_membership')
+      .values([
+        { id: newId(), team_id: teamId, user_id: noisyId },
+        { id: newId(), team_id: teamId, user_id: quietId },
+      ])
+      .execute()
+    await database.db
+      .insertInto('user_preference')
+      .values({ id: newId(), user_id: noisyId, email_notifications: 'none' })
+      .execute()
+  }, 60_000)
+
+  afterAll(async () => {
+    if (!database) return
+    await database.db
+      .deleteFrom('notification')
+      .where('recipient_id', 'in', [noisyId, quietId])
+      .execute()
+    await database.db.deleteFrom('user_preference').where('user_id', '=', noisyId).execute()
+    await database.db.deleteFrom('workspace').where('id', '=', workspaceId).execute()
+    await database.db.deleteFrom('user').where('id', 'in', [actorId, noisyId, quietId]).execute()
+    await database.close()
+  })
+
+  it('still emails a recipient sitting behind a backlog larger than the whole batch', async () => {
+    const { mailer, sent } = recordingMailer()
+    await recordNotifications(database.db, [
+      ...Array.from(
+        { length: NOTIFICATION_EMAIL_BATCH_LIMIT + 1 },
+        (_, index): NotificationEvent => ({
+          recipientId: noisyId,
+          actorId,
+          kind: 'issue_assigned',
+          teamId,
+          subjectType: 'issue',
+          subjectId: newId(),
+          subjectKey: `ENG-${index}`,
+          subjectTitle: 'Noise',
+          eventKey: String(index),
+          createdAt: SETTLED,
+        }),
+      ),
+      {
+        recipientId: quietId,
+        actorId,
+        kind: 'issue_assigned',
+        teamId,
+        subjectType: 'issue',
+        subjectId: newId(),
+        subjectKey: 'ENG-quiet',
+        subjectTitle: 'Ship the inbox',
+        eventKey: 'quiet',
+        createdAt: SETTLED,
+      },
+    ])
+
+    const result = await runNotificationEmailSweep({
+      db: database.db,
+      mailer,
+      publicUrl: PUBLIC_URL,
+      logger: silentLogger(),
+      now: NOW,
+    })
+
+    expect(sent).toHaveLength(1)
+    expect(sent[0]?.to).toEqual([`${quietId}@example.com`])
+    expect(result.recipients).toBe(1)
   })
 })
 

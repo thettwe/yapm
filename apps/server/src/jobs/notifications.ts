@@ -1,6 +1,10 @@
 import type { NotificationDigestItem } from '@yapm/email'
 import { renderNotificationDigest } from '@yapm/email'
-import { isActionableNotification, notificationCopy } from '@yapm/schema'
+import {
+  ACTIONABLE_NOTIFICATION_KINDS,
+  isActionableNotification,
+  notificationCopy,
+} from '@yapm/schema'
 import type { DB, NotificationKey, PendingNotificationEmail } from '@yapm/schema/db'
 import {
   deleteNotificationsOlderThan,
@@ -67,6 +71,11 @@ function keyOf(row: PendingNotificationEmail): NotificationKey {
 // H1's posture, applied per recipient: `assigned_only` (the default) emails only kinds addressed at
 // a person, `all` emails every kind, `none` emails nothing. The in-app row is never affected —
 // the preference governs delivery, not the notification.
+//
+// DEFENCE IN DEPTH. The same rule is applied in SQL, before the sweep's `limit`, so a `none`-mode
+// recipient's backlog can never consume the batch budget (`pendingNotificationEmails`). This keeps
+// the classification testable without a database and catches any caller that reads pending rows
+// some other way.
 function wantsEmail(row: PendingNotificationEmail): boolean {
   switch (row.mode) {
     case 'none':
@@ -150,6 +159,7 @@ export async function runNotificationEmailSweep(
   const rows = await pendingNotificationEmails(db, {
     createdBefore: new Date(now - NOTIFICATION_EMAIL_DEBOUNCE_MS),
     createdAfter: new Date(now - NOTIFICATION_EMAIL_MAX_AGE_MS),
+    actionableKinds: [...ACTIONABLE_NOTIFICATION_KINDS],
     limit: NOTIFICATION_EMAIL_BATCH_LIMIT,
   })
 

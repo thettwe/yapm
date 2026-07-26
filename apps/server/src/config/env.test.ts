@@ -79,6 +79,49 @@ describe('loadEnv', () => {
     }
   })
 
+  // pg-boss only parses a cron at `schedule()` time, inside scheduler registration whose failure is
+  // caught and logged — so before this, a typo booted a perfectly healthy instance whose sweeps
+  // were silently unregistered. The worst shape of failure for a job you notice by its absence.
+  it('rejects an unparseable cron expression, naming the variable and the expected format', () => {
+    try {
+      loadEnv({ ...VALID, NOTIFICATION_RETENTION_CRON: 'every day at 3am' })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      const issues = (error as EnvValidationError).issues
+      expect(issues[0]?.variable).toBe('NOTIFICATION_RETENTION_CRON')
+      expect(issues[0]?.message).toMatch(/^must be a cron expression: /)
+      expect(issues[0]?.expected).toContain('five-field cron expression')
+    }
+  })
+
+  it('checks every cron variable, not just one of them', () => {
+    try {
+      loadEnv({
+        ...VALID,
+        CYCLE_MAINTENANCE_CRON: 'hourly',
+        NOTIFICATION_EMAIL_CRON: '*/2 * * *ish *',
+        NOTIFICATION_RETENTION_CRON: 'nightly',
+        GITHUB_RECONCILE_CRON: 'sometimes',
+      })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      const variables = (error as EnvValidationError).issues.map((issue) => issue.variable)
+      expect(variables.sort()).toEqual([
+        'CYCLE_MAINTENANCE_CRON',
+        'GITHUB_RECONCILE_CRON',
+        'NOTIFICATION_EMAIL_CRON',
+        'NOTIFICATION_RETENTION_CRON',
+      ])
+    }
+  })
+
+  it('accepts the shipped defaults and a hand-written expression', () => {
+    const env = loadEnv({ ...VALID, NOTIFICATION_EMAIL_CRON: '*/5 6-20 * * 1-5' })
+
+    expect(env.NOTIFICATION_EMAIL_CRON).toBe('*/5 6-20 * * 1-5')
+    expect(env.CYCLE_MAINTENANCE_CRON).toBe('* * * * *')
+  })
+
   it('reports every invalid variable at once', () => {
     try {
       loadEnv({ DATABASE_URL: 'mysql://localhost/yapm', LOG_LEVEL: 'loud', PORT: 'abc' })

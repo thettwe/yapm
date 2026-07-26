@@ -10,7 +10,7 @@ import {
   notificationSubjectPath,
   runNotificationEmailSweep,
 } from './notifications.js'
-import { startScheduler } from './scheduler.js'
+import { CYCLE_MAINTENANCE_QUEUE, startScheduler } from './scheduler.js'
 
 const TEAM = '11111111-1111-7111-8111-111111111111'
 const ISSUE_A = '22222222-2222-7222-8222-222222222222'
@@ -183,13 +183,14 @@ interface RecordedSchedule {
   cron: string
 }
 
-function fakeBoss() {
+function fakeBoss(failOnQueue?: string) {
   const queues: RecordedQueue[] = []
   const schedules: RecordedSchedule[] = []
   const boss = {
     on: () => boss,
     start: () => Promise.resolve(),
     createQueue: (name: string) => {
+      if (name === failOnQueue) return Promise.reject(new Error(`pg-boss refused ${name}`))
       queues.push({ name })
       return Promise.resolve()
     },
@@ -240,6 +241,46 @@ describe('startScheduler — notification queue topology', () => {
       NOTIFICATION_RETENTION_QUEUE,
       NOTIFICATION_EMAIL_QUEUE,
     ])
+  })
+
+  // ONE boss, TWO independent blocks. Registered in a single `await` chain, an unrelated failure in
+  // the cycle block took notification retention and email delivery down with it — and `index.ts`
+  // catches and logs the throw, so the instance served requests looking entirely healthy.
+  it('still registers notification jobs when the cycle block fails to register', async () => {
+    const { boss, queues, schedules } = fakeBoss(CYCLE_MAINTENANCE_QUEUE)
+    const logger = { info: vi.fn(), error: vi.fn() }
+
+    const scheduler = await startScheduler({
+      db: {} as never,
+      dbProvider: {} as never,
+      logger: logger as never,
+      cycles: { cron: '* * * * *' },
+      notifications: { retentionDays: 30, retentionCron: '7 3 * * *' },
+      boss,
+    })
+
+    expect(queues.map((queue) => queue.name)).toEqual([NOTIFICATION_RETENTION_QUEUE])
+    expect(schedules).toEqual([{ name: NOTIFICATION_RETENTION_QUEUE, cron: '7 3 * * *' }])
+    expect(logger.error).toHaveBeenCalledTimes(1)
+    // And the handle comes back regardless, so the caller can still stop the boss it started.
+    await scheduler.stop()
+  })
+
+  it('still registers cycle jobs when the notification block fails to register', async () => {
+    const { boss, queues } = fakeBoss(NOTIFICATION_RETENTION_QUEUE)
+    const logger = { info: vi.fn(), error: vi.fn() }
+
+    await startScheduler({
+      db: {} as never,
+      dbProvider: {} as never,
+      logger: logger as never,
+      cycles: { cron: '* * * * *' },
+      notifications: { retentionDays: 30, retentionCron: '7 3 * * *' },
+      boss,
+    })
+
+    expect(queues.map((queue) => queue.name)).toEqual([CYCLE_MAINTENANCE_QUEUE])
+    expect(logger.error).toHaveBeenCalledTimes(1)
   })
 
   it('registers nothing when neither block is supplied', async () => {

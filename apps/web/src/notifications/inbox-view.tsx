@@ -32,13 +32,23 @@ export function InboxView() {
   const zero = useZero()
   const { rows, unread, loaded } = useInbox()
 
-  const [focusIndex, setFocusIndex] = useState(0)
+  // THE CURSOR IS A ROW IDENTITY, NOT A POSITION. This list is live and newest-first, so a
+  // notification arriving while somebody reads would re-point a flat index at a different row —
+  // and the next Enter or `e` would open or mark the wrong one. The index is derived from the id
+  // each render; a clamped position is only the fallback for when the anchored row has left the
+  // list (read-filtered away, swept by retention).
+  const [focusedId, setFocusedId] = useState<string | undefined>(undefined)
   const [error, setError] = useState<string | undefined>(undefined)
   const containerRef = useRef<HTMLElement>(null)
+  const lastIndexRef = useRef(0)
 
   const groups = useMemo(() => groupNotifications(rows, Date.now()), [rows])
   // The flat position of every row, so the day headings never disturb the `j`/`k` sequence.
   const indexById = useMemo(() => new Map(rows.map((row, position) => [row.id, position])), [rows])
+
+  const anchored = focusedId === undefined ? -1 : (indexById.get(focusedId) ?? -1)
+  const focusIndex =
+    anchored === -1 ? Math.min(lastIndexRef.current, Math.max(0, rows.length - 1)) : anchored
 
   const focusRow = useCallback((index: number) => {
     const el = containerRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`)
@@ -46,25 +56,24 @@ export function InboxView() {
   }, [])
 
   useEffect(() => {
-    const clamped = Math.min(focusIndex, Math.max(0, rows.length - 1))
-    if (clamped !== focusIndex) setFocusIndex(clamped)
+    lastIndexRef.current = focusIndex
     const container = containerRef.current
     if (!container || rows.length === 0) return
     const active = document.activeElement
     if (active === document.body || container.contains(active)) {
-      focusRow(clamped)
+      focusRow(focusIndex)
     }
   }, [rows, focusIndex, focusRow])
 
   const move = useCallback(
     (delta: number) => {
-      setFocusIndex((prev) => {
-        const next = Math.max(0, Math.min(rows.length - 1, prev + delta))
-        focusRow(next)
-        return next
-      })
+      const next = Math.max(0, Math.min(rows.length - 1, focusIndex + delta))
+      const target = rows[next]
+      if (target === undefined) return
+      setFocusedId(target.id)
+      focusRow(next)
     },
-    [rows.length, focusRow],
+    [rows, focusIndex, focusRow],
   )
 
   const run = useCallback(async (write: ReturnType<typeof zero.mutate>) => {
@@ -195,7 +204,7 @@ export function InboxView() {
                     index={position}
                     row={row}
                     focused={position === focusIndex}
-                    onFocusRow={setFocusIndex}
+                    onFocusRow={setFocusedId}
                     onOpen={() => open(row)}
                   />
                 )
@@ -218,7 +227,7 @@ function InboxRow({
   index: number
   row: NotificationRowData
   focused: boolean
-  onFocusRow: (index: number) => void
+  onFocusRow: (id: string) => void
   onOpen: () => void
 }) {
   return (
@@ -228,7 +237,7 @@ function InboxRow({
       data-testid="notification-row"
       data-read={row.read ? 'true' : 'false'}
       tabIndex={focused ? 0 : -1}
-      onFocus={() => onFocusRow(index)}
+      onFocus={() => onFocusRow(row.id)}
       onClick={onOpen}
       className="flex min-h-[var(--density-row)] w-full items-center gap-3 border-b border-border px-4 py-2 text-left outline-none transition-colors hover:bg-bg-hover focus-visible:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
     >

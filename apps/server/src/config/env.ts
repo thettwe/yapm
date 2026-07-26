@@ -1,7 +1,25 @@
 import { isAbsolute, resolve } from 'node:path'
+import { CronExpressionParser } from 'cron-parser'
 import * as z from 'zod'
 
 const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'] as const
+
+// Every scheduled sweep in this process is driven by a cron string from env, and pg-boss only
+// parses it at `schedule()` time — deep inside scheduler registration, whose failure is caught and
+// logged so the app still serves. A typo therefore booted a healthy instance with retention and
+// email delivery silently switched off. Validated HERE, at boot, with pg-boss's OWN parser and its
+// own options (`strict: false`), so what env accepts is exactly what pg-boss accepts.
+const cronExpression = z.string().check((ctx) => {
+  try {
+    CronExpressionParser.parse(ctx.value, { tz: 'UTC', strict: false })
+  } catch (error) {
+    ctx.issues.push({
+      code: 'custom',
+      input: ctx.value,
+      message: `must be a cron expression: ${error instanceof Error ? error.message : String(error)}`,
+    })
+  }
+})
 
 const postgresUrl = z.string().check((ctx) => {
   let url: URL
@@ -137,7 +155,7 @@ export const envSchema = z
         z.enum(['true', 'false']),
       )
       .default('true'),
-    CYCLE_MAINTENANCE_CRON: z.string().min(1).default('* * * * *'),
+    CYCLE_MAINTENANCE_CRON: cronExpression.default('* * * * *'),
     // Auth (better-auth, in-process). Defaults let an empty .env boot for local dev;
     // BETTER_AUTH_SECRET MUST be changed in production.
     BETTER_AUTH_SECRET: z.string().min(1).default('yapm-dev-secret-change-me-in-production'),
@@ -164,9 +182,9 @@ export const envSchema = z
     // either is how those two came to disagree.
     PUBLIC_URL: optionalHttpUrl,
     // The notification email sweep and the retention sweep, both on the existing pg-boss instance.
-    NOTIFICATION_EMAIL_CRON: z.string().min(1).default('*/2 * * * *'),
+    NOTIFICATION_EMAIL_CRON: cronExpression.default('*/2 * * * *'),
     NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
-    NOTIFICATION_RETENTION_CRON: z.string().min(1).default('7 3 * * *'),
+    NOTIFICATION_RETENTION_CRON: cronExpression.default('7 3 * * *'),
     // Connectors (GitHub App). All optional: absent env cleanly DISABLES the connector, never
     // crashes boot. SECRETS_ENCRYPTION_KEY encrypts connector secrets entered via the admin UI;
     // env-provided App credentials do not require it.
@@ -176,7 +194,7 @@ export const envSchema = z
     GITHUB_APP_WEBHOOK_SECRET: optionalString,
     // How often the connector's reconcile sweep re-polls GitHub with conditional (ETag/304)
     // requests to heal any missed webhook. Only runs when the GitHub App is configured.
-    GITHUB_RECONCILE_CRON: z.string().min(1).default('*/15 * * * *'),
+    GITHUB_RECONCILE_CRON: cronExpression.default('*/15 * * * *'),
     // AI (BYO-key gateway). ALL optional: absent env cleanly DISABLES AI, never crashes boot.
     // These are the OPTIONAL instance-default provider keys for a single-instance self-host that
     // prefers env over DB-resident secrets (mirroring githubAppEnv); UI-entered per-workspace
@@ -244,7 +262,8 @@ export const EXPECTED_FORMAT: Record<string, string> = {
   ZERO_QUERY_API_KEY: 'the shared secret zero-cache sends as X-Api-Key to /api/zero/query',
   ZERO_MUTATE_API_KEY: 'the shared secret zero-cache sends as X-Api-Key to /api/zero/mutate',
   CYCLE_MAINTENANCE: "'true' to run the cycle auto-rollover scheduler, or 'false' to disable it",
-  CYCLE_MAINTENANCE_CRON: "a cron expression, e.g. '* * * * *' for every minute",
+  CYCLE_MAINTENANCE_CRON:
+    "a five-field cron expression (minute hour day-of-month month day-of-week), e.g. '* * * * *' for every minute",
   BETTER_AUTH_SECRET: 'a random string (openssl rand -base64 32); change in production',
   BETTER_AUTH_URL:
     'the server base URL better-auth signs/verifies against, e.g. http://localhost:3000',
@@ -263,11 +282,11 @@ export const EXPECTED_FORMAT: Record<string, string> = {
   PUBLIC_URL:
     'the browsable base URL used to build email deep links, e.g. https://yapm.example.com; required when SMTP_URL or RESEND_API_KEY is set',
   NOTIFICATION_EMAIL_CRON:
-    "a cron expression for the notification email sweep, e.g. '*/2 * * * *' for every two minutes",
+    "a five-field cron expression for the notification email sweep, e.g. '*/2 * * * *' for every two minutes",
   NOTIFICATION_RETENTION_DAYS:
     'an integer number of days to keep notifications before deleting them, e.g. 30',
   NOTIFICATION_RETENTION_CRON:
-    "a cron expression for the notification retention sweep, e.g. '7 3 * * *' for 03:07 daily",
+    "a five-field cron expression for the notification retention sweep, e.g. '7 3 * * *' for 03:07 daily",
   SECRETS_ENCRYPTION_KEY:
     'base64-encoded 32 random bytes (openssl rand -base64 32) to encrypt connector secrets at rest, or unset',
   GITHUB_APP_ID:
@@ -276,7 +295,8 @@ export const EXPECTED_FORMAT: Record<string, string> = {
     'the GitHub App private key PEM (PKCS#1); set with the other GITHUB_APP_* vars, or leave all unset',
   GITHUB_APP_WEBHOOK_SECRET:
     'the GitHub App webhook secret; set with the other GITHUB_APP_* vars, or leave all unset',
-  GITHUB_RECONCILE_CRON: "a cron expression for the connector reconcile sweep, e.g. '*/15 * * * *'",
+  GITHUB_RECONCILE_CRON:
+    "a five-field cron expression for the connector reconcile sweep, e.g. '*/15 * * * *'",
   AI_ANTHROPIC_API_KEY:
     'an Anthropic API key as the instance-default AI provider key, or unset (per-workspace keys are entered in the admin UI)',
   AI_GOOGLE_API_KEY: 'a Google Gemini API key as the instance-default AI provider key, or unset',

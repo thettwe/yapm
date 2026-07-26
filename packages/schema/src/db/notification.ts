@@ -125,6 +125,10 @@ export interface PendingNotificationEmailsOptions {
   readonly createdBefore: Date
   // Never resurrect a backlog when email is enabled on an existing instance.
   readonly createdAfter: Date
+  // The kinds `assigned_only` (the default preference) emails, passed IN from
+  // `ACTIONABLE_NOTIFICATION_KINDS` rather than named here, so the classification still lives in
+  // TypeScript and a new kind still costs no migration.
+  readonly actionableKinds: readonly NotificationKind[]
   readonly limit: number
 }
 
@@ -157,12 +161,26 @@ export interface PendingNotificationEmail extends NotificationKey {
 // and it needs the same actor name the inbox row shows. Left, not inner, because `actor_id` carries
 // no FK — a vanished actor must degrade the copy, never drop the notification.
 //
-// The actionable/ambient filter is applied by the caller against the preference `mode`, so the
-// classification stays in TypeScript where a new kind can join it without a migration.
+// The preference filter is applied HERE, in SQL, against the same coalesced `mode` expression the
+// result carries — and that placement is the point, not a micro-optimisation. Filtered in
+// TypeScript after the `limit`, every row a `none`-mode recipient accumulates occupies the batch
+// budget and is then discarded unstamped, so one such recipient with more pending rows than the
+// limit starves every other recipient's email for the whole recency window. The kind list is passed
+// in, so the actionable/ambient classification still lives in TypeScript.
 export async function pendingNotificationEmails(
   db: Kysely<DB>,
   options: PendingNotificationEmailsOptions,
 ): Promise<PendingNotificationEmail[]> {
+  const mode = sql<EmailNotificationMode>`coalesce(${sql.ref(
+    'user_preference.email_notifications',
+  )}, 'assigned_only')`
+  const actionable =
+    options.actionableKinds.length === 0
+      ? sql<SqlBool>`false`
+      : sql<SqlBool>`${sql.ref('notification.kind')} in (${sql.join(
+          options.actionableKinds.map((kind) => sql`${kind}`),
+        )})`
+
   return await db
     .selectFrom('notification')
     .innerJoin('user', 'user.id', 'notification.recipient_id')
@@ -173,7 +191,7 @@ export async function pendingNotificationEmails(
     )
     .leftJoin('user as actor', 'actor.id', 'notification.actor_id')
     .leftJoin('user_preference', 'user_preference.user_id', 'notification.recipient_id')
-    .select((eb) => [
+    .select([
       'notification.recipient_id as recipientId',
       'notification.actor_id as actorId',
       'actor.name as actorName',
@@ -187,15 +205,11 @@ export async function pendingNotificationEmails(
       'notification.created_at as createdAt',
       'user.email as email',
       'user.name as name',
-      eb.fn
-        .coalesce(
-          'user_preference.email_notifications',
-          sql<EmailNotificationMode>`'assigned_only'`,
-        )
-        .as('mode'),
+      mode.as('mode'),
     ])
     .where('notification.read_at', 'is', null)
     .where('notification.email_sent_at', 'is', null)
+    .where(sql<SqlBool>`${mode} <> 'none' and (${mode} = 'all' or ${actionable})`)
     // `created_at` is a DB-defaulted (`Generated<Timestamp>`) column whose operand typing does not
     // accept a plain `Date` under this project's TS config; a raw predicate compares it cleanly.
     .where(sql<SqlBool>`${sql.ref('notification.created_at')} < ${options.createdBefore}`)

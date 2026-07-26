@@ -82,6 +82,11 @@ test('before the query has hydrated the control asserts nothing, stays focusable
   expect(button).not.toHaveAttribute('tabindex', '-1')
   expect(button).toHaveAccessibleDescription(PENDING_HINT)
   expect(screen.getByText(PENDING_HINT)).toBeInTheDocument()
+  // `aria-disabled` styles nothing on its own — the shared button dresses only the native
+  // `disabled:` variant — so the not-actionable state has to be spelled out, or an inert control
+  // renders at full strength and still lights up under the pointer.
+  expect(button.className).toContain('aria-disabled:opacity-60')
+  expect(button.className).toContain('aria-disabled:pointer-events-none')
 
   button.focus()
   expect(button).toHaveFocus()
@@ -112,6 +117,38 @@ test('a failed query says so, offers a retry, and still refuses to mutate', () =
 
   fireEvent.click(retry)
   expect(zero.retry).toHaveBeenCalledTimes(1)
+})
+
+// Recovery is exactly the moment the retry vanishes, and the keyboard user who pressed it is still
+// standing on it. Letting focus fall to `<body>` sends the next Tab back to the top of the
+// document — from a control inside the issue Sheet, that is the whole page to walk again.
+test('the retry hands focus back to the follow control when the query recovers', () => {
+  zero.resultType = 'error'
+  const view = render(<FollowControl issueId="issue-1" />)
+
+  const retry = screen.getByRole('button', { name: 'Retry' })
+  retry.focus()
+  expect(retry).toHaveFocus()
+
+  zero.resultType = 'complete'
+  view.rerender(<FollowControl issueId="issue-1" />)
+
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Follow' })).toHaveFocus()
+})
+
+test('a retry nobody was standing on does not steal focus', () => {
+  const elsewhere = document.createElement('button')
+  document.body.append(elsewhere)
+  zero.resultType = 'error'
+  const view = render(<FollowControl issueId="issue-1" />)
+  elsewhere.focus()
+
+  zero.resultType = 'complete'
+  view.rerender(<FollowControl issueId="issue-1" />)
+
+  expect(elsewhere).toHaveFocus()
+  elsewhere.remove()
 })
 
 test('with no synced row the control offers to follow and says what that does', () => {

@@ -2,7 +2,8 @@ import { useQuery, useZero } from '@rocicorp/zero/react'
 import { mutators, queries } from '@yapm/schema'
 import { PropertyButton } from '@yapm/ui/components/detail-field'
 import { BellIcon, BellOffIcon } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { RetryButton } from '@/components/retry-button'
 import { runMutation } from '@/lib/mutation'
 
 export const FOLLOWING_HINT = 'Updates on this issue reach your inbox. Select to stop.'
@@ -27,6 +28,7 @@ export function FollowControl({ issueId }: { issueId: string }) {
   const zero = useZero()
   const [subscription, result] = useQuery(queries.subscriptions.mine({ issueId }))
   const [error, setError] = useState<string | undefined>(undefined)
+  const followRef = useRef<HTMLButtonElement>(null)
 
   // AN UNHYDRATED QUERY IS NOT AN ANSWER. Until the row has actually arrived, "no row" and "no
   // subscription" are indistinguishable, and defaulting to "not following" tells a subscriber
@@ -63,8 +65,13 @@ export function FollowControl({ issueId }: { issueId: string }) {
     <span className="flex min-w-0 flex-col gap-0.5">
       <span className="flex min-w-0 items-center gap-1">
         <PropertyButton
+          ref={followRef}
           {...(settled ? { 'aria-pressed': following } : { 'aria-disabled': true })}
           aria-describedby={failed ? `follow-alert-${issueId}` : `follow-hint-${issueId}`}
+          // `aria-disabled` carries no styling of its own — PropertyButton dresses only the native
+          // `disabled:` variant — so without this the inert control renders at full strength and
+          // still lights up under the pointer, promising an action the handler guard refuses.
+          className="aria-disabled:pointer-events-none aria-disabled:opacity-60"
           onClick={() => void toggle()}
         >
           {following ? (
@@ -74,14 +81,16 @@ export function FollowControl({ issueId }: { issueId: string }) {
           )}
           {!settled ? 'Updates' : following ? 'Following' : 'Follow'}
         </PropertyButton>
+        {/* Recovery is exactly the moment this button vanishes, and the keyboard user who pressed
+            it is still standing on it — so it hands focus back to the control it belongs to. */}
         {result.type === 'error' ? (
-          <button
-            type="button"
-            className="rounded-control px-1 py-0.5 font-ui text-[11px] text-accent-strong underline underline-offset-2 hover:bg-bg-hover focus-visible:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
-            onClick={result.retry}
+          <RetryButton
+            onRetry={result.retry}
+            fallbackRef={followRef}
+            className="rounded-control px-1 py-0.5 font-ui text-[11px] text-accent-strong hover:bg-bg-hover focus-visible:bg-bg-hover focus-visible:ring-accent"
           >
             Retry
-          </button>
+          </RetryButton>
         ) : null}
       </span>
       {failed ? null : (

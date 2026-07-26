@@ -35,14 +35,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      # No pnpm setup and no install: both scripts below import only node: builtins, so this job needs
-      # nothing from the workspace. Setting pnpm up anyway made the post-job cache save fail with
-      # "Path Validation Error: Path(s) specified in the action for caching do(es) not exist" — because
-      # no install ever created a store to cache — which failed the job while both checks had passed.
-      # That turned main red on 6da1ae4 and 6171e41 with no code defect behind it.
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .node-version
+      # Deliberately no setup-node and no pnpm. Both scripts below import only node: builtins and read
+      # files off the checkout, so this job needs nothing installed — and every attempt to set the
+      # toolchain up here has failed the job while the checks themselves passed:
+      #   - with pnpm/action-setup: the post-job cache save failed with "Path Validation Error: Path(s)
+      #     specified in the action for caching do(es) not exist", because no install ever created a
+      #     store. This turned main red on 6da1ae4 and 6171e41 with no code defect behind it.
+      #   - without it: setup-node still shells out to pnpm (package.json's packageManager field) and
+      #     failed with "Unable to locate executable file: pnpm".
+      # The runner's preinstalled Node satisfies engines >=24. If these scripts ever gain a workspace
+      # dependency, this job needs setup-node AND a real install — not one without the other.
       - run: node scripts/check-boundaries.mjs
       - run: node scripts/check-image-manifests.mjs
 

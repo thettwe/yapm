@@ -204,37 +204,37 @@ client group (7–10) after the server contract it consumes exists.
 
 ## 9. The command palette
 
-- [ ] 9.1 Set `shouldFilter={false}` on the palette's `Command` and move filtering and ordering of
+- [x] 9.1 Set `shouldFilter={false}` on the palette's `Command` and move filtering and ordering of
       **every** group, action rows included, onto the group-1 core over a stable declaration order.
-- [ ] 9.2 Control the cursor: `value={active} onValueChange={setActive}` keyed to a **row identity**,
+- [x] 9.2 Control the cursor: `value={active} onValueChange={setActive}` keyed to a **row identity**,
       with the stated fallback (first row of the first group) when the active row leaves the list.
-- [ ] 9.3 Replace the "Jump to issue" group (`apps/web/src/issues/command.tsx:505`) with the "On this
+- [x] 9.3 Replace the "Jump to issue" group (`apps/web/src/issues/command.tsx:505`) with the "On this
       device" group fed by `useLocalSearchCorpus(teamId)`, capped at ~5 rows.
-- [ ] 9.4 Append the "From the server" group below a divider, fed by `useServerSearch` with
+- [x] 9.4 Append the "From the server" group below a divider, fed by `useServerSearch` with
       `teamId` = the open team so both groups mean the same scope, with the D17 state line.
-- [ ] 9.5 Add the persistent `Search everything for "q" →` row navigating to `/search?q=`.
-- [ ] 9.6 **Verify `cmdk` behaves as assumed** under `shouldFilter={false}`: that `CommandEmpty`
+- [x] 9.5 Add the persistent `Search everything for "q" →` row navigating to `/search?q=`.
+- [x] 9.6 **Verify `cmdk` behaves as assumed** under `shouldFilter={false}`: that `CommandEmpty`
       counts mounted items, and that a controlled `value` is not reset when a group is appended.
       Record what was found in design.md's implementation log; if either is false, render the empty
       state from the palette itself and keep the cursor in local state.
-- [ ] 9.7 **Test** (unit/component): the existing action rows still filter and execute; a
+- [x] 9.7 **Test** (unit/component): the existing action rows still filter and execute; a
       description-only token surfaces in the on-device group; the active row keeps its position when
       the server group is appended; the cursor falls to the first row when the active row disappears;
       and ordering is identical across two identical queries.
 
 ## 10. The `/search` route
 
-- [ ] 10.1 Add `apps/web/src/routes/search.tsx` (`/search?q=`) inside `Authenticated` + `AppShell`,
+- [x] 10.1 Add `apps/web/src/routes/search.tsx` (`/search?q=`) inside `Authenticated` + `AppShell`,
       workspace-wide (no `teamId` sent), with the query in the URL so it is shareable and the back
       button is correct.
-- [ ] 10.2 Build the surface: results grouped by the same two labels, `SearchResultRow` +
+- [x] 10.2 Build the surface: results grouped by the same two labels, `SearchResultRow` +
       `SnippetText`, the D17 states, the cap message, and one polite live region for the whole surface.
-- [ ] 10.3 Add a keyboard-reachable search entry to the app shell header (beside the inbox badge) so
+- [x] 10.3 Add a keyboard-reachable search entry to the app shell header (beside the inbox badge) so
       the route is reachable from every surface **without** adding a second keybinding.
-- [ ] 10.4 Full keyboard model: Arrow keys move across group boundaries as one list, Enter opens,
+- [x] 10.4 Full keyboard model: Arrow keys move across group boundaries as one list, Enter opens,
       Escape returns focus, and `ownsKeyboard` is respected so a single-letter key never hijacks the
       input.
-- [ ] 10.5 **Test** `apps/web/src/routes.test.tsx` covers the new route; the surface renders each of
+- [x] 10.5 **Test** `apps/web/src/routes.test.tsx` covers the new route; the surface renders each of
       the D17 states; and the offline state appears when the connection state says so.
 
 ## 11. End-to-end

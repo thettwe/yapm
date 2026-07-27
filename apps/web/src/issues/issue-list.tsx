@@ -181,7 +181,7 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
   }
 
   return (
-    <CommandProvider teamId={teamId} teamKey={teamKey} issues={rows} onOpenIssue={onOpenIssue}>
+    <CommandProvider teamId={teamId} issues={rows}>
       <IssueListBody
         teamId={teamId}
         teamKey={teamKey}

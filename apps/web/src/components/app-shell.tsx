@@ -1,5 +1,9 @@
 import { useQuery } from '@rocicorp/zero/react'
+import { Link } from '@tanstack/react-router'
 import { queries } from '@yapm/schema'
+import { buttonVariants } from '@yapm/ui/components/button'
+import { cn } from '@yapm/ui/lib/utils'
+import { SearchIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useSession } from '@/auth/client'
 import { ConnectionStatus } from '@/components/connection-status'
@@ -20,6 +24,7 @@ export function AppShell({ current, children }: { current: string; children: Rea
         <Switcher current={current} />
         <div className="flex-1" />
         <ConnectionStatus connection={connection} />
+        <SearchEntry />
         <InboxBadge />
         <ThemeControls />
         <UserMenu
@@ -36,5 +41,22 @@ export function AppShell({ current, children }: { current: string; children: Rea
         {children}
       </main>
     </div>
+  )
+}
+
+// The route's entry point in the shell, a LINK for the same reason the inbox badge is one: it is
+// in the tab order, so `/search` is reachable with no pointer and without a second keybinding.
+// Cmd-K stays the product's only global shortcut, and its "search everything" row is the other way
+// in — one question, two depths, one binding.
+function SearchEntry() {
+  return (
+    <Link
+      to="/search"
+      className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }))}
+      aria-label="Search"
+      data-testid="search-entry"
+    >
+      <SearchIcon />
+    </Link>
   )
 }

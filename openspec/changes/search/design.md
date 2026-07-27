@@ -927,3 +927,153 @@ nothing in lint, typecheck, test or build objects to it.
 Worth generalising: the repo has no gate for this. Every other source file under `apps/`,
 `packages/` and `openspec/` was checked and is NUL-free, so the rule is currently upheld by
 convention alone.
+
+### I22 — Task 9.6: `cmdk` 1.1.1 behaves as D8 assumed, verified against the shipped source
+
+Both assumptions hold, checked in `node_modules/.pnpm/cmdk@1.1.1/…/dist/index.mjs` rather than
+inferred from the docs, and then asserted in `apps/web/src/issues/command.test.tsx`.
+
+**`CommandEmpty` counts mounted items.** The internal filter routine short-circuits with
+`if (!search || shouldFilter === false) { filtered.count = items.size; return }`, where `items` is
+the set of item ids added on mount and deleted on unmount, and both the mount and unmount paths
+schedule it. `CommandEmpty` renders on `filtered.count === 0`, so with `shouldFilter={false}` it
+still tracks exactly what the application chose to render. The test drives the label page down to
+zero rows and back to prove it.
+
+**A controlled `value` survives an appended group.** The scorer's re-sort returns early under
+`shouldFilter === false`, so no DOM reordering happens at all; and the mount path only reaches its
+"select the first item" fallback via `state.value || selectFirst()`, which a non-empty controlled
+value skips. Appending the server group therefore cannot move the cursor.
+
+Neither fallback in 9.6 was needed. The palette still renders its own both-empty state, for a
+different reason: the escalation row is always mounted while there is a query, so `filtered.count`
+is never zero on the launcher page and `CommandEmpty` correctly stays silent there.
+
+### I23 — The escalation row sits ABOVE the server group, not below it
+
+Task 9.5 does not fix the row's position and the natural reading — a persistent row pinned to the
+bottom — is wrong here. Server results are appended last, so anything below them is pushed down
+every time the group answers. That is the same reflow under the cursor that H12's two-group seam
+exists to prevent, just at the other end of the list: arrow onto `Search everything for "q" →`
+during the 150 ms debounce and it would slide away as the answer lands.
+
+So the order is: action groups, `On this device`, the escalation row, the divider, `From the
+server`. The invariant it buys is the strong one — **every** append is strictly at the end of the
+list, and no rendered row ever changes index. `command.test.tsx` asserts the full prefix of the row
+list is unchanged across the server answering, not merely that the active row's identity survived.
+
+### I24 — `CommandProvider` lost `teamKey` and `onOpenIssue`, because the palette can now cross teams
+
+The old jump list was the open team's `issues` prop, so `onOpenIssue` could assume the surface's
+team and `teamKey` could format the key. The on-device pass reads `issues.mine` too, which spans
+every team the caller belongs to, so a palette hit can belong to another team and opening it under
+the surface's team would produce a URL for an issue that is not there.
+
+Both props are therefore gone. Navigation goes through `useOpenSearchResult`, which reads the team
+from the **row**, and the issue key comes from the corpus, which resolves it against `teams.all`.
+For a same-team issue the URL is byte-identical to the one `onOpenIssue` produced, so nothing about
+the existing path changed except who computes it. `issue-list.tsx` keeps its own `onOpenIssue` for
+its own rows.
+
+### I25 — Escape on `/search` returns rather than dismisses, because there is nothing to dismiss
+
+The command-palette spec's Escape scenario is about a dialog: dismiss, restore focus. The full route
+is not a dialog, and the shared cursor rule guarantees an active row whenever rows exist — so
+"release the cursor" is not a state the surface can be in. Two candidate meanings remain: clear the
+query, or return.
+
+It returns: focus to the input, cursor to the first row, query untouched. Clearing somebody's query
+on Escape is the destructive reading of an undo-shaped key, and the query is in the URL, so clearing
+it would also rewrite history. Recorded because task 10.4 says "Escape returns focus" and this is
+the reading chosen.
+
+### I26 — Which on-device kinds each surface can open, and the one row with no URL of its own
+
+`useLocalSearchCorpus` yields five kinds, and a result must be openable or Enter becomes a key that
+sometimes does nothing. Resolution, in `search/results.ts`:
+
+- **issue** → its own team's list with the issue open. Cross-team correct (I24).
+- **team** → that team's issue list.
+- **project** → `/teams/$teamId/projects?open=`. Projects are workspace-level but their view is only
+  mounted under a team route, so the team is the surface's: the open team in the palette, and on
+  `/search` the first team in `teams.all`'s stable ordering. The view it opens is workspace-level
+  either way, so the choice changes the header and nothing else.
+- **cycle** → that team's cycles. Only reachable when a team is in context, which is exactly when
+  the corpus subscribes to `cycles.byTeam`.
+- **label** → the team's issue list. **A label has no URL of its own**: the issue list's filters are
+  component state, not search params. The alternative was to drop label rows, which would make a
+  subscription task 8.2 mandates contribute nothing. One line in `localSearchRow` changes if a
+  label-scoped URL ever exists.
+
+A row whose team cannot be resolved is dropped rather than rendered inert.
+
+### I27 — The header entry is in `AppShell`, and the team surfaces reach `/search` through Cmd-K
+
+Task 10.3 puts the entry "beside the inbox badge", which is in `AppShell` — used by `/`, `/inbox`
+and the settings routes. The team routes (`issues`, `board`, `cycles`, `projects`, `roadmap`,
+`triage`, `retros`) each build their own header and carry no inbox badge either, so "reachable
+everywhere" is served by two doors, not one: the shell's link on the shell surfaces, and Cmd-K's
+`Search everything for "q" →` row on the team surfaces, which is where the palette is mounted.
+
+Still **one** keybinding. Adding a second entry point to the team headers would be a UI change to
+seven routes for a path Cmd-K already covers, and adding a `/` shortcut is refused outright.
+
+### I28 — `ownsKeyboard` guards the one window-level handler `/search` installs
+
+Task 10.4 requires `ownsKeyboard` to be respected, which needs something to respect it. The route
+handles Arrow/Enter/Escape/Home/End on the input itself — nothing global — so the only window-level
+handler is *type-to-focus*: a printable single character with no modifier moves the caret into the
+query field, and `ownsKeyboard(event.target)` refuses when another field, an open dialog or a
+listbox already owns the keyboard. It adds no shortcut and no keybinding; it makes the route usable
+after Tab has taken focus to the header. Asserted both ways in `search-view.test.tsx`.
+
+### I29 — The URL settles 400 ms behind the keystroke, and it settles with `replace`
+
+The query is in the URL so a search is shareable and Back is correct. Writing it per keystroke would
+put one history entry per character in front of the page the caller came from — Back would become a
+backspace key. So the route debounces the URL write by 400 ms (longer than the 150 ms server
+debounce, which is the one that has to feel instant) and uses `replace: true`. The entry the caller
+arrived on stays the one Back returns to, and a `q` arriving from outside — a shared link, a Back,
+the palette's escalation row — always wins over local input state.
+
+### I30 — The palette requests five server rows, so it suppresses D17's cap line
+
+`useServerSearch(query, { limit: 5 })` in the palette means `truncated` is true for almost every
+non-trivial query, and `Showing the first 50 — refine your query` would then be both factually
+wrong (it is showing five) and noise on a launcher whose entire answer to "there is more" is the
+escalation row directly above the group. So the palette passes `truncated: false` into the state
+mapper, with the reason on the line.
+
+D17's cap line is a `/search` state: the route requests `SERVER_RESULT_LIMIT` and shows it over the
+full fifty. This costs nothing in oracle terms — `truncated` is computed over post-scoping rows only
+on both surfaces, and suppressing a line can never reveal a row — and it is why the palette test
+asserts every other D17 state but not this one.
+
+### I31 — Controlling the cursor moved its lifetime too, so `useSearchCursor` took a session key
+
+Task 9.2 says control the palette's cursor. Doing that moved the state from `cmdk` — which holds it
+inside the `Command` element, and the dialog unmounts that element when it closes — into
+`CommandProvider`, which wraps the whole issue list and never unmounts. The identity rule then
+carried a cursor across a close: reopen after running `Go to inbox` and that row was still active,
+because `start()` cleared the search but the row was an action row and so had never left `rowIds`
+for the fallback to fire. A bare Cmd-K then Enter would re-run the last thing you ran instead of
+`New issue` — including `Mark all notifications as read` and the triage rows. The palette spec says
+every behaviour it already guarantees is unchanged; this one was not.
+
+The fix is at the lifetime, not at the symptom. A caller that outlives the list it describes has to
+say when a cursor stops meaning anything, so `useSearchCursor(rowIds, sessionKey)` takes an opaque
+key and treats a change of key as "no selection", falling through to the same first-row rule that
+already handles a vanished row. `CommandProvider` bumps a counter in `start`, which is the single
+entry point for both opening the dialog and moving to a sub-page — so a sub-page opens on its own
+first row too. `/search` passes no key: it is a route, it unmounts when you leave it, and its
+lifetime is already the one its cursor should have.
+
+Three tests in `command.test.tsx` cover it, and all three were confirmed to fail with the second
+argument removed: reopening after executing an action, reopening after Escape with the cursor moved
+onto an action row that still exists on reopen (so the fallback cannot mask it), and a sub-page
+reopening on its own first row. The first also asserts the consequence rather than only the state —
+Enter on the reopened palette opens the new-issue composer.
+
+Worth naming for the next surface that controls a cursor: no gate catches this. Lint, typecheck and
+the whole suite were green with the defect present, because every existing cursor test drove one
+continuous session.

@@ -15,9 +15,9 @@ import {
 // own behaviour — what it deletes, in what order, and what it survives — is what this file tests.
 // The SQL those two emit is the schema package's business and is covered against live Postgres.
 const listOrphanedAttachments = vi.hoisted(() => vi.fn())
-const deleteAttachment = vi.hoisted(() => vi.fn())
+const collectOrphanedAttachment = vi.hoisted(() => vi.fn())
 
-vi.mock('@yapm/schema/db', () => ({ listOrphanedAttachments, deleteAttachment }))
+vi.mock('@yapm/schema/db', () => ({ listOrphanedAttachments, collectOrphanedAttachment }))
 
 const TEAM = '11111111-1111-7111-8111-111111111111'
 const HOUR_MS = 60 * 60 * 1000
@@ -63,13 +63,26 @@ function silentLogger() {
   return { info: vi.fn(), error: vi.fn() }
 }
 
+// Stands in for the real claim, and models the one property the sweep depends on: the row's edges
+// are re-read AT CLAIM TIME, not taken from the listing that selected it. `attached` is the
+// database moving underneath the pass; a row that gained an edge is refused and its bytes are never
+// touched. `log` records the row deletes, which happen after the bytes and only on a claim.
+function claim(attached: Set<string>, log: string[]) {
+  return async (_db: unknown, id: string, removeBytes: () => Promise<void>): Promise<boolean> => {
+    if (attached.has(id)) return false
+    await removeBytes()
+    log.push(`row:${id}`)
+    return true
+  }
+}
+
 const db = {} as Kysely<DB>
 
 describe('runAttachmentGc', () => {
   beforeEach(() => {
     listOrphanedAttachments.mockReset()
-    deleteAttachment.mockReset()
-    deleteAttachment.mockResolvedValue(true)
+    collectOrphanedAttachment.mockReset()
+    collectOrphanedAttachment.mockImplementation(claim(new Set(), []))
   })
 
   // THUMBNAIL → OBJECT → ROW, objects before the row. A crash between them must leave a row whose
@@ -84,10 +97,7 @@ describe('runAttachmentGc', () => {
         await provider.delete(key)
       },
     }
-    deleteAttachment.mockImplementation((_db: unknown, id: string) => {
-      order.push(`row:${id}`)
-      return Promise.resolve(true)
-    })
+    collectOrphanedAttachment.mockImplementation(claim(new Set(), order))
     listOrphanedAttachments.mockResolvedValue([row('a', new Date(NOW - 48 * HOUR_MS))])
 
     const result = await runAttachmentGc({
@@ -99,7 +109,7 @@ describe('runAttachmentGc', () => {
     })
 
     expect(order).toEqual([`${TEAM}/a.thumb`, `${TEAM}/a`, 'row:a'])
-    expect(result).toEqual({ collected: 1, failed: 0 })
+    expect(result).toEqual({ collected: 1, failed: 0, skipped: 0 })
   })
 
   // The grace window is the sweep's whole policy, and it is expressed as a cutoff handed to the
@@ -136,14 +146,16 @@ describe('runAttachmentGc', () => {
     })
 
     expect(deleted).toEqual([])
-    expect(deleteAttachment).not.toHaveBeenCalled()
-    expect(result).toEqual({ collected: 0, failed: 0 })
+    expect(collectOrphanedAttachment).not.toHaveBeenCalled()
+    expect(result).toEqual({ collected: 0, failed: 0, skipped: 0 })
   })
 
   // One unreachable object must not abort the pass: the rows after it are collected now rather than
   // never, and the failed one is still an orphan so the next tick re-selects it.
   it('contains a per-row failure and keeps going', async () => {
     const { provider, deleted } = recordingProvider((key) => key === `${TEAM}/b`)
+    const log: string[] = []
+    collectOrphanedAttachment.mockImplementation(claim(new Set(), log))
     listOrphanedAttachments.mockResolvedValue([
       row('a', new Date(NOW - 48 * HOUR_MS)),
       row('b', new Date(NOW - 48 * HOUR_MS)),
@@ -153,7 +165,7 @@ describe('runAttachmentGc', () => {
 
     const result = await runAttachmentGc({ db, provider, logger, graceHours: 24, now: NOW })
 
-    expect(result).toEqual({ collected: 2, failed: 1 })
+    expect(result).toEqual({ collected: 2, failed: 1, skipped: 0 })
     expect(deleted).toEqual([
       `${TEAM}/a.thumb`,
       `${TEAM}/a`,
@@ -161,9 +173,41 @@ describe('runAttachmentGc', () => {
       `${TEAM}/c.thumb`,
       `${TEAM}/c`,
     ])
-    // The failed row's own row delete never ran, so it stays an orphan.
-    expect(deleteAttachment.mock.calls.map((call) => call[1])).toEqual(['a', 'c'])
+    // The failed row's own row delete never ran — the claim's transaction rolled back — so it stays
+    // an orphan and the next tick re-selects it.
+    expect(log).toEqual(['row:a', 'row:c'])
     expect(logger.error).toHaveBeenCalledTimes(1)
+  })
+
+  // THE RACE THE CLAIM EXISTS FOR. `listOrphanedAttachments` is a snapshot; between it and a row's
+  // turn, someone attaches that file. Deleting it on the strength of the stale list would destroy
+  // the bytes of an attached file, which "an attached file is never collected" forbids outright.
+  it('skips a row that gained an edge after the listing and never touches its bytes', async () => {
+    const attached = new Set<string>()
+    const log: string[] = []
+    const { provider, deleted } = recordingProvider()
+    const racing: StorageProvider = {
+      ...provider,
+      delete: async (key) => {
+        // `b` is attached while `a` is still being collected — after the listing, before the claim.
+        if (key === `${TEAM}/a.thumb`) attached.add('b')
+        await provider.delete(key)
+      },
+    }
+    collectOrphanedAttachment.mockImplementation(claim(attached, log))
+    listOrphanedAttachments.mockResolvedValue([
+      row('a', new Date(NOW - 48 * HOUR_MS)),
+      row('b', new Date(NOW - 48 * HOUR_MS)),
+      row('c', new Date(NOW - 48 * HOUR_MS)),
+    ])
+    const logger = silentLogger()
+
+    const result = await runAttachmentGc({ db, provider: racing, logger, graceHours: 24, now: NOW })
+
+    expect(result).toEqual({ collected: 2, failed: 0, skipped: 1 })
+    expect(deleted).toEqual([`${TEAM}/a.thumb`, `${TEAM}/a`, `${TEAM}/c.thumb`, `${TEAM}/c`])
+    expect(log).toEqual(['row:a', 'row:c'])
+    expect(logger.error).not.toHaveBeenCalled()
   })
 
   // NEVER rejects: this worker shares a process and a pg-boss instance with the cycle, notification
@@ -175,7 +219,7 @@ describe('runAttachmentGc', () => {
 
     await expect(
       runAttachmentGc({ db, provider, logger, graceHours: 24, now: NOW }),
-    ).resolves.toEqual({ collected: 0, failed: 0 })
+    ).resolves.toEqual({ collected: 0, failed: 0, skipped: 0 })
     expect(logger.error).toHaveBeenCalledTimes(1)
   })
 })

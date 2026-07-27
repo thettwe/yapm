@@ -69,8 +69,14 @@ runtime stage, and the constraint this places on cross-architecture builds SHALL
 The system's documented one-command backup SHALL state exactly what it captures under each storage
 provider: with the local provider, a database dump **and** an archive of the storage directory; with
 object storage, the database dump only, with the attachment table serving as the manifest against
-which an operator verifies their own bucket backup. Restore ordering SHALL be documented so that no
-restored row can reference bytes that were never captured.
+which an operator verifies their own bucket backup.
+
+Capture ordering SHALL be documented so that no captured row can reference bytes that were never
+captured: because an upload writes its object before its row, the database SHALL be dumped before
+the files are captured, making the file capture a superset of what the dump refers to. Restore
+ordering SHALL be documented separately, as a statement about intermediate states rather than about
+completeness: the database SHALL be restored before the files, so the only state a partial restore
+can be in is one the running application already handles.
 
 #### Scenario: Local-provider backup includes the files
 
@@ -84,7 +90,16 @@ restored row can reference bytes that were never captured.
 - **THEN** the documentation states that the bucket is the operator's own backup domain
 - **AND** states that the attachment table is the manifest for verifying it
 
-#### Scenario: Restore ordering never leaves a row without bytes
+#### Scenario: Capture ordering never dumps a row whose bytes were not captured
+
+- **WHEN** the documented backup procedure is followed
+- **THEN** the database is dumped before the files are captured, so every row in the dump names
+  bytes that were already on disk when the dump ran
+- **AND** the file capture may contain objects with no row in the dump, which are the orphans the
+  nightly sweep already collects
+
+#### Scenario: Restore ordering leaves only states the application already handles
 
 - **WHEN** the documented restore procedure is followed
-- **THEN** files are restored before the database, so every restored row references bytes that exist
+- **THEN** the database is restored before the files, so a row whose bytes have not landed yet
+  serves the ordinary refusal rather than leaving unreachable bytes

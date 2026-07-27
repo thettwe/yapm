@@ -1237,7 +1237,19 @@ type BodyLimitOptions = { maxSize: number; onError?: OnError }
 export declare const bodyLimit: (options: BodyLimitOptions) => MiddlewareHandler
 ```
 
-`maxSize` is in **bytes**. It is checked against `Content-Length` **before the body is read** and enforced again while streaming, so a lying header cannot be used to exhaust memory. `onError` returns the response; omitted, the middleware throws a 413 `HTTPException`.
+`maxSize` is in **bytes**. `onError` returns the response; omitted, the middleware throws a 413 `HTTPException`.
+
+**The two paths are exclusive, not belt-and-braces** — read from the installed `dist/middleware/body-limit/index.js`, because "checked on the header *and* enforced again while streaming" is the plausible-sounding claim and it is wrong:
+
+```js
+if (hasContentLength && !hasTransferEncoding) {
+  const contentLength = parseInt(c.req.raw.headers.get('content-length') || '0', 10)
+  return contentLength > maxSize ? onError(c) : next()   // ← returns; nothing is counted
+}
+// only here: read the stream, sum chunk lengths, onError() the moment size > maxSize
+```
+
+So: with a usable `Content-Length` the middleware rejects **before reading** and then passes the body through **uncounted** — a header understating the body is bounded by the HTTP layer's own content-length framing, which stops the readable at the declared length, not by this middleware. Without one (chunked), and only then, it counts bytes while reading. Both paths refuse an over-size body before it is buffered; neither does both.
 
 **`secureHeaders(options?)`** — every option is optional and **most default to on**, so an unopinionated call adds HSTS, `X-Frame-Options`, COOP, Origin-Agent-Cluster and more. Each is `overridableHeader` (`boolean | string`), so `false` switches one off. Verified defaults from the installed JSDoc: `crossOriginEmbedderPolicy=false`; `crossOriginResourcePolicy`, `crossOriginOpenerPolicy`, `originAgentCluster`, `referrerPolicy`, `strictTransportSecurity`, `xContentTypeOptions`, `xDnsPrefetchControl`, `xDownloadOptions`, `xFrameOptions`, `xPermittedCrossDomainPolicies`, `xXssProtection` and `removePoweredBy` all **true**. `contentSecurityPolicy` and `permissionsPolicy` are off unless configured.
 

@@ -29,6 +29,7 @@ export type {
 export {
   attachAttachment,
   canUploadToTeam,
+  collectOrphanedAttachment,
   createAttachment,
   deleteAttachment,
   findAttachmentForReader,

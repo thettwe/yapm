@@ -288,8 +288,14 @@ while serving. A failure to generate a thumbnail SHALL NOT fail the upload.
 The system SHALL register the attachment garbage collection sweep on the process's existing pg-boss
 instance, SHALL NOT construct a second `PgBoss` and SHALL NOT call `start()` a second time. The
 sweep SHALL delete objects and thumbnails before their rows, SHALL be bounded per pass, and SHALL
-only consider rows that have been unattached for longer than the configured grace period. A failure
-to register the sweep SHALL NOT prevent the other scheduled jobs from registering.
+only consider rows that are still unattached and were **created** longer ago than the configured
+grace period. The window runs from upload, not from detachment: there is no record of when an edge
+was removed, and adding one would be a column maintained on every delete path for a sweep that runs
+nightly. The consequence is stated rather than smoothed over — a file whose issue or comment is
+deleted long after the upload is collected by the next sweep, with no further grace. The sweep SHALL
+re-check that a row is still unattached at the moment it collects it, so a file attached after the
+listing is never collected. A failure to register the sweep SHALL NOT prevent the other scheduled
+jobs from registering.
 
 #### Scenario: An abandoned upload is collected
 

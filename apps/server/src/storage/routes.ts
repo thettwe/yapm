@@ -150,11 +150,21 @@ export function createFileRoutes(options: FileRoutesOptions): Hono {
     return serve(id, c.get('fileUserId'), 'thumb')
   })
 
-  // `bodyLimit` rejects on the Content-Length header BEFORE a byte is read and also bounds the
-  // stream, so a lying header cannot be used to exhaust memory. One file per request: batching
-  // would make partial failure a shape the client has to reason about, and a browser can issue N
-  // requests. This is a REQUEST-SHAPE refusal, not a row refusal — it says nothing about any row,
-  // so it carries its own status rather than the read path's.
+  // `bodyLimit` takes ONE of two paths, and it is worth being exact about which, because "and also
+  // bounds the stream" is the comfortable thing to believe and not what the middleware does:
+  //
+  //   - `Content-Length` present and no `transfer-encoding` → compared to `maxSize` BEFORE a byte
+  //     is read, and the body is then passed through UNCOUNTED. A header that lies about a larger
+  //     body cannot get past this; a header that lies about a smaller one is bounded by the HTTP
+  //     layer's own content-length framing, which stops reading at the declared length, not by
+  //     this middleware.
+  //   - No usable `Content-Length` (chunked) → every chunk is counted while reading and the
+  //     request is refused the moment the running total passes `maxSize`.
+  //
+  // Either way an over-size upload is refused before it is buffered. One file per request:
+  // batching would make partial failure a shape the client has to reason about, and a browser can
+  // issue N requests. This is a REQUEST-SHAPE refusal, not a row refusal — it says nothing about
+  // any row, so it carries its own status rather than the read path's.
   app.post(
     FILES_API_BASE,
     requireSession,
@@ -176,7 +186,11 @@ export function createFileRoutes(options: FileRoutesOptions): Hono {
       }
 
       const file = form.file
-      const teamId = typeof form.teamId === 'string' ? form.teamId : ''
+      // LOWER-CASED WHERE IT IS READ, once. Postgres compares `uuid` case-insensitively, so
+      // `canUploadToTeam` accepts an upper-cased team id — but the storage key is built from this
+      // same string and `STORAGE_KEY_PATTERN` is lower-case hex only. Without this, an authorised
+      // upload naming `019FA434-…` becomes an `InvalidStorageKeyError` and a 500 instead of a 201.
+      const teamId = typeof form.teamId === 'string' ? form.teamId.toLowerCase() : ''
       if (!(file instanceof File) || teamId.length === 0) {
         return c.json({ error: 'invalid_request' }, 400, { 'cache-control': 'no-store' })
       }

@@ -62,6 +62,9 @@ describe.skipIf(DATABASE_URL === undefined)('/api/v1/files', () => {
   const memberA = `a-${newId()}`
   const memberB = `b-${newId()}`
   const viewerA = `v-${newId()}`
+  // Removed from the workspace, but their `team_membership` row was never cleaned up — which is the
+  // realistic state, because removing somebody from a workspace does not delete their team rows.
+  const exMember = `x-${newId()}`
 
   let png: Uint8Array
   let uploadedId: string
@@ -110,6 +113,8 @@ describe.skipIf(DATABASE_URL === undefined)('/api/v1/files', () => {
         { id: newId(), team_id: teamAId, user_id: memberA },
         { id: newId(), team_id: teamBId, user_id: memberB },
         { id: newId(), team_id: teamAId, user_id: viewerA },
+        // No `workspace_member` row for this one. Deliberately.
+        { id: newId(), team_id: teamAId, user_id: exMember },
       ])
       .execute()
 
@@ -179,6 +184,23 @@ describe.skipIf(DATABASE_URL === undefined)('/api/v1/files', () => {
 
     expect(unknown).toEqual(real)
     expect(malformed).toEqual(real)
+  })
+
+  // WORKSPACE MEMBERSHIP FIRST, THEN THE TEAM — the same order `teamScoped` reads in, where
+  // `isMember(ctx)` denies before any team is considered. Removing somebody from the workspace does
+  // not delete their `team_membership` rows, so a read predicate that starts at the team table
+  // would keep serving bytes to a person sync, search and the upload gate have all already stopped
+  // serving. That would make this route the one surface a removal did not close.
+  it('refuses a team member with no workspace_member row, identically', async () => {
+    const real = await capture(await request(`${FILES_API_BASE}/${uploadedId}`, exMember))
+    const unknown = await capture(await request(`${FILES_API_BASE}/${newId()}`, exMember))
+
+    expect(real.status).toBe(404)
+    expect(real.body).toBe('{"error":"not_found"}')
+    expect(unknown).toEqual(real)
+
+    // …and the thumbnail is not a second door into the same bytes.
+    expect((await request(`${FILES_API_BASE}/${uploadedId}/thumb`, exMember)).status).toBe(404)
   })
 
   it('serves the exact uploaded bytes to a member of team A, cached privately and inline', async () => {
@@ -255,24 +277,76 @@ describe.skipIf(DATABASE_URL === undefined)('/api/v1/files', () => {
     expect(response.status).toBe(404)
   })
 
-  it('refuses an upload larger than the limit before the body is read', async () => {
-    const small = createFileRoutes({
+  // Postgres compares `uuid` case-insensitively, so every authorisation predicate accepts this —
+  // but the storage key is built from the same string and its allowlist is lower-case hex only.
+  // Un-normalised, an authorised upload naming an upper-cased team is a 500, not a 201.
+  it('accepts an upper-cased teamId and stores it canonically', async () => {
+    const form = new FormData()
+    form.set('file', new File([pngBlob()], 'shouty.png', { type: 'image/png' }))
+    form.set('teamId', teamAId.toUpperCase())
+
+    const response = await request(FILES_API_BASE, memberA, { method: 'POST', body: form })
+    expect(response.status).toBe(201)
+    const created = (await response.json()) as { id: string }
+
+    const stored = await database.db
+      .selectFrom('attachment')
+      .select('team_id')
+      .where('id', '=', created.id)
+      .executeTakeFirst()
+    expect(stored?.team_id).toBe(teamAId)
+    expect((await request(`${FILES_API_BASE}/${created.id}`, memberA)).status).toBe(200)
+  })
+
+  const smallRoutes = () =>
+    createFileRoutes({
       auth: fakeAuth(),
       db: database.db,
       provider: createLocalStorageProvider({ dir }),
       logger: silent,
       maxBytes: 64,
     })
+
+  it('refuses an upload larger than the limit before the body is read', async () => {
     const form = new FormData()
     form.set('file', new File([pngBlob()], 'diagram.png', { type: 'image/png' }))
     form.set('teamId', teamAId)
 
-    const response = await small.request(FILES_API_BASE, {
+    const response = await smallRoutes().request(FILES_API_BASE, {
       method: 'POST',
       body: form,
       headers: { 'x-test-user': memberA },
     })
     expect(response.status).toBe(413)
+  })
+
+  // THE OTHER HALF OF THE CEILING, and the one the header check cannot cover. `bodyLimit`'s two
+  // paths are exclusive: with a `Content-Length` it refuses before reading and then passes the body
+  // through uncounted; a chunked request has no length to check, so the ceiling is only real if the
+  // middleware counts bytes as they arrive. This request declares no length and sends 16x the
+  // ceiling.
+  it('refuses a chunked upload that exceeds the limit, with no Content-Length to check', async () => {
+    const chunk = new Uint8Array(256)
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let i = 0; i < 4; i += 1) controller.enqueue(chunk)
+        controller.close()
+      },
+    })
+    const chunked = new Request(`http://files.test${FILES_API_BASE}`, {
+      method: 'POST',
+      body,
+      headers: {
+        'x-test-user': memberA,
+        'content-type': 'multipart/form-data; boundary=----yapm',
+      },
+      duplex: 'half',
+    } as unknown as RequestInit)
+    expect(chunked.headers.get('content-length')).toBeNull()
+
+    const response = await smallRoutes().request(chunked)
+    expect(response.status).toBe(413)
+    expect(await response.json()).toEqual({ error: 'payload_too_large', maxBytes: 64 })
   })
 
   // AN SVG IS AN HTML DOCUMENT. It round-trips, it is downloadable, and the origin never renders it.
@@ -341,6 +415,53 @@ describe.skipIf(DATABASE_URL === undefined)('/api/v1/files', () => {
       .where('id', '=', created.id)
       .executeTakeFirst()
     expect(row?.issue_id).toBe(issueId)
+  })
+
+  // ONE parent, not one per edge. Guarding only the edge being set would let a file that already
+  // hangs off a comment be given an issue edge as well, and a double-parented row survives deleting
+  // either parent — so its bytes outlive both, invisible to the sweep.
+  it('refuses to add a second edge to a file that is already attached', async () => {
+    const issueId = newId()
+    const commentId = newId()
+    await database.db
+      .insertInto('issue')
+      .values({
+        id: issueId,
+        team_id: teamAId,
+        title: 'one parent only',
+        status: 'todo',
+        priority: 'no_priority',
+        creator_id: memberA,
+      })
+      .execute()
+    await sql`
+      insert into comment (id, issue_id, team_id, author_id, body)
+      values (${commentId}, ${issueId}, ${teamAId}, ${memberA}, ${JSON.stringify({ type: 'doc' })}::jsonb)
+    `.execute(database.db)
+
+    const form = new FormData()
+    form.set('file', new File([pngBlob()], 'on-a-comment.png', { type: 'image/png' }))
+    form.set('teamId', teamAId)
+    form.set('commentId', commentId)
+    const created = (await (
+      await request(FILES_API_BASE, memberA, { method: 'POST', body: form })
+    ).json()) as { id: string }
+
+    const second = await request(`${FILES_API_BASE}/${created.id}`, memberA, {
+      method: 'PATCH',
+      body: JSON.stringify({ issueId }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(second.status).toBe(404)
+    expect(await second.text()).toBe('{"error":"not_found"}')
+
+    const row = await database.db
+      .selectFrom('attachment')
+      .select(['issue_id', 'comment_id'])
+      .where('id', '=', created.id)
+      .executeTakeFirst()
+    expect(row?.issue_id).toBeNull()
+    expect(row?.comment_id).toBe(commentId)
   })
 
   it('deletes idempotently, and the second call is the standard refusal', async () => {

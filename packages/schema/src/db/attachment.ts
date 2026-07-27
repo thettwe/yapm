@@ -79,20 +79,35 @@ function toRow(row: AttachmentSelectRow): AttachmentRow {
   }
 }
 
-// The reader's scope, mirroring `teamScoped` (`zero/queries.ts`) EXACTLY, including its
-// workspace-admin bypass: an admin can create issues in any team of their workspace, so they can
-// read them, so they can read what is attached to them. Spelled as a SQL fragment rather than as a
-// resolved team list so it can be inlined into the same statement as the id lookup.
+// The reader's scope, mirroring `teamScoped` (`zero/queries.ts`) EXACTLY — BOTH of its halves.
+//
+// `teamScoped` is `isMember(ctx)` first and the team predicate second: a user with no
+// `workspace_member` row is denied before any team is considered, because `ctx.role` is null.
+// `team_membership` alone is NOT that check. Removing somebody from the workspace does not delete
+// their team rows, so a predicate that starts at `team_membership` keeps serving bytes to a person
+// sync, search and the upload gate have all already stopped serving — the read path would be the
+// one surface a removal did not close.
+//
+// Hence the workspace-membership `exists` wrapping the disjunction, and only then the team
+// predicate, including its workspace-admin bypass: an admin can create issues in any team of their
+// workspace, so they can read them, so they can read what is attached to them. Spelled as a SQL
+// fragment rather than as a resolved team list so it can be inlined into the same statement as the
+// id lookup.
 function readableByFragment(userId: string) {
   return sql<boolean>`(
     exists (
-      select 1 from team_membership m
-      where m.team_id = attachment.team_id and m.user_id = ${userId}
+      select 1 from workspace_member wm0 where wm0.user_id = ${userId}
     )
-    or exists (
-      select 1 from workspace_member wm
-      join team t on t.workspace_id = wm.workspace_id
-      where wm.user_id = ${userId} and wm.role = 'admin' and t.id = attachment.team_id
+    and (
+      exists (
+        select 1 from team_membership m
+        where m.team_id = attachment.team_id and m.user_id = ${userId}
+      )
+      or exists (
+        select 1 from workspace_member wm
+        join team t on t.workspace_id = wm.workspace_id
+        where wm.user_id = ${userId} and wm.role = 'admin' and t.id = attachment.team_id
+      )
     )
   )`
 }
@@ -172,6 +187,10 @@ export interface AttachTarget {
 // `is null` guards are in the statement rather than in a read-then-write, so two concurrent
 // attaches cannot both win and an already-attached row is never re-parented — the update simply
 // matches nothing and the caller gets `null`, which folds into the standard refusal.
+//
+// BOTH guards apply on BOTH paths, not just to the edge being set. The contract is "attach an
+// UNATTACHED file", singular: a row that already hangs off a comment must not additionally be given
+// an issue edge, or it is parented twice and deleting either parent leaves it half-orphaned.
 export async function attachAttachment(
   db: Kysely<DB>,
   target: AttachTarget,
@@ -181,11 +200,13 @@ export async function attachAttachment(
     .updateTable('attachment')
     .where('id', '=', target.id)
     .where(readableByFragment(target.userId))
+    .where('issue_id', 'is', null)
+    .where('comment_id', 'is', null)
   if (target.issueId != null) {
-    update = update.where('issue_id', 'is', null).set({ issue_id: target.issueId })
+    update = update.set({ issue_id: target.issueId })
   }
   if (target.commentId != null) {
-    update = update.where('comment_id', 'is', null).set({ comment_id: target.commentId })
+    update = update.set({ comment_id: target.commentId })
   }
   const row = await update.returning(SELECTED).executeTakeFirst()
   return row === undefined ? null : toRow(row as unknown as AttachmentSelectRow)
@@ -222,6 +243,44 @@ export async function listOrphanedAttachments(
     .limit(options.limit)
     .execute()
   return rows.map((row) => toRow(row as unknown as AttachmentSelectRow))
+}
+
+// The sweep's ONE unit of work, and the reason it is a statement pair rather than a bare delete.
+//
+// `listOrphanedAttachments` is a snapshot: between it and the delete, `attachAttachment` can give a
+// row an edge. Deleting on the strength of the stale list destroys the bytes of a file that is now
+// attached — the exact thing "an attached file is never collected" forbids. So the row is CLAIMED
+// first, `for update`, re-checking both edges under the lock, and the bytes are removed inside the
+// same transaction as the row delete.
+//
+// The two orderings both end well. A concurrent attach that arrives first makes the claim's
+// re-check fail (Postgres re-evaluates the qualification for the locked row version), so the sweep
+// returns `false` and skips. One that arrives second blocks on the lock, then matches a deleted row
+// and returns `null`, which the PATCH route already folds into the standard refusal.
+//
+// `removeBytes` runs inside the transaction, so a provider failure rolls the row delete back and
+// the row is still an orphan for the next pass. Objects still go before the row on the happy path,
+// which is what keeps a crash's residue "a row whose bytes are gone" rather than unnameable bytes.
+export async function collectOrphanedAttachment(
+  db: Kysely<DB>,
+  id: string,
+  removeBytes: () => Promise<void>,
+): Promise<boolean> {
+  if (!UUID_PATTERN.test(id)) return false
+  return db.transaction().execute(async (trx) => {
+    const claimed = await trx
+      .selectFrom('attachment')
+      .select('id')
+      .where('id', '=', id)
+      .where('issue_id', 'is', null)
+      .where('comment_id', 'is', null)
+      .forUpdate()
+      .executeTakeFirst()
+    if (claimed === undefined) return false
+    await removeBytes()
+    await trx.deleteFrom('attachment').where('id', '=', id).execute()
+    return true
+  })
 }
 
 export interface UploadScopeQuery {

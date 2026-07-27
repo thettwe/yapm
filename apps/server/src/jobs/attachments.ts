@@ -1,5 +1,5 @@
 import type { DB } from '@yapm/schema/db'
-import { deleteAttachment, listOrphanedAttachments } from '@yapm/schema/db'
+import { collectOrphanedAttachment, listOrphanedAttachments } from '@yapm/schema/db'
 import type { Kysely } from 'kysely'
 import type { Logger } from '../logger.js'
 import { objectKeyFor, type StorageProvider, thumbnailKeyFor } from '../storage/provider.js'
@@ -24,6 +24,10 @@ export interface AttachmentGcOptions {
 export interface AttachmentGcResult {
   readonly collected: number
   readonly failed: number
+  // Listed as an orphan, but no longer one by the time the claim ran — attached in between. Counted
+  // rather than silent, because "the sweep skipped rows" and "the sweep found nothing" are
+  // different facts about an instance.
+  readonly skipped: number
 }
 
 // The sweep that stops abandoned pastes accumulating: an attachment with NEITHER an issue nor a
@@ -32,6 +36,12 @@ export interface AttachmentGcResult {
 // ORDER IS THUMBNAIL → OBJECT → ROW, objects before the row. A crash between them leaves a row
 // whose bytes are gone, which the read path already folds into the standard refusal — rather than
 // bytes nobody can name, which is a leak only a bucket listing could find.
+//
+// THE LIST IS A SNAPSHOT AND THE ROW IS RE-CHECKED BEFORE ANYTHING IS TOUCHED. A file attached
+// between the listing statement and this row's turn must survive, so each row is claimed by
+// `collectOrphanedAttachment` — `for update`, both edges re-checked under the lock, bytes and row
+// removed in that one transaction. A row that gained an edge in the meantime is skipped, not
+// destroyed.
 //
 // DANGLING OBJECTS ARE NOT SWEPT. Listing a bucket to find objects with no row is an O(objects)
 // operation against a paid API on a cron, and this ordering makes the leak one-directional and
@@ -56,18 +66,21 @@ export async function runAttachmentGc(options: AttachmentGcOptions): Promise<Att
     })
   } catch (error) {
     logger.error({ err: error }, 'attachment gc could not list orphans; skipping this pass')
-    return { collected: 0, failed: 0 }
+    return { collected: 0, failed: 0, skipped: 0 }
   }
 
   let collected = 0
   let failed = 0
+  let skipped = 0
 
   for (const orphan of orphans) {
     try {
-      await provider.delete(thumbnailKeyFor(orphan.teamId, orphan.id))
-      await provider.delete(objectKeyFor(orphan.teamId, orphan.id))
-      await deleteAttachment(db, orphan.id)
-      collected += 1
+      const taken = await collectOrphanedAttachment(db, orphan.id, async () => {
+        await provider.delete(thumbnailKeyFor(orphan.teamId, orphan.id))
+        await provider.delete(objectKeyFor(orphan.teamId, orphan.id))
+      })
+      if (taken) collected += 1
+      else skipped += 1
     } catch (error) {
       // One unreachable object must not abort the pass — the next tick re-selects this row, because
       // it is still an orphan, and the ones after it are collected now rather than never.
@@ -76,8 +89,8 @@ export async function runAttachmentGc(options: AttachmentGcOptions): Promise<Att
     }
   }
 
-  if (collected > 0 || failed > 0) {
-    logger.info({ collected, failed, graceHours }, 'attachment orphan sweep ran')
+  if (collected > 0 || failed > 0 || skipped > 0) {
+    logger.info({ collected, failed, skipped, graceHours }, 'attachment orphan sweep ran')
   }
-  return { collected, failed }
+  return { collected, failed, skipped }
 }

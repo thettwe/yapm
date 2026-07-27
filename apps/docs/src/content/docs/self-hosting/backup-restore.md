@@ -1,6 +1,6 @@
 ---
 title: Backup and restore
-description: What a complete yapm backup contains, the procedure for each storage provider, why files are captured before the database, and what you can safely throw away.
+description: What a complete yapm backup contains, the procedure for each storage provider, why the database is captured before the files, and what you can safely throw away.
 ---
 
 A yapm instance holds durable state in **two** places, and only two: the Postgres database, and —
@@ -28,32 +28,41 @@ it in the meantime.
 rebuilds by initial sync. Backing it up buys nothing, and restoring a stale one is worse than not
 having it.
 
-## Order matters: files first, then the database
+## Order matters: the database first, both ways
 
 Neither procedure below is atomic across the two stores, and it does not need to be — as long as you
-capture in the right order.
+capture in the right order. The order follows from **how an upload is written**: yapm writes the
+object, then the thumbnail, then the row. The bytes always exist before the row that names them.
 
-**Capture the files first, then dump the database.** Then every row in the dump refers to bytes that
-were already in the file backup. The reverse order leaves a window where a row is in the dump and its
-bytes are not, which is a broken image.
+**Dump the database first, then tar the files.** Every row in a dump taken at T1 names bytes that
+were already on disk before T1, so they are still there when the tar runs at T2 — the file archive is
+a superset of what the dump refers to. The reverse order is the one that breaks: a file uploaded
+between the tar and the dump lands in the dump as a row whose bytes were never captured, which is the
+broken image this ordering exists to prevent.
 
-**Restore the database first, then the files.** A row whose bytes are missing already serves an
-ordinary "not found" and is repaired the moment the files land; bytes with no row are unreachable
-garbage that nobody ever asks for.
+Capturing the database first does mean the tar may contain objects with no row in the dump — uploads
+that happened in between. Those are harmless: they are exactly the orphans the [nightly
+sweep](/self-hosting/attachments/#the-orphan-sweep) already collects.
 
-That asymmetry — files before rows on the way out, rows before files on the way in — is deliberate.
-Every intermediate state is one the running application already handles.
+**Restore the database first, then the files**, for the same reason in the other direction. A row
+whose bytes have not landed yet serves an ordinary "not found" and is repaired the moment the files
+arrive; bytes with no row are unreachable garbage that nobody ever asks for.
+
+One residual case, stated rather than hidden: an attachment **deleted** between the dump and the tar
+is restored as a row whose bytes are gone. That is the same state the running application already
+handles — the read path serves its ordinary "not found" — and it is a file somebody deliberately
+deleted, not one you lost.
 
 ## Local provider (the default)
 
 ```bash
-# 1. Files first.
-docker run --rm -v yapm_files:/files -v "$PWD:/backup" busybox \
-  tar czf /backup/yapm-files.tar.gz -C /files .
-
-# 2. Then the database.
+# 1. The database first.
 docker compose -f docker/docker-compose.yml exec -T postgres \
   pg_dump -U yapm -d yapm --clean --if-exists > yapm-db.sql
+
+# 2. Then the files, which are a superset of what the dump names.
+docker run --rm -v yapm_files:/files -v "$PWD:/backup" busybox \
+  tar czf /backup/yapm-files.tar.gz -C /files .
 ```
 
 Restore, into a stack whose containers are running but which has no data yet:
@@ -93,7 +102,7 @@ true). So you can *verify* a bucket backup rather than trust it:
 select id, team_id, filename, byte_size, has_thumbnail from attachment order by created_at;
 ```
 
-The same ordering rule applies: snapshot or verify the bucket first, dump the database second.
+The same ordering rule applies: dump the database first, then snapshot or verify the bucket.
 
 ## What a restore does not bring back
 

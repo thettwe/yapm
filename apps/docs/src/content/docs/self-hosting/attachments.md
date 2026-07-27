@@ -1,6 +1,6 @@
 ---
 title: Attachments
-description: Where uploaded files live, choosing between local disk and S3-compatible storage, the nine environment variables, upload limits, the nightly orphan sweep, why there are no shareable links, and how SVGs are served.
+description: Where uploaded files live, choosing between local disk and S3-compatible storage, the eleven environment variables, upload limits, the nightly orphan sweep, why there are no shareable links, and how SVGs are served.
 ---
 
 Editor images and issue files need somewhere to put bytes. yapm ships two places: a **directory on
@@ -76,13 +76,16 @@ rather than at somebody's first paste. If you run the server outside the contain
 ## Uploading and serving
 
 Uploads go to `POST /api/v1/files` as `multipart/form-data` — one file per request, with the owning
-`teamId` and optionally the `issueId`/`commentId` it belongs to. The response is an **id and four
-facts**, and no URL of any kind.
+`teamId` and optionally the `issueId`/`commentId` it belongs to. The response is an **id and three
+facts** — the sniffed content type, the byte size and whether a thumbnail exists — and no URL of any
+kind.
 
 - **Members upload; viewers do not.** Viewers are read-only everywhere else and are read-only here.
   They can read every attachment their teams own.
-- **The size limit is enforced on the `Content-Length` header before a byte is read**, and again on
-  the stream, so a lying header costs nothing.
+- **The size limit is enforced before anything is buffered**, by whichever of two checks applies: an
+  upload that declares a `Content-Length` over `ATTACHMENT_MAX_BYTES` is rejected before a byte is
+  read, and one that declares no length at all (chunked) is counted as it arrives and cut off at the
+  same ceiling.
 - **The stored content type is sniffed from the bytes**, never taken from the upload's own claim.
   A file whose bytes are not one of PNG, JPEG, GIF, WebP or AVIF is stored as
   `application/octet-stream`.
@@ -155,8 +158,10 @@ the grace window *without the document ever saving* loses that image. Twenty-fou
 essentially impossible for a human. Raise `ATTACHMENT_ORPHAN_GRACE_HOURS` if you disagree.
 
 **Deleting an issue or comment does not delete its files immediately.** The link is nulled instead
-of cascading, which makes those files orphans — so they are collected by the next sweep after the
-grace window, not inside somebody's transaction.
+of cascading, which makes those files orphans — collected by a later sweep, not inside somebody's
+transaction. Note that the grace window is measured from **upload**, not from when the link was
+removed: a file attached to an issue you delete a month from now is collected by the very next
+sweep, because it was created long before the cutoff.
 
 ## Watching storage grow
 

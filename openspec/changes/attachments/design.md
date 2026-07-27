@@ -278,6 +278,14 @@ so one pass can never be unbounded work:
    ATTACHMENT_ORPHAN_GRACE_HOURS`. Delete the object and the thumbnail, then the row. Object-first,
    so a crash between the two leaves a row whose bytes are gone (which the read path already folds
    into the standard refusal) rather than bytes nobody can name.
+   The window runs from `created_at`, deliberately: there is no record of when an edge was removed,
+   and a `unattached_at` column would have to be maintained on every path that nulls one. The
+   consequence is that a file whose issue or comment is deleted long after the upload is collected
+   by the next sweep with no further grace — its bytes were already about to be unreachable.
+   That listing is a **snapshot**, so each row is re-checked under a `for update` claim before
+   anything is deleted (`collectOrphanedAttachment`), and the bytes and the row are removed in that
+   one transaction. Without the claim, a file attached between the listing and its turn in the loop
+   would be destroyed anyway — the one thing "an attached file is never collected" forbids outright.
 2. **Dangling objects** are *not* swept. Listing a bucket to find objects with no row is an
    O(objects) operation against a paid API on a cron, and pass 1's ordering makes the leak
    one-directional and small. An operator-run reconciliation belongs with `yapm backup`, not here.
@@ -292,8 +300,13 @@ editor attaches on the same autosave that persists the node — but it is a *pol
 
 `POST /api/v1/files`, `multipart/form-data`, fields `file` (required), `teamId` (required),
 `issueId` / `commentId` (optional). Wrapped in `hono/body-limit` at `ATTACHMENT_MAX_BYTES`
-(default 25 MiB), which **rejects on the `Content-Length` header before reading a byte** and also
-bounds the stream, so a lying header cannot be used to exhaust memory. One file per request: batching
+(default 25 MiB). Its two paths are **exclusive**, which is worth stating precisely because the
+comfortable phrasing ("header check *and* stream check") is not what 4.12.31 does: with a usable
+`Content-Length` it rejects **before reading a byte** and then passes the body through uncounted —
+a header understating the body is bounded by the HTTP layer's own content-length framing — and only
+when there is no usable `Content-Length` (chunked) does it count bytes while reading and refuse the
+moment the total passes the ceiling. Either way an over-size body is refused before it is buffered.
+See `reference/server-stack.md` §5.3.1. One file per request: batching
 would make partial failure a shape the client has to reason about, and the browser can issue N
 requests.
 
@@ -335,8 +348,14 @@ Recorded here so the export change inherits it rather than rediscovering it:
   app container to produce a tarball would be both slow and expensive. The `attachment` table is the
   **manifest**: every row names an object that must exist, so an operator can verify a bucket backup
   rather than trust it.
-- Either way the backup is consistent-enough-by-ordering, not atomic: dump the database *after* the
-  files, so every row in the dump has bytes that were already captured.
+- Either way the backup is consistent-enough-by-ordering, not atomic — and the ordering follows from
+  how an upload is written, object before row: dump the database **first**, then capture the files.
+  Every row in a dump taken at T1 names bytes that were on disk before T1 and are therefore still
+  there at T2, so the file capture is a superset of what the dump refers to. The reverse order is
+  the broken one: a file uploaded between the file capture and the dump lands in the dump as a row
+  whose bytes were never captured. The superset costs nothing — objects with no row are exactly the
+  orphans the sweep collects. One residual case: an attachment *deleted* between the dump and the
+  file capture restores as a row whose bytes are gone, which is already an ordinary refusal.
 
 ### D14 — The guard test, on the `search/isolation.test.ts` precedent
 

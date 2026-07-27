@@ -35,8 +35,10 @@ than that is left to you.
   a team that opens drafts at branch creation it would fire on nearly every issue.
 - **A pull request closed without merging drives nothing.** "Closed" can mean superseded by a better
   branch, abandoned, or opened against the wrong base — there is no target that is right more often
-  than it is wrong. An In Review issue whose PR went away is reported by the divergence flag
-  instead.
+  than it is wrong. The issue keeps the status it had, and its reality strip shows the closed PR.
+  Note that the [divergence flag](/features/delivery-signals/#the-divergence-flag) does not fire
+  here either: it flags an In Review issue with *no* pull request or only a draft one, and a closed
+  pull request is neither.
 - **Automation never moves an issue backward.** Backlog → Todo → In Progress → In Review → Done is a
   one-way ladder. A target at or below where the issue already sits is a no-op, so a Done issue that
   acquires a new pull request — a follow-up, a revert, a docs pass — stays Done.
@@ -149,8 +151,10 @@ The **Status automation** section lists every team with its current state and on
 control each. The control is reachable with Tab alone and activates with Enter or Space; the change
 is announced, applies immediately with no round trip, and persists through sync.
 
-Members and viewers do not see the section and cannot write the setting — but they *can* see the
-resulting statuses, and any member can tell whether their team's board moves on its own.
+Members and viewers do not see the section and cannot write the setting; there is no member-visible
+indicator of whether automation is on, so ask a workspace admin if you need to know. What everyone
+does see is the result: the statuses themselves, and the divergence flag wherever status and git
+still disagree.
 
 ## Who performs the transition
 

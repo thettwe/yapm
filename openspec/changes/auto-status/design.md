@@ -887,3 +887,57 @@ existing precedent in `mutators.notification.pg.test.ts` and `mutators.mentions.
 - `docker/docker-compose.yml` parses to exactly three services: `postgres`, `yapm`, `zero-cache`.
 - `git diff --stat main...HEAD -- apps/server/src/connectors/github/` is empty: the union firewall
   holds against the merge base, not just against the working tree.
+
+### I26 — The epoch is compared against the instant of the STATE, not the pull request's activity time
+
+As delivered, both `applyAutoStatusForPullRequest` call sites passed `mutation.updatedAt` as
+`eventAt`. That is GitHub's `pull_request.updated_at` — the last time *anything* happened to the PR,
+which is what D5's edge guard and the out-of-order guard are correctly written against, and exactly
+the wrong clock for D3's epoch. A pull request merged three weeks before a team opted in keeps
+emitting mutations with a fresh `updated_at` forever, so the first comment, label or reconcile sweep
+after the switch would have driven the linked issue to Done — the two-hundred-issues-flip the epoch
+exists to prevent, arriving through the front door rather than through the backfill.
+
+`stateEventAt` now derives the instant of the state being asserted: `mergedAt` for a merge, and — on
+the insert branch only — `openedAt` for an open, so a months-old still-open PR first ingested after
+the opt-in is inert too. The update branch keeps `updatedAt` for `open`, because there an open edge
+is a draft marked ready for review, which happens at the activity time and not at creation.
+`mutation.updatedAt` is unchanged as the out-of-order guard. Both directions are asserted in
+`work-graph.test.ts` and against live Postgres in `auto-status.pg.test.ts`; both new pg cases fail on
+the delivered code.
+
+### I27 — "A fresh instant" is enforced by the mutator, not by the one UI call site
+
+`team.setAutoStatus` wrote `args.since` verbatim, so the guarantee that enabling records *now* held
+only because `connectors-view.tsx` passes `Date.now()` as both `since` and `updatedAt`. The mutator
+is also mounted as an AI tool, where `since` comes from the model and `updatedAt` is minted
+server-side by `callSiteMintedFields` — so a model that supplied a back-dated `since` could enable
+automation with a cut-off before a connector's history and replay a board, which is the one thing
+`MUTATOR_TOOL_KINDS` cites when classifying the tool as a plain `write`.
+
+The stored epoch is now `Math.max(args.since, args.updatedAt)`: never older than the write that set
+it. The clamp is args-derived, so it is identical on the optimistic and authoritative passes, and it
+is a no-op for the web caller. The pg fixture, the only caller that deliberately enables "an hour
+ago", now writes at that instant rather than at `NOW` — a write in the past is what enabling in the
+past means.
+
+### I28 — Two acceptance claims described behaviour the change does not ship
+
+- The closed-PR scenario and the docs page both said an In Review issue whose PR closed without
+  merging is reported by the divergence marker. It is not: `status_ahead_of_pr` fires only when the
+  latest linked PR is absent or `draft`, and this change is forbidden by its own sibling requirement
+  from touching `computeDivergence`. Both now state what ships — no transition, and the marker is
+  silent for a closed PR. Widening it is a change to the divergence capability with its own spec.
+- The docs page told members "any member can tell whether their team's board moves on its own". The
+  column does replicate to every member, and the spec's permission story says so, but no
+  member-visible surface renders it — the only render site is inside the admin-gated section. The
+  page now says to ask an admin.
+
+### I29 — The status-writer guard proved proximity, not containment
+
+`ownerOf` attributed each `tx.mutate.issue.update({status})` to the nearest *preceding*
+`defineMutator`, without proving the write was inside that mutator's body. A status write extracted
+into a module-level helper would have been credited to whichever mutator sat above it and the guard
+would have passed with a second, undriven write path in the file. It now computes the balanced
+`defineMutator(...)` span and requires the write to fall inside one; a write enclosed by none throws
+rather than being silently attributed.

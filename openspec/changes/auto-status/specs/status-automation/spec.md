@@ -77,8 +77,11 @@ under the system principal and is subject to that mutator's own team-scoped auth
 #### Scenario: A pull request closed without merging drives nothing
 
 - **WHEN** a linked pull request is closed without being merged
-- **THEN** no status is written, and an In Review issue whose pull request has gone away is reported
-  by the existing divergence marker rather than by a transition
+- **THEN** no status is written and the issue keeps the status it had. The existing divergence
+  computation is unchanged by this capability, and `status_ahead_of_pr` fires only for an In Review
+  issue with no linked pull request or only a draft one — so a closed-unmerged pull request under an
+  In Review issue is silent today, and widening that marker would be a change to the divergence
+  capability with its own spec, not a consequence of this one
 
 #### Scenario: Automation never moves an issue backward
 

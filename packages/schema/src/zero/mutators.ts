@@ -413,6 +413,12 @@ export type SetTeamAutoStatusArgs = z.infer<typeof setTeamAutoStatusArgs>
 // non-admin learns nothing about whether the id exists. The epoch is minted at the CALL SITE and
 // carried in args — a `Date.now()` here would differ between the optimistic and authoritative
 // passes and silently move the team's cut-off on every rebase.
+//
+// "A fresh instant" is a property of THIS mutator, not of one UI call site: the stored epoch is
+// never older than the write that set it, so no caller — including the AI tool, whose `since` is
+// model-supplied while `updatedAt` is minted server-side — can enable automation with a back-dated
+// cut-off and replay a connector backfill across a board. The clamp is args-derived and therefore
+// identical on every rebase, and a no-op for the web caller, which passes one instant as both.
 export const setTeamAutoStatus = defineMutator(setTeamAutoStatusArgs, async ({ tx, args, ctx }) => {
   if (!canManage(ctx)) throw notAuthorized(args.id)
 
@@ -421,7 +427,7 @@ export const setTeamAutoStatus = defineMutator(setTeamAutoStatusArgs, async ({ t
 
   await tx.mutate.team.update({
     id: args.id,
-    autoStatusSince: args.since,
+    autoStatusSince: args.since === null ? null : Math.max(args.since, args.updatedAt),
     updatedAt: args.updatedAt,
   })
 })

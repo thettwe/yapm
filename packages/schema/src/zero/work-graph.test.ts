@@ -482,6 +482,56 @@ describe('applyWorkGraphMutation — status automation behind the union', () => 
     expect(runQueue).toHaveLength(1)
   })
 
+  // The epoch is compared against the instant of the STATE, not against the pull request's
+  // last-activity time. `updated_at` bumps on a comment, so a pull request that merged long before a
+  // team opted in keeps emitting mutations with a fresh `updated_at` forever; comparing THAT would
+  // hand the backfill the board the epoch exists to protect.
+  it('drives nothing from a merge that predates the opt-in but was commented on after', async () => {
+    const mutation = prMutation({ state: 'merged', mergedAt: 500, updatedAt: 90_000 })
+    const { tx, calls, runQueue } = fakeTx([
+      { id: 'pr-1', teamId: 'team-1', state: 'open', mergedAt: null, updatedAt: 400 },
+      { autoStatusSince: OPT_IN },
+      [{ issueId: 'issue-7' }],
+    ])
+    await applyWorkGraphMutation(tx, CTX, mutation)
+
+    expect(issueWrites(calls)).toEqual([])
+    expect(runQueue).toHaveLength(1)
+  })
+
+  // The same trap on the other transition, and the reason the insert branch uses `openedAt`: a
+  // months-old still-open pull request first ingested by the backfill sweep is a real edge (the row
+  // is new) describing an instant from before the switch.
+  it('drives nothing when a long-open pull request is first seen after the opt-in', async () => {
+    const mutation = prMutation({ state: 'open', openedAt: 500, updatedAt: 90_000 })
+    const { tx, calls, runQueue } = fakeTx([
+      undefined, // findPr -> insert
+      { autoStatusSince: OPT_IN },
+      [{ issueId: 'issue-7' }],
+    ])
+    await applyWorkGraphMutation(tx, CTX, mutation)
+
+    expect(issueWrites(calls)).toEqual([])
+    expect(runQueue).toHaveLength(1)
+  })
+
+  // But a draft marked ready for review is an `open` edge that happens NOW, not when the pull
+  // request was created — so the update branch keeps using the activity time and the transition
+  // still fires for a pull request opened as a draft before the team opted in.
+  it('fires when a pre-opt-in draft is marked ready for review after it', async () => {
+    const mutation = prMutation({ state: 'open', openedAt: 500, updatedAt: 90_000 })
+    const { tx, calls } = fakeTx([
+      { id: 'pr-1', teamId: 'team-1', state: 'draft', mergedAt: null, updatedAt: 600 },
+      { autoStatusSince: OPT_IN },
+      [{ issueId: 'issue-7' }],
+      issueRow(),
+      { id: 'issue-7', teamId: 'team-1' },
+    ])
+    await applyWorkGraphMutation(tx, CTX, mutation)
+
+    expect(issueWrites(calls)).toEqual([{ id: 'issue-7', status: 'in_review', updatedAt: CTX.now }])
+  })
+
   // One delivery that both links and transitions must do both, which is only true because the
   // auto-status call sits AFTER `linkIssues` — a fresh branch push carries the ref and the open
   // state in the same event.

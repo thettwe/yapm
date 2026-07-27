@@ -166,17 +166,23 @@ describe('the set of status-writing mutators is closed', () => {
   const SOURCE = readFileSync(fileURLToPath(new URL('./mutators.ts', import.meta.url)), 'utf8')
 
   const definitions = [...SOURCE.matchAll(/export const (\w+) = defineMutator\(/gu)].map(
-    (match) => ({ index: match.index, ident: match[1] as string }),
+    (match) => ({ open: match.index + match[0].length - 1, ident: match[1] as string }),
   )
 
+  // Containment, not proximity. "The nearest preceding `defineMutator`" would credit a status write
+  // hoisted into a module-level helper to whichever mutator happens to be defined above it, and the
+  // guard would pass while a second, undriven write path existed. So the owner is the mutator whose
+  // `defineMutator(...)` span actually encloses the write, and a write enclosed by none is a hard
+  // failure — it is either a helper that has to be routed through a driven mutator, or a parallel
+  // path into `issue.status`, and both are the hole this test exists to catch.
   function ownerOf(index: number): string {
-    let owner: string | undefined
     for (const definition of definitions) {
-      if (definition.index >= index) break
-      owner = definition.ident
+      if (definition.open >= index) break
+      if (index < definition.open + balanced(definition.open, '(', ')').length) {
+        return definition.ident
+      }
     }
-    if (owner === undefined) throw new Error(`no mutator encloses source offset ${index}`)
-    return owner
+    throw new Error(`no mutator body encloses the issue.status write at source offset ${index}`)
   }
 
   // The slice from `open` to the matching close, balanced so a nested `humanStatusStamp(...)`, a

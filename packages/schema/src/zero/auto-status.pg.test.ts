@@ -152,6 +152,7 @@ describe.skipIf(DATABASE_URL === undefined)('status automation, end to end', () 
     externalId: string
     branch: string
     state?: PrState & ('draft' | 'open' | 'merged' | 'closed')
+    openedAt?: number
     mergedAt?: number | null
     updatedAt?: number
     number?: number
@@ -168,7 +169,7 @@ describe.skipIf(DATABASE_URL === undefined)('status automation, end to end', () 
       state: over.state ?? 'open',
       url: 'https://github.com/acme/app/pull/12',
       headSha: 'abc123',
-      openedAt: OPENED_AT,
+      openedAt: over.openedAt ?? OPENED_AT,
       mergedAt: over.mergedAt ?? null,
       updatedAt: over.updatedAt ?? OPENED_AT,
       issueRefs: parseIssueRefs({ branch: over.branch }),
@@ -204,11 +205,15 @@ describe.skipIf(DATABASE_URL === undefined)('status automation, end to end', () 
     return result.map((row) => row.id)
   }
 
+  // `updatedAt` is the instant of the admin's write, so enabling "an hour ago" is a write an hour
+  // ago. The mutator refuses to store an epoch older than its own write — otherwise an agent could
+  // back-date the cut-off and replay a backfill — so a fixture that wrote at NOW would be asking
+  // for the very thing that is forbidden.
   async function setAutoStatus(teamId: string, since: number | null): Promise<void> {
     await apply((tx) =>
       mutators.team.setAutoStatus.fn({
         tx,
-        args: { id: teamId, since, updatedAt: NOW },
+        args: { id: teamId, since, updatedAt: since ?? NOW },
         ctx: ADMIN,
       }),
     )
@@ -463,6 +468,59 @@ describe.skipIf(DATABASE_URL === undefined)('status automation, end to end', () 
     expect(links[0]?.count).toBe('1')
     // And divergence reports what automation declined to act on.
     expect(await divergence(id)).toBe('status_behind_merge')
+  })
+
+  // The same property, against the thing that actually defeats it: `updated_at` is the pull
+  // request's LAST-ACTIVITY time and bumps on a comment or a label, so a pull request that merged
+  // three weeks before the switch is first seen by the backfill sweep carrying a fresh `updated_at`.
+  // Comparing that against the epoch would drive Done off a merge nobody opted into — which is the
+  // two-hundred-issues-flip scenario the epoch exists to prevent, arriving through the front door.
+  it('drives nothing from a long-merged pull request whose activity time is fresh', async () => {
+    const id = await createIssue(optedInTeamId, 'Merged three weeks before the switch')
+    const number = (await issue(id)).number
+    const before = await issue(id)
+    const threeWeeks = 21 * 24 * HOUR
+
+    await deliver(
+      optedInTeamId,
+      pullRequest({
+        externalId: 'PR_STALE',
+        branch: `feature/${optedInKey}-${number}-thing`,
+        state: 'merged',
+        openedAt: OPT_IN_AT - threeWeeks - HOUR,
+        mergedAt: OPT_IN_AT - threeWeeks,
+        updatedAt: NOW,
+      }),
+    )
+
+    const after = await issue(id)
+    expect(after.status).toBe('todo')
+    expect(after.updated_at.getTime()).toBe(before.updated_at.getTime())
+    expect(await divergence(id)).toBe('status_behind_merge')
+  })
+
+  // And the same trap on the other transition: a pull request opened long before the switch and
+  // still open is first ingested afterwards. The open edge is real — the row is new — but the
+  // instant it describes is not.
+  it('drives nothing from a pull request opened before the switch and first seen after', async () => {
+    const id = await createIssue(optedInTeamId, 'Opened before the switch')
+    const number = (await issue(id)).number
+    const before = await issue(id)
+
+    await deliver(
+      optedInTeamId,
+      pullRequest({
+        externalId: 'PR_OLD_OPEN',
+        branch: `feature/${optedInKey}-${number}-thing`,
+        state: 'open',
+        openedAt: OPT_IN_AT - 2 * HOUR,
+        updatedAt: NOW,
+      }),
+    )
+
+    const after = await issue(id)
+    expect(after.status).toBe('todo')
+    expect(after.updated_at.getTime()).toBe(before.updated_at.getTime())
   })
 
   it('fires on an event exactly at the opt-in instant', async () => {

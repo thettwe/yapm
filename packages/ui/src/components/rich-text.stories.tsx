@@ -127,3 +127,37 @@ export function MentionsReadOnly() {
     </PresetGrid>
   )
 }
+
+// A document naming a node type this bundle does not declare — what a tab left open across a deploy
+// loads. TipTap has already pruned the unknown node by the time this renders, so the editor refuses
+// to exist at all: one keystroke in an editable surface would autosave the pruned document over the
+// real one, and LWW would make it the truth.
+const skewed: JSONContent = {
+  type: 'doc',
+  content: [
+    {
+      type: 'paragraph',
+      content: [{ type: 'text', text: 'The steps to reproduce are in the table below.' }],
+    },
+    {
+      type: 'callout',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Gone.' }] }],
+    },
+  ],
+}
+
+export function BlockedBySchemaSkew() {
+  return (
+    <PresetGrid>
+      <RichTextEditor ariaLabel="Description" defaultValue={skewed} minHeight="6rem" />
+    </PresetGrid>
+  )
+}
+
+export function BlockedBySchemaSkewReadOnly() {
+  return (
+    <PresetGrid>
+      <RichTextRenderer value={skewed} />
+    </PresetGrid>
+  )
+}

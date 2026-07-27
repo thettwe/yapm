@@ -426,3 +426,229 @@ None blocking. Two things are decided-by-default and worth a second look at revi
 2. Whether the read-only `RichTextRenderer` should show the skew banner at all, or render the
    lossy document quietly. This design shows it, on the grounds that a reader silently missing a
    table is the same failure one step downstream.
+
+## Decisions made during implementation
+
+<!-- Appended during the build phase: what was ambiguous, what was chosen, and why. -->
+
+### I1 — Task 1.3: the graph did not split
+
+```
+$ ls node_modules/.pnpm | grep -E '^@tiptap\+(core|pm)@'
+@tiptap+core@3.28.0_@tiptap+pm@3.28.0
+@tiptap+pm@3.28.0
+
+$ ls node_modules/.pnpm | grep -E '^prosemirror-model@'
+prosemirror-model@1.25.11
+
+$ ls node_modules/.pnpm | grep -E '^(lowlight|highlight)'
+highlight.js@11.11.1
+lowlight@3.3.0
+
+$ ls packages/ui/node_modules/@tiptap/
+extension-code-block  extension-code-block-lowlight  extension-image  extension-mention
+extension-table  markdown  pm  react  starter-kit  suggestion
+```
+
+Exactly one `@tiptap/core`, one `@tiptap/pm`, one `prosemirror-model`, and one `highlight.js` shared
+by `lowlight` and the code-block extension. `@tiptap/extension-code-block` resolves in
+`packages/ui/node_modules`, which is the whole reason D4 declares it.
+
+### I2 — Task 3.1: the four `.d.ts` files, as installed
+
+Read before writing any of group 3, because 3.28 postdates the model's training data.
+
+| Package | Exports that matter | Notes |
+|---|---|---|
+| `@tiptap/extension-image` | `Image` (default + named), `ImageOptions`, `SetImageOptions`, `inputRegex` | Attributes are `src`/`alt`/`title`/`width`/`height`; `parseHTML` is `img[src]`; options are `inline`, `allowBase64`, `HTMLAttributes`, `resize` (**not** `resizable`, and it is an object-or-`false`, defaulting to `false`). Ships `parseMarkdown` and `renderMarkdown` reading `attrs.src`. |
+| `@tiptap/extension-table` | **Both**: `Table`, `TableCell`, `TableHeader`, `TableRow` individually **and** a `TableKit` bundle. Plus `renderTableToMarkdown`, `escapeTableCellPipes`, `preprocessTablePipes`, `createTable`, `TableView`, `DEFAULT_CELL_LINE_SEPARATOR`. | The resizing option is **`resizable: boolean`**, default `false` already. `goToNextCell` / `goToPreviousCell` are real commands. The four extensions are used directly rather than through `TableKit`, so `resizable: false` is stated at the one place it is decided. |
+| `@tiptap/extension-code-block` | `CodeBlock`, `CodeBlockOptions` | Its `renderMarkdown` hard-codes three backticks — the defect `editor-markdown` §I11 corrected. |
+| `@tiptap/extension-code-block-lowlight` | `CodeBlockLowlight`, `CodeBlockLowlightOptions` | The lowlight option is plainly **`lowlight`** (typed `any`), alongside `defaultLanguage`. |
+
+Two findings from reading rather than assuming:
+
+- **The table extension already ships markdown both ways.** `renderMarkdown` → `renderTableToMarkdown`,
+  a `parseMarkdown` that builds `tableRow`/`tableHeader`/`tableCell`, and a `markdownTokenizer` that
+  registers GFM table parsing with `marked`. Task 4.2's table case is therefore a *correction* to
+  upstream's renderer, not a new one — see I5.
+- **`Gapcursor` is in this StarterKit** (`@tiptap/extensions`, added unless `gapcursor: false`), so
+  the arrow-key exit from a table works. Verified in `starter-kit/dist/index.js` rather than assumed.
+
+### I3 — `plaintext.ts` has ONE import now, and the header says so
+
+Task 2.2 puts the stamp in `sanitizeRichText`; task 4.1 says to keep `plaintext.ts`'s zero imports.
+Both cannot be literally true unless the constant is duplicated, which is the one thing a version
+constant must never be.
+
+`plaintext.ts` imports `./schema-version.js`, a sibling that itself imports nothing, so the
+**transitive closure is still empty** — which is the property the header comment was protecting.
+`apps/server` still pulls in no TipTap, no React, no ProseMirror; `check-boundaries.mjs` rule 3 is
+green. The header comment was rewritten to say "exactly one import — a sibling that itself imports
+nothing" rather than left claiming something untrue.
+
+### I4 — 🔴 The image node has ONE parse rule, and it is not `parseHTML: () => []`
+
+The plan says `parseHTML: () => []` "so no pasted `<img>` becomes an image node". Written literally
+that also **loses every image on an internal copy/paste**: `prosemirror-view` round-trips a copied
+slice through `renderHTML` → `data-pm-slice` HTML → `parseHTML`, and a node type with no parse rule
+cannot come back. Copy a paragraph containing an image, paste it one line down, and the image is
+gone with nothing said — which is the same class of silent loss the schema-skew guard exists to
+prevent, and shipping the guard beside it would be incoherent.
+
+So the rule is `img[data-attachment-id]`, with `getAttrs` returning `false` unless the attribute is
+present, non-empty and not URL-shaped. `data-attachment-id` is an attribute nothing outside yapm
+emits, and the node declares **no `src` attribute at all**, so:
+
+- a pasted `<img src="https://tracker.example/p.png">` matches no rule and mints nothing;
+- a crafted `<img data-attachment-id="…">` can mint a node naming an id the pasting user may not
+  own — and that is inert, because permission is checked server-side per request on `team_id` and
+  the refusal is byte-identical to "no such attachment";
+- `sanitizeRichText` refuses a URL-shaped `attachmentId` again on the authoritative pass.
+
+The purpose clause of the instruction — no pasted `<img>` becomes an image node — holds exactly. If
+review disagrees, the revert is one `parseHTML` body.
+
+### I5 — Three corrections to `@tiptap/extension-table`'s shipped markdown renderer
+
+All on the public `renderMarkdown` `NodeConfig` field, none touching `MarkdownManager`.
+
+1. **A `|` typed in a cell splits the cell.** `renderTableToMarkdown` escapes pipes only inside
+   backtick code spans (`escapeTableCellPipes`), so `a | b` as prose emits `| a | b |` and re-parses
+   one column wider. The fix wraps the `helpers` object handed to the renderer so that
+   `renderChildren` escapes pipes in the cell text it returns — reusing upstream's whole layout pass
+   rather than reimplementing it. The escape walks backslash pairs rather than using a regex, because
+   the text encoder has already escaped backslashes and `\\` must not gain a third.
+2. **A multi-block cell emits U+001F.** `DEFAULT_CELL_LINE_SEPARATOR` is the unit separator, and the
+   renderer's own `collapseWhitespace` is `/\s+/`, which does not match it — so a cell holding two
+   paragraphs reached the clipboard with a literal control character in it. Passing
+   `cellLineSeparator: ' '` gives the space-joined line §D8 specifies.
+3. **`codeBlockToMarkdown` moved onto `CodeBlockLowlight`**, and `PortableStarterKit`'s
+   `addExtensions` override is deleted — StarterKit's `codeBlock` is now `false` and nothing else
+   needed the override. It also learned one thing: a `plaintext` block emits a **bare** fence, since
+   ` ```plaintext ` pasted into GitHub is noise nobody wrote.
+
+### I6 — Languages are ACCEPTED as aliases, and `lowlight` is reached through an adapter
+
+§D4's curated list is sixteen entries. Coercing everything else to `plaintext` broke four shipped
+`editor-markdown` round-trip tests, because ` ```ts ` and ` ```md ` are what people actually write
+and coercion rewrote the author's fence.
+
+Two mechanisms, decided by reading the plugin's source:
+
+- **`LANGUAGE_ALIASES`** — `ts`, `js`, `jsx`, `md`, `sh`, `zsh`, `py`, `rs`, `yml`, `golang`,
+  `docker`, `patch`, `xml`, `text`, `txt`. Each is *accepted verbatim* (so a round trip returns the
+  author's fence) and maps to the selector entry it belongs to (so the `<select>` shows "TypeScript"
+  for a `ts` block rather than rendering blank). Every one was verified to resolve against the
+  registered grammars by running it; `shell` does not resolve and is therefore not in the list.
+- **A `lowlight` adapter, not the raw instance.** `LowlightPlugin` decides whether to highlight at
+  all with `lowlight.listLanguages().includes(language)` — registered names, **not** aliases — or
+  `highlight.getLanguage(language)` against the **global** `highlight.js/lib/core` singleton, which
+  `createLowlight()`'s private instance never populates (verified: `core.getLanguage('typescript')`
+  is `false` after registering it on the instance). A ` ```ts ` block would fail both gates and fall
+  through to `highlightAuto` — a detection pass per keystroke, guessing. The adapter answers for the
+  accepted set and refuses to throw, since `lowlight.highlight` throws on an unknown name and a
+  document is user-controlled input.
+
+`defaultLanguage: 'plaintext'` for the same reason: without it every unlabelled block runs
+`highlightAuto` on every transaction.
+
+An **unrecognised** language still coerces to `plaintext` inbound, per §D8. A **bare** fence keeps
+the node's own `null` rather than being written to `plaintext` — they mean the same thing to the
+renderer and the selector, and writing one would be attribute churn on every paste.
+
+### I7 — The image's markdown path is computed in the PRE-WALK, like a mention's display name
+
+`packages/ui` may not know the API base (CLAUDE.md #3), and the markdown manager is a module-level
+singleton built from `createRichTextExtensions()` with **no** options — so a per-call
+`resolveAttachmentSrc` cannot reach an extension's config. `normalizeForMarkdown` therefore rewrites
+`{attachmentId, alt, width}` into `{alt, src}` and the extension's `renderMarkdown` emits
+`![alt](src)`. Exactly the mechanism `editor-markdown` already uses for `resolveMentionName`.
+
+**With no resolver the image degrades to its alt text** rather than emitting `![alt]()`, which would
+re-parse as an image with an empty target. Storybook and the unit tests are the only surfaces
+without one; `apps/web` supplies it in task 7.4.
+
+Inbound, `![alt](url)` becomes a **link labelled with the alt** (§D8). One thing the plan did not
+anticipate: a lone `![alt](url)` line arrives as a **doc-level** image node, and the link it degrades
+to is inline — a `doc` requires `block+`, so `coerceInbound` wraps it in a paragraph at that one
+depth. Without the wrap the whole node is dropped on `setContent`.
+
+### I8 — The plaintext walker carries one bit of context, and separators can be upgraded
+
+§D9's table row is not reachable by a stateless case. A cell is a **block** container, so its
+paragraphs would each end a line and a three-column row would arrive at `search_document` as three
+lines. `walkText` gained an `inCell` flag: inside a cell every block separator is a space, and the
+`tableRow` node — which is not `inCell` — still ends the line.
+
+Two mechanical corrections that followed:
+
+- **Separator collapsing had to become stateful.** Runs of `\n` collapse in the final join, but runs
+  of `' '` survive it as literal double spaces. Comparing the last pushed part against the break
+  strings is wrong — a text node whose whole content is one space is indistinguishable from a cell
+  separator by value, and mistaking one for the other welds two blocks together. The sink tracks the
+  pending separator explicitly.
+- **A row break must REPLACE a trailing cell separator.** A row's last cell pushes a space and then
+  the row has to end the line; a plain "skip if a separator is already pending" dropped the newline
+  and welded every row of the table into one line. Caught by the test, not by reading.
+
+`codeBlock` needed no case and now carries a comment saying so, so a later refactor of the default
+cannot silently change it.
+
+### I9 — `isRichTextEmpty` counts a table as structural
+
+Not in the plan. A description holding one empty table is not an empty description, and without the
+case the placeholder would draw over a table the user just inserted. One line beside the existing
+`horizontalRule` / `image` case.
+
+### I10 — Task 2.2's "update the tests that assert an exact document" reached three files
+
+The stamp changes what `sanitizeRichText` returns, so every test asserting a stored document
+verbatim moved: `plaintext.test.ts` (one case, now asserting the document *below* the stamp),
+`zero/mutators.test.ts` and `zero/mutators.issue.test.ts`.
+
+⚠️ That means `git diff --stat origin/main -- packages/schema/src/zero` is **not** empty, which
+task 12.3 expects. The two entries are `mutators.test.ts` and `mutators.issue.test.ts` — expectation
+updates only, no mutator body, no ZQL, no new mutator. 12.3 should be read as "no *behaviour* in
+`src/zero` moved", and the close phase should record these two files as the expected entries rather
+than treating a non-empty diff as a failure.
+
+### I11 — The capability guard has no test-file exclusion, and it caught a test asserting the ban
+
+`apps/server/src/storage/no-capability.test.ts` rule (c) greps `packages/schema/src/rich-text` and
+`packages/ui/src` for an attribute whose value opens with an absolute URL. Writing the sanitizer test
+for §D2 — the one that proves a tracking-pixel `src` is dropped — tripped it, and so did the comment
+explaining why. Exactly the shape `attachments` §I6 recorded for rule (a), which excludes `.test.ts`
+for precisely this reason; rule (c) does not.
+
+`apps/server` gets no diff in this change (§D13), so the fixture is assembled instead of written as a
+literal, with a comment naming the guard. **The close phase should give rule (c) the same
+`.test.ts` exclusion rule (a) has** — a guard that a test about the invariant cannot state is a guard
+that will be worked around rather than read.
+
+### Evidence: the falsifiable check can fail (task 10.8, first leg)
+
+`packages/ui/src/components/rich-text.skew.test.tsx`, 6 tests, all green. Neutering the guard — one
+`if (false && skew.blocked)` in `RichTextEditor`, restored afterwards — fails **2 of 6**:
+
+```
+× the write is structurally refused > renders the blocked state, exposes no editable region,
+  and never fires onChange
+    TestingLibraryElementError: Unable to find an element by: [data-testid="rich-text-blocked"]
+× the write is structurally refused > says why, in a status region a screen reader announces
+```
+
+The other four are the hazard and the detector, which do not depend on the component: leg 1 builds a
+real `Editor` over the extension set with the five new node types removed and observes TipTap prune
+the image and the table while leaving the paragraph behind, and leg 2 reports that same document
+blocked against that same reduced schema. Both are unwritable against `origin/main`, where neither
+the node types nor `detectRichTextSkew` exist.
+
+### Not done in this pass
+
+Groups 6–9, 11 and 12 are the later passes'. Two items inside groups 1–5 are also open and are named
+rather than ticked:
+
+- **Task 3.8** — the real-browser check that the editor constructs with all three node types and that
+  `prosemirror-model` is loaded exactly once. jsdom cannot see a duplicated `prosemirror-model`; the
+  `node_modules/.pnpm` evidence in I1 is necessary but not sufficient.
+- **Task 12.2** — the client bundle delta from `lowlight` + `highlight.js` + the three extensions.

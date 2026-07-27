@@ -1,6 +1,7 @@
 import { mustGetMutator, type Transaction } from '@rocicorp/zero'
 import { describe, expect, it } from 'vitest'
 import { newId } from '../id.js'
+import { RICH_TEXT_SCHEMA_VERSION } from '../rich-text/schema-version.js'
 import type { AuthContext } from './context.js'
 import { MutationErrorCode, mutationErrorCode } from './errors.js'
 import {
@@ -845,8 +846,12 @@ describe('sanitizeRichText on every document write path', () => {
       },
     ],
   }
+  // The stored document also gains `attrs.schemaVersion`. That stamp is what lets a client detect
+  // that a document was written by a NEWER bundle than the one it is running and refuse to save over
+  // it — asserted on its own in `rich-text/schema-version.test.ts`.
   const clean = {
     type: 'doc',
+    attrs: { schemaVersion: RICH_TEXT_SCHEMA_VERSION },
     content: [
       {
         type: 'paragraph',

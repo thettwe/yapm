@@ -2,11 +2,24 @@ export { newId } from './id.js'
 export type { MentionRenderMode, RichTextToPlainTextOptions } from './rich-text/plaintext.js'
 export {
   extractMentionIds,
+  IMAGE_ALT_MAX_LENGTH,
+  IMAGE_NODE_TYPE,
+  IMAGE_WIDTHS,
   MENTION_LABEL_MAX_LENGTH,
   MENTION_NODE_TYPE,
   richTextToPlainText,
   sanitizeRichText,
 } from './rich-text/plaintext.js'
+export type {
+  RichTextSkew,
+  RichTextSkewKnownTypes,
+  RichTextSkewReason,
+} from './rich-text/schema-version.js'
+export {
+  detectRichTextSkew,
+  RICH_TEXT_SCHEMA_VERSION,
+  RICH_TEXT_SCHEMA_VERSION_ATTR,
+} from './rich-text/schema-version.js'
 export type {
   LocalSearchCandidate,
   LocalSearchKind,

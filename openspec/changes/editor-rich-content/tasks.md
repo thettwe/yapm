@@ -12,25 +12,25 @@ phase's.
 
 ## 1. Dependencies
 
-- [ ] 1.1 Add six entries to the `catalog:` block in `pnpm-workspace.yaml`, alphabetical, each with
+- [x] 1.1 Add six entries to the `catalog:` block in `pnpm-workspace.yaml`, alphabetical, each with
       a one-line CLAUDE.md §5 justification: `'@tiptap/extension-code-block': 3.28.0`,
       `'@tiptap/extension-code-block-lowlight': 3.28.0`, `'@tiptap/extension-image': 3.28.0`,
       `'@tiptap/extension-table': 3.28.0`, `'highlight.js': ^11.11.1`, `lowlight: ^3.3.0`.
       **Exact, never a caret, on all four TipTap entries** — their peers on `@tiptap/core` and
       `@tiptap/pm` are exact and a split resolution is a runtime failure that passes typecheck.
       Note in the comment that `highlight.js` is BSD-3-Clause.
-- [ ] 1.2 Add all six to `packages/ui/package.json` as `catalog:`. **`@tiptap/extension-code-block`
+- [x] 1.2 Add all six to `packages/ui/package.json` as `catalog:`. **`@tiptap/extension-code-block`
       is declared explicitly**, not left to StarterKit: `code-block-lowlight` peer-requires it
       exactly and imports it at runtime, and under pnpm's strict layout it would otherwise resolve
       inside starter-kit's `node_modules` and duplicate `prosemirror-model`. Run
       `node scripts/check-catalog.mjs`.
-- [ ] 1.3 `pnpm install`, then verify the graph did not split the way `editor-markdown` §"Evidence"
+- [x] 1.3 `pnpm install`, then verify the graph did not split the way `editor-markdown` §"Evidence"
       did: `ls node_modules/.pnpm | grep -E '^@tiptap\+(core|pm)@'` must show exactly one of each.
       Record the actual output in design.md §"Decisions made during implementation".
 
 ## 2. 🔴 The schema-skew guard — before any new node type
 
-- [ ] 2.1 Create `packages/schema/src/rich-text/schema-version.ts`. **It imports nothing**, for the
+- [x] 2.1 Create `packages/schema/src/rich-text/schema-version.ts`. **It imports nothing**, for the
       reason `plaintext.ts` states in its header comment — copy that constraint into this file's
       header. Export `RICH_TEXT_SCHEMA_VERSION = 2`, `RICH_TEXT_SCHEMA_VERSION_ATTR = 'schemaVersion'`,
       a `RichTextSkew` result type, and a pure
@@ -39,15 +39,15 @@ phase's.
       `doc.attrs.schemaVersion` (absent ⇒ 1) against `RICH_TEXT_SCHEMA_VERSION`. Total on malformed
       input, like the rest of the file's neighbours: anything unwalkable contributes nothing rather
       than throwing.
-- [ ] 2.2 Stamp the version in `sanitizeRichText` (`plaintext.ts`): the returned doc's `attrs` gain
+- [x] 2.2 Stamp the version in `sanitizeRichText` (`plaintext.ts`): the returned doc's `attrs` gain
       `schemaVersion: RICH_TEXT_SCHEMA_VERSION`. Pure, deterministic, mints nothing — it must
       produce the identical document on the optimistic and the authoritative pass, which is the
       property that keeps rebase from visibly rewriting the user's text. Confirm the existing
       `sanitizeRichText` tests still pass and update the ones that assert an exact document.
-- [ ] 2.3 Export `schema-version.ts` from `packages/schema/src/rich-text/`'s barrel and from the
+- [x] 2.3 Export `schema-version.ts` from `packages/schema/src/rich-text/`'s barrel and from the
       package's `@yapm/schema` subpath exactly as `plaintext.ts` is exported. Run
       `node scripts/check-boundaries.mjs` — the new file must not trip rule 3.
-- [ ] 2.4 **Test (unit)** `packages/schema/src/rich-text/schema-version.test.ts`: an unknown node
+- [x] 2.4 **Test (unit)** `packages/schema/src/rich-text/schema-version.test.ts`: an unknown node
       type is reported; an unknown mark type is reported; a document naming only known types with no
       stamp is clean; a stamp above the constant is reported even when every type is known; a stamp
       equal to or below it is clean; malformed input (a string, `null`, a cyclic-free but weirdly
@@ -55,39 +55,39 @@ phase's.
 
 ## 3. The three node types
 
-- [ ] 3.1 Read the installed `.d.ts` for all four new packages in `node_modules` **before writing
+- [x] 3.1 Read the installed `.d.ts` for all four new packages in `node_modules` **before writing
       any of this group**. Record in design.md §"Decisions made during implementation" the actual
       exported names and option shapes for `@tiptap/extension-table` (is it `Table` + `TableRow` +
       `TableHeader` + `TableCell`, a `TableKit`, or both? what is the resizing option called?) and
       for `@tiptap/extension-code-block-lowlight` (option name for the lowlight instance). Do not
       write these from memory — 3.28 postdates the model's training data.
-- [ ] 3.2 Add the image node to `createRichTextExtensions()` in `packages/ui/src/components/rich-text.tsx`:
+- [x] 3.2 Add the image node to `createRichTextExtensions()` in `packages/ui/src/components/rich-text.tsx`:
       `Image.extend(...)` keeping the name `image`, with attributes exactly `attachmentId` (string,
       required), `alt` (string, default `''`) and `width` (`'small' | 'medium' | 'full'`, default
       `'full'`). **`parseHTML: () => []`** so no pasted `<img>` becomes an image node, and a
       `renderHTML` that emits `<img>` only when a resolver is supplied. Add
       `resolveAttachmentSrc?: (attachmentId: string, variant: 'thumb' | 'full') => string` to
       `RichTextExtensionOptions` and thread it through `RichTextEditor` and `RichTextRenderer` props.
-- [ ] 3.3 Harden `sanitizeRichText` for image nodes: drop every attribute outside the permitted three
+- [x] 3.3 Harden `sanitizeRichText` for image nodes: drop every attribute outside the permitted three
       and reject any URL-shaped value (`/^\s*[a-z][a-z0-9+.-]*:|^\/\//i`). This runs on the
       authoritative pass, so it is what makes "no URL is ever stored" true rather than merely
       intended. **Test (unit)** in the existing `plaintext.test.ts`.
-- [ ] 3.4 Add a React node view for the image (`packages/ui/src/components/image-node.tsx`):
+- [x] 3.4 Add a React node view for the image (`packages/ui/src/components/image-node.tsx`):
       `NodeViewWrapper`, `contentEditable={false}`, `loading="lazy"`, `decoding="async"`, alt text on
       the `<img>` and on the wrapper's `aria-label`, a visible selected outline driven by
       ProseMirror's `selected` prop (not colour alone), and the alt-text placeholder branch when no
       resolver is supplied.
-- [ ] 3.5 Add the table nodes with a header row and **`resizable` off** (D3). Confirm `Gapcursor` is
+- [x] 3.5 Add the table nodes with a header row and **`resizable` off** (D3). Confirm `Gapcursor` is
       actually in the configured StarterKit rather than assuming it — the arrow-key exit from a table
       depends on it. Verify `goToNextCell` is the Tab binding the extension ships and that it is not
       shadowed by anything already bound.
-- [ ] 3.6 Replace the code block: `StarterKit.configure({ codeBlock: false })` plus
+- [x] 3.6 Replace the code block: `StarterKit.configure({ codeBlock: false })` plus
       `CodeBlockLowlight` over a `createLowlight()` instance registering exactly the curated language
       list in design §D4. **Move `codeBlockToMarkdown` onto the new extension** — it is the shipped
       fix for a code block containing its own fence and its round-trip test will fail if it is
       dropped. Delete `PortableStarterKit`'s now-empty `addExtensions` override if nothing else needs
       it.
-- [ ] 3.7 Add a language selector to the code block's node view, listing only registered languages
+- [x] 3.7 Add a language selector to the code block's node view, listing only registered languages
       plus plain text, as a native `<select>` with an accessible name.
 - [ ] 3.8 Verify in a real browser (not jsdom) that an editor with all three node types constructs,
       that `prosemirror-model` is loaded exactly once, and that a document holding all three
@@ -96,37 +96,37 @@ phase's.
 
 ## 4. Walker and serialiser cases — with the node types, never after
 
-- [ ] 4.1 Add walker cases to `packages/schema/src/rich-text/plaintext.ts` per design §D9: `image`
+- [x] 4.1 Add walker cases to `packages/schema/src/rich-text/plaintext.ts` per design §D9: `image`
       contributes its trimmed, length-bounded `alt` (nothing when empty); the table node family
       separates cells within a row and rows from one another; `codeBlock` is confirmed correct by
       default and gets a comment saying so, so a later refactor of the default does not silently
       change it. Keep the file's zero imports.
-- [ ] 4.2 Add `renderMarkdown` cases (design §D8) on the new extensions in
+- [x] 4.2 Add `renderMarkdown` cases (design §D8) on the new extensions in
       `packages/ui/src/lib/markdown.ts`'s node set — **on the extension configs, not in the manager**;
       `@tiptap/core` 3.28 declares `renderMarkdown` on `NodeConfig`, so this is additive. Table →
       GFM pipe table with `|` escaped in cells; image → `![alt](<resolved path>)`; code block keeps
       the content-dependent fence and gains its language.
-- [ ] 4.3 Add the inbound coercions in `markdownToRichText`'s `coerceInbound`: an inbound `image`
+- [x] 4.3 Add the inbound coercions in `markdownToRichText`'s `coerceInbound`: an inbound `image`
       node degrades to a link labelled with its alt (design §D8 — an image node names an attachment
       row, and a pasted URL names nothing this instance owns); an inbound code block's language is
       coerced to a registered language or `plaintext`; a table passes through.
-- [ ] 4.4 Confirm the shipped inline-code-span characterisation test (`editor-markdown` §I7) is still
+- [x] 4.4 Confirm the shipped inline-code-span characterisation test (`editor-markdown` §I7) is still
       green and unchanged. It documents an unfixed defect on purpose; this change neither fixes nor
       breaks it.
 
 ## 5. The blocked "reload to edit" state
 
-- [ ] 5.1 In `packages/ui/src/components/rich-text.tsx`, derive the known-type sets **once** from
+- [x] 5.1 In `packages/ui/src/components/rich-text.tsx`, derive the known-type sets **once** from
       `getSchema(createRichTextExtensions())` — `Object.keys(schema.nodes)` and
       `Object.keys(schema.marks)` — never a hand-written list.
-- [ ] 5.2 In `RichTextEditor`, run `detectRichTextSkew` on `defaultValue` before constructing the
+- [x] 5.2 In `RichTextEditor`, run `detectRichTextSkew` on `defaultValue` before constructing the
       editor. Blocked ⇒ render a non-editable `RichTextRenderer` over the value plus a banner
       (`role="status"`, the reason, and a `Reload` button calling `location.reload()`), and wire
       **neither** `onChange` nor `onSubmit`. Structural, not a flag: there must be no editable editor
       instance in that branch.
-- [ ] 5.3 Show the same notice (without the reload button) in `RichTextRenderer` when the value is
+- [x] 5.3 Show the same notice (without the reload button) in `RichTextRenderer` when the value is
       blocked, so a reader is not silently missing content.
-- [ ] 5.4 Add a `rich-text.stories.tsx` story for the blocked state so it is visible in the themed
+- [x] 5.4 Add a `rich-text.stories.tsx` story for the blocked state so it is visible in the themed
       showcase across every preset.
 
 ## 6. The insert menu
@@ -199,7 +199,7 @@ phase's.
 
 ## 10. Tests
 
-- [ ] 10.1 **Test (unit) — the falsifiable check.** `packages/ui/src/components/rich-text.skew.test.tsx`
+- [x] 10.1 **Test (unit) — the falsifiable check.** `packages/ui/src/components/rich-text.skew.test.tsx`
       (jsdom): (a) build a real `Editor` over an extension set with the image and table extensions
       **removed** and load a document containing both — assert TipTap really does prune them, so the
       hazard is demonstrated rather than asserted; (b) `detectRichTextSkew` reports that document
@@ -215,11 +215,11 @@ phase's.
       `onCancel` is **not** called, and the draft survives; with no popup open, Escape still calls
       `onCancel`; the mention popup's existing behaviour is unchanged. Falsify it by removing
       `host.consume` from the slash controller and confirm it fails.
-- [ ] 10.4 **Test (unit)** markdown round-trips for all three node types, including a `|` inside a
+- [x] 10.4 **Test (unit)** markdown round-trips for all three node types, including a `|` inside a
       cell, a code block containing its own fence, an image with and without alt, and the inbound
       cases: `![](url)` becomes a link, a GFM table becomes a table, an unregistered fence language
       coerces.
-- [ ] 10.5 **Test (unit)** the plaintext walker: an image's alt is projected, table cells do not weld
+- [x] 10.5 **Test (unit)** the plaintext walker: an image's alt is projected, table cells do not weld
       together, a mention inside a table cell is still extracted by `extractMentionIds`.
 - [ ] 10.6 **Test (unit)** `contrast.test.ts` covers the new tokens (this is 9.4; listed here so the
       close phase does not skip it).

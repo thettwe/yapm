@@ -48,7 +48,17 @@ catalog:
   # suggestion packages carry EXACT peer ranges on `@tiptap/core` and `@tiptap/pm`, so a split
   # resolution duplicates the ProseMirror `model` package and throws
   # `RangeError: Adding different instances of a keyed plugin` at runtime — invisible to typecheck.
+  #
+  # `@tiptap/extension-code-block` is declared EXPLICITLY here and in `packages/ui`, not inherited
+  # from StarterKit: `-code-block-lowlight` peer-requires it at exactly 3.28.0 and imports it at
+  # runtime, and under pnpm's strict layout an undeclared peer resolves inside starter-kit's own
+  # `node_modules` — a second `prosemirror-model`, and a throw at RUNTIME after typecheck, lint and
+  # `vite build` have all passed.
+  '@tiptap/extension-code-block': 3.28.0
+  '@tiptap/extension-code-block-lowlight': 3.28.0
+  '@tiptap/extension-image': 3.28.0
   '@tiptap/extension-mention': 3.28.0
+  '@tiptap/extension-table': 3.28.0
   '@tiptap/markdown': 3.28.0
   '@tiptap/pm': 3.28.0
   '@tiptap/react': 3.28.0
@@ -76,11 +86,20 @@ catalog:
   # boot is exactly a cron pg-boss will accept at schedule time.
   cron-parser: ^5.6.2
   fractional-indexing: ^4.0.0
+  # CLAUDE.md §5 justification: BSD-3-Clause — AGPL-compatible, and the FIRST non-MIT/Apache runtime
+  # dependency in the client bundle, so it is named in TECHSTACK.md and the licence audit rather
+  # than passing unremarked. Reached only through `lowlight`, and only the curated grammars in
+  # `reference/frontend-build.md` §11.7 are registered — never `lowlight.common`, which is ~37.
+  # No `highlight.js` stylesheet is ever loaded: the `hljs-*` classes map to `--code-*` tokens.
+  'highlight.js': ^11.11.1
   hono: ^4.12.31
   jose: ^6.2.4
   jsdom: ^29.1.1
   kysely: 0.28.17
   lefthook: ^2.1.10
+  # MIT, and the only syntax-highlighting adapter `@tiptap/extension-code-block-lowlight` accepts.
+  # Depends on `highlight.js: ~11.11.0`, so the two resolve to one copy.
+  lowlight: ^3.3.0
   lucide-react: ^1.26.0
   nodemailer: ^9.0.3
   octokit: ^5.0.5

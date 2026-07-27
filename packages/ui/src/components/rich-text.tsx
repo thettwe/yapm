@@ -1,4 +1,13 @@
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
+import Image, { type ImageOptions } from '@tiptap/extension-image'
 import Mention, { type MentionNodeAttrs } from '@tiptap/extension-mention'
+import {
+  renderTableToMarkdown,
+  Table,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from '@tiptap/extension-table'
 import { Node as ProseMirrorNode, Slice } from '@tiptap/pm/model'
 import { PluginKey } from '@tiptap/pm/state'
 import type { EditorProps } from '@tiptap/pm/view'
@@ -6,25 +15,36 @@ import {
   EditorContent,
   Extension,
   type Extensions,
+  getSchema,
   type InputRule,
   type JSONContent,
   type MarkdownRendererHelpers,
   markInputRule,
   markPasteRule,
   mergeAttributes,
+  ReactNodeViewRenderer,
   textblockTypeInputRule,
   useEditor,
   useEditorState,
 } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { exitSuggestion, type SuggestionOptions, type SuggestionProps } from '@tiptap/suggestion'
+import {
+  detectRichTextSkew,
+  IMAGE_NODE_TYPE,
+  type RichTextSkew,
+  type RichTextSkewKnownTypes,
+} from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
+import { CodeBlockNodeView } from '@yapm/ui/components/code-block-node'
+import { type AttachmentSrcResolver, ImageNodeView } from '@yapm/ui/components/image-node'
 import {
   MentionList,
   mentionAnnouncement,
   mentionOptionId,
   nextMentionIndex,
 } from '@yapm/ui/components/mention-list'
+import { lowlight, PLAIN_TEXT_LANGUAGE } from '@yapm/ui/lib/code-languages'
 import { markdownToRichText, richTextToMarkdown } from '@yapm/ui/lib/markdown'
 import { type MentionCandidate, matchMentions } from '@yapm/ui/lib/mention-match'
 import { cn } from '@yapm/ui/lib/utils'
@@ -52,7 +72,7 @@ import { createPortal } from 'react-dom'
 
 export type RichTextValue = JSONContent
 
-export type { MentionCandidate }
+export type { AttachmentSrcResolver, MentionCandidate }
 
 // `MentionPluginKey` is NOT exported by @tiptap/extension-mention 3.28 — it survives only in a
 // JSDoc `@default`. Every editor instance gets its own EditorState, so one shared key object is
@@ -159,29 +179,196 @@ const MarkdownShortcuts = Extension.create({
 //
 // `renderMarkdown` is a public `NodeConfig` field declared by `@tiptap/core` 3.28 itself
 // (`reference/frontend-build.md` §11.6), so this is the supported seam rather than another private
-// method. It is reached by extending StarterKit's own `addExtensions` instead of importing
-// `@tiptap/extension-code-block`: that package is not a declared dependency here, and adding it
-// would put a second catalog pin on something StarterKit already resolves at the same version.
+// method. It MOVED here from `StarterKit.extend({ addExtensions })` when the code block became
+// `CodeBlockLowlight`: it is the shipped fix for a block containing its own fence, and dropping it
+// fails `editor-markdown`'s round-trip test.
 function codeBlockToMarkdown(node: JSONContent, helpers: MarkdownRendererHelpers): string {
-  const language = typeof node.attrs?.language === 'string' ? node.attrs.language : ''
+  const declared = node.attrs?.language
+  // `plaintext` emits a BARE fence: it is this editor's fallback for "no language", and a
+  // ```plaintext fence pasted into GitHub is noise nobody wrote.
+  const language = typeof declared === 'string' && declared !== PLAIN_TEXT_LANGUAGE ? declared : ''
   const body = node.content ? helpers.renderChildren(node.content) : ''
   const longestRun = [...body.matchAll(/`+/g)].reduce((max, run) => Math.max(max, run[0].length), 0)
   const fence = '`'.repeat(Math.max(3, longestRun + 1))
   return `${fence}${language}\n${body}\n${fence}`
 }
 
-const PortableStarterKit = StarterKit.extend({
-  addExtensions() {
-    return (this.parent?.() ?? []).map((extension) =>
-      extension.name === 'codeBlock'
-        ? extension.extend({ renderMarkdown: codeBlockToMarkdown })
-        : extension,
-    )
+/**
+ * The syntax-highlighted code block. StarterKit's own `codeBlock` is switched off so exactly one
+ * code-block node type exists.
+ *
+ * `@tiptap/extension-code-block` is a DECLARED dependency of this package rather than something
+ * inherited from StarterKit: `-code-block-lowlight` peer-requires it at exactly 3.28.0 and imports
+ * it at runtime, and under pnpm's strict layout an undeclared peer resolves inside starter-kit's own
+ * `node_modules`, duplicating `prosemirror-model` and throwing at RUNTIME after typecheck, lint and
+ * `vite build` have all passed.
+ */
+const HighlightedCodeBlock = CodeBlockLowlight.configure({
+  lowlight,
+  // Without this the plugin calls `highlightAuto` on every unlabelled block, on every transaction:
+  // a detection pass per keystroke, and colours nobody asked for in a block of prose.
+  defaultLanguage: PLAIN_TEXT_LANGUAGE,
+}).extend({
+  renderMarkdown: codeBlockToMarkdown,
+  addNodeView() {
+    return ReactNodeViewRenderer(CodeBlockNodeView)
   },
 })
 
+// A `|` inside a cell ends the cell as far as every GFM reader is concerned. 3.28.0's
+// `renderTableToMarkdown` escapes pipes only inside backtick code spans (`escapeTableCellPipes`),
+// so `a | b` typed as prose in a cell silently becomes two columns.
+//
+// Walked pair by pair rather than replaced by regex: the text encoder has already escaped
+// backslashes, so `\\` must stay a literal backslash and `\|` must not gain a second one.
+function escapeCellPipes(text: string): string {
+  let out = ''
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index] as string
+    if (char === '\\' && index + 1 < text.length) {
+      out += char + (text[index + 1] as string)
+      index += 1
+      continue
+    }
+    out += char === '|' ? '\\|' : char
+  }
+  return out
+}
+
+const TABLE_MARKDOWN_OPTIONS = {
+  // 3.28.0's default is U+001F, which `collapseWhitespace` does NOT match (`\s` does not cover it)
+  // and which therefore reaches the clipboard as a literal control character. A cell holding two
+  // paragraphs flattens to a space-joined line, which is all GFM can carry anyway.
+  cellLineSeparator: ' ',
+}
+
+const PortableTable = Table.configure({
+  // A column width is a SYNCED attribute and a drag handle is a pointer-only affordance. Column
+  // widths are also the single most common source of LWW churn in every editor that has them.
+  // Tables size to content.
+  resizable: false,
+}).extend({
+  renderMarkdown: (node, helpers) =>
+    renderTableToMarkdown(
+      node,
+      {
+        ...helpers,
+        renderChildren: (content) => escapeCellPipes(helpers.renderChildren(content)),
+      },
+      TABLE_MARKDOWN_OPTIONS,
+    ),
+})
+
+/**
+ * The image node, REDEFINED rather than configured.
+ *
+ * The stored node carries an opaque `attachmentId` and NO URL — not even a relative path. A document
+ * syncs through Zero, so whatever string sits in a node replicates to every team member's IndexedDB
+ * and persists as long as the document does: a URL there is a bearer capability at rest on every
+ * client. `apps/server`'s storage seam has no `getUrl()` for the same reason, and the path is
+ * computed at render time from a resolver the application supplies (`packages/ui` may not know the
+ * API base — packages never import apps).
+ *
+ * 3.28.0's own node declares `src` / `title` / `width` / `height` and parses any `img[src]`. All of
+ * that is replaced. `sanitizeRichText` enforces the same three attributes on the AUTHORITATIVE pass,
+ * which is what makes "no URL is ever stored" true rather than merely intended.
+ */
+const AttachmentImage = Image.extend<
+  ImageOptions & { resolveAttachmentSrc?: AttachmentSrcResolver }
+>({
+  name: IMAGE_NODE_TYPE,
+
+  // Stated rather than spread from the parent, because three of these four are DEAD for this node
+  // and saying so is the point: `allowBase64` feeds a `parseHTML` this node replaces, `resize` feeds
+  // an `addNodeView` it replaces, and a resize handle is a pointer-only affordance writing a synced
+  // attribute. `inline: false` is the one that still does something — it makes the node a block.
+  addOptions() {
+    return {
+      inline: false,
+      allowBase64: false,
+      resize: false as const,
+      HTMLAttributes: {},
+      resolveAttachmentSrc: undefined,
+    }
+  },
+
+  addAttributes() {
+    return {
+      attachmentId: { default: '' },
+      alt: { default: '' },
+      width: { default: 'full' },
+    }
+  },
+
+  // Nothing a browser or another editor puts on the clipboard becomes an image node: an external
+  // `<img src>` matches NO rule here, so it cannot mint a node at all, let alone one carrying a URL.
+  //
+  // The one rule that exists matches this node's OWN serialised form — `data-attachment-id` is an
+  // attribute nothing outside yapm emits — because ProseMirror's internal copy/paste round-trips a
+  // slice through `renderHTML` + `parseHTML`, and with no rule at all a yapm→yapm paste would drop
+  // every image silently. That is the same class of loss the schema-skew guard exists to prevent,
+  // so it is not one to accept here. The attribute is refused when it is empty or URL-shaped, and
+  // `sanitizeRichText` refuses it again on the authoritative pass.
+  parseHTML() {
+    return [
+      {
+        tag: 'img[data-attachment-id]',
+        getAttrs: (element) => {
+          const id = (element as HTMLElement).getAttribute('data-attachment-id') ?? ''
+          if (id === '' || IMAGE_URL_SHAPED.test(id)) return false
+          return {
+            attachmentId: id,
+            alt: (element as HTMLElement).getAttribute('alt') ?? '',
+            width: (element as HTMLElement).getAttribute('data-width') ?? 'full',
+          }
+        },
+      },
+    ]
+  },
+
+  renderHTML({ HTMLAttributes, node }) {
+    const attrs = node.attrs as { attachmentId?: string; alt?: string; width?: string }
+    const attachmentId = attrs.attachmentId ?? ''
+    const alt = attrs.alt ?? ''
+    const shared = {
+      'data-attachment-id': attachmentId,
+      'data-width': attrs.width ?? 'full',
+      alt,
+    }
+    const src =
+      attachmentId === '' ? '' : (this.options.resolveAttachmentSrc?.(attachmentId, 'full') ?? '')
+    // With no resolver there is no path this bundle can name, and an empty `src` makes a browser
+    // re-request the current page. The alt text is what is left.
+    if (src === '') return ['span', mergeAttributes(shared, { 'data-image-placeholder': '' }), alt]
+    return ['img', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, shared, { src })]
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(ImageNodeView)
+  },
+
+  // The path is put on `src` by `normalizeForMarkdown`'s pre-walk, for the same reason a mention's
+  // display name is: the markdown manager is a module-level singleton built with no options, so a
+  // per-call resolver cannot reach an extension's config. An image with no resolvable path never
+  // gets here — the pre-walk degrades it to its alt text.
+  renderMarkdown: (node) => {
+    const attrs = (node.attrs ?? {}) as { alt?: unknown; src?: unknown }
+    const alt = typeof attrs.alt === 'string' ? attrs.alt : ''
+    const src = typeof attrs.src === 'string' ? attrs.src : ''
+    return `![${alt}](${src})`
+  },
+})
+
+const IMAGE_URL_SHAPED = /^\s*[a-z][a-z0-9+.-]*:|^\/\//i
+
 export interface RichTextExtensionOptions {
   resolveMentionName?: ((id: string) => string | undefined) | undefined
+  /**
+   * Turns an opaque `attachmentId` into a path this deployment can serve. Supplied by `apps/web` as
+   * `` (id, v) => `/api/v1/files/${id}${v === 'thumb' ? '/thumb' : ''}` ``. Omitted — Storybook, unit
+   * tests — an image renders its alt text in a bordered placeholder.
+   */
+  resolveAttachmentSrc?: AttachmentSrcResolver | undefined
   mentionSuggestion?: Omit<SuggestionOptions<MentionCandidate, MentionNodeAttrs>, 'editor'>
 }
 
@@ -191,9 +378,19 @@ export interface RichTextExtensionOptions {
  */
 export function createRichTextExtensions(options: RichTextExtensionOptions = {}): Extensions {
   return [
-    PortableStarterKit.configure({
+    StarterKit.configure({
       heading: { levels: [2, 3] },
+      // Replaced by `HighlightedCodeBlock`, so exactly one code-block node type exists. `Gapcursor`
+      // stays on — verified present in this StarterKit's `addExtensions`, and it is what lets the
+      // arrow keys leave a table at its top and bottom edges.
+      codeBlock: false,
     }),
+    HighlightedCodeBlock,
+    AttachmentImage.configure({ resolveAttachmentSrc: options.resolveAttachmentSrc }),
+    PortableTable,
+    TableRow,
+    TableHeader,
+    TableCell,
     Mention.configure({
       // Array-shaped with exactly one entry: `@` addressing one person is all that ships, but a
       // second trigger is an added element rather than a signature change.
@@ -223,13 +420,39 @@ export const richTextExtensions: Extensions = createRichTextExtensions()
 
 export const EMPTY_DOC: JSONContent = { type: 'doc', content: [{ type: 'paragraph' }] }
 
+let knownTypes: RichTextSkewKnownTypes | undefined
+
+/**
+ * The node and mark names THIS BUNDLE declares, derived from the compiled schema and never listed by
+ * hand: a node added to the extension set is covered the day it is added rather than the day
+ * somebody remembers. Built once, lazily — `getSchema` resolves the whole extension set.
+ */
+export function richTextKnownTypes(): RichTextSkewKnownTypes {
+  if (knownTypes === undefined) {
+    const schema = getSchema(createRichTextExtensions())
+    knownTypes = {
+      knownNodeTypes: new Set(Object.keys(schema.nodes)),
+      knownMarkTypes: new Set(Object.keys(schema.marks)),
+    }
+  }
+  return knownTypes
+}
+
+export function richTextSkew(value: JSONContent | null | undefined): RichTextSkew {
+  if (!value) return { blocked: false }
+  return detectRichTextSkew(value, richTextKnownTypes())
+}
+
 function collectText(node: JSONContent): string {
   if (node.type === 'text') return node.text ?? ''
   return (node.content ?? []).map(collectText).join('')
 }
 
 function hasStructuralLeaf(node: JSONContent): boolean {
-  if (node.type === 'horizontalRule' || node.type === 'image') return true
+  if (node.type === 'horizontalRule' || node.type === IMAGE_NODE_TYPE) return true
+  // A table holding nothing but empty cells is still a table somebody inserted deliberately, so a
+  // description that contains only one is not an empty description.
+  if (node.type === 'table') return true
   return (node.content ?? []).some(hasStructuralLeaf)
 }
 
@@ -249,13 +472,14 @@ export function isRichTextEmpty(value: JSONContent | null | undefined): boolean 
 export function richTextSliceToMarkdown(
   slice: Slice,
   resolveMentionName?: ((id: string) => string | undefined) | undefined,
+  resolveAttachmentSrc?: AttachmentSrcResolver | undefined,
 ): string {
   const nodes = (slice.content.toJSON() ?? []) as JSONContent[]
   if (nodes.length === 0) return ''
   // A partial selection inside one paragraph is a fragment of INLINE nodes, which is not a document.
   const content =
     slice.content.firstChild?.isInline === true ? [{ type: 'paragraph', content: nodes }] : nodes
-  return richTextToMarkdown({ type: 'doc', content }, { resolveMentionName })
+  return richTextToMarkdown({ type: 'doc', content }, { resolveMentionName, resolveAttachmentSrc })
 }
 
 function plainTextLines(content: readonly JSONContent[]): string[] | null {
@@ -297,10 +521,12 @@ function isSingleTextRun(content: readonly JSONContent[], text: string): boolean
  */
 export function richTextRendererProps(
   resolveMentionName?: ((id: string) => string | undefined) | undefined,
+  resolveAttachmentSrc?: AttachmentSrcResolver | undefined,
 ): EditorProps {
   return {
     attributes: { class: 'tiptap' },
-    clipboardTextSerializer: (slice) => richTextSliceToMarkdown(slice, resolveMentionName),
+    clipboardTextSerializer: (slice) =>
+      richTextSliceToMarkdown(slice, resolveMentionName, resolveAttachmentSrc),
   }
 }
 
@@ -312,9 +538,11 @@ export function richTextRendererProps(
  */
 export function richTextClipboardProps(
   resolveMentionName?: ((id: string) => string | undefined) | undefined,
+  resolveAttachmentSrc?: AttachmentSrcResolver | undefined,
 ): Pick<EditorProps, 'clipboardTextSerializer' | 'handlePaste'> {
   return {
-    clipboardTextSerializer: (slice) => richTextSliceToMarkdown(slice, resolveMentionName),
+    clipboardTextSerializer: (slice) =>
+      richTextSliceToMarkdown(slice, resolveMentionName, resolveAttachmentSrc),
     handlePaste: (view, event) => {
       const clipboard = event.clipboardData
       if (clipboard === null) return false
@@ -593,12 +821,112 @@ export interface RichTextEditorProps {
    */
   mentionables?: readonly MentionCandidate[]
   mentionNames?: MentionNameLookup
+  /** See `RichTextExtensionOptions.resolveAttachmentSrc`. */
+  resolveAttachmentSrc?: AttachmentSrcResolver
   onChange?: (doc: JSONContent) => void
   onSubmit?: (doc: JSONContent) => void
   onCancel?: () => void
 }
 
-export function RichTextEditor({
+const SKEW_NOTICE =
+  'This was edited in a newer version of yapm. Reload the page to see and edit all of it.'
+
+/**
+ * The refusal, and it is STRUCTURAL rather than a flag checked in a handler.
+ *
+ * A document holding node types this bundle does not declare has already been pruned by the time
+ * TipTap parses it, and one keystroke would autosave the pruned version over the real one — LWW
+ * makes it the truth, nothing errors, nothing is logged, and no review catches content that
+ * disappeared in somebody's browser two weeks earlier. So there is no editor instance in this
+ * branch at all: `onChange` and `onSubmit` cannot fire because nothing is wired to them.
+ *
+ * ⚠️ A tab running the build BEFORE this guard shipped has none of this code and will still prune.
+ * That window is one deploy wide and cannot be closed from inside the change that introduces the
+ * guard. It is stated in the docs page for the same reason it is stated here.
+ */
+function RichTextBlocked({
+  value,
+  mentionNames,
+  resolveAttachmentSrc,
+  className,
+  minHeight,
+  onCancel,
+  showReload,
+}: {
+  value: JSONContent | null | undefined
+  mentionNames?: MentionNameLookup
+  resolveAttachmentSrc?: AttachmentSrcResolver
+  className?: string
+  minHeight?: string
+  onCancel?: (() => void) | undefined
+  showReload: boolean
+}) {
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: Escape still dismisses the surface holding this
+    <div
+      data-testid="rich-text-blocked"
+      className={cn('rounded-control border border-border bg-bg', className)}
+      onKeyDown={(event) => {
+        if (onCancel && event.key === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          onCancel()
+        }
+      }}
+    >
+      <div
+        role="status"
+        className="flex flex-wrap items-center gap-2 border-border border-b bg-bg-hover px-3 py-2 font-ui text-[13px] text-text-2"
+      >
+        <span>{SKEW_NOTICE}</span>
+        {showReload ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="xs"
+            onClick={() => {
+              if (typeof location !== 'undefined') location.reload()
+            }}
+          >
+            Reload
+          </Button>
+        ) : null}
+      </div>
+      <div className="px-3 py-2" style={minHeight === undefined ? undefined : { minHeight }}>
+        <RichTextRendererSurface
+          value={value}
+          mentionNames={mentionNames}
+          resolveAttachmentSrc={resolveAttachmentSrc}
+        />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Runs the skew detector BEFORE an editor exists, and hands off to one of two components that share
+ * no state. The hook order above the branch is fixed, so the branch is legal and the editable
+ * component simply never mounts when the document is blocked.
+ */
+export function RichTextEditor(props: RichTextEditorProps) {
+  const skew = useMemo(() => richTextSkew(props.defaultValue), [props.defaultValue])
+  if (skew.blocked) {
+    return (
+      <RichTextBlocked
+        value={props.defaultValue}
+        mentionNames={props.mentionNames}
+        resolveAttachmentSrc={props.resolveAttachmentSrc}
+        className={props.className}
+        minHeight={props.minHeight}
+        onCancel={props.onCancel}
+        showReload
+      />
+    )
+  }
+  return <RichTextEditorSurface {...props} />
+}
+
+function RichTextEditorSurface({
   defaultValue,
   editable = true,
   placeholder,
@@ -609,6 +937,7 @@ export function RichTextEditor({
   className,
   mentionables,
   mentionNames,
+  resolveAttachmentSrc,
   onChange,
   onSubmit,
   onCancel,
@@ -653,10 +982,14 @@ export function RichTextEditor({
     [wrapperId, popupElement],
   )
 
+  const resolveSrcRef = useRef(resolveAttachmentSrc)
+  resolveSrcRef.current = resolveAttachmentSrc
+
   const extensions = useMemo(
     () =>
       createRichTextExtensions({
         resolveMentionName: (id) => mentionNamesRef.current?.get(id),
+        resolveAttachmentSrc: (id, variant) => resolveSrcRef.current?.(id, variant) ?? '',
         mentionSuggestion: mention.suggestion,
       }),
     [mention],
@@ -674,7 +1007,10 @@ export function RichTextEditor({
         'aria-multiline': 'true',
         class: 'tiptap',
       },
-      ...richTextClipboardProps((id) => mentionNamesRef.current?.get(id)),
+      ...richTextClipboardProps(
+        (id) => mentionNamesRef.current?.get(id),
+        (id, variant) => resolveSrcRef.current?.(id, variant) ?? '',
+      ),
     },
     onUpdate: ({ editor: instance }) => onChange?.(instance.getJSON()),
   })
@@ -880,18 +1216,27 @@ function Toolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
   )
 }
 
-export function RichTextRenderer({
-  value,
-  mentionNames,
-  className,
-}: {
+export interface RichTextRendererProps {
   value: JSONContent | null | undefined
   mentionNames?: MentionNameLookup
+  /** See `RichTextExtensionOptions.resolveAttachmentSrc`. */
+  resolveAttachmentSrc?: AttachmentSrcResolver
   className?: string
-}) {
+}
+
+function RichTextRendererSurface({
+  value,
+  mentionNames,
+  resolveAttachmentSrc,
+  className,
+}: RichTextRendererProps) {
   const extensions = useMemo(
-    () => createRichTextExtensions({ resolveMentionName: (id) => mentionNames?.get(id) }),
-    [mentionNames],
+    () =>
+      createRichTextExtensions({
+        resolveMentionName: (id) => mentionNames?.get(id),
+        resolveAttachmentSrc,
+      }),
+    [mentionNames, resolveAttachmentSrc],
   )
 
   // `mentionNames` is a dependency because a rename has to reach every already-rendered document:
@@ -902,10 +1247,31 @@ export function RichTextRenderer({
       extensions,
       content: value ?? EMPTY_DOC,
       editable: false,
-      editorProps: richTextRendererProps((id) => mentionNames?.get(id)),
+      editorProps: richTextRendererProps((id) => mentionNames?.get(id), resolveAttachmentSrc),
     },
     [value, extensions],
   )
 
   return <EditorContent editor={editor} className={cn(contentClass, className)} />
+}
+
+/**
+ * A reader gets the notice too, and without the Reload button: a rendered document with content
+ * invisibly missing is the same failure one step downstream, and somebody reading a comment has no
+ * other way to know a table was there.
+ */
+export function RichTextRenderer(props: RichTextRendererProps) {
+  const skew = useMemo(() => richTextSkew(props.value), [props.value])
+  if (skew.blocked) {
+    return (
+      <RichTextBlocked
+        value={props.value}
+        mentionNames={props.mentionNames}
+        resolveAttachmentSrc={props.resolveAttachmentSrc}
+        className={props.className}
+        showReload={false}
+      />
+    )
+  }
+  return <RichTextRendererSurface {...props} />
 }

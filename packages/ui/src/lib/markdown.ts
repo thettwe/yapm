@@ -6,6 +6,7 @@ import {
   resolveExtensions,
 } from '@tiptap/react'
 import { createRichTextExtensions, EMPTY_DOC } from '@yapm/ui/components/rich-text'
+import { coerceCodeLanguage } from '@yapm/ui/lib/code-languages'
 
 // Markdown is the INTERCHANGE format, never the storage format: the jsonb columns keep TipTap JSON
 // and nothing here is persisted. These two functions exist for text crossing the boundary — the
@@ -22,9 +23,19 @@ import { createRichTextExtensions, EMPTY_DOC } from '@yapm/ui/components/rich-te
 export interface RichTextToMarkdownOptions {
   /** Maps a mentioned user's id to their current display name, from live synced data. */
   readonly resolveMentionName?: ((id: string) => string | undefined) | undefined
+  /**
+   * Turns an opaque `attachmentId` into a path this deployment serves. The emitted path is
+   * CLIPBOARD-ONLY and is never stored: it makes a pasted-elsewhere image resolvable for anybody on
+   * the same host and useless as a bearer capability off it. Omitted, an image degrades to its alt
+   * text, because there is no path this bundle can name.
+   */
+  readonly resolveAttachmentSrc?:
+    | ((attachmentId: string, variant: 'thumb' | 'full') => string)
+    | undefined
 }
 
 const MENTION_NODE_TYPE = 'mention'
+const IMAGE_NODE_TYPE = 'image'
 const MENTION_LABEL_MAX_LENGTH = 120
 
 // 3.28.0's own set, kept verbatim. What it is missing is every character that only means something
@@ -256,13 +267,25 @@ function mentionText(
 // `richTextToPlainText` already produce. 3.28.0's default is `[@ id="u1" label="Ada Lovelace"]`:
 // lossless through itself, unreadable everywhere markdown actually goes. Nothing matches names on
 // the way back in, so a paste never invents a mention.
-function normalizeNode(
-  node: JSONContent,
-  resolveMentionName: ((id: string) => string | undefined) | undefined,
-): JSONContent[] {
+function normalizeNode(node: JSONContent, options: RichTextToMarkdownOptions): JSONContent[] {
   if (node.type === MENTION_NODE_TYPE) {
-    const text = mentionText(node, resolveMentionName)
+    const text = mentionText(node, options.resolveMentionName)
     return text === '' ? [] : [{ type: 'text', text }]
+  }
+
+  // The image node stores an opaque `attachmentId` and no URL, so the PATH is computed here and
+  // handed to the extension's `renderMarkdown` on `src`. It has to happen in the pre-walk for the
+  // same reason a mention's display name does: the markdown manager is a module-level singleton
+  // built with no options, so a per-call resolver cannot reach an extension's config.
+  if (node.type === IMAGE_NODE_TYPE) {
+    const attrs = node.attrs ?? {}
+    const id = typeof attrs.attachmentId === 'string' ? attrs.attachmentId.trim() : ''
+    const alt = typeof attrs.alt === 'string' ? attrs.alt.trim() : ''
+    const src = id === '' ? '' : (options.resolveAttachmentSrc?.(id, 'full') ?? '')
+    // No resolver, no path: `![alt]()` re-parses as an image with an empty target, which is worse
+    // than the alt text a reader can at least read.
+    if (src === '') return alt === '' ? [] : [{ type: 'text', text: alt }]
+    return [{ type: IMAGE_NODE_TYPE, attrs: { alt, src } }]
   }
 
   const next: JSONContent = { ...node }
@@ -277,7 +300,7 @@ function normalizeNode(
   }
 
   if (Array.isArray(node.content)) {
-    next.content = node.content.flatMap((child) => normalizeNode(child, resolveMentionName))
+    next.content = node.content.flatMap((child) => normalizeNode(child, options))
   }
 
   return [next]
@@ -285,9 +308,9 @@ function normalizeNode(
 
 export function normalizeForMarkdown(
   doc: JSONContent,
-  resolveMentionName?: ((id: string) => string | undefined) | undefined,
+  options: RichTextToMarkdownOptions = {},
 ): JSONContent {
-  return normalizeNode(doc, resolveMentionName)[0] as JSONContent
+  return normalizeNode(doc, options)[0] as JSONContent
 }
 
 export function richTextToMarkdown(
@@ -295,7 +318,7 @@ export function richTextToMarkdown(
   options: RichTextToMarkdownOptions = {},
 ): string {
   if (!doc || (doc.content ?? []).length === 0) return ''
-  const normalized = normalizeForMarkdown(doc, options.resolveMentionName)
+  const normalized = normalizeForMarkdown(doc, options)
   return manager().serialize(normalized).replace(/\n+$/, '')
 }
 
@@ -310,10 +333,30 @@ export function richTextToMarkdown(
 // text. `refuseRawHtml` is what stops the parser from reaching `generateJSON` and building one, and
 // this restates the invariant where enforcing it costs a type check — "a paste never notifies
 // anybody" is a promise, so it is worth holding in two places rather than one.
-function coerceInbound(node: JSONContent): JSONContent[] {
+function coerceInbound(node: JSONContent, atDocLevel = false): JSONContent[] {
   if (node.type === MENTION_NODE_TYPE) {
     const text = mentionText(node, undefined)
     return text === '' ? [] : [{ type: 'text', text }]
+  }
+
+  // A PASTE NEVER MINTS AN IMAGE NODE, for the same reason it never mints a mention: an image node
+  // names an `attachment` row that must exist and be team-scoped, and a pasted URL names nothing
+  // this instance owns. It degrades to a link labelled with its alt text — which keeps both the
+  // words and the destination, where minting a node would keep neither.
+  if (node.type === IMAGE_NODE_TYPE) {
+    const attrs = node.attrs ?? {}
+    const href = typeof attrs.src === 'string' ? attrs.src.trim() : ''
+    const alt = typeof attrs.alt === 'string' ? attrs.alt.trim() : ''
+    const label = alt === '' ? href : alt
+    if (label === '') return []
+    const text: JSONContent =
+      href === ''
+        ? { type: 'text', text: label }
+        : { type: 'text', text: label, marks: [{ type: 'link', attrs: { href } }] }
+    // A lone `![alt](url)` line arrives as a DOC-LEVEL image node — the block image is a block, and
+    // the link it degrades to is inline. A `doc` requires `block+`, so it needs a paragraph around
+    // it or the whole node is dropped on `setContent`.
+    return atDocLevel ? [{ type: 'paragraph', content: [text] }] : [text]
   }
 
   const next: JSONContent = { ...node }
@@ -321,7 +364,24 @@ function coerceInbound(node: JSONContent): JSONContent[] {
     const level = typeof node.attrs?.level === 'number' ? node.attrs.level : 2
     next.attrs = { ...node.attrs, level: level <= 2 ? 2 : 3 }
   }
-  if (Array.isArray(node.content)) next.content = node.content.flatMap(coerceInbound)
+  // A fence naming a grammar this bundle does not carry would render unhighlighted AND leave the
+  // language selector describing a language that is not there. `plaintext` is the honest reading.
+  if (node.type === 'codeBlock') {
+    const declared = node.attrs?.language
+    // A bare fence keeps the node's own `null` rather than being written to `plaintext`: they mean
+    // the same thing to the renderer and the selector, and writing one would be attribute churn on
+    // every paste of an unlabelled block.
+    next.attrs = {
+      ...node.attrs,
+      language:
+        typeof declared === 'string' && declared !== '' ? coerceCodeLanguage(declared) : null,
+    }
+  }
+  // Wrapped rather than passed by reference: `flatMap` hands the callback an index, which would
+  // land in `atDocLevel` and read as true for every child but the first.
+  if (Array.isArray(node.content)) {
+    next.content = node.content.flatMap((child) => coerceInbound(child))
+  }
   return [next]
 }
 
@@ -329,7 +389,7 @@ export function markdownToRichText(markdown: string): JSONContent {
   // Per-parse state: an unclosed `<em>` in one paste must not license a stray `</em>` in the next.
   reopenDepth.clear()
   const parsed = manager().parse(markdown)
-  const content = (parsed.content ?? []).flatMap(coerceInbound)
+  const content = (parsed.content ?? []).flatMap((node) => coerceInbound(node, true))
   // The manager's empty output is `{type:'doc'}`, which is not a valid document for a schema whose
   // `doc` requires `block+`.
   if (content.length === 0) return EMPTY_DOC

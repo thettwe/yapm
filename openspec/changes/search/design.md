@@ -1077,3 +1077,74 @@ Enter on the reopened palette opens the new-issue composer.
 Worth naming for the next surface that controls a cursor: no gate catches this. Lint, typecheck and
 the whole suite were green with the defect present, because every existing cursor test drove one
 continuous session.
+
+### I32 — AI isolation is asserted at the SYMBOL, not at the import, because the barrel makes imports unenforceable
+
+Task 6.6 asks that no AI path "imports `db/search.js` or names `search_document`". The first half
+cannot be checked as written: `packages/schema/src/db/index.ts` re-exports every search helper, so
+`apps/server/src/ai/digest.ts` importing `@yapm/schema/db` for `cycleFacts` already "imports" the
+search module in every sense a module graph can see. Checking the import edge would therefore be
+either vacuous or a false positive, and neither is worth a test.
+
+What is checkable is the symbol. `apps/server/src/search/isolation.test.ts` derives the forbidden
+list from `db/search.ts`'s own `export` statements — so a helper added there is covered by the guard
+on the day it is written, without anyone remembering to extend a hand-listed array — adds the two
+literals that reach the table without naming an export (`search_document` and the module path), and
+asserts no file under `apps/server/src/ai/` nor any of the four shared modules names one. Two
+guards keep it honest: the derived list is asserted non-empty and to contain three known names, and
+the same matcher is run over `db/search.ts` and `search/routes.ts`, which must both trip.
+
+Verified by perturbation: appending `const leak = searchDocuments` to `apps/server/src/ai/digest.ts`
+fails it, and adding a `search: { reindex }` group to `defineMutators` fails the 6.5 assertion
+beside it. The second needed `pnpm --filter @yapm/schema build` first — `apps/server` resolves
+`@yapm/schema` through `dist`, so a source-only perturbation of the registry proves nothing.
+
+### I33 — Tasks 6.3, 6.4 and 6.7 needed three actors, six rows and the whole app, not three more assertions
+
+Each of the three would have passed vacuously in its obvious form.
+
+**6.3** is not a scoping question, so seeding the retro in the caller's *own* team is what makes it
+one about the indexable allowlist. The three actors are the member, the retro's **facilitator** and
+the **workspace admin** — the three with the strongest claim on that text — and `retro_card_author`
+is written too, so the anonymity binding exists to be leaked. A second test asserts those same three
+actors *do* get a row for an indexable token, because otherwise the silence proves only that they
+can see nothing at all.
+
+**6.4** needs rows the caller may not read that match the *same* token: three in scope and three out.
+`truncated` is then false at `limit=4` while six documents match, and the admin's six-row response in
+the same test is what proves the other three exist. Perturbed both ways — `truncated: true` fails
+five tests, `truncated: false` fails two — so neither direction of the flag can rot unnoticed.
+
+**6.7** drives the request through `createApp`, not through the search router, because the middleware
+one line from making the promise false is the *request logger*. Changing `path: c.req.path` to
+`c.req.url` in `app.ts` fails it; the assertion also requires the app to have logged at all, and
+covers the hit, the miss, the statement timeout and the 401.
+
+### I34 — The e2e tier measured 7.5 ms keypress-to-paint, and the index interval is pinned at 2 s for it
+
+`apps/web/e2e/search.spec.ts` measures the instant half on the same clock the page uses: an init
+script timestamps every `fetch` to `/api/v1/search`, a capture-phase `keydown` listener starts the
+clock, and a `MutationObserver` plus one `requestAnimationFrame` stops it at the frame the row
+renders in. The measured interval, with the search route blocked at the Playwright level, is
+**7.5 ms** against the 100 ms budget — read by temporarily asserting `toBeLessThan(0.0001)`, which
+is also what proves the measurement is not zero-valued and vacuous.
+
+The keystroke is a **Backspace** on `<token>z`, not the last letter of the token: the on-device pass
+is a substring match, so every prefix of a token already matches and there is no "first character
+that produces the row". Deleting one trailing character is the only single keystroke that takes the
+row from absent to present.
+
+Two assertions bracket the request rather than one: no request had been issued at paint time, **and**
+one is issued afterwards. Without the second, a build that never asks the server anything would pass.
+
+`playwright.config.ts` now sets `SEARCH_INDEX_INTERVAL_SECONDS: '2'` beside the existing
+`CYCLE_MAINTENANCE: 'false'`. The specs still wait on the `search_document` row rather than on a
+sleep — the client issues one request per settled query and does not retry a miss, so a surface
+polled before the indexer ran would stay empty forever and time out for the wrong reason — but at
+the ten-second default that wait dominates the suite.
+
+One flake was found and fixed while running the four tests together: reading an issue back from
+Postgres immediately after the UI clears `data-pending` failed once in four runs, because clearing
+that attribute means the *client* saw the synced row, which is one replication hop behind the
+commit. The lookup is now polled with a 20 s ceiling, so it still fails when the row genuinely is
+not there.

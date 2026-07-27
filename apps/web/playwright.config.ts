@@ -43,6 +43,10 @@ export default defineConfig({
         PORT: String(SERVER_PORT),
         LOG_LEVEL: 'warn',
         CYCLE_MAINTENANCE: 'false',
+        // The index is maintained by a job, so its freshness is a real wait. Two seconds instead
+        // of the ten-second default keeps `search.spec.ts` honest about the lag while bounding it:
+        // the specs wait on the document row, never on a fixed sleep.
+        SEARCH_INDEX_INTERVAL_SECONDS: '2',
         BETTER_AUTH_SECRET: process.env.E2E_BETTER_AUTH_SECRET ?? 'e2e-development-secret-value',
         BETTER_AUTH_URL: SERVER_ORIGIN,
         WEB_ORIGIN: `http://localhost:${WEB_PORT}`,

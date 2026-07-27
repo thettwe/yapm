@@ -153,15 +153,15 @@ client group (7–10) after the server contract it consumes exists.
       widening; and a forced statement timeout returns the same status and body as a miss.
 - [x] 6.2 **Test** the response shape is invariant: assert the exact JSON body for miss,
       out-of-scope, blank query, one-character query, unparseable query and timeout are all equal.
-- [ ] 6.3 **Test** a retro draft token and a retro card token return nothing to a member, a
+- [x] 6.3 **Test** a retro draft token and a retro card token return nothing to a member, a
       facilitator and a workspace admin.
-- [ ] 6.4 **Test** `truncated` is `true` only when the post-scoping result count reaches the limit,
+- [x] 6.4 **Test** `truncated` is `true` only when the post-scoping result count reaches the limit,
       and never varies with rows outside the caller's scope.
-- [ ] 6.5 **Test** search adds no agent tool: the registry derived from `defineMutators` is unchanged.
-- [ ] 6.6 **Test** no AI path reads the index: assert that no module under `apps/server/src/ai/`, and
+- [x] 6.5 **Test** search adds no agent tool: the registry derived from `defineMutators` is unchanged.
+- [x] 6.6 **Test** no AI path reads the index: assert that no module under `apps/server/src/ai/`, and
       neither `packages/schema/src/zero/{digest,ai-tools,cycle-facts}.ts` nor
       `packages/schema/src/db/cycle-facts.ts`, imports `db/search.js` or names `search_document`.
-- [ ] 6.7 **Test** queries are never logged: drive a request carrying a distinctive token through the
+- [x] 6.7 **Test** queries are never logged: drive a request carrying a distinctive token through the
       app with a capturing logger and assert **no** emitted entry contains it — the request-logger
       line included.
 
@@ -239,17 +239,17 @@ client group (7–10) after the server contract it consumes exists.
 
 ## 11. End-to-end
 
-- [ ] 11.1 **Test** `apps/web/e2e/search.spec.ts`, the *instant* half of the falsifiable check: with
+- [x] 11.1 **Test** `apps/web/e2e/search.spec.ts`, the *instant* half of the falsifiable check: with
       `/api/v1/search` blocked at the route level, Cmd-K and a description-only token for the current
       team produces the row with **zero in-flight requests to the search route** and a `performance`
       mark under 100 ms from keypress to paint, while the "From the server" group renders its offline
       label instead of hanging.
-- [ ] 11.2 **Test** the *complete* half: seed a comment on another team's issue, wait for the index,
+- [x] 11.2 **Test** the *complete* half: seed a comment on another team's issue, wait for the index,
       search from `/search`, and assert the hit with its snippet — then assert a member of one team
       never sees the other team's hit.
-- [ ] 11.3 **Test** cursor stability against the real stack: arrow into the third row while the server
+- [x] 11.3 **Test** cursor stability against the real stack: arrow into the third row while the server
       request is in flight, and assert the same row is active after it resolves.
-- [ ] 11.4 **Test** keyboard-only escalation: palette → `Search everything` → `/search` → open a
+- [x] 11.4 **Test** keyboard-only escalation: palette → `Search everything` → `/search` → open a
       result → browser back, with no pointer.
 
 ## 12. Documentation

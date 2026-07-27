@@ -10,6 +10,7 @@ import {
 import type { Kysely } from 'kysely'
 import { pino } from 'pino'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { createApp } from '../app.js'
 import type { AuthService, SessionUser } from '../auth.js'
 import { createSearchRoutes } from './routes.js'
 
@@ -68,6 +69,11 @@ describe.skipIf(DATABASE_URL === undefined)('GET /api/v1/search', () => {
   const teamTwoId = newId()
   const memberId = newId()
   const strangerId = newId()
+  // The two actors task 6.3 adds to the member: the retro's own facilitator, who has every
+  // in-product reason to see retro text, and the workspace admin, whose scope covers every team.
+  // If any path could reach a retro row, one of these three is who it would reach it for.
+  const facilitatorId = newId()
+  const adminId = newId()
   let app: ReturnType<typeof createSearchRoutes>
 
   // `null` is the anonymous caller. Not `undefined`, which would silently take the default.
@@ -114,11 +120,16 @@ describe.skipIf(DATABASE_URL === undefined)('GET /api/v1/search', () => {
       .values([
         { id: newId(), workspace_id: workspaceId, user_id: memberId, role: 'member' },
         { id: newId(), workspace_id: workspaceId, user_id: strangerId, role: 'member' },
+        { id: newId(), workspace_id: workspaceId, user_id: facilitatorId, role: 'member' },
+        { id: newId(), workspace_id: workspaceId, user_id: adminId, role: 'admin' },
       ])
       .execute()
     await db
       .insertInto('team_membership')
-      .values({ id: newId(), team_id: teamOneId, user_id: memberId })
+      .values([
+        { id: newId(), team_id: teamOneId, user_id: memberId },
+        { id: newId(), team_id: teamOneId, user_id: facilitatorId },
+      ])
       .execute()
     await db
       .insertInto('issue')
@@ -142,7 +153,88 @@ describe.skipIf(DATABASE_URL === undefined)('GET /api/v1/search', () => {
           priority: 'medium',
           creator_id: strangerId,
         },
+        // Task 6.4's corpus: the SAME token on three in-scope rows and three out-of-scope ones, so
+        // `truncated` can be caught depending on rows the caller may not read. A pre-scoping count
+        // would report truncation at a limit the caller's own three rows never reach.
+        ...[2, 3, 4].flatMap((number) => [
+          {
+            id: newId(),
+            team_id: teamOneId,
+            number,
+            title: `In scope ${number}: qztroute-many`,
+            status: 'todo' as const,
+            priority: 'medium' as const,
+            creator_id: memberId,
+          },
+          {
+            id: newId(),
+            team_id: teamTwoId,
+            number,
+            title: `Out of scope ${number}: qztroute-many`,
+            status: 'todo' as const,
+            priority: 'medium' as const,
+            creator_id: strangerId,
+          },
+        ]),
       ])
+      .execute()
+
+    // The retrospective anonymity boundary, seeded inside the caller's OWN team so its absence is
+    // a property of the indexable allowlist rather than of scoping. `retro_card_author` is written
+    // too: the binding search must never make inferable exists here, not only in the schema-drift
+    // test's absence assertion.
+    const retroId = newId()
+    const retroColumnId = newId()
+    const retroCardId = newId()
+    await db
+      .insertInto('retro')
+      .values({
+        id: retroId,
+        team_id: teamOneId,
+        title: 'Retro under test',
+        format: 'wentwell_didnt_action',
+        facilitator_id: facilitatorId,
+        created_by: facilitatorId,
+      })
+      .execute()
+    await db
+      .insertInto('retro_column')
+      .values({
+        id: retroColumnId,
+        retro_id: retroId,
+        team_id: teamOneId,
+        key: 'went_well',
+        title: 'Went well',
+        accent_token: 'positive',
+        rank: 'a0',
+      })
+      .execute()
+    await db
+      .insertInto('retro_draft')
+      .values({
+        id: newId(),
+        retro_id: retroId,
+        team_id: teamOneId,
+        column_id: retroColumnId,
+        author_id: memberId,
+        body: 'Still being written: qztroute-draft',
+        rank: 'a0',
+      })
+      .execute()
+    await db
+      .insertInto('retro_card')
+      .values({
+        id: retroCardId,
+        retro_id: retroId,
+        team_id: teamOneId,
+        column_id: retroColumnId,
+        body: 'Published anonymously: qztroute-card',
+        rank: 'a0',
+      })
+      .execute()
+    await db
+      .insertInto('retro_card_author')
+      .values({ card_id: retroCardId, retro_id: retroId, author_id: memberId })
       .execute()
 
     for (const entityType of ['issue', 'comment'] as const) {
@@ -238,5 +330,115 @@ describe.skipIf(DATABASE_URL === undefined)('GET /api/v1/search', () => {
     const payload = JSON.parse(body) as Record<string, unknown>
     expect(payload.truncated).toBe(true)
     expect(Object.keys(payload).sort()).toEqual(['results', 'truncated'])
+  })
+
+  // Task 6.3. Not a scoping question — the draft and the card are in the caller's OWN team, and
+  // the facilitator and the admin are the two actors with the strongest claim to see them. What
+  // makes them invisible is that no retro row is indexable at all.
+  describe('the retrospective boundary', () => {
+    const actors = { member: memberId, facilitator: facilitatorId, admin: adminId }
+
+    it('returns nothing for a retro draft or a retro card, to any actor', async () => {
+      for (const [name, actor] of Object.entries(actors)) {
+        for (const token of ['qztroute-draft', 'qztroute-card']) {
+          const outcome = await get(`q=${token}`, actor)
+          expect(outcome, `${name} searching ${token}`).toEqual({
+            status: 200,
+            body: '{"results":[],"truncated":false}',
+          })
+        }
+      }
+    })
+
+    // Without this the test above would pass for an actor who can see nothing at all, which is
+    // the vacuous version of the same assertion.
+    it('answers those same actors for an indexable row, so the silence above is about retros', async () => {
+      for (const [name, actor] of Object.entries(actors)) {
+        const { status, body } = await get('q=qztroute-visible', actor)
+        const results = (JSON.parse(body) as { results: unknown[] }).results
+        expect({ name, status, count: results.length }).toEqual({ name, status: 200, count: 1 })
+      }
+    })
+  })
+
+  // Task 6.4. Six rows carry `qztroute-many`; three of them are in the caller's scope. Every
+  // assertion below would change if `truncated` were computed anywhere but over the rows the
+  // caller actually receives.
+  describe('truncated', () => {
+    const many = async (limit: number, user = memberId) => {
+      const { body } = await get(`q=qztroute-many&limit=${limit}`, user)
+      return JSON.parse(body) as { results: unknown[]; truncated: boolean }
+    }
+
+    it('is true exactly when the returned rows reach the limit', async () => {
+      expect(await many(1)).toMatchObject({ truncated: true })
+      expect(await many(2)).toMatchObject({ truncated: true })
+      const atCapacity = await many(3)
+      expect(atCapacity.results).toHaveLength(3)
+      expect(atCapacity.truncated).toBe(true)
+    })
+
+    it('is false at a limit the caller’s own rows cannot fill, though six rows match', async () => {
+      // The admin's scope proves the other three documents exist and match the same token, so a
+      // `false` below is the scoping filter running BEFORE the count rather than a thin corpus.
+      const admin = await many(10, adminId)
+      expect(admin.results).toHaveLength(6)
+
+      const scoped = await many(4)
+      expect(scoped.results).toHaveLength(3)
+      expect(scoped.truncated).toBe(false)
+      expect(await many(6)).toMatchObject({ truncated: false })
+    })
+  })
+
+  // Task 6.7. The refusal to record queries is one middleware away from being false, and nothing
+  // else in the repo would notice. So it is asserted through the WHOLE app — the request logger
+  // included — rather than by reading `routes.ts`.
+  describe('query strings never reach a logger', () => {
+    const lines: string[] = []
+    const capturing = pino({ level: 'trace' }, { write: (chunk: string) => void lines.push(chunk) })
+
+    const drive = async (token: string, db: Kysely<DB>, user: string | null = memberId) => {
+      const whole = createApp({
+        logger: capturing,
+        readinessChecks: [],
+        search: createSearchRoutes({
+          auth: fakeAuth(),
+          db,
+          logger: capturing,
+          textConfig: 'simple',
+          statementTimeoutMs: 2000,
+        }),
+      })
+      return await whole.request(
+        `/api/v1/search?q=${encodeURIComponent(token)}`,
+        user === null ? {} : { headers: { 'x-test-user': user } },
+      )
+    }
+
+    it('emits not one line carrying the query, on a hit, a miss, a timeout or a 401', async () => {
+      lines.length = 0
+      const hit = await drive('qztroute-visible', database.db)
+      const miss = await drive('qztroute-nowhere-at-all', database.db)
+      const timedOut = await drive('qztroute-visible', timingOutDb(database.db))
+      const anonymous = await drive('qztroute-visible', database.db, null)
+
+      expect([hit.status, miss.status, timedOut.status, anonymous.status]).toEqual([
+        200, 200, 200, 401,
+      ])
+      // The app DID log — otherwise the absence below proves nothing.
+      expect(lines.length).toBeGreaterThanOrEqual(4)
+      expect(lines.join('\n')).toContain('"path":"/api/v1/search"')
+      expect(lines.join('\n')).toContain('search statement timed out')
+
+      for (const needle of [
+        'qztroute-visible',
+        'qztroute-nowhere-at-all',
+        encodeURIComponent('qztroute-visible'),
+        '?q=',
+      ]) {
+        expect(lines.filter((line) => line.includes(needle))).toEqual([])
+      }
+    })
   })
 })

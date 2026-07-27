@@ -52,17 +52,17 @@ falsifiable check (5) before the UI, so the behaviour is proven before it is exp
 
 ## 3. Human-intent stamping in the shared mutators
 
-- [ ] 3.1 In `packages/schema/src/zero/mutators.ts`, add a small shared helper that returns the
+- [x] 3.1 In `packages/schema/src/zero/mutators.ts`, add a small shared helper that returns the
       `lastHumanStatusAt` patch for a given `ctx` and `updatedAt` — the stamp when
       `ctx.userID !== SYSTEM_ACTOR_ID`, nothing otherwise. Pure function of args and ctx, so the
       optimistic and authoritative passes agree and rebase is safe.
-- [ ] 3.2 Apply it in the four mutators that write `issue.status`: `createIssue`, `setIssueStatus`,
+- [x] 3.2 Apply it in the four mutators that write `issue.status`: `createIssue`, `setIssueStatus`,
       `moveIssue`, and `routeIssue` (only when `routeIssue` is actually given a status).
-- [ ] 3.3 Add `team.setAutoStatus` to `mutators.ts`: args `{ id, since: timestamp | null, updatedAt }`,
+- [x] 3.3 Add `team.setAutoStatus` to `mutators.ts`: args `{ id, since: timestamp | null, updatedAt }`,
       gated by `canManage` before the team is loaded, writing `auto_status_since`. The instant comes
       from args (the call site), never from inside the mutator body. Register it in the `team` group
       of the `mutators` map.
-- [ ] 3.4 Classify `team.setAutoStatus` in `packages/schema/src/zero/ai-tools.ts` —
+- [x] 3.4 Classify `team.setAutoStatus` in `packages/schema/src/zero/ai-tools.ts` —
       `MUTATOR_TOOL_KINDS` (`write`) and the args map. The registry is exhaustive by construction and
       its test fails until this is done.
 - [ ] 3.5 **Test (unit)** in `packages/schema/src/zero/mutators.issue.test.ts`: a status write under a
@@ -77,18 +77,18 @@ falsifiable check (5) before the UI, so the behaviour is proven before it is exp
 
 ## 4. The transition, behind the `WorkGraphMutation` union
 
-- [ ] 4.1 Implement `applyAutoStatusForPullRequest(tx, ctx, input)` in `auto-status.ts`: read the
+- [x] 4.1 Implement `applyAutoStatusForPullRequest(tx, ctx, input)` in `auto-status.ts`: read the
       team's `auto_status_since`, read up to `AUTO_STATUS_MAX_LINKED_ISSUES` `issue_link` rows for the
       pull request, load each linked issue's `status`, `needsTriage` and `lastHumanStatusAt`, call
       `decideAutoStatus`, and for each non-null target invoke
       `mutators.issue.setStatus.fn({ tx, args: { id, status, updatedAt: now }, ctx: SYSTEM_AUTH_CONTEXT })`.
       No raw `tx.mutate.issue.update`, no Kysely.
-- [ ] 4.2 Call it from both non-stale branches of `applyWorkGraphMutation`'s `upsertPullRequest` case
+- [x] 4.2 Call it from both non-stale branches of `applyWorkGraphMutation`'s `upsertPullRequest` case
       in `work-graph.ts` — after `linkIssues`, passing the **effective** state actually written
       (`merged` when pinned terminal) and the previous state (`null` on insert). The stale branch
       (`mutation.updatedAt < existing.updatedAt`) keeps linking and keeps returning without
       considering status.
-- [ ] 4.3 Confirm `apps/server/src/connectors/github/` is untouched by this change — a `git diff
+- [x] 4.3 Confirm `apps/server/src/connectors/github/` is untouched by this change — a `git diff
       --stat` over that directory must be empty. That absence is the firewall property, not a
       convention.
 - [ ] 4.4 **Test (unit)** `packages/schema/src/zero/work-graph.test.ts` additions using the existing

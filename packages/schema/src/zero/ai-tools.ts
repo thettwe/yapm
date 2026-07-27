@@ -60,6 +60,7 @@ import {
   setPreferenceArgs,
   setRetroFacilitatorArgs,
   setRetroPhaseArgs,
+  setTeamAutoStatusArgs,
   startRetroTimerArgs,
   stopRetroTimerArgs,
   unfollowIssueArgs,
@@ -113,6 +114,9 @@ const MUTATOR_TOOL_KINDS: Record<string, ToolKind> = {
   'team.create': 'write',
   'team.rename': 'write',
   'team.archive': 'destructive',
+  // Opting a team into status automation. A plain write: it is per-team, instantly reversible, and
+  // its epoch means enabling it rewrites nothing that already happened.
+  'team.setAutoStatus': 'write',
   'team.addMember': 'write',
   'team.removeMember': 'destructive',
   'invite.create': 'write',
@@ -188,6 +192,7 @@ const MUTATOR_TOOL_ARGS: Record<string, z.ZodType> = {
   'team.create': createTeamArgs,
   'team.rename': renameTeamArgs,
   'team.archive': archiveTeamArgs,
+  'team.setAutoStatus': setTeamAutoStatusArgs,
   'team.addMember': addTeamMemberArgs,
   'team.removeMember': removeTeamMemberArgs,
   'invite.create': createInviteArgs,

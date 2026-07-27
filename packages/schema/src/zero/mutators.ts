@@ -34,6 +34,7 @@ import {
   type RetroPhase,
   type RetroVoteTarget,
   type SubscriptionState,
+  SYSTEM_ACTOR_ID,
   THEME_PRESETS,
 } from './context.js'
 import { type CycleOrderRow, isUnfinished, nextCycleId } from './cycles.js'
@@ -397,6 +398,34 @@ export const archiveTeam = defineMutator(archiveTeamArgs, async ({ tx, args, ctx
   })
 })
 
+export const setTeamAutoStatusArgs = z.object({
+  id: z.string().min(1),
+  // One nullable instant is both the switch and its epoch: null is off, a timestamp is
+  // "on, and no event older than this may drive status" — which is what makes enabling safe on an
+  // instance whose connector is about to backfill years of merged pull requests.
+  since: timestamp.nullable(),
+  updatedAt: timestamp,
+})
+
+export type SetTeamAutoStatusArgs = z.infer<typeof setTeamAutoStatusArgs>
+
+// Opting a team into status automation. `canManage` runs BEFORE the team is loaded, so a
+// non-admin learns nothing about whether the id exists. The epoch is minted at the CALL SITE and
+// carried in args — a `Date.now()` here would differ between the optimistic and authoritative
+// passes and silently move the team's cut-off on every rebase.
+export const setTeamAutoStatus = defineMutator(setTeamAutoStatusArgs, async ({ tx, args, ctx }) => {
+  if (!canManage(ctx)) throw notAuthorized(args.id)
+
+  const target = await tx.run(zql.team.where('id', args.id).one())
+  if (!target) throw notAuthorized(args.id)
+
+  await tx.mutate.team.update({
+    id: args.id,
+    autoStatusSince: args.since,
+    updatedAt: args.updatedAt,
+  })
+})
+
 export const addTeamMemberArgs = z.object({
   id: z.string().min(1),
   teamId: z.string().min(1),
@@ -659,6 +688,21 @@ export const unfollowIssue = defineMutator(unfollowIssueArgs, async ({ tx, args,
   await setIssueSubscriptionState(tx, ctx, args, 'unsubscribed')
 })
 
+// The human-intent stamp folded into every row write that sets `issue.status`. `updated_at` cannot
+// carry this: it moves for a title edit, a label, an assignee. The absence of the stamp on a
+// machine write is the audit record — it is how `decideAutoStatus` tells "a person decided this"
+// from "the instance advanced it", and therefore what stops automation overriding a human.
+//
+// Returned as a PATCH spread into the caller's single update rather than written separately, and a
+// pure function of `ctx` and `updatedAt` — no `Date.now()`, no read — so the optimistic and
+// authoritative passes produce the identical row and rebase is stable.
+function humanStatusStamp(
+  ctx: AuthContext,
+  updatedAt: number,
+): { readonly lastHumanStatusAt?: number } {
+  return ctx.userID === SYSTEM_ACTOR_ID ? {} : { lastHumanStatusAt: updatedAt }
+}
+
 export const createIssueArgs = z.object({
   id: z.string().min(1),
   teamId: z.string().min(1),
@@ -718,6 +762,7 @@ export const createIssue = defineMutator(createIssueArgs, async ({ tx, args, ctx
     // `issue.setCycle` / `issue.routeIssue` / the rollover stamp it when a cycle is set.
     carryoverCount: 0,
     cycleAssignedAt: null,
+    ...humanStatusStamp(ctx, args.updatedAt),
     createdAt: args.createdAt,
     updatedAt: args.updatedAt,
   })
@@ -756,7 +801,12 @@ export const setIssueStatusArgs = z.object({
 export const setIssueStatus = defineMutator(setIssueStatusArgs, async ({ tx, args, ctx }) => {
   if (!canWrite(ctx)) throw notAuthorized(args.id)
   await loadIssueForWrite(tx, ctx, args.id)
-  await tx.mutate.issue.update({ id: args.id, status: args.status, updatedAt: args.updatedAt })
+  await tx.mutate.issue.update({
+    id: args.id,
+    status: args.status,
+    ...humanStatusStamp(ctx, args.updatedAt),
+    updatedAt: args.updatedAt,
+  })
 })
 
 export const setIssuePriorityArgs = z.object({
@@ -815,6 +865,7 @@ export const moveIssue = defineMutator(moveIssueArgs, async ({ tx, args, ctx }) 
     id: args.id,
     status: args.status,
     rank: args.rank,
+    ...humanStatusStamp(ctx, args.updatedAt),
     updatedAt: args.updatedAt,
   })
 })
@@ -1184,6 +1235,7 @@ export const declineTriage = defineMutator(declineTriageArgs, async ({ tx, args,
     id: args.id,
     needsTriage: false,
     status: 'canceled',
+    ...humanStatusStamp(ctx, args.updatedAt),
     updatedAt: args.updatedAt,
   })
 })
@@ -1238,7 +1290,9 @@ export const routeIssue = defineMutator(routeIssueArgs, async ({ tx, args, ctx }
   await tx.mutate.issue.update({
     id: args.id,
     needsTriage: false,
-    ...(args.status === undefined ? {} : { status: args.status }),
+    ...(args.status === undefined
+      ? {}
+      : { status: args.status, ...humanStatusStamp(ctx, args.updatedAt) }),
     ...(args.assigneeId === undefined ? {} : { assigneeId: args.assigneeId }),
     ...(args.cycleId === undefined
       ? {}
@@ -2709,6 +2763,7 @@ export const mutators = defineMutators({
     create: createTeam,
     rename: renameTeam,
     archive: archiveTeam,
+    setAutoStatus: setTeamAutoStatus,
     addMember: addTeamMember,
     removeMember: removeTeamMember,
   },

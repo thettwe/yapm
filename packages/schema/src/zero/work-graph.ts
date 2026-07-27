@@ -1,4 +1,5 @@
 import type { Transaction } from '@rocicorp/zero'
+import { applyAutoStatusForPullRequest } from './auto-status.js'
 import type {
   CiConclusion,
   ConnectorLinkSource,
@@ -199,18 +200,33 @@ export async function applyWorkGraphMutation(
         // `merged` is terminal on GitHub: never regress away from it, and preserve the recorded
         // merge time. A closed PR may still reopen, so only merged is pinned.
         const terminalMerged = existing.state === 'merged'
+        const effectiveState = terminalMerged ? 'merged' : mutation.state
         await tx.mutate.pull_request.update({
           id: existing.id,
           repo: mutation.repo,
           number: mutation.number,
           title: mutation.title,
-          state: terminalMerged ? 'merged' : mutation.state,
+          state: effectiveState,
           url: mutation.url,
           headSha: mutation.headSha,
           mergedAt: terminalMerged ? existing.mergedAt : mutation.mergedAt,
           updatedAt: mutation.updatedAt,
         })
         await linkIssues(tx, existing, mutation.issueRefs, now)
+        // After linking, so a delivery that both links and transitions does both. The EFFECTIVE
+        // state is passed, not `mutation.state`: `updated_at` bumps on any activity, so an
+        // already-merged pull request emits fresh mutations for months and only the edge
+        // `existing.state -> effectiveState` distinguishes the merge from the comment on it.
+        await applyAutoStatusForPullRequest(
+          tx,
+          { teamId: existing.teamId, now },
+          {
+            pullRequestId: existing.id,
+            previousState: existing.state,
+            state: effectiveState,
+            eventAt: mutation.updatedAt,
+          },
+        )
         return
       }
       await tx.mutate.pull_request.insert({
@@ -231,6 +247,19 @@ export async function applyWorkGraphMutation(
         updatedAt: mutation.updatedAt,
       })
       await linkIssues(tx, { id: mutation.id, teamId: ctx.teamId }, mutation.issueRefs, now)
+      // A pull request yapm has not seen before: `null` previous state, so the insert is always an
+      // edge and a PR that arrives already merged (backfill, reconcile) is one merge edge, not none.
+      // The since-epoch, not this branch, is what keeps that backfill from rewriting a board.
+      await applyAutoStatusForPullRequest(
+        tx,
+        { teamId: ctx.teamId, now },
+        {
+          pullRequestId: mutation.id,
+          previousState: null,
+          state: mutation.state,
+          eventAt: mutation.updatedAt,
+        },
+      )
       return
     }
 

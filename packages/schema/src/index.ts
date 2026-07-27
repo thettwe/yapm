@@ -49,10 +49,16 @@ export {
   mutatorToolNames,
   needsApproval,
 } from './zero/ai-tools.js'
-export type { AutoStatusInput, AutoStatusRung } from './zero/auto-status.js'
+export type {
+  AutoStatusContext,
+  AutoStatusInput,
+  AutoStatusPullRequestInput,
+  AutoStatusRung,
+} from './zero/auto-status.js'
 export {
   AUTO_STATUS_MAX_LINKED_ISSUES,
   AUTO_STATUS_RANK,
+  applyAutoStatusForPullRequest,
   decideAutoStatus,
 } from './zero/auto-status.js'
 export type {
@@ -225,6 +231,7 @@ export type {
   RetractRetroVoteArgs,
   SetPreferenceArgs,
   SetRetroPhaseArgs,
+  SetTeamAutoStatusArgs,
   StartRetroTimerArgs,
   UnfollowIssueArgs,
 } from './zero/mutators.js'
@@ -413,6 +420,8 @@ export {
   setRetroFacilitatorArgs,
   setRetroPhase,
   setRetroPhaseArgs,
+  setTeamAutoStatus,
+  setTeamAutoStatusArgs,
   startRetroTimer,
   startRetroTimerArgs,
   stopRetroTimer,

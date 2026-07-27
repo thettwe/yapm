@@ -571,3 +571,90 @@ shared constant cannot carry. All 32 server test files / 236 tests pass unchange
 which is task 1.2's stated confirmation. `grep -rn decideAutoStatus apps packages --include="*.ts"`
 returns only the definition and its `index.ts` re-export: no consumer exists yet, which is the point
 of this phase.
+
+*(AutomationStateMachine phase — the stamp and its reader, built together: a machine may only
+advance an issue no human has more recently decided about, and only on a state edge.)*
+
+### I6 — `issue.declineTriage` is a FIFTH mutator that writes `issue.status`; it stamps too
+
+§D4 and task 3.2 both name four stampers — `issue.create`, `issue.setStatus`, `issue.move`,
+`issue.routeIssue`. A grep for `tx.mutate.issue.update` found a fifth writer of the column:
+`declineTriage` writes `status: 'canceled'`. Two statements in this document disagree about it —
+the enumeration says four, while the guard test §Risks describes ("enumerates every mutator in
+`defineMutators` that writes `issue.status` and requires each to stamp") would find five and fail.
+
+Resolved in favour of the mechanical statement: `declineTriage` stamps. Declining IS a person
+deciding a status, so the enumeration was the incomplete half. The change is behaviourally inert
+today — guard 5 puts `canceled` off-ladder regardless of any stamp — and it can only ever make
+automation *more* conservative, never less, so there is no case where stamping here costs a
+transition that should have fired. Task 3.6's guard test is now total by construction rather than
+by a hand-maintained list of four.
+
+### I7 — Guards 1–3 are hoisted ahead of the reads in `applyAutoStatusForPullRequest`
+
+`decideAutoStatus` stays the single ladder, but three of its guards — off, before the epoch, no
+edge — depend on nothing about the issue. Evaluating them only *after* loading the team, 25
+`issue_link` rows and 25 issues would make every existing instance (all of which have
+`auto_status_since IS NULL`) pay ~27 queries for every comment, label and review on every merged
+pull request, forever. `updated_at` bumps on any activity, so that is the common case, not the rare
+one, and it is a sub-100ms constraint rather than hygiene.
+
+So the applier checks the edge (free), then reads the team once and checks off + epoch, before
+touching a single link. The per-issue guards (4–8) stay inside `decideAutoStatus` where they can be
+table-tested. The hoisted three are commented as guards 1–3 of the same ladder so the duplication is
+legible rather than accidental.
+
+### I8 — `AutoStatusContext` is declared in `auto-status.ts`, not imported from `work-graph.ts`
+
+`applyAutoStatusForPullRequest`'s second parameter is structurally `WorkGraphContext`
+(`{ teamId, now }`). Importing that type would be erased at build and harmless at runtime, but it
+would put an edge back from `auto-status.ts` to `work-graph.ts` in the source graph that §D8's
+stated direction (`work-graph.ts → auto-status.ts → mutators.ts`) forbids. The interface is four
+words; it is declared locally and the call sites pass their own object.
+
+The `teamId` passed is the PULL REQUEST's team, not blindly `ctx.teamId`: on the update branch that
+is `existing.teamId`, matching what `linkIssues` already scopes to, so a repo whose team mapping was
+changed after the PR row was written reads the setting of the team the PR actually lives in.
+
+### I9 — Four existing exact-shape assertions were updated, because the stamp changes the row
+
+`mutators.issue.test.ts` (setStatus, move) and `mutators.triage.test.ts` (declineTriage, routeIssue)
+assert the recorded write with `toEqual` on the whole value, so adding `lastHumanStatusAt` turned
+them red. Each gained the one new key with the same instant as `updatedAt`. This is the same call as
+I3's drift mirror: leaving the suite red between this phase and the test phase contradicts "the app
+runs after every task", and these are existing assertions describing the new intended row — not the
+new tests of tasks 3.5/3.6, which remain unwritten and owned by the test phase.
+
+### I10 — Behaviour proven against live Postgres this phase, then the probe deleted
+
+The falsifiable check (task 5.1) belongs to the test phase, but shipping an unexercised state
+machine on the strength of unit-level fakes would be exactly the "fluent, plausible, wrong" failure
+this project keeps warning about. A throwaway `*.pg.test.ts` was driven through the REAL
+`applyWorkGraphMutations` path against the `yapm-as` stack (`postgres://…:5446`), then removed. Six
+scenarios, all passing:
+
+1. T1 (`auto_status_since` = an hour ago) `todo → in_review` on the open edge, `→ done` on the merge
+   edge; T2 (`NULL`) stays `todo` through both, and `computeDivergence('todo', signal)` returns
+   `status_behind_merge` — off is unchanged, divergence and all.
+2. A verbatim replay of the merged mutation: `issue.updated_at` byte-identical before and after, and
+   `last_human_status_at` still `NULL` — which is simultaneously the idempotency proof and the proof
+   that the system principal does not stamp.
+3. A member's move to `in_progress` after the merge survives a later merged-PR delivery whose
+   `eventAt` is older than the human's.
+4. **The edge-versus-state isolation, which 1–3 do not reach**: with the issue at `in_progress` and
+   a human stamp at `NOW+10s`, an activity bump on the already-merged PR carrying
+   `updatedAt = NOW+30s` — NEWER than the human — still writes nothing. Firing on state would flip
+   the issue back to `done` here; firing on the edge cannot. This is §D5's motivating scenario and
+   the one a plausible-but-wrong implementation passes tests 1–3 while failing.
+5. A merged PR whose `updatedAt` precedes `auto_status_since` drives nothing.
+6. An untriaged issue and a canceled issue are both left alone by a merged PR.
+
+### I11 — Gate output for this phase
+
+`pnpm turbo lint typecheck build` clean (12 tasks; one Biome export-ordering fix applied via
+`pnpm run format`). `node scripts/check-boundaries.mjs` clean. With
+`DATABASE_URL=postgres://yapm:yapm@localhost:5446/yapm`, `pnpm turbo test` 7/7 tasks:
+`@yapm/schema` 42 files / 578 tests, `@yapm/server` 32 / 236, `@yapm/web` 29 / 280, `@yapm/ui` 6 / 85,
+`@yapm/email` 3 / 23 — including the `ai-tools` exhaustiveness test, which `team.setAutoStatus`
+would have broken had 3.4 been skipped. `git diff --stat -- apps/server/src/connectors/github/` is
+empty: the firewall property holds by absence, as §D8 requires.

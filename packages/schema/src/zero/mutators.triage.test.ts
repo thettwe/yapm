@@ -112,7 +112,7 @@ describe('issue.declineTriage', () => {
       {
         table: 'issue',
         verb: 'update',
-        value: { id, needsTriage: false, status: 'canceled', updatedAt: 9 },
+        value: { id, needsTriage: false, status: 'canceled', lastHumanStatusAt: 9, updatedAt: 9 },
       },
     ])
   })
@@ -157,6 +157,7 @@ describe('issue.routeIssue', () => {
       id,
       needsTriage: false,
       status: 'todo',
+      lastHumanStatusAt: 11,
       assigneeId: MEMBER.userID,
       cycleId,
       // Routing into a cycle stamps the assignment moment, which is what makes the retro's

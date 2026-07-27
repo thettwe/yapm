@@ -151,7 +151,11 @@ describe('issue.setStatus / setPriority / assign', () => {
       ctx: MEMBER,
     })
     expect(calls).toEqual([
-      { table: 'issue', verb: 'update', value: { id, status: 'in_progress', updatedAt: 5 } },
+      {
+        table: 'issue',
+        verb: 'update',
+        value: { id, status: 'in_progress', lastHumanStatusAt: 5, updatedAt: 5 },
+      },
     ])
   })
 
@@ -207,7 +211,7 @@ describe('issue.move', () => {
       {
         table: 'issue',
         verb: 'update',
-        value: { id, status: 'in_review', rank: 'a1', updatedAt: 7 },
+        value: { id, status: 'in_review', rank: 'a1', lastHumanStatusAt: 7, updatedAt: 7 },
       },
     ])
   })

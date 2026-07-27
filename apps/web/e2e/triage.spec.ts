@@ -55,6 +55,8 @@ async function createIssue(page: Page, title: string): Promise<void> {
 // the keyboard rather than clicking an unfiltered deep item: cmdk re-sorts its list on every
 // render while Zero sync settles, so a click on a moving row races the re-render churn. Typing
 // narrows the list to one stable option and Enter fires it off the input, immune to that churn.
+// `exact`: the palette's persistent escalation row echoes the typed query back, so a substring
+// name now matches the action AND `Search everything for "Send to triage" →`.
 async function sendToTriage(page: Page, title: string): Promise<void> {
   const target = page.locator(ROW).filter({ hasText: title })
   await target.focus()
@@ -64,7 +66,7 @@ async function sendToTriage(page: Page, title: string): Promise<void> {
   await expect(palette).toBeVisible()
   const search = page.getByPlaceholder(/Type a command or search/)
   await search.fill('Send to triage')
-  await expect(page.getByRole('option', { name: 'Send to triage' })).toBeVisible()
+  await expect(page.getByRole('option', { name: 'Send to triage', exact: true })).toBeVisible()
   await search.press('Enter')
   await expect(page.locator(ROW).filter({ hasText: title })).toHaveCount(0, { timeout: 20_000 })
 }

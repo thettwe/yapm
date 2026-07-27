@@ -42,10 +42,16 @@ const doc = (text: string): string =>
 //
 // Neither seeded document carries a mention, so no id -> name map is loaded; the job's `'label'`
 // resolution is asserted where the job lives.
-async function indexToConvergence(database: Database): Promise<void> {
+//
+// `teamIds` is not decoration. The diff is global by design and every Postgres suite in the repo
+// runs against ONE database, so an unscoped upsert here re-indexes rows this file does not own —
+// which silently heals `apps/server/src/jobs/search.pg.test.ts`'s deliberately backdated issue and
+// fails it. It also protects this file: the diff orders by id, ids are UUIDv7, and this fixture is
+// the newest thing in the database, so an unscoped batch would be the first to drop it.
+async function indexToConvergence(database: Database, teamIds: readonly string[]): Promise<void> {
   for (const entityType of ['issue', 'comment'] as const) {
     for (let pass = 0; pass < 50; pass += 1) {
-      const rows = await reconcileDiffBatch(database.db, { entityType, limit: 200 })
+      const rows = await reconcileDiffBatch(database.db, { entityType, limit: 200, teamIds })
       if (rows.length === 0) break
       const documents: SearchDocumentRow[] = rows.map((row) => ({
         entityType: row.entityType,
@@ -301,7 +307,7 @@ describe.skipIf(DATABASE_URL === undefined)('search over live Postgres', () => {
       })
       .execute()
 
-    await indexToConvergence(database)
+    await indexToConvergence(database, [teamOneId, teamTwoId])
 
     memberScope = await resolveSearchScope(db, memberId)
     adminScope = await resolveSearchScope(db, adminId)
@@ -378,7 +384,7 @@ describe.skipIf(DATABASE_URL === undefined)('search over live Postgres', () => {
         wire(await search(adminScope, 'qzt-bravo')),
         wire(await search(memberScope, 'qzt-golf')),
       ]
-      await indexToConvergence(database)
+      await indexToConvergence(database, [teamOneId, teamTwoId])
       const after = [
         wire(await search(memberScope, 'qzt-alpha')),
         wire(await search(memberScope, 'qzt-bravo')),

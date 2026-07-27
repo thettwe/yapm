@@ -280,11 +280,11 @@ client group (7–10) after the server contract it consumes exists.
 
 ## 13. Verification
 
-- [ ] 13.1 `pnpm turbo lint typecheck test build` green, with the integration tests run against live
+- [x] 13.1 `pnpm turbo lint typecheck test build` green, with the integration tests run against live
       Postgres (`DATABASE_URL` set) so nothing self-skips.
-- [ ] 13.2 The compose smoke test passes from empty volumes, re-confirming task 2.6's finding on the
+- [x] 13.2 The compose smoke test passes from empty volumes, re-confirming task 2.6's finding on the
       integrated branch.
-- [ ] 13.3 Walk every scenario in `openspec/changes/search/specs/**` and confirm it is true.
-- [ ] 13.4 Confirm the falsifiable check fails on `main` and passes here, and record in design.md's
+- [x] 13.3 Walk every scenario in `openspec/changes/search/specs/**` and confirm it is true.
+- [x] 13.4 Confirm the falsifiable check fails on `main` and passes here, and record in design.md's
       implementation log which plausible-but-wrong implementations were perturbed to prove the check
       bites (at minimum: snippet generated before the scoping filter, and a 503 on timeout).

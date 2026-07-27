@@ -106,12 +106,18 @@ async function acceptInvite(browser: Browser, inviteLink: string) {
 // choice rather than clicking a row cmdk is still re-sorting as data syncs in. The input is
 // located by role, not by placeholder: the palette rewrites its placeholder per page, so
 // `Type a command or search…` exists on the root page and nowhere else.
+// The root palette's persistent escalation row echoes the typed query back, so it matches every
+// option name this helper is given; it is excluded by text rather than by an exact name, because
+// the assign rows carry more than the label they are looked up by.
 async function choose(page: Page, query: string, option: string, wait = 20_000): Promise<void> {
   const palette = page.getByRole('dialog', { name: 'Command palette' })
   await expect(palette).toBeVisible({ timeout: 20_000 })
   const search = palette.getByRole('combobox')
   await search.fill(query)
-  await expect(page.getByRole('option', { name: option })).toBeVisible({ timeout: wait })
+  const match = page
+    .getByRole('option', { name: option })
+    .filter({ hasNotText: 'Search everything for' })
+  await expect(match).toBeVisible({ timeout: wait })
   await search.press('Enter')
   await expect(palette).toBeHidden({ timeout: 20_000 })
 }

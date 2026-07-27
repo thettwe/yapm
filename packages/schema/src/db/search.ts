@@ -395,6 +395,12 @@ export async function staleCommentBatch(
 export interface ReconcileDiffOptions {
   readonly entityType: SearchEntityType
   readonly limit: number
+  // A narrowing the reconcile pass never uses — it diffs the whole index, which is the point. It
+  // exists because the diff is global and the repo's Postgres suites share one database: a caller
+  // that upserts every row this returns re-indexes rows it does not own, which silently heals
+  // another suite's deliberately-stale fixture. Ordering by id makes that worse, not better, since
+  // ids are UUIDv7 and the newest rows sort last.
+  readonly teamIds?: readonly string[]
 }
 
 // The full diff, and the reason the passes need no cursor table: it asks "which source rows have no
@@ -409,8 +415,12 @@ export async function reconcileDiffBatch(
   db: Kysely<DB>,
   options: ReconcileDiffOptions,
 ): Promise<SearchSourceRow[]> {
+  const teamIds = options.teamIds
+  // An empty narrowing is "no teams", not "every team". Returned early because Kysely renders an
+  // empty `in` list as invalid SQL rather than as a false predicate.
+  if (teamIds !== undefined && teamIds.length === 0) return []
   if (options.entityType === 'issue') {
-    const rows = await db
+    let issueQuery = db
       .selectFrom('issue')
       .leftJoin('search_document as d', (join) =>
         join.on('d.entity_type', '=', 'issue').onRef('d.entity_id', '=', 'issue.id'),
@@ -431,7 +441,8 @@ export async function reconcileDiffBatch(
       )
       .orderBy('issue.id', 'asc')
       .limit(options.limit)
-      .execute()
+    if (teamIds !== undefined) issueQuery = issueQuery.where('issue.team_id', 'in', teamIds)
+    const rows = await issueQuery.execute()
     return rows.map((row) => ({
       entityType: 'issue' as const,
       entityId: row.id,
@@ -445,7 +456,7 @@ export async function reconcileDiffBatch(
     }))
   }
 
-  const rows = await db
+  let commentQuery = db
     .selectFrom('comment')
     .leftJoin('search_document as d', (join) =>
       join.on('d.entity_type', '=', 'comment').onRef('d.entity_id', '=', 'comment.id'),
@@ -463,7 +474,8 @@ export async function reconcileDiffBatch(
     )
     .orderBy('comment.id', 'asc')
     .limit(options.limit)
-    .execute()
+  if (teamIds !== undefined) commentQuery = commentQuery.where('comment.team_id', 'in', teamIds)
+  const rows = await commentQuery.execute()
   return rows.map((row) => ({
     entityType: 'comment' as const,
     entityId: row.id,

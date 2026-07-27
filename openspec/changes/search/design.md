@@ -1226,3 +1226,87 @@ them (the `createServerMutators()` maintenance bullet superseded by H10, the `Re
 and saved views), plus one that no answer superseded but the build corrected: the reconcile is its
 own `search-reconcile` cron rather than being folded into `cycle-maintenance`, which an operator can
 switch off with `CYCLE_MAINTENANCE=false`.
+
+### I39 — Task 13.4: both named perturbations bite, and neither bites where it was expected to
+
+The two plausible-but-wrong implementations task 13.4 names were built and run against the shipped
+tests, one at a time, on the integrated branch:
+
+- **Snippet generated before the scoping filter.** `ts_headline` moved into the inner select over
+  `d.body`, the `team_id = any($teams)` predicate moved out of the indexed scan and into the outer
+  `where`. Result: `search.pg.test.ts` **2 failed / 13 passed** — `does not let higher-ranked
+  out-of-scope rows crowd out an in-scope one` and `returns the in-scope row identically at every
+  limit the out-of-scope rows could fill`.
+- **A 503 on timeout.** The catch arm returning `c.json({error}, 503)` instead of `EMPTY`. Result:
+  `routes.pg.test.ts` **2 failed / 8 passed** — `returns one identical response for every non-401
+  outcome` and `emits not one line carrying the query, on a hit, a miss, a timeout or a 401`.
+
+Worth recording: the snippet perturbation is caught by the **same two assertions I13 added for the
+filter-after-ranking case**, not by anything about snippets. Both wrong implementations are the same
+defect wearing different clothes — the scoping predicate leaving the indexed scan — and the only
+assertions that see it are the ones that search a token matching on *both* sides of the boundary.
+Every "is the snippet right" assertion in the file passes under the perturbation, because the
+snippets the caller receives are correct; it is the ones they never receive that cost them a slot.
+A reviewer tempted to delete the `qzt-hotel` corpus as redundant should read that sentence again.
+
+On `main` the check cannot pass at all: `git grep` for `api/v1/search`, `search_document` and
+`useLocalSearchCorpus` outside `openspec/` returns only `ROADMAP.md`'s planning line. The route, the
+table and the on-device hook do not exist there, so `search.spec.ts` and both `.pg.test.ts` files
+fail on absence rather than on behaviour.
+
+### I40 — Two prior e2e specs asserted on a substring name the escalation row now also matches
+
+The full Playwright suite failed in six places on the integrated branch, all one cause:
+`getByRole('option', { name })` is a substring match, and the palette's persistent
+`Search everything for "…" →` row echoes the typed query back, so every option looked up by the text
+that was typed to filter to it now resolves to two elements.
+
+The product behaviour is the intended one (task 9.5's row is meant to be there, and D15 wants the
+escape hatch visible for every query), so the fix is in the specs: `triage.spec.ts` matches the
+action name with `exact: true`, and `notifications.spec.ts`'s `choose()` excludes the row by text
+rather than by an exact name, because its assign rows carry more than the label they are looked up
+by. Both were verified against the real stack: 71 passed, 0 failed.
+
+The cursor was never at risk — the escalation row is appended below the actions and the palette's
+controlled `value` kept the action row selected throughout — so this was an assertion that had gone
+ambiguous, not a regression in what Enter does.
+
+### I41 — `rank-collation.test.ts` was 510 round-trips inside a 5-second timeout
+
+The first full `turbo test` run against empty volumes failed on `packages/schema/src/db/
+rank-collation.test.ts` at 5005 ms against vitest's 5000 ms default. It is untouched by this change,
+but it inserted its 510 probe rows one statement at a time while every other suite in the repo ran
+its Postgres tier concurrently, and `search` adds three of those suites.
+
+Batching the inserts into a single multi-row `insert` took the test from 5005 ms to 70 ms. The
+shuffle that makes the assertion meaningful is preserved — the rows still arrive in a random order
+and Postgres still has to sort them — so nothing about what is proven changed, only how long a
+pooled connection is held. Recorded because it is an unrelated file touched by this change, and
+because the diagnosis (connection hold time under suite-wide concurrency, not the assertion) is what
+makes the edit safe.
+
+### I42 — One suite's index reconcile was healing another suite's fixture, because the diff is global and the database is not
+
+A full `turbo test` run failed `apps/server/src/jobs/search.pg.test.ts` › `misses a backdated row in
+the tail and heals it in the reconcile`, with the backdated title already healed *before* the
+reconcile that is supposed to heal it. It passed when the package was run alone, and passed on the
+next five turbo runs — a real race, not a flake to be re-run away.
+
+The cause: `packages/schema/src/db/search.pg.test.ts`'s `indexToConvergence` composed the shipped
+helpers (I10) but called `reconcileDiffBatch` **unscoped**, and the reconcile diff is global by
+design — it asks "which rows in this database disagree with their document". Every Postgres suite in
+the repo shares one `DATABASE_URL`, and turbo runs `@yapm/schema#test` and `@yapm/server#test`
+concurrently, so that upsert re-indexed rows the file did not own, including the issue the server
+suite had just deliberately backdated.
+
+Demonstrated rather than reasoned about. A foreign issue was made stale by hand, then:
+
+- with the scoping in place, `search.pg.test.ts` ran green and the foreign document still read
+  `Board card ms2plmqt-8h4t`;
+- with the scoping removed, the same run left it reading `FOREIGN STALE PROBE`.
+
+`ReconcileDiffOptions` gained an optional `teamIds` narrowing, which the reconcile pass itself never
+passes. It is production surface added for a test, which is worth being explicit about: the
+alternative is a test that writes rows it does not own, and the same narrowing also protects the
+schema suite from itself — the diff orders by id, ids are UUIDv7, so the newest rows sort last and an
+unscoped `limit: 200` over a large shared database would drop this fixture first.

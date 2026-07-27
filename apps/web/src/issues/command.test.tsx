@@ -131,14 +131,30 @@ function Opener() {
   )
 }
 
-function mount() {
-  render(
+function tree() {
+  return (
     <CommandProvider teamId="team-1" issues={[]}>
       <Opener />
-    </CommandProvider>,
+    </CommandProvider>
   )
+}
+
+let view: ReturnType<typeof render> | undefined
+
+function mount() {
+  view = render(tree())
   act(() => {
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
+  })
+}
+
+// A row arriving from the sync engine is a re-render with no interaction behind it — no keystroke,
+// no click, no new request. Re-rendering rather than pressing a key is what keeps the cursor
+// assertions below about the arrival instead of about the key that provoked it.
+async function replicate() {
+  await act(async () => {
+    view?.rerender(tree())
+    await vi.advanceTimersByTimeAsync(0)
   })
 }
 
@@ -225,6 +241,42 @@ test('an issue both passes match renders once', async () => {
   expect(screen.getAllByText('Replica resync')).toHaveLength(2)
   expect(itemValues()).not.toContain('server:issue:issue-9')
   expect(itemValues()).toContain('server:comment:s2')
+})
+
+// …and the other direction, which is the one that costs the caller something. The on-device group
+// keeps growing after the server group has painted, so suppression decided per render lets a row
+// that replicates seconds late DELETE a server row already on screen — taking the cursor keyed to
+// it down with it. Suppression is decided once, against the corpus as it stood when the answer
+// landed.
+test('a local row that replicates late does not delete the server row already on screen', async () => {
+  harness.rows = { 'teams.all': [TEAM] }
+  mount()
+  await type('replica')
+  await settleServer([
+    {
+      ...serverHit('s1', 'Replica resync'),
+      type: 'issue',
+      id: 'issue-9',
+      issueId: 'issue-9',
+      snippet: '',
+    },
+  ])
+
+  const before = itemValues()
+  expect(before).toContain('server:issue:issue-9')
+  fireEvent.keyDown(input(), { key: 'ArrowDown' })
+  expect(activeValue()).toBe('server:issue:issue-9')
+
+  harness.rows = {
+    'teams.all': [TEAM],
+    'issues.byTeam': [issue({ id: 'issue-9', number: 9, title: 'Replica resync' })],
+  }
+  await replicate()
+
+  const after = itemValues()
+  expect(after).toContain('local:issue:issue-9')
+  expect(after).toContain('server:issue:issue-9')
+  expect(activeValue()).toBe('server:issue:issue-9')
 })
 
 test('a description-only token surfaces in the on-device group', async () => {

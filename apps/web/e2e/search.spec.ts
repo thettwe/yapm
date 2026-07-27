@@ -374,6 +374,18 @@ test.describe('search', () => {
     const last = await findIssueRow(db, titles[2] ?? '')
     await waitForIndexed(db, last.id)
 
+    // The late arrival has to be something the on-device pass structurally cannot hold, or the
+    // duplicate suppression removes it and there is no server group left to arrive. A comment on an
+    // issue nobody has opened is exactly that: comments sync only for the open issue, so this row
+    // reaches the list through the index or not at all.
+    const commentId = await seedComment(db, {
+      teamId: last.teamId,
+      issueId: last.id,
+      authorId: await findUserId(db, ADMIN.email),
+      body: `A late note about ${found} that only the index can reach.`,
+    })
+    await waitForIndexed(db, commentId)
+
     // Slow enough that the arrow keys are pressed while the request is unmistakably outstanding.
     await page.route('**/api/v1/search*', async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 2_500))
@@ -399,6 +411,9 @@ test.describe('search', () => {
     expect(activeBefore).toBe(before[2])
 
     await expect(page.locator(SERVER_ROW).first()).toBeVisible({ timeout: 30_000 })
+    // Exactly one: the comment. The three issues the server also matched are already in the
+    // on-device group above, and a build that rendered them twice would show four rows here.
+    await expect(page.locator(SERVER_ROW)).toHaveCount(1)
 
     const after = await order()
     const activeAfter = await page

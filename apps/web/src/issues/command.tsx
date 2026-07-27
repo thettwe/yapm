@@ -54,12 +54,7 @@ import { type IssueRowData, STATUS_LABEL, STATUS_TO_KIND } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
 import { useSearchCursor } from '@/search/cursor'
 import { filterPaletteGroups, type PaletteGroup, type PaletteRow } from '@/search/palette-rows'
-import {
-  localSearchRows,
-  type SearchRow,
-  serverSearchRows,
-  withoutLocalDuplicates,
-} from '@/search/results'
+import { localSearchRows, type SearchRow } from '@/search/results'
 import {
   SEARCH_EMPTY_REFINE,
   SEARCH_EMPTY_STALE,
@@ -72,6 +67,7 @@ import {
 } from '@/search/states'
 import { useLocalSearchCorpus } from '@/search/use-local-corpus'
 import { useOpenSearchResult } from '@/search/use-open-result'
+import { useDedupedServerRows } from '@/search/use-server-rows'
 import { useServerSearch } from '@/search/use-server-search'
 
 type PalettePage = 'root' | 'status' | 'assign' | 'label' | 'project' | 'create'
@@ -81,6 +77,10 @@ type PalettePage = 'root' | 'status' | 'assign' | 'label' | 'project' | 'create'
 const PALETTE_GROUP_LIMIT = 5
 
 const ESCALATE_ROW_ID = 'search:everything'
+
+// Shared rather than a fresh literal: the sub-pages render no result rows at all, and a new empty
+// array each render would re-key the cursor's row list for nothing.
+const NO_SEARCH_ROWS: readonly SearchRow[] = []
 
 interface CommandApi {
   open: () => void
@@ -408,10 +408,8 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
     () => (isRoot ? localSearchRows(corpus.search(search, PALETTE_GROUP_LIMIT), teamId) : []),
     [isRoot, corpus, search, teamId],
   )
-  const serverRows = useMemo(
-    () => (isRoot ? withoutLocalDuplicates(localRows, serverSearchRows(server.results)) : []),
-    [isRoot, localRows, server.results],
-  )
+  const dedupedServerRows = useDedupedServerRows(search, localRows, server.results)
+  const serverRows = isRoot ? dedupedServerRows : NO_SEARCH_ROWS
 
   const escalate = isRoot && search.trim().length > 0
   const rowIds = useMemo(() => {

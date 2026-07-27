@@ -1430,3 +1430,31 @@ reproducing the exact race I42 diagnosed, against a sibling suite in the same pa
 database. It also left the suite exposed to the second half of I42's reasoning: the diff orders by
 UUIDv7 id ascending, so over a shared accumulating database an unscoped `limit: 200` drops the
 newest rows first, and these fixtures are the newest thing in it. Now scoped to its two teams.
+
+### I51 — Review round 2: duplicate suppression was re-decided on every render
+
+I44's suppression read the live on-device group inside a `useMemo` keyed on that group's identity.
+The corpus keeps growing after the server group has painted — the sync engine replicates a row
+seconds later — so a late local arrival did not merely stop rendering a duplicate, it DELETED a
+server row the caller was already looking at, and the cursor keyed to that row identity fell back to
+the top of the list. The append-only invariant D8 states covers additions; removals were never named
+because nothing was supposed to remove.
+
+`useDedupedServerRows` (`apps/web/src/search/use-server-rows.ts`) decides suppression **once per
+answer**: the memo is keyed on `(query, results)` and reads the local group through a ref, so a
+corpus change cannot re-open the question, and an id already shown for the current query is retained
+for as long as the answer still carries it. The retained set is cleared when the query changes. Both
+surfaces call the one hook, so the palette and `/search` cannot drift on it.
+
+The e2e companion had to move with it. 11.3's late arrival was three issues the on-device pass also
+holds, so suppression correctly removed all three and left the test waiting for a group that could
+never appear. It now seeds a comment on one of them — text the on-device pass structurally cannot
+hold — and additionally pins the suppression itself: exactly one row under "From the server".
+
+### I52 — Review round 2: two prose claims the `abbreviation` tier had made stale
+
+I47 added the sixth tier and amended the docs page. `TECHSTACK.md`'s Search row still read "So search
+is exact, not fuzzy" — true of the server pass, and now wrong about the client one, which reaches
+`Change status` from `cs` — and still described the client pass as plain "substring semantics". Both
+scoped to what shipped. The change's own spec carried the same two phrasings ("substring on-device",
+"by name substring"); the acceptance criteria now describe the six-tier ladder they are judging.

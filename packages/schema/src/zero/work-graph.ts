@@ -1,4 +1,5 @@
 import type { Transaction } from '@rocicorp/zero'
+import { applyAutoStatusForPullRequest } from './auto-status.js'
 import type {
   CiConclusion,
   ConnectorLinkSource,
@@ -144,6 +145,23 @@ async function findPr(
   )) as PrRow | undefined
 }
 
+// The instant the ASSERTED STATE occurred, which is what the team's opt-in epoch has to be compared
+// against. `updated_at` is the pull request's last-activity time and bumps on a comment or a label,
+// so comparing THAT against the epoch would let a pull request merged long before a team opted in
+// drive Done the first time anyone touches it afterwards — the exact rewrite the epoch exists to
+// prevent. `mutation.updatedAt` remains the out-of-order guard; only this feeds the ladder.
+// `openedAt` is used only when the row is first seen: on an update, an `open` edge is a draft marked
+// ready for review, which happens at `updated_at`, not at creation.
+function stateEventAt(
+  mutation: Extract<WorkGraphMutation, { kind: 'upsertPullRequest' }>,
+  state: PullRequestState,
+  firstSeen: boolean,
+): number {
+  if (state === 'merged') return mutation.mergedAt ?? mutation.updatedAt
+  if (firstSeen && state === 'open') return mutation.openedAt
+  return mutation.updatedAt
+}
+
 async function linkIssues(
   tx: Transaction,
   pr: { id: string; teamId: string },
@@ -199,18 +217,33 @@ export async function applyWorkGraphMutation(
         // `merged` is terminal on GitHub: never regress away from it, and preserve the recorded
         // merge time. A closed PR may still reopen, so only merged is pinned.
         const terminalMerged = existing.state === 'merged'
+        const effectiveState = terminalMerged ? 'merged' : mutation.state
         await tx.mutate.pull_request.update({
           id: existing.id,
           repo: mutation.repo,
           number: mutation.number,
           title: mutation.title,
-          state: terminalMerged ? 'merged' : mutation.state,
+          state: effectiveState,
           url: mutation.url,
           headSha: mutation.headSha,
           mergedAt: terminalMerged ? existing.mergedAt : mutation.mergedAt,
           updatedAt: mutation.updatedAt,
         })
         await linkIssues(tx, existing, mutation.issueRefs, now)
+        // After linking, so a delivery that both links and transitions does both. The EFFECTIVE
+        // state is passed, not `mutation.state`: `updated_at` bumps on any activity, so an
+        // already-merged pull request emits fresh mutations for months and only the edge
+        // `existing.state -> effectiveState` distinguishes the merge from the comment on it.
+        await applyAutoStatusForPullRequest(
+          tx,
+          { teamId: existing.teamId, now },
+          {
+            pullRequestId: existing.id,
+            previousState: existing.state,
+            state: effectiveState,
+            eventAt: stateEventAt(mutation, effectiveState, false),
+          },
+        )
         return
       }
       await tx.mutate.pull_request.insert({
@@ -231,6 +264,19 @@ export async function applyWorkGraphMutation(
         updatedAt: mutation.updatedAt,
       })
       await linkIssues(tx, { id: mutation.id, teamId: ctx.teamId }, mutation.issueRefs, now)
+      // A pull request yapm has not seen before: `null` previous state, so the insert is always an
+      // edge and a PR that arrives already merged (backfill, reconcile) is one merge edge, not none.
+      // The since-epoch, not this branch, is what keeps that backfill from rewriting a board.
+      await applyAutoStatusForPullRequest(
+        tx,
+        { teamId: ctx.teamId, now },
+        {
+          pullRequestId: mutation.id,
+          previousState: null,
+          state: mutation.state,
+          eventAt: stateEventAt(mutation, mutation.state, true),
+        },
+      )
       return
     }
 

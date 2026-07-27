@@ -48,9 +48,10 @@ to own it under an organization).
 | Checks | Read-only | CI health |
 | Deployments | Read-only | Deploy state |
 
-Read-only covers the wedge (PR/CI/deploy state driving the issue's reality strip) and guarantees
-yapm never modifies your GitHub. Only escalate Issues + Pull requests to **Read & write** if you
-later want yapm to post back-reference comments on PRs — that forces installers to re-approve.
+Read-only covers the wedge (PR/CI/deploy state driving the issue's reality strip **and**, for teams
+that opt in, the issue's status) and guarantees yapm never modifies your GitHub. Only escalate
+Issues + Pull requests to **Read & write** if you later want yapm to post back-reference comments on
+PRs — that forces installers to re-approve.
 
 ## 4. Subscribe to events
 
@@ -101,3 +102,24 @@ deployments. Ingested work-graph rows land inside that team's boundary; a webhoo
 repo is dropped. Once mapped, a PR whose branch name or body mentions an issue key (e.g. `ENG-142`)
 lights up that issue's **reality strip** — PR state, CI health, and review age — on the issue row
 and detail.
+
+## 10. Optionally, let pull requests drive issue status
+
+By default, linked PR activity only *shows* on the issue — a status that disagrees with git gets a
+[divergence flag](/features/delivery-signals/#the-divergence-flag), never a rewrite. The same
+*Settings → Connectors* page has a **Status automation** section where an admin can turn that into a
+transition, **per team**:
+
+- **Off by default**, and off for every team after an upgrade. An instance that adopts nothing
+  behaves exactly as before.
+- **Two transitions only** — a linked PR opening moves the issue to In Review, merging it moves the
+  issue to Done. Never backward, never onto a canceled or untriaged issue.
+- **Enabling changes no existing issue.** yapm records the instant you enabled it and ignores every
+  PR event older than that, so first-install backfill and the reconcile sweep cannot retroactively
+  rewrite a board.
+- **No new App permission and no write to GitHub.** The transition is a write to yapm's own
+  database; nothing is posted back to the provider, so nobody has to re-approve the installation.
+- **No new environment variable, container, or job.** The whole setting is one column per team.
+
+See [Status automation](/features/auto-status/) for the full guard ladder, how it interacts with the
+divergence flag, and the branch-name caveat worth knowing before you enable it.

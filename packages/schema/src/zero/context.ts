@@ -228,6 +228,18 @@ export interface AuthContext {
   readonly role: WorkspaceRole | null
 }
 
+// The instance acting as itself: cycle rollover, and the connector union's status automation.
+// Two rules bound this principal, and neither is expressible in the type:
+//   1. It is reachable only from server-side call sites driven by instance-produced data — a
+//      scheduler tick, or a mutation the ingest path derived from a verified provider delivery.
+//   2. It is never derived from a request. No header, token, cookie or payload field may select
+//      it, and no client mutator may be invoked under it.
+// It carries `admin` so the team-scoped write gates pass for every team; no user is impersonated,
+// and `userID` is a reserved literal rather than a row in `user`.
+export const SYSTEM_ACTOR_ID = 'system'
+
+export const SYSTEM_AUTH_CONTEXT: AuthContext = { userID: SYSTEM_ACTOR_ID, role: 'admin' }
+
 // User-scoped entities gate on identity alone: authenticated is enough, membership is not
 // required (a signed-in non-member still reads and writes their own preference).
 export function isAuthenticated(ctx: AuthContext | undefined): ctx is AuthContext {

@@ -77,7 +77,8 @@ Source: https://docs.github.com/en/rest/authentication/permissions-required-for-
 | `statuses` ("Commit statuses") | read | Legacy `status` events (Travis/older CI) → CI health. |
 | `deployments` | read | deployment / deployment_status → deploy state. |
 
-- If v1 only *reads* PR/issue state and never writes back, `issues`/`pull_requests` can be **read**. Start read-only, escalate to write only when auto-status-write / back-linking ships. Escalating permissions later forces installers to re-approve — so decide the v1 write surface deliberately.
+- If v1 only *reads* PR/issue state and never writes back, `issues`/`pull_requests` can be **read**. Start read-only, escalate to write only when writing *to GitHub* — a status/label/comment pushed back to the provider, or back-linking — actually ships. Escalating permissions later forces installers to re-approve — so decide the v1 write surface deliberately.
+- **Not triggered by yapm's own status automation** (change `auto-status`): a linked PR opening or merging moves the *yapm* issue, which is a write to yapm's Postgres and nothing else. No GitHub write scope, no re-approval. This distinction is easy to lose because both are called "auto-status" — the one that costs a scope is the *write-back*, which yapm deliberately does not do.
 - Each permission gates the matching webhook events (§2.5) and REST endpoints. E.g. `checks:read` is required to receive `check_run`/`check_suite` and to call `GET /repos/{owner}/{repo}/commits/{ref}/check-runs`.
 
 ### 1.4 Private key + credential storage

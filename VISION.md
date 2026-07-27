@@ -83,8 +83,8 @@ Everyone else — cloud-first startups, Jira escapees, OSS maintainers — comes
 
 ## Phasing sketch (to be refined into a roadmap)
 
-1. **Phase 1 — PM core, graph-ready.** Issues, projects, cycles, triage, keyboard-first UI, GitHub sync (branch/PR ↔ issue). The schema models the full work graph from day one even before all edges are ingested.
-2. **Phase 2 — Delivery truth.** PR/CI/deploy ingestion, automatic status transitions, DORA + review-health + CI-health views.
+1. **Phase 1 — PM core, graph-ready.** Issues, projects, cycles, triage, keyboard-first UI, GitHub sync (branch/PR ↔ issue), and **opt-in per-team status transitions** driven by that link — off by default, with the divergence flag as the behaviour whenever they are off or blocked. The schema models the full work graph from day one even before all edges are ingested.
+2. **Phase 2 — Delivery truth.** PR/CI/deploy ingestion, DORA + review-health + CI-health views. *Automatic status transitions were scoped here; the pull-request half of them shipped in Phase 1 instead, on opt-in terms, so what remains is deploy- and CI-driven transitions, which need an issue↔deployment edge that does not exist yet.*
 3. **Phase 3 — Incidents + cloud.** Incident tracking closing the loop (change failure rate, MTTR), then the managed cloud offering.
 
 ## Honest risks

@@ -60,6 +60,8 @@ const team = table('team')
     name: string(),
     key: string(),
     archivedAt: number().from('archived_at').optional(),
+    // Opt-in status automation: absent is off, a timestamp is on-since-then.
+    autoStatusSince: number().from('auto_status_since').optional(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })
@@ -120,6 +122,8 @@ const issue = table('issue')
     // Cycle-history facts the retro's Delivered panel reports as facts rather than guesses.
     carryoverCount: number().from('carryover_count'),
     cycleAssignedAt: number().from('cycle_assigned_at').optional(),
+    // When a person last set the status, which `updatedAt` cannot distinguish from any other edit.
+    lastHumanStatusAt: number().from('last_human_status_at').optional(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })

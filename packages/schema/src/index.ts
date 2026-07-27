@@ -50,6 +50,18 @@ export {
   needsApproval,
 } from './zero/ai-tools.js'
 export type {
+  AutoStatusContext,
+  AutoStatusInput,
+  AutoStatusPullRequestInput,
+  AutoStatusRung,
+} from './zero/auto-status.js'
+export {
+  AUTO_STATUS_MAX_LINKED_ISSUES,
+  AUTO_STATUS_RANK,
+  applyAutoStatusForPullRequest,
+  decideAutoStatus,
+} from './zero/auto-status.js'
+export type {
   ConnectorContext,
   ConnectorDefinition,
   ConnectorHeaders,
@@ -127,6 +139,8 @@ export {
   RETRO_VOTE_TARGETS,
   REVIEW_STATES,
   SUBSCRIPTION_STATES,
+  SYSTEM_ACTOR_ID,
+  SYSTEM_AUTH_CONTEXT,
   THEME_PRESETS,
   WORKSPACE_ROLES,
 } from './zero/context.js'
@@ -217,6 +231,7 @@ export type {
   RetractRetroVoteArgs,
   SetPreferenceArgs,
   SetRetroPhaseArgs,
+  SetTeamAutoStatusArgs,
   StartRetroTimerArgs,
   UnfollowIssueArgs,
 } from './zero/mutators.js'
@@ -405,6 +420,8 @@ export {
   setRetroFacilitatorArgs,
   setRetroPhase,
   setRetroPhaseArgs,
+  setTeamAutoStatus,
+  setTeamAutoStatusArgs,
   startRetroTimer,
   startRetroTimerArgs,
   stopRetroTimer,

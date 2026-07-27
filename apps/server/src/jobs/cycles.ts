@@ -1,5 +1,4 @@
 import {
-  type AuthContext,
   type CycleFacts,
   type CycleOrderRow,
   DEFAULT_RETRO_FORMAT,
@@ -8,15 +7,12 @@ import {
   nextCycleId,
   RETRO_FORMAT_COLUMNS,
   RETRO_PRESENCE_STALE_MS,
+  SYSTEM_AUTH_CONTEXT,
 } from '@yapm/schema'
 import { cycleFactsForTeam, type DB } from '@yapm/schema/db'
 import type { createServerMutators } from '@yapm/schema/server'
 import { type Kysely, type SqlBool, sql } from 'kysely'
 import type { ZeroDatabase } from '../zero/db-provider.js'
-
-// Rollover runs as the workspace itself: an admin system principal so `canWrite` passes and
-// the team-scoped write gate is bypassed for every team. No user is impersonated.
-const SYSTEM_CTX: AuthContext = { userID: 'system', role: 'admin' }
 
 type ServerMutators = ReturnType<typeof createServerMutators>
 
@@ -92,7 +88,11 @@ export async function runCycleMaintenance(
     .execute()
   for (const cycle of toActivate) {
     await dbProvider.transaction((tx) =>
-      mutators.cycle.activate.fn({ tx, args: { id: cycle.id, updatedAt: now }, ctx: SYSTEM_CTX }),
+      mutators.cycle.activate.fn({
+        tx,
+        args: { id: cycle.id, updatedAt: now },
+        ctx: SYSTEM_AUTH_CONTEXT,
+      }),
     )
     activated.push(cycle.id)
   }
@@ -113,7 +113,11 @@ export async function runCycleMaintenance(
       : null
     const successor = await resolveNextCycleId(db, cycle)
     await dbProvider.transaction((tx) =>
-      mutators.cycle.complete.fn({ tx, args: { id: cycle.id, updatedAt: now }, ctx: SYSTEM_CTX }),
+      mutators.cycle.complete.fn({
+        tx,
+        args: { id: cycle.id, updatedAt: now },
+        ctx: SYSTEM_AUTH_CONTEXT,
+      }),
     )
     completed.push(cycle.id)
     if (facts && options.onCycleClosing) await options.onCycleClosing(facts)
@@ -123,7 +127,7 @@ export async function runCycleMaintenance(
     // — still yields exactly one retro, with the unique index on `retro.cycle_id` as the backstop.
     const args = openRetroArgs(cycle.id, successor, now)
     await dbProvider.transaction((tx) =>
-      mutators.retro.openForCycle.fn({ tx, args, ctx: SYSTEM_CTX }),
+      mutators.retro.openForCycle.fn({ tx, args, ctx: SYSTEM_AUTH_CONTEXT }),
     )
     const opened = await db
       .selectFrom('retro')

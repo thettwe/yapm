@@ -43,10 +43,28 @@ status disagrees with git reality. It appears when:
 
 - a linked PR is **merged** but the issue is not marked done or canceled,
 - an issue is **done** but its CI is failing, or
-- an issue is **in review** with no open PR behind it.
+- an issue is **in review** with no linked pull request at all, or only a draft one.
 
 It rides on the same linked data as the strip, so it lights up the moment reality and status drift
 apart — and clears itself the moment you reconcile them.
+
+### Flagging versus fixing
+
+The flag is what yapm does when it will not correct the status for you, which is the default and
+stays the default. A team can opt in to [status automation](/features/auto-status/), and then the
+two work as one behaviour with a switch:
+
+- **Automation off** — the default, and every existing team. The flag behaves exactly as described
+  above; nothing is ever overwritten.
+- **Automation on and a transition fires** — status and git now agree, so the flag stays quiet on
+  its own. Nothing suppresses it; the disagreement it reports no longer exists.
+- **Automation on but the transition is blocked** — by a guard such as a person having set the
+  status after the pull-request event, an untriaged issue, or a canceled one — the flag fires. A
+  blocked transition is precisely the case where yapm is not confident enough to act but *is*
+  confident the two disagree.
+
+Automation corrects only what it is sure about and hands everything else back to the flag. Enabling
+it adds no new kind of divergence and changes nothing about how divergence is computed.
 
 ## Filtering by delivery reality
 

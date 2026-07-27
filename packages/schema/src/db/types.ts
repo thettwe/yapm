@@ -67,6 +67,9 @@ export interface TeamTable {
   name: string
   key: string
   archived_at: TimestampOrNull
+  // Opt-in status automation, off by default. Null is off; a timestamp is both "on" and the epoch
+  // every transition's event instant is compared against, so enabling never rewrites history.
+  auto_status_since: TimestampOrNull
   created_at: Generated<Timestamp>
   updated_at: Generated<Timestamp>
 }
@@ -128,6 +131,10 @@ export interface IssueTable {
   // that already write the row; no identity dimension.
   carryover_count: Generated<number>
   cycle_assigned_at: TimestampOrNull
+  // When a PERSON last set this issue's status. `updated_at` cannot answer that — it moves for a
+  // title edit and for automation's own write — and the guard ladder needs it to refuse a
+  // transition whose event predates a human's deliberate decision.
+  last_human_status_at: TimestampOrNull
   created_at: Generated<Timestamp>
   updated_at: Generated<Timestamp>
 }

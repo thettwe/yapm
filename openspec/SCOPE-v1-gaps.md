@@ -719,28 +719,64 @@ degradation reads), `mentions` (the plaintext walker — §1.2).
   `ts_headline`) carrying **its own** team-scoping predicate and the workspace-admin bypass that
   mirrors `teamScoped`, plus the document upsert/delete helpers. SQL and permission predicate live
   together, in `packages/schema`, beside `cycle-facts.ts` and `connector.ts`.
-- `createServerMutators()` maintains the sidecar for `issue.create` / `issue.update` /
+- ~~`createServerMutators()` maintains the sidecar for `issue.create` / `issue.update` /
   `comment.create` / `comment.edit` / `comment.delete` — the same wrapper where
   `claimNextIssueNumber` lives, so the document is written inside the same Postgres transaction as
-  the row it derives from and cannot half-commit.
+  the row it derives from and cannot half-commit.~~
+
+  > **SUPERSEDED, 2026-07-27 — the maintainer answered H10 (§6) the other way.** Index maintenance
+  > is a **pg-boss job**, not the write transaction, and `createServerMutators()` is not touched at
+  > all. Editing a title is among the most common interactions in the product and CLAUDE.md #9 is
+  > non-negotiable, while search freshness is not a stated promise — so the write path stays exactly
+  > as fast as it was and the index runs ~10 s behind. A watermark **tail** on the existing
+  > scheduler self-re-arms every `SEARCH_INDEX_INTERVAL_SECONDS` behind a fixed one-minute cron
+  > watchdog, and a slower `search-reconcile` does the full diff, the orphan canary and the
+  > first-boot backfill — which is also the only thing that heals a row written with an
+  > `updated_at` behind the watermark. **One exception, deliberate:** `comment_id` and `issue_id`
+  > carry `on delete cascade`, so deleting a comment removes its document inside the deleting
+  > transaction; deleted text must never stay findable for five minutes. Derived in full in
+  > `openspec/changes/search/design.md` D4 and D5. Built in change 13.
 - A **`search-index` queue on the existing scheduler** (§1.4): an idempotent, bounded, resumable
   backfill (run once when documents are missing, so an upgrade's boot stays fast) that doubles as the
   reconcile/repair path, plus a bounded reconcile sweep folded into the existing cycle-maintenance
   cron.
+
+  > **Corrected in place, 2026-07-27.** Two queues, not one, and the reconcile is **not** folded
+  > into `cycle-maintenance`: `search-index` (policy `short`) is the self-re-arming tail and
+  > `search-reconcile` (policy `exclusive`) runs on its own `SEARCH_RECONCILE_CRON`. Folding it into
+  > the cycle cron would tie search's repair cadence to a feature an operator can switch off
+  > (`CYCLE_MAINTENANCE=false`). Still **one** `PgBoss` and one `boss.start()`, per §1.4.
 - **`GET /api/v1/search?q=&teamId?=`** on the existing Hono app — session-authenticated via
   `auth.getSessionUser` (the middleware shape the ai/connector admin routes already use), team set
   resolved **server-side**, `LIMIT 50`, a per-request `statement_timeout`, returning ranked hits with
   `ts_headline` snippets. Additive under the existing `/api/v1` contract.
-- **Command palette** (`apps/web/src/issues/command.tsx`): a **Results** group fed entirely by the
-  local pass (renders on the keystroke, no fetch in the path) **replacing** the existing "Jump to
-  issue" group (§1.3), and a **From the server** group appended below a divider after a 150 ms
-  debounce + `AbortController`, plus a persistent `Search everywhere for "q" →` row.
+- **Command palette** (`apps/web/src/issues/command.tsx`): an **On this device** group fed entirely
+  by the local pass (renders on the keystroke, no fetch in the path) **replacing** the existing
+  "Jump to issue" group (§1.3), and a **From the server** group appended below a divider after a
+  150 ms debounce + `AbortController`, plus a persistent `Search everything for "q" →` row.
+
+  > **Corrected in place, 2026-07-27 — labels, and the row's position.** This originally read
+  > `Results` / `From the server` and `Search everywhere`. `Results` does not *show* a seam, which
+  > is the whole point of the H12 answer, and `On this device` makes the offline line
+  > (`Offline — on-device results only`) read in the same vocabulary. The escalation row is
+  > `Search everything for "q" →` and sits **above** the server group, not pinned below it: server
+  > results are appended last, so a row below them would slide out from under the cursor as the
+  > answer lands — the same reflow the two-group seam exists to prevent, at the other end of the
+  > list. The invariant that buys is the strong one: every append is strictly at the end, and no
+  > rendered row ever changes index. See `openspec/changes/search/design.md` D7, D8 and I23.
 - A **`/search?q=`** TanStack route: all results grouped by entity with snippets, fully
   keyboard-operable, tokenized, AA in all three presets light and dark, and an explicit "offline —
   showing local results only" state driven by the existing sync-recovery connection state.
 - Local-only search (no index, no route, no permission risk by construction) over entities already
-  fully synced under existing permissioned queries: projects, cycles, teams, labels, retros, saved
-  views — **title substring only**.
+  fully synced under existing permissioned queries: projects, cycles, teams, labels, ~~retros, saved
+  views~~ — **title substring only**.
+
+  > **Corrected in place, 2026-07-27 — retros and saved views are out of both passes.** Excluding
+  > every `retro_*` table *including the retro's own title* is what turns "no search path can reach
+  > `retro_card_author`" from a judgement about which retro column is safe into a one-line grep, and
+  > a retro is a handful of rows per team all one click from the cycle view. `saved_view` is a
+  > filter, not content; the list's own view picker is its surface. See
+  > `openspec/changes/search/design.md` D6.
 - Tests in all three tiers, and docs: an `apps/docs` features/search page, a self-hoster note on
   index maintenance and how to force a reindex, `/api/v1/search` in the API reference, plus
   ROADMAP/README updates.
@@ -1137,26 +1173,53 @@ English teams via stemming and stopwords; `'simple'` is fair to every self-hoste
 local pass's substring semantics more closely, which shrinks the visible seam. Recommendation:
 `'simple'`, env-configurable, cheap to reverse (rebuild one index) — but the default is a stance about
 who yapm is for. *Blocks: `search`.*
+> **ANSWERED — `'simple'`, env-configurable via `SEARCH_TEXT_CONFIG`.** yapm is for self-hosters
+> everywhere, and `'simple'` also sits closer to the on-device pass's substring semantics, which
+> narrows the visible seam. "Cheap to reverse" was made a real property rather than a runbook step:
+> the expression index is built against a SQL **literal**, so the `search-reconcile` job compares
+> the live `pg_indexes.indexdef` against the configured value and rebuilds that one index when they
+> differ — otherwise a changed variable would silently stop the index being used. Built in change 13.
 
 **H10 — Whether write amplification on the issue-write path is the right trade.** Maintaining the
 index inside the write transaction means every title/description/comment edit gets slower so search is
 never stale. The alternative — the pg-boss job, seconds of staleness — leaves writes untouched. A
 direct "which promise bends" call between constraint #9 on the write path and search freshness.
 *Blocks: `search`.*
+> **ANSWERED — the job. Search freshness bends, the write path does not.** This reversed §2.3's
+> `createServerMutators()` bullet (superseded above): no mutator writes a document, so an
+> issue-title edit costs exactly what it did before. Typical staleness ~10 s, ~60 s if the
+> self-re-arm chain breaks, healed by a fixed one-minute watchdog; a backdated `updated_at` is
+> healed by the reconcile. One exception taken deliberately: an FK cascade removes a deleted
+> comment's document inside the deleting transaction. Built in change 13.
 
 **H11 — What "everything" includes in search results.** Whether results surface `needs_triage` issues
 (held out of every list today) and `canceled` issues. Both are readable, so neither is a permission
 question; both are product questions about whether search means "what I work on" or "what exists".
 Must be decided, not deferred (§2.3 amendment). *Blocks: `search`.*
+> **ANSWERED — both included, visibly labelled.** Search means "what exists"; the lists are what
+> curate. Finding nothing when you search for an issue you filed that was later canceled is worse
+> than finding it marked canceled. The route returns `status` and `needsTriage` on every hit and the
+> result row renders both as state labels, so it is one rule observable in one place rather than two
+> passes filtering inconsistently. Built in change 13.
 
 **H12 — Whether the seam is shown or hidden.** Two labelled groups is honest and cursor-stable; a
 single merged list that settles when the server answers is what people expect from Linear and reflows
 under the keyboard. DESIGN.md's restraint principle points one way, familiarity the other. *Blocks:
 `search`.*
+> **ANSWERED — show it. Two labelled groups, `On this device` and `From the server`.** CLAUDE.md #10
+> outranks familiarity with other tools, and cursor stability while arrowing is exactly what a
+> reflowing merged list destroys. The palette therefore sets `shouldFilter={false}`, takes filtering
+> and ordering off `cmdk`'s scorer onto the shared deterministic core, and anchors its cursor to a
+> **row identity** rather than an index — so appending the server group cannot move anything. §2.3's
+> `Results` label is corrected above. Built in change 13.
 
 **H13 — Whether a future typo-tolerance pass may add the `pg_trgm` extension.** It is in the official
 `postgres:18` image and adds no container, but it adds a `CREATE EXTENSION` requirement some
 managed-Postgres self-hosters cannot satisfy. A deployment-promise decision. *Informs: `search`.*
+> **ANSWERED — no.** The deployment promise wins; trading it for typo tolerance nobody has asked for
+> is not the trade. Search is exact, not fuzzy, and yapm requires no `CREATE EXTENSION` of any kind.
+> Revisit only if it becomes a real complaint. TECHSTACK's Search row, which named `pg_trgm`, was
+> corrected by change 13.
 
 **H14 — Which env var carries the public browsable URL for email deep links** (§3.2). Recommendation:
 add `PUBLIC_URL`, required when `SMTP_URL` is set, and fix the `WEB_ORIGIN` default-vs-example

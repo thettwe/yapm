@@ -1148,3 +1148,81 @@ Postgres immediately after the UI clears `data-pending` failed once in four runs
 that attribute means the *client* saw the synced row, which is one replication hop behind the
 commit. The lookup is now polled with a 20 s ceiling, so it still fails when the row genuinely is
 not there.
+
+### I35 — PROCESS.md names a mechanical `.env.example`-vs-Zod drift check that does not exist; verified by hand instead
+
+Task 12.4 says "confirm the mechanical drift check against the Zod schema passes", and PROCESS.md §2
+claims "mechanical checks catch the detectable cases (`.env.example` vs the Zod schema; ROADMAP
+status vs archived changes)". Neither exists. `scripts/` holds `check-boundaries`, `check-catalog`,
+`check-commit-msg`, `check-image-manifests`, `dev` and `smoke`; nothing greps `.env.example`, and no
+CI workflow does either. The claim is aspirational.
+
+Writing the script was rejected for this stage: a docs assignment adding a merge-blocking gate is a
+tooling change nobody reviewed, and getting its exemption list right (the eleven compose- and
+build-only variables in `.env.example` that never appear in the server's Zod schema —
+`POSTGRES_*`, `*_HOST_PORT`, `*_IMAGE`, `ZERO_ADMIN_PASSWORD`, `ZERO_LOG_LEVEL`,
+`VITE_ZERO_CACHE_URL`; and the five compose-derived ones in the schema that must NOT be in
+`.env.example` — `NODE_ENV`, `HOST`, `PORT`, `DATABASE_URL`, `WEB_DIST_DIR`) is a judgement about
+each variable, not a one-liner.
+
+So the check was run by hand against `EXPECTED_FORMAT` — the schema's own description map, which
+`env.test.ts` already ties to the schema — and recorded here: **41 documented variables, zero
+missing from `.env.example`, zero present in `.env.example` that the schema does not know about**
+(beyond the eleven listed above). All five `SEARCH_*` variables appear in the schema, in
+`EXPECTED_FORMAT` and in `.env.example`, with matching defaults.
+
+Worth naming for whoever writes the real script: it needs both directions and both exemption lists,
+or it will fail on day one against a file that is correct.
+
+### I36 — `reference/server-stack.md` gained the pg-boss finding I8 paid for, because the policy table alone does not predict it
+
+The reference's queue-policy table is verbatim from pg-boss's docs and is not wrong. It is also not
+enough: nothing in "`exclusive` — only allows 1 job to be queued or active" tells you that the
+*self-re-arming worker* pattern silently dies under it, because the re-arm is issued from inside the
+job that is still counted as active. That cost a live debugging round in this change (I8) and the
+next feature to want a sub-minute cadence would pay it again.
+
+Two `VERIFIED` paragraphs were added to §6.4: the `short`-not-`exclusive` rule for self-re-arming
+workers with the measured evidence (`send` from inside an active job returns `null` under
+`exclusive`, a job id under `short`, pg-boss 12.26.2), and the companion trap that `createQueue` is
+a no-op on an existing queue while `updateQueue` cannot change a policy — so a policy fix does not
+reach an upgraded instance unless the queue is read back and reconciled, which is what `ensurePolicy`
+in `apps/server/src/jobs/scheduler.ts` does.
+
+`cmdk` got no reference entry: it has none today, and I22's findings are recorded above and asserted
+in `command.test.tsx`, which is where a behavioural claim about a rendering library belongs.
+
+### I37 — ROADMAP's "V1 is not complete" paragraph is now "V1 is now complete", which is a claim worth being deliberate about
+
+Task 12.7 asks for the paragraph "whose second bullet this change closes". Closing the second bullet
+makes both bullets closed, so the paragraph's opening sentence had to move too — and "V1 is now
+complete" is a stronger statement than a status-row flip.
+
+It is made anyway, and scoped: it means *the locked v1 scope in this document* is built, which the
+next paragraph already says ("what remains is AI *features* on the change-9 foundation … not core
+project management"). The two entries under **Known gaps** — one-command export and attachments —
+are explicitly *not* v1 scope and stay exactly where they are. The claim is about the locked scope,
+not about the product being finished, and the surrounding text is what keeps that honest.
+
+Also corrected in the same pass, because they were made false rather than merely stale by this
+change: the order-rationale sentence that named `search`'s two unmeasurable risks now records that
+both were measured (H10 removed write amplification; zero-cache was verified to replicate past the
+new table and its GIN expression index from empty volumes), and the Search gap bullet's own
+evidence — a grep for `ilike|tsvector|to_tsquery` returning nothing — is marked as no longer holding
+rather than left standing as a live finding.
+
+### I38 — §6's H9–H13 got ANSWERED blockquotes, not only §2.3's corrections
+
+Task 12.8 names only `openspec/SCOPE-v1-gaps.md` §2.3. But §6 is the register of decisions that
+"needs a human", and `mentions` set the precedent of writing the answer back into it as a blockquote
+under the question (H6, H7, H8). Leaving H9–H13 reading as open blockers after they were answered
+and built would make the register wrong about the one thing it exists to track — and the answers to
+H10 and H12 are exactly the ones a future reader is most likely to try to relitigate.
+
+So all five carry an `ANSWERED` blockquote in the established shape: what was decided, the reason in
+one or two sentences, and where it was built. Three §2.3 bullets were struck through in place beside
+them (the `createServerMutators()` maintenance bullet superseded by H10, the `Results` /
+`Search everywhere` labels superseded by H12, and the local-only entity list that still named retros
+and saved views), plus one that no answer superseded but the build corrected: the reconcile is its
+own `search-reconcile` cron rather than being folded into `cycle-maintenance`, which an operator can
+switch off with `CYCLE_MAINTENANCE=false`.

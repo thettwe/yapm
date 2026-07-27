@@ -254,27 +254,27 @@ client group (7–10) after the server contract it consumes exists.
 
 ## 12. Documentation
 
-- [ ] 12.1 `apps/docs/src/content/docs/features/search.md` — what is searchable and what is not (and
+- [x] 12.1 `apps/docs/src/content/docs/features/search.md` — what is searchable and what is not (and
       why retros never are), the two groups and why the seam is shown, triage/canceled labelling, the
       keyboard model, the empty and offline states, and the promise that queries are never recorded.
-- [ ] 12.2 `apps/docs/src/content/docs/self-hosting/search-index.md` — how the index is maintained and
+- [x] 12.2 `apps/docs/src/content/docs/self-hosting/search-index.md` — how the index is maintained and
       how stale it can be, the five environment variables, changing `SEARCH_TEXT_CONFIG` and what the
       job does about it, forcing a full reindex, reading the readiness freshness entry, and the
       `/api/v1/search` request/response reference (this is where the other `/api/v1` surfaces are
       documented today).
-- [ ] 12.3 Add both pages to `apps/docs/astro.config.mjs`'s sidebar and confirm
+- [x] 12.3 Add both pages to `apps/docs/astro.config.mjs`'s sidebar and confirm
       `pnpm --filter @yapm/docs build` passes.
-- [ ] 12.4 `.env.example` — the five variables with their defaults and one-line descriptions; confirm
+- [x] 12.4 `.env.example` — the five variables with their defaults and one-line descriptions; confirm
       the mechanical drift check against the Zod schema passes.
-- [ ] 12.5 **`TECHSTACK.md`** — its Search row currently reads "Postgres FTS (`tsvector` + `pg_trgm`)".
+- [x] 12.5 **`TECHSTACK.md`** — its Search row currently reads "Postgres FTS (`tsvector` + `pg_trgm`)".
       `pg_trgm` is refused (it needs `CREATE EXTENSION`, which some managed-Postgres self-hosters
       cannot run); replace it with the `'simple'` default, the env override, and the
       no-extension promise.
-- [ ] 12.6 `README.md` — add search to the feature list; "What's next" no longer opens with Search.
-- [ ] 12.7 `ROADMAP.md` — row 13's status, **and** its now-false "index maintained in the
+- [x] 12.6 `README.md` — add search to the feature list; "What's next" no longer opens with Search.
+- [x] 12.7 `ROADMAP.md` — row 13's status, **and** its now-false "index maintained in the
       server-mutator wrapper" claim (H10 answered the other way), and the "V1 is not complete"
       paragraph, whose second bullet this change closes.
-- [ ] 12.8 `openspec/SCOPE-v1-gaps.md` §2.3 — correct in place the bullet that puts index maintenance
+- [x] 12.8 `openspec/SCOPE-v1-gaps.md` §2.3 — correct in place the bullet that puts index maintenance
       in `createServerMutators()`, and the group labels, citing the H10 and H12 answers, exactly as
       `mentions` corrected §0.
 

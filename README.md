@@ -80,12 +80,17 @@ cannot spoof a colleague, with **eligibility decided server-side** by the same p
 decides who may read the issue, so a mention of someone who cannot read it produces nothing and the
 list says why instead of going quiet — and being mentioned **subscribes you to the issue**, through
 a durable subscription with a sticky, keyboard-operable unfollow on the issue itself and no
-follower list or count for anyone, admins included.
+follower list or count for anyone, admins included · **instant-then-complete search** — `⌘K` or a
+full `/search?q=` route, answered in the same frame from rows the browser already holds (no network,
+works offline) and then *extended* by Postgres full-text over comment bodies and every other team
+you can read, shown as two labelled groups that never reorder under the keyboard cursor, adding **no
+container and no `CREATE EXTENSION`**, with the index maintained by a background job so an issue-title
+edit costs exactly what it did before — and **no query is ever recorded**: no search log, no
+analytics, no "popular searches", nothing aggregatable into a per-person record.
 
 ## What's next
 
-**Search** — instant over already-synced rows, then complete via Postgres full-text, with no new
-container. Then **BYO-key AI agents** that read and act through the same permissions as a human —
+**BYO-key AI agents** that read and act through the same permissions as a human —
 the foundation (gateway, agent-as-actor tools, the AI-over-work-graph substrate) is in; a governed
 PM-facing digest and an **AI-facilitated** retro — drafting themes and candidate actions on top of
 the retrospective that already ships — build on it next. Then DORA and review-health metrics

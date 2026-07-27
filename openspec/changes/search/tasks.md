@@ -5,32 +5,32 @@ client group (7–10) after the server contract it consumes exists.
 
 ## 1. The shared search core, pure and consumer-free
 
-- [ ] 1.1 Create `packages/schema/src/search/tokenize.ts`: split a raw query into lowercased tokens,
+- [x] 1.1 Create `packages/schema/src/search/tokenize.ts`: split a raw query into lowercased tokens,
       report the non-whitespace length, and expose the **minimum server-query length (2)** as a named
       constant so the client and the route cannot disagree about when the server pass is skipped.
-- [ ] 1.2 Create `packages/schema/src/search/score.ts`: the on-device tier ladder — issue-key exact >
+- [x] 1.2 Create `packages/schema/src/search/score.ts`: the on-device tier ladder — issue-key exact >
       title prefix > title substring > body substring — extending `matchesText`'s semantics
       (`packages/schema/src/zero/filter.ts:71`) rather than forking them, with `updatedAt desc` as the
       only tiebreak. Pure, no imports.
-- [ ] 1.3 Create `packages/schema/src/search/merge.ts`: the deterministic merge and dedupe over
+- [x] 1.3 Create `packages/schema/src/search/merge.ts`: the deterministic merge and dedupe over
       on-device candidates (an issue reached through two synced queries appears once), plus the
       on-device cap (200) as a named constant.
-- [ ] 1.4 Create `packages/schema/src/search/index.ts` and export the module from `@yapm/schema`'s
+- [x] 1.4 Create `packages/schema/src/search/index.ts` and export the module from `@yapm/schema`'s
       public surface. Confirm `scripts/check-boundaries.mjs` still passes — this directory must import
       nothing.
-- [ ] 1.5 Extend `packages/schema/src/rich-text/plaintext.ts` with whatever the indexer and the
+- [x] 1.5 Extend `packages/schema/src/rich-text/plaintext.ts` with whatever the indexer and the
       on-device pass need (do **not** write a second walker), preserving `mentions: 'strip'` and the
       comment that makes it mandatory on model-facing paths.
-- [ ] 1.6 **Test** `packages/schema/src/search/*.test.ts` (unit, no DB): tier ordering including the
+- [x] 1.6 **Test** `packages/schema/src/search/*.test.ts` (unit, no DB): tier ordering including the
       `@lov`-style word-start case, issue-key matching with and without the team prefix, ties broken
       only by `updatedAt`, dedupe across sources, the cap, the minimum-length constant, and the same
       input producing the same order twice.
-- [ ] 1.7 **Test** extend `packages/schema/src/rich-text/plaintext.test.ts` for the new indexer needs,
+- [x] 1.7 **Test** extend `packages/schema/src/rich-text/plaintext.test.ts` for the new indexer needs,
       asserting a mention resolves to the supplied name and that `'strip'` still removes it entirely.
 
 ## 2. Migration `0015_search` and the schema surface
 
-- [ ] 2.1 Write `packages/schema/src/migrations/0015_search.ts` creating `search_document`:
+- [x] 2.1 Write `packages/schema/src/migrations/0015_search.ts` creating `search_document`:
       `entity_type text not null check (entity_type in ('issue','comment'))`, `entity_id uuid not
       null`, `team_id uuid not null references team(id) on delete cascade`, `issue_id uuid not null
       references issue(id) on delete cascade`, `comment_id uuid references comment(id) on delete
@@ -39,18 +39,18 @@ client group (7–10) after the server contract it consumes exists.
       primary key `(entity_type, entity_id)`, and the shape CHECK from design D3. Comment the two
       CHECKs (why the allowlist is enforced here and not only in TypeScript) and the `team_id`
       denormalisation (citing the invariant, not restating it).
-- [ ] 2.2 Add the three indexes in the same migration: the GIN **expression** index over
+- [x] 2.2 Add the three indexes in the same migration: the GIN **expression** index over
       `setweight(to_tsvector('simple', title),'A') || setweight(to_tsvector('simple', body),'B')`, a
       btree on `team_id`, and a btree on `(entity_type, source_updated_at)` for the watermark read.
       No backfill in the migrator.
-- [ ] 2.3 Register `0015_search` in `packages/schema/src/migrations/index.ts`.
-- [ ] 2.4 Add `SearchDocumentTable` to `packages/schema/src/db/types.ts` and `search_document` to the
+- [x] 2.3 Register `0015_search` in `packages/schema/src/migrations/index.ts`.
+- [x] 2.4 Add `SearchDocumentTable` to `packages/schema/src/db/types.ts` and `search_document` to the
       `DB` interface. **Do not touch `packages/schema/src/zero/schema.ts`.**
-- [ ] 2.5 **Test** extend `packages/schema/src/db/schema-drift.test.ts`: add `search_document` to
+- [x] 2.5 **Test** extend `packages/schema/src/db/schema-drift.test.ts`: add `search_document` to
       `KYSELY_DB`, to the column-shape map, and to the **server-only** list beside `retro_card_author`
       — asserting it is in the Kysely `DB` and absent from the Zero introspection. Add an assertion
       that its compound primary key and its two CHECK constraints match Postgres.
-- [ ] 2.6 **Verify the replica before anything is built on top of it.** Bring the compose stack up
+- [x] 2.6 **Verify the replica before anything is built on top of it.** Bring the compose stack up
       from empty volumes with the migration applied and confirm zero-cache replicates, starts and
       serves synced queries past the new table and its GIN expression index, with no publication
       change. Record the result in design.md's implementation log. If it fails, stop and re-scope —

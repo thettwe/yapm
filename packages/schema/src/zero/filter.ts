@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { matchesSearchText } from '../search/score.js'
 import {
   ISSUE_GROUPINGS,
   ISSUE_PRIORITIES,
@@ -68,15 +69,14 @@ export const issueSortSchema = z.object({
 
 export const issueGroupingSchema = z.enum(ISSUE_GROUPINGS)
 
+// Delegates to the search core so the list's text axis and the palette's ranking can never
+// disagree about what "matches" means. The one thing that stays here is the blank-needle rule: an
+// unset text axis matches every issue, which is the FILTER's meaning of empty, not search's.
+// `body` is not passed — a filtered list row holds no description plaintext, so this is exactly the
+// title-and-key predicate it has always been.
 function matchesText(issue: IssueView, text: string, teamKey?: string): boolean {
-  const needle = text.trim().toLowerCase()
-  if (needle.length === 0) return true
-  if (issue.title.toLowerCase().includes(needle)) return true
-  if (issue.number != null) {
-    const key = teamKey ? `${teamKey}-${issue.number}` : String(issue.number)
-    if (key.toLowerCase().includes(needle)) return true
-  }
-  return false
+  if (text.trim().length === 0) return true
+  return matchesSearchText({ title: issue.title, number: issue.number, teamKey }, text)
 }
 
 // Intention axes only. Every predicate is AND-combined; within an axis, values are OR-ed.

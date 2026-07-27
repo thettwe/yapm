@@ -8,6 +8,29 @@ export {
   sanitizeRichText,
 } from './rich-text/plaintext.js'
 export type {
+  LocalSearchCandidate,
+  LocalSearchKind,
+  LocalSearchResult,
+  SearchTextFields,
+  SearchTier,
+} from './search/index.js'
+export {
+  compareLocalResults,
+  isServerSearchable,
+  issueKeyOf,
+  LOCAL_RESULT_LIMIT,
+  LOCAL_SEARCH_KINDS,
+  MIN_SERVER_QUERY_LENGTH,
+  matchesSearchText,
+  mergeLocalCandidates,
+  normalizeQuery,
+  queryLength,
+  SEARCH_TIERS,
+  scoreSearchText,
+  searchTierRank,
+  tokenizeQuery,
+} from './search/index.js'
+export type {
   ActiveToolOptions,
   AgentAuditEntry,
   MutatorToolSpec,

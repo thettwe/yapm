@@ -549,3 +549,127 @@ marginal gain over the server pass that already covers it.
 ## Decisions made during implementation
 
 <!-- Appended during the build phase: what was ambiguous, what was chosen, and why. -->
+
+### I1 — Task 2.6: the replica survives the new table. Verified, on both paths, before anything was built on top
+
+Run against a `yapm-sr` compose project on ports 5445/4853/3005, from `down -v` (empty volumes),
+`postgres:18` and `rocicorp/zero:1.8.0`, with **no publication change** — the default
+`FOR TABLES IN SCHEMA public` throughout. Both paths that matter were exercised, because they fail
+differently:
+
+**(a) The upgrade path — DDL applied to a live zero-cache.** `migrateToLatest` ran while zero-cache
+was already replicating. The change-streamer logged the `CREATE TABLE search_document` and all three
+`CREATE INDEX` statements off the WAL, and the write-worker applied
+`create-table search_document`, `create-index search_document_pkey`,
+`create-index search_document_team_id_idx` and `create-index search_document_watermark_idx` to the
+SQLite replica. `search_document_fts_idx` — the **GIN expression index** — appears in the
+change-source log and is **absent from the write-worker's applied list**: zero-cache skips it
+silently, with no error and no warning, and reports `"status":"OK","stage":"Replicating"`.
+
+**(b) The fresh-install path — an empty replica against a schema that already contains the table.**
+The `zero-replica` volume was deleted and zero-cache restarted. Initial sync copied the table
+(`Starting binary copy stream of search_document`, `syncMode:"initial"`), recreated its pkey and its
+two btree indexes (`87/106`, `88/106`, `89/106`), skipped the GIN index again, reached
+`stage":"Replicating"` and the container went `healthy`.
+
+**And it serves.** `apps/web/e2e/sync.spec.ts` — 4 tests, including the disconnect/reconnect one —
+passed against that stack (`E2E_SERVER_PORT=3005`, `E2E_ZERO_CACHE_URL=http://localhost:4853`), with
+synced queries over `workspace`, `team`, `team_membership`, `notification`, `workspace_member`,
+`invite` and `user_preference` materializing from the server. So this is "serves synced queries past
+the new table", not "the health check is green".
+
+The one `ERROR` in the log is `getLitestream` → `tryRestore` → `Unexpected undefined value`, which is
+zero-cache looking for a litestream backup that dev has never configured. Pre-existing, unrelated,
+and present on `main`.
+
+**Conclusion: D2 holds and the fallback is not needed.** No custom publication, no
+`ZERO_APP_PUBLICATIONS` change, no full replica resync on upgrade. Plain `text` columns are the
+reason: the tsvector never enters the replication path, and an index is not logically replicated at
+all. The rest of the change can be built on this.
+
+Two smaller facts observed in the same session, both worth having: the GIN index is genuinely used
+(`Bitmap Index Scan on search_document_fts_idx` for a `websearch_to_tsquery('simple', …)` probe, so
+the index expression and the query expression match exactly — the mismatch D11 exists to prevent is
+not present at the default), and **D5's cascade works**: deleting the probe issue removed its
+`search_document` row in the same statement, with no sweep.
+
+### I2 — `score.ts` imports `normalizeQuery` from `./tokenize.js`, against task 1.2's "no imports"
+
+Task 1.2 says the scorer is "pure, no imports". Taken literally, that means `score.ts` re-implements
+`trim().toLowerCase()`, or takes an already-normalised needle and trusts every caller to have
+normalised it. Both are the fork the same task forbids one clause earlier: two normalisations that
+can drift, or a footgun where passing a raw query silently mis-ranks.
+
+So `score.ts` imports exactly one thing, from inside the directory. The property the mission states —
+*"a new directory that imports nothing outside itself"* — is intact and is what
+`scripts/check-boundaries.mjs` and the whole design actually rest on; "no imports at all" was the
+shorthand, not the requirement.
+
+### I3 — A fifth tier, `issue-key-partial`, appended BELOW the four rather than inserted among them
+
+`matchesText` matched a **substring** of the issue key (`filter.ts:71-80`), and the specified ladder
+tops out at "issue-key **exact**". Those cannot both be true of one function: a four-tier ladder
+whose top rung is exact-only either drops key-substring matching — silently narrowing the issue
+list's text filter, a regression in a change that is supposed to widen search — or keeps it as a
+second, un-ranked predicate, which is precisely the fork task 1.2 forbids.
+
+`issue-key-partial` is therefore appended as the lowest tier, and `matchesSearchText` is **defined
+as** `scoreSearchText(...) !== undefined`. Consequences, all wanted: the maintainer's stated ordering
+(issue-key exact > title prefix > title substring > body substring) is untouched; the list filter's
+predicate is byte-for-byte the same set of matches it has always returned; and a query like `ng-1`
+still finds `ENG-12` but ranks below every real title hit rather than above them — which is the
+right answer, because ranking key fragments above titles would put every issue whose key contains the
+letter you just typed at the top of the palette.
+
+`filter.ts` keeps exactly one thing of its own: the blank-needle rule (`text.trim()` empty ⇒ every
+issue matches). That is the **filter's** meaning of an unset text axis, not search's — search returns
+nothing for a blank query — so it stays at the call site rather than being pushed into the ladder.
+
+### I4 — The `@lov`-style word-start case needs no tier of its own
+
+Task 1.6 names it as a case to test without saying what it is. Read against D12, it is the mention
+one: the plaintext projection renders a mention as `@` + the person's resolved name, so typing
+`@lov` or `lov` finds what Lovisa was mentioned on. Plain substring already reaches a word start,
+and the `@` is what makes the intent unambiguous — so the case is a **test**
+(`score.test.ts`, "finds a mention by the start of the mentioned person name") rather than a fifth
+ranking rule. Adding a `title-word-start` tier would have reordered the four the maintainer fixed,
+which was not on offer.
+
+### I5 — The plaintext walker gained exactly one thing: `maxLength`
+
+Task 1.5 says "whatever the indexer and the on-device pass need", which invites scope. Walking the
+existing file against both consumers, everything else was already there: `{mentions: 'label', names}`
+resolves a mention to a person's current name (D12), `extractMentionIds` is how the indexer knows
+whose names to load, and `'strip'` plus its shouting comment stay untouched and mandatory on
+model-facing paths.
+
+What was missing is a **bound**. The indexer writes the result into a row and the on-device cache
+holds one per synced issue, so a pasted 400 KB document must cost a known number of bytes rather than
+however many its author had. `maxLength` truncates *and* short-circuits the walk, so a document
+twenty times the budget does not cost twenty times the work. Omitting it is unbounded, which is what
+the two human-facing callers already wanted — no existing behaviour moved.
+
+### I6 — The allowlist CHECK cannot be tested in isolation, and the test says so instead of pretending
+
+The first version of the drift assertion (task 2.5) expected an out-of-allowlist insert to be
+refused by `search_document_entity_type_check`. It is refused by
+`search_document_entity_shape_check` — because an unknown `entity_type` satisfies neither branch of
+D3's shape CHECK, so both constraints reject the row and Postgres reports whichever it evaluated
+first. There is no insert that violates the allowlist alone.
+
+Rather than reorder the constraints to make an assertion pass, the test now asserts the three things
+that are actually true and actually matter: the row **cannot exist** (SQLSTATE `23514`, from one of
+the two named `search_document` checks — not a foreign-key violation, which would have proven
+nothing about the allowlist); the allowlist's *definition* names `'issue'` and `'comment'` and does
+not name `retro`, `retro_card`, `retro_draft`, `project` or `cycle`; and the shape CHECK bites on its
+own for an **allowlisted** row with the wrong shape (an `issue` document carrying a `comment_id`, a
+`comment` document whose `comment_id` is not its `entity_id`).
+
+### I7 — `search_document` is exported from `@yapm/schema/db`'s type surface now, not when the SQL lands
+
+`SearchDocument` / `NewSearchDocument` / `SearchDocumentUpdate` and `SearchDocumentTable` are
+re-exported from `packages/schema/src/db/index.ts` in this stage even though nothing imports them
+until group 3. The alternative — adding the table to `DB` here and its types two groups later — leaves
+a window where the only way to write the table is with an inline row type, which is how a second
+definition of the row shape gets written. The types cost nothing and the row shape has exactly one
+home from the first commit.

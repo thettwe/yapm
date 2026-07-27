@@ -89,6 +89,53 @@ describe('richTextToPlainText', () => {
     ).toBe('one\ntwo\nthree')
   })
 
+  // What the search indexer asks of this walk: a mention resolves to the person's CURRENT name, so
+  // the index finds them by who they are now rather than by whatever label was frozen into the
+  // document when they were mentioned — and a rename propagates on the next reindex.
+  it('indexes a mention under the resolved name, so a rename propagates', () => {
+    const document = doc(paragraph(text('Blocked on '), mention({ id: 'u-1', label: 'Lovisa' })))
+    expect(
+      richTextToPlainText(document, {
+        mentions: 'label',
+        names: new Map([['u-1', 'Lovisa Berg']]),
+      }),
+    ).toBe('Blocked on @Lovisa Berg')
+  })
+
+  // The other half, unchanged and load-bearing: the model-facing form still removes the person
+  // entirely, so a searchable projection and a model prompt can never be built the same way.
+  it('still strips a mention completely in strip mode even with names supplied', () => {
+    const document = doc(paragraph(text('Blocked on '), mention({ id: 'u-1', label: 'Lovisa' })))
+    const stripped = richTextToPlainText(document, {
+      mentions: 'strip',
+      names: new Map([['u-1', 'Lovisa Berg']]),
+    })
+    expect(stripped).toBe('Blocked on')
+    expect(stripped).not.toContain('Lovisa')
+    expect(stripped).not.toContain('@')
+  })
+
+  it('bounds the output at maxLength and stops walking once the budget is spent', () => {
+    const long = doc(
+      ...Array.from({ length: 500 }, (_, index) => paragraph(text(`line ${index} of prose`))),
+    )
+    expect(richTextToPlainText(long, { maxLength: 40 })).toHaveLength(40)
+    expect(richTextToPlainText(long, { maxLength: 40 })).toBe(
+      richTextToPlainText(long).slice(0, 40),
+    )
+  })
+
+  it('leaves a document shorter than the budget untouched, and honours a zero budget', () => {
+    const document = doc(paragraph(text('short')))
+    expect(richTextToPlainText(document, { maxLength: 4096 })).toBe('short')
+    expect(richTextToPlainText(document, { maxLength: 0 })).toBe('')
+  })
+
+  it('is unbounded when no budget is given', () => {
+    const long = doc(...Array.from({ length: 200 }, () => paragraph(text('x'.repeat(50)))))
+    expect(richTextToPlainText(long).length).toBeGreaterThan(9000)
+  })
+
   it('returns an empty string for a malformed document rather than throwing', () => {
     for (const value of [
       undefined,

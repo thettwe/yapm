@@ -95,7 +95,11 @@ nightly sweep of abandoned uploads, defaulting to a directory on disk (complete,
 and switchable to any S3-compatible bucket, where **there are no signed or shareable links and no
 setting that turns them on**: an image in a synced document would put a bearer token on every
 teammate's device, so the document stores an opaque id and the app proxies every byte, which is also
-what makes the permission check identical for both providers. The editor and Files UI that put it in
+what makes the permission check identical for both providers ·
+**markdown as the interchange format** — type markdown to format, paste markdown in, and copy
+markdown *out* that actually reads correctly in a terminal or a Slack message (no `&lt;` entities,
+and a paragraph that starts with `#` comes back a paragraph), while rich text stays the storage
+format and an in-app copy/paste stays lossless. The editor and Files UI that put attachments in
 front of you are next.
 
 ## What's next

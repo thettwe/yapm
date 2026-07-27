@@ -245,7 +245,7 @@ reaches Postgres or zero-cache.
 - **Unit, node** (`markdown.test.ts`): both conversion functions, the escape table row by row, the
   mention rendering, the clamp, the schema-normalised round trip. This is where the falsifiable check
   lives.
-- **Unit, jsdom** (`markdown.editor.test.tsx`, `@vitest-environment jsdom` docblock — the convention
+- **Unit, jsdom** (`markdown-editor.test.tsx`, `@vitest-environment jsdom` docblock — the convention
   `packages/ui/vitest.config.ts` already documents): the two input rules against a real editor, the
   clipboard serialiser, and all three paste refusals.
 
@@ -382,3 +382,71 @@ path. `richTextSliceToMarkdown` over a whole document gives
 transaction that scrolls the selection into view throws `target.getClientRects is not a function`
 out of `prosemirror-view`.
 
+
+### I6 — `richTextClipboardProps` is extracted, for the same reason I4 exported the slice helper
+
+I4 exported `richTextSliceToMarkdown` so the copy behaviour was reachable without driving a real
+`copy` event through jsdom. Writing the paste tests hit the identical wall one level up: **jsdom
+implements neither `ClipboardEvent` nor `DataTransfer`** (verified — both are `undefined` under
+`jsdom` in this Vitest setup), so a test that went through `RichTextEditor`'s React tree could only
+ever hand `handlePaste` a stand-in clipboard *and* would have no way to reach the handler at all,
+since the editor instance is private to the component.
+
+`editorProps.clipboardTextSerializer` and `editorProps.handlePaste` therefore moved into an exported
+`richTextClipboardProps(resolveMentionName)`, which `RichTextEditor` spreads. The tests build a real
+`Editor` with the same object, so the function under test is the one that ships. Behaviour is
+unchanged; `clipboard.types.includes(...)` became `Array.from(clipboard.types).includes(...)` because
+`DataTransfer.types` is a `readonly string[]` in the DOM lib but only iterable in practice.
+
+### I7 — A THIRD serialiser defect, out of reach, documented rather than fixed
+
+Found while writing the code-verbatim test (task 3.3). An inline code span containing a backtick is
+emitted with single-backtick delimiters:
+
+```
+"a `b` c"  =>  "`a `b` c`"  =>  parses as: code("a ") + text("b") + code(" c")
+"`lead"    =>  "``lead`"    =>  parses as: plain text "``lead`"
+```
+
+CommonMark requires a run of backticks **longer** than any run inside the span. This is the same
+family as §D4's two defects — an asymmetry in a symmetry feature — but unlike them it cannot be
+reached from the one private method §D4 budgets. `getMarkOpening(markType, mark, mode)` renders the
+mark against a **placeholder** string (`__TIPTAP_MARKDOWN_PLACEHOLDER__`) and slices off
+everything before the placeholder, so a mark's delimiter never sees the text it wraps. A
+content-dependent fence means overriding `renderNodesWithMarkBoundaries` — ~150 lines of private
+surface, and every upstream fix becomes a merge.
+
+**Decision: documented, not fixed.** The text itself still leaves yapm byte-intact, which is what the
+portability promise is about; only the code-span boundary moves, and only for a span that contains a
+backtick. It is pinned by a characterisation test (`an inline code span holding a backtick is emitted
+verbatim and does NOT round-trip`) whose comment names the reason, so a future fix trips it and its
+author reads this instead of rediscovering it. Recorded in `reference/frontend-build.md` §11.6 and in
+the feature page's "what markdown cannot carry" table.
+
+### I8 — The escape table has one row that was already green
+
+`*` at the start of a paragraph is escaped by the library's **inline** set, not by the block-leading
+rule, so `* bullet` round-trips against the uncorrected serialiser too. The row is kept in the table
+because it is part of the documented contract, and the falsification run below records which rows
+actually discriminate.
+
+### Evidence: the tests can fail (tasks 3.x and 5.x)
+
+Neutering `installPortableTextEncoding` — a one-line early return, restored afterwards — fails
+**15 of `markdown.test.ts`'s 33 tests**: the falsifiable check, ten of the twelve escape-table rows
+(`* bullet` and the fence are covered by the library's own inline set), the leading-space row, the
+`>`-plus-punctuation row, the hard-break row, and the mid-paragraph row (which fails on entity
+encoding rather than on escapes).
+
+Removing `MarkdownShortcuts` from `createRichTextExtensions()` and disabling two paste refusals —
+all restored afterwards — fails **4 of `markdown-editor.test.tsx`'s 15**: both input-rule tests, the
+HTML-flavour refusal, and the bare-URL refusal. No test in either file passes vacuously.
+
+### Evidence: nothing outside this change's surface moved (task 6.5)
+
+```
+$ git diff --stat origin/main -- packages/schema apps/server apps/web .env.example
+(no output)
+```
+
+No migration, no Zero schema change, no jsonb column, no env var.

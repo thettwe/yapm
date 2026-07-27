@@ -52,29 +52,29 @@ point of the change, not a preference.
 
 ## 3. The falsifiable check, before anything is wired to a surface
 
-- [ ] 3.1 **Test (unit, no DB)** `packages/ui/src/lib/markdown.test.ts` — the round trip that fails
+- [x] 3.1 **Test (unit, no DB)** `packages/ui/src/lib/markdown.test.ts` — the round trip that fails
       on `main` and fails against the uncorrected library:
       a document of two paragraphs, `a < b & c` and `# not a heading`, serialises to
       `"a < b & c\n\n\\# not a heading"` (asserted as an exact string — no entity, the `#` escaped)
       and parses back to the same document.
-- [ ] 3.2 **Test (unit, no DB)** The escape table row by row (design.md §D5): leading `#`, `-`, `+`,
+- [x] 3.2 **Test (unit, no DB)** The escape table row by row (design.md §D5): leading `#`, `-`, `+`,
       `*`, `>`, `|`, `1.`, `1)`, `---`, `===`, a fence, and 4+ leading spaces — each asserted on the
       emitted string **and** on the re-parsed document. Include the two that only fail together:
       `> not a quote` and `a < b & c` in the same test, so nobody re-introduces entity encoding to
       "fix" `>`.
-- [ ] 3.3 **Test (unit, no DB)** Code is verbatim: a code block and an inline code span both
+- [x] 3.3 **Test (unit, no DB)** Code is verbatim: a code block and an inline code span both
       containing `if (a < b && c) {}` emit byte-identical code, no escapes, no entities.
-- [ ] 3.4 **Test (unit, no DB)** Round trip over the whole supported node set — bold, italic, strike,
+- [x] 3.4 **Test (unit, no DB)** Round trip over the whole supported node set — bold, italic, strike,
       inline code, links, headings 2 and 3, bullet and ordered lists including one nested level,
       blockquote, code block with a language, horizontal rule, hard break, nested marks — compared
       **after normalising both sides through `getSchema(createRichTextExtensions())`**
       (`Node.fromJSON(schema, doc).toJSON()`), per design.md §D7. Raw JSON equality would fail on
       schema defaults, not on losses.
-- [ ] 3.5 **Test (unit, no DB)** Mentions: a resolved mention emits `@Ada Lovelace`; an unresolved one
+- [x] 3.5 **Test (unit, no DB)** Mentions: a resolved mention emits `@Ada Lovelace`; an unresolved one
       with a stored label falls back to it; one with neither emits nothing (not `@`); the output
       contains no `id=` / `label=` attribute syntax — assert that explicitly, because it is what
       3.28.0 emits by default. And `markdownToRichText('@Ada Lovelace')` produces **no** mention node.
-- [ ] 3.6 **Test (unit, no DB)** Heading clamp: `# `, `## `, `### `, `#### `, `###### ` produce only
+- [x] 3.6 **Test (unit, no DB)** Heading clamp: `# `, `## `, `### `, `#### `, `###### ` produce only
       levels 2 and 3. Empty string produces `EMPTY_DOC`. Underline is stripped and its text kept.
 
 ## 4. The editor surface — `packages/ui/src/components/rich-text.tsx`
@@ -97,42 +97,48 @@ point of the change, not a preference.
 
 ## 5. Editor-level tests
 
-- [ ] 5.1 **Test (unit, jsdom)** `packages/ui/src/components/markdown-editor.test.tsx` with the
+- [x] 5.1 **Test (unit, jsdom)** `packages/ui/src/components/markdown-editor.test.tsx` with the
       `@vitest-environment jsdom` docblock (the convention `packages/ui/vitest.config.ts` documents):
       typing `# ` produces a level-2 heading; typing `[yapm](https://yapm.dev)` produces a link with
       that href; neither fires inside a code block.
-- [ ] 5.2 **Test (unit, jsdom)** `clipboardTextSerializer` over a full-document selection and over a
+- [x] 5.2 **Test (unit, jsdom)** `clipboardTextSerializer` over a full-document selection and over a
       partial selection, asserting the markdown string in both.
-- [ ] 5.3 **Test (unit, jsdom)** All three paste refusals plus the conversion case, driven through a
-      `ClipboardEvent` with a real `DataTransfer`: plain-text markdown converts; the same text with
-      an HTML flavour present does not; the same text with the caret in a code block does not.
-- [ ] 5.4 **Test (unit, jsdom)** One paste, one undo, and the document equals its pre-paste state.
+- [x] 5.3 **Test (unit, jsdom)** All **four** paste refusals (§D10's three plus I3's) and the
+      conversion case: plain-text markdown converts; the same text with an HTML flavour present does
+      not; the same text with the caret in a code block or under a code mark does not; a bare URL
+      over a non-empty selection does not, and the link extension then links it.
+      ⚠️ **Not** a real `ClipboardEvent`/`DataTransfer` as this task originally said — jsdom
+      implements neither (both `undefined`; verified). The handler is called with a clipboard object
+      of the same shape and the `Slice` `prosemirror-view` would have parsed, through
+      `view.props.handlePaste` and `view.someProp` — the two entry points the real paste path uses.
+      Logged as I6.
+- [x] 5.4 **Test (unit, jsdom)** One paste, one undo, and the document equals its pre-paste state.
 
 ## 6. Documentation
 
-- [ ] 6.1 New `apps/docs/src/content/docs/features/markdown.md`: the shortcut table (including which
+- [x] 6.1 New `apps/docs/src/content/docs/features/markdown.md`: the shortcut table (including which
       ones already existed), what copy-out produces, what paste-in converts and the three times it
       deliberately does not, what a mention becomes and why it does not come back, and an honest
       "what markdown cannot carry" list (underline, mention identity, leading indentation). Add the
       sidebar entry to `apps/docs/astro.config.mjs`.
-- [ ] 6.2 `reference/frontend-build.md` §11: update §11.1 to six catalog entries, and add **§11.6** —
+- [x] 6.2 `reference/frontend-build.md` §11: update §11.1 to six catalog entries, and add **§11.6** —
       the two verified serialiser defects with their probe output, the single private method the
       correction attaches to and why (with the rejected alternatives in one line each), the fact that
       `@tiptap/core` 3.28 (not the markdown package) declares `markdownName` / `renderMarkdown` on
       `NodeConfig`, and that `resolveExtensions` / `getSchema` / the input-rule helpers all come from
       `@tiptap/react`'s `export * from '@tiptap/core'`.
-- [ ] 6.3 `TECHSTACK.md` line 74: five catalog entries become six, naming `@tiptap/markdown` and the
+- [x] 6.3 `TECHSTACK.md` line 74: five catalog entries become six, naming `@tiptap/markdown` and the
       serialiser correction so it is not "cleaned up" by a later reader. `README.md`: one line in
       "What works today".
-- [ ] 6.4 `ROADMAP.md`: row 16 → shipped, and restate §Known gaps so **export stays open** — this
+- [x] 6.4 `ROADMAP.md`: row 16 → shipped, and restate §Known gaps so **export stays open** — this
       change built the serialiser the export change needs and shipped none of the export surface.
-- [ ] 6.5 Assert, do not assume: `.env.example`, `packages/schema/**` and `apps/server/**` are
+- [x] 6.5 Assert, do not assume: `.env.example`, `packages/schema/**` and `apps/server/**` are
       untouched by this change. `git diff --stat` is the evidence.
 
 ## 7. Verification
 
 - [ ] 7.1 `pnpm turbo lint typecheck test build` clean from the repo root. Report actual output.
-- [ ] 7.2 `pnpm --filter @yapm/docs build` clean.
+- [x] 7.2 `pnpm --filter @yapm/docs build` clean.
 - [ ] 7.3 Manual, in a real browser (the thing jsdom cannot prove): copy a description containing a
       heading, a list, a link, a mention and `a < b & c` into a plain-text target and read it; paste
       markdown back in from the same plain text and confirm the document matches. Record the result

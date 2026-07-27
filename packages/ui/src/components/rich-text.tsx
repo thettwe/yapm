@@ -1,6 +1,7 @@
 import Mention, { type MentionNodeAttrs } from '@tiptap/extension-mention'
 import { Node as ProseMirrorNode, Slice } from '@tiptap/pm/model'
 import { PluginKey } from '@tiptap/pm/state'
+import type { EditorProps } from '@tiptap/pm/view'
 import {
   EditorContent,
   Extension,
@@ -257,6 +258,62 @@ function isSingleTextRun(content: readonly JSONContent[], text: string): boolean
   const children = content[0]?.type === 'paragraph' ? (content[0].content ?? []) : []
   const only = children.length === 1 ? children[0] : undefined
   return only?.type === 'text' && only.text === text.trim()
+}
+
+/**
+ * Both clipboard behaviours as one object, so the editor's real markdown wiring is reachable from a
+ * test that drives a ProseMirror view directly. jsdom implements neither `ClipboardEvent` nor
+ * `DataTransfer`, so a test that went through `RichTextEditor`'s React tree could only ever assert
+ * against a stand-in clipboard anyway; this way the function under test is the one that ships.
+ */
+export function richTextClipboardProps(
+  resolveMentionName?: ((id: string) => string | undefined) | undefined,
+): Pick<EditorProps, 'clipboardTextSerializer' | 'handlePaste'> {
+  return {
+    clipboardTextSerializer: (slice) => richTextSliceToMarkdown(slice, resolveMentionName),
+    handlePaste: (view, event) => {
+      const clipboard = event.clipboardData
+      if (clipboard === null) return false
+      // A yapm→yapm paste carries `data-pm-slice`; a paste from a browser or another editor
+      // carries real HTML. Either way ProseMirror's HTML path beats a markdown round trip.
+      if (Array.from(clipboard.types).includes('text/html')) return false
+
+      const text = clipboard.getData('text/plain')
+      if (text.trim() === '') return false
+
+      // Pasting a markdown snippet into a code block must insert the characters — that is what a
+      // code block is for.
+      const { doc, schema, selection } = view.state
+      const { $from } = selection
+      if ($from.parent.type.spec.code === true) return false
+      const code = schema.marks.code
+      if (
+        code &&
+        (code.isInSet($from.marks()) !== undefined ||
+          doc.rangeHasMark(selection.from, selection.to, code))
+      ) {
+        return false
+      }
+
+      try {
+        const content = markdownToRichText(text).content ?? []
+        if (content.length === 0) return false
+        if (isPlainTextEquivalent(content, text)) return false
+        if (!selection.empty && isSingleTextRun(content, text)) return false
+
+        const parsed = ProseMirrorNode.fromJSON(schema, { type: 'doc', content })
+        // ONE transaction, so one Cmd+Z restores the pre-paste document.
+        view.dispatch(
+          view.state.tr.replaceSelection(Slice.maxOpen(parsed.content)).scrollIntoView(),
+        )
+        return true
+      } catch {
+        // The clipboard is arbitrary user input and `Node.fromJSON` throws on anything the schema
+        // will not hold. Falling through to ProseMirror's own paste is always safe.
+        return false
+      }
+    },
+  }
 }
 
 const contentClass = cn(
@@ -573,50 +630,7 @@ export function RichTextEditor({
         'aria-multiline': 'true',
         class: 'tiptap',
       },
-      clipboardTextSerializer: (slice) =>
-        richTextSliceToMarkdown(slice, (id) => mentionNamesRef.current?.get(id)),
-      handlePaste: (view, event) => {
-        const clipboard = event.clipboardData
-        if (clipboard === null) return false
-        // A yapm→yapm paste carries `data-pm-slice`; a paste from a browser or another editor
-        // carries real HTML. Either way ProseMirror's HTML path beats a markdown round trip.
-        if (clipboard.types.includes('text/html')) return false
-
-        const text = clipboard.getData('text/plain')
-        if (text.trim() === '') return false
-
-        // Pasting a markdown snippet into a code block must insert the characters — that is what a
-        // code block is for.
-        const { doc, schema, selection } = view.state
-        const { $from } = selection
-        if ($from.parent.type.spec.code === true) return false
-        const code = schema.marks.code
-        if (
-          code &&
-          (code.isInSet($from.marks()) !== undefined ||
-            doc.rangeHasMark(selection.from, selection.to, code))
-        ) {
-          return false
-        }
-
-        try {
-          const content = markdownToRichText(text).content ?? []
-          if (content.length === 0) return false
-          if (isPlainTextEquivalent(content, text)) return false
-          if (!selection.empty && isSingleTextRun(content, text)) return false
-
-          const parsed = ProseMirrorNode.fromJSON(schema, { type: 'doc', content })
-          // ONE transaction, so one Cmd+Z restores the pre-paste document.
-          view.dispatch(
-            view.state.tr.replaceSelection(Slice.maxOpen(parsed.content)).scrollIntoView(),
-          )
-          return true
-        } catch {
-          // The clipboard is arbitrary user input and `Node.fromJSON` throws on anything the schema
-          // will not hold. Falling through to ProseMirror's own paste is always safe.
-          return false
-        }
-      },
+      ...richTextClipboardProps((id) => mentionNamesRef.current?.get(id)),
     },
     onUpdate: ({ editor: instance }) => onChange?.(instance.getJSON()),
   })

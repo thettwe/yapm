@@ -20,6 +20,7 @@ import {
   renameWorkspace,
   revokeInvite,
   setPreferenceArgs,
+  setTeamAutoStatus,
   WORKSPACE_NAME_MAX_LENGTH,
 } from './mutators.js'
 
@@ -332,6 +333,62 @@ describe('team rename and archive', () => {
     expect(calls).toEqual([
       { table: 'team', verb: 'update', value: { id, archivedAt: 10, updatedAt: 10 } },
     ])
+  })
+})
+
+describe('team.setAutoStatus', () => {
+  it.each([
+    ['a member', MEMBER],
+    ['a viewer', VIEWER],
+    ['a non-member', NON_MEMBER],
+    ['an unauthenticated caller', undefined],
+  ])('rejects %s before any existence read', async (_label, ctx) => {
+    const id = newId()
+    const { tx, calls, runQueue } = fakeTx([{ id }])
+    const error = await capture(
+      setTeamAutoStatus.fn({ tx, args: { id, since: 10, updatedAt: 10 }, ctx }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+    // The team was never loaded, so a non-admin learns nothing about whether the id exists.
+    expect(runQueue).toHaveLength(1)
+  })
+
+  it('lets an admin enable automation with the epoch the call site minted', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id }])
+    await setTeamAutoStatus.fn({ tx, args: { id, since: 10, updatedAt: 10 }, ctx: ADMIN })
+    expect(calls).toEqual([
+      { table: 'team', verb: 'update', value: { id, autoStatusSince: 10, updatedAt: 10 } },
+    ])
+  })
+
+  // Null is off, and it has to be written rather than inferred: re-enabling later records a FRESH
+  // instant, which is what keeps a disabled window from being replayed by a late delivery.
+  it('lets an admin disable automation by writing null', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id }])
+    await setTeamAutoStatus.fn({ tx, args: { id, since: null, updatedAt: 12 }, ctx: ADMIN })
+    expect(calls).toEqual([
+      { table: 'team', verb: 'update', value: { id, autoStatusSince: null, updatedAt: 12 } },
+    ])
+  })
+
+  it('rejects an admin pointing at a team that does not exist', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([undefined])
+    const error = await capture(
+      setTeamAutoStatus.fn({ tx, args: { id, since: 10, updatedAt: 10 }, ctx: ADMIN }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it('writes nothing but the setting — no issue is touched by flipping the switch', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id }])
+    await setTeamAutoStatus.fn({ tx, args: { id, since: 10, updatedAt: 10 }, ctx: ADMIN })
+    expect(calls.map((call) => call.table)).toEqual(['team'])
   })
 })
 
@@ -862,6 +919,7 @@ describe('the mutator registry', () => {
       'team.create',
       'team.rename',
       'team.archive',
+      'team.setAutoStatus',
       'team.addMember',
       'team.removeMember',
       'invite.create',

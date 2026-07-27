@@ -1,7 +1,7 @@
 import { mustGetMutator, type Transaction } from '@rocicorp/zero'
 import { describe, expect, it } from 'vitest'
 import { newId } from '../id.js'
-import type { AuthContext } from './context.js'
+import { type AuthContext, SYSTEM_AUTH_CONTEXT } from './context.js'
 import { MutationErrorCode, mutationErrorCode } from './errors.js'
 import { mutators } from './mutators.js'
 import { createServerMutators } from './server-mutators.js'
@@ -156,6 +156,41 @@ describe('issue.setStatus / setPriority / assign', () => {
         verb: 'update',
         value: { id, status: 'in_progress', lastHumanStatusAt: 5, updatedAt: 5 },
       },
+    ])
+  })
+
+  // The stamp is what `decideAutoStatus` reads to tell a person's decision from the instance's, so
+  // the two contexts have to disagree about exactly this one column and about nothing else. Both are
+  // `admin`, so the read path either side is identical and `userID` is the only variable.
+  it('stamps last_human_status_at when a person sets the status', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id, teamId: TEAM_ID }])
+    await mutators.issue.setStatus.fn({
+      tx,
+      args: { id, status: 'done', updatedAt: 9 },
+      ctx: ADMIN,
+    })
+    expect(calls).toEqual([
+      {
+        table: 'issue',
+        verb: 'update',
+        value: { id, status: 'done', lastHumanStatusAt: 9, updatedAt: 9 },
+      },
+    ])
+  })
+
+  // The absence is the audit record. Stamping here would make automation block itself on its own
+  // previous write one delivery later, and would claim a person set a status nobody set.
+  it('leaves last_human_status_at untouched when the system principal sets the status', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id, teamId: TEAM_ID }])
+    await mutators.issue.setStatus.fn({
+      tx,
+      args: { id, status: 'done', updatedAt: 9 },
+      ctx: SYSTEM_AUTH_CONTEXT,
+    })
+    expect(calls).toEqual([
+      { table: 'issue', verb: 'update', value: { id, status: 'done', updatedAt: 9 } },
     ])
   })
 

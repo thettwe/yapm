@@ -653,6 +653,39 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
     expect(problems, problems.join('\n')).toEqual([])
   })
 
+  // Status automation's entire storage footprint, called out by name for the same reason as the
+  // natural keys below: the generic sweeps above would catch a drop, but not say what broke. Both
+  // columns must be NULLABLE with no default — `team.auto_status_since` because null is the off
+  // state AND the shipped default (a default would silently opt every existing team in), and
+  // `issue.last_human_status_at` because a default would fabricate human intent on rows nobody
+  // touched. Both must be `timestamptz`, because the guard ladder compares them against event
+  // instants; an integer column here would compare wrong rather than fail.
+  it.each([
+    ['team', 'auto_status_since'],
+    ['issue', 'last_human_status_at'],
+  ])('carries %s.%s as a nullable timestamptz in Postgres', (table, column) => {
+    const actual = tables.find((candidate) => candidate.name === table)
+    const found = actual?.columns.find((candidate) => candidate.name === column)
+    expect(found, `${table}.${column} is missing from Postgres`).toBeDefined()
+    expect(found?.dataType).toBe('timestamptz')
+    expect(found?.isNullable).toBe(true)
+    expect(found?.hasDefaultValue).toBe(false)
+  })
+
+  // And the other side of the same fact: a column that reached Postgres but never reached the Zero
+  // schema does not sync, so the settings toggle would write a value the client can never read back
+  // and the guard ladder would see `undefined` on every issue.
+  it.each([
+    ['team', 'auto_status_since'],
+    ['issue', 'last_human_status_at'],
+  ])('exposes %s.%s through the Zero schema as an optional number', (table, column) => {
+    const shape = tableShapes().find((candidate) => candidate.serverName === table)
+    const found = shape?.columns.find((candidate) => candidate.serverName === column)
+    expect(found, `${table}.${column} is missing from the Zero schema`).toBeDefined()
+    expect(found?.type).toBe('number')
+    expect(found?.optional).toBe(true)
+  })
+
   // Called out on its own because the whole notification design rests on it: the natural key IS the
   // primary key, IN THIS ORDER, so nothing is minted, `on conflict do nothing` needs no separate
   // unique index, and a mutator re-run during rebase can neither duplicate nor alter a row. The

@@ -468,8 +468,18 @@ log(`Integrate: ${integrate?.passed ? 'green' : 'RED'}`)
 
 phase('Sync')
 await agent(
-  `${PREAMBLE}\n\n## Sync phase\nAnother change may have merged to ${BASE} while you were building. Bring ${BRANCH} ` +
-    `up to date so the PR merges cleanly:\n` +
+  `${PREAMBLE}\n\n## Sync phase — rebase ONLY\n` +
+    `### 🔴 You must not touch a pull request. Not create one, not merge one, not re-run its checks.\n` +
+    `\`gh pr create\`, \`gh pr merge\`, \`gh pr review\`, \`gh run rerun\` are all forbidden here. Reading state with ` +
+    `\`gh pr list\` or \`gh pr view\` is fine; changing it is not. The review flow that runs after you owns the entire ` +
+    `PR lifecycle, and its merge decision depends on review rounds that have NOT HAPPENED YET.\n` +
+    `This is not hypothetical. Twice now a Sync agent has created a PR, waited out its CI and squash-merged it — ` +
+    `landing the change on ${BASE} before a single review round ran, and stranding every subsequent review fix on an ` +
+    `orphaned branch. Both times CI was green, so it looked correct. Green CI means the code compiles and the tests ` +
+    `pass; it does not mean the change has been reviewed. Merging here destroys that distinction.\n` +
+    `If you find an open PR for this branch, LEAVE IT OPEN and say so in your report.\n\n` +
+    `### Your actual job\nAnother change may have merged to ${BASE} while you were building. Bring ${BRANCH} up to ` +
+    `date so that the review flow can later merge it cleanly:\n` +
     `1. git fetch origin\n` +
     `2. git rebase origin/${BASE}\n` +
     `3. Resolve any conflicts. Expect them in ROADMAP.md and README.md — concurrent changes add rows in the same ` +

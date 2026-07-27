@@ -569,6 +569,15 @@ const merge = await agent(
     `${persistent.length ? `\nFindings that reappeared across rounds (possible stuck fixes): ${persistent.join('; ')}.` : ''}` +
     `${allUnfixable.length ? `\nReported unfixable: ${allUnfixable.map((u) => `[${u.severity}] ${u.summary} (${u.reason})`).join('; ')}.` : ''}` +
     `${unverifiedFixes.length ? `\nThese fixes landed in the final round and were NOT re-reviewed — eyeball them in the final diff:\n${unverifiedFixes.join('\n')}` : ''}\n\n` +
+    `0. FIRST, check the PR is actually mergeable and that CI ran against its CURRENT head:\n` +
+    `   \`gh pr view ${opened.prNumber} --json mergeable,mergeStateStatus,headRefOid\` and ` +
+    `\`gh api repos/{owner}/{repo}/commits/<headRefOid>/check-runs --jq .total_count\`.\n` +
+    `   - If \`mergeStateStatus\` is \`DIRTY\` or \`BEHIND\`, the base moved while the review rounds ran. Rebase onto ` +
+    `${BASE}, resolve conflicts keeping BOTH sides' intent, re-run the fast gates, and \`git push ` +
+    `--force-with-lease\`. Do not merge a branch you have not rebased.\n` +
+    `   - **If the head commit has ZERO check-runs, CI never saw the code you are about to merge.** A green run on an ` +
+    `older SHA is not evidence about this one — GitHub does not create \`pull_request\` runs while a PR is conflicted, ` +
+    `so a stale-but-green PR is exactly the shape this trap takes. Rebase or push to trigger a run, then wait for it.\n` +
     `1. Do NOT re-run the gate suite locally. GitHub CI already covers lint, typecheck, unit + integration tests, ` +
     `build, catalog, boundaries, commit hygiene, the Playwright e2e suite, and the three-container compose smoke ` +
     `test. Run: gh pr checks ${opened.prNumber} --watch, then read EVERY check.\n` +

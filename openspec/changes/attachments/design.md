@@ -399,3 +399,178 @@ schema-skew question — are respectively settled here (D6, by the maintainer) a
 ## Decisions made during implementation
 
 <!-- Appended during the build phase: what was ambiguous, what was chosen, and why. -->
+
+### I1 — Task 2.7: `bigint` replicates cleanly on both paths; the two PARTIAL indexes do not, and do not need to
+
+Run against a `yapm-at` compose project on ports 5447/4855/3007, from `down -v`, `postgres:18` +
+`rocicorp/zero:1.8.0`, no publication change — the default `FOR TABLES IN SCHEMA public` throughout.
+Migrations `0001`–`0016` were applied first and allowed to reach `"stage":"Replicating"`, and a
+workspace + team were seeded so the copy had a parent row to hang off.
+
+**(a) The upgrade path — DDL applied to a live zero-cache.** `0017_attachments` ran while zero-cache
+was replicating. The change-streamer logged the `CREATE TABLE` and the `CREATE INDEX` statements off
+the WAL (`ddlStart` → `ddlUpdate` → `n schema change(s)`), and the **write-worker applied**:
+
+```
+write-worker  create-table attachment
+write-worker  create-index attachment_pkey
+write-worker  create-index attachment_team_id_idx
+write-worker  PRAGMA optimized after schema change (0 ms)
+```
+
+`"status":"OK"` / `"stage":"Replicating"` throughout, no error, no resync.
+
+**`bigint` is a non-event, which is the fact task 2.7 exists to establish.** `byte_size` is in the
+table the write-worker created, is in the copy `SELECT` list below, and carries its row's value. No
+fallback to `integer` is needed and none was taken.
+
+**What zero-cache SKIPPED, silently, is both PARTIAL indexes.** `attachment_issue_id_idx`
+(`where issue_id is not null`) and `attachment_orphan_idx` (`where issue_id is null and comment_id
+is null`) appear in the change-streamer log and are **absent from the write-worker's applied list** —
+the same shape of finding as the `search` I1 GIN expression index, with no error and no warning.
+This is fine, and it is written down rather than left to be rediscovered: an index is not logically
+replicated, the two skipped ones exist for the **Postgres-side** sweep and Files read, and the
+replica's own `attachments.byIssue` scan is over a table bounded by one team's uploads. If that scan
+ever matters, the fix is a non-partial index, not a publication change.
+
+**(b) The fresh-install path — an empty replica against a schema that already has the table.** The
+`yapm-at_zero-replica` volume was deleted and zero-cache restarted (postgres untouched). Initial sync
+copied the table with **every column, `byte_size` included**:
+
+```
+Starting binary copy stream of attachment: SELECT "byte_size","comment_id","content_type","created_at","filename","has_thumbnail","id","issue_id","team_id","uploader_id" FROM "public"."attachment"
+Finished copying 1 rows into attachment (flush: 0.016 ms)
+Creating index 1/106: CREATE UNIQUE INDEX "attachment_pkey" ON "attachment" ("id" ASC);
+Creating index 2/106: CREATE  INDEX "attachment_team_id_idx" ON "attachment" ("team_id" ASC);
+```
+
+`"stage":"Indexing"` → `"stage":"Replicating"`, `"status":"OK"`, container `healthy`. The partial
+indexes are skipped here too — consistent with (a) rather than a second behaviour.
+
+The one `ERROR` in the log is `getLitestream` → `Unexpected undefined value`, zero-cache looking for
+a litestream backup dev has never configured. Pre-existing, unrelated, present on `main`, and named
+in the `search` I1 finding for the same reason.
+
+**Conclusion: no fallback needed.** No custom publication, no `ZERO_APP_PUBLICATIONS` change, no
+full replica resync on upgrade. The rest of the change is built on this.
+
+### I2 — `uploader_id` carries NO foreign key to `user`, because it cannot
+
+Design §D4 and task 2.1 both specify `uploader_id ... references "user"(id) on delete cascade`. That
+migration **cannot apply on a fresh instance**, and it failed exactly that way the first time it was
+run against the live stack: `error: relation "user" does not exist`. The `user` table is
+better-auth's, created by *its* `getMigrations()` at boot — which `apps/server/src/index.ts` runs
+**after** the Kysely migrator, deliberately, since better-auth's migration is not advisory-locked.
+
+Every other user-shaped column in this repo already resolves this the same way and says so:
+`issue.creator_id` and `issue.assignee_id` are bare `text` (`0004_issue_core`), and
+`0013_notifications` carries the comment verbatim — *"No FK: `user` is better-auth's table, created
+by its own migrator, and this repo's migrations never reference it (matching `retro.facilitator_id`
+/ `retro.created_by`)."* So `uploader_id` is `text not null` with no reference.
+
+The consequence is deliberate rather than merely tolerated. `on delete cascade` would have meant
+*deleting an account destroys the files they uploaded* — including a design diagram attached to a
+live issue, deleted because the person who pasted it left. Permission here is anchored on `team_id`,
+not on the uploader, so with no cascade a departed colleague's attachments stay readable by the team
+that owns them. That is the better answer regardless of the boot-order constraint that forced it.
+
+### I3 — `byte_size` reads back as a STRING, and is converted in exactly one place
+
+`bigint` is the right column type — a byte count is not an `int4` on principle — but node-postgres
+hands `int8` back as a **string** (`"4096"`, observed on the live stack), and no global type parser
+is registered in `db/client.ts`. Registering one would change how every other `int8` in the process
+reads, which is a far larger blast radius than this change is entitled to.
+
+So `AttachmentTable.byte_size` is typed `ColumnType<string, number | string, number | string>` — the
+honest shape — and `db/attachment.ts` converts with `Number()` at its boundary, so `AttachmentRow`
+carries a `number` and nothing outside that file ever sees the string. This is the same judgement
+`db/search.ts` made about `Generated<Timestamp>` not unwrapping: type the column as it actually
+behaves, and fix it once at the one boundary that owns the table.
+
+### I4 — `docker-compose.dev.yml` gains nothing, and two host-run harnesses gain one env line each
+
+Task 6.2 says "both compose files". `docker/docker-compose.dev.yml` has **no `yapm` service** — the
+dev loop runs the server on the host under `tsx watch`, which is why its zero-cache points at
+`host.docker.internal`. There is no container to mount a volume on, so the dev compose file is
+unchanged and only `docker/docker-compose.yml` gains the `files` volume and the env block.
+
+That exposes a real problem the task did not anticipate. `STORAGE_LOCAL_DIR` defaults to
+`/var/lib/yapm/files`, which is right for the container and impossible for a normal user on a
+developer machine — and the storage readiness check is **gating**, so a host-run server would sit at
+`not_ready` forever. Two harnesses set it instead:
+
+- `scripts/dev.mjs`, alongside the `DATABASE_URL` / `VITE_ZERO_CACHE_URL` defaults it already
+  computes, pointing at the gitignored `data/files`.
+- `apps/web/playwright.config.ts`'s server `webServer.env`, which is a fixed object with no
+  `process.env` spread — so without a line there, **every existing e2e spec** would fail at
+  `url: ${SERVER_ORIGIN}/readyz` on this branch.
+
+That second edit touches `apps/web`, which the task list forbids. The prohibition is about building
+change 17's editor and Files UI in this change; a one-line env addition to a test harness that this
+change would otherwise break is the narrower of two rules the plan asks for, and "do not regress a
+prior change" is the wider one. It is one line plus a comment, and no `apps/web` source file is
+touched.
+
+### I5 — The storage readiness check is GATING, and `health.ts` grew one helper to say so
+
+`health.ts` had `databaseCheck` (gating, fixed name), `replicationCheck` (gating, fixed name) and
+`nonGatingCheck` (generic). There was no generic *gating* check, so storage would have had to
+either invent a fourth named one-off or be silently non-gating.
+
+Added `gatingCheck(name, probe, timeoutMs)` — which `databaseCheck` now delegates to, since it was
+already that function with a literal name. Storage is gating deliberately, and differs from search
+freshness for a reason worth stating: a stale search index degrades results, while an unwritable
+attachment volume means every upload fails and every image 404s. §Risks calls for exactly this — a
+read-only or missing mount must fail `/readyz` at boot rather than at somebody's first paste.
+
+### I6 — The capability guard's word grep covers SHIPPED source only
+
+Rule (a) greps for `presign`, `signedUrl`, `getSignedUrl`, `createPresignedUrl`, `X-Amz-Signature`
+and `getUrl` under `apps/server/src/storage/`. `s3.test.ts` legitimately asserts that a signed query
+string is **never** produced, which means it has to name `X-Amz-Signature` — and
+`no-capability.test.ts` itself is the extreme case, since it must contain every forbidden word in
+order to forbid it.
+
+So (a) filters `.test.ts` out and says why in the file. The invariant is about what the server can
+do, not about what its tests may say — and rule (b), the one that actually matters, reads
+`provider.ts` source directly and is unaffected. Proven to bite: adding a `shareLink(key): Promise<string>`
+member — a name no wordlist contains — fails (b) immediately.
+
+### I7 — `canUploadToTeam` and `targetsAreInTeam` live in `db/attachment.ts` too
+
+Task 2.5 names five accessors, all over the `attachment` table. The routes also need two predicates
+that read *other* tables: may this caller upload into this team (membership, minus `viewer`), and is
+this `issueId`/`commentId` in the same team as the row.
+
+Written in `storage/routes.ts` they would be a **second definition of membership**, sitting beside
+`findAttachmentForReader`'s inlined scope fragment and free to disagree with it — which is the exact
+failure the one-file rule exists to prevent, just one table over. They live in `db/attachment.ts`
+with the read predicate they must agree with. No `apps/server` module writes SQL about attachment
+permission.
+
+### I8 — Upload / PATCH / DELETE authorisation failures return the READ path's refusal
+
+Design §D7 fixes the refusal for `GET`. It does not say what a `POST` naming a team the caller is
+not in returns. Both available answers are defensible; this one is the same shape, because the
+alternative reintroduces the oracle on a different verb: a `403` for "that team exists and you are
+not in it" beside a `404` for "no such team" is a team-existence probe, and `PATCH`/`DELETE` name a
+row directly, so anything but the standard refusal there leaks precisely what `GET` refuses to.
+
+Request-**shape** failures keep their own statuses, because they describe the caller's own input and
+can say nothing about any row: `413` for a body over `ATTACHMENT_MAX_BYTES` (from `hono/body-limit`,
+on the `Content-Length` header before a byte is read), and `400 {"error":"invalid_request"}` for a
+missing `file` part, a missing `teamId`, a malformed multipart body, or a `PATCH` naming neither
+edge. All of them carry `cache-control: no-store`.
+
+### I9 — Task 9.1 was written in this phase, not deferred, because group 5 is otherwise unproven
+
+Groups 9 and 10 belong to the close phase. `apps/server/src/storage/routes.pg.test.ts` was written
+here anyway: it is the change's falsifiable check, and shipping seven route handlers with no test
+over any of them would mean the phase's own claim — "the routes work" — rested on nothing.
+
+It passes against live Postgres on the `yapm-at` stack, 15 tests, including the three legs the check
+names: a member of team B gets **byte-identical** responses (status, body, and the full header set
+minus `Date`) for the real attachment id, a UUID never uploaded, and `not-a-uuid`; and a member of
+team A gets `200`, the exact uploaded bytes, `Cache-Control: private, max-age=300`,
+`Content-Type: image/png`, `Content-Disposition: inline`, `X-Content-Type-Options: nosniff`.
+Task 9.2's contract items are in the same file. Tasks 9.3–9.5 are still the close phase's.

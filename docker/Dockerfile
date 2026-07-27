@@ -40,6 +40,19 @@ RUN groupadd --system --gid 1001 yapm \
 COPY --from=build --chown=yapm:yapm /app /app
 COPY --from=build --chown=yapm:yapm /repo/apps/web/dist /app/web
 
+# Attachment bytes under the local provider (the default). Created and chowned BEFORE `USER yapm`,
+# so a named volume inherits the ownership and a bind-mounted host path is not silently unwritable
+# by uid 1001 — which would otherwise surface as `/readyz` failing at boot rather than as a
+# permission error somebody can read.
+#
+# NOTE: `sharp` puts the first NATIVE module into this image. Its prebuilt platform packages
+# (@img/sharp-linux-*) are resolved by `pnpm install` in the build stage and carried across by
+# `pnpm deploy --prod --legacy`; both stages are `node:24-slim`, so the same libc and the same arch
+# apply on either side. A CROSS-ARCHITECTURE build (`--platform linux/arm64` on an x64 host) must
+# either build on the target arch or configure pnpm's `supportedArchitectures` — a new constraint on
+# the release pipeline, and one more reason the base stays `node:24-slim` rather than Alpine.
+RUN mkdir -p /var/lib/yapm/files && chown -R yapm:yapm /var/lib/yapm
+
 USER yapm
 EXPOSE 3000
 

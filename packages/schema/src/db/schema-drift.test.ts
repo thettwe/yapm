@@ -419,6 +419,22 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     source_updated_at: { nullable: false, hasDefault: false },
     indexed_at: { nullable: false, hasDefault: true },
   },
+  // Uploaded-file metadata. `issue_id`/`comment_id` are NULLABLE with no default because both are
+  // `on delete set null` — a deleted comment orphans its files rather than cascading — and because
+  // an image pasted into a not-yet-created issue has no edge for a while. `team_id` is the
+  // permission anchor and is therefore the one edge that is never null.
+  attachment: {
+    id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    issue_id: { nullable: true, hasDefault: false },
+    comment_id: { nullable: true, hasDefault: false },
+    uploader_id: { nullable: false, hasDefault: false },
+    filename: { nullable: false, hasDefault: false },
+    content_type: { nullable: false, hasDefault: false },
+    byte_size: { nullable: false, hasDefault: false },
+    has_thumbnail: { nullable: false, hasDefault: true },
+    created_at: { nullable: false, hasDefault: true },
+  },
   user: {
     id: { nullable: false, hasDefault: false },
     name: { nullable: false, hasDefault: false },
@@ -651,6 +667,45 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
     }
 
     expect(problems, problems.join('\n')).toEqual([])
+  })
+
+  // The attachment table, column by column in BOTH directions, because it is the only table in the
+  // repo whose read permission is enforced by a route rather than by a synced predicate alone: a
+  // column that reached Postgres but not the Zero schema silently stops the Files list working,
+  // and a column here that is not in Postgres is a 500 on the upload path.
+  it('carries every attachment column in Postgres and in the Zero schema', () => {
+    const actual = tables.find((candidate) => candidate.name === 'attachment')
+    expect(actual, 'attachment is missing from Postgres').toBeDefined()
+    const shape = tableShapes().find((candidate) => candidate.serverName === 'attachment')
+    expect(shape, 'attachment is missing from the Zero schema').toBeDefined()
+
+    const columns = Object.keys(KYSELY_DB.attachment ?? {})
+    expect(columns.length).toBe(10)
+    for (const column of columns) {
+      expect(
+        actual?.columns.map((candidate) => candidate.name),
+        `attachment.${column} in Postgres`,
+      ).toContain(column)
+      expect(
+        shape?.columns.map((candidate) => candidate.serverName),
+        `attachment.${column} in the Zero schema`,
+      ).toContain(column)
+    }
+  })
+
+  // `bigint` is the one column type in this table not already on the replication path for some
+  // other table, and it is the one whose JS representation is a trap: node-postgres hands `int8`
+  // back as a STRING, so a column typed `number` here would silently produce `'1024'` where every
+  // caller expects `1024`. `db/attachment.ts` converts at its boundary; this pins the Postgres side.
+  it('stores attachment.byte_size as int8 and syncs it as a number', () => {
+    const actual = tables.find((candidate) => candidate.name === 'attachment')
+    const column = actual?.columns.find((candidate) => candidate.name === 'byte_size')
+    expect(column?.dataType).toBe('int8')
+    expect(column?.isNullable).toBe(false)
+
+    const shape = tableShapes().find((candidate) => candidate.serverName === 'attachment')
+    const synced = shape?.columns.find((candidate) => candidate.serverName === 'byte_size')
+    expect(synced?.type).toBe('number')
   })
 
   // Status automation's entire storage footprint, called out by name for the same reason as the

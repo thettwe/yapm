@@ -78,6 +78,16 @@ const GITHUB_APP_VARS = [
 const MAIL_REQUIRED_VARS = ['EMAIL_FROM', 'PUBLIC_URL'] as const
 const MAIL_TRANSPORT_VARS = ['RESEND_API_KEY', 'SMTP_URL'] as const
 
+// The S3 quartet, on the GITHUB_APP_VARS precedent: STORAGE_PROVIDER=s3 with any of these missing is
+// a deliberate-but-broken config, so boot fast-fails naming each one. `local` requires nothing —
+// object storage is an option, never a prerequisite.
+const S3_REQUIRED_VARS = [
+  'S3_BUCKET',
+  'S3_REGION',
+  'S3_ACCESS_KEY_ID',
+  'S3_SECRET_ACCESS_KEY',
+] as const
+
 const optionalHttpUrl = z.preprocess(
   (value) => (typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined),
   z.string().url().optional(),
@@ -240,6 +250,44 @@ export const envSchema = z
     // bytes as a miss (a 503 beside a 200 would be an oracle over corpus size), so this bounds the
     // work rather than shaping the answer.
     SEARCH_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(100).max(60000).default(2000),
+    // Attachment byte storage. `local` is the DEFAULT and is COMPLETE — a self-hoster with no
+    // object store gets full functionality, so this is not a fallback. `s3` is the option, and it
+    // is all-or-nothing (see the refinement below).
+    //
+    // There is no signed-URL variable here and there never will be: an <img src> lives in a
+    // document that syncs to every team member's IndexedDB, so a URL stored in one is a bearer
+    // capability at rest on every client. The app proxies bytes for BOTH providers instead, which
+    // is what makes the permission check literally the same code either way.
+    STORAGE_PROVIDER: z
+      .preprocess(
+        (value) =>
+          typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined,
+        z.enum(['local', 's3']),
+      )
+      .default('local'),
+    STORAGE_LOCAL_DIR: z.string().min(1).default('/var/lib/yapm/files'),
+    S3_BUCKET: optionalString,
+    S3_REGION: optionalString,
+    S3_ACCESS_KEY_ID: optionalString,
+    S3_SECRET_ACCESS_KEY: optionalString,
+    // Optional, and the reason R2 / Backblaze B2 / Garage / SeaweedFS / a MinIO an operator
+    // already runs are all reachable. Absent means AWS: https://s3.<region>.amazonaws.com.
+    S3_ENDPOINT: optionalHttpUrl,
+    S3_FORCE_PATH_STYLE: z
+      .preprocess(
+        (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+        z.enum(['true', 'false']),
+      )
+      .default('false'),
+    // The one hard limit on a single upload. Enforced by `hono/body-limit`, which rejects on the
+    // Content-Length header before a byte is read AND bounds the stream, so a lying header cannot
+    // be used to exhaust memory.
+    ATTACHMENT_MAX_BYTES: z.coerce.number().int().min(1024).max(1073741824).default(26214400),
+    // How long an attachment with neither an issue nor a comment survives before the sweep takes
+    // it. The sharp edge is written down rather than smoothed over: somebody who pastes an image
+    // and then leaves the tab open longer than this without the document saving loses it.
+    ATTACHMENT_ORPHAN_GRACE_HOURS: z.coerce.number().int().min(1).max(8760).default(24),
+    ATTACHMENT_GC_CRON: cronExpression.default('23 4 * * *'),
   })
   .check((ctx) => {
     const value = ctx.value
@@ -267,6 +315,21 @@ export const envSchema = z
           input: value[name],
           path: [name],
           message: `is required when ${transport} is set (an email transport needs a From address and a public base URL)`,
+        })
+      }
+    }
+  })
+  .check((ctx) => {
+    const value = ctx.value
+    if (value.STORAGE_PROVIDER !== 's3') return
+    for (const name of S3_REQUIRED_VARS) {
+      if (value[name] === undefined) {
+        ctx.issues.push({
+          code: 'custom',
+          input: value[name],
+          path: [name],
+          message:
+            'is required when STORAGE_PROVIDER=s3 (the bucket, its region and a credential pair are all needed to sign a request)',
         })
       }
     }
@@ -342,6 +405,25 @@ export const EXPECTED_FORMAT: Record<string, string> = {
     "a Postgres text-search configuration name matching ^[a-z_][a-z0-9_]{0,62}$ and present in pg_ts_config, e.g. 'simple' (the default) or 'english'",
   SEARCH_STATEMENT_TIMEOUT_MS:
     'an integer millisecond ceiling for one search query, 100 to 60000, e.g. 2000',
+  STORAGE_PROVIDER:
+    "one of local | s3 — where attachment bytes live; 'local' (the default) is complete on its own",
+  STORAGE_LOCAL_DIR:
+    'an absolute directory for attachment bytes under the local provider, e.g. /var/lib/yapm/files',
+  S3_BUCKET: 'the bucket attachments are stored in; required when STORAGE_PROVIDER=s3',
+  S3_REGION:
+    "the bucket's region, e.g. eu-central-1 (use 'auto' for R2); required when STORAGE_PROVIDER=s3",
+  S3_ACCESS_KEY_ID: 'the access key id; required when STORAGE_PROVIDER=s3',
+  S3_SECRET_ACCESS_KEY: 'the secret access key; required when STORAGE_PROVIDER=s3',
+  S3_ENDPOINT:
+    'an S3-compatible endpoint URL for R2/B2/Garage/MinIO, e.g. https://<account>.r2.cloudflarestorage.com, or unset for AWS',
+  S3_FORCE_PATH_STYLE:
+    "'true' to address objects as <endpoint>/<bucket>/<key> (MinIO, Garage), or 'false' for virtual-host style (the default)",
+  ATTACHMENT_MAX_BYTES:
+    'an integer byte ceiling for one upload, 1024 to 1073741824, e.g. 26214400 (25 MiB)',
+  ATTACHMENT_ORPHAN_GRACE_HOURS:
+    'an integer number of hours an unattached upload survives before the sweep deletes it, 1 to 8760, e.g. 24',
+  ATTACHMENT_GC_CRON:
+    "a five-field cron expression for the orphaned-attachment sweep, e.g. '23 4 * * *' for 04:23 daily",
 }
 
 export interface EnvIssue {
@@ -478,4 +560,37 @@ export function mailEnv(env: Env): MailEnv | null {
     return { transport: 'smtp', url: env.SMTP_URL, from, publicUrl, ignored: null }
   }
   return null
+}
+
+export type StorageEnv =
+  | { provider: 'local'; dir: string }
+  | {
+      provider: 's3'
+      bucket: string
+      region: string
+      accessKeyId: string
+      secretAccessKey: string
+      endpoint: string | null
+      forcePathStyle: boolean
+    }
+
+// The selected byte store from env, mirroring `githubAppEnv`/`mailEnv` in shape — and differing
+// from both in the one way that matters: it NEVER returns null. Email is an optional feature whose
+// absence is a complete product; storage is not, so `local` is what an unconfigured instance gets.
+//
+// The env schema's refinement already failed boot if any of the S3 quartet was missing alongside
+// `STORAGE_PROVIDER=s3`, so the `s3` arm is complete by construction rather than by a cast.
+export function storageEnv(env: Env): StorageEnv {
+  if (env.STORAGE_PROVIDER === 's3') {
+    return {
+      provider: 's3',
+      bucket: env.S3_BUCKET ?? '',
+      region: env.S3_REGION ?? '',
+      accessKeyId: env.S3_ACCESS_KEY_ID ?? '',
+      secretAccessKey: env.S3_SECRET_ACCESS_KEY ?? '',
+      endpoint: env.S3_ENDPOINT ?? null,
+      forcePathStyle: env.S3_FORCE_PATH_STYLE === 'true',
+    }
+  }
+  return { provider: 'local', dir: env.STORAGE_LOCAL_DIR }
 }

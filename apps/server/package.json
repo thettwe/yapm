@@ -23,6 +23,7 @@
     "@yapm/email": "workspace:*",
     "@yapm/schema": "workspace:*",
     "ai": "catalog:",
+    "aws4fetch": "catalog:",
     "better-auth": "catalog:",
     "cron-parser": "catalog:",
     "hono": "catalog:",
@@ -32,6 +33,7 @@
     "octokit": "catalog:",
     "pg-boss": "catalog:",
     "pino": "catalog:",
+    "sharp": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

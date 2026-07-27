@@ -542,6 +542,10 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
       // user id: if it ever synced past its owner, this issue's follower list would become
       // readable, which is exactly the surveillance surface the mentions change refuses to build.
       'subscriptions.mine': { issueId: deliveryIssueId },
+      // Team-scoped, read-only, and swept by the same walk because an attachment row carries an
+      // uploader id: if it ever synced past its team, who pasted what would become readable
+      // outside the team that owns the file.
+      'attachments.byIssue': { issueId: deliveryIssueId },
     }
   }
 

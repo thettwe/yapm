@@ -68,14 +68,25 @@ function round(value: number): number {
   return Math.round(value * 1000) / 1000
 }
 
-export function databaseCheck(ping: () => Promise<void>, timeoutMs = 2000): ReadinessCheck {
+// A check whose failure is a VERDICT: the probe rejects, the instance reports not-ready, and an
+// orchestrator takes it out of rotation. The opposite of `nonGatingCheck` below — use this when the
+// thing being probed is something requests cannot be served without.
+export function gatingCheck(
+  name: string,
+  probe: () => Promise<void>,
+  timeoutMs = 2000,
+): ReadinessCheck {
   return {
-    name: 'database',
+    name,
     run: async () => {
-      await withTimeout(ping(), timeoutMs, `no response within ${timeoutMs}ms`)
+      await withTimeout(probe(), timeoutMs, `no response within ${timeoutMs}ms`)
       return undefined
     },
   }
+}
+
+export function databaseCheck(ping: () => Promise<void>, timeoutMs = 2000): ReadinessCheck {
+  return gatingCheck('database', ping, timeoutMs)
 }
 
 // A check whose result is INFORMATION rather than a verdict: it reports what it found, and it

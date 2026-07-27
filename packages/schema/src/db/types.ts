@@ -589,6 +589,29 @@ export interface SearchDocumentTable {
   indexed_at: Generated<Timestamp>
 }
 
+// An uploaded file's row. Bytes live in the storage provider under `<team_id>/<id>`; there is no
+// `storage_key` column, because a stored key is one refactor away from being rendered.
+//
+// `byte_size` is `bigint`, and node-postgres hands `int8` back as a STRING (no type parser is
+// registered, and registering a global one would change how every other int8 in the process reads).
+// The one file that owns every statement over this table — `db/attachment.ts` — converts at its
+// boundary, so nothing outside it ever sees the string. `Timestamp`/`boolean` rather than
+// `Generated<…>` on the DB-defaulted columns: kysely 0.28.17's `Generated` WRAPS rather than
+// unwraps, which mis-types both select and update (the connectors decision).
+export interface AttachmentTable {
+  id: string
+  team_id: string
+  issue_id: Nullable<string>
+  comment_id: Nullable<string>
+  uploader_id: string
+  filename: string
+  // The SNIFFED media type, never the client's claim.
+  content_type: string
+  byte_size: ColumnType<string, number | string, number | string>
+  has_thumbnail: boolean
+  created_at: Timestamp
+}
+
 // Owned by better-auth (created by its `getMigrations()` at boot), read-only here so
 // mutators/queries can join member profiles. camelCase columns and a `text` id are
 // better-auth's shape (reference/kysely-stack.md §5.4), not ours to change.
@@ -640,6 +663,7 @@ export interface DB {
   notification: NotificationTable
   issue_subscription: IssueSubscriptionTable
   search_document: SearchDocumentTable
+  attachment: AttachmentTable
   user: UserTable
 }
 
@@ -774,5 +798,9 @@ export type IssueSubscriptionUpdate = Updateable<IssueSubscriptionTable>
 export type SearchDocument = Selectable<SearchDocumentTable>
 export type NewSearchDocument = Insertable<SearchDocumentTable>
 export type SearchDocumentUpdate = Updateable<SearchDocumentTable>
+
+export type Attachment = Selectable<AttachmentTable>
+export type NewAttachment = Insertable<AttachmentTable>
+export type AttachmentUpdate = Updateable<AttachmentTable>
 
 export type User = Selectable<UserTable>

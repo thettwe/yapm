@@ -47,6 +47,11 @@ export default defineConfig({
         // of the ten-second default keeps `search.spec.ts` honest about the lag while bounding it:
         // the specs wait on the document row, never on a fixed sleep.
         SEARCH_INDEX_INTERVAL_SECONDS: '2',
+        // The shipped default is `/var/lib/yapm/files`, which is where the container writes and
+        // which no developer machine will let a normal user create. `/readyz` probes the directory
+        // at boot (gating, deliberately — a read-only mount must not take traffic), so this env is
+        // what keeps the harness reaching `ready` at all. `data/` is gitignored.
+        STORAGE_LOCAL_DIR: 'data/e2e-files',
         BETTER_AUTH_SECRET: process.env.E2E_BETTER_AUTH_SECRET ?? 'e2e-development-secret-value',
         BETTER_AUTH_URL: SERVER_ORIGIN,
         WEB_ORIGIN: `http://localhost:${WEB_PORT}`,

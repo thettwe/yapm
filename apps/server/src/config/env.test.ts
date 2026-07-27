@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { aiEnv, EnvValidationError, githubAppEnv, loadEnv, mailEnv } from './env.js'
+import { aiEnv, EnvValidationError, githubAppEnv, loadEnv, mailEnv, storageEnv } from './env.js'
 
 const VALID = {
   DATABASE_URL: 'postgres://yapm:yapm@localhost:5432/yapm',
@@ -437,6 +437,92 @@ describe('search index configuration', () => {
       ['SEARCH_INDEX_INTERVAL_SECONDS', '3601'],
       ['SEARCH_STATEMENT_TIMEOUT_MS', '99'],
       ['SEARCH_STATEMENT_TIMEOUT_MS', '60001'],
+    ]) {
+      try {
+        loadEnv({ ...VALID, [variable as string]: value })
+        expect.unreachable('loadEnv should have thrown')
+      } catch (error) {
+        expect((error as EnvValidationError).issues[0]?.variable).toBe(variable)
+      }
+    }
+  })
+})
+
+describe('storage configuration', () => {
+  const S3_QUARTET = {
+    S3_BUCKET: 'yapm-files',
+    S3_REGION: 'eu-central-1',
+    S3_ACCESS_KEY_ID: 'AKIAEXAMPLE',
+    S3_SECRET_ACCESS_KEY: 'secret',
+  }
+
+  it('defaults to the complete local provider with nothing set', () => {
+    const env = loadEnv({ ...VALID })
+
+    expect(env.STORAGE_PROVIDER).toBe('local')
+    expect(env.STORAGE_LOCAL_DIR).toBe('/var/lib/yapm/files')
+    expect(env.ATTACHMENT_MAX_BYTES).toBe(26214400)
+    expect(env.ATTACHMENT_ORPHAN_GRACE_HOURS).toBe(24)
+    expect(env.ATTACHMENT_GC_CRON).toBe('23 4 * * *')
+    expect(storageEnv(env)).toEqual({ provider: 'local', dir: '/var/lib/yapm/files' })
+  })
+
+  it('fails boot naming each individually missing S3 variable', () => {
+    for (const missing of Object.keys(S3_QUARTET)) {
+      const source: NodeJS.ProcessEnv = { ...VALID, ...S3_QUARTET, STORAGE_PROVIDER: 's3' }
+      delete source[missing]
+      try {
+        loadEnv(source)
+        expect.unreachable('loadEnv should have thrown')
+      } catch (error) {
+        expect(error).toBeInstanceOf(EnvValidationError)
+        const issues = (error as EnvValidationError).issues
+        expect(issues.map((issue) => issue.variable)).toEqual([missing])
+        expect(issues[0]?.message).toContain('STORAGE_PROVIDER=s3')
+      }
+    }
+  })
+
+  it('reads whitespace-only S3 values as absent, so a blank compose var is still a boot failure', () => {
+    try {
+      loadEnv({ ...VALID, ...S3_QUARTET, STORAGE_PROVIDER: 's3', S3_BUCKET: '   ' })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      expect((error as EnvValidationError).issues[0]?.variable).toBe('S3_BUCKET')
+    }
+  })
+
+  it('returns a complete s3 arm when the quartet is present', () => {
+    const env = loadEnv({
+      ...VALID,
+      ...S3_QUARTET,
+      STORAGE_PROVIDER: 's3',
+      S3_ENDPOINT: 'https://account.r2.cloudflarestorage.com',
+      S3_FORCE_PATH_STYLE: 'true',
+    })
+
+    expect(storageEnv(env)).toEqual({
+      provider: 's3',
+      bucket: 'yapm-files',
+      region: 'eu-central-1',
+      accessKeyId: 'AKIAEXAMPLE',
+      secretAccessKey: 'secret',
+      endpoint: 'https://account.r2.cloudflarestorage.com',
+      forcePathStyle: true,
+    })
+  })
+
+  it('leaves the S3 quartet unrequired under the local provider', () => {
+    expect(() => loadEnv({ ...VALID, STORAGE_PROVIDER: 'local' })).not.toThrow()
+  })
+
+  it('rejects an out-of-range size or grace window and a malformed cron, naming the variable', () => {
+    for (const [variable, value] of [
+      ['ATTACHMENT_MAX_BYTES', '1023'],
+      ['ATTACHMENT_MAX_BYTES', '1073741825'],
+      ['ATTACHMENT_ORPHAN_GRACE_HOURS', '0'],
+      ['ATTACHMENT_ORPHAN_GRACE_HOURS', '8761'],
+      ['ATTACHMENT_GC_CRON', 'every-day-at-four'],
     ]) {
       try {
         loadEnv({ ...VALID, [variable as string]: value })

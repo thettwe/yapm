@@ -16,6 +16,11 @@ const defaults = {
   DATABASE_URL: `postgres://${user}:${password}@localhost:${pgPort}/${database}`,
   VITE_ZERO_CACHE_URL: `http://localhost:${cachePort}`,
   SERVER_ORIGIN: `http://localhost:${process.env.PORT ?? '3000'}`,
+  // Attachment bytes for the host-run server. The shipped default is `/var/lib/yapm/files`, which
+  // is where the container writes and which no developer machine will let a normal user create —
+  // and `/readyz` probes it at boot, so without this the dev server would never report ready.
+  // `data/` is gitignored.
+  STORAGE_LOCAL_DIR: join(repoRoot, 'data', 'files'),
 }
 for (const [key, value] of Object.entries(defaults)) {
   if (!process.env[key]) process.env[key] = value

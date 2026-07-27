@@ -7,7 +7,9 @@ import { runCycleDigest } from '../ai/digest.js'
 import type { AiGateway } from '../ai/gateway.js'
 import type { Logger } from '../logger.js'
 import type { Mailer } from '../mail/index.js'
+import type { StorageProvider } from '../storage/provider.js'
 import type { ZeroDatabase } from '../zero/db-provider.js'
+import { ATTACHMENT_GC_QUEUE, runAttachmentGc } from './attachments.js'
 import { type CycleMaintenanceOptions, runCycleMaintenance } from './cycles.js'
 import {
   NOTIFICATION_EMAIL_QUEUE,
@@ -24,6 +26,7 @@ import {
 
 export const CYCLE_MAINTENANCE_QUEUE = 'cycle-maintenance'
 export const CYCLE_DIGEST_QUEUE = 'cycle-digest'
+export { ATTACHMENT_GC_QUEUE } from './attachments.js'
 export { NOTIFICATION_EMAIL_QUEUE, NOTIFICATION_RETENTION_QUEUE } from './notifications.js'
 export { SEARCH_INDEX_QUEUE, SEARCH_RECONCILE_QUEUE } from './search.js'
 
@@ -77,6 +80,15 @@ export interface SearchSchedulerOptions {
   textConfig: string
 }
 
+// Present ⇒ the orphaned-attachment sweep is registered on the SHARED boss. Absent ⇒ it is not,
+// and unattached uploads simply accumulate — which is a disk-space question, never a correctness
+// one, so it is independently gated like every other block.
+export interface AttachmentSchedulerOptions {
+  provider: StorageProvider
+  graceHours: number
+  cron: string
+}
+
 // Every block is independently optional, extending the shape `digest?:` already used. Turning off
 // cycle maintenance therefore no longer silently turns off notification retention.
 export interface StartSchedulerOptions {
@@ -86,6 +98,7 @@ export interface StartSchedulerOptions {
   cycles?: CycleSchedulerOptions
   notifications?: NotificationSchedulerOptions
   search?: SearchSchedulerOptions
+  attachments?: AttachmentSchedulerOptions
   // Injected by tests so the queue topology — which queues exist, and on what cron — is assertable
   // without a database or real polling. Mirrors the GitHub connector's `boss?:`.
   boss?: PgBoss
@@ -107,7 +120,7 @@ interface CycleDigestJobData {
 // `pgboss` schema on a fresh volume — a boot race invisible in dev and ugly exactly once, on a
 // self-hoster's first `docker compose up`.
 export async function startScheduler(options: StartSchedulerOptions): Promise<Scheduler> {
-  const { db, dbProvider, logger, cycles, notifications, search } = options
+  const { db, dbProvider, logger, cycles, notifications, search, attachments } = options
 
   const boss = options.boss ?? new PgBoss({ db: fromKysely(db), schema: 'pgboss' })
   if (options.boss === undefined) {
@@ -142,6 +155,16 @@ export async function startScheduler(options: StartSchedulerOptions): Promise<Sc
       await registerSearchJobs({ boss, db, logger, search })
     } catch (error) {
       logger.error({ err: error }, 'search job registration failed; other scheduled jobs continue')
+    }
+  }
+  if (attachments) {
+    try {
+      await registerAttachmentJobs({ boss, db, logger, attachments })
+    } catch (error) {
+      logger.error(
+        { err: error },
+        'attachment job registration failed; other scheduled jobs continue',
+      )
     }
   }
 
@@ -338,6 +361,30 @@ async function registerSearchJobs(options: RegisterSearchJobsOptions): Promise<v
     { intervalSeconds, reconcileCron, textConfig, watchdogCron: SEARCH_INDEX_WATCHDOG_CRON },
     'search index maintenance scheduled',
   )
+}
+
+interface RegisterAttachmentJobsOptions {
+  boss: PgBoss
+  db: Kysely<DB>
+  logger: Logger
+  attachments: AttachmentSchedulerOptions
+}
+
+// A FOURTH independent block on the SHARED `boss` — no second `PgBoss`, no second `boss.start()`.
+// The comment on `startScheduler` says why: a third instance in the process is a third concurrent
+// install of the `pgboss` schema on a fresh volume, a boot race invisible in dev and ugly exactly
+// once, on a self-hoster's first `docker compose up`.
+async function registerAttachmentJobs(options: RegisterAttachmentJobsOptions): Promise<void> {
+  const { boss, db, logger } = options
+  const { provider, graceHours, cron } = options.attachments
+
+  await boss.createQueue(ATTACHMENT_GC_QUEUE)
+  await boss.work(ATTACHMENT_GC_QUEUE, async () => {
+    // The sweep contains its own per-row failures and never rejects.
+    await runAttachmentGc({ db, provider, logger, graceHours, now: Date.now() })
+  })
+  await boss.schedule(ATTACHMENT_GC_QUEUE, cron)
+  logger.info({ cron, graceHours, storage: provider.kind }, 'attachment orphan sweep scheduled')
 }
 
 interface SweepManualCompletionsOptions {

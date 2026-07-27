@@ -479,6 +479,30 @@ const issueSubscription = table('issue_subscription')
   })
   .primaryKey('issueId', 'userId')
 
+// An uploaded file's metadata. Rows SYNC — the Files list must be instant and must reorder as
+// somebody else uploads, which is what the sync engine is for — and they are READ-ONLY on the
+// client: there is no `attachment` mutator anywhere (see `queries.ts`), because a row without bytes
+// is meaningless and a Zero mutator cannot carry bytes.
+//
+// NOTHING HERE IS A CAPABILITY. No storage key, no URL, not even a relative path — the id is a
+// name, and naming a file you may not read gets you exactly the bytes you get for naming one that
+// does not exist. The renderer computes `/api/v1/files/<id>` from the id; the app proxies the bytes
+// for both storage providers, so the permission check is the same code either way.
+const attachment = table('attachment')
+  .columns({
+    id: string(),
+    teamId: string().from('team_id'),
+    issueId: string().from('issue_id').optional(),
+    commentId: string().from('comment_id').optional(),
+    uploaderId: string().from('uploader_id'),
+    filename: string(),
+    contentType: string().from('content_type'),
+    byteSize: number().from('byte_size'),
+    hasThumbnail: boolean().from('has_thumbnail'),
+    createdAt: number().from('created_at'),
+  })
+  .primaryKey('id')
+
 const user = table('user')
   .columns({
     id: string(),
@@ -632,6 +656,11 @@ const issueRelationships = relationships(issue, ({ one, many }) => ({
     destField: ['issueId'],
     destSchema: issueLink,
   }),
+  attachments: many({
+    sourceField: ['id'],
+    destField: ['issueId'],
+    destSchema: attachment,
+  }),
 }))
 
 const pullRequestRelationships = relationships(pullRequest, ({ one, many }) => ({
@@ -779,7 +808,7 @@ const issueLabelRelationships = relationships(issueLabel, ({ one }) => ({
   }),
 }))
 
-const commentRelationships = relationships(comment, ({ one }) => ({
+const commentRelationships = relationships(comment, ({ one, many }) => ({
   team: one({
     sourceField: ['teamId'],
     destField: ['id'],
@@ -794,6 +823,11 @@ const commentRelationships = relationships(comment, ({ one }) => ({
     sourceField: ['authorId'],
     destField: ['id'],
     destSchema: user,
+  }),
+  attachments: many({
+    sourceField: ['id'],
+    destField: ['commentId'],
+    destSchema: attachment,
   }),
 }))
 
@@ -1035,6 +1069,27 @@ const notificationRelationships = relationships(notification, ({ one }) => ({
   }),
 }))
 
+// `team` is what `teamScoped`'s two-hop predicate needs; `issue`/`comment` are the edges the Files
+// surface follows back. No `uploader` relationship: who uploaded a file is not something any list
+// renders, and this product's metrics are team-level only.
+const attachmentRelationships = relationships(attachment, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  issue: one({
+    sourceField: ['issueId'],
+    destField: ['id'],
+    destSchema: issue,
+  }),
+  comment: one({
+    sourceField: ['commentId'],
+    destField: ['id'],
+    destSchema: comment,
+  }),
+}))
+
 const issueSubscriptionRelationships = relationships(issueSubscription, ({ one }) => ({
   issue: one({
     sourceField: ['issueId'],
@@ -1080,6 +1135,7 @@ export const schema = createSchema({
     retroPresence,
     notification,
     issueSubscription,
+    attachment,
     user,
   ],
   relationships: [
@@ -1113,6 +1169,7 @@ export const schema = createSchema({
     retroPresenceRelationships,
     notificationRelationships,
     issueSubscriptionRelationships,
+    attachmentRelationships,
   ],
   enableLegacyMutators: false,
   enableLegacyQueries: false,

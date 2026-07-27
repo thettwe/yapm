@@ -8,6 +8,7 @@ import {
   type Extensions,
   type InputRule,
   type JSONContent,
+  type MarkdownRendererHelpers,
   markInputRule,
   markPasteRule,
   mergeAttributes,
@@ -151,6 +152,34 @@ const MarkdownShortcuts = Extension.create({
   },
 })
 
+// CommonMark closes a fenced code block at the first fence AT LEAST as long as the one that opened
+// it, so a block whose own text contains ``` has to open with a longer run — otherwise the fence
+// closes early, the tail of the code becomes prose, and the block does not come back. 3.28.0's
+// `codeBlock.renderMarkdown` hard-codes three backticks.
+//
+// `renderMarkdown` is a public `NodeConfig` field declared by `@tiptap/core` 3.28 itself
+// (`reference/frontend-build.md` §11.6), so this is the supported seam rather than another private
+// method. It is reached by extending StarterKit's own `addExtensions` instead of importing
+// `@tiptap/extension-code-block`: that package is not a declared dependency here, and adding it
+// would put a second catalog pin on something StarterKit already resolves at the same version.
+function codeBlockToMarkdown(node: JSONContent, helpers: MarkdownRendererHelpers): string {
+  const language = typeof node.attrs?.language === 'string' ? node.attrs.language : ''
+  const body = node.content ? helpers.renderChildren(node.content) : ''
+  const longestRun = [...body.matchAll(/`+/g)].reduce((max, run) => Math.max(max, run[0].length), 0)
+  const fence = '`'.repeat(Math.max(3, longestRun + 1))
+  return `${fence}${language}\n${body}\n${fence}`
+}
+
+const PortableStarterKit = StarterKit.extend({
+  addExtensions() {
+    return (this.parent?.() ?? []).map((extension) =>
+      extension.name === 'codeBlock'
+        ? extension.extend({ renderMarkdown: codeBlockToMarkdown })
+        : extension,
+    )
+  },
+})
+
 export interface RichTextExtensionOptions {
   resolveMentionName?: ((id: string) => string | undefined) | undefined
   mentionSuggestion?: Omit<SuggestionOptions<MentionCandidate, MentionNodeAttrs>, 'editor'>
@@ -162,7 +191,7 @@ export interface RichTextExtensionOptions {
  */
 export function createRichTextExtensions(options: RichTextExtensionOptions = {}): Extensions {
   return [
-    StarterKit.configure({
+    PortableStarterKit.configure({
       heading: { levels: [2, 3] },
     }),
     Mention.configure({
@@ -258,6 +287,21 @@ function isSingleTextRun(content: readonly JSONContent[], text: string): boolean
   const children = content[0]?.type === 'paragraph' ? (content[0].content ?? []) : []
   const only = children.length === 1 ? children[0] : undefined
   return only?.type === 'text' && only.text === text.trim()
+}
+
+/**
+ * The read-only renderer's `editorProps`. Copying out of a NON-EDITABLE view is not an edge case —
+ * it is every comment and every description a member without write access can see — so the
+ * serialiser belongs here as much as it does on the editor. `handlePaste` deliberately does not:
+ * there is nothing to paste into.
+ */
+export function richTextRendererProps(
+  resolveMentionName?: ((id: string) => string | undefined) | undefined,
+): EditorProps {
+  return {
+    attributes: { class: 'tiptap' },
+    clipboardTextSerializer: (slice) => richTextSliceToMarkdown(slice, resolveMentionName),
+  }
 }
 
 /**
@@ -858,7 +902,7 @@ export function RichTextRenderer({
       extensions,
       content: value ?? EMPTY_DOC,
       editable: false,
-      editorProps: { attributes: { class: 'tiptap' } },
+      editorProps: richTextRendererProps((id) => mentionNames?.get(id)),
     },
     [value, extensions],
   )

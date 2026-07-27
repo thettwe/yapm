@@ -59,10 +59,13 @@ which is what most markdown converters emit, and which is unreadable anywhere ou
 renderer.
 
 A paragraph that *begins* with something markdown would read as structure — `# `, `- `, `1. `, `> `,
-`| ` — comes out with a backslash in front of it, so pasting it back gives you the paragraph you
-wrote rather than a heading you did not.
+`| `, with or without a space or two in front of it — comes out with a backslash, so pasting it back
+gives you the paragraph you wrote rather than a heading you did not. A code block containing its own
+` ``` ` line is fenced with enough backticks to hold it.
 
-Copying a partial selection copies only the selection.
+Copying a partial selection copies only the selection. This works **anywhere text is shown**, not
+only where you can edit it: comments, and descriptions on an issue you can only read, copy as
+markdown too.
 
 **Copying inside yapm is unaffected.** A copy from one yapm editor into another uses the rich
 clipboard flavour and is lossless, mention chips and all. Markdown is only what the text becomes
@@ -73,7 +76,7 @@ when it leaves.
 Paste markdown as **plain text** — from a terminal, a `.md` file, a chat message — and it becomes
 rich text: headings become headings, lists become lists, `[text](url)` becomes a link.
 
-It deliberately does **not** convert in three cases:
+It deliberately does **not** convert in four cases:
 
 - **The clipboard carries formatted content.** Copying from a browser, another editor or another
   yapm editor puts a rich flavour on the clipboard alongside the plain one. That path is better than
@@ -82,6 +85,12 @@ It deliberately does **not** convert in three cases:
   are.
 - **Converting would change nothing.** Pasting an ordinary sentence takes the ordinary path, so your
   cursor lands where you expect.
+- **You pasted a bare URL over selected text.** The selection becomes a link to it rather than being
+  replaced.
+
+**Anything that looks like an HTML tag stays text.** Pasting `<div>hello</div>`, or a sentence like
+`compare a<b and c>d`, gives you those exact characters. yapm never treats pasted plain text as
+markup, so nothing you paste can quietly become a mention, a heading or an empty paragraph.
 
 A conversion is **one undo**. Press undo once and the document is exactly as it was before the
 paste.

@@ -1907,9 +1907,15 @@ paragraph holding the original text:
 "    indented" => "indented"        "a < b & c" => "a < b & c"
 ```
 
-Two details that are easy to get wrong: ordered lists escape the **delimiter**, `1\.`, because `\1.`
-does not escape in CommonMark; and there is no backslash escape for a space, so 4+ leading spaces
-are **dropped** rather than encoded.
+Three details that are easy to get wrong. Ordered lists escape the **delimiter**, `1\.`, because
+`\1.` does not escape in CommonMark. There is no backslash escape for a space, so 4+ leading spaces
+are **dropped** rather than encoded. And CommonMark allows **up to three spaces** before every one
+of those markers, so the block tests have to run against the de-indented text and re-emit the
+indentation *in front of* the backslash — `  \- two`, never `\  - two`.
+
+⚠️ **A heading's trailing `#` run is an optional CLOSING sequence** and CommonMark discards it, so a
+heading whose text ends `Plan #` re-parses as `Plan`. Escape a trailing `(\s)(#+)$` on the heading's
+last text node. Nothing about the *opening* escape covers this.
 
 **Where the correction attaches, and what was rejected.** `renderNodeToMarkdown` short-circuits
 `node.type === 'text'` **before** any handler lookup, so there is no extension-level hook for text.
@@ -1922,12 +1928,56 @@ paragraph); override `paragraph`'s public `renderMarkdown` (undoing entity encod
 blanket decode of rendered children, which corrupts an inline code span containing a literal
 `&amp;`); fork the serialiser (~1300 lines owned for two functions).
 
-⚠️ **A third defect is out of reach and is documented rather than fixed.** An inline code span
+🚩 **`parse()` runs raw HTML through `generateJSON` against your whole extension set.** This is the
+sharpest edge in the package and it does not look like one, because markdown is a superset of HTML
+and `marked` emits an `html` token for anything tag-shaped. `MarkdownManager.parseHTMLToken` hands
+that token to `generateJSON(html, this.baseExtensions)` — so **ordinary prose is parsed as markup**:
+
+```
+"compare a<b and c>d"                              => text("compare a") + paragraph() + text("d")
+"<div>hello</div>"                                 => paragraph("hello")          ← tags deleted
+'<span data-type="mention" data-id="ada" …>x</…>'  => a REAL mention node
+```
+
+It is invisible under `node`: `parseHTMLToken` falls back to literal text when `window.DOMParser` is
+missing, so a Vitest suite on the default `node` environment passes while the browser does all three.
+Test this module under **jsdom**.
+
+yapm's answer is to refuse raw HTML in the parse rather than to sanitise its output, via `marked`'s
+own tokenizers on the manager's `instance` getter:
+
+```ts
+manager.instance.use({
+  tokenizer: {
+    html: () => undefined,                                   // block: never
+    tag: src => (/^<\/?em>/.test(src) ? false : undefined),  // inline: one exception
+  },
+})
+```
+
+⚠️ **`false` and `undefined` mean opposite things there.** `marked`'s `use()` wraps each replaced
+tokenizer as `if (result === false) result = previous(...)` — so `false` **delegates** to the stock
+tokenizer and `undefined` means "no match, keep scanning", which is what leaves the characters as
+text. Getting these the wrong way round silently disables nothing.
+
+The `<em>` exception is not cosmetic: `@tiptap/extension-italic` is the one extension in this node
+set that declares `markdownOptions.htmlReopen` (`<em>` / `</em>`), which the serialiser falls back to
+when overlapping marks cannot be written with `*` alone. Refusing all HTML would stop yapm's own
+output round-tripping.
+
+⚠️ **`codeBlock.renderMarkdown` hard-codes a three-backtick fence**, so a code block whose text
+contains a ``` line closes early and its tail becomes prose. Fixed through the **public**
+`renderMarkdown` field: emit a fence one backtick longer than the longest run inside. Reaching the
+code-block extension without adding `@tiptap/extension-code-block` as a dependency is
+`StarterKit.extend({ addExtensions() { … map over this.parent?.() … } })`.
+
+⚠️ **A defect that IS out of reach, documented rather than fixed.** An inline code span
 containing a backtick is emitted with single-backtick delimiters — `` `a `b` c` `` — where
 CommonMark requires a longer run. `getMarkOpening` renders a mark against a **placeholder** string,
 never the real text, so a content-dependent delimiter is impossible without overriding
 `renderNodesWithMarkBoundaries` (~150 lines). Pinned by a characterisation test in
-`packages/ui/src/lib/markdown.test.ts`.
+`packages/ui/src/lib/markdown.test.ts`. The *block* fence above is reachable only because a node's
+renderer receives its real content; a mark's does not.
 
 **Two API facts worth not re-deriving:**
 

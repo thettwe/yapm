@@ -146,3 +146,12 @@ point of the change, not a preference.
 - [ ] 7.4 Bundle sanity: `apps/web`'s built client grows by roughly the measured ~26 KB gzip and no
       more. A larger jump means the graph split or the serialiser reached a surface it should not
       have.
+- [x] 7.5 Review fix pass, round 1 → design.md I9–I13: raw HTML refused in the parse (and no mention
+      node from pasted text), block-leading escapes de-indent first, a heading's trailing hash run
+      escaped, a code block's fence sized to its content, copy-out wired into `RichTextRenderer`,
+      and the boundary matcher extracted with fixture tests (`prosemirror-*` added, dynamic
+      `import()`/`require()` no longer evade rule 3). Fast gates re-run:
+      `pnpm turbo run typecheck --filter=...[origin/main]`, `pnpm lint`,
+      `pnpm turbo run test --filter=...[origin/main]`, `node scripts/check-boundaries.mjs`,
+      `node --test scripts/lib/*.test.mjs`. Build, e2e and the compose smoke test are CI's, per
+      PROCESS.md §4.

@@ -1,3 +1,11 @@
+// @vitest-environment jsdom
+//
+// The functions under test are pure over JSON, but the PARSE path is not environment-neutral:
+// `MarkdownManager.parseHTMLToken` keeps raw HTML as literal text when `window.DOMParser` is
+// missing and runs it through `generateJSON` when it is there. Under `node` — this package's
+// default environment — the raw-HTML rows below would pass without any of the code that makes them
+// pass in a browser, which is the only place this module actually runs.
+
 import { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { getSchema, type JSONContent } from '@tiptap/react'
 import { createRichTextExtensions, EMPTY_DOC } from '@yapm/ui/components/rich-text'
@@ -72,6 +80,20 @@ for (const [label, text, emitted] of ESCAPE_TABLE) {
   })
 }
 
+// CommonMark permits up to THREE spaces before every marker in the table above, so a paragraph the
+// author indented by one, two or three is still read as structure. The backslash also has to land
+// AFTER the indentation — `\  - two` escapes a space, which is not a thing markdown does.
+for (const indent of [' ', '  ', '   ']) {
+  for (const [label, text, emitted] of ESCAPE_TABLE) {
+    test(`${label} indented by ${indent.length} space(s) is still escaped`, () => {
+      const source = doc(paragraph(indent + text))
+
+      expect(richTextToMarkdown(source)).toBe(indent + emitted)
+      expect(roundTrip(source)).toEqual(normalize(source))
+    })
+  }
+}
+
 test('four leading spaces are dropped rather than encoded, and the text survives', () => {
   // Markdown has no backslash escape for whitespace. The alternatives are an HTML entity — the
   // exact garbage this module exists to remove — or emitting an indented code block the author
@@ -113,6 +135,39 @@ test('block-leading escapes apply after a hard break, which also opens a line', 
   expect(roundTrip(source)).toEqual(normalize(source))
 })
 
+test('a heading ending in a hash run keeps it', () => {
+  // CommonMark reads a trailing run of `#` preceded by a space as an optional CLOSING sequence and
+  // throws it away, so an unescaped `## Plan #` comes back as `Plan`.
+  const source = doc({
+    type: 'heading',
+    attrs: { level: 2 },
+    content: [{ type: 'text', text: 'Plan #' }],
+  })
+
+  expect(richTextToMarkdown(source)).toBe('## Plan \\#')
+  expect(roundTrip(source)).toEqual(normalize(source))
+
+  const many = doc({
+    type: 'heading',
+    attrs: { level: 3 },
+    content: [{ type: 'text', text: 'Sprint ###' }],
+  })
+
+  expect(richTextToMarkdown(many)).toBe('### Sprint \\###')
+  expect(roundTrip(many)).toEqual(normalize(many))
+})
+
+test('a hash mid-heading, and a heading with no trailing hash, are left alone', () => {
+  const source = doc({
+    type: 'heading',
+    attrs: { level: 2 },
+    content: [{ type: 'text', text: 'Item # 4 plan' }],
+  })
+
+  expect(richTextToMarkdown(source)).toBe('## Item # 4 plan')
+  expect(roundTrip(source)).toEqual(normalize(source))
+})
+
 test('a block-leading character mid-paragraph is left alone', () => {
   const source = doc(paragraph('sprint 1. and item # 4 and a > b'))
 
@@ -136,6 +191,32 @@ test('a code block emits its code byte-identically', () => {
   expect(markdown).not.toContain('\\')
   expect(markdown).not.toContain('&lt;')
   expect(markdown).not.toContain('&amp;')
+  expect(roundTrip(source)).toEqual(normalize(source))
+})
+
+test('a code block containing a fence opens with a longer one', () => {
+  // CommonMark closes a fenced block at the first fence AT LEAST as long as the opener, so a
+  // three-backtick fence around code that itself contains ``` closes early: the tail of the code
+  // becomes prose and the block does not come back.
+  const fenced = 'before\n```js\ninner()\n```\nafter'
+  const source = doc({
+    type: 'codeBlock',
+    attrs: { language: null },
+    content: [{ type: 'text', text: fenced }],
+  })
+
+  expect(richTextToMarkdown(source)).toBe(`\`\`\`\`\n${fenced}\n\`\`\`\``)
+  expect(roundTrip(source)).toEqual(normalize(source))
+})
+
+test('the fence grows with the longest run inside, and only that far', () => {
+  const source = doc({
+    type: 'codeBlock',
+    attrs: { language: 'md' },
+    content: [{ type: 'text', text: '`````\nfive\n`````' }],
+  })
+
+  expect(richTextToMarkdown(source)).toBe('``````md\n`````\nfive\n`````\n``````')
   expect(roundTrip(source)).toEqual(normalize(source))
 })
 
@@ -314,6 +395,52 @@ test('parsing never produces a mention node, and nobody is matched by name', () 
 
   expect(JSON.stringify(parsed)).not.toContain('mention')
   expect(parsed).toEqual(doc(paragraph('ping @Ada Lovelace now')))
+})
+
+test('a pasted mention SPAN does not become a mention either', () => {
+  // The one that matters, and the one `@Ada Lovelace` above cannot catch: markdown is a superset of
+  // HTML, so a raw-HTML token is handed to `generateJSON` against THIS editor's full extension set —
+  // Mention included. Text somebody pasted would have minted a real mention node, subscription and
+  // all, from a `data-type="mention"` attribute they never saw.
+  const span = '<span data-type="mention" data-id="ada" data-label="Ada Lovelace">x</span> hi'
+  const parsed = markdownToRichText(span)
+
+  expect(JSON.stringify(parsed)).not.toContain('mention"')
+  expect(parsed).toEqual(doc(paragraph(span)))
+})
+
+// ── 3.5b Raw HTML is text, not markup ───────────────────────────────────────────────────────────
+
+const HTML_SHAPED: readonly (readonly [label: string, text: string])[] = [
+  // Not markup at all — ordinary prose from a terminal that `marked` reads as an inline tag. The
+  // characters were DELETED and the paragraph split in three.
+  ['prose that looks like a tag', 'compare a<b and c>d'],
+  ['a block element', '<div>hello</div>'],
+  ['a self-closing element', 'line one<br/>line two'],
+  ['an unknown element', '<yapm-thing a="1">x</yapm-thing>'],
+  ['a script tag', '<script>alert(1)</script>'],
+]
+
+for (const [label, text] of HTML_SHAPED) {
+  test(`${label} pasted as plain text stays literal`, () => {
+    expect(markdownToRichText(text)).toEqual(doc(paragraph(text)))
+  })
+}
+
+test('the one tag this serialiser emits itself still parses', () => {
+  // `@tiptap/extension-italic` declares `htmlReopen: { open: '<em>', close: '</em>' }`, which the
+  // serialiser falls back to when overlapping marks cannot be written with `*` alone. Refusing ALL
+  // HTML would make yapm's own output stop round-tripping, so `<em>` is the single exception.
+  expect(markdownToRichText('a <em>x</em> b')).toEqual(
+    doc({
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: 'a ' },
+        { type: 'text', text: 'x', marks: [{ type: 'italic' }] },
+        { type: 'text', text: ' b' },
+      ],
+    }),
+  )
 })
 
 // ── 3.6 The inbound clamp, empty input, and what markdown cannot carry ──────────────────────────

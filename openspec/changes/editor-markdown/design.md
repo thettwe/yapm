@@ -450,3 +450,99 @@ $ git diff --stat origin/main -- packages/schema apps/server apps/web .env.examp
 ```
 
 No migration, no Zero schema change, no jsonb column, no env var.
+
+### I9 — The parse refuses raw HTML outright, and the tests move to jsdom
+
+The single largest thing the build missed. Markdown is a superset of HTML and `marked` emits an
+`html` token for anything tag-shaped, which `MarkdownManager.parseHTMLToken` hands to
+`generateJSON(html, baseExtensions)` — **this editor's full extension set, Mention included**.
+Verified by running it:
+
+```
+"compare a<b and c>d"                             => text("compare a") + paragraph() + text("d")
+"<div>hello</div>"                                => paragraph("hello")     ← tags deleted
+'<span data-type="mention" data-id="ada" …>'      => a REAL mention node
+```
+
+The first row is not markup at all — it is a sentence out of a terminal, and pasting it deleted
+characters and split the paragraph in three. The third is worse: pasted text minting a mention node
+is exactly the "a paste never notifies anybody" promise §D3 makes, broken from the other direction.
+
+**Decision: the markdown path does not consume raw HTML.** `marked`'s block (`html`) and inline
+(`tag`) tokenizers are switched off on the manager's `instance` — public getter, public `use()` —
+so the characters stay literal text, which is what somebody pasting `<div>` meant. One exception:
+`@tiptap/extension-italic` is the only extension here declaring `markdownOptions.htmlReopen`
+(`<em>`/`</em>`), which the serialiser itself emits for overlapping marks, so `<em>` is let through
+and yapm's own output still round-trips. `marked`'s `use()` wrapper delegates to the stock tokenizer
+on `false` and stops on `undefined`; that asymmetry is the whole mechanism.
+
+`coerceInbound` also replaces any inbound `mention` node with its label text, alongside the heading
+clamp. Redundant while the tokenizers are off, and kept anyway: the invariant is a promise, not an
+optimisation, and it now holds in two independent places.
+
+⚠️ `markdown.test.ts` moved to `@vitest-environment jsdom`. `parseHTMLToken` keeps HTML literal when
+`window.DOMParser` is missing, so **under `node` every row above passes with none of the code that
+makes it pass in a browser** — the only place this module actually runs. Recorded in
+`reference/frontend-build.md` §11.6.
+
+### I10 — Block-leading escapes de-indent first
+
+§D5's table tests the block markers at absolute position 0. CommonMark permits **up to three spaces**
+before every one of them, so `  - two` was emitted unescaped and re-parsed as a list. The escape now
+splits the surviving 0–3 space indent off, tests the de-indented body, and re-emits the indentation
+**in front of** the backslash — `  \- two`, because `\  - two` escapes a space, which markdown does
+not do. The escape table in the tests gained 1-, 2- and 3-space variants of every row.
+
+### I11 — Two more serialiser corrections, both on public surface
+
+**A heading's trailing hash run.** CommonMark reads a run of `#` at the end of an ATX heading as an
+optional *closing* sequence and discards it, so `## Plan #` came back as `Plan`. The text hook now
+escapes a trailing `(\s)(#+)$` on a heading's last text node. Nothing about the opening escape
+covered it.
+
+**A code block containing its own fence.** `codeBlock.renderMarkdown` hard-codes three backticks, so
+a block whose text contains a ``` line closed early: the tail of the code became prose and the block
+did not round-trip. Fixed on the **public** `renderMarkdown` `NodeConfig` field (§D8's first
+extension point, used for the first time) — emit a fence one backtick longer than the longest run
+inside. The code-block extension is reached with
+`StarterKit.extend({ addExtensions() { … } })` rather than by adding
+`@tiptap/extension-code-block` to the catalog: it is not a declared dependency of `packages/ui`, and
+a second pin on a package StarterKit already resolves at 3.28.0 buys nothing. §D4's one-private-
+method budget is untouched — both of these are public surface.
+
+I7's inline-code-span backtick remains out of reach for the reason recorded there: a *node's*
+renderer receives its real content, a *mark's* renderer receives a placeholder.
+
+### I12 — The read-only renderer copies markdown too
+
+`richTextClipboardProps` was wired only into `RichTextEditor`. `RichTextRenderer` is what draws every
+comment and every description a member without write access sees, so copy-out — the headline of this
+change — was absent from most of the surfaces a reader copies from. `richTextRendererProps()` is now
+the renderer's `editorProps`: the `tiptap` class it already had, plus the same serialiser.
+`handlePaste` is deliberately not included; there is nothing to paste into.
+
+The jsdom suite also gained the case §I4's wrap branch actually exists for. A **text** selection's
+slice arrives block-wrapped however partial it is, so `doc.slice(from, to)` in the old test helper
+never reached that branch and its comment said otherwise. The helper now uses
+`state.selection.content()` — the slice `prosemirror-view` really hands the serialiser — and a
+`NodeSelection` over a mention chip is what produces the bare inline fragment.
+
+### I13 — The boundary rules got a test, and two holes closed
+
+Rule 3's evidence was a scratch file run by hand (recorded above), which proves it worked once.
+The matcher moved to `scripts/lib/boundaries.mjs` as a pure `findViolations(rel, source)` and is
+covered by fixture sources: one violating source per rule family plus a clean one.
+
+Two defects the test found on the way:
+
+- The rule's message names ProseMirror but the list did not cover bare `prosemirror-*` packages.
+  Added — and the wildcard now keys on a trailing `*` anywhere, not only `/*`, since
+  `prosemirror-` is a name prefix rather than a scope.
+- The pattern required whitespace after `import`/`from`, so `import('@tiptap/core')` and
+  `require('react')` evaded it entirely — the dynamic form costs the server bundle a chunk, which is
+  the whole point of the rule. Widened to `\b(?:from|import|require)\s*\(?\s*['"]…['"]`.
+
+⚠️ **`node --test`, not Vitest.** CI's `boundary-guard` job deliberately runs with **no**
+`pnpm install` (the workflow records the two ways giving it a toolchain turned main red), so the test
+for a builtins-only rule has to be builtins-only itself. It runs in that same job, and as
+`pnpm check:boundaries:test`.

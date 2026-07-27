@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 
 import { Fragment, Slice } from '@tiptap/pm/model'
-import { Editor, type JSONContent } from '@tiptap/react'
-import { createRichTextExtensions, richTextClipboardProps } from '@yapm/ui/components/rich-text'
+import { NodeSelection } from '@tiptap/pm/state'
+import { Editor, getSchema, type JSONContent } from '@tiptap/react'
+import {
+  createRichTextExtensions,
+  richTextClipboardProps,
+  richTextRendererProps,
+  richTextSliceToMarkdown,
+} from '@yapm/ui/components/rich-text'
 import { afterEach, beforeAll, expect, test } from 'vitest'
 
 // `prosemirror-view` measures the selection on every transaction that scrolls it into view, and
@@ -191,9 +197,10 @@ const COPY_SOURCE: JSONContent = {
   ],
 }
 
+// `selection.content()`, not `doc.slice(from, to)`: the former is what `prosemirror-view`'s
+// `serializeForClipboard` actually hands the serialiser, and the two differ in open depth.
 function copy(editor: Editor): string {
-  const { from, to } = editor.state.selection
-  const slice = editor.state.doc.slice(from, to)
+  const slice = editor.state.selection.content()
   return editor.view.someProp('clipboardTextSerializer', (f) => f(slice, editor.view)) ?? ''
 }
 
@@ -206,8 +213,9 @@ test('copying the whole document yields portable markdown with the live mention 
 
 test('copying a partial selection serialises only what was selected', () => {
   const editor = createEditor(COPY_SOURCE)
-  // Inside the mention-carrying paragraph only, starting two characters in: a partial selection is
-  // a fragment of INLINE nodes rather than a document, which is the case the serialiser wraps.
+  // Inside the mention-carrying paragraph only, starting two characters in. A text selection's
+  // slice still arrives BLOCK-WRAPPED, however partial it is — only the open depths change — which
+  // is why the serialiser's bare-inline branch is exercised separately below.
   let from = 0
   let to = 0
   editor.state.doc.forEach((node, offset) => {
@@ -222,6 +230,50 @@ test('copying a partial selection serialises only what was selected', () => {
   expect(markdown).toBe('ng @Ada Lovelace about a < b')
   expect(markdown).not.toContain('Plan')
   expect(markdown).not.toContain('- one')
+})
+
+test('copying a selected mention chip alone reaches the bare-inline branch', () => {
+  const editor = createEditor(COPY_SOURCE)
+  let mentionPos = -1
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'mention') mentionPos = pos
+  })
+  editor.view.dispatch(
+    editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, mentionPos)),
+  )
+
+  // The one real copy whose slice is NOT a document: a `NodeSelection` over an inline node hands
+  // the serialiser a bare inline fragment, which is the case `richTextSliceToMarkdown` wraps.
+  expect(editor.state.selection.content().content.firstChild?.isInline).toBe(true)
+  expect(copy(editor)).toBe('@Ada Lovelace')
+})
+
+test('a bare inline fragment is wrapped rather than serialised as a document', () => {
+  const schema = getSchema(createRichTextExtensions())
+
+  expect(richTextSliceToMarkdown(Slice.maxOpen(Fragment.from(schema.text('hi'))))).toBe('hi')
+})
+
+test('the read-only renderer copies markdown too, not flat text', () => {
+  // Every comment and every description a member without write access can see is rendered by
+  // `RichTextRenderer`. Without the serialiser, copying one yields ProseMirror's structure-free
+  // `textBetween` output — no `##`, no `-`, no link target.
+  const element = document.createElement('div')
+  document.body.append(element)
+  const editor = new Editor({
+    element,
+    extensions: createRichTextExtensions({ resolveMentionName: (id) => NAMES.get(id) }),
+    content: COPY_SOURCE,
+    editable: false,
+    // The SAME object `RichTextRenderer` passes to `useEditor`.
+    editorProps: richTextRendererProps((id) => NAMES.get(id)),
+  })
+  editors.push(editor)
+  editor.commands.selectAll()
+
+  expect(editor.isEditable).toBe(false)
+  expect(editor.view.props.clipboardTextSerializer).toBeTypeOf('function')
+  expect(copy(editor)).toBe('## Plan\n\nping @Ada Lovelace about a < b\n\n- one')
 })
 
 // ── 5.3 Paste: one conversion, four refusals ────────────────────────────────────────────────────

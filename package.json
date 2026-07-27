@@ -20,6 +20,7 @@
     "format": "biome check --write .",
     "check:catalog": "node scripts/check-catalog.mjs",
     "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check:boundaries:test": "node --test scripts/lib/*.test.mjs",
     "check:image-manifests": "node scripts/check-image-manifests.mjs",
     "check:commit-msg": "node scripts/check-commit-msg.mjs",
     "prepare": "node scripts/install-git-hooks.mjs"

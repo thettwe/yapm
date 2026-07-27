@@ -658,3 +658,89 @@ scenarios, all passing:
 `@yapm/email` 3 / 23 — including the `ai-tools` exhaustiveness test, which `team.setAutoStatus`
 would have broken had 3.4 been skipped. `git diff --stat -- apps/server/src/connectors/github/` is
 empty: the firewall property holds by absence, as §D8 requires.
+
+*(Admin-surface phase — exposing the setting now that the behaviour behind it exists.)*
+
+### I12 — `text-text-3` fails AA for the two pieces of copy that carry the decision
+
+Measured, not assumed: a throwaway Playwright audit rendered the section in all three presets, light
+and dark, composited every background layer on a canvas (so `oklab` and alpha resolve to the pixel a
+human sees) and computed WCAG ratios. `text-text-3` — the token the rest of the connectors page uses
+for secondary text — lands at **2.80–3.70** across the six combinations. That is below AA for normal
+text at any of the sizes in play.
+
+Two of this section's strings are not decoration: the three-sentence trade-off copy (§D10 — the
+whole reason it is at the point of decision rather than only in the docs) and each row's `On`/`Off`
+readout, which is the setting's current value. Both moved to **`text-text-2`**, which measures
+**5.42–7.28** across the same six combinations. `text-text-3` was left alone everywhere else on the
+page — retokenising the sibling paragraphs is a design-system change with page-wide blast radius and
+is not this change's business.
+
+No new token, and `packages/ui` has an empty diff.
+
+### I13 — The `default` button variant is at the AA floor, and that is the app's floor, not ours
+
+Post-fix measurements, hover excluded (the first pass measured `hover:bg-primary/80` by accident and
+read low; the mouse is now parked before sampling):
+
+| | warm L | warm D | focused L | focused D | editorial L | editorial D |
+|---|---|---|---|---|---|---|
+| heading | 14.02 | 15.15 | 17.77 | 16.26 | 18.11 | 17.12 |
+| copy | 5.54 | 6.79 | 6.03 | 7.28 | 5.42 | 6.80 |
+| team name | 14.02 | 15.15 | 17.77 | 16.26 | 18.11 | 17.12 |
+| On/Off | 5.54 | 6.79 | 6.03 | 7.28 | 5.42 | 6.80 |
+| Disable (`outline`) | 14.02 | 13.94 | 17.77 | 15.31 | 18.11 | 16.01 |
+| Enable (`default`) | 4.55 | 5.98 | 5.00 | 5.27 | 4.55 | 6.35 |
+
+Everything clears 4.5. The **Enable** button sits closest to the floor at 4.55 because
+`variant="default"` is `bg-primary` / `text-primary-foreground` — the app-wide primary pairing. The
+same audit measured `[data-testid="create-team"]` on the home page in editorial and got the identical
+`rgb(255,255,255)` on `rgb(222,52,26)` / `rgb(11,11,12)` on `rgb(255,90,60)`. So the margin is a
+property of the accent tokens, shared with every primary button in yapm, and moving this one control
+off `default` would only hide it. Recorded rather than papered over; matching the connector's own
+Enable/Disable shape (§D10) is the stated requirement and it is what shipped.
+
+Fonts resolve from `--type-heading` / `--type-ui` per preset (Figtree, Inter, Fraunces for the
+heading in editorial) — no literal family anywhere. The focus ring on the toggle measures
+`0 0 0 3px oklab(… / 0.5)` with the border going to the accent, `:focus-visible` true after a `Tab`.
+
+### I14 — Announce optimistically, retract on rejection
+
+The row's visible state flips from the synced Zero row, so it is already optimistic. The `sr-only`
+`role="status"` live region is written **immediately after** `zero.mutate(...)` returns its
+`MutatorResult`, not after `runMutation` resolves — waiting for the server acknowledgement would
+make the screen-reader announcement the one part of the interaction that does wait on the network.
+If the authoritative pass then rejects, the announcement is cleared and the failure goes to a
+`role="alert"`. The alternative — announce only on success — is silent for the sighted-equivalent
+duration and violates the sub-100ms rule for exactly one class of user.
+
+There is no `busy` flag and no `disabled` state on the toggle, unlike the REST controls above it on
+the same page. A round trip that does not exist cannot be double-submitted: each activation reads
+the already-flipped `enabled` and writes the opposite.
+
+### I15 — What the admin-surface phase verified live
+
+Against the `yapm-as` stack (postgres 5446, zero-cache 4854, server on 3006 because that is the port
+baked into the container's `ZERO_QUERY_URL`), with two throwaway Playwright specs since 6.4 and 6.5
+belong to the test phase:
+
+- The toggle is the **6th** Tab stop from the top of the document, `:focus-visible` true, activated
+  with `Enter`.
+- Optimistic flip measured at **8 ms** from keypress to `data-enabled` changing.
+- The value round-tripped: after `page.reload()` the row still reads enabled, and
+  `select auto_status_since from team` in Postgres shows the timestamp minted in the browser.
+- The announcement read `Status automation enabled for Scratch ms33z465.`; the toggle's
+  `aria-label` read `Disable status automation for Scratch ms33z465, currently on`.
+- With the workspace member demoted to `member` in Postgres, `/settings/connectors` renders the
+  page's existing "available to workspace admins only" line and **zero** occurrences of both
+  `[data-testid="status-automation"]` and `[data-testid="status-automation-toggle"]` — the section
+  rides that one gate rather than adding a second. The role was restored and the scratch team row
+  deleted; both throwaway specs were removed rather than left behind as half-forms of 6.4/6.5.
+
+### I16 — Gate output for the admin-surface phase
+
+`pnpm turbo lint typecheck test build` with `DATABASE_URL=postgres://yapm:yapm@localhost:5446/yapm`:
+**17/17 tasks successful** (13 cache hits for the packages this phase did not touch), `@yapm/web`
+29 files / 280 tests. `biome ci .` checked 457 files with no fixes applied.
+`node scripts/check-boundaries.mjs` clean. `git diff --stat -- packages/ui` and
+`git diff --stat -- apps/server/src/connectors/github/` are both **empty**.

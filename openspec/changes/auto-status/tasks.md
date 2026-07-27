@@ -114,15 +114,15 @@ falsifiable check (5) before the UI, so the behaviour is proven before it is exp
 
 ## 6. The admin surface
 
-- [ ] 6.1 Add a **Status automation** section to `apps/web/src/settings/connectors-view.tsx`: one row
+- [x] 6.1 Add a **Status automation** section to `apps/web/src/settings/connectors-view.tsx`: one row
       per non-archived team, each showing the team name, its current state, and an Enable/Disable
       control built from the existing tokenized `Button` in the same shape as the connector's own
       toggle. Teams come from the already-synced Zero query; the write is
       `team.setAutoStatus` with the instant minted at this call site.
-- [ ] 6.2 Write the section's copy: the two transitions; never backward, never Canceled, never
+- [x] 6.2 Write the section's copy: the two transitions; never backward, never Canceled, never
       untriaged; and enabling does not change existing issues. Three sentences at the point of
       decision, not only in the docs.
-- [ ] 6.3 Confirm the section is invisible and unreachable for a non-admin, riding the page's existing
+- [x] 6.3 Confirm the section is invisible and unreachable for a non-admin, riding the page's existing
       admin gate rather than adding a second one.
 - [ ] 6.4 **Test (unit)** a component test for the section: renders each team's state, invokes the
       mutator with `null` when disabling and a timestamp when enabling, and renders nothing for a
@@ -131,7 +131,7 @@ falsifiable check (5) before the UI, so the behaviour is proven before it is exp
       admin, reach the control with Tab only, activate with Enter, reload, and assert it still reads
       enabled (the value round-tripped through Postgres and back down the sync socket). Assert a
       member session cannot reach the control.
-- [ ] 6.6 Verify the section in all three presets in light and dark: every color and font from a
+- [x] 6.6 Verify the section in all three presets in light and dark: every color and font from a
       token, AA contrast, visible focus ring, and the state change announced.
 
 ## 7. Documentation

@@ -1,5 +1,5 @@
-import { useQuery } from '@rocicorp/zero/react'
-import { queries } from '@yapm/schema'
+import { useQuery, useZero } from '@rocicorp/zero/react'
+import { mutators, queries } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { Input } from '@yapm/ui/components/input'
 import { Label } from '@yapm/ui/components/label'
@@ -7,6 +7,7 @@ import { Select } from '@yapm/ui/components/select'
 import { CheckIcon, ExternalLinkIcon, PlusIcon, XIcon } from 'lucide-react'
 import { type FormEvent, useCallback, useEffect, useId, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
+import { runMutation } from '@/lib/mutation'
 import {
   type ConnectorStatusResponse,
   fetchGithubConnector,
@@ -84,6 +85,8 @@ function ConnectorsAdmin() {
           {error}
         </p>
       ) : null}
+
+      <StatusAutomationSection />
     </section>
   )
 }
@@ -405,5 +408,130 @@ function MapRepoForm({
         Map
       </Button>
     </form>
+  )
+}
+
+// Unlike the connector status above — which is REST because its config is server-only — this
+// setting is a synced Zero column, so the toggle is an optimistic shared-mutator write with no
+// round trip.
+function StatusAutomationSection() {
+  const [teams] = useQuery(queries.teams.all())
+  const headingId = useId()
+  const [announcement, setAnnouncement] = useState('')
+  const [error, setError] = useState<string | undefined>(undefined)
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="flex flex-col gap-3 rounded-card border border-border p-4"
+      data-testid="status-automation"
+    >
+      <header className="flex flex-col gap-1">
+        <h2 id={headingId} className="font-heading text-base font-semibold text-text-1">
+          Status automation
+        </h2>
+        <p className="text-sm text-text-2">
+          For a team with this on, opening a linked pull request moves its issue to In Review and
+          merging one moves it to Done. Automation never moves an issue backward, and never touches
+          a canceled or an untriaged issue. Turning it on changes no existing issue — only
+          pull-request activity from that moment onward.
+        </p>
+      </header>
+
+      <p
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        data-testid="status-automation-announcement"
+      >
+        {announcement}
+      </p>
+
+      {error !== undefined ? (
+        <p className="text-sm text-status-urgent" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {teams.length === 0 ? (
+        <p className="text-[12.5px] text-text-2" data-testid="status-automation-empty">
+          No teams yet. Create a team to choose whether its pull requests drive issue status.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {teams.map((team) => (
+            <StatusAutomationRow
+              key={team.id}
+              id={team.id}
+              name={team.name}
+              teamKey={team.key}
+              since={team.autoStatusSince ?? null}
+              onAnnounce={setAnnouncement}
+              onError={setError}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function StatusAutomationRow({
+  id,
+  name,
+  teamKey,
+  since,
+  onAnnounce,
+  onError,
+}: {
+  id: string
+  name: string
+  teamKey: string
+  since: number | null
+  onAnnounce: (message: string) => void
+  onError: (message: string | undefined) => void
+}) {
+  const zero = useZero()
+  const enabled = since !== null
+
+  async function toggle() {
+    onError(undefined)
+    // Minted here, at the call site: a `Date.now()` inside the mutator body would differ between
+    // the optimistic pass and every rebase, moving the team's cut-off underneath it.
+    const now = Date.now()
+    const write = zero.mutate(
+      mutators.team.setAutoStatus({ id, since: enabled ? null : now, updatedAt: now }),
+    )
+    onAnnounce(`Status automation ${enabled ? 'disabled' : 'enabled'} for ${name}.`)
+    const failure = await runMutation(write)
+    if (failure !== undefined) {
+      onAnnounce('')
+      onError(failure)
+    }
+  }
+
+  return (
+    <li
+      className="flex flex-wrap items-center gap-3 rounded-control border border-border p-3"
+      data-testid="status-automation-row"
+      data-team-key={teamKey}
+    >
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm font-medium text-text-1">{name}</span>
+        <span className="text-xs text-text-2">{enabled ? 'On' : 'Off'}</span>
+      </div>
+      <Button
+        size="sm"
+        variant={enabled ? 'outline' : 'default'}
+        onClick={toggle}
+        aria-label={`${enabled ? 'Disable' : 'Enable'} status automation for ${name}, currently ${
+          enabled ? 'on' : 'off'
+        }`}
+        data-testid="status-automation-toggle"
+        data-enabled={enabled ? 'true' : 'false'}
+      >
+        {enabled ? 'Disable' : 'Enable'}
+      </Button>
+    </li>
   )
 }

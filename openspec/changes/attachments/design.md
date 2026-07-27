@@ -574,3 +574,75 @@ minus `Date`) for the real attachment id, a UUID never uploaded, and `not-a-uuid
 team A gets `200`, the exact uploaded bytes, `Cache-Control: private, max-age=300`,
 `Content-Type: image/png`, `Content-Disposition: inline`, `X-Content-Type-Options: nosniff`.
 Task 9.2's contract items are in the same file. Tasks 9.3–9.5 are still the close phase's.
+
+### I10 — The e2e tier does NOT exercise the Docker image, and the spec says so
+
+Task 9.5 and the phase brief both describe the e2e spec as the one place "the docker named volume,
+the non-root uid 1001 and the sharp native module in the runtime image are exercised together". That
+is not what the harness does, and writing the spec as if it were would have made a false claim in a
+comment that nobody re-checks.
+
+`apps/web/playwright.config.ts` boots the server on the **host** under `tsx` against a Postgres and
+zero-cache started from `docker-compose.dev.yml`, and CI's `e2e` job does exactly the same. The
+runtime image, its `files` named volume and its uid-1001 user are the **`smoke` job's** ground —
+`docker compose -f docker/docker-compose.yml up -d --build` — and that job already gates the merge.
+
+So `apps/web/e2e/attachments.spec.ts` claims only what it proves: a real better-auth session cookie,
+a real multipart body over HTTP through the vite proxy, the real `sharp` binding decoding real
+bytes, the local provider writing to a real filesystem, and the falsifiable check across two
+accounts in two teams. The comment names the gap rather than implying coverage.
+
+### I11 — Task 10.6: no CLAUDE.md constraint is made stale, verified rather than assumed
+
+Walked all ten. The two that could plausibly have moved:
+
+- **#1 three containers.** `docker/docker-compose.yml` still declares exactly `postgres`, `yapm` and
+  `zero-cache`. The change adds a named *volume*, which is not a service.
+- **#4 client-minted UUIDv7 at the mutator call site, never inside a mutator body.** The attachment
+  id is **server**-minted, in the upload route. That does not touch the constraint, which is a rule
+  about mutators and rebase: there is no attachment mutator at all (§D5), nothing re-runs, and the
+  id is returned in the response rather than reconciled optimistically. The constraint's text is
+  still exactly right for every mutator in the repo.
+
+#2 (ZQL/mutators only in `packages/schema`) holds — the synced query is in `zero/queries.ts` and
+every statement over the table is in `db/attachment.ts`. #5 is satisfied by the catalog entry with
+its justification. #6, #7, #8, #9 and #10 are untouched: no TS-Compiler-API tool, no gate, no
+per-person metric, no new network wait on a common interaction, no UI at all.
+
+### I12 — `reference/server-stack.md` gained a verified §5.3.1
+
+The reference's Hono section documented routing, `createMiddleware`, static files, validation,
+OpenAPI and errors — and nothing about the built-in middleware this change needed. Rather than leave
+the next reader to rediscover it, §5.3.1 now records what was read out of the installed
+`hono@4.12.31` `.d.ts` files: `bodyLimit`'s complete two-option shape (no `unit`, no `message`), the
+fact that `secureHeaders` defaults **most** headers on so an unopinionated call adds HSTS and COOP,
+its CSP-as-arrays form, and the two-registration rule for scoping a path-mounted middleware.
+
+### I13 — `backup-restore.md` is new, and is honest that `yapm backup` does not exist
+
+Task 10.2 allowed for the page being absent; it was. It is written as the **manual procedure** an
+operator runs today, with a `caution` aside saying the one-command version is unwritten, because a
+page that reads like a command reference for a command that does not exist is worse than no page.
+Design §D13's contract is the page's structure: local = `pg_dump` + `tar`, s3 = `pg_dump` only with
+the `attachment` table as the manifest, files captured before the database and restored after it,
+and the `zero-replica` volume deliberately not backed up (and deleted on restore, since a replica
+built from the old database must be rebuilt).
+
+### I14 — Two tasks are deliberately left unticked, and CI owns both
+
+**6.4 (compose smoke test)** and the `build` leg of **10.7** were not run locally. The PR is open, so
+every push runs the full suite: CI's `smoke` job builds and boots the three-container stack — which
+is the only place the runtime image, the `files` named volume and the uid-1001 write are exercised
+together (see I10) — and its `build` job runs `pnpm turbo build`. Running either here duplicates
+something already in flight and would have cost more wall clock than it bought.
+
+What WAS run locally, with actual output reported: `turbo typecheck` (8/8), `biome ci .`
+(483 files, no fixes), `turbo test` against a live Postgres on 5447 (schema 47 files / 696 tests,
+server 39 / 341, web 30 / 288, ui 6 / 85, email 3 / 23 — **zero skipped**, so every `.pg.test.ts`
+actually executed), `pnpm --filter @yapm/docs build` (20 pages), `check-boundaries.mjs` and
+`check-catalog.mjs`. The Postgres was torn down with `-p yapm-at … down -v`.
+
+**The new scoping test was falsified before being trusted.** Removing the `teamScoped` wrapper from
+`attachments.byIssue` — the exact one-line change the test exists to catch — fails four of its eight
+assertions (other-team member, unauthenticated, teamless member, foreign `issueId`) while the four
+positive legs keep passing. Reverted after the check.

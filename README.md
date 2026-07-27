@@ -89,7 +89,14 @@ works offline) and then *extended* by Postgres full-text over comment bodies and
 you can read, shown as two labelled groups that never reorder under the keyboard cursor, adding **no
 container and no `CREATE EXTENSION`**, with the index maintained by a background job so an issue-title
 edit costs exactly what it did before — and **no query is ever recorded**: no search log, no
-analytics, no "popular searches", nothing aggregatable into a per-person record.
+analytics, no "popular searches", nothing aggregatable into a per-person record ·
+**attachment storage** — a provider-neutral byte store behind `/api/v1/files` with thumbnails and a
+nightly sweep of abandoned uploads, defaulting to a directory on disk (complete, no fourth container)
+and switchable to any S3-compatible bucket, where **there are no signed or shareable links and no
+setting that turns them on**: an image in a synced document would put a bearer token on every
+teammate's device, so the document stores an opaque id and the app proxies every byte, which is also
+what makes the permission check identical for both providers. The editor and Files UI that put it in
+front of you are next.
 
 ## What's next
 

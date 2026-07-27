@@ -210,14 +210,14 @@ task is wrong.
       round-trips as `application/octet-stream` + `Content-Disposition: attachment` and never as
       `image/svg+xml`; `/thumb` on a `has_thumbnail: false` row is the standard refusal; `DELETE` is
       idempotent and the second call is the standard refusal.
-- [ ] 9.3 **Test (integration)** `attachments.byIssue` scoping in the schema package's synced-query
+- [x] 9.3 **Test (integration)** `attachments.byIssue` scoping in the schema package's synced-query
       test style: a member of the owning team sees the rows; a member of another team gets empty;
       an unauthenticated context gets empty; a workspace admin sees them under the existing
       `teamScoped` bypass.
-- [ ] 9.4 **Test (unit)** assert the two absences the design depends on: the shared mutator map
+- [x] 9.4 **Test (unit)** assert the two absences the design depends on: the shared mutator map
       contains no mutator writing `attachment`, and `MUTATOR_TOOL_KINDS` therefore has no attachment
       entry while its exhaustiveness check still passes.
-- [ ] 9.5 **Test (e2e, Playwright)** `apps/web/e2e/attachments.spec.ts` — one focused spec, not a
+- [x] 9.5 **Test (e2e, Playwright)** `apps/web/e2e/attachments.spec.ts` — one focused spec, not a
       suite. Against the real three-container stack with the **local** provider and the real named
       volume: a signed-in member uploads a PNG through `/api/v1/files`, fetches it back and gets the
       same bytes with the expected headers; a signed-in member of another team gets the byte-
@@ -227,21 +227,21 @@ task is wrong.
 
 ## 10. Documentation
 
-- [ ] 10.1 New `apps/docs/src/content/docs/self-hosting/attachments.md`: the two providers and how to
+- [x] 10.1 New `apps/docs/src/content/docs/self-hosting/attachments.md`: the two providers and how to
       choose; the full env block; the volume; upload limits; what the orphan sweep does and its
       grace window; **why there are no shareable links** (the Zero-replication argument, stated for
       an operator rather than for a reviewer); and the SVG download-not-render behaviour.
-- [ ] 10.2 Update `apps/docs/src/content/docs/self-hosting/backup-restore.md` (or create it if
+- [x] 10.2 Update `apps/docs/src/content/docs/self-hosting/backup-restore.md` (or create it if
       absent) with design §D13: what backup covers per provider, restore ordering, and the
       attachment table as the manifest for an S3 operator's own bucket backup.
-- [ ] 10.3 Add the sidebar entry in `apps/docs/astro.config.mjs`.
-- [ ] 10.4 Update `README.md` ("What works today") and `ROADMAP.md` — row 15 to shipped, and the
+- [x] 10.3 Add the sidebar entry in `apps/docs/astro.config.mjs`.
+- [x] 10.4 Update `README.md` ("What works today") and `ROADMAP.md` — row 15 to shipped, and the
       §Known gaps one-command-export paragraph at line 54, which now has half its substrate.
-- [ ] 10.5 Update `TECHSTACK.md`: the attachments line (both providers, no signed URLs) and a note
+- [x] 10.5 Update `TECHSTACK.md`: the attachments line (both providers, no signed URLs) and a note
       that the runtime image now contains a native module, with the cross-architecture build
       constraint from design §D9. Update the `yapm backup` line at ~134 to point at the written
       contract.
-- [ ] 10.6 Update `CLAUDE.md` §"Non-negotiable constraints" only if this change makes a listed
+- [x] 10.6 Update `CLAUDE.md` §"Non-negotiable constraints" only if this change makes a listed
       constraint stale — it should not; verify rather than assume, and say so in the PR description.
 - [ ] 10.7 Run `pnpm turbo lint typecheck test build` and `node scripts/check-boundaries.mjs`,
       `node scripts/check-catalog.mjs`. Report actual output; never claim a gate passed without

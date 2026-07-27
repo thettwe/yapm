@@ -1220,6 +1220,39 @@ app.use('/auth/*', basicAuth({ username: 'hono', password: 'pass' }))
 
 Rule: "Middleware — should `await next()` and return nothing to call the next Middleware, **or** return a `Response` to early-exit."
 
+#### 5.3.1 Built-in middleware for a byte-serving route (verified against the installed 4.12.31 `.d.ts`, 2026-07-27)
+
+`hono` 4.12.31 ships these as **separate entry points of the same package** — no extra dependency, and nothing is pulled in unless imported. Confirmed present in `node_modules/hono/dist/middleware/`: `body-limit`, `etag`, `secure-headers`, plus `cache`, `compress`, `timeout`, `request-id` and ~18 others.
+
+```ts
+import { bodyLimit } from 'hono/body-limit'
+import { secureHeaders } from 'hono/secure-headers'
+```
+
+**`bodyLimit({ maxSize, onError? })`** — the exact and complete option set; there is no `unit` or `message` option.
+
+```ts
+type OnError = (c: Context) => Response | Promise<Response>
+type BodyLimitOptions = { maxSize: number; onError?: OnError }
+export declare const bodyLimit: (options: BodyLimitOptions) => MiddlewareHandler
+```
+
+`maxSize` is in **bytes**. It is checked against `Content-Length` **before the body is read** and enforced again while streaming, so a lying header cannot be used to exhaust memory. `onError` returns the response; omitted, the middleware throws a 413 `HTTPException`.
+
+**`secureHeaders(options?)`** — every option is optional and **most default to on**, so an unopinionated call adds HSTS, `X-Frame-Options`, COOP, Origin-Agent-Cluster and more. Each is `overridableHeader` (`boolean | string`), so `false` switches one off. Verified defaults from the installed JSDoc: `crossOriginEmbedderPolicy=false`; `crossOriginResourcePolicy`, `crossOriginOpenerPolicy`, `originAgentCluster`, `referrerPolicy`, `strictTransportSecurity`, `xContentTypeOptions`, `xDnsPrefetchControl`, `xDownloadOptions`, `xFrameOptions`, `xPermittedCrossDomainPolicies`, `xXssProtection` and `removePoweredBy` all **true**. `contentSecurityPolicy` and `permissionsPolicy` are off unless configured.
+
+CSP is an object of **arrays**, not a string; a directive with an empty array emits the bare keyword:
+
+```ts
+secureHeaders({
+  contentSecurityPolicy: { defaultSrc: ["'none'"], sandbox: [] },
+  strictTransportSecurity: false, // the deployment's business, not a route's
+})
+// → Content-Security-Policy: default-src 'none'; sandbox
+```
+
+**Scope it to a path.** `app.use('*', …)` on an app mounted at `/` applies to the SPA and every other route in the process; use `app.use('/api/v1/files', …)` and `app.use('/api/v1/files/*', …)` — two registrations, because the bare path does not match the wildcard.
+
 ### 5.4 Static files (serving the built SPA)
 
 ```ts

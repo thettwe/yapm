@@ -175,3 +175,57 @@ export async function seedCycleDigest(
     })
     .execute()
 }
+
+// A TipTap document holding one paragraph, which is the shape both `issue.description` and
+// `comment.body` carry on the wire.
+function richTextDoc(text: string): string {
+  return JSON.stringify({
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+  })
+}
+
+export async function findUserId(db: Database, email: string): Promise<string> {
+  const row = await db.db
+    .selectFrom('user')
+    .select('id')
+    .where('email', '=', email)
+    .executeTakeFirstOrThrow()
+  return row.id
+}
+
+// Write a description straight to Postgres. It replicates to the signed-in client through the same
+// path a typed description takes, and the search change needs one that reached the replica WITHOUT
+// the client having rendered the editor — the on-device pass reads the synced row, not the DOM.
+export async function setIssueDescription(
+  db: Database,
+  issueId: string,
+  text: string,
+): Promise<void> {
+  await db.db
+    .updateTable('issue')
+    .set({ description: richTextDoc(text) as never, updated_at: new Date() })
+    .where('id', '=', issueId)
+    .execute()
+}
+
+// Comments sync ONLY for the issue the caller has open (`queries.ts`), so a comment seeded on an
+// issue nobody has opened is reachable from the server pass and from nowhere else. That is exactly
+// what the "complete" half of search has to find.
+export async function seedComment(
+  db: Database,
+  options: { teamId: string; issueId: string; authorId: string; body: string },
+): Promise<string> {
+  const id = newId()
+  await db.db
+    .insertInto('comment')
+    .values({
+      id,
+      issue_id: options.issueId,
+      team_id: options.teamId,
+      author_id: options.authorId,
+      body: richTextDoc(options.body) as never,
+    })
+    .execute()
+  return id
+}

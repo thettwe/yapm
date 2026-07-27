@@ -13,6 +13,7 @@ import * as m0011 from './0011_cycle_rollover_origin.js'
 import * as m0012 from './0012_retro.js'
 import * as m0013 from './0013_notifications.js'
 import * as m0014 from './0014_mentions.js'
+import * as m0015 from './0015_search.js'
 
 export const migrations: Record<string, Migration> = {
   '0001_workspace': m0001,
@@ -29,6 +30,7 @@ export const migrations: Record<string, Migration> = {
   '0012_retro': m0012,
   '0013_notifications': m0013,
   '0014_mentions': m0014,
+  '0015_search': m0015,
 }
 
 export const migrationProvider: MigrationProvider = {

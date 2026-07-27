@@ -20,6 +20,7 @@ export default defineConfig({
             { label: 'Retrospectives', slug: 'features/retrospectives' },
             { label: 'Notifications', slug: 'features/notifications' },
             { label: 'Mentions', slug: 'features/mentions' },
+            { label: 'Search', slug: 'features/search' },
           ],
         },
         {
@@ -29,6 +30,7 @@ export default defineConfig({
             { label: 'Enable AI', slug: 'self-hosting/ai-setup' },
             { label: 'Email delivery', slug: 'self-hosting/email' },
             { label: 'Sync connection & recovery', slug: 'self-hosting/sync-recovery' },
+            { label: 'Search index', slug: 'self-hosting/search-index' },
           ],
         },
       ],

@@ -8,6 +8,35 @@ export {
   sanitizeRichText,
 } from './rich-text/plaintext.js'
 export type {
+  LocalSearchCandidate,
+  LocalSearchKind,
+  LocalSearchResult,
+  SearchTextFields,
+  SearchTier,
+  SnippetSegment,
+} from './search/index.js'
+export {
+  compareLocalResults,
+  isServerSearchable,
+  issueKeyOf,
+  LOCAL_RESULT_LIMIT,
+  LOCAL_SEARCH_KINDS,
+  MIN_SERVER_QUERY_LENGTH,
+  matchesSearchText,
+  mergeLocalCandidates,
+  normalizeQuery,
+  queryLength,
+  SEARCH_BODY_MAX_LENGTH,
+  SEARCH_TIERS,
+  SERVER_RESULT_LIMIT,
+  SNIPPET_START_DELIMITER,
+  SNIPPET_STOP_DELIMITER,
+  scoreSearchText,
+  searchTierRank,
+  splitSnippet,
+  tokenizeQuery,
+} from './search/index.js'
+export type {
   ActiveToolOptions,
   AgentAuditEntry,
   MutatorToolSpec,

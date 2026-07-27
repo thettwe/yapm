@@ -17,8 +17,10 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandSeparator,
   CommandShortcut,
 } from '@yapm/ui/components/command-palette'
+import { SearchResultRow } from '@yapm/ui/components/search-result-row'
 import { StatusGlyph } from '@yapm/ui/components/status-glyph'
 import {
   ArrowRightIcon,
@@ -30,6 +32,7 @@ import {
   PlusIcon,
   RocketIcon,
   RouteIcon,
+  SearchIcon,
   TagIcon,
   UserIcon,
   UserXIcon,
@@ -47,10 +50,32 @@ import {
   useState,
 } from 'react'
 import { useMembership } from '@/auth/use-membership'
-import { type IssueRowData, issueKey, STATUS_LABEL, STATUS_TO_KIND } from '@/issues/model'
+import { type IssueRowData, STATUS_LABEL, STATUS_TO_KIND } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
+import { useSearchCursor } from '@/search/cursor'
+import { filterPaletteGroups, type PaletteGroup, type PaletteRow } from '@/search/palette-rows'
+import { localSearchRows, type SearchRow, serverSearchRows } from '@/search/results'
+import {
+  SEARCH_EMPTY_REFINE,
+  SEARCH_EMPTY_STALE,
+  SEARCH_GROUP_LOCAL,
+  SEARCH_GROUP_SERVER,
+  searchAnnouncement,
+  searchEmptyHeadline,
+  searchEverythingLabel,
+  serverGroupLine,
+} from '@/search/states'
+import { useLocalSearchCorpus } from '@/search/use-local-corpus'
+import { useOpenSearchResult } from '@/search/use-open-result'
+import { useServerSearch } from '@/search/use-server-search'
 
 type PalettePage = 'root' | 'status' | 'assign' | 'label' | 'project' | 'create'
+
+// Both result groups are capped small: Cmd-K is a launcher, and a launcher that fills its viewport
+// with hits has stopped being one. The "search everything" row below them is where depth lives.
+const PALETTE_GROUP_LIMIT = 5
+
+const ESCALATE_ROW_ID = 'search:everything'
 
 interface CommandApi {
   open: () => void
@@ -72,9 +97,7 @@ export function useCommand(): CommandApi {
 
 interface CommandProviderProps {
   teamId: string
-  teamKey: string
   issues: readonly IssueRowData[]
-  onOpenIssue: (issue: IssueRowData) => void
   children: ReactNode
 }
 
@@ -84,15 +107,23 @@ interface TeamMember {
   image?: string | null
 }
 
-export function CommandProvider({
-  teamId,
-  teamKey,
-  issues,
-  onOpenIssue,
-  children,
-}: CommandProviderProps) {
+/**
+ * The palette owns its own filtering, ordering and cursor.
+ *
+ * `cmdk`'s built-in scorer re-sorts items within a group AND groups by their best item's score, so
+ * appending a "From the server" group after the debounced request resolves would re-order every
+ * group above it — a list that moves between the arrow key and Enter. `shouldFilter={false}` turns
+ * that off; the shared search core filters every group, action rows included, over a stable
+ * declaration order, and the active row is controlled and keyed to a row IDENTITY, so an append
+ * cannot move it.
+ *
+ * Both groups mean the same scope — the open team — so the palette never answers a question its
+ * two halves disagree about. `/search` is where the workspace-wide answer lives.
+ */
+export function CommandProvider({ teamId, issues, children }: CommandProviderProps) {
   const zero = useZero()
   const navigate = useNavigate()
+  const openResult = useOpenSearchResult()
   const { userId, canWrite } = useMembership()
   const [teams] = useQuery(queries.teams.all())
   const [users] = useQuery(queries.users.all())
@@ -104,7 +135,19 @@ export function CommandProvider({
   const [targetIds, setTargetIds] = useState<readonly string[]>([])
   const [search, setSearch] = useState('')
   const [error, setError] = useState<string | undefined>(undefined)
+  // Bumped by every `start`, and read by the cursor as its session key. The provider outlives the
+  // dialog, so a cursor left behind by the last visit is state the next visit must not inherit.
+  const [session, setSession] = useState(0)
   const contextRef = useRef<readonly string[]>([])
+
+  const isRoot = page === 'root'
+  const corpus = useLocalSearchCorpus(teamId)
+  // A closed palette, and every page that is not the launcher, asks the server nothing: the hook's
+  // minimum-length rule turns an empty query into no request at all.
+  const server = useServerSearch(open && isRoot ? search : '', {
+    teamId,
+    limit: PALETTE_GROUP_LIMIT,
+  })
 
   const members = useMemo<TeamMember[]>(() => {
     const team = teams.find((candidate) => candidate.id === teamId)
@@ -124,6 +167,7 @@ export function CommandProvider({
     setPage(next)
     setSearch('')
     setError(undefined)
+    setSession((previous) => previous + 1)
     setOpen(true)
   }, [])
 
@@ -278,10 +322,140 @@ export function CommandProvider({
       ? (issues.find((issue) => issue.id === targetIds[0])?.title ?? 'issue')
       : `${targetIds.length} issues`
 
+  const navigateTeam = useCallback(
+    (id: string) => {
+      void navigate({ to: '/teams/$teamId/issues', params: { teamId: id }, search: {} })
+      close()
+    },
+    [navigate, close],
+  )
+
+  const actionGroups = useMemo<PaletteGroup[]>(() => {
+    switch (page) {
+      case 'root':
+        return rootActionGroups({
+          teams,
+          canWrite,
+          hasTarget,
+          onCreate: () => start('create', []),
+          onStatus: () => start('status', targetIds),
+          onAssign: () => start('assign', targetIds),
+          onLabel: () => start('label', targetIds),
+          onProject: () => start('project', targetIds),
+          onAcceptTriage: () => applyTriage('accept'),
+          onDeclineTriage: () => applyTriage('decline'),
+          onFlagTriage: () => applyTriage('flag'),
+          onRouteTriage: () => {
+            void navigate({ to: '/teams/$teamId/triage', params: { teamId } })
+            close()
+          },
+          onMarkAllNotificationsRead: markAllNotificationsRead,
+          onNavigateInbox: () => {
+            void navigate({ to: '/inbox' })
+            close()
+          },
+          onNavigateHome: () => {
+            void navigate({ to: '/' })
+            close()
+          },
+          onNavigateTeam: navigateTeam,
+        })
+      case 'status':
+        return statusGroups(applyStatus)
+      case 'assign':
+        return assignGroups(members, userId, applyAssign)
+      case 'label':
+        return labelGroups(labels, applyLabel)
+      case 'project':
+        return projectGroups(projects, applyProject)
+      case 'create':
+        return []
+    }
+  }, [
+    page,
+    teams,
+    canWrite,
+    hasTarget,
+    targetIds,
+    members,
+    userId,
+    labels,
+    projects,
+    applyStatus,
+    applyAssign,
+    applyLabel,
+    applyProject,
+    applyTriage,
+    markAllNotificationsRead,
+    navigateTeam,
+    navigate,
+    close,
+    start,
+    teamId,
+  ])
+
+  const visibleGroups = useMemo(
+    () => filterPaletteGroups(actionGroups, search),
+    [actionGroups, search],
+  )
+
+  const localRows = useMemo(
+    () => (isRoot ? localSearchRows(corpus.search(search, PALETTE_GROUP_LIMIT), teamId) : []),
+    [isRoot, corpus, search, teamId],
+  )
+  const serverRows = useMemo(
+    () => (isRoot ? serverSearchRows(server.results) : []),
+    [isRoot, server.results],
+  )
+
+  const escalate = isRoot && search.trim().length > 0
+  const rowIds = useMemo(() => {
+    const ids = visibleGroups.flatMap((group) => group.rows.map((row) => row.id))
+    ids.push(...localRows.map((row) => row.id))
+    if (escalate) ids.push(ESCALATE_ROW_ID)
+    ids.push(...serverRows.map((row) => row.id))
+    return ids
+  }, [visibleGroups, localRows, serverRows, escalate])
+
+  const { active, setActive } = useSearchCursor(rowIds, session)
+
+  const serverState = {
+    phase: server.phase,
+    resultCount: serverRows.length,
+    // Never truncated HERE. The palette asks for five rows, so `server.truncated` is true for
+    // almost every real query, and D17's cap line names the route's limit rather than this one.
+    // "There is more" is the escalation row directly above this group, which is a better answer on
+    // a launcher than a sentence. The route shows the cap line, over the full fifty.
+    truncated: false,
+  }
+  const nothingMatched =
+    isRoot &&
+    search.trim().length > 0 &&
+    visibleGroups.length === 0 &&
+    localRows.length === 0 &&
+    serverRows.length === 0 &&
+    server.phase === 'ready'
+  const serverLine = nothingMatched ? undefined : serverGroupLine(serverState)
+
+  const openRow = useCallback(
+    (row: SearchRow) => {
+      openResult(row.target)
+      close()
+    },
+    [openResult, close],
+  )
+
   return (
     <CommandContext.Provider value={api}>
       {children}
-      <CommandDialog open={open} onOpenChange={setOpen} label="Command palette">
+      <CommandDialog
+        open={open}
+        onOpenChange={setOpen}
+        label="Command palette"
+        shouldFilter={false}
+        value={active}
+        onValueChange={setActive}
+      >
         {page === 'create' ? (
           <CreateIssueForm onSubmit={createIssue} onCancel={close} error={error} />
         ) : (
@@ -293,53 +467,81 @@ export function CommandProvider({
             />
             <CommandList>
               <CommandEmpty>No results found.</CommandEmpty>
-              {page === 'root' ? (
-                <RootPage
-                  issues={issues}
-                  teamKey={teamKey}
-                  teams={teams}
-                  canWrite={canWrite}
-                  hasTarget={hasTarget}
-                  onOpenIssue={(issue) => {
-                    onOpenIssue(issue)
-                    close()
-                  }}
-                  onNavigateTeam={(id) => {
-                    void navigate({ to: '/teams/$teamId/issues', params: { teamId: id } })
-                    close()
-                  }}
-                  onNavigateHome={() => {
-                    void navigate({ to: '/' })
-                    close()
-                  }}
-                  onNavigateInbox={() => {
-                    void navigate({ to: '/inbox' })
-                    close()
-                  }}
-                  onMarkAllNotificationsRead={markAllNotificationsRead}
-                  onCreate={() => start('create', [])}
-                  onStatus={() => start('status', targetIds)}
-                  onAssign={() => start('assign', targetIds)}
-                  onLabel={() => start('label', targetIds)}
-                  onProject={() => start('project', targetIds)}
-                  onAcceptTriage={() => applyTriage('accept')}
-                  onDeclineTriage={() => applyTriage('decline')}
-                  onFlagTriage={() => applyTriage('flag')}
-                  onRouteTriage={() => {
-                    void navigate({ to: '/teams/$teamId/triage', params: { teamId } })
-                    close()
-                  }}
-                />
+              {visibleGroups.map((group) => (
+                <CommandGroup key={group.id} heading={group.heading}>
+                  {group.rows.map((row) => (
+                    <CommandItem key={row.id} value={row.id} onSelect={row.onSelect}>
+                      {row.content}
+                      {row.shortcut === undefined ? null : (
+                        <CommandShortcut>{row.shortcut}</CommandShortcut>
+                      )}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ))}
+              {localRows.length > 0 ? (
+                <CommandGroup heading={SEARCH_GROUP_LOCAL}>
+                  {localRows.map((row) => (
+                    <ResultItem key={row.id} row={row} onOpen={openRow} />
+                  ))}
+                </CommandGroup>
               ) : null}
-              {page === 'status' ? <StatusPage onPick={applyStatus} /> : null}
-              {page === 'assign' ? (
-                <AssignPage members={members} meId={userId} onPick={applyAssign} />
-              ) : null}
-              {page === 'label' ? <LabelPage labels={labels} onPick={applyLabel} /> : null}
-              {page === 'project' ? (
-                <ProjectPage projects={projects} onPick={applyProject} />
+              {isRoot ? (
+                <>
+                  {/* The escalation row sits ABOVE the server group, not below it. Server results
+                      arrive last and must therefore be the last rows in the list: a persistent row
+                      underneath them would be pushed down every time the group answered, which is
+                      the same reflow the two-group seam exists to prevent — just at the bottom. */}
+                  {escalate ? (
+                    <CommandGroup>
+                      <CommandItem
+                        value={ESCALATE_ROW_ID}
+                        onSelect={() => {
+                          void navigate({ to: '/search', search: { q: search } })
+                          close()
+                        }}
+                      >
+                        <SearchIcon />
+                        {searchEverythingLabel(search)}
+                      </CommandItem>
+                    </CommandGroup>
+                  ) : null}
+                  {/* `alwaysRender`: cmdk hides a separator the moment the input has text, and the
+                      seam between the two passes is precisely what H12 asked to stay visible. */}
+                  <CommandSeparator alwaysRender />
+                  <CommandGroup heading={SEARCH_GROUP_SERVER}>
+                    {serverRows.map((row) => (
+                      <ResultItem key={row.id} row={row} onOpen={openRow} />
+                    ))}
+                    {serverLine === undefined ? null : (
+                      <p
+                        className="px-2 py-1.5 font-ui text-[13px] text-text-3"
+                        data-testid="palette-server-state"
+                      >
+                        {serverLine}
+                      </p>
+                    )}
+                  </CommandGroup>
+                  {nothingMatched ? (
+                    <div className="flex flex-col gap-1 px-2 py-4" data-testid="palette-empty">
+                      <p className="font-ui text-sm text-text-1">{searchEmptyHeadline(search)}</p>
+                      <p className="font-ui text-[13px] text-text-3">{SEARCH_EMPTY_REFINE}</p>
+                      <p className="font-ui text-[13px] text-text-3">{SEARCH_EMPTY_STALE}</p>
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </CommandList>
+            {isRoot ? (
+              <p
+                className="sr-only"
+                role="status"
+                aria-live="polite"
+                data-testid="palette-announcement"
+              >
+                {searchAnnouncement(localRows.length, serverState)}
+              </p>
+            ) : null}
             {error !== undefined ? (
               <div
                 className="border-t border-border px-4 py-2 text-xs text-status-urgent"
@@ -361,6 +563,21 @@ export function CommandProvider({
   )
 }
 
+function ResultItem({ row, onOpen }: { row: SearchRow; onOpen: (row: SearchRow) => void }) {
+  return (
+    <CommandItem value={row.id} onSelect={() => onOpen(row)} className="h-auto p-0">
+      <SearchResultRow
+        kind={row.kind}
+        issueKey={row.issueKey}
+        title={row.title}
+        snippet={row.snippet}
+        states={row.states}
+        className="rounded-control"
+      />
+    </CommandItem>
+  )
+}
+
 function placeholderFor(page: PalettePage, target: string): string {
   switch (page) {
     case 'status':
@@ -376,37 +593,10 @@ function placeholderFor(page: PalettePage, target: string): string {
   }
 }
 
-function RootPage({
-  issues,
-  teamKey,
-  teams,
-  canWrite,
-  hasTarget,
-  onOpenIssue,
-  onNavigateTeam,
-  onNavigateHome,
-  onNavigateInbox,
-  onMarkAllNotificationsRead,
-  onCreate,
-  onStatus,
-  onAssign,
-  onLabel,
-  onProject,
-  onAcceptTriage,
-  onDeclineTriage,
-  onFlagTriage,
-  onRouteTriage,
-}: {
-  issues: readonly IssueRowData[]
-  teamKey: string
+interface RootActions {
   teams: readonly { id: string; name: string }[]
   canWrite: boolean
   hasTarget: boolean
-  onOpenIssue: (issue: IssueRowData) => void
-  onNavigateTeam: (id: string) => void
-  onNavigateHome: () => void
-  onNavigateInbox: () => void
-  onMarkAllNotificationsRead: () => void
   onCreate: () => void
   onStatus: () => void
   onAssign: () => void
@@ -416,221 +606,337 @@ function RootPage({
   onDeclineTriage: () => void
   onFlagTriage: () => void
   onRouteTriage: () => void
-}) {
-  return (
-    <>
-      <CommandGroup heading="Create">
-        <CommandItem value="new issue create" onSelect={onCreate}>
-          <PlusIcon />
-          New issue
-          <CommandShortcut>C</CommandShortcut>
-        </CommandItem>
-      </CommandGroup>
-      {hasTarget && canWrite ? (
-        <CommandGroup heading="Issue">
-          <CommandItem value="change status" onSelect={onStatus}>
-            <CircleDotIcon />
-            Change status…
-            <CommandShortcut>S</CommandShortcut>
-          </CommandItem>
-          <CommandItem value="assign" onSelect={onAssign}>
-            <UserIcon />
-            Assign…
-            <CommandShortcut>A</CommandShortcut>
-          </CommandItem>
-          <CommandItem value="add label" onSelect={onLabel}>
-            <TagIcon />
-            Add label…
-            <CommandShortcut>L</CommandShortcut>
-          </CommandItem>
-          <CommandItem value="move to project" onSelect={onProject}>
-            <RocketIcon />
-            Move to project…
-            <CommandShortcut>P</CommandShortcut>
-          </CommandItem>
-        </CommandGroup>
-      ) : null}
-      {hasTarget && canWrite ? (
-        <CommandGroup heading="Triage">
-          <CommandItem value="accept from triage" onSelect={onAcceptTriage}>
-            <CheckIcon />
-            Accept from triage
-          </CommandItem>
-          <CommandItem value="route issue triage" onSelect={onRouteTriage}>
-            <RouteIcon />
-            Route…
-          </CommandItem>
-          <CommandItem value="decline triage cancel" onSelect={onDeclineTriage}>
-            <XIcon />
-            Decline (cancel)
-          </CommandItem>
-          <CommandItem value="send to triage" onSelect={onFlagTriage}>
-            <InboxIcon />
-            Send to triage
-          </CommandItem>
-        </CommandGroup>
-      ) : null}
-      {/* Not gated on a selected issue: marking your own inbox read is never about the issues
-          the palette happens to be pointed at. */}
-      <CommandGroup heading="Notifications">
-        <CommandItem
-          value="mark all notifications as read inbox"
-          onSelect={onMarkAllNotificationsRead}
-        >
-          <CheckCheckIcon />
-          Mark all notifications as read
-        </CommandItem>
-      </CommandGroup>
-      <CommandGroup heading="Navigate">
-        <CommandItem value="go to inbox notifications" onSelect={onNavigateInbox}>
-          <BellIcon />
-          Go to inbox
-        </CommandItem>
-        <CommandItem value="go to workspace overview" onSelect={onNavigateHome}>
-          <ArrowRightIcon />
-          Go to workspace overview
-        </CommandItem>
-        {teams.map((team) => (
-          <CommandItem
-            key={team.id}
-            value={`go to ${team.name} issues`}
-            onSelect={() => onNavigateTeam(team.id)}
-          >
-            <ArrowRightIcon />
-            Go to {team.name} issues
-          </CommandItem>
-        ))}
-      </CommandGroup>
-      {issues.length > 0 ? (
-        <CommandGroup heading="Jump to issue">
-          {issues.map((issue) => (
-            <CommandItem
-              key={issue.id}
-              value={`${issueKey(teamKey, issue)} ${issue.title}`}
-              onSelect={() => onOpenIssue(issue)}
-            >
-              <StatusGlyph status={STATUS_TO_KIND[issue.status]} />
-              <span className="font-mono text-xs text-text-3">{issueKey(teamKey, issue)}</span>
-              <span className="truncate">{issue.title}</span>
-            </CommandItem>
-          ))}
-        </CommandGroup>
-      ) : null}
-    </>
-  )
+  onMarkAllNotificationsRead: () => void
+  onNavigateInbox: () => void
+  onNavigateHome: () => void
+  onNavigateTeam: (id: string) => void
 }
 
-function StatusPage({ onPick }: { onPick: (status: IssueStatus) => void }) {
-  return (
-    <CommandGroup heading="Change status">
-      {ISSUE_STATUSES.map((status) => (
-        <CommandItem
-          key={status}
-          value={`set status ${STATUS_LABEL[status]}`}
-          onSelect={() => onPick(status)}
-        >
-          <StatusGlyph status={STATUS_TO_KIND[status]} />
-          Set status: {STATUS_LABEL[status]}
-        </CommandItem>
-      ))}
-    </CommandGroup>
-  )
-}
+// The action rows as DATA, in declaration order. Each `search` string is the value the row used to
+// hand `cmdk`, so what makes a row match is unchanged — only who applies the match moved.
+function rootActionGroups(actions: RootActions): PaletteGroup[] {
+  const groups: PaletteGroup[] = [
+    {
+      id: 'create',
+      heading: 'Create',
+      rows: [
+        {
+          id: 'action:create-issue',
+          search: 'new issue create',
+          shortcut: 'C',
+          onSelect: actions.onCreate,
+          content: (
+            <>
+              <PlusIcon />
+              New issue
+            </>
+          ),
+        },
+      ],
+    },
+  ]
 
-function AssignPage({
-  members,
-  meId,
-  onPick,
-}: {
-  members: readonly TeamMember[]
-  meId: string | null
-  onPick: (assigneeId: string | null) => void
-}) {
-  return (
-    <CommandGroup heading="Assign">
-      {meId ? (
-        <CommandItem value="assign to me" onSelect={() => onPick(meId)}>
-          <UserIcon />
-          Assign to me
-          <CommandShortcut>I</CommandShortcut>
-        </CommandItem>
-      ) : null}
-      <CommandItem value="unassign" onSelect={() => onPick(null)}>
-        <UserXIcon />
-        Unassign
-      </CommandItem>
-      {members
-        .filter((member) => member.id !== meId)
-        .map((member) => (
-          <CommandItem
-            key={member.id}
-            value={`assign to ${member.name}`}
-            onSelect={() => onPick(member.id)}
-          >
-            <Avatar size="xs">
-              {member.image ? <AvatarImage src={member.image} alt={member.name} /> : null}
-              <AvatarFallback aria-label={member.name}>{initials(member.name)}</AvatarFallback>
-            </Avatar>
-            Assign to {member.name}
-          </CommandItem>
-        ))}
-    </CommandGroup>
-  )
-}
-
-function LabelPage({
-  labels,
-  onPick,
-}: {
-  labels: readonly { id: string; name: string; color: string }[]
-  onPick: (labelId: string) => void
-}) {
-  if (labels.length === 0) {
-    return (
-      <div className="px-4 py-6 text-center text-sm text-text-3">No labels in this team yet.</div>
+  if (actions.hasTarget && actions.canWrite) {
+    groups.push(
+      {
+        id: 'issue',
+        heading: 'Issue',
+        rows: [
+          {
+            id: 'action:status',
+            search: 'change status',
+            shortcut: 'S',
+            onSelect: actions.onStatus,
+            content: (
+              <>
+                <CircleDotIcon />
+                Change status…
+              </>
+            ),
+          },
+          {
+            id: 'action:assign',
+            search: 'assign',
+            shortcut: 'A',
+            onSelect: actions.onAssign,
+            content: (
+              <>
+                <UserIcon />
+                Assign…
+              </>
+            ),
+          },
+          {
+            id: 'action:label',
+            search: 'add label',
+            shortcut: 'L',
+            onSelect: actions.onLabel,
+            content: (
+              <>
+                <TagIcon />
+                Add label…
+              </>
+            ),
+          },
+          {
+            id: 'action:project',
+            search: 'move to project',
+            shortcut: 'P',
+            onSelect: actions.onProject,
+            content: (
+              <>
+                <RocketIcon />
+                Move to project…
+              </>
+            ),
+          },
+        ],
+      },
+      {
+        id: 'triage',
+        heading: 'Triage',
+        rows: [
+          {
+            id: 'action:triage-accept',
+            search: 'accept from triage',
+            onSelect: actions.onAcceptTriage,
+            content: (
+              <>
+                <CheckIcon />
+                Accept from triage
+              </>
+            ),
+          },
+          {
+            id: 'action:triage-route',
+            search: 'route issue triage',
+            onSelect: actions.onRouteTriage,
+            content: (
+              <>
+                <RouteIcon />
+                Route…
+              </>
+            ),
+          },
+          {
+            id: 'action:triage-decline',
+            search: 'decline triage cancel',
+            onSelect: actions.onDeclineTriage,
+            content: (
+              <>
+                <XIcon />
+                Decline (cancel)
+              </>
+            ),
+          },
+          {
+            id: 'action:triage-flag',
+            search: 'send to triage',
+            onSelect: actions.onFlagTriage,
+            content: (
+              <>
+                <InboxIcon />
+                Send to triage
+              </>
+            ),
+          },
+        ],
+      },
     )
   }
-  return (
-    <CommandGroup heading="Add label">
-      {labels.map((label) => (
-        <CommandItem
-          key={label.id}
-          value={`add label ${label.name}`}
-          onSelect={() => onPick(label.id)}
-        >
-          <span className="size-3 rounded-full" style={{ backgroundColor: label.color }} />
-          {label.name}
-        </CommandItem>
-      ))}
-    </CommandGroup>
+
+  // Not gated on a selected issue: marking your own inbox read is never about the issues the
+  // palette happens to be pointed at.
+  groups.push(
+    {
+      id: 'notifications',
+      heading: 'Notifications',
+      rows: [
+        {
+          id: 'action:notifications-read-all',
+          search: 'mark all notifications as read inbox',
+          onSelect: actions.onMarkAllNotificationsRead,
+          content: (
+            <>
+              <CheckCheckIcon />
+              Mark all notifications as read
+            </>
+          ),
+        },
+      ],
+    },
+    {
+      id: 'navigate',
+      heading: 'Navigate',
+      rows: [
+        {
+          id: 'action:go-inbox',
+          search: 'go to inbox notifications',
+          onSelect: actions.onNavigateInbox,
+          content: (
+            <>
+              <BellIcon />
+              Go to inbox
+            </>
+          ),
+        },
+        {
+          id: 'action:go-home',
+          search: 'go to workspace overview',
+          onSelect: actions.onNavigateHome,
+          content: (
+            <>
+              <ArrowRightIcon />
+              Go to workspace overview
+            </>
+          ),
+        },
+        ...actions.teams.map((team) => ({
+          id: `action:go-team:${team.id}`,
+          search: `go to ${team.name} issues`,
+          onSelect: () => actions.onNavigateTeam(team.id),
+          content: (
+            <>
+              <ArrowRightIcon />
+              Go to {team.name} issues
+            </>
+          ),
+        })),
+      ],
+    },
   )
+
+  return groups
 }
 
-function ProjectPage({
-  projects,
-  onPick,
-}: {
-  projects: readonly { id: string; name: string }[]
-  onPick: (projectId: string | null) => void
-}) {
-  return (
-    <CommandGroup heading="Move to project">
-      <CommandItem value="remove from project none" onSelect={() => onPick(null)}>
-        <XIcon />
-        No project
-      </CommandItem>
-      {projects.map((project) => (
-        <CommandItem
-          key={project.id}
-          value={`move to project ${project.name}`}
-          onSelect={() => onPick(project.id)}
-        >
-          <RocketIcon />
-          {project.name}
-        </CommandItem>
-      ))}
-    </CommandGroup>
-  )
+function statusGroups(onPick: (status: IssueStatus) => void): PaletteGroup[] {
+  return [
+    {
+      id: 'status',
+      heading: 'Change status',
+      rows: ISSUE_STATUSES.map((status) => ({
+        id: `status:${status}`,
+        search: `set status ${STATUS_LABEL[status]}`,
+        onSelect: () => onPick(status),
+        content: (
+          <>
+            <StatusGlyph status={STATUS_TO_KIND[status]} />
+            Set status: {STATUS_LABEL[status]}
+          </>
+        ),
+      })),
+    },
+  ]
+}
+
+function assignGroups(
+  members: readonly TeamMember[],
+  meId: string | null,
+  onPick: (assigneeId: string | null) => void,
+): PaletteGroup[] {
+  const rows: PaletteRow[] = []
+  if (meId) {
+    rows.push({
+      id: 'assign:me',
+      search: 'assign to me',
+      shortcut: 'I',
+      onSelect: () => onPick(meId),
+      content: (
+        <>
+          <UserIcon />
+          Assign to me
+        </>
+      ),
+    })
+  }
+  rows.push({
+    id: 'assign:none',
+    search: 'unassign',
+    onSelect: () => onPick(null),
+    content: (
+      <>
+        <UserXIcon />
+        Unassign
+      </>
+    ),
+  })
+  for (const member of members) {
+    if (member.id === meId) continue
+    rows.push({
+      id: `assign:${member.id}`,
+      search: `assign to ${member.name}`,
+      onSelect: () => onPick(member.id),
+      content: (
+        <>
+          <Avatar size="xs">
+            {member.image ? <AvatarImage src={member.image} alt={member.name} /> : null}
+            <AvatarFallback aria-label={member.name}>{initials(member.name)}</AvatarFallback>
+          </Avatar>
+          Assign to {member.name}
+        </>
+      ),
+    })
+  }
+  return [{ id: 'assign', heading: 'Assign', rows }]
+}
+
+function labelGroups(
+  labels: readonly { id: string; name: string; color: string }[],
+  onPick: (labelId: string) => void,
+): PaletteGroup[] {
+  return [
+    {
+      id: 'label',
+      heading: 'Add label',
+      rows: labels.map((label) => ({
+        id: `label:${label.id}`,
+        search: `add label ${label.name}`,
+        onSelect: () => onPick(label.id),
+        content: (
+          <>
+            <span className="size-3 rounded-full" style={{ backgroundColor: label.color }} />
+            {label.name}
+          </>
+        ),
+      })),
+    },
+  ]
+}
+
+function projectGroups(
+  projects: readonly { id: string; name: string }[],
+  onPick: (projectId: string | null) => void,
+): PaletteGroup[] {
+  return [
+    {
+      id: 'project',
+      heading: 'Move to project',
+      rows: [
+        {
+          id: 'project:none',
+          search: 'remove from project none',
+          onSelect: () => onPick(null),
+          content: (
+            <>
+              <XIcon />
+              No project
+            </>
+          ),
+        },
+        ...projects.map((project) => ({
+          id: `project:${project.id}`,
+          search: `move to project ${project.name}`,
+          onSelect: () => onPick(project.id),
+          content: (
+            <>
+              <RocketIcon />
+              {project.name}
+            </>
+          ),
+        })),
+      ],
+    },
+  ]
 }
 
 function CreateIssueForm({

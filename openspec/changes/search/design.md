@@ -1,0 +1,1312 @@
+## Context
+
+Search is the last of the three v1 gaps named in `openspec/SCOPE-v1-gaps.md`. That document is the
+mission input; **read its §2.3 and §6 with this file, not instead of it.** Where the two disagree,
+this file says so and gives the reason — every disagreement here traces to a maintainer answer on an
+H-question that the scope wrote before the answer existed.
+
+**What already exists.** `packages/schema/src/rich-text/plaintext.ts` (shipped by `mentions`) is a
+pure, import-free walk over TipTap document JSON exporting `richTextToPlainText(doc, {mentions,
+names})`, `extractMentionIds` and `sanitizeRichText`; its header comment names `search` as the
+expected second consumer. `apps/server/src/jobs/scheduler.ts` is a single `PgBoss` instance with
+independently-gated feature blocks and "ONE PgBoss instance and ONE `boss.start()` in this file"
+written on it. `packages/schema/src/db/` is a substantial Kysely layer (`cycle-facts.ts`,
+`connector.ts`, `ai-config.ts`, `notification.ts`, `issue-subscription.ts`). The drift test already
+carries a server-only-tables assertion with six entries. `apps/web/src/issues/command.tsx` is a
+`cmdk` palette with a "Jump to issue" group at line 505, mounted only inside the team issue list.
+
+**What does not exist.** `grep -rn "ilike\|tsvector\|to_tsquery\|websearch_to_tsquery" apps packages`
+returns nothing. `matchesText` (`packages/schema/src/zero/filter.ts:71-80`) matches issue title and
+issue key only — a token that appears only in a description already fails today. There is no
+debounce/abort helper in `apps/web/src/lib/` (it holds `keyboard.ts` and `mutation.ts`).
+
+**The maintainer's five answers, taken as given and not relitigated:** H9 `'simple'`,
+env-configurable. H10 index maintenance is a **job**, not the write transaction, registered on the
+existing scheduler. H11 results include `needs_triage` **and** `canceled`, visibly labelled. H12 the
+seam is **shown** as two labelled groups. H13 **no `pg_trgm`**.
+
+## Goals / Non-Goals
+
+**Goals:**
+
+- The first frame of a search is computed with no network, and search keeps working offline.
+- The complete answer — comment bodies, other teams — arrives without ever moving a row that is
+  above the keyboard cursor.
+- Search cannot reveal the *existence* of a row the caller may not read: not by returning it, not by
+  a count, not by a ranking artefact, and not by a status or timing difference.
+- No search path can reach the retro anonymity boundary, provable by grep rather than by argument.
+- The write path is not slowed by one microsecond of index maintenance.
+- Zero new containers, zero new dependencies, zero `CREATE EXTENSION`.
+
+**Non-Goals:** see the proposal's Non-goals section — it is the authoritative list.
+
+## Decisions
+
+### D1 — A read-only Postgres FTS route is outside CLAUDE.md #2, not a violation of it
+
+Stated explicitly rather than left ambiguous, because a reviewer will ask.
+
+CLAUDE.md #2 is *"All ZQL and all mutators live in `packages/schema`. Client and server import the
+same mutator function. This keeps the sync layer swappable."* The search path contains **no ZQL and
+no mutator**: no `defineQuery`, no `defineMutator`, no new synced query, no ZQL text operator (ZQL
+has none: `reference/zero.md` §13 records "No first-class text search" and "No JSON filters" in the same list, which is why a synced
+query could not search a TipTap body even in principle). A Kysely statement is not ZQL, and
+`packages/schema/src/db/` is already a substantial Kysely layer the server reads through.
+
+The constraint's *purpose* — keeping the sync layer swappable — is honoured by the same discipline,
+applied by analogy and binding on this change:
+
+- **The SQL and its scoping predicate live in `packages/schema/src/db/search.ts`**, never in
+  `apps/server`. One file, greppable, beside the other Kysely modules.
+- **Ranking, tokenizing, plaintext extraction and merge live in `packages/schema/src/search/`** as
+  pure functions imported by `apps/web` (on-device pass) and `apps/server` (index write), so the two
+  passes can never disagree about what a document contains.
+- `apps/server` owns only the HTTP route, session auth and serialisation.
+- `packages/schema` keeps zero UI imports; `scripts/check-boundaries.mjs` still passes.
+
+Swapping the sync layer to Electric would leave `db/search.ts` and `search/` untouched. That is the
+test the constraint actually cares about, and it passes.
+
+### D2 — A server-only sidecar table, with the `tsvector` only inside the index expression
+
+`search_document` carries **plain `text` columns**. The weighted `tsvector` exists only as the
+expression of a GIN index:
+
+```sql
+create index search_document_fts_idx on search_document using gin (
+  (setweight(to_tsvector('simple', title), 'A') || setweight(to_tsvector('simple', body), 'B'))
+);
+```
+
+Rejected: a `tsvector` column (generated or otherwise) on `issue` / `comment`. The compose stack runs
+`postgres:18` with Zero's default `FOR TABLES IN SCHEMA public` publication, and `reference/zero.md`
+§13 records that `generated stored` columns **do** sync on PG18 — so a tsvector column would enter
+the replication path toward zero-cache's SQLite replica carrying an exotic type, churn the drift test,
+and put an unverified type mapping on the critical sync path. Indexes are not logically replicated
+and `text` maps trivially, so a sidecar of plain text columns is a non-event for the replica. The
+other alternative — excluding the table via a custom publication — is rejected outright:
+`ZERO_APP_PUBLICATIONS` changes force a **full replica resync**, which is an ops event on every
+self-hosted upgrade.
+
+`search_document` joins `issue_sequence`, `cycle_sequence`, `connector_config`, `connector_secret`,
+`connector_installation` and `retro_card_author` on the drift test's server-only list.
+
+### D3 — The allowlist is a Postgres CHECK, deliberately inverting `notification.kind`'s precedent
+
+```sql
+entity_type text not null check (entity_type in ('issue', 'comment'))
+```
+
+`notifications` deliberately gave `kind` **no** CHECK so that adding a kind costs a TypeScript union
+member rather than a migration in a different change. That reasoning does not transfer, and the
+inversion is the point: here the closed set **is the security property**. An index built as "every
+text column" is how the retro anonymity guarantee dies, and making a new indexable entity type cost
+a forward-only migration and a reviewer's eye is exactly the friction this table wants. A second
+CHECK pins the entity/FK shape so the invariant is a database fact rather than a convention:
+
+```sql
+check ((entity_type = 'issue'   and comment_id is null and entity_id = issue_id)
+    or (entity_type = 'comment' and comment_id = entity_id))
+```
+
+### D4 — The index is maintained by a job; the write path is untouched (H10)
+
+**This supersedes `openspec/SCOPE-v1-gaps.md` §2.3's bullet** *"`createServerMutators()` maintains the
+sidecar for `issue.create` / `issue.update` / `comment.create` / `comment.edit` / `comment.delete`"*.
+The maintainer answered H10 the other way: index maintenance is a pg-boss job, accepting seconds of
+staleness. Editing a title is among the most common interactions in the product, CLAUDE.md #9 is
+non-negotiable, and search freshness is not a stated promise. `SCOPE-v1-gaps.md` §2.3 is corrected in
+place by this change (task 12.8), the way `mentions` corrected §0.
+
+No mutator changes. `createServerMutators()` is not touched.
+
+**How the job knows what is stale.** A **watermark tail** plus a **full reconcile**, both driven by
+`updated_at` — no outbox table, no trigger, no extra write anywhere:
+
+- *Tail* (`search-index` queue): for each entity type, read the watermark as
+  `select max(source_updated_at) from search_document where entity_type = $t` (one index-only lookup
+  on the `(entity_type, source_updated_at)` btree), then
+  `select … from issue where updated_at >= $watermark order by updated_at limit $batch`. `>=` rather
+  than `>` so rows sharing a timestamp are never skipped; re-indexing a row is idempotent, so the
+  overlap costs nothing. Loop batches until drained or a wall-clock budget is spent.
+- *Reconcile* (`search-reconcile` queue): the full diff —
+  `left join search_document … where d.entity_id is null or d.source_updated_at <> src.updated_at` —
+  plus an orphan pass. This is also the **first-boot backfill**: on a fresh upgrade every row is
+  missing, the diff finds them, and running it repeatedly converges. Bounded and resumable **because
+  it is a diff**, which is why it needs no cursor table.
+
+The reconcile is not optional decoration. `updated_at` is minted at the client call site
+(`args.updatedAt`), so a skewed client clock can write a row *behind* the watermark, which the tail
+would miss forever. The reconcile is the only thing that heals it, and that is why it exists.
+
+**Cadence, stated honestly.** pg-boss cron granularity is one minute, and "seconds of staleness"
+needs better than that. So the `search-index` queue is created with pg-boss's **`exclusive`** policy
+(one job queued *or* active, v12 `QueuePolicy`) and the worker **re-arms itself** with
+`boss.send(queue, {}, {startAfter: SEARCH_INDEX_INTERVAL_SECONDS})` at the end of each pass, with a
+one-minute cron as a **watchdog** so a lost or failed job cannot stop indexing forever. `exclusive`
+is what makes the two arming paths safe to overlap.
+
+- Typical lag: **~10 s** (the default interval) plus pass duration.
+- Worst case if the re-arm chain breaks: **~60 s**, healed by the watchdog.
+- A backdated `updated_at`: healed by the reconcile (default every 5 minutes).
+
+The watchdog cron is **not** exposed as an environment variable — it exists only to heal a broken
+re-arm chain and there is no reason to tune it. Everything an operator would plausibly turn is.
+
+### D5 — The one deliberate write-path cost: an FK cascade on delete
+
+`comment.delete` exists (`packages/schema/src/zero/mutators.ts:1423`). If deletion were left to the
+reconcile pass, a deleted comment would keep returning a snippet of its own text for up to five
+minutes. That is worse than the cost of fixing it, so `search_document.comment_id` carries a real
+`references comment(id) on delete cascade` and Postgres removes the document inside the deleting
+transaction.
+
+Named as an exception to D4 rather than hidden: it is one indexed row delete on a rare operation,
+not the every-title-edit amplification H10 refused. `issue_id` carries the same cascade
+(there is no `issue.delete` mutator today — belt and braces, and it also cleans up a whole issue's
+comment documents in one statement).
+
+The indexer must therefore tolerate a source row deleted mid-pass: a batch upsert can hit
+`23503 foreign_key_violation`. The pass catches it, drops the batch, and lets the next pass converge
+rather than failing the whole sweep.
+
+### D6 — What is searchable, and why each inclusion and exclusion
+
+**Server index — allowlist of two:**
+
+| Entity | Indexed as | Why |
+|---|---|---|
+| `issue` | `title` (weight A) + description plaintext (weight B) | The primary object of the product, and descriptions are the highest-value text the on-device pass can only partly reach (other teams' issues never sync). |
+| `comment` | comment plaintext (weight B); `title` is empty | The **only** high-value text a client structurally cannot search: comments sync only for the issue currently open (`queries.ts:126`), and bulk-syncing every comment of every team to every client is exactly the antipattern Zero exists to avoid. |
+
+A comment document indexes **only the comment's own text**. The parent issue's title is *not* copied
+in — otherwise searching an issue title would return the issue plus every comment on it. The route
+joins `issue` for display (key, title, status, `needs_triage`), which also means no denormalised
+title can go stale.
+
+**On-device only — no index, no route, no permission risk by construction** (title/name substring
+over rows already synced under existing permissioned queries): `project` (`projects.all`,
+workspace-wide), `cycle` and `label` (`*.byTeam`, current team), `team` (`teams.all`). Indexing them
+server-side would duplicate data the client already holds and add a second permission predicate for
+no gain.
+
+**Excluded from both passes, permanently:** every `retro_*` table, including the `retro` entity's own
+title. The title names nobody, so this is stricter than the anonymity boundary requires — deliberately.
+A retro is a handful of rows per team, all one click from the cycle view, so the value is near zero;
+and excluding the whole family turns *"no search path can reach `retro_card_author`"* from a
+judgement about which retro column is safe into a one-line grep any reviewer can run. Also excluded:
+`saved_view` (a filter, not content — the list's own view picker is its surface), `cycle_digest`,
+every connector/PR/CI/deployment row, `user` / `workspace_member` / `invite` (a people index invites
+directory scraping), and attachments (there is no upload path).
+
+### D7 — Hybrid, with the seam shown (H12)
+
+Pure client-side **structurally cannot** answer the highest-value search in a tracker (comments are
+not synced; ZQL has no JSON filters). Pure server-on-every-keystroke is a direct hit on CLAUDE.md #9
+— search-as-you-type in Cmd-K is a common interaction and making its first frame wait on a round trip
+is the bug the constraint names. So: **on-device first, server appended.**
+
+Two labelled groups, never a merged list. The two passes have genuinely different match semantics —
+on-device is substring, server is full-text — and pretending otherwise produces the confusing case
+where the server "finds something the on-device pass should have". More decisively: a merged list
+reflows when the second half lands, and a list that moves between the arrow key and Enter is a defect
+under CLAUDE.md #10, not a polish item.
+
+**Group labels:** `On this device` and `From the server`. `SCOPE-v1-gaps.md` §2.3 proposed
+`Results` / `From the server`; "Results" does not *show* a seam, which is the whole point of the H12
+answer, and "On this device" makes the offline state (`Offline — on-device results only`) read in the
+same vocabulary. Recorded as a deviation.
+
+### D8 — Cursor stability: the palette takes filtering and ordering away from `cmdk`
+
+The palette renders `<Command>` with `cmdk`'s default `shouldFilter` (true), which **scores and
+re-sorts items within a group and groups by their best item's score**. Appending a "From the server"
+group 150 ms later would therefore re-sort the groups above it — precisely the reflow H12's answer
+exists to prevent.
+
+So the palette sets **`shouldFilter={false}`** and owns both halves:
+
+- **Filtering and ordering** come from `packages/schema/src/search/` — a deterministic scorer over a
+  stable declaration order, applied to action rows as well as result rows, so nothing anywhere in the
+  palette reorders for a reason the code does not state.
+- **The cursor is controlled**: `<Command value={active} onValueChange={setActive}>`, where `active`
+  is a **result id**, not an index. Appending a group cannot move it, and if the active row does
+  leave the list (the query narrowed), the cursor falls to the first row of the first group — one
+  stated rule instead of `cmdk`'s implicit one.
+
+`cmdk`'s `CommandEmpty` counts *mounted* items when `shouldFilter` is false; that behaviour is
+**verified at build time** (task 9.6), not assumed, with the fallback being an explicit empty state
+rendered by the palette itself.
+
+Ordinary palette behaviour must not regress: the `command-palette` spec's "typing filters, Arrow keys
+move the active item, Enter executes, Escape closes and restores focus" scenarios all still hold —
+only the implementation of "filters" moves.
+
+### D9 — The route, and the four ways it refuses to be a permission oracle
+
+`GET /api/v1/search?q=&teamId?=&limit?=`, session-authenticated with the `auth.getSessionUser`
+middleware shape the AI and connector admin routes already use.
+
+1. **Auth before existence.** No session ⇒ `401` before any table is read. This is the *only*
+   non-200 outcome the route has.
+2. **Scope resolved server-side, never from the client.** The actor's team set comes from
+   `workspace_member` (admin ⇒ every team in the workspace, mirroring `teamScoped`'s bypass exactly)
+   or `team_membership`. Every statement filters `team_id = any($teams)`. An authenticated
+   non-member's set is empty and yields zero rows — the deny-by-empty-set analogue of `denyAll`'s
+   empty `or()`. `teamId` **intersects** that set and can never widen it, exactly as `issues.byTeam`
+   re-evaluates its membership predicate server-side.
+3. **One response shape for every non-401 outcome.** Miss, out-of-scope, blank query, sub-minimum
+   query, and **statement timeout** all return `200 {"results": [], "truncated": false}`. A
+   `503`-on-timeout beside a `200`-on-miss is an oracle over corpus size; so is a `partial` flag that
+   is only ever true when the corpus is big. **No partial flag is exposed at all.** The accepted cost:
+   a self-hoster whose searches time out sees an empty server group with no in-band signal — so the
+   timeout is counted and logged server-side (without the query) and surfaced in the operator-facing
+   freshness signal (D13). That is the honest trade, and it is written here so nobody "fixes" it
+   later by adding a status code.
+4. **Snippets after the filter, never before.** `ts_headline` runs in the same `SELECT` as, and
+   after, the `team_id = any($teams)` predicate — never over a pre-filter CTE. No counts, no totals,
+   no "N more results you can't see". `truncated` is `results.length === limit`, computed over
+   **post-scoping** rows only, so it can never depend on a row the caller may not read.
+
+**Hunted for, and closed, beyond the one the scope named** — the mission asked for others of the
+status-oracle class, so here is the list and what each does about it:
+
+- *Error text.* A malformed `q` that `websearch_to_tsquery` cannot parse must not produce a 400 that
+  a valid-but-absent token would not. Empty/whitespace/sub-minimum/unparseable all collapse to the
+  same `200 []` before any table is read.
+- *Timing.* The dominant timing signal is corpus size, which is bounded by the same statement timeout
+  for every caller regardless of scope, and the scoping predicate is applied *inside* the indexed
+  scan rather than as a post-filter, so a token that exists only out-of-scope costs the same index
+  probe as a token that exists nowhere. This is the weakest of the four defences — timing is never
+  fully closable — and it is named as a residual risk below rather than claimed as solved.
+- *Ranking artefacts.* Ranks are computed over the scoped row set only; no global IDF, no corpus-wide
+  statistic, and no `ts_rank` normalisation flag that reads a document count leaks in.
+- *`truncated`.* Post-scoping only, per above.
+- *Log lines.* The request logger records `c.req.path`, which in Hono excludes the query string, and
+  the route logs no `q`. **Asserted by a test** (task 6.7), because it is one middleware change from
+  being false and nothing else in the repo would notice.
+
+### D10 — Ranking, and how recency factors in
+
+`ts_rank_cd(vector, websearch_to_tsquery($cfg, $q), 32)` — `32` is the `rank/(rank+1)` normalisation,
+which bounds the score into `(0,1)` without consulting any corpus-wide statistic (see D9's ranking
+artefacts). Recency is a **tiebreak only**, not a blended weight: ordering is
+`rank desc, source_updated_at desc, entity_type asc, entity_id asc`. A recency *weight* needs a
+coefficient only real usage data can calibrate, and inventing one now would be a number nobody can
+defend. Fully deterministic ordering is also what makes the integration tests assertable and the
+cursor stable.
+
+The on-device scorer is a separate, simpler tier ladder in `packages/schema/src/search/`: issue-key
+exact > title prefix > title substring > body substring, then `updatedAt desc`. It extends
+`matchesText`'s semantics (`filter.ts:71` — title + issue key, substring, lowercased) rather than
+forking them, so the list's text filter and the palette agree about what "matches" means.
+
+### D11 — `'simple'`, env-configurable, and the job owns the rebuild (H9)
+
+`SEARCH_TEXT_CONFIG` defaults to `simple`. The catch nobody should discover in production: an
+expression index is built with a **literal** configuration, so changing the variable without
+rebuilding the index silently stops the index being used and search degrades to a sequential scan.
+
+So the **`search-reconcile` job owns the index definition**. On each run it compares the live index
+definition (`pg_indexes.indexdef`) against the configured value and, when they differ, rebuilds the
+one index. That makes H9's "cheap to reverse (rebuild one index)" a real property rather than a
+runbook step. At the scale yapm targets this is a sub-second `CREATE INDEX`, taken inside the job and
+never at boot.
+
+Two safety rails, because the configuration is interpolated as a SQL literal (a parameter cannot
+appear in an index expression):
+
+- Zod validates the *shape* at boot against `^[a-z_][a-z0-9_]{0,62}$`, failing fast by name.
+- Before any DDL or query, the job verifies the value exists in `pg_ts_config`. An unknown
+  configuration **fails the ensure step loudly and leaves the previous index in place** — search
+  keeps working with the old configuration rather than going dark.
+
+Rejected: making the variable affect only the query (silently slow), and rebuilding at boot (DDL on
+the boot path of every self-hoster, for a variable almost nobody changes).
+
+### D12 — The plaintext walker is extended, not duplicated, and it stays mention-aware
+
+`packages/schema/src/rich-text/plaintext.ts` gains only what search needs; no second walker is
+written. The indexer calls `richTextToPlainText(doc, {mentions: 'label', names})`, loading the
+id→name map for the mention ids in the batch with one
+`select id, name from "user" where id = any($ids)`. Two consequences, both wanted:
+
+- A mention is findable by the person's **current** name, and a rename propagates on the next
+  reindex — the same anti-spoof property the renderer has, since the stored `label` is only a
+  fallback.
+- `search_document.body` therefore contains colleagues' names. **`search_document` is never an AI
+  data source** (`SCOPE-v1-gaps.md` §1.9). The AI substrate's guarantee is that it is fed only
+  team-level aggregates that structurally cannot name a person; a searchable projection of every
+  description and comment is exactly the shape that would break it. The rule ships as a comment on
+  the table and on `db/search.ts`, as a spec scenario, and as a **test** asserting that no module
+  under `apps/server/src/ai/`, and neither `zero/{digest,ai-tools,cycle-facts}.ts` nor
+  `db/cycle-facts.ts`, imports `db/search.js` or names `search_document`. `richTextToPlainText`'s
+  `'strip'` mode remains mandatory on model-facing paths; search is not one, which is precisely why
+  it must not become one.
+
+This change adds **no mutator**, and `zero/ai-tools.ts` derives the agent tool set from
+`defineMutators` — so adding none is structurally what keeps search out of the agent surface. That is
+worth stating because it is an absence, and absences are not self-enforcing.
+
+### D13 — Silent index drift is made visible
+
+If a future write path bypasses `updated_at` (a bulk import, a connector that authors issue text),
+those rows become invisible to server search while looking perfectly normal on-device, and users
+report it as "search is flaky" — nearly unreproducible. Two mitigations, both cheap:
+
+- The reconcile pass logs `{indexed, stale, orphaned, missing, timedOutSearches}` every run.
+- `/readyz`'s existing report gains a **non-gating** `search` entry carrying the document count, the
+  source count, and the age of the oldest un-indexed row. Non-gating is deliberate: a stale index
+  must never take an instance out of rotation.
+
+### D14 — The `team_id` denormalisation invariant is cited, not restated
+
+`search_document.team_id` is a denormalised copy of the owning issue's team and is only sound because
+**an issue can never change team**. That invariant, its verification and its guard test are owned by
+`notifications` (`SCOPE-v1-gaps.md` §1.5; `routeIssue`'s doc comment in
+`packages/schema/src/zero/mutators.ts` refuses team reassignment explicitly). This change cites it on
+the column and adds nothing. If a future change makes issues movable, it must move every derived row
+— notification rows, subscription rows, and now every one of the issue's documents — or they silently
+leak to the old team.
+
+### D15 — One surface, two depths
+
+Cmd-K stays the action launcher it is and gains results capped at ~5 per group plus a persistent
+`Search everything for "q" →` row; Enter there navigates to `/search?q=`, a real route (shareable,
+back-button correct) where fifty comment hits with snippets are legible. Two competing entry points
+would mean two keybindings and two mental models for one question.
+
+The two surfaces differ in **scope**, and that difference is what makes each honest:
+
+- **The palette is this team.** Its on-device group reads `issues.byTeam` + `triage.inbox` +
+  `cycles.byTeam` + `labels.byTeam` for the open team, plus workspace-wide `projects.all` and
+  `teams.all` (which are navigation targets, not team-scoped work data). Its server group sends
+  `teamId` = the open team, so both groups mean the same scope.
+- **`/search?q=` is everywhere** — every team the caller may read, `teamId` omitted. Its on-device
+  group is necessarily thinner (`issues.mine` across all the caller's teams, `projects.all`,
+  `teams.all`) and is labelled as such; the server group is where completeness comes from. That is
+  the thesis working as designed, not a gap.
+
+Both surfaces consume one `useLocalSearchCorpus(teamId?)` hook and one `useServerSearch(query, opts)`
+hook, so there is one implementation of each pass.
+
+### D16 — Snippets are segments, never HTML
+
+`ts_headline` returns markup. Rendering it with `dangerouslySetInnerHTML` would be a stored-XSS
+vector fed directly by user-authored comment bodies. So the route asks `ts_headline` for
+`StartSel=U+0001, StopSel=U+0002` — control characters that cannot occur in normal prose, and whose
+worst failure if they somehow did is a mis-highlight rather than injected HTML — and
+`packages/ui`'s `SnippetText` splits on them and renders alternating `<span>`s. No HTML is ever
+interpolated. Also passed: `MaxFragments=1, MaxWords=18, MinWords=5, HighlightAll=false`.
+
+### D17 — Empty, offline and still-indexing states, decided rather than left to the implementation
+
+| Situation | What the surface says |
+|---|---|
+| Query shorter than 2 non-whitespace characters | On-device group renders; server group reads `Keep typing to search everything`. **The rule never depends on whether any row existed.** |
+| Server pass in flight | `Searching…`, announced politely to assistive tech |
+| Server answered, no hits, on-device has hits | The server group is present and reads `No further matches` |
+| Both empty | One empty state: `No matches for "<q>".` + `Try fewer or different words.` + `Recently edited items can take a few seconds to appear.` |
+| Connection not established (existing sync-recovery state) | Server group replaced by `Offline — on-device results only`; the on-device group is unaffected |
+| Result set hit the cap | `Showing the first 50 — refine your query` |
+
+The "recently edited" line is how the D4 staleness bound reaches the user without a per-query
+freshness flag (which would be an oracle).
+
+### D18 — Keyboard and accessibility model
+
+Arrow keys move between rows **across group boundaries** (one list, two headings), Enter opens the
+hit, Escape dismisses and restores focus to the prior surface. Nothing requires a pointer. Group
+headings are `cmdk` group labels, so the seam is announced structurally rather than only visually.
+The result count and the arrival of the server group are announced through one polite live region —
+one, not two, so a late-arriving group does not interrupt a user mid-arrow. Every colour and font is
+a token; the active row uses the wash-plus-rule idiom `mentions` established in I19 (`bg-accent-soft`
+plus a 2 px `--accent-strong` left rule with `text-1`/`text-2` ink) rather than accent-coloured ink,
+because `text-accent-strong` over `--accent-soft` measures 3.94–3.95 in three preset/mode
+combinations — below AA. `styles/contrast.test.ts` already asserts that pairing.
+
+### D19 — Big-feature rule: all three tiers, and the judgement is not close
+
+PROCESS.md §3 asks for all three tiers iff the change touches **≥2 of** {synced entity/schema,
+mutator, permission surface, signature UI}. Counted honestly:
+
+- **Synced entity / schema — partly.** A forward-only migration, a new table, the hand-written Kysely
+  `DB` and the drift test all move. The *Zero schema* does not, and no entity newly syncs. Counted as
+  a schema touch, not a synced-entity touch.
+- **Mutator — no.** H10 removed the mutator wrapper writes entirely; `createServerMutators()` is not
+  opened.
+- **Permission surface — yes, and it is the crux.** A new read path with its own team-scoping
+  predicate, its own admin bypass, and an oracle risk sharp enough that the scope singled it out.
+- **Signature UI — yes.** The command palette is the product's signature surface, plus a new route.
+
+Two unambiguous plus one partial ⇒ **all three tiers**, and E2E is not reflexive here: the *instant*
+half of the falsifiable check is only expressible against the real stack (zero in-flight requests and
+a sub-100 ms paint from a keypress), and cursor stability across an asynchronous group arrival is not
+observable in jsdom.
+
+## Risks / Trade-offs
+
+- **Search becomes an anonymity break** → the single most dangerous failure mode. Mitigated by an
+  allowlist enforced *in Postgres* (D3), by excluding the entire `retro_*` family from both passes
+  (D6), by the drift test's server-only assertion, and by a pg test asserting a distinctive token in
+  a `retro_draft` and in a `retro_card` is invisible to every actor **including a workspace admin**.
+- **A permission oracle by omission** → D9's four defences, each asserted by a test rather than
+  reasoned about. **Residual, and named rather than claimed solved:** timing. A statement timeout
+  bounds the worst case identically for every caller and the scoping predicate is inside the indexed
+  scan, but response *time* can never be made perfectly independent of what is in the database. What
+  is closed is every discrete signal — status, shape, count, ranking, log.
+- **zero-cache destabilised by the new table** → the default publication copies `search_document`
+  into the replica whether Zero knows about it or not. Plain `text` columns keep the type mapping
+  trivial and indexes are not logically replicated, so this should be a non-event — but "should be"
+  is doing work. **This is verified in the compose smoke test before anything is built on top of it
+  (task 2.6), not after.** The fallback (a custom publication) costs a full replica resync on every
+  self-hosted upgrade and is therefore a fallback nobody wants to take.
+- **The on-device pass gets expensive** → walking every synced issue's TipTap description on every
+  keystroke is real CPU at a few thousand issues, and the interaction it would slow is the one this
+  design exists to keep instant. Mitigated by a plaintext cache memoised on `issue.id + updatedAt`,
+  built incrementally as rows are first seen rather than eagerly on the first keystroke, and by the
+  200-row on-device cap. The cost of building that cache is itself unmeasured — task 8.5 measures it
+  and records the number.
+- **Silent index drift** → D13.
+- **The re-arm chain breaks and nobody notices** → the one-minute cron watchdog is the floor, and
+  D13's freshness signal is what makes a persistently-stale index visible.
+- **`cmdk` with `shouldFilter={false}` behaves differently than assumed** → `CommandEmpty` and
+  auto-selection are verified at build time (task 9.6) with an explicit fallback, not assumed.
+- **Scope gravity toward the filter model** → `IssueFilter`, `saved_view` and search all answer
+  "narrow this set". Unifying them mid-build doubles the change and puts the saved-view schema in
+  play. Named a non-goal now precisely so it can be pointed at later.
+- **Two new pg-boss queues on a shared instance** → registered in one independently-gated
+  `registerSearchJobs` block whose failure is caught and logged, exactly as the cycle and
+  notification blocks are, so a bad search cron cannot take cycle rollover or notification email
+  down with it.
+
+## Migration Plan
+
+`0015_search` creates the table and its three indexes only — **no backfill in the migrator**, so an
+existing instance's boot is not blocked by a full index build. On first boot after the upgrade the
+`search-reconcile` pass finds every row missing and converges in bounded batches; until it does,
+the server group returns fewer results and the on-device group is unaffected. Rollback is
+`down()` dropping the table; nothing else in the schema references it.
+
+## How we will know this worked
+
+**The single falsifiable check.** `packages/schema/src/db/search.pg.test.ts`, the scenario
+`"a member of one team cannot tell an out-of-scope hit from a miss"`, run with
+`DATABASE_URL=postgres://yapm:yapm@localhost:5445/yapm pnpm --filter @yapm/schema test search.pg`.
+
+It seeds four distinctive tokens into live Postgres — `qzt-alpha` into a **comment body** on an issue
+in team T1; `qzt-bravo` into an **issue description** in team T2; `qzt-charlie` into a
+**`retro_draft.body`** in T1; `qzt-delta` into a **`retro_card.body`** in T1 — runs the indexer to
+convergence, and then, as a member of T1 only:
+
+1. `qzt-alpha` returns exactly the T1 comment, with a snippet.
+2. The response for `qzt-bravo` (exists, out of scope) is **byte-identical** to the response for
+   `qzt-echo` (exists nowhere).
+3. `qzt-charlie` and `qzt-delta` return nothing — **and nothing to a workspace admin either**.
+4. Re-running the indexer leaves every result set unchanged (idempotency).
+
+On today's `main` this fails at import: `packages/schema/src/db/search.ts` does not exist, and
+`grep -rn "ilike\|tsvector\|to_tsquery" apps packages` returns zero hits. Assertion 2 is the one that
+bites hardest — it is the assertion a plausible-but-wrong implementation (filter after ranking,
+snippet over a pre-filter CTE, 404-vs-empty, count in the payload) fails.
+
+**The second half of the thesis, which only an E2E can check.** `apps/web/e2e/search.spec.ts`: with
+`/api/v1/search` blocked at the route level, press Cmd-K and type a token that appears only in the
+**description** of an issue already synced for the current team. The row is present with **zero
+in-flight requests to the search route** and a `performance` mark under 100 ms from keypress to
+paint, and the "From the server" group renders its offline label instead of hanging. On `main` this
+fails twice over: there is no server route to block, and `matchesText` matches title and issue key
+only, so a description-only token already misses.
+
+**Supporting gates:** the drift test shows `search_document` present in Postgres and absent from the
+Zero schema; the compose smoke test still passes, proving zero-cache replicates cleanly past the new
+table and its GIN expression index; a test asserts the request logger never records the query string;
+and a test asserts no AI path names the table.
+
+**What is not agent-checkable, and belongs to a human.** Whether the two-group seam reads as *honest*
+rather than as *bureaucratic* — whether a first-time user understands why some results arrive late,
+or just sees a palette that looks unfinished — is a judgement no assertion can make. The same is true
+of whether the result rows feel Linear-grade against the Warm mockups, and of the ranking's felt
+quality on a real corpus (the tests can prove the ordering is deterministic; they cannot prove it is
+*good*). These are flagged for review, not automated, and if the answer to the first one is "it reads
+as unfinished", the fix is the labels and the copy — not merging the groups, which H12 already
+decided.
+
+## Open Questions
+
+None blocking. The two the scope left genuinely open are answered above and recorded here so the
+answers are findable: recency is a tiebreak, not a weight (D10); the on-device pass **does** search
+descriptions, behind a memoised plaintext cache whose build cost task 8.5 measures (Risks). Two more
+are resolved by deliberate choice rather than measurement and could be revisited with data: whether
+issues in **archived** teams should be searchable — they are, because `teamScoped` does not filter
+`archivedAt` and search's predicate mirrors `teamScoped` exactly rather than inventing a third
+behaviour (`teams.all`'s `archivedAt IS NULL` filter is a *navigation* concern, and the existing
+inconsistency is pre-existing, now merely visible); and whether search should open a low-TTL synced
+query covering issue titles across all of the caller's teams — no, because Zero has no `select()`, so
+"titles across my teams" necessarily syncs full descriptions too, which is a lot of client data for a
+marginal gain over the server pass that already covers it.
+
+## Decisions made during implementation
+
+<!-- Appended during the build phase: what was ambiguous, what was chosen, and why. -->
+
+### I1 — Task 2.6: the replica survives the new table. Verified, on both paths, before anything was built on top
+
+Run against a `yapm-sr` compose project on ports 5445/4853/3005, from `down -v` (empty volumes),
+`postgres:18` and `rocicorp/zero:1.8.0`, with **no publication change** — the default
+`FOR TABLES IN SCHEMA public` throughout. Both paths that matter were exercised, because they fail
+differently:
+
+**(a) The upgrade path — DDL applied to a live zero-cache.** `migrateToLatest` ran while zero-cache
+was already replicating. The change-streamer logged the `CREATE TABLE search_document` and all three
+`CREATE INDEX` statements off the WAL, and the write-worker applied
+`create-table search_document`, `create-index search_document_pkey`,
+`create-index search_document_team_id_idx` and `create-index search_document_watermark_idx` to the
+SQLite replica. `search_document_fts_idx` — the **GIN expression index** — appears in the
+change-source log and is **absent from the write-worker's applied list**: zero-cache skips it
+silently, with no error and no warning, and reports `"status":"OK","stage":"Replicating"`.
+
+**(b) The fresh-install path — an empty replica against a schema that already contains the table.**
+The `zero-replica` volume was deleted and zero-cache restarted. Initial sync copied the table
+(`Starting binary copy stream of search_document`, `syncMode:"initial"`), recreated its pkey and its
+two btree indexes (`87/106`, `88/106`, `89/106`), skipped the GIN index again, reached
+`stage":"Replicating"` and the container went `healthy`.
+
+**And it serves.** `apps/web/e2e/sync.spec.ts` — 4 tests, including the disconnect/reconnect one —
+passed against that stack (`E2E_SERVER_PORT=3005`, `E2E_ZERO_CACHE_URL=http://localhost:4853`), with
+synced queries over `workspace`, `team`, `team_membership`, `notification`, `workspace_member`,
+`invite` and `user_preference` materializing from the server. So this is "serves synced queries past
+the new table", not "the health check is green".
+
+The one `ERROR` in the log is `getLitestream` → `tryRestore` → `Unexpected undefined value`, which is
+zero-cache looking for a litestream backup that dev has never configured. Pre-existing, unrelated,
+and present on `main`.
+
+**Conclusion: D2 holds and the fallback is not needed.** No custom publication, no
+`ZERO_APP_PUBLICATIONS` change, no full replica resync on upgrade. Plain `text` columns are the
+reason: the tsvector never enters the replication path, and an index is not logically replicated at
+all. The rest of the change can be built on this.
+
+Two smaller facts observed in the same session, both worth having: the GIN index is genuinely used
+(`Bitmap Index Scan on search_document_fts_idx` for a `websearch_to_tsquery('simple', …)` probe, so
+the index expression and the query expression match exactly — the mismatch D11 exists to prevent is
+not present at the default), and **D5's cascade works**: deleting the probe issue removed its
+`search_document` row in the same statement, with no sweep.
+
+### I2 — `score.ts` imports `normalizeQuery` from `./tokenize.js`, against task 1.2's "no imports"
+
+Task 1.2 says the scorer is "pure, no imports". Taken literally, that means `score.ts` re-implements
+`trim().toLowerCase()`, or takes an already-normalised needle and trusts every caller to have
+normalised it. Both are the fork the same task forbids one clause earlier: two normalisations that
+can drift, or a footgun where passing a raw query silently mis-ranks.
+
+So `score.ts` imports exactly one thing, from inside the directory. The property the mission states —
+*"a new directory that imports nothing outside itself"* — is intact and is what
+`scripts/check-boundaries.mjs` and the whole design actually rest on; "no imports at all" was the
+shorthand, not the requirement.
+
+### I3 — A fifth tier, `issue-key-partial`, appended BELOW the four rather than inserted among them
+
+`matchesText` matched a **substring** of the issue key (`filter.ts:71-80`), and the specified ladder
+tops out at "issue-key **exact**". Those cannot both be true of one function: a four-tier ladder
+whose top rung is exact-only either drops key-substring matching — silently narrowing the issue
+list's text filter, a regression in a change that is supposed to widen search — or keeps it as a
+second, un-ranked predicate, which is precisely the fork task 1.2 forbids.
+
+`issue-key-partial` is therefore appended as the lowest tier, and `matchesSearchText` is **defined
+as** `scoreSearchText(...) !== undefined`. Consequences, all wanted: the maintainer's stated ordering
+(issue-key exact > title prefix > title substring > body substring) is untouched; the list filter's
+predicate is byte-for-byte the same set of matches it has always returned; and a query like `ng-1`
+still finds `ENG-12` but ranks below every real title hit rather than above them — which is the
+right answer, because ranking key fragments above titles would put every issue whose key contains the
+letter you just typed at the top of the palette.
+
+`filter.ts` keeps exactly one thing of its own: the blank-needle rule (`text.trim()` empty ⇒ every
+issue matches). That is the **filter's** meaning of an unset text axis, not search's — search returns
+nothing for a blank query — so it stays at the call site rather than being pushed into the ladder.
+
+### I4 — The `@lov`-style word-start case needs no tier of its own
+
+Task 1.6 names it as a case to test without saying what it is. Read against D12, it is the mention
+one: the plaintext projection renders a mention as `@` + the person's resolved name, so typing
+`@lov` or `lov` finds what Lovisa was mentioned on. Plain substring already reaches a word start,
+and the `@` is what makes the intent unambiguous — so the case is a **test**
+(`score.test.ts`, "finds a mention by the start of the mentioned person name") rather than a fifth
+ranking rule. Adding a `title-word-start` tier would have reordered the four the maintainer fixed,
+which was not on offer.
+
+### I5 — The plaintext walker gained exactly one thing: `maxLength`
+
+Task 1.5 says "whatever the indexer and the on-device pass need", which invites scope. Walking the
+existing file against both consumers, everything else was already there: `{mentions: 'label', names}`
+resolves a mention to a person's current name (D12), `extractMentionIds` is how the indexer knows
+whose names to load, and `'strip'` plus its shouting comment stay untouched and mandatory on
+model-facing paths.
+
+What was missing is a **bound**. The indexer writes the result into a row and the on-device cache
+holds one per synced issue, so a pasted 400 KB document must cost a known number of bytes rather than
+however many its author had. `maxLength` truncates *and* short-circuits the walk, so a document
+twenty times the budget does not cost twenty times the work. Omitting it is unbounded, which is what
+the two human-facing callers already wanted — no existing behaviour moved.
+
+### I6 — The allowlist CHECK cannot be tested in isolation, and the test says so instead of pretending
+
+The first version of the drift assertion (task 2.5) expected an out-of-allowlist insert to be
+refused by `search_document_entity_type_check`. It is refused by
+`search_document_entity_shape_check` — because an unknown `entity_type` satisfies neither branch of
+D3's shape CHECK, so both constraints reject the row and Postgres reports whichever it evaluated
+first. There is no insert that violates the allowlist alone.
+
+Rather than reorder the constraints to make an assertion pass, the test now asserts the three things
+that are actually true and actually matter: the row **cannot exist** (SQLSTATE `23514`, from one of
+the two named `search_document` checks — not a foreign-key violation, which would have proven
+nothing about the allowlist); the allowlist's *definition* names `'issue'` and `'comment'` and does
+not name `retro`, `retro_card`, `retro_draft`, `project` or `cycle`; and the shape CHECK bites on its
+own for an **allowlisted** row with the wrong shape (an `issue` document carrying a `comment_id`, a
+`comment` document whose `comment_id` is not its `entity_id`).
+
+### I7 — `search_document` is exported from `@yapm/schema/db`'s type surface now, not when the SQL lands
+
+`SearchDocument` / `NewSearchDocument` / `SearchDocumentUpdate` and `SearchDocumentTable` are
+re-exported from `packages/schema/src/db/index.ts` in this stage even though nothing imports them
+until group 3. The alternative — adding the table to `DB` here and its types two groups later — leaves
+a window where the only way to write the table is with an inline row type, which is how a second
+definition of the row shape gets written. The types cost nothing and the row shape has exactly one
+home from the first commit.
+
+### I8 — The tail queue's policy is `short`, not `exclusive` (D4 corrected against pg-boss 12)
+
+D4 specified pg-boss's **`exclusive`** policy for `search-index`, on the reasoning that "one job
+queued or active" is what makes the self re-arm and the watchdog cron safe to overlap. Built exactly
+that way, it does not work, and it does not fail loudly: **`exclusive` counts active jobs, so the
+re-arm — which is issued from inside the still-active pass — is rejected.** `boss.send` returns
+`null`, the chain dies after exactly one pass, and indexing silently degrades to the watchdog's once
+a minute. A first live run showed one completed `search-index` job and nothing queued.
+
+Verified rather than reasoned about, against pg-boss 12.26.2 on the live stack: a `send` issued from
+inside an active job returns `null` under `exclusive` and a job id under **`short`**.
+
+`short` is "one job **queued**, unlimited active", which is the property actually wanted:
+
+- the re-arm always succeeds, because nothing is queued at the moment the pass ends;
+- a watchdog tick while the chain is alive finds a job already queued and is dropped, so the two
+  arming paths still cannot multiply into two chains;
+- a watchdog tick with nothing queued — the broken chain — enqueues one, which is the whole point of
+  the watchdog.
+
+"Unlimited active" costs nothing here: one worker with `batchSize` 1 runs one pass at a time within a
+process, and two passes racing across replicas write the same idempotent upserts. `search-reconcile`
+stays `exclusive`: it is cron-driven only, never re-arms, and overlapping full diffs are pure waste.
+
+Re-verified live: with a 2-second interval, six passes completed in twenty-five seconds with one
+queued — the cadence D4 promised.
+
+**And the policy is now declared rather than assumed.** `createQueue` is a no-op on an existing
+queue and `updateQueue` cannot change a policy (`UpdateQueueOptions` omits it), so a queue created by
+an earlier build keeps the wrong policy forever — silently, because the wrong policy does not error,
+it just indexes once a minute. `ensurePolicy` reads the queue, drops it if the policy differs, and
+recreates it. Dropping discards queued jobs, which are self-re-arming idempotent passes.
+
+### I9 — The reconcile diff compares timestamps at millisecond resolution, or it never converges
+
+`timestamptz` keeps microseconds; a JavaScript `Date` does not. The projection reads
+`issue.updated_at` into a `Date` and writes it back into `search_document.source_updated_at`, so any
+row whose `updated_at` came from the column default (`now()`) is stored a few microseconds short of
+its source — and `d.source_updated_at is distinct from issue.updated_at` then reports it stale on
+**every** pass, forever. Caught by the first live run of task 4.7's "backfills in bounded batches"
+test: a six-row corpus never drained, spending the entire twenty-second budget re-indexing itself.
+
+The fix is one `date_trunc('milliseconds', …)` on the **source** side of the comparison, in
+`reconcileDiffBatch` and in `searchIndexFreshness`'s un-indexed CTE. Only the comparison is
+truncated: `source_updated_at` still stores the value as read, and the watermark's `>=` re-selects
+the boundary row, which is idempotent by design.
+
+Note the shape of the bug rather than just the bug: it was invisible to correctness — every search
+returned the right rows throughout — and visible only as a job that burns a connection forever. That
+is why the test asserts `stale === 0` on a second pass rather than only asserting the rows are right.
+
+### I10 — `search.pg.test.ts` composes the indexer rather than importing the job
+
+Task 3.6 says "runs the indexer to convergence", and the indexer lives in
+`apps/server/src/jobs/search.ts` — which `packages/schema` may not import (CLAUDE.md #3). The test
+therefore composes the same exported helpers the job composes (`reconcileDiffBatch` →
+`richTextToPlainText` → `upsertSearchDocuments`) in a ten-line local loop, and says so in a comment.
+The job's own behaviour — batching, the watermark tail, FK-violation tolerance, mention-name
+resolution — is asserted where the job lives, in `apps/server/src/jobs/search.pg.test.ts`.
+
+### I11 — The `search` readiness entry needed a non-gating check kind, so one was added
+
+`runReadinessChecks` marks a check failed when its `run()` throws, and any failed check makes
+`/readyz` a 503. A `search` entry built on `replicationCheck`'s shape would therefore take an
+instance out of rotation because the index is behind — exactly what D13 says must not happen. So
+`health.ts` gained `nonGatingCheck(name, probe)`, which reports a probe failure as a detail string
+(`unavailable: …`) instead of an unhealthy process. It is generic rather than search-specific
+because the next operator-facing signal will want the same thing.
+
+### I12 — The route's Zod schema `.catch()`es instead of rejecting, and that is a security property
+
+`q`, `teamId` and `limit` are all validated, but none of them can produce a 400: `q` is any string,
+and the two optional fields fall back to their defaults on anything malformed. A `z.string().min(2)`
+on `q` would have been the natural spelling and would have made a one-character query a **400** while
+a two-character miss stayed a **200** — a status difference a caller can measure, which is the same
+oracle class as a 503-on-timeout. The minimum length is applied afterwards, as a `200` with no
+results, from the shared `isServerSearchable` constant.
+
+### I13 — The falsifiable check did not bite on "filter after ranking", so two assertions were added
+
+Task 3.6 names two plausible-but-wrong implementations the oracle test must catch: a snippet
+generated before the scoping filter, and the scoping filter applied **after** the ranking. Perturbing
+the second one — moving `team_id = any($teams)` out of the indexed scan and into the outer select,
+below the `limit` — left **all thirteen** tests in `search.pg.test.ts` green, and all five in
+`routes.pg.test.ts`. The check did not bite on half of what it was written to catch.
+
+It is a real oracle, not a cosmetic difference. With the filter below the limit, the inner scan ranks
+and truncates the **whole corpus** and the outer select then discards what the caller may not read,
+so out-of-scope rows consume result slots. The caller cannot see those rows — but they can see their
+own results being crowded out, and the count of what is missing is a measure of how many out-of-scope
+rows matched the token. That is the existence of a row leaking as a ranking artefact, which is
+exactly the class §3's invariant forbids.
+
+The existing assertions all missed it because every one of them searched a token that matched
+**either** in scope **or** out of scope, never both. An out-of-scope-only token returns nothing under
+both implementations; the byte-identity assertion is satisfied by two different empty answers.
+
+Two assertions now cover the seam, over a `qzt-hotel` corpus of three T2 matches all newer than a
+single T1 match, so the recency tiebreak deliberately ranks every unreadable row above the readable
+one:
+
+- searched at a limit of three, the member gets the T1 issue and not an empty list;
+- the member's response is byte-identical at every limit from one to four, so no limit exists at
+  which the out-of-scope rows can be felt.
+
+Both fail against the perturbation and pass against the shipped statement. Recorded here rather than
+only fixed, because the gap was in the *test*, and a test that cannot fail is worth less than no test
+— it reports safety it never checked.
+
+### I14 — `packages/ui` gains its first `@yapm/schema` dependency, through a new pure sub-entry
+
+`SnippetText` has to split on the `U+0001`/`U+0002` delimiters, and `splitSnippet` already exists in
+`packages/schema/src/search/snippet.ts` — the file whose whole reason for existing is that the wire
+format has two ends that must agree. Reimplementing the parser in `packages/ui` would put a second
+copy of that format one refactor away from the first, which is exactly the failure D16 exists to
+prevent.
+
+The obstacle is a convention rather than a rule: `issue-row.tsx` states that the design system
+"stays free of a schema dependency", mirroring the delivery vocabulary as plain string unions. That
+reasoning is about *vocabulary* — copying two string unions is free — and does not transfer to a
+parser. But importing from `@yapm/schema`'s root barrel would pull Zero, Kysely and Zod into the
+Ladle bundle for one pure function, which is the real cost the convention was protecting against.
+
+So `@yapm/schema` gained a **`./search` export** pointing at `dist/search/index.js`, and
+`packages/ui` depends on `@yapm/schema` and imports only from there. That directory is documented as
+importing nothing outside itself, so the design system's runtime dependency is a handful of pure
+functions and nothing else — verified: the story chunk built by `ladle build` is 6.5 kB. The
+vocabulary convention is otherwise kept: `SearchResultKind` and `SearchResultState` are plain string
+unions declared in `packages/ui`, and `SearchResultRow` still takes resolved display values only.
+
+### I15 — The snippet highlight is weight and an underline, not a second background wash
+
+The obvious rendering for `ts_headline` output is `<mark>` with a background. It does not work here:
+the active row is *already* painted `--accent-soft`, so a highlight wash on top of it either
+disappears or needs a colour nobody has contrast-tested — and inventing one is how the 3.94 problem
+I19 found gets reintroduced one component over.
+
+The highlight is therefore `font-semibold`, an ink step from `text-2` to `text-1`, and a 2 px
+`--accent-strong` underline. Emphasis without hue (WCAG 1.4.1), on ink pairs already asserted AA
+everywhere. Measured in a real browser against the built showcase, all six preset/mode panels:
+
+| | warm L | warm D | focused L | focused D | editorial L | editorial D |
+|---|---|---|---|---|---|---|
+| title ink on the active row | 12.31 | 11.11 | 15.60 | 12.25 | 16.06 | 13.25 |
+| snippet ink on the active row | 4.86 | 4.98 | 5.29 | 5.49 | 4.81 | 5.26 |
+| highlight underline on the active row | 4.55 | 5.31 | 4.39 | 3.97 | 3.93 | 4.91 |
+| the 2 px rule on the surface | 5.54 | 6.65 | 5.00 | 4.78 | 4.55 | 5.83 |
+
+Every ink pair clears 4.5; the underline, a non-text indicator, clears 3.0 with margin. The same
+pairs are now asserted in `styles/contrast.test.ts` over both `--bg` (the `/search` route) and
+`--bg-elevated` (the palette), so a future token edit fails a test rather than a screenshot.
+
+The same browser pass confirmed the rest of the row contract: `text-overflow: ellipsis` with
+`white-space: nowrap` on the title, `border-left-width: 2px` on the active row, `background:
+rgba(0,0,0,0)` on every `<mark>`, and `<script>`/`<img onerror=…>` inside a snippet rendered as
+escaped text with zero elements created.
+
+### I16 — `SEARCH_BODY_MAX_LENGTH` moved from `apps/server` into the shared core
+
+The indexer bounded its projection at 20 000 characters; the on-device cache needs the same bound
+for the same reason. Two constants would mean a token past one cut but not the other — the two
+passes disagreeing about what a document contains, which is the single property
+`packages/schema/src/search/` exists to guarantee. The constant now lives in
+`search/document.ts` with the reason on it, and `apps/server/src/jobs/search.ts` imports it. No
+behaviour moved.
+
+### I17 — The on-device pass reads a mention's STORED label; the server pass is what stays current
+
+`richTextToPlainText(doc, {mentions: 'label'})` resolves a mention through a supplied id→name map
+and falls back to the label stored on the node. The indexer supplies the map (D12) so a rename
+propagates. The client hook does **not**: supplying it would mean subscribing to every user from the
+corpus hook — an eighth subscription, outside the set this change specified — to fix a case the
+server pass already indexes correctly.
+
+The consequence, stated rather than discovered: immediately after somebody is renamed, their new
+name finds their mentions through the server group and their old name finds them on-device, until
+the mentioning document is next edited. Both groups are labelled, which is the seam H12 asked to be
+shown, working as designed.
+
+### I18 — Task 8.5 measured: the keystroke costs ~1 ms, and the walk was never on the keystroke path
+
+Measured by `apps/web/src/search/corpus-cost.test.tsx`, which seeds 3 000 issues each carrying a
+four-paragraph description (~120 words) and drives the real hook. Three runs, same machine:
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| cold corpus build (walks all 3 000 documents) | 8.9 ms | 8.6 ms | 8.9 ms |
+| **first keystroke** | 1.00 ms | 2.23 ms | 1.04 ms |
+| **steady-state keystroke** (mean of 8) | 1.22 ms | 1.03 ms | 1.21 ms |
+| rebuild after one description is edited | 1.4 ms | 1.2 ms | 1.2 ms |
+
+The stated fallback — building the cache lazily per matched row — **is not needed and is not
+taken**. The number that decides it is the first keystroke at 1–3 ms against a 100 ms budget.
+
+Two things the numbers say that the plan did not anticipate. First, the walk is not on the keystroke
+path at all: the cache is filled in the corpus memo, which runs when a synced query *delivers*, so
+"first keystroke" measures ranking over already-extracted text rather than extraction. Second, the
+cost that does exist — 8.9 ms to walk 3 000 documents cold — lands once, on the render that first
+receives the rows, and is itself well inside the budget; a lazy-per-row scheme would have traded
+that single 9 ms for a variable cost inside the interaction it is meant to protect.
+
+The test keeps a 100 ms ceiling on the three interactive numbers, so the budget is a gate rather
+than a note. It is deliberately ~30–100× the observed value: the point is to catch an accidental
+per-keystroke walk, not to police a millisecond on a loaded CI box.
+
+### I19 — The abort guard inside the fetch continuation is defence no test can isolate, and it stays
+
+`useServerSearch` has two defences against a superseded response: `AbortController` per query, and a
+comparison of the answered key against the live input. Perturbing them one at a time showed the
+guard inside `.then` (`if (controller.signal.aborted) return`) is the only one whose removal breaks
+**nothing** — every reachable ordering that reaches it produces an answer whose key the comparison
+then rejects anyway. The three other perturbations each fail tests: dropping the key comparison
+fails four, dropping the client-side minimum-length check fails one, dropping the abort on cleanup
+fails two.
+
+It is kept rather than deleted, with the reason written on it. Removing it would make correctness
+rest entirely on the key comparison being complete for every future caller of this hook, and the
+check costs one property read. Recorded because a line no test defends is a line the next reader is
+entitled to know the status of.
+
+### I20 — Two states, not one, for "no server answer yet"
+
+D17 lists the states but not the rule that decides between them, and the obvious reading — show the
+last answer until a new one lands — is wrong: the spec requires the group to show results only for
+the query currently in the input. So `useServerSearch` compares the answered key against the live
+(not debounced) input and reports `searching` with an empty list whenever they differ. Typing one
+more character therefore empties the server group immediately rather than leaving the previous
+query's hits under a new query, and no result ever renders under a label it does not answer.
+
+`offline` reads `ConnectionSummary.writable`, which is true for exactly `connected` and `connecting`
+— so a client still dialling on boot reads as searching rather than flashing "offline" at somebody
+who is merely early. That is the *existing* connection state, per the local-first-sync spec, not a
+second notion of online invented here.
+
+### I21 — A control character in a string literal must be written as an escape, not as a raw byte
+
+`useServerSearch` joins `limit`, `teamId` and `query` into one comparable answer key. The separator
+has to be a character that cannot occur in a team id or a typed query, so `U+0000` is the right
+choice — but the first implementation emitted it as a **literal NUL byte in the source file**.
+
+That is a build-invisible defect: it compiles, it type-checks, it passes every test. What it breaks
+is everything that reads the file as text. Git classifies the file as binary and prints `Bin 0 ->
+4731 bytes` instead of a diff, so it cannot be reviewed line by line; `grep` and ripgrep both skip
+it as binary, so it silently disappears from every repo-wide search — including the greps this
+change relies on to prove no AI path and no retro path reads the index.
+
+Written as `\u0000` the runtime value is byte-identical and the file is text again. The reason is
+recorded on the line itself, because the raw byte is the form an editor produces by default and
+nothing in lint, typecheck, test or build objects to it.
+
+Worth generalising: the repo has no gate for this. Every other source file under `apps/`,
+`packages/` and `openspec/` was checked and is NUL-free, so the rule is currently upheld by
+convention alone.
+
+### I22 — Task 9.6: `cmdk` 1.1.1 behaves as D8 assumed, verified against the shipped source
+
+Both assumptions hold, checked in `node_modules/.pnpm/cmdk@1.1.1/…/dist/index.mjs` rather than
+inferred from the docs, and then asserted in `apps/web/src/issues/command.test.tsx`.
+
+**`CommandEmpty` counts mounted items.** The internal filter routine short-circuits with
+`if (!search || shouldFilter === false) { filtered.count = items.size; return }`, where `items` is
+the set of item ids added on mount and deleted on unmount, and both the mount and unmount paths
+schedule it. `CommandEmpty` renders on `filtered.count === 0`, so with `shouldFilter={false}` it
+still tracks exactly what the application chose to render. The test drives the label page down to
+zero rows and back to prove it.
+
+**A controlled `value` survives an appended group.** The scorer's re-sort returns early under
+`shouldFilter === false`, so no DOM reordering happens at all; and the mount path only reaches its
+"select the first item" fallback via `state.value || selectFirst()`, which a non-empty controlled
+value skips. Appending the server group therefore cannot move the cursor.
+
+Neither fallback in 9.6 was needed. The palette still renders its own both-empty state, for a
+different reason: the escalation row is always mounted while there is a query, so `filtered.count`
+is never zero on the launcher page and `CommandEmpty` correctly stays silent there.
+
+### I23 — The escalation row sits ABOVE the server group, not below it
+
+Task 9.5 does not fix the row's position and the natural reading — a persistent row pinned to the
+bottom — is wrong here. Server results are appended last, so anything below them is pushed down
+every time the group answers. That is the same reflow under the cursor that H12's two-group seam
+exists to prevent, just at the other end of the list: arrow onto `Search everything for "q" →`
+during the 150 ms debounce and it would slide away as the answer lands.
+
+So the order is: action groups, `On this device`, the escalation row, the divider, `From the
+server`. The invariant it buys is the strong one — **every** append is strictly at the end of the
+list, and no rendered row ever changes index. `command.test.tsx` asserts the full prefix of the row
+list is unchanged across the server answering, not merely that the active row's identity survived.
+
+### I24 — `CommandProvider` lost `teamKey` and `onOpenIssue`, because the palette can now cross teams
+
+The old jump list was the open team's `issues` prop, so `onOpenIssue` could assume the surface's
+team and `teamKey` could format the key. The on-device pass reads `issues.mine` too, which spans
+every team the caller belongs to, so a palette hit can belong to another team and opening it under
+the surface's team would produce a URL for an issue that is not there.
+
+Both props are therefore gone. Navigation goes through `useOpenSearchResult`, which reads the team
+from the **row**, and the issue key comes from the corpus, which resolves it against `teams.all`.
+For a same-team issue the URL is byte-identical to the one `onOpenIssue` produced, so nothing about
+the existing path changed except who computes it. `issue-list.tsx` keeps its own `onOpenIssue` for
+its own rows.
+
+### I25 — Escape on `/search` returns rather than dismisses, because there is nothing to dismiss
+
+The command-palette spec's Escape scenario is about a dialog: dismiss, restore focus. The full route
+is not a dialog, and the shared cursor rule guarantees an active row whenever rows exist — so
+"release the cursor" is not a state the surface can be in. Two candidate meanings remain: clear the
+query, or return.
+
+It returns: focus to the input, cursor to the first row, query untouched. Clearing somebody's query
+on Escape is the destructive reading of an undo-shaped key, and the query is in the URL, so clearing
+it would also rewrite history. Recorded because task 10.4 says "Escape returns focus" and this is
+the reading chosen.
+
+### I26 — Which on-device kinds each surface can open, and the one row with no URL of its own
+
+`useLocalSearchCorpus` yields five kinds, and a result must be openable or Enter becomes a key that
+sometimes does nothing. Resolution, in `search/results.ts`:
+
+- **issue** → its own team's list with the issue open. Cross-team correct (I24).
+- **team** → that team's issue list.
+- **project** → `/teams/$teamId/projects?open=`. Projects are workspace-level but their view is only
+  mounted under a team route, so the team is the surface's: the open team in the palette, and on
+  `/search` the first team in `teams.all`'s stable ordering. The view it opens is workspace-level
+  either way, so the choice changes the header and nothing else.
+- **cycle** → that team's cycles. Only reachable when a team is in context, which is exactly when
+  the corpus subscribes to `cycles.byTeam`.
+- **label** → the team's issue list. **A label has no URL of its own**: the issue list's filters are
+  component state, not search params. The alternative was to drop label rows, which would make a
+  subscription task 8.2 mandates contribute nothing. One line in `localSearchRow` changes if a
+  label-scoped URL ever exists.
+
+A row whose team cannot be resolved is dropped rather than rendered inert.
+
+### I27 — The header entry is in `AppShell`, and the team surfaces reach `/search` through Cmd-K
+
+Task 10.3 puts the entry "beside the inbox badge", which is in `AppShell` — used by `/`, `/inbox`
+and the settings routes. The team routes (`issues`, `board`, `cycles`, `projects`, `roadmap`,
+`triage`, `retros`) each build their own header and carry no inbox badge either, so "reachable
+everywhere" is served by two doors, not one: the shell's link on the shell surfaces, and Cmd-K's
+`Search everything for "q" →` row on the team surfaces, which is where the palette is mounted.
+
+Still **one** keybinding. Adding a second entry point to the team headers would be a UI change to
+seven routes for a path Cmd-K already covers, and adding a `/` shortcut is refused outright.
+
+### I28 — `ownsKeyboard` guards the one window-level handler `/search` installs
+
+Task 10.4 requires `ownsKeyboard` to be respected, which needs something to respect it. The route
+handles Arrow/Enter/Escape/Home/End on the input itself — nothing global — so the only window-level
+handler is *type-to-focus*: a printable single character with no modifier moves the caret into the
+query field, and `ownsKeyboard(event.target)` refuses when another field, an open dialog or a
+listbox already owns the keyboard. It adds no shortcut and no keybinding; it makes the route usable
+after Tab has taken focus to the header. Asserted both ways in `search-view.test.tsx`.
+
+### I29 — The URL settles 400 ms behind the keystroke, and it settles with `replace`
+
+The query is in the URL so a search is shareable and Back is correct. Writing it per keystroke would
+put one history entry per character in front of the page the caller came from — Back would become a
+backspace key. So the route debounces the URL write by 400 ms (longer than the 150 ms server
+debounce, which is the one that has to feel instant) and uses `replace: true`. The entry the caller
+arrived on stays the one Back returns to, and a `q` arriving from outside — a shared link, a Back,
+the palette's escalation row — always wins over local input state.
+
+### I30 — The palette requests five server rows, so it suppresses D17's cap line
+
+`useServerSearch(query, { limit: 5 })` in the palette means `truncated` is true for almost every
+non-trivial query, and `Showing the first 50 — refine your query` would then be both factually
+wrong (it is showing five) and noise on a launcher whose entire answer to "there is more" is the
+escalation row directly above the group. So the palette passes `truncated: false` into the state
+mapper, with the reason on the line.
+
+D17's cap line is a `/search` state: the route requests `SERVER_RESULT_LIMIT` and shows it over the
+full fifty. This costs nothing in oracle terms — `truncated` is computed over post-scoping rows only
+on both surfaces, and suppressing a line can never reveal a row — and it is why the palette test
+asserts every other D17 state but not this one.
+
+### I31 — Controlling the cursor moved its lifetime too, so `useSearchCursor` took a session key
+
+Task 9.2 says control the palette's cursor. Doing that moved the state from `cmdk` — which holds it
+inside the `Command` element, and the dialog unmounts that element when it closes — into
+`CommandProvider`, which wraps the whole issue list and never unmounts. The identity rule then
+carried a cursor across a close: reopen after running `Go to inbox` and that row was still active,
+because `start()` cleared the search but the row was an action row and so had never left `rowIds`
+for the fallback to fire. A bare Cmd-K then Enter would re-run the last thing you ran instead of
+`New issue` — including `Mark all notifications as read` and the triage rows. The palette spec says
+every behaviour it already guarantees is unchanged; this one was not.
+
+The fix is at the lifetime, not at the symptom. A caller that outlives the list it describes has to
+say when a cursor stops meaning anything, so `useSearchCursor(rowIds, sessionKey)` takes an opaque
+key and treats a change of key as "no selection", falling through to the same first-row rule that
+already handles a vanished row. `CommandProvider` bumps a counter in `start`, which is the single
+entry point for both opening the dialog and moving to a sub-page — so a sub-page opens on its own
+first row too. `/search` passes no key: it is a route, it unmounts when you leave it, and its
+lifetime is already the one its cursor should have.
+
+Three tests in `command.test.tsx` cover it, and all three were confirmed to fail with the second
+argument removed: reopening after executing an action, reopening after Escape with the cursor moved
+onto an action row that still exists on reopen (so the fallback cannot mask it), and a sub-page
+reopening on its own first row. The first also asserts the consequence rather than only the state —
+Enter on the reopened palette opens the new-issue composer.
+
+Worth naming for the next surface that controls a cursor: no gate catches this. Lint, typecheck and
+the whole suite were green with the defect present, because every existing cursor test drove one
+continuous session.
+
+### I32 — AI isolation is asserted at the SYMBOL, not at the import, because the barrel makes imports unenforceable
+
+Task 6.6 asks that no AI path "imports `db/search.js` or names `search_document`". The first half
+cannot be checked as written: `packages/schema/src/db/index.ts` re-exports every search helper, so
+`apps/server/src/ai/digest.ts` importing `@yapm/schema/db` for `cycleFacts` already "imports" the
+search module in every sense a module graph can see. Checking the import edge would therefore be
+either vacuous or a false positive, and neither is worth a test.
+
+What is checkable is the symbol. `apps/server/src/search/isolation.test.ts` derives the forbidden
+list from `db/search.ts`'s own `export` statements — so a helper added there is covered by the guard
+on the day it is written, without anyone remembering to extend a hand-listed array — adds the two
+literals that reach the table without naming an export (`search_document` and the module path), and
+asserts no file under `apps/server/src/ai/` nor any of the four shared modules names one. Two
+guards keep it honest: the derived list is asserted non-empty and to contain three known names, and
+the same matcher is run over `db/search.ts` and `search/routes.ts`, which must both trip.
+
+Verified by perturbation: appending `const leak = searchDocuments` to `apps/server/src/ai/digest.ts`
+fails it, and adding a `search: { reindex }` group to `defineMutators` fails the 6.5 assertion
+beside it. The second needed `pnpm --filter @yapm/schema build` first — `apps/server` resolves
+`@yapm/schema` through `dist`, so a source-only perturbation of the registry proves nothing.
+
+### I33 — Tasks 6.3, 6.4 and 6.7 needed three actors, six rows and the whole app, not three more assertions
+
+Each of the three would have passed vacuously in its obvious form.
+
+**6.3** is not a scoping question, so seeding the retro in the caller's *own* team is what makes it
+one about the indexable allowlist. The three actors are the member, the retro's **facilitator** and
+the **workspace admin** — the three with the strongest claim on that text — and `retro_card_author`
+is written too, so the anonymity binding exists to be leaked. A second test asserts those same three
+actors *do* get a row for an indexable token, because otherwise the silence proves only that they
+can see nothing at all.
+
+**6.4** needs rows the caller may not read that match the *same* token: three in scope and three out.
+`truncated` is then false at `limit=4` while six documents match, and the admin's six-row response in
+the same test is what proves the other three exist. Perturbed both ways — `truncated: true` fails
+five tests, `truncated: false` fails two — so neither direction of the flag can rot unnoticed.
+
+**6.7** drives the request through `createApp`, not through the search router, because the middleware
+one line from making the promise false is the *request logger*. Changing `path: c.req.path` to
+`c.req.url` in `app.ts` fails it; the assertion also requires the app to have logged at all, and
+covers the hit, the miss, the statement timeout and the 401.
+
+### I34 — The e2e tier measured 7.5 ms keypress-to-paint, and the index interval is pinned at 2 s for it
+
+`apps/web/e2e/search.spec.ts` measures the instant half on the same clock the page uses: an init
+script timestamps every `fetch` to `/api/v1/search`, a capture-phase `keydown` listener starts the
+clock, and a `MutationObserver` plus one `requestAnimationFrame` stops it at the frame the row
+renders in. The measured interval, with the search route blocked at the Playwright level, is
+**7.5 ms** against the 100 ms budget — read by temporarily asserting `toBeLessThan(0.0001)`, which
+is also what proves the measurement is not zero-valued and vacuous.
+
+The keystroke is a **Backspace** on `<token>z`, not the last letter of the token: the on-device pass
+is a substring match, so every prefix of a token already matches and there is no "first character
+that produces the row". Deleting one trailing character is the only single keystroke that takes the
+row from absent to present.
+
+Two assertions bracket the request rather than one: no request had been issued at paint time, **and**
+one is issued afterwards. Without the second, a build that never asks the server anything would pass.
+
+`playwright.config.ts` now sets `SEARCH_INDEX_INTERVAL_SECONDS: '2'` beside the existing
+`CYCLE_MAINTENANCE: 'false'`. The specs still wait on the `search_document` row rather than on a
+sleep — the client issues one request per settled query and does not retry a miss, so a surface
+polled before the indexer ran would stay empty forever and time out for the wrong reason — but at
+the ten-second default that wait dominates the suite.
+
+One flake was found and fixed while running the four tests together: reading an issue back from
+Postgres immediately after the UI clears `data-pending` failed once in four runs, because clearing
+that attribute means the *client* saw the synced row, which is one replication hop behind the
+commit. The lookup is now polled with a 20 s ceiling, so it still fails when the row genuinely is
+not there.
+
+### I35 — PROCESS.md names a mechanical `.env.example`-vs-Zod drift check that does not exist; verified by hand instead
+
+Task 12.4 says "confirm the mechanical drift check against the Zod schema passes", and PROCESS.md §2
+claims "mechanical checks catch the detectable cases (`.env.example` vs the Zod schema; ROADMAP
+status vs archived changes)". Neither exists. `scripts/` holds `check-boundaries`, `check-catalog`,
+`check-commit-msg`, `check-image-manifests`, `dev` and `smoke`; nothing greps `.env.example`, and no
+CI workflow does either. The claim is aspirational.
+
+Writing the script was rejected for this stage: a docs assignment adding a merge-blocking gate is a
+tooling change nobody reviewed, and getting its exemption list right (the eleven compose- and
+build-only variables in `.env.example` that never appear in the server's Zod schema —
+`POSTGRES_*`, `*_HOST_PORT`, `*_IMAGE`, `ZERO_ADMIN_PASSWORD`, `ZERO_LOG_LEVEL`,
+`VITE_ZERO_CACHE_URL`; and the five compose-derived ones in the schema that must NOT be in
+`.env.example` — `NODE_ENV`, `HOST`, `PORT`, `DATABASE_URL`, `WEB_DIST_DIR`) is a judgement about
+each variable, not a one-liner.
+
+So the check was run by hand against `EXPECTED_FORMAT` — the schema's own description map, which
+`env.test.ts` already ties to the schema — and recorded here: **41 documented variables, zero
+missing from `.env.example`, zero present in `.env.example` that the schema does not know about**
+(beyond the eleven listed above). All five `SEARCH_*` variables appear in the schema, in
+`EXPECTED_FORMAT` and in `.env.example`, with matching defaults.
+
+Worth naming for whoever writes the real script: it needs both directions and both exemption lists,
+or it will fail on day one against a file that is correct.
+
+### I36 — `reference/server-stack.md` gained the pg-boss finding I8 paid for, because the policy table alone does not predict it
+
+The reference's queue-policy table is verbatim from pg-boss's docs and is not wrong. It is also not
+enough: nothing in "`exclusive` — only allows 1 job to be queued or active" tells you that the
+*self-re-arming worker* pattern silently dies under it, because the re-arm is issued from inside the
+job that is still counted as active. That cost a live debugging round in this change (I8) and the
+next feature to want a sub-minute cadence would pay it again.
+
+Two `VERIFIED` paragraphs were added to §6.4: the `short`-not-`exclusive` rule for self-re-arming
+workers with the measured evidence (`send` from inside an active job returns `null` under
+`exclusive`, a job id under `short`, pg-boss 12.26.2), and the companion trap that `createQueue` is
+a no-op on an existing queue while `updateQueue` cannot change a policy — so a policy fix does not
+reach an upgraded instance unless the queue is read back and reconciled, which is what `ensurePolicy`
+in `apps/server/src/jobs/scheduler.ts` does.
+
+`cmdk` got no reference entry: it has none today, and I22's findings are recorded above and asserted
+in `command.test.tsx`, which is where a behavioural claim about a rendering library belongs.
+
+### I37 — ROADMAP's "V1 is not complete" paragraph is now "V1 is now complete", which is a claim worth being deliberate about
+
+Task 12.7 asks for the paragraph "whose second bullet this change closes". Closing the second bullet
+makes both bullets closed, so the paragraph's opening sentence had to move too — and "V1 is now
+complete" is a stronger statement than a status-row flip.
+
+It is made anyway, and scoped: it means *the locked v1 scope in this document* is built, which the
+next paragraph already says ("what remains is AI *features* on the change-9 foundation … not core
+project management"). The two entries under **Known gaps** — one-command export and attachments —
+are explicitly *not* v1 scope and stay exactly where they are. The claim is about the locked scope,
+not about the product being finished, and the surrounding text is what keeps that honest.
+
+Also corrected in the same pass, because they were made false rather than merely stale by this
+change: the order-rationale sentence that named `search`'s two unmeasurable risks now records that
+both were measured (H10 removed write amplification; zero-cache was verified to replicate past the
+new table and its GIN expression index from empty volumes), and the Search gap bullet's own
+evidence — a grep for `ilike|tsvector|to_tsquery` returning nothing — is marked as no longer holding
+rather than left standing as a live finding.
+
+### I38 — §6's H9–H13 got ANSWERED blockquotes, not only §2.3's corrections
+
+Task 12.8 names only `openspec/SCOPE-v1-gaps.md` §2.3. But §6 is the register of decisions that
+"needs a human", and `mentions` set the precedent of writing the answer back into it as a blockquote
+under the question (H6, H7, H8). Leaving H9–H13 reading as open blockers after they were answered
+and built would make the register wrong about the one thing it exists to track — and the answers to
+H10 and H12 are exactly the ones a future reader is most likely to try to relitigate.
+
+So all five carry an `ANSWERED` blockquote in the established shape: what was decided, the reason in
+one or two sentences, and where it was built. Three §2.3 bullets were struck through in place beside
+them (the `createServerMutators()` maintenance bullet superseded by H10, the `Results` /
+`Search everywhere` labels superseded by H12, and the local-only entity list that still named retros
+and saved views), plus one that no answer superseded but the build corrected: the reconcile is its
+own `search-reconcile` cron rather than being folded into `cycle-maintenance`, which an operator can
+switch off with `CYCLE_MAINTENANCE=false`.
+
+### I39 — Task 13.4: both named perturbations bite, and neither bites where it was expected to
+
+The two plausible-but-wrong implementations task 13.4 names were built and run against the shipped
+tests, one at a time, on the integrated branch:
+
+- **Snippet generated before the scoping filter.** `ts_headline` moved into the inner select over
+  `d.body`, the `team_id = any($teams)` predicate moved out of the indexed scan and into the outer
+  `where`. Result: `search.pg.test.ts` **2 failed / 13 passed** — `does not let higher-ranked
+  out-of-scope rows crowd out an in-scope one` and `returns the in-scope row identically at every
+  limit the out-of-scope rows could fill`.
+- **A 503 on timeout.** The catch arm returning `c.json({error}, 503)` instead of `EMPTY`. Result:
+  `routes.pg.test.ts` **2 failed / 8 passed** — `returns one identical response for every non-401
+  outcome` and `emits not one line carrying the query, on a hit, a miss, a timeout or a 401`.
+
+Worth recording: the snippet perturbation is caught by the **same two assertions I13 added for the
+filter-after-ranking case**, not by anything about snippets. Both wrong implementations are the same
+defect wearing different clothes — the scoping predicate leaving the indexed scan — and the only
+assertions that see it are the ones that search a token matching on *both* sides of the boundary.
+Every "is the snippet right" assertion in the file passes under the perturbation, because the
+snippets the caller receives are correct; it is the ones they never receive that cost them a slot.
+A reviewer tempted to delete the `qzt-hotel` corpus as redundant should read that sentence again.
+
+On `main` the check cannot pass at all: `git grep` for `api/v1/search`, `search_document` and
+`useLocalSearchCorpus` outside `openspec/` returns only `ROADMAP.md`'s planning line. The route, the
+table and the on-device hook do not exist there, so `search.spec.ts` and both `.pg.test.ts` files
+fail on absence rather than on behaviour.
+
+### I40 — Two prior e2e specs asserted on a substring name the escalation row now also matches
+
+The full Playwright suite failed in six places on the integrated branch, all one cause:
+`getByRole('option', { name })` is a substring match, and the palette's persistent
+`Search everything for "…" →` row echoes the typed query back, so every option looked up by the text
+that was typed to filter to it now resolves to two elements.
+
+The product behaviour is the intended one (task 9.5's row is meant to be there, and D15 wants the
+escape hatch visible for every query), so the fix is in the specs: `triage.spec.ts` matches the
+action name with `exact: true`, and `notifications.spec.ts`'s `choose()` excludes the row by text
+rather than by an exact name, because its assign rows carry more than the label they are looked up
+by. Both were verified against the real stack: 71 passed, 0 failed.
+
+The cursor was never at risk — the escalation row is appended below the actions and the palette's
+controlled `value` kept the action row selected throughout — so this was an assertion that had gone
+ambiguous, not a regression in what Enter does.
+
+### I41 — `rank-collation.test.ts` was 510 round-trips inside a 5-second timeout
+
+The first full `turbo test` run against empty volumes failed on `packages/schema/src/db/
+rank-collation.test.ts` at 5005 ms against vitest's 5000 ms default. It is untouched by this change,
+but it inserted its 510 probe rows one statement at a time while every other suite in the repo ran
+its Postgres tier concurrently, and `search` adds three of those suites.
+
+Batching the inserts into a single multi-row `insert` took the test from 5005 ms to 70 ms. The
+shuffle that makes the assertion meaningful is preserved — the rows still arrive in a random order
+and Postgres still has to sort them — so nothing about what is proven changed, only how long a
+pooled connection is held. Recorded because it is an unrelated file touched by this change, and
+because the diagnosis (connection hold time under suite-wide concurrency, not the assertion) is what
+makes the edit safe.
+
+### I42 — One suite's index reconcile was healing another suite's fixture, because the diff is global and the database is not
+
+A full `turbo test` run failed `apps/server/src/jobs/search.pg.test.ts` › `misses a backdated row in
+the tail and heals it in the reconcile`, with the backdated title already healed *before* the
+reconcile that is supposed to heal it. It passed when the package was run alone, and passed on the
+next five turbo runs — a real race, not a flake to be re-run away.
+
+The cause: `packages/schema/src/db/search.pg.test.ts`'s `indexToConvergence` composed the shipped
+helpers (I10) but called `reconcileDiffBatch` **unscoped**, and the reconcile diff is global by
+design — it asks "which rows in this database disagree with their document". Every Postgres suite in
+the repo shares one `DATABASE_URL`, and turbo runs `@yapm/schema#test` and `@yapm/server#test`
+concurrently, so that upsert re-indexed rows the file did not own, including the issue the server
+suite had just deliberately backdated.
+
+Demonstrated rather than reasoned about. A foreign issue was made stale by hand, then:
+
+- with the scoping in place, `search.pg.test.ts` ran green and the foreign document still read
+  `Board card ms2plmqt-8h4t`;
+- with the scoping removed, the same run left it reading `FOREIGN STALE PROBE`.
+
+`ReconcileDiffOptions` gained an optional `teamIds` narrowing, which the reconcile pass itself never
+passes. It is production surface added for a test, which is worth being explicit about: the
+alternative is a test that writes rows it does not own, and the same narrowing also protects the
+schema suite from itself — the diff orders by id, ids are UUIDv7, so the newest rows sort last and an
+unscoped `limit: 200` over a large shared database would drop this fixture first.

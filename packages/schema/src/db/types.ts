@@ -554,6 +554,34 @@ export interface IssueSubscriptionTable {
   updated_at: Timestamp
 }
 
+// SERVER-ONLY. The searchable projection of the two allowlisted entity types — in this interface
+// and in the migrations, deliberately ABSENT from the Zero schema (asserted by the drift test
+// beside `retro_card_author`), so no synced query can name it.
+//
+// NEVER AN AI DATA SOURCE. `body` holds the plaintext of every indexed description and comment,
+// including colleagues' names resolved from mention nodes. The AI substrate's guarantee is that a
+// model is fed only team-level aggregates that structurally cannot name a person; a searchable
+// projection of every document is exactly the shape that would break it. `richTextToPlainText`'s
+// `'strip'` mode stays mandatory on model-facing paths — search is not one, which is precisely why
+// it must not become one.
+//
+// `title`/`body` are plain text and DB-defaulted to `''`; the weighted `tsvector` exists only
+// inside the GIN index expression, so nothing exotic enters the replication path. `team_id` is
+// denormalised off the owning issue and is sound only because an issue can never change team.
+export interface SearchDocumentTable {
+  entity_type: 'issue' | 'comment'
+  entity_id: string
+  team_id: string
+  issue_id: string
+  comment_id: Nullable<string>
+  title: Generated<string>
+  body: Generated<string>
+  // The source row's own `updated_at`, copied verbatim — never `now()`. Both the incremental
+  // watermark and the reconcile's staleness diff compare against it.
+  source_updated_at: Timestamp
+  indexed_at: Generated<Timestamp>
+}
+
 // Owned by better-auth (created by its `getMigrations()` at boot), read-only here so
 // mutators/queries can join member profiles. camelCase columns and a `text` id are
 // better-auth's shape (reference/kysely-stack.md §5.4), not ours to change.
@@ -604,6 +632,7 @@ export interface DB {
   retro_presence: RetroPresenceTable
   notification: NotificationTable
   issue_subscription: IssueSubscriptionTable
+  search_document: SearchDocumentTable
   user: UserTable
 }
 
@@ -734,5 +763,9 @@ export type NotificationUpdate = Updateable<NotificationTable>
 export type IssueSubscription = Selectable<IssueSubscriptionTable>
 export type NewIssueSubscription = Insertable<IssueSubscriptionTable>
 export type IssueSubscriptionUpdate = Updateable<IssueSubscriptionTable>
+
+export type SearchDocument = Selectable<SearchDocumentTable>
+export type NewSearchDocument = Insertable<SearchDocumentTable>
+export type SearchDocumentUpdate = Updateable<SearchDocumentTable>
 
 export type User = Selectable<UserTable>

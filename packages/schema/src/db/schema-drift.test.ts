@@ -402,6 +402,21 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },
+  // SERVER-ONLY, and the second table whose absence from the Zero schema is a guarantee rather
+  // than an optimisation: it holds the plaintext of every indexed description and comment. Its
+  // text columns are plain `text` — the weighted tsvector lives only inside the GIN index
+  // expression — so nothing exotic reaches the replication path.
+  search_document: {
+    entity_type: { nullable: false, hasDefault: false },
+    entity_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    issue_id: { nullable: false, hasDefault: false },
+    comment_id: { nullable: true, hasDefault: false },
+    title: { nullable: false, hasDefault: true },
+    body: { nullable: false, hasDefault: true },
+    source_updated_at: { nullable: false, hasDefault: false },
+    indexed_at: { nullable: false, hasDefault: true },
+  },
   user: {
     id: { nullable: false, hasDefault: false },
     name: { nullable: false, hasDefault: false },
@@ -486,6 +501,10 @@ describe('server-only tables are excluded from the Zero schema', () => {
       // The crux of the retro's anonymity guarantee: if this table ever appears in the Zero schema,
       // an anonymous card's author becomes syncable and the guarantee is a lie. Merge-blocking.
       'retro_card_author',
+      // The searchable projection of every description and comment. If it ever appears in the Zero
+      // schema, every client replicates the full text of every team it can read — and the
+      // team-scoped predicate that guards the search route stops being the only way in.
+      'search_document',
     ]) {
       expect(Object.keys(KYSELY_DB)).toContain(name)
       expect(zeroTables).not.toContain(name)
@@ -665,6 +684,82 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
     // The deliberate contrast, asserted rather than merely commented: `kind` must stay widenable
     // for the price of a TypeScript union member, so it carries no CHECK.
     expect(await checkConstraints(database.db, 'notification')).toEqual([])
+  })
+
+  // The natural key again, and for the same reason: the indexer's multi-row
+  // `on conflict (entity_type, entity_id) do update` mints nothing, so re-running any pass is
+  // idempotent by construction. Column ORDER matters — it is the conflict target.
+  it('keeps the search_document natural key as a two-column primary key, in order', () => {
+    expect(pkByTable.get('search_document')).toEqual(['entity_type', 'entity_id'])
+  })
+
+  // The allowlist is the security property, so it is enforced in Postgres rather than only in
+  // TypeScript — the deliberate inversion of `notification.kind`'s no-CHECK precedent. The shape
+  // CHECK is the other half: it makes the entity/FK invariant a database fact.
+  it('enforces the entity-type allowlist and the entity shape in Postgres', async () => {
+    const normalized = (await checkConstraints(database.db, 'search_document')).map((definition) =>
+      definition.replaceAll(/\s+/gu, ' '),
+    )
+
+    const allowlist = normalized.find(
+      (definition) => definition.includes('entity_type') && !definition.includes('comment_id'),
+    )
+    expect(allowlist).toBeDefined()
+    for (const entityType of ['issue', 'comment']) {
+      expect(allowlist).toContain(`'${entityType}'`)
+    }
+    // A denylist would let a new table in by omission. Nothing outside the two is nameable.
+    for (const excluded of ['retro', 'retro_card', 'retro_draft', 'project', 'cycle']) {
+      expect(allowlist).not.toContain(`'${excluded}'`)
+    }
+
+    const shape = normalized.find((definition) => definition.includes('comment_id'))
+    expect(shape).toBeDefined()
+    expect(shape).toContain('entity_id = issue_id')
+    expect(shape).toContain('comment_id = entity_id')
+  })
+
+  // CHECK constraints are evaluated before the foreign-key triggers, so a rejection here is a
+  // CHECK's and not the FK's — asserted by the SQLSTATE rather than by "it threw something".
+  async function insertFailure(
+    entityType: string,
+    commentId: string | null,
+  ): Promise<{ code?: string; constraint?: string } | undefined> {
+    const sameId = '11111111-1111-4111-8111-111111111111'
+    return await sql`
+      insert into search_document
+        (entity_type, entity_id, team_id, issue_id, comment_id, source_updated_at)
+      values
+        (${entityType}, ${sameId}, gen_random_uuid(), ${sameId}, ${commentId}, now())
+    `
+      .execute(database.db)
+      .then(
+        () => undefined,
+        (error: unknown) => error as { code?: string; constraint?: string },
+      )
+  }
+
+  it('rejects a row whose entity type is outside the allowlist', async () => {
+    const failure = await insertFailure('retro_card', null)
+
+    expect(failure?.code).toBe('23514')
+    // An unknown entity type violates BOTH checks — the allowlist by name, the shape because
+    // neither of its branches can hold — so Postgres reports whichever it evaluated first. What
+    // matters is that the row cannot exist; which of the two refused it is not the property.
+    expect(failure?.constraint).toMatch(/^search_document_entity_(type|shape)_check$/u)
+  })
+
+  it('rejects an allowlisted row whose entity/FK shape is wrong', async () => {
+    const issueWithComment = await insertFailure('issue', '22222222-2222-4222-8222-222222222222')
+    expect(issueWithComment?.code).toBe('23514')
+    expect(issueWithComment?.constraint).toBe('search_document_entity_shape_check')
+
+    const commentPointingElsewhere = await insertFailure(
+      'comment',
+      '22222222-2222-4222-8222-222222222222',
+    )
+    expect(commentPointingElsewhere?.code).toBe('23514')
+    expect(commentPointingElsewhere?.constraint).toBe('search_document_entity_shape_check')
   })
 })
 

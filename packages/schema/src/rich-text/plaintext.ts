@@ -4,6 +4,10 @@
 // needed by the server-authoritative mention fan-out, which never loads an editor.
 //
 // Expect a second consumer: the search change extends this file rather than writing its own walk.
+// It arrived, and it added exactly one thing — `maxLength`. Both of its callers need a BOUNDED
+// projection: the indexer writes the result into a row and the on-device pass caches it per issue,
+// so a pathological document must cost a known number of bytes rather than however many its author
+// pasted. Everything else search needs (`'label'` resolution, `extractMentionIds`) was already here.
 
 export const MENTION_NODE_TYPE = 'mention'
 
@@ -33,6 +37,28 @@ export interface RichTextToPlainTextOptions {
   // Resolved display names by user id. A mention with no entry falls back to its stored `label`,
   // and a mention with neither renders as nothing at all rather than as a bare `@`.
   readonly names?: ReadonlyMap<string, string>
+  // A hard ceiling on the returned text, in UTF-16 code units, and also an early exit from the
+  // walk — a document twenty times the budget must not cost twenty times the work. Omitted means
+  // unbounded, which is what the human-facing callers want.
+  readonly maxLength?: number
+}
+
+interface TextSink {
+  readonly parts: string[]
+  length: number
+  readonly budget: number
+}
+
+const UNBOUNDED = Number.POSITIVE_INFINITY
+
+function push(sink: TextSink, text: string): void {
+  if (text.length === 0) return
+  sink.parts.push(text)
+  sink.length += text.length
+}
+
+function isFull(sink: TextSink): boolean {
+  return sink.length >= sink.budget
 }
 
 interface UnknownNode {
@@ -84,28 +110,32 @@ function renderMention(node: UnknownNode, options: RichTextToPlainTextOptions): 
   return name.length > 0 ? `@${name}` : ''
 }
 
-function walkText(value: unknown, out: string[], options: RichTextToPlainTextOptions): void {
+function walkText(value: unknown, sink: TextSink, options: RichTextToPlainTextOptions): void {
+  if (isFull(sink)) return
   const node = asNode(value)
   if (node === undefined) return
 
   if (isMentionNode(node)) {
-    out.push(renderMention(node, options))
+    push(sink, renderMention(node, options))
     return
   }
   if (node.type === 'text') {
-    if (typeof node.text === 'string') out.push(node.text)
+    if (typeof node.text === 'string') push(sink, node.text)
     return
   }
   if (node.type === 'hardBreak') {
-    out.push(BLOCK_BREAK)
+    push(sink, BLOCK_BREAK)
     return
   }
 
-  for (const child of childrenOf(node)) walkText(child, out, options)
+  for (const child of childrenOf(node)) {
+    if (isFull(sink)) break
+    walkText(child, sink, options)
+  }
 
   // Blocks end a line. Runs of breaks collapse below, so an empty paragraph or a nesting level that
   // contributes no text costs no blank line.
-  if (typeof node.type !== 'string' || !INLINE_NODE_TYPES.has(node.type)) out.push(BLOCK_BREAK)
+  if (typeof node.type !== 'string' || !INLINE_NODE_TYPES.has(node.type)) push(sink, BLOCK_BREAK)
 }
 
 // A document's human-readable text. Total on malformed input: anything that is not a walkable node
@@ -115,16 +145,22 @@ export function richTextToPlainText(
   doc: unknown,
   options: RichTextToPlainTextOptions = {},
 ): string {
-  const out: string[] = []
-  walkText(doc, out, options)
+  const budget =
+    options.maxLength === undefined ? UNBOUNDED : Math.max(0, Math.trunc(options.maxLength))
+  const sink: TextSink = { parts: [], length: 0, budget }
+  walkText(doc, sink, options)
   // One line per block that produced text: trailing space left behind by a stripped mention or an
   // empty nesting level is whitespace the author never typed, so it is not theirs to preserve.
-  return out
+  const text = sink.parts
     .join('')
     .split(BLOCK_BREAK)
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .join(BLOCK_BREAK)
+  // Cut again after the join: the walk stops at the first part that crosses the budget, so the last
+  // one can overshoot it. A truncated word is the right failure — the alternative is a bound the
+  // caller cannot rely on.
+  return text.length > budget ? text.slice(0, budget) : text
 }
 
 function walkMentionIds(value: unknown, ids: string[], seen: Set<string>): void {

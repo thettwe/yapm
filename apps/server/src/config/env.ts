@@ -213,6 +213,33 @@ export const envSchema = z
         z.enum(['true', 'false']),
       )
       .default('true'),
+    // Server-side search index maintenance, on the EXISTING pg-boss instance. Off means the
+    // `/api/v1/search` route keeps answering — with whatever the index already holds — rather than
+    // failing; the on-device pass is unaffected either way.
+    SEARCH_INDEX: z
+      .preprocess(
+        (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+        z.enum(['true', 'false']),
+      )
+      .default('true'),
+    // pg-boss cron granularity is one minute and "seconds of staleness" needs better, so the tail
+    // worker re-arms itself with this delay; a fixed one-minute cron watchdog heals a broken chain
+    // and is deliberately NOT tunable (there is no reason to turn it).
+    SEARCH_INDEX_INTERVAL_SECONDS: z.coerce.number().int().min(1).max(3600).default(10),
+    SEARCH_RECONCILE_CRON: cronExpression.default('*/5 * * * *'),
+    // Interpolated into SQL as a LITERAL — a parameter cannot appear in an index expression — so
+    // the shape is pinned here, at boot, failing fast BY NAME. Existence is a separate rail: the
+    // reconcile job checks `pg_ts_config` before any DDL and leaves the old index in place if the
+    // configuration is unknown. `simple` rather than `english` because stemming would quietly
+    // optimise for English teams.
+    SEARCH_TEXT_CONFIG: z
+      .string()
+      .regex(/^[a-z_][a-z0-9_]{0,62}$/, 'must be a Postgres text-search configuration name')
+      .default('simple'),
+    // The search read's own `statement_timeout`. A timeout returns the same status and the same
+    // bytes as a miss (a 503 beside a 200 would be an oracle over corpus size), so this bounds the
+    // work rather than shaping the answer.
+    SEARCH_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(100).max(60000).default(2000),
   })
   .check((ctx) => {
     const value = ctx.value
@@ -305,6 +332,16 @@ export const EXPECTED_FORMAT: Record<string, string> = {
     'one of anthropic | google | openai — the instance-default AI provider, or unset',
   AI_DIGEST_ON_CYCLE_CLOSE:
     "'true' to pre-compute a cycle digest when a cycle closes (default), or 'false' to disable it",
+  SEARCH_INDEX:
+    "'true' to maintain the server-side search index in the background (default), or 'false' to disable it",
+  SEARCH_INDEX_INTERVAL_SECONDS:
+    'an integer number of seconds between search index passes, 1 to 3600, e.g. 10',
+  SEARCH_RECONCILE_CRON:
+    "a five-field cron expression for the search reconcile/backfill pass, e.g. '*/5 * * * *' for every five minutes",
+  SEARCH_TEXT_CONFIG:
+    "a Postgres text-search configuration name matching ^[a-z_][a-z0-9_]{0,62}$ and present in pg_ts_config, e.g. 'simple' (the default) or 'english'",
+  SEARCH_STATEMENT_TIMEOUT_MS:
+    'an integer millisecond ceiling for one search query, 100 to 60000, e.g. 2000',
 }
 
 export interface EnvIssue {

@@ -1517,6 +1517,10 @@ Two mechanisms; **`key_strict_fifo` is the one that matches "serialize webhook p
 >
 > Warning on `stately`: "By definition, stately queues will not allow multiple jobs to occupy `retry` state. Once a job exists in `retry`, failing another `active` job will bypass the retry mechanism and force the job to `failed`."
 
+**`VERIFIED` (pg-boss 12.26.2, live stack, change 13) — a self-re-arming worker must use `short`, never `exclusive`.** The sub-minute-cadence pattern is: a worker that ends each pass with `boss.send(queue, {}, { startAfter: n })` to schedule its own next run, plus a one-minute cron as a watchdog. Under **`exclusive`** that chain dies after exactly one pass and **does not fail loudly**: `exclusive` counts *queued **or** active*, the re-arm is issued from inside the still-active job, so the `send` is suppressed and returns **`null`**. The job silently degrades to the watchdog's once-a-minute. Under **`short`** ("1 queued, unlimited active") the same `send` returns a job id, because nothing is queued at the moment the pass ends — and a watchdog tick while the chain is alive still finds a job queued and is dropped, so the two arming paths cannot multiply into two chains. Measured directly: a `send` issued from inside an active job returns `null` under `exclusive` and a job id under `short`. Use `exclusive` only for cron-driven queues that never re-arm themselves (yapm's `search-reconcile`); use `short` for the self-re-arming tail (`search-index`).
+
+**`VERIFIED` — `createQueue` is a no-op on an existing queue and `updateQueue` cannot change a policy** (`UpdateQueueOptions` omits it), so a queue created by an earlier build keeps its old policy forever. Combined with the silent degradation above, that means a policy fix does not take effect on an upgraded instance unless the queue is read back and reconciled (yapm reads the policy at boot and drops/recreates when it disagrees).
+
 yapm shape:
 
 ```ts

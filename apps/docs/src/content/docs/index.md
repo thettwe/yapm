@@ -35,3 +35,7 @@ runs as three containers you own.
 - [Mentions](/features/mentions/) — type `@` in a description or comment to pull a teammate in,
   from a list that opens instantly and offline, tells you when a name cannot be reached, and
   subscribes the person you named to the issue — reversibly, from the issue itself.
+- [Search](/features/search/) — `⌘K` or `/search`, answered instantly from rows your browser already
+  holds and then completed by Postgres full-text over comments and your other teams, in two labelled
+  groups that never reorder under your keyboard. Queries are never recorded. Operators: see
+  [Search index](/self-hosting/search-index/).

@@ -2,7 +2,7 @@ import { type CycleFacts, newId, upsertCycleDigest } from '@yapm/schema'
 import { cycleFactsForTeam, cyclesNeedingDigest, type DB } from '@yapm/schema/db'
 import { createServerMutators } from '@yapm/schema/server'
 import type { Kysely } from 'kysely'
-import { fromKysely, PgBoss } from 'pg-boss'
+import { fromKysely, PgBoss, type QueuePolicy } from 'pg-boss'
 import { runCycleDigest } from '../ai/digest.js'
 import type { AiGateway } from '../ai/gateway.js'
 import type { Logger } from '../logger.js'
@@ -15,10 +15,23 @@ import {
   runNotificationEmailSweep,
   runNotificationRetention,
 } from './notifications.js'
+import {
+  runSearchIndexTail,
+  runSearchReconcile,
+  SEARCH_INDEX_QUEUE,
+  SEARCH_RECONCILE_QUEUE,
+} from './search.js'
 
 export const CYCLE_MAINTENANCE_QUEUE = 'cycle-maintenance'
 export const CYCLE_DIGEST_QUEUE = 'cycle-digest'
 export { NOTIFICATION_EMAIL_QUEUE, NOTIFICATION_RETENTION_QUEUE } from './notifications.js'
+export { SEARCH_INDEX_QUEUE, SEARCH_RECONCILE_QUEUE } from './search.js'
+
+// The tail's safety net. pg-boss cron granularity is one minute, which is far coarser than the
+// re-arm interval — this exists ONLY so a lost or failed job cannot stop indexing forever, which is
+// why it is a constant rather than an environment variable. Everything an operator would plausibly
+// turn is one.
+const SEARCH_INDEX_WATCHDOG_CRON = '* * * * *'
 
 // The manual-completion sweep bound: a cycle completed by hand (through the shared `cycle.complete`
 // mutator, which the scheduler never re-selects) is picked up for a digest by the next maintenance
@@ -56,7 +69,15 @@ export interface NotificationSchedulerOptions {
   email?: NotificationEmailSchedulerOptions
 }
 
-// Both blocks are independently optional, extending the shape `digest?:` already used. Turning off
+// Present ⇒ the two index passes are registered on the SHARED boss. Absent (SEARCH_INDEX=false) ⇒
+// they are not, and the search route keeps answering from whatever the index already holds.
+export interface SearchSchedulerOptions {
+  intervalSeconds: number
+  reconcileCron: string
+  textConfig: string
+}
+
+// Every block is independently optional, extending the shape `digest?:` already used. Turning off
 // cycle maintenance therefore no longer silently turns off notification retention.
 export interface StartSchedulerOptions {
   db: Kysely<DB>
@@ -64,6 +85,7 @@ export interface StartSchedulerOptions {
   logger: Logger
   cycles?: CycleSchedulerOptions
   notifications?: NotificationSchedulerOptions
+  search?: SearchSchedulerOptions
   // Injected by tests so the queue topology — which queues exist, and on what cron — is assertable
   // without a database or real polling. Mirrors the GitHub connector's `boss?:`.
   boss?: PgBoss
@@ -85,7 +107,7 @@ interface CycleDigestJobData {
 // `pgboss` schema on a fresh volume — a boot race invisible in dev and ugly exactly once, on a
 // self-hoster's first `docker compose up`.
 export async function startScheduler(options: StartSchedulerOptions): Promise<Scheduler> {
-  const { db, dbProvider, logger, cycles, notifications } = options
+  const { db, dbProvider, logger, cycles, notifications, search } = options
 
   const boss = options.boss ?? new PgBoss({ db: fromKysely(db), schema: 'pgboss' })
   if (options.boss === undefined) {
@@ -113,6 +135,13 @@ export async function startScheduler(options: StartSchedulerOptions): Promise<Sc
         { err: error },
         'notification job registration failed; other scheduled jobs continue',
       )
+    }
+  }
+  if (search) {
+    try {
+      await registerSearchJobs({ boss, db, logger, search })
+    } catch (error) {
+      logger.error({ err: error }, 'search job registration failed; other scheduled jobs continue')
     }
   }
 
@@ -247,6 +276,67 @@ async function registerNotificationJobs(options: RegisterNotificationJobsOptions
   logger.info(
     { cron: email.cron, transport: email.mailer.transport },
     'notification email delivery scheduled',
+  )
+}
+
+interface RegisterSearchJobsOptions {
+  boss: PgBoss
+  db: Kysely<DB>
+  logger: Logger
+  search: SearchSchedulerOptions
+}
+
+// `createQueue` is a no-op on an existing queue and `updateQueue` cannot change a policy
+// (`UpdateQueueOptions` omits it), so a queue created by an earlier build keeps its old policy
+// forever — and the wrong policy here does not fail, it silently degrades the tail to the watchdog's
+// once a minute. Declaring the policy rather than assuming it costs one read at boot. Dropping the
+// queue discards its queued jobs, which are self-re-arming idempotent passes; the next one re-arms.
+async function ensurePolicy(boss: PgBoss, name: string, policy: QueuePolicy): Promise<void> {
+  const existing = await boss.getQueue(name)
+  if (existing !== null && existing.policy !== policy) await boss.deleteQueue(name)
+  await boss.createQueue(name, { policy })
+}
+
+// Two queues on the SHARED boss — no second `PgBoss`, no second `boss.start()`.
+//
+// The tail cannot be a cron: pg-boss's granularity is one minute and the design's staleness bound
+// is seconds. So the worker RE-ARMS itself with `startAfter: intervalSeconds` at the end of every
+// pass, and a one-minute cron watchdog heals a chain broken by a lost or failed job.
+//
+// THE POLICY IS `short`, NOT `exclusive` (design I8). `exclusive` allows one job queued *or active*,
+// which means the re-arm — issued from inside the active job — is rejected and returns null: the
+// chain dies after exactly one pass, silently, with the watchdog then indexing once a minute
+// forever. `short` allows one job QUEUED, unlimited active, which is the property actually wanted:
+// the re-arm always succeeds (nothing is queued at that moment) and a watchdog tick is dropped
+// whenever the chain is alive, so chains cannot multiply and a broken one is still healed.
+//
+// The re-arm is in a `finally`: a pass that throws must not end indexing until the next watchdog
+// tick, and a pg-boss retry of the failed job would re-run the same pass rather than a fresh one.
+async function registerSearchJobs(options: RegisterSearchJobsOptions): Promise<void> {
+  const { boss, db, logger } = options
+  const { intervalSeconds, reconcileCron, textConfig } = options.search
+
+  await ensurePolicy(boss, SEARCH_INDEX_QUEUE, 'short')
+  await boss.work(SEARCH_INDEX_QUEUE, async () => {
+    try {
+      await runSearchIndexTail({ db, logger })
+    } finally {
+      await boss.send(SEARCH_INDEX_QUEUE, {}, { startAfter: intervalSeconds })
+    }
+  })
+  await boss.schedule(SEARCH_INDEX_QUEUE, SEARCH_INDEX_WATCHDOG_CRON)
+  // The chain's first link. Without it a fresh boot waits up to a minute for the watchdog before
+  // indexing anything, which on an empty index is the whole corpus.
+  await boss.send(SEARCH_INDEX_QUEUE, {}, { startAfter: intervalSeconds })
+
+  await ensurePolicy(boss, SEARCH_RECONCILE_QUEUE, 'exclusive')
+  await boss.work(SEARCH_RECONCILE_QUEUE, async () => {
+    await runSearchReconcile({ db, logger, textConfig })
+  })
+  await boss.schedule(SEARCH_RECONCILE_QUEUE, reconcileCron)
+  logger.info(
+    { intervalSeconds, reconcileCron, textConfig, watchdogCron: SEARCH_INDEX_WATCHDOG_CRON },
+    'search index maintenance scheduled',
   )
 }
 

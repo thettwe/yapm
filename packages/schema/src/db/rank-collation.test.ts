@@ -31,9 +31,11 @@ describe.skipIf(DATABASE_URL === undefined)('rank collation', () => {
 
     await database.db.transaction().execute(async (tx) => {
       await sql`create temp table rank_probe (rank text collate "C") on commit drop`.execute(tx)
-      for (const rank of shuffled) {
-        await sql`insert into rank_probe (rank) values (${rank})`.execute(tx)
-      }
+      // One statement, not five hundred: the shuffle is what makes the DB sort, and round-tripping
+      // each row held a pooled connection long enough to time the test out when every suite in the
+      // repo runs its Postgres tier at once.
+      const values = sql.join(shuffled.map((rank) => sql`(${rank})`))
+      await sql`insert into rank_probe (rank) values ${values}`.execute(tx)
       const { rows } = await sql<{ rank: string }>`
         select rank from rank_probe order by rank
       `.execute(tx)

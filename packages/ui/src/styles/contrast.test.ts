@@ -105,6 +105,38 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     }
   })
 
+  // The search result row. Its title ink is `text-1`, its snippet ink `text-2`, and a HIGHLIGHTED
+  // snippet segment steps up to `text-1` — carried by weight and an `--accent-strong` underline
+  // rather than by a second background wash, precisely so the emphasis cannot land on an untested
+  // colour pair. All three must read on the plain row and on the active row, which is the soft
+  // accent wash over both the elevated surface (palette) and the base surface (the /search route).
+  it('the search result row ink meets AA on the plain and the active row (>= 4.5)', () => {
+    for (const surface of ['--bg', '--bg-elevated'] as const) {
+      const plain = hex(t, surface)
+      const activeRow = over(t['--accent-soft'] ?? '', plain)
+      for (const background of [plain, activeRow]) {
+        for (const ink of ['--text-1', '--text-2'] as const) {
+          expect(
+            contrastRatio(hex(t, ink), background),
+            `${ink} on ${surface}`,
+          ).toBeGreaterThanOrEqual(AA_NORMAL)
+        }
+      }
+    }
+  })
+
+  // The underline under a highlighted snippet segment is a non-text indicator, so 3:1 (WCAG 1.4.11)
+  // is the bar rather than 4.5. Asserted because it is the ONLY thing distinguishing a highlight
+  // from body text on the active row, where the wash and the underline share an accent origin.
+  it('the snippet highlight underline is distinguishable on the active row (>= 3.0)', () => {
+    for (const surface of ['--bg', '--bg-elevated'] as const) {
+      const activeRow = over(t['--accent-soft'] ?? '', hex(t, surface))
+      expect(contrastRatio(hex(t, '--accent-strong'), activeRow), surface).toBeGreaterThanOrEqual(
+        AA_LARGE,
+      )
+    }
+  })
+
   it('on-accent text on the accent fill meets AA (>= 4.5)', () => {
     expect(contrastRatio(hex(t, '--on-accent'), hex(t, '--accent'))).toBeGreaterThanOrEqual(
       AA_NORMAL,

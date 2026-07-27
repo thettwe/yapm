@@ -5,6 +5,12 @@ import { type SearchTextFields, type SearchTier, scoreSearchText, searchTierRank
 // and the route shows the whole list; both read the same bound so neither can quietly raise it.
 export const LOCAL_RESULT_LIMIT = 200
 
+// The server pass's cap, here rather than in `db/search.ts` so the two ceilings sit together and
+// the surface that words "showing the first N" reads the number rather than repeating it. There is
+// no pagination behind it: a capped set says so and invites a narrower query (design D17), because
+// a page-two link would be a second read path to keep honest about scope.
+export const SERVER_RESULT_LIMIT = 50
+
 // Every entity the on-device pass can reach, and nothing else. Issues come from two synced queries
 // (`issues.byTeam` filters triage out, `triage.inbox` is where those rows live), which is exactly
 // why dedupe is a requirement rather than a nicety.

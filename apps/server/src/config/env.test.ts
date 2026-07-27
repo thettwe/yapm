@@ -102,6 +102,7 @@ describe('loadEnv', () => {
         NOTIFICATION_EMAIL_CRON: '*/2 * * *ish *',
         NOTIFICATION_RETENTION_CRON: 'nightly',
         GITHUB_RECONCILE_CRON: 'sometimes',
+        SEARCH_RECONCILE_CRON: 'occasionally',
       })
       expect.unreachable('loadEnv should have thrown')
     } catch (error) {
@@ -111,6 +112,7 @@ describe('loadEnv', () => {
         'GITHUB_RECONCILE_CRON',
         'NOTIFICATION_EMAIL_CRON',
         'NOTIFICATION_RETENTION_CRON',
+        'SEARCH_RECONCILE_CRON',
       ])
     }
   })
@@ -399,6 +401,49 @@ describe('mailEnv', () => {
       expect.unreachable('loadEnv should have thrown')
     } catch (error) {
       expect((error as EnvValidationError).issues[0]?.variable).toBe('NOTIFICATION_RETENTION_DAYS')
+    }
+  })
+})
+
+describe('search index configuration', () => {
+  it('applies the documented defaults', () => {
+    const env = loadEnv({ ...VALID })
+
+    expect(env.SEARCH_INDEX).toBe('true')
+    expect(env.SEARCH_INDEX_INTERVAL_SECONDS).toBe(10)
+    expect(env.SEARCH_RECONCILE_CRON).toBe('*/5 * * * *')
+    expect(env.SEARCH_TEXT_CONFIG).toBe('simple')
+    expect(env.SEARCH_STATEMENT_TIMEOUT_MS).toBe(2000)
+  })
+
+  // The value reaches SQL as a LITERAL — a parameter cannot appear in an index expression — so the
+  // shape is a boot-time gate, failing fast BY NAME rather than at the first DDL.
+  it('rejects a text-search configuration that is not a bare identifier, naming the variable', () => {
+    for (const value of ["simple'; drop table issue--", 'English', '1simple', '']) {
+      try {
+        loadEnv({ ...VALID, SEARCH_TEXT_CONFIG: value })
+        expect.unreachable('loadEnv should have thrown')
+      } catch (error) {
+        const issue = (error as EnvValidationError).issues[0]
+        expect(issue?.variable).toBe('SEARCH_TEXT_CONFIG')
+        expect(issue?.expected).toContain('pg_ts_config')
+      }
+    }
+  })
+
+  it('rejects an out-of-range interval and statement timeout', () => {
+    for (const [variable, value] of [
+      ['SEARCH_INDEX_INTERVAL_SECONDS', '0'],
+      ['SEARCH_INDEX_INTERVAL_SECONDS', '3601'],
+      ['SEARCH_STATEMENT_TIMEOUT_MS', '99'],
+      ['SEARCH_STATEMENT_TIMEOUT_MS', '60001'],
+    ]) {
+      try {
+        loadEnv({ ...VALID, [variable as string]: value })
+        expect.unreachable('loadEnv should have thrown')
+      } catch (error) {
+        expect((error as EnvValidationError).issues[0]?.variable).toBe(variable)
+      }
     }
   })
 })

@@ -18,6 +18,7 @@ export {
   LOCAL_RESULT_LIMIT,
   LOCAL_SEARCH_KINDS,
   mergeLocalCandidates,
+  SERVER_RESULT_LIMIT,
 } from './merge.js'
 export type { SearchTextFields, SearchTier } from './score.js'
 export {
@@ -27,6 +28,12 @@ export {
   scoreSearchText,
   searchTierRank,
 } from './score.js'
+export type { SnippetSegment } from './snippet.js'
+export {
+  SNIPPET_START_DELIMITER,
+  SNIPPET_STOP_DELIMITER,
+  splitSnippet,
+} from './snippet.js'
 export {
   isServerSearchable,
   MIN_SERVER_QUERY_LENGTH,

@@ -9,6 +9,7 @@ import {
   pingDatabase,
   readReplicationStatus,
   type SecretCodec,
+  searchIndexFreshness,
   seedWorkspace,
 } from '@yapm/schema/db'
 import { createAiAdminRoutes } from './ai/admin-routes.js'
@@ -27,10 +28,11 @@ import {
 import { createConnectorAdminRoutes } from './connectors/admin-routes.js'
 import { createGithubConnector, githubConnector } from './connectors/github/index.js'
 import { createGithubWebhookRoute } from './connectors/github/routes.js'
-import { databaseCheck, replicationCheck } from './health.js'
+import { databaseCheck, nonGatingCheck, replicationCheck } from './health.js'
 import { type Scheduler, startScheduler } from './jobs/scheduler.js'
 import { createLogger, type Logger } from './logger.js'
 import { createMailer } from './mail/index.js'
+import { createSearchRoutes } from './search/routes.js'
 import { createSessionContextResolver } from './zero/context.js'
 import { createZeroDatabase } from './zero/db-provider.js'
 
@@ -183,6 +185,18 @@ async function main(): Promise<void> {
       : {}),
   }
 
+  // Independently gated: off means the index stops being maintained, not that search errors. The
+  // route keeps answering from whatever the index already holds, and the on-device pass is
+  // untouched either way.
+  const search =
+    env.SEARCH_INDEX === 'true'
+      ? {
+          intervalSeconds: env.SEARCH_INDEX_INTERVAL_SECONDS,
+          reconcileCron: env.SEARCH_RECONCILE_CRON,
+          textConfig: env.SEARCH_TEXT_CONFIG,
+        }
+      : undefined
+
   let scheduler: Scheduler | undefined
   try {
     scheduler = await startScheduler({
@@ -191,6 +205,7 @@ async function main(): Promise<void> {
       logger,
       ...(cycles ? { cycles } : {}),
       notifications,
+      ...(search ? { search } : {}),
     })
   } catch (error) {
     logger.error({ err: error }, 'failed to start the background job scheduler')
@@ -203,6 +218,12 @@ async function main(): Promise<void> {
       replicationCheck(async () =>
         assertReplicationHealthy(await readReplicationStatus(database.db)),
       ),
+      // Non-gating: how far behind the index is, for an operator, never a verdict on the process.
+      nonGatingCheck('search', async () => {
+        const freshness = await searchIndexFreshness(database.db)
+        const age = freshness.oldestUnindexedAgeSeconds
+        return `documents=${freshness.documents} sources=${freshness.sources} oldestUnindexedAgeSeconds=${age === null ? 'none' : age}`
+      }),
     ],
     webDistDir: env.WEB_DIST_DIR,
     authRoutes: createAuthRoutes({
@@ -215,6 +236,13 @@ async function main(): Promise<void> {
     githubWebhook,
     connectorAdmin,
     aiAdmin,
+    search: createSearchRoutes({
+      auth,
+      db: database.db,
+      logger,
+      textConfig: env.SEARCH_TEXT_CONFIG,
+      statementTimeoutMs: env.SEARCH_STATEMENT_TIMEOUT_MS,
+    }),
     zero: {
       dbProvider,
       resolveContext: createSessionContextResolver({

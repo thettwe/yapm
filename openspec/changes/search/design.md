@@ -673,3 +673,112 @@ until group 3. The alternative — adding the table to `DB` here and its types t
 a window where the only way to write the table is with an inline row type, which is how a second
 definition of the row shape gets written. The types cost nothing and the row shape has exactly one
 home from the first commit.
+
+### I8 — The tail queue's policy is `short`, not `exclusive` (D4 corrected against pg-boss 12)
+
+D4 specified pg-boss's **`exclusive`** policy for `search-index`, on the reasoning that "one job
+queued or active" is what makes the self re-arm and the watchdog cron safe to overlap. Built exactly
+that way, it does not work, and it does not fail loudly: **`exclusive` counts active jobs, so the
+re-arm — which is issued from inside the still-active pass — is rejected.** `boss.send` returns
+`null`, the chain dies after exactly one pass, and indexing silently degrades to the watchdog's once
+a minute. A first live run showed one completed `search-index` job and nothing queued.
+
+Verified rather than reasoned about, against pg-boss 12.26.2 on the live stack: a `send` issued from
+inside an active job returns `null` under `exclusive` and a job id under **`short`**.
+
+`short` is "one job **queued**, unlimited active", which is the property actually wanted:
+
+- the re-arm always succeeds, because nothing is queued at the moment the pass ends;
+- a watchdog tick while the chain is alive finds a job already queued and is dropped, so the two
+  arming paths still cannot multiply into two chains;
+- a watchdog tick with nothing queued — the broken chain — enqueues one, which is the whole point of
+  the watchdog.
+
+"Unlimited active" costs nothing here: one worker with `batchSize` 1 runs one pass at a time within a
+process, and two passes racing across replicas write the same idempotent upserts. `search-reconcile`
+stays `exclusive`: it is cron-driven only, never re-arms, and overlapping full diffs are pure waste.
+
+Re-verified live: with a 2-second interval, six passes completed in twenty-five seconds with one
+queued — the cadence D4 promised.
+
+**And the policy is now declared rather than assumed.** `createQueue` is a no-op on an existing
+queue and `updateQueue` cannot change a policy (`UpdateQueueOptions` omits it), so a queue created by
+an earlier build keeps the wrong policy forever — silently, because the wrong policy does not error,
+it just indexes once a minute. `ensurePolicy` reads the queue, drops it if the policy differs, and
+recreates it. Dropping discards queued jobs, which are self-re-arming idempotent passes.
+
+### I9 — The reconcile diff compares timestamps at millisecond resolution, or it never converges
+
+`timestamptz` keeps microseconds; a JavaScript `Date` does not. The projection reads
+`issue.updated_at` into a `Date` and writes it back into `search_document.source_updated_at`, so any
+row whose `updated_at` came from the column default (`now()`) is stored a few microseconds short of
+its source — and `d.source_updated_at is distinct from issue.updated_at` then reports it stale on
+**every** pass, forever. Caught by the first live run of task 4.7's "backfills in bounded batches"
+test: a six-row corpus never drained, spending the entire twenty-second budget re-indexing itself.
+
+The fix is one `date_trunc('milliseconds', …)` on the **source** side of the comparison, in
+`reconcileDiffBatch` and in `searchIndexFreshness`'s un-indexed CTE. Only the comparison is
+truncated: `source_updated_at` still stores the value as read, and the watermark's `>=` re-selects
+the boundary row, which is idempotent by design.
+
+Note the shape of the bug rather than just the bug: it was invisible to correctness — every search
+returned the right rows throughout — and visible only as a job that burns a connection forever. That
+is why the test asserts `stale === 0` on a second pass rather than only asserting the rows are right.
+
+### I10 — `search.pg.test.ts` composes the indexer rather than importing the job
+
+Task 3.6 says "runs the indexer to convergence", and the indexer lives in
+`apps/server/src/jobs/search.ts` — which `packages/schema` may not import (CLAUDE.md #3). The test
+therefore composes the same exported helpers the job composes (`reconcileDiffBatch` →
+`richTextToPlainText` → `upsertSearchDocuments`) in a ten-line local loop, and says so in a comment.
+The job's own behaviour — batching, the watermark tail, FK-violation tolerance, mention-name
+resolution — is asserted where the job lives, in `apps/server/src/jobs/search.pg.test.ts`.
+
+### I11 — The `search` readiness entry needed a non-gating check kind, so one was added
+
+`runReadinessChecks` marks a check failed when its `run()` throws, and any failed check makes
+`/readyz` a 503. A `search` entry built on `replicationCheck`'s shape would therefore take an
+instance out of rotation because the index is behind — exactly what D13 says must not happen. So
+`health.ts` gained `nonGatingCheck(name, probe)`, which reports a probe failure as a detail string
+(`unavailable: …`) instead of an unhealthy process. It is generic rather than search-specific
+because the next operator-facing signal will want the same thing.
+
+### I12 — The route's Zod schema `.catch()`es instead of rejecting, and that is a security property
+
+`q`, `teamId` and `limit` are all validated, but none of them can produce a 400: `q` is any string,
+and the two optional fields fall back to their defaults on anything malformed. A `z.string().min(2)`
+on `q` would have been the natural spelling and would have made a one-character query a **400** while
+a two-character miss stayed a **200** — a status difference a caller can measure, which is the same
+oracle class as a 503-on-timeout. The minimum length is applied afterwards, as a `200` with no
+results, from the shared `isServerSearchable` constant.
+
+### I13 — The falsifiable check did not bite on "filter after ranking", so two assertions were added
+
+Task 3.6 names two plausible-but-wrong implementations the oracle test must catch: a snippet
+generated before the scoping filter, and the scoping filter applied **after** the ranking. Perturbing
+the second one — moving `team_id = any($teams)` out of the indexed scan and into the outer select,
+below the `limit` — left **all thirteen** tests in `search.pg.test.ts` green, and all five in
+`routes.pg.test.ts`. The check did not bite on half of what it was written to catch.
+
+It is a real oracle, not a cosmetic difference. With the filter below the limit, the inner scan ranks
+and truncates the **whole corpus** and the outer select then discards what the caller may not read,
+so out-of-scope rows consume result slots. The caller cannot see those rows — but they can see their
+own results being crowded out, and the count of what is missing is a measure of how many out-of-scope
+rows matched the token. That is the existence of a row leaking as a ranking artefact, which is
+exactly the class §3's invariant forbids.
+
+The existing assertions all missed it because every one of them searched a token that matched
+**either** in scope **or** out of scope, never both. An out-of-scope-only token returns nothing under
+both implementations; the byte-identity assertion is satisfied by two different empty answers.
+
+Two assertions now cover the seam, over a `qzt-hotel` corpus of three T2 matches all newer than a
+single T1 match, so the recency tiebreak deliberately ranks every unreadable row above the readable
+one:
+
+- searched at a limit of three, the member gets the T1 issue and not an empty list;
+- the member's response is byte-identical at every limit from one to four, so no limit exists at
+  which the out-of-scope rows can be felt.
+
+Both fail against the perturbation and pass against the shipped statement. Recorded here rather than
+only fixed, because the gap was in the *test*, and a test that cannot fail is worth less than no test
+— it reports safety it never checked.

@@ -78,6 +78,28 @@ export function databaseCheck(ping: () => Promise<void>, timeoutMs = 2000): Read
   }
 }
 
+// A check whose result is INFORMATION rather than a verdict: it reports what it found, and it
+// reports a failure to find out as a detail string instead of an unhealthy process. Search
+// freshness is the first of these — a lagging or unmeasurable index must never take an instance out
+// of rotation, because the on-device pass is unaffected and the server pass degrades to fewer
+// results rather than to an error.
+export function nonGatingCheck(
+  name: string,
+  probe: () => Promise<string>,
+  timeoutMs = 2000,
+): ReadinessCheck {
+  return {
+    name,
+    run: async () => {
+      try {
+        return await withTimeout(probe(), timeoutMs, `no response within ${timeoutMs}ms`)
+      } catch (error) {
+        return `unavailable: ${describe(error)}`
+      }
+    },
+  }
+}
+
 export function replicationCheck(probe: () => Promise<string>, timeoutMs = 2000): ReadinessCheck {
   return {
     name: 'replication',

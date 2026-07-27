@@ -13,6 +13,7 @@ export type {
   LocalSearchResult,
   SearchTextFields,
   SearchTier,
+  SnippetSegment,
 } from './search/index.js'
 export {
   compareLocalResults,
@@ -26,8 +27,12 @@ export {
   normalizeQuery,
   queryLength,
   SEARCH_TIERS,
+  SERVER_RESULT_LIMIT,
+  SNIPPET_START_DELIMITER,
+  SNIPPET_STOP_DELIMITER,
   scoreSearchText,
   searchTierRank,
+  splitSnippet,
   tokenizeQuery,
 } from './search/index.js'
 export type {

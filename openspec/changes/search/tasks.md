@@ -58,27 +58,27 @@ client group (7–10) after the server contract it consumes exists.
 
 ## 3. Postgres full-text in `packages/schema/src/db/search.ts`
 
-- [ ] 3.1 Create `packages/schema/src/db/search.ts` with a header comment stating the three rules it
+- [x] 3.1 Create `packages/schema/src/db/search.ts` with a header comment stating the three rules it
       carries: every Kysely statement over `search_document` lives here; the scoping predicate lives
       beside the SQL it guards; and **this table is never an AI data source**.
-- [ ] 3.2 Implement `resolveSearchScope(db, userId)` → `{teams: string[], isAdmin: boolean}` from
+- [x] 3.2 Implement `resolveSearchScope(db, userId)` → `{teams: string[], isAdmin: boolean}` from
       `workspace_member` / `team_membership`, mirroring `teamScoped`'s admin bypass exactly, returning
       an **empty array** for a non-member, and `intersectScope(scope, teamId?)` which can only narrow.
-- [ ] 3.3 Implement `searchDocuments(db, {scope, query, limit, textConfig})`: `websearch_to_tsquery` +
+- [x] 3.3 Implement `searchDocuments(db, {scope, query, limit, textConfig})`: `websearch_to_tsquery` +
       `ts_rank_cd(…, 32)` + `ts_headline` with `StartSel=U+0001 StopSel=U+0002 MaxFragments=1
       MaxWords=18 MinWords=5 HighlightAll=false`, `team_id = any($teams)` applied **inside** the
       indexed scan, a join to `issue` (and `team` for the key) for display fields including `status`
       and `needs_triage`, ordering `rank desc, source_updated_at desc, entity_type asc, entity_id
       asc`, and a hard `limit`. Snippets are produced in the same statement, after the filter.
-- [ ] 3.4 Implement the index-maintenance helpers: `searchWatermark`, `staleIssueBatch`,
+- [x] 3.4 Implement the index-maintenance helpers: `searchWatermark`, `staleIssueBatch`,
       `staleCommentBatch`, `reconcileDiffBatch`, `orphanedCommentDocuments`, `upsertSearchDocuments`
       (a single multi-row `insert … on conflict (entity_type, entity_id) do update`), and
       `deleteSearchDocuments`. Every one bounded by an explicit limit.
-- [ ] 3.5 Implement `ensureSearchIndex(db, textConfig)`: verify the configuration exists in
+- [x] 3.5 Implement `ensureSearchIndex(db, textConfig)`: verify the configuration exists in
       `pg_ts_config`, compare `pg_indexes.indexdef` against the configured value, and rebuild the one
       index when they differ. On an unknown configuration, throw with the variable name and leave the
       existing index in place.
-- [ ] 3.6 **Test** `packages/schema/src/db/search.pg.test.ts` (integration, live Postgres,
+- [x] 3.6 **Test** `packages/schema/src/db/search.pg.test.ts` (integration, live Postgres,
       `describe.skipIf(DATABASE_URL === undefined)`) — **this file carries the falsifiable check**.
       Seed `qzt-alpha` into a T1 comment body, `qzt-bravo` into a T2 issue description, `qzt-charlie`
       into a `retro_draft.body` in T1, `qzt-delta` into a `retro_card.body` in T1. As a member of T1
@@ -86,7 +86,7 @@ client group (7–10) after the server contract it consumes exists.
       **byte-identical** to the response for `qzt-echo` (present nowhere); `qzt-charlie` and
       `qzt-delta` return nothing, **including to a workspace admin**. Re-running the indexer leaves
       every result set unchanged.
-- [ ] 3.7 **Test** in the same file: a non-member gets zero rows; a `teamId` for a team the caller is
+- [x] 3.7 **Test** in the same file: a non-member gets zero rows; a `teamId` for a team the caller is
       not in yields the identical empty response; an admin's scope covers every team; a token in an
       issue title returns the issue **once** and not each of its comments; a `needs_triage` issue and
       a `canceled` issue are both returned and carry their state; ordering is byte-stable across two
@@ -95,32 +95,32 @@ client group (7–10) after the server contract it consumes exists.
 
 ## 4. Configuration and the background index jobs
 
-- [ ] 4.1 Add to `apps/server/src/config/env.ts`, with the existing Zod patterns and a description
+- [x] 4.1 Add to `apps/server/src/config/env.ts`, with the existing Zod patterns and a description
       entry for each: `SEARCH_INDEX` (`'true'|'false'`, default `'true'`),
       `SEARCH_INDEX_INTERVAL_SECONDS` (int 1–3600, default 10), `SEARCH_RECONCILE_CRON`
       (`cronExpression`, default `*/5 * * * *`), `SEARCH_TEXT_CONFIG`
       (`^[a-z_][a-z0-9_]{0,62}$`, default `simple`), `SEARCH_STATEMENT_TIMEOUT_MS` (int 100–60000,
       default 2000).
-- [ ] 4.2 Create `apps/server/src/jobs/search.ts`: `runSearchIndexTail` (watermark read, bounded
+- [x] 4.2 Create `apps/server/src/jobs/search.ts`: `runSearchIndexTail` (watermark read, bounded
       batches per entity type, plaintext extraction via `richTextToPlainText(doc, {mentions:'label',
       names})` with one `select id, name from "user" where id = any($ids)` per batch, upsert, loop
       until drained or a wall-clock budget is spent) and `runSearchReconcile` (`ensureSearchIndex`,
       the full diff, the orphan delete, and the structured `{indexed, stale, orphaned, missing}` log
       line). Both tolerate `23503 foreign_key_violation` from a source row deleted mid-pass by
       dropping the batch, never by failing the pass.
-- [ ] 4.3 Extend `startScheduler` with an independently-gated `search?: SearchSchedulerOptions` block
+- [x] 4.3 Extend `startScheduler` with an independently-gated `search?: SearchSchedulerOptions` block
       registering `search-index` (pg-boss policy `exclusive`, worker re-arms with
       `startAfter: intervalSeconds`, plus a fixed one-minute cron watchdog) and `search-reconcile`
       (on `SEARCH_RECONCILE_CRON`). **No second `PgBoss` and no second `boss.start()`.** Registration
       failure is caught and logged, exactly as the cycle and notification blocks are.
-- [ ] 4.4 Wire the block in `apps/server/src/index.ts`, gated on `SEARCH_INDEX`.
-- [ ] 4.5 Add a **non-gating** `search` readiness check reporting document count, source count and the
+- [x] 4.4 Wire the block in `apps/server/src/index.ts`, gated on `SEARCH_INDEX`.
+- [x] 4.5 Add a **non-gating** `search` readiness check reporting document count, source count and the
       age of the oldest un-indexed row.
-- [ ] 4.6 **Test** `apps/server/src/jobs/search.test.ts` (unit, injected `boss`, no DB): the queue
+- [x] 4.6 **Test** `apps/server/src/jobs/search.test.ts` (unit, injected `boss`, no DB): the queue
       topology — both queues exist, `search-index` is `exclusive`, the watchdog cron is registered,
       the reconcile cron comes from env, only **one** scheduler instance is started, and a search
       registration failure does not prevent the cycle and notification blocks from registering.
-- [ ] 4.7 **Test** `apps/server/src/jobs/search.pg.test.ts` (integration): a fresh instance backfills
+- [x] 4.7 **Test** `apps/server/src/jobs/search.pg.test.ts` (integration): a fresh instance backfills
       from empty in bounded batches; an edited title is re-indexed on the next tail pass; a row
       written with a backdated `updated_at` is missed by the tail and healed by the reconcile; a
       deleted comment's document is gone **immediately** via the FK cascade with no sweep; and
@@ -128,30 +128,30 @@ client group (7–10) after the server contract it consumes exists.
 
 ## 5. The `/api/v1/search` route
 
-- [ ] 5.1 Create `apps/server/src/search/routes.ts` mounting `GET /api/v1/search`, using the
+- [x] 5.1 Create `apps/server/src/search/routes.ts` mounting `GET /api/v1/search`, using the
       `auth.getSessionUser` middleware shape the AI and connector admin routes already use: no session
       ⇒ `401` **before any table is read**, and that is the route's only non-200 outcome.
-- [ ] 5.2 Validate `q`, `teamId?` and `limit?` with Zod. A blank, whitespace-only, sub-minimum-length
+- [x] 5.2 Validate `q`, `teamId?` and `limit?` with Zod. A blank, whitespace-only, sub-minimum-length
       or unparseable query returns `200 {"results": [], "truncated": false}` **before** touching the
       index — never a 400.
-- [ ] 5.3 Resolve the scope with `resolveSearchScope` / `intersectScope` and run `searchDocuments`
+- [x] 5.3 Resolve the scope with `resolveSearchScope` / `intersectScope` and run `searchDocuments`
       inside a transaction carrying `set local statement_timeout = $SEARCH_STATEMENT_TIMEOUT_MS`.
       Catch the timeout and return the **same status and shape** as a miss, counting and logging it
       server-side without the query string.
-- [ ] 5.4 Serialise the invariant response shape: `{results: [{type, id, issueId, teamId, issueKey,
+- [x] 5.4 Serialise the invariant response shape: `{results: [{type, id, issueId, teamId, issueKey,
       issueTitle, status, needsTriage, snippet, updatedAt}], truncated}` where `truncated =
       results.length === limit`, computed over post-scoping rows only. No totals, no counts of
       withheld rows, no partial flag.
-- [ ] 5.5 Mount it in `apps/server/src/app.ts` beside the other `/api/v1` surfaces.
+- [x] 5.5 Mount it in `apps/server/src/app.ts` beside the other `/api/v1` surfaces.
 
 ## 6. The oracle, logging and AI-isolation assertions
 
-- [ ] 6.1 **Test** `apps/server/src/search/routes.pg.test.ts`: an unauthenticated request is `401`
+- [x] 6.1 **Test** `apps/server/src/search/routes.pg.test.ts`: an unauthenticated request is `401`
       identically whether the token would have matched or not; an authenticated non-member gets the
       standard empty body; a member's out-of-scope token response is byte-identical to a
       nowhere-token response; a `teamId` outside the caller's set narrows to empty rather than
       widening; and a forced statement timeout returns the same status and body as a miss.
-- [ ] 6.2 **Test** the response shape is invariant: assert the exact JSON body for miss,
+- [x] 6.2 **Test** the response shape is invariant: assert the exact JSON body for miss,
       out-of-scope, blank query, one-character query, unparseable query and timeout are all equal.
 - [ ] 6.3 **Test** a retro draft token and a retro card token return nothing to a member, a
       facilitator and a workspace admin.

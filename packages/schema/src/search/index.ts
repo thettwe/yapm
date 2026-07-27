@@ -8,6 +8,7 @@
 // What is NOT here: the SQL and its scoping predicate, which live in `db/search.ts` beside the
 // other Kysely modules, and the route, which lives in `apps/server`. See design D1.
 
+export { SEARCH_BODY_MAX_LENGTH } from './document.js'
 export type {
   LocalSearchCandidate,
   LocalSearchKind,

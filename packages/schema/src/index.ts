@@ -26,6 +26,7 @@ export {
   mergeLocalCandidates,
   normalizeQuery,
   queryLength,
+  SEARCH_BODY_MAX_LENGTH,
   SEARCH_TIERS,
   SERVER_RESULT_LIMIT,
   SNIPPET_START_DELIMITER,

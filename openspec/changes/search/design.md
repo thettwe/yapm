@@ -782,3 +782,148 @@ one:
 Both fail against the perturbation and pass against the shipped statement. Recorded here rather than
 only fixed, because the gap was in the *test*, and a test that cannot fail is worth less than no test
 — it reports safety it never checked.
+
+### I14 — `packages/ui` gains its first `@yapm/schema` dependency, through a new pure sub-entry
+
+`SnippetText` has to split on the `U+0001`/`U+0002` delimiters, and `splitSnippet` already exists in
+`packages/schema/src/search/snippet.ts` — the file whose whole reason for existing is that the wire
+format has two ends that must agree. Reimplementing the parser in `packages/ui` would put a second
+copy of that format one refactor away from the first, which is exactly the failure D16 exists to
+prevent.
+
+The obstacle is a convention rather than a rule: `issue-row.tsx` states that the design system
+"stays free of a schema dependency", mirroring the delivery vocabulary as plain string unions. That
+reasoning is about *vocabulary* — copying two string unions is free — and does not transfer to a
+parser. But importing from `@yapm/schema`'s root barrel would pull Zero, Kysely and Zod into the
+Ladle bundle for one pure function, which is the real cost the convention was protecting against.
+
+So `@yapm/schema` gained a **`./search` export** pointing at `dist/search/index.js`, and
+`packages/ui` depends on `@yapm/schema` and imports only from there. That directory is documented as
+importing nothing outside itself, so the design system's runtime dependency is a handful of pure
+functions and nothing else — verified: the story chunk built by `ladle build` is 6.5 kB. The
+vocabulary convention is otherwise kept: `SearchResultKind` and `SearchResultState` are plain string
+unions declared in `packages/ui`, and `SearchResultRow` still takes resolved display values only.
+
+### I15 — The snippet highlight is weight and an underline, not a second background wash
+
+The obvious rendering for `ts_headline` output is `<mark>` with a background. It does not work here:
+the active row is *already* painted `--accent-soft`, so a highlight wash on top of it either
+disappears or needs a colour nobody has contrast-tested — and inventing one is how the 3.94 problem
+I19 found gets reintroduced one component over.
+
+The highlight is therefore `font-semibold`, an ink step from `text-2` to `text-1`, and a 2 px
+`--accent-strong` underline. Emphasis without hue (WCAG 1.4.1), on ink pairs already asserted AA
+everywhere. Measured in a real browser against the built showcase, all six preset/mode panels:
+
+| | warm L | warm D | focused L | focused D | editorial L | editorial D |
+|---|---|---|---|---|---|---|
+| title ink on the active row | 12.31 | 11.11 | 15.60 | 12.25 | 16.06 | 13.25 |
+| snippet ink on the active row | 4.86 | 4.98 | 5.29 | 5.49 | 4.81 | 5.26 |
+| highlight underline on the active row | 4.55 | 5.31 | 4.39 | 3.97 | 3.93 | 4.91 |
+| the 2 px rule on the surface | 5.54 | 6.65 | 5.00 | 4.78 | 4.55 | 5.83 |
+
+Every ink pair clears 4.5; the underline, a non-text indicator, clears 3.0 with margin. The same
+pairs are now asserted in `styles/contrast.test.ts` over both `--bg` (the `/search` route) and
+`--bg-elevated` (the palette), so a future token edit fails a test rather than a screenshot.
+
+The same browser pass confirmed the rest of the row contract: `text-overflow: ellipsis` with
+`white-space: nowrap` on the title, `border-left-width: 2px` on the active row, `background:
+rgba(0,0,0,0)` on every `<mark>`, and `<script>`/`<img onerror=…>` inside a snippet rendered as
+escaped text with zero elements created.
+
+### I16 — `SEARCH_BODY_MAX_LENGTH` moved from `apps/server` into the shared core
+
+The indexer bounded its projection at 20 000 characters; the on-device cache needs the same bound
+for the same reason. Two constants would mean a token past one cut but not the other — the two
+passes disagreeing about what a document contains, which is the single property
+`packages/schema/src/search/` exists to guarantee. The constant now lives in
+`search/document.ts` with the reason on it, and `apps/server/src/jobs/search.ts` imports it. No
+behaviour moved.
+
+### I17 — The on-device pass reads a mention's STORED label; the server pass is what stays current
+
+`richTextToPlainText(doc, {mentions: 'label'})` resolves a mention through a supplied id→name map
+and falls back to the label stored on the node. The indexer supplies the map (D12) so a rename
+propagates. The client hook does **not**: supplying it would mean subscribing to every user from the
+corpus hook — an eighth subscription, outside the set this change specified — to fix a case the
+server pass already indexes correctly.
+
+The consequence, stated rather than discovered: immediately after somebody is renamed, their new
+name finds their mentions through the server group and their old name finds them on-device, until
+the mentioning document is next edited. Both groups are labelled, which is the seam H12 asked to be
+shown, working as designed.
+
+### I18 — Task 8.5 measured: the keystroke costs ~1 ms, and the walk was never on the keystroke path
+
+Measured by `apps/web/src/search/corpus-cost.test.tsx`, which seeds 3 000 issues each carrying a
+four-paragraph description (~120 words) and drives the real hook. Three runs, same machine:
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| cold corpus build (walks all 3 000 documents) | 8.9 ms | 8.6 ms | 8.9 ms |
+| **first keystroke** | 1.00 ms | 2.23 ms | 1.04 ms |
+| **steady-state keystroke** (mean of 8) | 1.22 ms | 1.03 ms | 1.21 ms |
+| rebuild after one description is edited | 1.4 ms | 1.2 ms | 1.2 ms |
+
+The stated fallback — building the cache lazily per matched row — **is not needed and is not
+taken**. The number that decides it is the first keystroke at 1–3 ms against a 100 ms budget.
+
+Two things the numbers say that the plan did not anticipate. First, the walk is not on the keystroke
+path at all: the cache is filled in the corpus memo, which runs when a synced query *delivers*, so
+"first keystroke" measures ranking over already-extracted text rather than extraction. Second, the
+cost that does exist — 8.9 ms to walk 3 000 documents cold — lands once, on the render that first
+receives the rows, and is itself well inside the budget; a lazy-per-row scheme would have traded
+that single 9 ms for a variable cost inside the interaction it is meant to protect.
+
+The test keeps a 100 ms ceiling on the three interactive numbers, so the budget is a gate rather
+than a note. It is deliberately ~30–100× the observed value: the point is to catch an accidental
+per-keystroke walk, not to police a millisecond on a loaded CI box.
+
+### I19 — The abort guard inside the fetch continuation is defence no test can isolate, and it stays
+
+`useServerSearch` has two defences against a superseded response: `AbortController` per query, and a
+comparison of the answered key against the live input. Perturbing them one at a time showed the
+guard inside `.then` (`if (controller.signal.aborted) return`) is the only one whose removal breaks
+**nothing** — every reachable ordering that reaches it produces an answer whose key the comparison
+then rejects anyway. The three other perturbations each fail tests: dropping the key comparison
+fails four, dropping the client-side minimum-length check fails one, dropping the abort on cleanup
+fails two.
+
+It is kept rather than deleted, with the reason written on it. Removing it would make correctness
+rest entirely on the key comparison being complete for every future caller of this hook, and the
+check costs one property read. Recorded because a line no test defends is a line the next reader is
+entitled to know the status of.
+
+### I20 — Two states, not one, for "no server answer yet"
+
+D17 lists the states but not the rule that decides between them, and the obvious reading — show the
+last answer until a new one lands — is wrong: the spec requires the group to show results only for
+the query currently in the input. So `useServerSearch` compares the answered key against the live
+(not debounced) input and reports `searching` with an empty list whenever they differ. Typing one
+more character therefore empties the server group immediately rather than leaving the previous
+query's hits under a new query, and no result ever renders under a label it does not answer.
+
+`offline` reads `ConnectionSummary.writable`, which is true for exactly `connected` and `connecting`
+— so a client still dialling on boot reads as searching rather than flashing "offline" at somebody
+who is merely early. That is the *existing* connection state, per the local-first-sync spec, not a
+second notion of online invented here.
+
+### I21 — A control character in a string literal must be written as an escape, not as a raw byte
+
+`useServerSearch` joins `limit`, `teamId` and `query` into one comparable answer key. The separator
+has to be a character that cannot occur in a team id or a typed query, so `U+0000` is the right
+choice — but the first implementation emitted it as a **literal NUL byte in the source file**.
+
+That is a build-invisible defect: it compiles, it type-checks, it passes every test. What it breaks
+is everything that reads the file as text. Git classifies the file as binary and prints `Bin 0 ->
+4731 bytes` instead of a diff, so it cannot be reviewed line by line; `grep` and ripgrep both skip
+it as binary, so it silently disappears from every repo-wide search — including the greps this
+change relies on to prove no AI path and no retro path reads the index.
+
+Written as `\u0000` the runtime value is byte-identical and the file is text again. The reason is
+recorded on the line itself, because the raw byte is the form an editor produces by default and
+nothing in lint, typecheck, test or build objects to it.
+
+Worth generalising: the repo has no gate for this. Every other source file under `apps/`,
+`packages/` and `openspec/` was checked and is NUL-free, so the rule is currently upheld by
+convention alone.

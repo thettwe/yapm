@@ -581,6 +581,9 @@ importers:
       '@tiptap/suggestion':
         specifier: 'catalog:'
         version: 3.28.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.28.0(@tiptap/pm@3.28.0))(@tiptap/pm@3.28.0)
+      '@yapm/schema':
+        specifier: workspace:*
+        version: link:../schema
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1

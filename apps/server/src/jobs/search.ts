@@ -1,4 +1,4 @@
-import { extractMentionIds, richTextToPlainText } from '@yapm/schema'
+import { extractMentionIds, richTextToPlainText, SEARCH_BODY_MAX_LENGTH } from '@yapm/schema'
 import type { DB, SearchDocumentRow, SearchEntityType, SearchSourceRow } from '@yapm/schema/db'
 import {
   deleteSearchDocuments,
@@ -25,11 +25,6 @@ export const SEARCH_BATCH_SIZE = 200
 // not a failure — it is the next pass's starting point. This is what keeps a backfill from
 // monopolising a connection for as long as the corpus takes.
 export const SEARCH_PASS_BUDGET_MS = 20_000
-
-// A pathological document must cost a known number of bytes in the row and in the GIN index rather
-// than however many its author pasted. Generous next to any real description; the truncation is
-// visible only to search, never to the editor.
-export const SEARCH_BODY_MAX_LENGTH = 20_000
 
 // Postgres' `foreign_key_violation`. A source row deleted between the read and the upsert makes the
 // whole multi-row statement fail; the batch is dropped and the next pass converges. Failing the

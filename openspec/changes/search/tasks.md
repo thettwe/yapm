@@ -167,37 +167,37 @@ client group (7–10) after the server contract it consumes exists.
 
 ## 7. Presentation primitives in `packages/ui`
 
-- [ ] 7.1 Add `SnippetText`: split on the `U+0001`/`U+0002` delimiters and render alternating spans.
+- [x] 7.1 Add `SnippetText`: split on the `U+0001`/`U+0002` delimiters and render alternating spans.
       **Never `dangerouslySetInnerHTML`.** Unknown or unbalanced delimiters degrade to plain text.
-- [ ] 7.2 Add `SearchResultRow`: entity glyph, mono issue key, title, optional snippet, optional state
+- [x] 7.2 Add `SearchResultRow`: entity glyph, mono issue key, title, optional snippet, optional state
       labels (triage, canceled), truncating not wrapping, at the issue-row density. Data-agnostic —
       it takes resolved display values and knows nothing of queries, teams or permissions. Active
       state uses the wash-plus-rule idiom (`bg-accent-soft` + a 2px `--accent-strong` left rule, ink
       stays `text-1`/`text-2`), not accent-coloured ink.
-- [ ] 7.3 Add both to the themed showcase across all three presets, light and dark, including the
+- [x] 7.3 Add both to the themed showcase across all three presets, light and dark, including the
       active, snippet-bearing and state-labelled variants.
-- [ ] 7.4 **Test** `SnippetText` renders markup-looking characters literally and interprets nothing;
+- [x] 7.4 **Test** `SnippetText` renders markup-looking characters literally and interprets nothing;
       extend `packages/ui/src/styles/contrast.test.ts` to cover the result row's ink and its
       highlighted snippet segment over the active-row background in every preset and mode.
 
 ## 8. The two shared client passes
 
-- [ ] 8.1 Add `apps/web/src/lib/debounce.ts` (or fold it into the hook — there is no such helper in
+- [x] 8.1 Add `apps/web/src/lib/debounce.ts` (or fold it into the hook — there is no such helper in
       `apps/web/src/lib/` today, which holds only `keyboard.ts` and `mutation.ts`).
-- [ ] 8.2 Add `apps/web/src/search/use-local-corpus.ts`: `useLocalSearchCorpus(teamId?)` subscribing to
+- [x] 8.2 Add `apps/web/src/search/use-local-corpus.ts`: `useLocalSearchCorpus(teamId?)` subscribing to
       `issues.byTeam` + `triage.inbox` + `cycles.byTeam` + `labels.byTeam` when a team is in context,
       and to `issues.mine` + `projects.all` + `teams.all` always; deduping issues by id; and holding a
       plaintext cache memoised on `issue.id + updatedAt`, built incrementally as rows are first seen
       rather than eagerly on the first keystroke.
-- [ ] 8.3 Add `apps/web/src/search/use-server-search.ts`: 150 ms debounce, `AbortController`, a
+- [x] 8.3 Add `apps/web/src/search/use-server-search.ts`: 150 ms debounce, `AbortController`, a
       superseded response discarded rather than rendered, the minimum-length constant from group 1
       honoured client-side so a short query issues no request, and the existing sync connection state
       read to produce the offline state rather than a second notion of "online".
-- [ ] 8.4 **Test** both hooks: no request below the minimum length; a superseded response never
+- [x] 8.4 **Test** both hooks: no request below the minimum length; a superseded response never
       renders; abort on unmount; the offline state follows the existing connection state; the corpus
       dedupes an issue reachable through two queries; and the on-device pass finds a description-only
       token that `matchesText` misses.
-- [ ] 8.5 **Measure** the plaintext cache: the cost of the first keystroke over a seeded corpus of a
+- [x] 8.5 **Measure** the plaintext cache: the cost of the first keystroke over a seeded corpus of a
       few thousand issues, and the steady-state per-keystroke cost. Record both numbers in design.md's
       implementation log. If the first keystroke exceeds the budget, the fallback is to build the
       cache lazily per matched row rather than over the corpus — decide with the number, not before.

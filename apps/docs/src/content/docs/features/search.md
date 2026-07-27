@@ -13,9 +13,9 @@ the text your browser does not hold — comment bodies, and issues in your other
 They are shown as two labelled groups, **On this device** and **From the server**, and never merged
 into one list. That is a deliberate choice and the rest of this page follows from it:
 
-- The two passes genuinely match differently — the on-device pass is a substring match, the server
-  pass is full-text — so a merged list would produce the confusing case where the server "finds
-  something the on-device pass should have".
+- The two passes genuinely match differently — the on-device pass matches literal substrings (plus a
+  strict word-prefix abbreviation), the server pass is full-text — so a merged list would produce the
+  confusing case where the server "finds something the on-device pass should have".
 - A merged list **reflows** when the second half arrives, 150 ms after you stopped typing. Arrow
   down to the third row, and the row under your cursor would move between the arrow key and
   `Enter`. yapm is keyboard-first before it is familiar, so the seam is shown instead.
@@ -31,8 +31,8 @@ structurally cannot answer.
 
 That decision is made once, at the moment the server answers. If a row syncs to your browser
 *afterwards* it is added to the on-device group above — it never removes a result you are already
-looking at, because a list that deletes the row under your cursor is worse than a list that briefly
-shows one thing twice.
+looking at, because a list that deletes the row under your cursor is worse than a list that shows
+one thing twice until you change the query.
 
 ## Where to search
 
@@ -90,7 +90,7 @@ contrast in all three presets, light and dark.
 |---|---|---|
 | **Issues** | On device **and** on the server | Title (ranked above) and description text |
 | **Comments** | Server only | The comment's own text |
-| **Projects, cycles, teams, labels** | On device only | Name substring |
+| **Projects, cycles, teams, labels** | On device only | Name — the same ladder as issues, minus the key tiers (substring plus the word-prefix abbreviation tier) |
 
 Comments are the reason the server pass exists. Your browser only syncs the comments of the issue
 you currently have open — bulk-syncing every comment of every team to every client is exactly the

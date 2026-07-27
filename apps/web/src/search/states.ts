@@ -68,7 +68,11 @@ function countPhrase(count: number, suffix: string): string {
 export function searchAnnouncement(localCount: number, state: ServerGroupState): string {
   const local = countPhrase(localCount, 'on this device')
   if (state.phase === 'ready') {
-    return `${local}, ${countPhrase(state.resultCount, 'from the server')}.`
+    const counts = `${local}, ${countPhrase(state.resultCount, 'from the server')}.`
+    // The cap is the one `ready` fact that is not in the counts: "50 results" reads as the answer
+    // rather than as the first page of it, and a screen-reader caller who is never told the set is
+    // capped has no way to learn that refining the query is what they should do next.
+    return state.truncated ? `${counts} ${SEARCH_CAPPED}.` : counts
   }
   return `${local}. ${serverGroupLine(state) ?? ''}`.trimEnd()
 }

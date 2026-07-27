@@ -237,9 +237,19 @@ describe.skipIf(DATABASE_URL === undefined)('GET /api/v1/search', () => {
       .values({ card_id: retroCardId, retro_id: retroId, author_id: memberId })
       .execute()
 
+    // `teamIds` for the reason decision I42 added it: the diff is global by design and every
+    // Postgres suite in the repo runs against ONE database, so an unscoped upsert here re-indexes
+    // rows this file does not own — which is what silently healed the backdated issue in
+    // `apps/server/src/jobs/search.pg.test.ts`. It also protects this suite from itself: the diff
+    // orders by UUIDv7 id ascending, so over a shared accumulating database an unscoped
+    // `limit: 200` drops the NEWEST rows first, and these fixtures are the newest thing in it.
     for (const entityType of ['issue', 'comment'] as const) {
       for (let pass = 0; pass < 20; pass += 1) {
-        const rows = await reconcileDiffBatch(db, { entityType, limit: 200 })
+        const rows = await reconcileDiffBatch(db, {
+          entityType,
+          limit: 200,
+          teamIds: [teamOneId, teamTwoId],
+        })
         if (rows.length === 0) break
         const documents: SearchDocumentRow[] = rows.map((row) => ({
           entityType: row.entityType,

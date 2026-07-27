@@ -5,7 +5,12 @@ import { SearchIcon } from 'lucide-react'
 import { type KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef } from 'react'
 import { ownsKeyboard } from '@/lib/keyboard'
 import { useSearchCursor } from '@/search/cursor'
-import { localSearchRows, type SearchRow, serverSearchRows } from '@/search/results'
+import {
+  localSearchRows,
+  type SearchRow,
+  serverSearchRows,
+  withoutLocalDuplicates,
+} from '@/search/results'
 import {
   SEARCH_EMPTY_REFINE,
   SEARCH_EMPTY_STALE,
@@ -55,7 +60,10 @@ export function SearchView({ query, onQueryChange }: SearchViewProps) {
     () => localSearchRows(corpus.search(query), fallbackTeamId),
     [corpus, query, fallbackTeamId],
   )
-  const serverRows = useMemo(() => serverSearchRows(server.results), [server.results])
+  const serverRows = useMemo(
+    () => withoutLocalDuplicates(localRows, serverSearchRows(server.results)),
+    [localRows, server.results],
+  )
 
   const rowIds = useMemo(
     () => [...localRows, ...serverRows].map((row) => row.id),
@@ -152,7 +160,11 @@ export function SearchView({ query, onQueryChange }: SearchViewProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex h-11 items-center gap-3 rounded-control border border-border bg-bg-elevated px-3">
+      {/* Every sibling primary surface renders one, and a shared `/search?q=` URL opens straight
+          onto this view — with no heading, heading navigation has nothing to land on. */}
+      <h1 className="text-sm font-semibold tracking-tight text-text-1">Search</h1>
+
+      <div className="flex h-11 items-center gap-3 rounded-control border border-border bg-bg-elevated px-3 transition-[color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
         <SearchIcon aria-hidden="true" className="size-4 shrink-0 text-text-3" />
         <input
           ref={inputRef}
@@ -213,16 +225,18 @@ export function SearchView({ query, onQueryChange }: SearchViewProps) {
               }}
             />
           ))}
-          {serverLine === undefined ? null : (
-            <p
-              className="px-3 py-2 font-ui text-[13px] text-text-3"
-              data-testid="search-server-state"
-            >
-              {serverLine}
-            </p>
-          )}
         </div>
       </div>
+
+      {/* Outside the listbox on purpose: a `<p>` among the options is a non-option child of a role
+          that only allows options and groups, so assistive tech may drop it or mis-count the list.
+          It is the group's caption, and the live region above carries the same fact in the audio
+          channel. */}
+      {serverLine === undefined ? null : (
+        <p className="px-3 font-ui text-[13px] text-text-3" data-testid="search-server-state">
+          {serverLine}
+        </p>
+      )}
 
       {bothEmpty ? (
         <div className="flex flex-col gap-1 px-3 py-6" data-testid="search-empty">

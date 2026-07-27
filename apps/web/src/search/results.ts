@@ -124,3 +124,28 @@ export function localSearchRows(
 export function serverSearchRows(results: readonly ServerSearchResult[]): SearchRow[] {
   return results.map(serverSearchRow)
 }
+
+/**
+ * Drop the server rows that name something the on-device group already shows.
+ *
+ * The two passes overlap by construction — a whole-word title token reaches both — and without this
+ * the same issue renders twice, once per group, which reads as a bug rather than as a seam. Only
+ * ISSUE rows are suppressed: a comment hit is a different piece of text about the same issue, and
+ * the on-device pass structurally cannot hold comment bodies, so it is never the duplicate.
+ *
+ * Suppression is strictly at the TAIL. Nothing above the server group can move, so D8's
+ * append-only invariant — and the cursor keyed to a row identity — is untouched.
+ */
+export function withoutLocalDuplicates(
+  localRows: readonly SearchRow[],
+  serverRows: readonly SearchRow[],
+): SearchRow[] {
+  const seen = new Set<string>()
+  for (const row of localRows) {
+    if (row.target.kind === 'issue') seen.add(`${row.kind}:${row.target.issueId}`)
+  }
+  if (seen.size === 0) return [...serverRows]
+  return serverRows.filter(
+    (row) => row.target.kind !== 'issue' || !seen.has(`${row.kind}:${row.target.issueId}`),
+  )
+}

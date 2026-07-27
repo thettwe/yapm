@@ -190,6 +190,43 @@ test('the existing action rows still filter and execute', async () => {
   expect(harness.navigate).toHaveBeenCalledWith({ to: '/inbox' })
 })
 
+// `cmdk`'s scorer matched a fuzzy subsequence, so `gti` reached "Go to inbox". Taking filtering off
+// it (D8) had to keep that reach, or every abbreviation anybody had learned stopped working.
+test('an abbreviation still reaches the action row it always reached', async () => {
+  mount()
+  await type('gti')
+
+  expect(screen.getByText('Go to inbox')).toBeInTheDocument()
+  expect(screen.queryByText('New issue')).not.toBeInTheDocument()
+})
+
+// The two passes overlap by construction on a whole-word title token. Without suppression the same
+// issue renders twice, once per group, which reads as a bug rather than as a seam.
+test('an issue both passes match renders once', async () => {
+  harness.rows = {
+    'teams.all': [TEAM],
+    'issues.byTeam': [issue({ id: 'issue-9', number: 9, title: 'Replica resync' })],
+  }
+  mount()
+  await type('replica')
+  await settleServer([
+    {
+      ...serverHit('s1', 'Replica resync'),
+      type: 'issue',
+      id: 'issue-9',
+      issueId: 'issue-9',
+      snippet: '',
+    },
+    // A comment on the same issue is DIFFERENT text about it, and the on-device pass structurally
+    // cannot hold comment bodies — so it stays.
+    { ...serverHit('s2', 'Replica resync'), issueId: 'issue-9' },
+  ])
+
+  expect(screen.getAllByText('Replica resync')).toHaveLength(2)
+  expect(itemValues()).not.toContain('server:issue:issue-9')
+  expect(itemValues()).toContain('server:comment:s2')
+})
+
 test('a description-only token surfaces in the on-device group', async () => {
   harness.rows = {
     'teams.all': [TEAM],

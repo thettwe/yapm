@@ -137,6 +137,13 @@ search: documents=8421 sources=8437 oldestUnindexedAgeSeconds=6
 A stale index must never take a container out of rotation — search degrading is not the app being
 down.
 
+The three numbers are computed at most **once per `SEARCH_INDEX_INTERVAL_SECONDS`** and served from
+memory in between. The container healthcheck probes `/readyz` every ten seconds and the query behind
+these counters scans the whole corpus, so recomputing it per probe would make an idle instance pay
+for its own health check; the pass that moves the counters runs on the same interval anyway. The
+statement carries `SEARCH_STATEMENT_TIMEOUT_MS` as its own ceiling, so a probe that gives up also
+cancels the scan in Postgres rather than leaving it holding a connection.
+
 A steady `oldestUnindexedAgeSeconds` in the tens of seconds is normal. One that climbs without
 bound means the tail is not keeping up or is not running: check for `search index tail ran` and
 `search reconcile ran` lines in the app log.

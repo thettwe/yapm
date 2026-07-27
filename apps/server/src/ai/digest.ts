@@ -1,5 +1,4 @@
 import {
-  type AuthContext,
   type CycleDigestStatus,
   type CycleFacts,
   type DigestContent,
@@ -8,6 +7,7 @@ import {
   dropUncitedItems,
   newId,
   type RosterMember,
+  SYSTEM_AUTH_CONTEXT,
   upsertCycleDigest,
 } from '@yapm/schema'
 import { type DB, getWorkspaceAiSpendUsd } from '@yapm/schema/db'
@@ -21,11 +21,6 @@ import { type AiGateway, AiSpendCapError } from './gateway.js'
 // Read-only (no mutator writes) and structured-only (no tools, no egress), so the injection
 // architecture is exercised end to end without the HITL-write path. AI off / keyless / spend-capped
 // writes `ai_off`; an error writes `failed`; either way the cycle view falls back to raw evidence.
-
-// The pre-compute runs under the workspace's own system principal (like cycle rollover) — no user is
-// impersonated; the digest is team-internal and structured-only, so there is no per-user ceiling to
-// enforce here (the write path is server-only and cannot be reached by a client).
-const SYSTEM_CTX: AuthContext = { userID: 'system', role: 'admin' }
 
 // Trusted operator authority — the NON-spoofable system channel. The untrusted work-graph text is
 // delimited in the user message (never concatenated here as instructions). Encodes the substrate
@@ -122,7 +117,9 @@ export async function runCycleDigest(
 
   try {
     const spendSoFarUsd = await getWorkspaceAiSpendUsd(deps.db, workspaceId)
-    const result = await deps.gateway.generateStructured(workspaceId, SYSTEM_CTX, {
+    // The system principal, not an invoking user: the digest is team-internal and structured-only,
+    // so there is no per-user ceiling to enforce, and the write path is server-only.
+    const result = await deps.gateway.generateStructured(workspaceId, SYSTEM_AUTH_CONTEXT, {
       system: DIGEST_SYSTEM_PROMPT,
       input: buildDigestInput(facts),
       schema: digestContentSchema,

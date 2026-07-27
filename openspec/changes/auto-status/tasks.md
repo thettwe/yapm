@@ -6,20 +6,20 @@ falsifiable check (5) before the UI, so the behaviour is proven before it is exp
 
 ## 1. The pure decision ladder, consumer-free
 
-- [ ] 1.1 Add `SYSTEM_ACTOR_ID` and `SYSTEM_AUTH_CONTEXT` to `packages/schema/src/zero/context.ts`
+- [x] 1.1 Add `SYSTEM_ACTOR_ID` and `SYSTEM_AUTH_CONTEXT` to `packages/schema/src/zero/context.ts`
       (`{ userID: 'system', role: 'admin' }`), with a comment stating the two rules that bound it: it
       is reachable only from server-side call sites driven by instance-produced data, and it is never
       derived from a request. Export both from `@yapm/schema`.
-- [ ] 1.2 Point `apps/server/src/jobs/cycles.ts` at the shared constant and delete its local
+- [x] 1.2 Point `apps/server/src/jobs/cycles.ts` at the shared constant and delete its local
       `SYSTEM_CTX` (`cycles.ts:19`). The value is identical; the point is one definition. Confirm the
       cycle job's existing tests still pass unchanged.
-- [ ] 1.3 Create `packages/schema/src/zero/auto-status.ts` with `AUTO_STATUS_RANK`
+- [x] 1.3 Create `packages/schema/src/zero/auto-status.ts` with `AUTO_STATUS_RANK`
       (`backlog 0, todo 1, in_progress 2, in_review 3, done 4`; `canceled` absent by construction, not
       by a branch) and `AUTO_STATUS_MAX_LINKED_ISSUES = 25`.
-- [ ] 1.4 Implement `decideAutoStatus(input): IssueStatus | null` in that file, exactly the eight
+- [x] 1.4 Implement `decideAutoStatus(input): IssueStatus | null` in that file, exactly the eight
       ordered guards in design.md §D6. Pure, synchronous, no ZQL, no imports beyond `context.js`
       types. The target map is `merged → done`, `open → in_review`, everything else `null`.
-- [ ] 1.5 Export the module from `packages/schema/src/index.ts`. Run
+- [x] 1.5 Export the module from `packages/schema/src/index.ts`. Run
       `node scripts/check-boundaries.mjs` — nothing new may cross a package boundary.
 - [ ] 1.6 **Test (unit, no DB)** `packages/schema/src/zero/auto-status.test.ts`: a table driving every
       guard to `null` one at a time (off; event before `autoStatusSince`; no state edge; needs_triage;
@@ -31,18 +31,18 @@ falsifiable check (5) before the UI, so the behaviour is proven before it is exp
 
 ## 2. Migration `0016_auto_status` and the schema surface
 
-- [ ] 2.1 Write `packages/schema/src/migrations/0016_auto_status.ts`: add
+- [x] 2.1 Write `packages/schema/src/migrations/0016_auto_status.ts`: add
       `team.auto_status_since timestamptz null` and `issue.last_human_status_at timestamptz null`,
       then one `UPDATE issue SET last_human_status_at = updated_at`. No index, no constraint, no
       extension. `down()` drops both columns. Register it in `migrations/index.ts`.
-- [ ] 2.2 Add both columns to the hand-written Kysely `DB` interface in
+- [x] 2.2 Add both columns to the hand-written Kysely `DB` interface in
       `packages/schema/src/db/types.ts` (nullable `Timestamp`, not `Generated`).
-- [ ] 2.3 Add both to the Zero schema in `packages/schema/src/zero/schema.ts` as
+- [x] 2.3 Add both to the Zero schema in `packages/schema/src/zero/schema.ts` as
       `number().from('auto_status_since').optional()` and
       `number().from('last_human_status_at').optional()`.
 - [ ] 2.4 **Test (integration)** extend `packages/schema/src/db/schema-drift.test.ts` so both columns
       are asserted present in Postgres **and** in the Zero schema.
-- [ ] 2.5 **Verify on the live stack before building on it** (the `search` I1 precedent): bring up
+- [x] 2.5 **Verify on the live stack before building on it** (the `search` I1 precedent): bring up
       `POSTGRES_HOST_PORT=5446 ZERO_CACHE_HOST_PORT=4854 YAPM_HOST_PORT=3006 docker compose -p yapm-as
       -f docker/docker-compose.dev.yml` from `down -v`, apply the migration against a **live**
       zero-cache, then delete the replica volume and restart to exercise the fresh-install path.

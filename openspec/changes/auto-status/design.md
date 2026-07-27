@@ -470,3 +470,104 @@ problem), and whether the section belongs on the connectors page or a future tea
 ## Decisions made during implementation
 
 <!-- Appended during the build phase: what was ambiguous, what was chosen, and why. -->
+
+*(Ladder + schema-surface phase — the two consumer-free producers: the pure decision function and
+the storage surface. No call site of `decideAutoStatus` exists yet, by design.)*
+
+### I1 — Task 2.5: two nullable `timestamptz` columns are a replication non-event, on both paths
+
+Run against the `yapm-as` compose project (ports 5446/4854/3006), `postgres:18` +
+`rocicorp/zero:1.8.0`, from `down -v`, with no publication change — the default
+`FOR TABLES IN SCHEMA public` throughout. Migrations `0001`–`0015` were applied first and allowed to
+replicate fully (write-worker reached `create-index search_document_watermark_idx`,
+`"stage":"Replicating"`), and a workspace + team + one three-day-old `todo` issue were seeded, so the
+backfill had a row to touch and the copy had a row to carry.
+
+**(a) The upgrade path — DDL applied to a live zero-cache.** `0016_auto_status` ran while zero-cache
+was replicating. The change-streamer logged both statements off the WAL
+(`alter table "team" add column "auto_status_since" timestamptz`,
+`alter table "issue" add column "last_human_status_at" timestamptz`, each as `ddlStart` →
+`ddlUpdate` → `1 schema change(s)`), and the **write-worker applied both**:
+
+```
+write-worker  add-column team    name=auto_status_since     typeOID=1184 dataType=timestamptz notNull=false dflt=null pos=8
+write-worker  add-column issue   name=last_human_status_at  typeOID=1184 dataType=timestamptz notNull=false dflt=null pos=19
+write-worker  PRAGMA optimized after schema change (0 ms)
+```
+
+No error, no warning, no resync, `"status":"OK"` / `"stage":"Replicating"` throughout. The one-shot
+`update issue set last_human_status_at = updated_at` replicated as ordinary row traffic; in Postgres
+`last_human_status_at = updated_at` on the pre-existing row, so the backfill did what it claims.
+
+Contrast with the `search` I1 finding, which is why this was confirmed rather than assumed: there,
+the GIN **expression index** was silently skipped by the write-worker. Nothing here is skipped —
+`timestamptz` (OID 1184) is already on the replication path for `created_at`, `updated_at`,
+`archived_at` and `cycle_assigned_at`, and `add-column` on an existing replicated table is a plain
+schema change.
+
+**(b) The fresh-install path — an empty replica against a schema that already has the columns.** The
+`yapm-as_zero-replica` volume was deleted and zero-cache restarted (postgres untouched). Initial sync
+copied 42 tables, and both new columns are **in the copy `SELECT` list**, which is the assertion that
+matters:
+
+```
+Starting binary copy stream of team:  SELECT "archived_at","auto_status_since","created_at","id","key","name","updated_at","workspace_id" FROM "public"."team"
+Starting binary copy stream of issue: SELECT "assignee_id","carryover_count","created_at","creator_id","cycle_assigned_at","cycle_id","description","id","last_human_status_at","needs_triage","number","priority","project_id","rank","rolled_over_from_cycle_id","status","team_id","title","updated_at" FROM "public"."issue"
+```
+
+`Finished copying 1 rows into team`, `Finished copying 1 rows into issue`, then `"stage":"Indexing"`
+→ `"stage":"Replicating"`, `"status":"OK"`, container `healthy`. The replica SQLite file could not be
+read out of the container directly (`node:sqlite` reports "file is not a database" — zero-cache's
+build uses a WAL variant stock SQLite will not open), so the copy `SELECT` and the row counts are the
+evidence, not a query against the replica file.
+
+**Conclusion: no fallback needed.** No custom publication, no `ZERO_APP_PUBLICATIONS` change, no full
+replica resync on upgrade. The rest of the change can be built on this.
+
+### I2 — `AUTO_STATUS_RANK` excludes `canceled` from its KEY TYPE, not just from its entries
+
+Tasks 1.3/design §D6 say `canceled` is "absent by construction, NOT by a branch". A
+`Partial<Record<IssueStatus, number>>` with five entries satisfies the letter of that and loses the
+spirit: the lookup then returns `number | undefined`, guard 8 needs a defensive `=== undefined`
+check to compile, and that check *is* the branch the task forbids — worse, a silent one that would
+also swallow a genuinely unranked new status.
+
+So the rank map is keyed by an exported `AutoStatusRung = Exclude<IssueStatus, 'canceled'>` and typed
+`Readonly<Record<AutoStatusRung, number>>`. Three consequences, all wanted: guard 5's
+`currentStatus === 'canceled'` early return narrows `currentStatus` to `AutoStatusRung`, so guard 8
+is a total lookup with no defensive branch; the target map's values are `AutoStatusRung`, so an
+unrankable target is unrepresentable rather than merely absent; and adding a seventh `IssueStatus`
+**fails to compile here** until someone decides where — or whether — it sits on the ladder, which is
+the property "by construction" is supposed to buy.
+
+### I3 — The drift test's `KYSELY_DB` mirror was updated here; its new *assertions* stay with task 2.4
+
+`schema-drift.test.ts` holds a hand-written mirror of the `DB` interface and fails on any column
+present in Postgres but absent from the mirror. Adding the migration without touching it leaves the
+suite red between this phase and the test phase, which contradicts "the app runs after every task".
+The two mirror entries are therefore part of the surface (tasks 2.2/2.3), not part of the test: they
+are the same mechanical edit as `db/types.ts`, in a different file. Task 2.4's actual content — an
+explicit assertion that both columns are present in Postgres *and* in the Zero schema — is untouched
+and still owned by the test phase.
+
+### I4 — `apps/server/src/ai/digest.ts` held a THIRD copy of the system principal; folded too
+
+Task 1.2 names only `jobs/cycles.ts:19`, but a grep for the literal found the same
+`const SYSTEM_CTX: AuthContext = { userID: 'system', role: 'admin' }` at `ai/digest.ts:28`, passed to
+`gateway.generateStructured` as the workspace's own principal for AI config and spend resolution.
+Leaving it would make design §D7's claim — "the product has exactly one definition of *the instance
+acting as itself*" — false on the day it is written, and it is the same principal under the same two
+rules (server-side, instance-produced data, never derived from a request). Folded onto
+`SYSTEM_AUTH_CONTEXT`; the digest's own reason for using it (team-internal, structured-only, no
+per-user ceiling to enforce) moved to a comment at the call site, since that is a constraint the
+shared constant cannot carry. All 32 server test files / 236 tests pass unchanged.
+
+### I5 — Gate output for this phase
+
+`pnpm turbo lint` clean (457 files). `pnpm turbo typecheck build` clean (11 tasks).
+`node scripts/check-boundaries.mjs` clean. With
+`DATABASE_URL=postgres://yapm:yapm@localhost:5446/yapm`: `@yapm/schema` 42 files / 578 tests passed,
+`@yapm/server` 32 files / 236 tests passed — including `src/jobs/cycles.test.ts` (4 tests) unchanged,
+which is task 1.2's stated confirmation. `grep -rn decideAutoStatus apps packages --include="*.ts"`
+returns only the definition and its `index.ts` re-export: no consumer exists yet, which is the point
+of this phase.

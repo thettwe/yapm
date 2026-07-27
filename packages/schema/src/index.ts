@@ -49,6 +49,12 @@ export {
   mutatorToolNames,
   needsApproval,
 } from './zero/ai-tools.js'
+export type { AutoStatusInput, AutoStatusRung } from './zero/auto-status.js'
+export {
+  AUTO_STATUS_MAX_LINKED_ISSUES,
+  AUTO_STATUS_RANK,
+  decideAutoStatus,
+} from './zero/auto-status.js'
 export type {
   ConnectorContext,
   ConnectorDefinition,
@@ -127,6 +133,8 @@ export {
   RETRO_VOTE_TARGETS,
   REVIEW_STATES,
   SUBSCRIPTION_STATES,
+  SYSTEM_ACTOR_ID,
+  SYSTEM_AUTH_CONTEXT,
   THEME_PRESETS,
   WORKSPACE_ROLES,
 } from './zero/context.js'

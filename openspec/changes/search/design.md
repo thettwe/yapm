@@ -1310,3 +1310,151 @@ passes. It is production surface added for a test, which is worth being explicit
 alternative is a test that writes rows it does not own, and the same narrowing also protects the
 schema suite from itself — the diff orders by id, ids are UUIDv7, so the newest rows sort last and an
 unscoped `limit: 200` over a large shared database would drop this fixture first.
+
+### I43 — Review round 1: the palette's on-device group was not team-scoped
+
+D15 says the palette means ONE team in both groups, and `/search` means every team in both. The hook
+implemented the second half and half of the first: `useLocalSearchCorpus` gated `issues.byTeam`,
+`triage.inbox`, `cycles.byTeam` and `labels.byTeam` on the team argument but subscribed
+`queries.issues.mine()` unconditionally — and `mine` spans every team the caller belongs to. So the
+palette's "On this device" group could show an issue from another team while "From the server",
+which sends `teamId`, could not. Two groups on one surface answering different questions is exactly
+what D15's scope column exists to prevent, and `features/search.md`'s table already documented the
+behaviour that was never implemented.
+
+`mine` is now gated the same way the other four are. Off a team surface it is still the on-device
+pass's only issue source, which is D15's thinner half working as designed. `projects.all` and
+`teams.all` stay ungated deliberately: they are navigation targets rather than team-scoped work
+data, and removing them would regress I26's project, cycle and label row resolution.
+
+`loaded` had to move with it — it was `mineResult.type === 'complete' && …`, which under a team
+context would now wait forever on a subscription that is never made.
+
+### I44 — Review round 1: an issue both passes match rendered twice
+
+The two passes overlap by construction — any whole-word title token reaches the on-device ladder AND
+Postgres FTS — and nothing suppressed the second copy, so a common query rendered the same issue
+once per group. That reads as a bug rather than as a seam, which is the one thing H12's two-group
+answer cannot afford.
+
+`withoutLocalDuplicates` drops a server row whose ISSUE is already in the on-device group, on both
+surfaces (one implementation, per D15's "both surfaces consume one hook each"). Comment hits stay:
+a comment is different text about the same issue, and the on-device pass structurally cannot hold
+comment bodies, so it is never the duplicate. Suppression is strictly at the TAIL, so D8's
+append-only invariant and the identity-keyed cursor are untouched.
+
+### I45 — Review round 1: a stall in the issue tail was skipping the comment tail permanently
+
+`runSearchIndexTail` tracked `drained` once for the whole pass and broke the outer entity-type loop
+on `!drained`. A timestamp collision in the ISSUE tail therefore skipped the comment tail entirely —
+and permanently, because a collision is self-perpetuating until the reconcile heals it. Comments
+would have stopped being indexed by the tail for as long as the collision lasted, with the only
+signal a warn line about issues.
+
+Drain state is now per entity type. The outer `break` is reserved for the wall-clock-budget case,
+which is the only condition that genuinely means there is no time left for the next type; a stall
+still contributes `drained: false` to the returned result, because it still means "not caught up".
+
+Proved in `search-tail.test.ts` rather than against live Postgres: reproducing a collision in the
+shared database means writing rows the suite does not own, which is precisely what I42 was about.
+
+### I46 — Review round 1: the `/readyz` search entry recomputed an O(corpus) scan per probe
+
+`searchIndexFreshness` is a full anti-join over `issue` and `comment`. The container healthcheck
+probes `/readyz` every ten seconds, so an idle instance was paying a corpus scan every ten seconds
+for a number that cannot move faster than the pass that writes it. Worse, `nonGatingCheck`'s 2 s
+guard is a `Promise.race`: it abandons the JavaScript promise and leaves the statement running, so a
+slow scan kept holding a pooled connection while the next probe started another one on top of it.
+
+`createSearchFreshnessProbe` memoises the answer for one `SEARCH_INDEX_INTERVAL_SECONDS`, coalesces
+concurrent probes onto one read, and sets `SEARCH_STATEMENT_TIMEOUT_MS` as a `set local
+statement_timeout` so an abandoned probe is actually cancelled in Postgres. The spec requires the
+three fields be **exposed**, not recomputed per probe, so caching keeps it satisfied.
+
+### I47 — Review round 1: taking filtering off `cmdk` had silently narrowed what matches
+
+D8 moved palette filtering onto the shared core and claimed ordinary palette behaviour must not
+regress. Matching did: `cmdk`'s scorer is a fuzzy subsequence, so `gti` reached "Go to inbox" and
+`eng12` reached `ENG-12`, and a plain substring predicate reaches neither.
+
+The ladder gained a sixth tier, `abbreviation`, appended below `issue-key-partial` for exactly I3's
+reason — dropping reach that already existed would be a regression in a change meant to widen
+search. It is deliberately **not** `cmdk`'s rule: a plain character subsequence would let `log` match
+"Landing page for the org", and this predicate is also the issue list's text filter, where there is
+no ranking to bury a bad match under. The tier requires the needle to be spellable as successive
+WORD PREFIXES, over the title and the issue key only — a subsequence over a two-thousand-character
+body would match nearly anything, and the body has a tier of its own.
+
+The alternative considered and rejected: import `cmdk`'s `defaultFilter` and use `score > 0` inside
+`paletteRowMatches`. That would have restored the action rows only — the palette's result rows are
+scored by the ladder, not by `paletteRowMatches` — leaving `eng12` broken, and it would have put a
+second matching predicate on one surface, which is the fork D8 and I3 both refused.
+
+Re-measured against task 8.5's corpus, because the tier runs for every row the literal tiers miss —
+which is most of them: `corpus=3000 build=9.2ms firstKeystroke=2.49ms steadyKeystroke=1.96ms`,
+against I18's ~1 ms. Still two orders of magnitude inside the 100 ms budget, and the walk is
+memoised on the (word, needle position) pair and never touches the body.
+
+### I48 — Review round 1: three keyboard and screen-reader gaps on `/search`
+
+Grouped because they are one omission each rather than one defect:
+
+- The capped-results notice was rendered only as text. `searchAnnouncement` now appends it, because
+  the live region is a screen-reader caller's only channel for the one `ready` fact the counts do not
+  carry — "50 results" reads as the answer rather than as the first page of it.
+- That notice was also a `<p>` inside `role="listbox"`, which allows options and groups and not
+  captions. It is now a sibling below the list. The palette's copy of the line is left where it is:
+  it never shows the cap (I30), and moving it out of `cmdk`'s scroll container would pin a
+  group caption below the scroll area.
+- `/search` rendered no `<h1>`, alone among the primary surfaces, so a shared search URL opened with
+  nothing for heading navigation to land on. It has one now, matching the sibling pattern.
+
+And the query field had `outline-none` with no focus ring on its container, making it the only
+page-level text input in the app with no visible focus indicator; the container now carries
+`input.tsx`'s tokenized `focus-within` ring.
+
+### I49 — Review round 1: the palette's result rows never rendered as selected
+
+`SearchResultRow` takes `active`, and `/search` passes it. The palette did not, so a selected result
+row got `CommandItem`'s wash and lost the accent rule — the same primitive looking different
+selected on two surfaces. `active` is threaded from the palette's own cursor rather than read back
+out of `cmdk` via `useCommandState`: the cursor is controlled here (D8), so the component already
+knows the answer, and reaching into the primitive for state the surface owns would be a second
+source of truth for it.
+
+### I50 — Review round 1: the route oracle suite was re-indexing rows it does not own
+
+I42 added `teamIds` to `reconcileDiffBatch` and applied it in `packages/schema/src/db/search.pg.test.ts`,
+but `apps/server/src/search/routes.pg.test.ts`'s `beforeAll` ran the same loop unscoped —
+reproducing the exact race I42 diagnosed, against a sibling suite in the same package and the same
+database. It also left the suite exposed to the second half of I42's reasoning: the diff orders by
+UUIDv7 id ascending, so over a shared accumulating database an unscoped `limit: 200` drops the
+newest rows first, and these fixtures are the newest thing in it. Now scoped to its two teams.
+
+### I51 — Review round 2: duplicate suppression was re-decided on every render
+
+I44's suppression read the live on-device group inside a `useMemo` keyed on that group's identity.
+The corpus keeps growing after the server group has painted — the sync engine replicates a row
+seconds later — so a late local arrival did not merely stop rendering a duplicate, it DELETED a
+server row the caller was already looking at, and the cursor keyed to that row identity fell back to
+the top of the list. The append-only invariant D8 states covers additions; removals were never named
+because nothing was supposed to remove.
+
+`useDedupedServerRows` (`apps/web/src/search/use-server-rows.ts`) decides suppression **once per
+answer**: the memo is keyed on `(query, results)` and reads the local group through a ref, so a
+corpus change cannot re-open the question, and an id already shown for the current query is retained
+for as long as the answer still carries it. The retained set is cleared when the query changes. Both
+surfaces call the one hook, so the palette and `/search` cannot drift on it.
+
+The e2e companion had to move with it. 11.3's late arrival was three issues the on-device pass also
+holds, so suppression correctly removed all three and left the test waiting for a group that could
+never appear. It now seeds a comment on one of them — text the on-device pass structurally cannot
+hold — and additionally pins the suppression itself: exactly one row under "From the server".
+
+### I52 — Review round 2: two prose claims the `abbreviation` tier had made stale
+
+I47 added the sixth tier and amended the docs page. `TECHSTACK.md`'s Search row still read "So search
+is exact, not fuzzy" — true of the server pass, and now wrong about the client one, which reaches
+`Change status` from `cs` — and still described the client pass as plain "substring semantics". Both
+scoped to what shipped. The change's own spec carried the same two phrasings ("substring on-device",
+"by name substring"); the acceptance criteria now describe the six-tier ladder they are judging.

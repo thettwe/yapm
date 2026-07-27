@@ -153,9 +153,14 @@ export async function runSearchIndexTail(options: SearchIndexOptions): Promise<S
     // Read ONCE per entity type, then walked forward in memory. Re-reading it per batch would be a
     // spin whenever a full batch shares one timestamp, because `>=` would re-select the same rows.
     let since = await searchWatermark(db, entityType)
+    // Per type, because a stall is a property of ONE type's cursor. A shared flag let a timestamp
+    // collision in the issue tail skip the comment tail entirely — and permanently, because the
+    // collision is self-perpetuating until the reconcile heals it, so comments would never index.
+    let outOfBudget = false
     for (;;) {
       if (clock() >= deadline) {
         drained = false
+        outOfBudget = true
         break
       }
       const rows =
@@ -182,7 +187,9 @@ export async function runSearchIndexTail(options: SearchIndexOptions): Promise<S
       }
       since = last
     }
-    if (!drained) break
+    // Only a spent wall-clock budget means there is no time left for the NEXT type. A stall does
+    // not: the next type's cursor is independent and still has budget to spend.
+    if (outOfBudget) break
   }
 
   if (indexed > 0 || dropped > 0) {

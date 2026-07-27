@@ -9,7 +9,6 @@ import {
   pingDatabase,
   readReplicationStatus,
   type SecretCodec,
-  searchIndexFreshness,
   seedWorkspace,
 } from '@yapm/schema/db'
 import { createAiAdminRoutes } from './ai/admin-routes.js'
@@ -32,6 +31,7 @@ import { databaseCheck, nonGatingCheck, replicationCheck } from './health.js'
 import { type Scheduler, startScheduler } from './jobs/scheduler.js'
 import { createLogger, type Logger } from './logger.js'
 import { createMailer } from './mail/index.js'
+import { createSearchFreshnessProbe } from './search/freshness.js'
 import { createSearchRoutes } from './search/routes.js'
 import { createSessionContextResolver } from './zero/context.js'
 import { createZeroDatabase } from './zero/db-provider.js'
@@ -211,6 +211,12 @@ async function main(): Promise<void> {
     logger.error({ err: error }, 'failed to start the background job scheduler')
   }
 
+  const searchFreshness = createSearchFreshnessProbe({
+    db: database.db,
+    ttlMs: env.SEARCH_INDEX_INTERVAL_SECONDS * 1000,
+    statementTimeoutMs: env.SEARCH_STATEMENT_TIMEOUT_MS,
+  })
+
   const app = createApp({
     logger,
     readinessChecks: [
@@ -219,11 +225,10 @@ async function main(): Promise<void> {
         assertReplicationHealthy(await readReplicationStatus(database.db)),
       ),
       // Non-gating: how far behind the index is, for an operator, never a verdict on the process.
-      nonGatingCheck('search', async () => {
-        const freshness = await searchIndexFreshness(database.db)
-        const age = freshness.oldestUnindexedAgeSeconds
-        return `documents=${freshness.documents} sources=${freshness.sources} oldestUnindexedAgeSeconds=${age === null ? 'none' : age}`
-      }),
+      // Memoised for one incremental-pass interval — the probe runs every ten seconds and the scan
+      // behind it is O(corpus), so recomputing it per probe would be the readiness check costing
+      // more than the traffic it guards.
+      nonGatingCheck('search', searchFreshness),
     ],
     webDistDir: env.WEB_DIST_DIR,
     authRoutes: createAuthRoutes({

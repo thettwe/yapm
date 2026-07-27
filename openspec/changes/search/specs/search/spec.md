@@ -9,7 +9,9 @@ full-text search, debounced behind an abortable request, and SHALL **extend** th
 with text the client does not hold — comment bodies, and issues in the caller's other teams.
 
 The two passes SHALL be presented as **two labelled groups**, never merged into one list, because
-they have different match semantics (substring on-device, full-text on the server) and because a
+they have different match semantics (a literal ladder on-device — exact key, title prefix, title
+substring, body substring, partial key, then a strict word-prefix abbreviation — against full-text
+on the server) and because a
 merged list would reorder when the second half arrives.
 
 Work-graph placement: search is a read surface over existing team-scoped entities; it introduces no
@@ -203,8 +205,9 @@ text) and **comments** (their own body only — the parent issue's title SHALL N
 comment's indexed text, so searching an issue title returns the issue once rather than the issue plus
 each of its comments).
 
-Projects, cycles, teams and labels SHALL be searchable **on-device only**, by name substring over
-rows already synced under existing permissioned queries, and SHALL NOT be indexed server-side.
+Projects, cycles, teams and labels SHALL be searchable **on-device only**, by the same shared ladder
+over their names — substring, and the strict word-prefix abbreviation tier below it — over rows
+already synced under existing permissioned queries, and SHALL NOT be indexed server-side.
 
 Results SHALL include issues awaiting triage and canceled issues, each **visibly labelled**. Both are
 readable, so neither is a permission question; search reports what exists, and lists curate.

@@ -9,7 +9,10 @@ import type { ReactNode } from 'react'
 // runs `shouldFilter={false}` and filters here instead.
 //
 // The predicate is the shared core's, so "matches" means the same thing in the palette, in the
-// issue list's text filter and in the on-device pass. The ORDER is declaration order, untouched:
+// issue list's text filter and in the on-device pass. It carries the `abbreviation` tier for this
+// call site's sake: `cmdk` scored a fuzzy subsequence, so `gti` reached "Go to inbox", and a
+// launcher that quietly stops answering the abbreviations people have learned is a regression
+// nobody would report as one. The ORDER is declaration order, untouched:
 // ranking action rows by tier would put "Assign…" above "Accept from triage" for one query and
 // below it for the next, and a launcher whose rows move for reasons the user cannot see is worse
 // than one that never moves at all.

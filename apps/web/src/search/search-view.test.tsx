@@ -181,7 +181,7 @@ test('the offline state comes from the existing connection state and leaves the 
   expect(screen.getByText('match alpha')).toBeInTheDocument()
 })
 
-test('a capped result set invites a narrower query', async () => {
+test('a capped result set invites a narrower query, in text and in the live region', async () => {
   const surface = mount()
   await surface.type('match')
   await settleServer([serverHit('s1', 'A hit')], true)
@@ -189,6 +189,23 @@ test('a capped result set invites a narrower query', async () => {
   expect(screen.getByTestId('search-server-state')).toHaveTextContent(
     'Showing the first 50 — refine your query',
   )
+  // The cap is not visible to a screen-reader caller anywhere else: the notice is a caption, not an
+  // option, so the live region is the only channel that carries it.
+  expect(screen.getByTestId('search-announcement')).toHaveTextContent(
+    'Showing the first 50 — refine your query',
+  )
+})
+
+// The notice is a caption for the group, not one of its options. A `<p>` among the options is a
+// child ARIA's `listbox` role does not allow.
+test('the server-state notice is not a child of the listbox', async () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.mine': [issue({ id: 'a', title: 'match alpha' })] }
+  const surface = mount()
+  await surface.type('match')
+  await settleServer([], false)
+
+  const listbox = screen.getByRole('listbox')
+  expect(listbox.contains(screen.getByTestId('search-server-state'))).toBe(false)
 })
 
 test('a server hit is attributed to its issue and carries its state label', async () => {

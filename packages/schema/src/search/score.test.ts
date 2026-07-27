@@ -16,6 +16,7 @@ describe('the tier ladder', () => {
       'title-substring',
       'body-substring',
       'issue-key-partial',
+      'abbreviation',
     ])
   })
 
@@ -44,6 +45,21 @@ describe('the tier ladder', () => {
 
   it('ranks a partial issue key last, preserving the list filter predicate', () => {
     expect(scoreSearchText(ISSUE, 'ng-1')).toBe('issue-key-partial')
+  })
+
+  // The reach `cmdk`'s scorer used to provide, kept when the palette took filtering off it (D8).
+  it('ranks a word-boundary abbreviation last, below every literal hit', () => {
+    expect(scoreSearchText(ISSUE, 'strf')).toBe('abbreviation')
+    expect(scoreSearchText(ISSUE, 'eng12')).toBe('abbreviation')
+    expect(scoreSearchText({ title: 'Change status' }, 'cs')).toBe('abbreviation')
+    expect(scoreSearchText({ title: 'Go to inbox notifications' }, 'gti')).toBe('abbreviation')
+  })
+
+  // A plain character subsequence would match this, and an unranked list filter that matches it
+  // feels broken. The needle has to be spellable as successive WORD PREFIXES.
+  it('does not treat scattered characters as an abbreviation', () => {
+    expect(scoreSearchText({ title: 'Landing page for the org' }, 'log')).toBeUndefined()
+    expect(scoreSearchText(ISSUE, 'stx')).toBeUndefined()
   })
 
   it('does not match a blank query', () => {

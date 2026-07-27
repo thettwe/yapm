@@ -386,12 +386,17 @@ describe('team.setAutoStatus', () => {
 
   // The "a fresh instant" guarantee has to hold in the MUTATOR, not in the one UI call site that
   // happens to pass `Date.now()` twice: this is mounted as an AI tool whose `since` comes from the
-  // model while `updatedAt` is minted server-side. A back-dated epoch is what would let an agent
-  // replay a connector backfill across a board, so it is clamped to the write's own instant.
-  it('refuses to store an epoch older than the write that set it', async () => {
+  // model while `updatedAt` is minted server-side. Both directions are hazards — a back-dated epoch
+  // lets an agent replay a connector backfill across a board, and a forward-dated one leaves the
+  // team reading "On" while no pull-request event can ever clear the guard — so the stored epoch is
+  // the write's own instant either way, and `since` says only on or off.
+  it.each([
+    ['back-dated', 0],
+    ['forward-dated', 9_000],
+  ])("stores the write's own instant, not a %s epoch", async (_label, since) => {
     const id = newId()
     const { tx, calls } = fakeTx([{ id }])
-    await setTeamAutoStatus.fn({ tx, args: { id, since: 0, updatedAt: 5_000 }, ctx: ADMIN })
+    await setTeamAutoStatus.fn({ tx, args: { id, since, updatedAt: 5_000 }, ctx: ADMIN })
     expect(calls).toEqual([
       { table: 'team', verb: 'update', value: { id, autoStatusSince: 5_000, updatedAt: 5_000 } },
     ])

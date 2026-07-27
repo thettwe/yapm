@@ -36,9 +36,6 @@ than that is left to you.
 - **A pull request closed without merging drives nothing.** "Closed" can mean superseded by a better
   branch, abandoned, or opened against the wrong base — there is no target that is right more often
   than it is wrong. The issue keeps the status it had, and its reality strip shows the closed PR.
-  Note that the [divergence flag](/features/delivery-signals/#the-divergence-flag) does not fire
-  here either: it flags an In Review issue with *no* pull request or only a draft one, and a closed
-  pull request is neither.
 - **Automation never moves an issue backward.** Backlog → Todo → In Progress → In Review → Done is a
   one-way ladder. A target at or below where the issue already sits is a no-op, so a Done issue that
   acquires a new pull request — a follow-up, a revert, a docs pass — stays Done.

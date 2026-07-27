@@ -400,9 +400,9 @@ export const archiveTeam = defineMutator(archiveTeamArgs, async ({ tx, args, ctx
 
 export const setTeamAutoStatusArgs = z.object({
   id: z.string().min(1),
-  // One nullable instant is both the switch and its epoch: null is off, a timestamp is
-  // "on, and no event older than this may drive status" — which is what makes enabling safe on an
-  // instance whose connector is about to backfill years of merged pull requests.
+  // The switch: null is off, any instant is "on, from the moment of this write" — which is what
+  // makes enabling safe on an instance whose connector is about to backfill years of merged pull
+  // requests. Only null-ness is read; the epoch actually stored is `updatedAt`.
   since: timestamp.nullable(),
   updatedAt: timestamp,
 })
@@ -414,11 +414,14 @@ export type SetTeamAutoStatusArgs = z.infer<typeof setTeamAutoStatusArgs>
 // carried in args — a `Date.now()` here would differ between the optimistic and authoritative
 // passes and silently move the team's cut-off on every rebase.
 //
-// "A fresh instant" is a property of THIS mutator, not of one UI call site: the stored epoch is
-// never older than the write that set it, so no caller — including the AI tool, whose `since` is
-// model-supplied while `updatedAt` is minted server-side — can enable automation with a back-dated
-// cut-off and replay a connector backfill across a board. The clamp is args-derived and therefore
-// identical on every rebase, and a no-op for the web caller, which passes one instant as both.
+// "A fresh instant" is a property of THIS mutator, not of one UI call site: enabling stores
+// `updatedAt` — the instant of the write itself — and never `since`, whose only job is to say on or
+// off. A one-sided clamp would still let a caller pick a FUTURE epoch and leave the team reading
+// "On" while no pull-request event can ever satisfy the guard, which is the same replay hazard
+// pointed the other way. This matters because the mutator is mounted as an AI tool, where `since`
+// is model-supplied while `updatedAt` is minted server-side by `callSiteMintedFields`. It is
+// args-derived and therefore identical on every rebase, and a no-op for the web caller, which
+// passes one instant as both.
 export const setTeamAutoStatus = defineMutator(setTeamAutoStatusArgs, async ({ tx, args, ctx }) => {
   if (!canManage(ctx)) throw notAuthorized(args.id)
 
@@ -427,7 +430,7 @@ export const setTeamAutoStatus = defineMutator(setTeamAutoStatusArgs, async ({ t
 
   await tx.mutate.team.update({
     id: args.id,
-    autoStatusSince: args.since === null ? null : Math.max(args.since, args.updatedAt),
+    autoStatusSince: args.since === null ? null : args.updatedAt,
     updatedAt: args.updatedAt,
   })
 })

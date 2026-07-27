@@ -43,7 +43,7 @@ status disagrees with git reality. It appears when:
 
 - a linked PR is **merged** but the issue is not marked done or canceled,
 - an issue is **done** but its CI is failing, or
-- an issue is **in review** with no open PR behind it.
+- an issue is **in review** with no linked pull request at all, or only a draft one.
 
 It rides on the same linked data as the strip, so it lights up the moment reality and status drift
 apart — and clears itself the moment you reconcile them.

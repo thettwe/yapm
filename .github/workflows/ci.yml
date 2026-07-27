@@ -45,6 +45,9 @@ jobs:
       #     failed with "Unable to locate executable file: pnpm".
       # The runner's preinstalled Node satisfies engines >=24. If these scripts ever gain a workspace
       # dependency, this job needs setup-node AND a real install — not one without the other.
+      # `node --test`, not Vitest, for exactly the reason spelled out above: this job has no
+      # install, so the test for the boundary rules has to run on builtins alone.
+      - run: node --test scripts/lib/*.test.mjs
       - run: node scripts/check-boundaries.mjs
       - run: node scripts/check-image-manifests.mjs
 

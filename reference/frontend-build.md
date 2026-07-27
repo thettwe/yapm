@@ -1785,12 +1785,20 @@ places an agent is most likely to guess.
 ```yaml
 # pnpm-workspace.yaml — catalog
 '@tiptap/extension-mention': 3.28.0
+'@tiptap/markdown': 3.28.0
 '@tiptap/pm': 3.28.0
 '@tiptap/react': 3.28.0
 '@tiptap/starter-kit': 3.28.0
 '@tiptap/suggestion': 3.28.0
 '@floating-ui/dom': ^1.8.0
 ```
+
+**Six entries, and `@tiptap/markdown` joined them in `editor-markdown` (2026-07-27).** It is
+first-party (the ueberdosis monorepo's `packages/markdown`), MIT, and its peers are **exact**
+`@tiptap/core: 3.28.0` and `@tiptap/pm: 3.28.0` — what this repo already resolves, so it drops in at
+the current pin with no graph movement. Its only runtime dependency is `marked@^17` (MIT, zero
+dependencies), which arrives transitively and gets no catalog entry of its own. Measured ~26 KB
+gzip.
 
 🚩 **Caret ranges are a runtime bug here, not a style preference.** `@tiptap/extension-mention` and
 `@tiptap/suggestion` declare **exact** peer ranges on `@tiptap/core` and `@tiptap/pm`. A split
@@ -1864,6 +1872,149 @@ identical to a sighted developer and breaks two things at once: `aria-activedesc
 a legal same-subtree IDREF, and any view-level "is a popup open?" ancestor check
 (`closest('[role="listbox"]')` and friends) stops matching, so single-letter shortcuts fire while
 the user is typing a name.
+
+### 11.6 `@tiptap/markdown@3.28.0` — the serialiser optimises for round-tripping through ITSELF
+
+Added 2026-07-27 while building `editor-markdown`. Everything here was produced by running the
+package against this repo's extension set in Node, not read from its documentation.
+
+**The two defects.** Both live in private methods of `MarkdownManager`:
+
+```
+encodeTextForMarkdown(text, node, parent)  →  escapeMarkdownSyntax(encodeHtmlEntities(text))
+escapeMarkdownSyntax(text)                 →  text.replace(/([\\`*_[\]~])/g, '\\$1')
+```
+
+1. Every non-code text node is HTML-entity-encoded. `a < b & c` serialises to `a &lt; b &amp; c` —
+   correct CommonMark, literal garbage in Slack or a terminal.
+2. The escape set has **no block-leading characters**, so a paragraph whose text is `# not a heading`
+   serialises unescaped and **re-parses as a heading**. Same for `- `, `1. `, `> `.
+
+🚩 **They are one defect, not two.** `> not a quote` round-trips against the stock package *only*
+because entity encoding turns `>` into `&gt;`. Remove the encoding alone and `>` newly breaks, so the
+correction has to be atomic.
+
+Probe output after correction (`packages/ui/src/lib/markdown.ts`), every row re-parsed back to a
+paragraph holding the original text:
+
+```
+"# h"          => "\# h"            "###### h"  => "\###### h"
+"- bullet"     => "\- bullet"       "+ bullet"  => "\+ bullet"
+"* bullet"     => "\* bullet"       "> not a quote" => "\> not a quote"
+"| a | b |"    => "\| a | b |"      "1. one"    => "1\. one"
+"1) one"       => "1\) one"         "---"       => "\---"
+"==="          => "\==="            "```js"     => "\`\`\`js"
+"    indented" => "indented"        "a < b & c" => "a < b & c"
+```
+
+Three details that are easy to get wrong. Ordered lists escape the **delimiter**, `1\.`, because
+`\1.` does not escape in CommonMark. There is no backslash escape for a space, so 4+ leading spaces
+are **dropped** rather than encoded. And CommonMark allows **up to three spaces** before every one
+of those markers, so the block tests have to run against the de-indented text and re-emit the
+indentation *in front of* the backslash — `  \- two`, never `\  - two`.
+
+⚠️ **A heading's trailing `#` run is an optional CLOSING sequence** and CommonMark discards it, so a
+heading whose text ends `Plan #` re-parses as `Plan`. Escape a trailing `(\s)(#+)$` on the heading's
+last text node. Nothing about the *opening* escape covers this.
+
+**Where the correction attaches, and what was rejected.** `renderNodeToMarkdown` short-circuits
+`node.type === 'text'` **before** any handler lookup, so there is no extension-level hook for text.
+The chosen fix replaces `encodeTextForMarkdown` on the manager *instance* with a total function that
+never calls through, keeping the private surface depended on to exactly **one method name** — and
+asserting that name exists at construction, so a version bump fails loudly rather than silently
+re-emitting entities. Rejected: accept and document (the feature's value proposition is symmetry);
+post-process the string (cannot tell a `#` the serialiser emitted for a heading from one in a
+paragraph); override `paragraph`'s public `renderMarkdown` (undoing entity encoding there means a
+blanket decode of rendered children, which corrupts an inline code span containing a literal
+`&amp;`); fork the serialiser (~1300 lines owned for two functions).
+
+🚩 **`parse()` runs raw HTML through `generateJSON` against your whole extension set.** This is the
+sharpest edge in the package and it does not look like one, because markdown is a superset of HTML
+and `marked` emits an `html` token for anything tag-shaped. `MarkdownManager.parseHTMLToken` hands
+that token to `generateJSON(html, this.baseExtensions)` — so **ordinary prose is parsed as markup**:
+
+```
+"compare a<b and c>d"                              => text("compare a") + paragraph() + text("d")
+"<div>hello</div>"                                 => paragraph("hello")          ← tags deleted
+'<span data-type="mention" data-id="ada" …>x</…>'  => a REAL mention node
+```
+
+It is invisible under `node`: `parseHTMLToken` falls back to literal text when `window.DOMParser` is
+missing, so a Vitest suite on the default `node` environment passes while the browser does all three.
+Test this module under **jsdom**.
+
+yapm's answer is to refuse raw HTML in the parse rather than to sanitise its output, via `marked`'s
+own tokenizers on the manager's `instance` getter:
+
+```ts
+manager.instance.use({
+  tokenizer: {
+    html: () => undefined,   // block: never
+    tag: src => …,           // inline: the serialiser's own reopen pairs, BALANCED, else undefined
+  },
+})
+```
+
+⚠️ **`false` and `undefined` mean opposite things there.** `marked`'s `use()` wraps each replaced
+tokenizer as `if (result === false) result = previous(...)` — so `false` **delegates** to the stock
+tokenizer and `undefined` means "no match, keep scanning", which is what leaves the characters as
+text. Getting these the wrong way round silently disables nothing.
+
+🚩 **The exception has to be derived, exact and balanced — all three.** It exists because the
+serialiser writes an overlap it cannot express with `*` alone as raw HTML, using the pair a mark
+declares under `markdownOptions.htmlReopen`:
+
+- **Derived.** `@tiptap/extension-italic` (`<em>`/`</em>`) is *not* the only one — `@tiptap/
+  extension-bold` declares `<strong>`/`</strong>` identically, and which pair you get depends on
+  which mark opens first (`**A*B***<em>C</em>` vs `*A**B***<strong>C</strong>`). Collect the tags
+  from `resolveExtensions(extensions)` via `getExtensionField(ext, 'markdownOptions')` instead of
+  listing them, and throw if the set comes back empty.
+- **Exact.** A prefix test like `/^<\/?em>/` also matches `<em class="x">`, which this serialiser
+  never emits. Match a bare tag and nothing else.
+- **Balanced.** A prefix test also matches a lone `</em>` in prose somebody pasted, and that hands
+  it straight back to `parseHTMLToken`: `compare a</em>b` loses five characters and gains an empty
+  paragraph. Delegate an opening tag only when its closing tag is still ahead in the same run, and a
+  closing tag only when this parse delegated its opener; keep a depth map per tag name and clear it
+  at the top of every parse.
+
+⚠️ **`codeBlock.renderMarkdown` hard-codes a three-backtick fence**, so a code block whose text
+contains a ``` line closes early and its tail becomes prose. Fixed through the **public**
+`renderMarkdown` field: emit a fence one backtick longer than the longest run inside. Reaching the
+code-block extension without adding `@tiptap/extension-code-block` as a dependency is
+`StarterKit.extend({ addExtensions() { … map over this.parent?.() … } })`.
+
+⚠️ **A defect that IS out of reach, documented rather than fixed.** An inline code span
+containing a backtick is emitted with single-backtick delimiters — `` `a `b` c` `` — where
+CommonMark requires a longer run. `getMarkOpening` renders a mark against a **placeholder** string,
+never the real text, so a content-dependent delimiter is impossible without overriding
+`renderNodesWithMarkBoundaries` (~150 lines). Pinned by a characterisation test in
+`packages/ui/src/lib/markdown.test.ts`. The *block* fence above is reachable only because a node's
+renderer receives its real content; a mark's does not.
+
+**Two API facts worth not re-deriving:**
+
+- `markdownName` / `parseMarkdown` / `renderMarkdown` are declared on `NodeConfig` and `MarkConfig`
+  by **`@tiptap/core` 3.28 itself**, not by `@tiptap/markdown`. A new node carries its own markdown
+  behaviour and `MarkdownManager` picks it up from the extension list — adding a node type is
+  additive, not a serialiser change.
+- `resolveExtensions`, `getSchema`, `textblockTypeInputRule`, `markInputRule` and `markPasteRule` all
+  come from **`@tiptap/react`** via its `export * from '@tiptap/core'`. Same reason as §11.1's last
+  note: `@tiptap/core` is a peer and is not resolvable from `packages/ui`.
+
+🚩 **Do not pre-resolve the extension list.** `resolveExtensions` is **not idempotent** — it expands
+StarterKit but keeps `starterKit` itself in its output, so resolving that result again yields 49
+extensions with 24 duplicate names and a TipTap warning. `MarkdownManager` flattens and sorts what it
+is given and later calls `getSchema(baseExtensions)`, which resolves. Pass the raw
+`createRichTextExtensions()` array; output is byte-identical either way.
+
+⚠️ **Mentions serialise as `[@ id="u1" label="Ada Lovelace"]` by default** — lossless through the
+package itself, unreadable everywhere markdown actually goes. yapm replaces this with `@Display Name`
+via a pure pre-walk over the JSON *before* serialisation, which also strips `underline` (3.28.0 emits
+`++u++`, not CommonMark). A pre-walk rather than a hook, so the mention-name resolver never has to be
+baked into a manager instance and one lazily-built manager serves every call.
+
+⚠️ **`parse('')` returns `{type:'doc'}`** — not a valid document for a schema whose `doc` requires
+`block+`. Substitute a document holding one empty paragraph.
 
 ---
 

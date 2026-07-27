@@ -25,6 +25,7 @@
     "@fontsource-variable/jetbrains-mono": "catalog:",
     "@fontsource/ibm-plex-mono": "catalog:",
     "@tiptap/extension-mention": "catalog:",
+    "@tiptap/markdown": "catalog:",
     "@tiptap/pm": "catalog:",
     "@tiptap/react": "catalog:",
     "@tiptap/starter-kit": "catalog:",

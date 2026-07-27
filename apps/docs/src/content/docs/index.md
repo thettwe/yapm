@@ -38,6 +38,9 @@ runs as three containers you own.
 - [Mentions](/features/mentions/) — type `@` in a description or comment to pull a teammate in,
   from a list that opens instantly and offline, tells you when a name cannot be reached, and
   subscribes the person you named to the issue — reversibly, from the issue itself.
+- [Markdown](/features/markdown/) — type markdown to format, paste markdown in, and copy markdown
+  out that reads correctly in a terminal or a chat message. Rich text stays the storage format; an
+  in-app copy/paste stays lossless.
 - [Search](/features/search/) — `⌘K` or `/search`, answered instantly from rows your browser already
   holds and then completed by Postgres full-text over comments and your other teams, in two labelled
   groups that never reorder under your keyboard. Queries are never recorded. Operators: see

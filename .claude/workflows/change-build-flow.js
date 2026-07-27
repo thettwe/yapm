@@ -1,64 +1,56 @@
 export const meta = {
   name: 'change-build-flow',
   description:
-    'Build one OpenSpec change end to end: propose, derive the stage order from the change\'s own tasks.md, build each stage behind a cheap independent verifier, verify live ONCE, then hand off to the PR-review flow.',
+    'Build one OpenSpec change: propose and plan in one pass, open the PR immediately so CI runs continuously, build in one or two passes, then hand off to the PR-review flow.',
   phases: [
-    { title: 'Propose', detail: 'write and validate the OpenSpec change artifacts' },
-    { title: 'Plan', detail: 'derive the stage order from the change\'s tasks.md' },
-    { title: 'Build', detail: 'one stage per task group; fast gates only' },
-    { title: 'Tests', detail: 'write the test tiers the proposal committed to' },
-    { title: 'Docs', detail: 'docs-site pages + root-doc freshness' },
-    { title: 'Integrate', detail: 'the ONE full live verification: full suite, docker, e2e, drift' },
-    { title: 'Sync', detail: 'rebase onto latest main' },
-    { title: 'Review', detail: 'hand off to the PR-review flow' },
+    { title: 'Propose', detail: 'OpenSpec artifacts and the build plan, in one pass' },
+    { title: 'Open', detail: 'open the PR now, so every later push runs CI in parallel' },
+    { title: 'Build', detail: 'one or two builders; fast gates, then push' },
+    { title: 'Close', detail: 'tests and docs' },
+    { title: 'Review', detail: 'hand the open PR to the review flow' },
   ],
 }
 
-// Rewrite (2026-07-25). Measured against the zero-reconnect and retro-board runs, the previous
-// per-change pattern took 110-218 min and carried the same disease the PR flow had before its own
-// rewrite: EVERY stage's independent verifier re-ran the full gate suite (turbo typecheck lint build
-// test + boundaries + catalog, often plus a docker stack boot), so a 5-stage change paid for the full
-// suite 5-6 times, each run re-proving the previous stage's work. Changes:
-//   1. Stage verifiers run FAST gates only (typecheck + lint + affected tests + boundaries). No full
-//      build, no docker, no e2e.
-//   2. Exactly ONE Integrate stage boots docker and runs the full suite + all e2e + the drift test.
-//   3. Stage order is DERIVED from the change's own tasks.md instead of hardcoded. Hardcoding it is
-//      what put Client before its Server prerequisites in the zero-reconnect run.
-//   4. A build agent that changes zero files is re-dispatched IMMEDIATELY, without paying for a
-//      verifier pass to discover it — that no-op cost 11 min in the zero-reconnect run.
-// Guarantees are unchanged: every stage is independently verified before it commits, and nothing
-// reaches review without one full live pass.
+// Rewrite (2026-07-27). The previous version averaged 4.8-7.3 h and 31-36 agents per change, all
+// serial. Measured breakdown of the 437-minute search build: Propose+Plan 30, four build stages each
+// behind its own verifier 160, Tests+Docs behind verifiers 60, Integrate 35, Sync 12, three review
+// rounds 100, merge 15. Changes, in order of what they saved:
 //
-// Stages stay SERIAL on purpose. PROCESS.md §5: two repo-mutating agents in one working tree corrupt
-// each other's `git add -A && commit`. Parallelism belongs across worktrees, not inside one.
+//   1. THE PR OPENS FIRST. ci.yml triggers on `pull_request`, so pushing to a feature branch with no
+//      PR open ran nothing — which is the only reason an Integrate phase existed at all: something had
+//      to boot Docker and run e2e before review, because CI had never seen the code. Open the PR at
+//      the start and every stage push runs the full suite, in parallel, for free. Integrate is gone.
+//   2. No per-stage verifier. Review plus CI already cover it. The cheap no-op guard stays, because a
+//      builder that writes nothing is the one failure a reviewer cannot see.
+//   3. One or two builders, not four stages. Stage granularity existed to give verifiers something to
+//      verify; without them it mostly bought serialization.
+//   4. Tests and docs in one pass, not two behind two more verifiers.
+//   5. Review capped at two rounds (in pr-review-flow). Across notifications, mentions, search and
+//      retro-board, round three has NEVER produced a critical or high finding — only polish, at ~40 min
+//      and ~500K tokens a time. Round two has, so it stays.
+//   6. effort: 'medium' on mechanical agents; 'high' only where judgement is the work.
+//
+// The remaining floor is real: an agent writing code takes 25-45 min and writers cannot be parallelised
+// within one worktree (PROCESS.md §5). At ~8 serial agents that is 1.5-2 h, so SCOPE PER CHANGE is now
+// the bigger lever. Prefer three changes of one hour over one change of three.
 
-// args: { changeName, branch, mission, prTitle, repoDir, base, docker, isBigFeature, maxAttempts }
+// args: { changeName, branch, mission, prTitle, repoDir, base, docker, resume, maxStages, tokenFloor }
 const A = args || {}
 const CHANGE = A.changeName
 const BRANCH = A.branch || `feat/${CHANGE}`
 const BASE = A.base || 'main'
 const REPO = A.repoDir || '/Users/thettwe/Works/yapm'
-const MAX_ATTEMPTS = A.maxAttempts || 3
+const RESUME = Boolean(A.resume)
 
 if (!CHANGE) throw new Error('change-build-flow requires args.changeName')
 if (!A.mission) throw new Error('change-build-flow requires args.mission — the change-specific brief')
 
-// Declared complexity budget. Every run states its ceiling up front; when the ceiling is reached the
-// run stops and reports the best artifact, what completed, what is unresolved, and why it stopped —
-// rather than continuing until something incidental terminates it. Wall-clock is not observable from
-// a workflow script (Date.now is unavailable), so the token budget is the enforceable dimension.
-const CEILING = {
-  stageAttempts: MAX_ATTEMPTS,
-  maxStages: A.maxStages || 5,
-  // Below this many remaining output tokens, do not START another stage.
-  tokenFloor: A.tokenFloor || 80_000,
-}
+// Two is the cap and one is the goal. A change needing three builders is a change that should have
+// been two changes.
+const CEILING = { maxStages: A.maxStages || 2, tokenFloor: A.tokenFloor || 80_000 }
 const budgetLeft = () => (budget.total ? budget.remaining() : Number.POSITIVE_INFINITY)
 const outOfBudget = () => budgetLeft() < CEILING.tokenFloor
 
-// Docker isolation. Only meaningful when this runs in a worktree alongside another build; the
-// compose files hardcode `name: yapm-dev` / `name: yapm`, so a bare compose command in two trees
-// shares one project and tears the other's stack down.
 const D = A.docker || {}
 const DOCKER_PROJECT = D.project || 'yapm-dev'
 const PG_PORT = D.pgPort || 5440
@@ -67,20 +59,27 @@ const APP_PORT = D.appPort || 3000
 const COMPOSE = `docker compose -p ${DOCKER_PROJECT} -f docker/docker-compose.dev.yml`
 const COMPOSE_ENV = `POSTGRES_HOST_PORT=${PG_PORT} ZERO_CACHE_HOST_PORT=${ZERO_PORT} YAPM_HOST_PORT=${APP_PORT}`
 
+// Fast gates only. The full suite, Docker and Playwright now run in CI on every push, because the PR
+// is open from the start — so running them locally is duplicating a thing already in flight.
+const FAST_GATES =
+  `pnpm turbo run typecheck '--filter=...[origin/${BASE}]' && pnpm lint && ` +
+  `pnpm turbo run test '--filter=...[origin/${BASE}]' && node scripts/check-boundaries.mjs`
+
 const ISOLATION =
-  `## Working boundary\n` +
-  `Work ONLY inside ${REPO}. Never cd to another worktree or to main's working tree.` +
+  `## Working boundary\nWork ONLY inside ${REPO}. Never cd to another worktree or to main's working tree.` +
   (A.docker
     ? `\nAnother build may be running concurrently in a sibling worktree. docker/docker-compose.dev.yml ` +
-      `hardcodes \`name: yapm-dev\`, so you MUST pass the project name and ports on EVERY compose command:\n` +
+      `hardcodes \`name: yapm-dev\`, so pass the project name and ports on EVERY compose command:\n` +
       `    ${COMPOSE_ENV} ${COMPOSE} ...\n` +
-      `Your DATABASE_URL is postgres://yapm:yapm@localhost:${PG_PORT}/yapm; your zero-cache is ` +
-      `http://localhost:${ZERO_PORT} (set VITE_ZERO_CACHE_URL and E2E_ZERO_CACHE_URL to it); app port ${APP_PORT}. ` +
-      `Tear down with \`${COMPOSE} down -v\` — never a bare \`down\`, never \`docker system prune\`, never stop ` +
-      `containers you did not start.`
+      `DATABASE_URL postgres://yapm:yapm@localhost:${PG_PORT}/yapm; zero-cache http://localhost:${ZERO_PORT}; ` +
+      `app port ${APP_PORT}. Tear down with \`${COMPOSE} down -v\` — never a bare \`down\`, never ` +
+      `\`docker system prune\`, never stop containers you did not start.`
     : '') +
-  `\ngit: only ever \`git push origin ${BRANCH}\`. Never push ${BASE}, never force-push except the Sync phase's ` +
-  `--force-with-lease on your own branch.`
+  `\ngit: only ever \`git push origin ${BRANCH}\`. Never push ${BASE}.\n` +
+  `**Never merge the pull request.** It is open from the start of this build so that CI runs on your ` +
+  `pushes; it is NOT ready to land. The review flow that runs last owns the merge decision, and it ` +
+  `depends on review rounds that have not happened yet. Green CI means the code compiles and the tests ` +
+  `pass — it does not mean the change has been reviewed. \`gh pr merge\` is forbidden to you.`
 
 const PREAMBLE =
   `You are building the ${CHANGE} change in the yapm repository at ${REPO}, on branch ${BRANCH}. All commits go to ` +
@@ -94,420 +93,222 @@ const PREAMBLE =
   `Sub-100ms interactions. Team-level metrics only. Do NOT regress any prior change.\n\n` +
   `## The stack postdates your training data\n` +
   `Zero 1.x is defineQuery / defineQueries / defineMutator / defineMutators / createBuilder / handleQueryRequest / ` +
-  `handleMutateRequest. Writing the 0.x names (syncedQuery, PushProcessor, definePermissions) from memory produces ` +
-  `fluent, plausible, NON-FUNCTIONAL code. Consult ${REPO}/reference/*.md before using Zero, Kysely, better-auth, ` +
-  `TanStack Router, Vite or Tailwind. If reference/ does not cover it, read the installed package's .d.ts in ` +
-  `node_modules. Do not guess.\n\n` +
+  `handleMutateRequest. The 0.x names (syncedQuery, PushProcessor, definePermissions) produce fluent, ` +
+  `NON-FUNCTIONAL code. Consult ${REPO}/reference/*.md before using Zero, Kysely, better-auth, TanStack Router, ` +
+  `TipTap, Vite or Tailwind; if reference/ does not cover it, read the installed package's .d.ts in node_modules. ` +
+  `Do not guess a package name or an API from memory.\n\n` +
   `## Decisions already settled by earlier changes\n` +
-  `Before proposing or building, read the "## Decisions made during implementation" sections of the two or three ` +
-  `most recent changes under ${REPO}/openspec/changes/ (and openspec/changes/archive/). Those decisions are settled ` +
-  `precedent — do not re-litigate them, and follow them unless this change has a specific reason not to, in which ` +
-  `case say why. That log is the project's decision provenance; ignoring it is how the same argument gets had twice.\n\n` +
+  `Read the "## Decisions made during implementation" sections of the two or three most recent changes under ` +
+  `${REPO}/openspec/changes/ and openspec/changes/archive/. Those are settled precedent — follow them unless this ` +
+  `change has a specific reason not to, and say why. Ignoring that log is how the same argument gets had twice.\n` +
+  `${REPO}/openspec/specs/ is the living behaviour and was made accurate on 2026-07-26 — 28 capabilities. Trust it.\n\n` +
   `## Working agreement\n` +
   `Ambiguity or a misbehaving library: choose what best fits VISION/DESIGN, log it in ` +
-  `openspec/changes/${CHANGE}/design.md under "## Decisions made during implementation", and continue — never stall, ` +
-  `never silently paper over. Conventional Commits with DCO sign-off (git commit -s). Biome formats. No comments ` +
-  `explaining what a line does — only constraints the code cannot express.\n\n` +
+  `openspec/changes/${CHANGE}/design.md under "## Decisions made during implementation", and continue — never ` +
+  `stall, never silently paper over. Conventional Commits with DCO sign-off (git commit -s). Biome formats. No ` +
+  `comments explaining what a line does — only constraints the code cannot express.\n\n` +
   `## Report honestly\n` +
-  `If you run out of road — a library does not behave as documented, a task is underspecified, a gate cannot be ` +
-  `satisfied — report the best artifact you produced, what actually completed, what is unresolved, and why you ` +
-  `stopped. Never present partial work as complete. A fluent summary over a half-finished stage is worse than a ` +
-  `blunt "this part is not done, here is why", because it costs someone else the time to discover it.`
-
-// Fast gates: what a stage verifier runs. Deliberately excludes the full build, docker, and e2e —
-// the Integrate stage runs those once, and CI re-runs everything on push anyway.
-const FAST_GATES =
-  `pnpm turbo run typecheck --filter=...[origin/${BASE}] && pnpm lint && ` +
-  `pnpm turbo run test --filter=...[origin/${BASE}] && node scripts/check-boundaries.mjs`
-
-const BUILD_SCHEMA = {
-  type: 'object',
-  properties: {
-    filesChanged: {
-      type: 'array',
-      description: 'repo-relative paths this stage created or modified, excluding openspec/ and gitignored output',
-      items: { type: 'string' },
-    },
-    tasksTicked: { type: 'array', items: { type: 'string' } },
-    summary: { type: 'string' },
-    decisions: { type: 'string', description: 'anything logged to design.md; empty if none' },
-  },
-  required: ['filesChanged', 'tasksTicked', 'summary', 'decisions'],
-  additionalProperties: false,
-}
-
-const VERIFY_SCHEMA = {
-  type: 'object',
-  properties: {
-    passed: { type: 'boolean' },
-    ranCommands: { type: 'array', items: { type: 'string' } },
-    failures: { type: 'array', items: { type: 'string' } },
-    notes: { type: 'string' },
-  },
-  required: ['passed', 'ranCommands', 'failures', 'notes'],
-  additionalProperties: false,
-}
+  `If you run out of road, report the best artifact you produced, what completed, what is unresolved, and why you ` +
+  `stopped. Never present partial work as complete — a fluent summary over a half-finished stage costs whoever ` +
+  `reads it next the time to discover that themselves.`
 
 const PLAN_SCHEMA = {
   type: 'object',
   properties: {
     isBigFeature: { type: 'boolean' },
-    testTiers: { type: 'string', description: 'which tiers this change needs, and why' },
-    falsifiableCheck: {
-      type: 'string',
-      description: 'the check that fails against current main and passes when this change is correct',
-    },
-    humanJudgement: {
-      type: 'string',
-      description: 'what about this change a human must judge because no agent can; empty if nothing',
+    testTiers: { type: 'string' },
+    falsifiableCheck: { type: 'string', description: 'the check that fails on current main and passes when this is correct' },
+    humanJudgement: { type: 'string', description: 'what a human must judge because no agent can; empty if nothing' },
+    oversized: {
+      type: 'boolean',
+      description: 'true if this change should really have been split into smaller changes',
     },
     stages: {
       type: 'array',
-      description: 'implementation stages in dependency order, derived from tasks.md',
+      description: 'one or at most two build passes, in dependency order',
       items: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'short PascalCase stage name' },
-          taskSections: { type: 'string', description: 'the tasks.md section numbers this stage covers' },
-          brief: { type: 'string', description: 'what to build, specific enough to hand to a builder' },
-          extraChecks: { type: 'string', description: 'stage-specific checks beyond the fast gates; empty if none' },
+          name: { type: 'string' },
+          brief: { type: 'string', description: 'what to build, specific enough to hand to a builder cold' },
         },
-        required: ['name', 'taskSections', 'brief', 'extraChecks'],
+        required: ['name', 'brief'],
         additionalProperties: false,
       },
     },
   },
-  required: ['isBigFeature', 'testTiers', 'falsifiableCheck', 'humanJudgement', 'stages'],
+  required: ['isBigFeature', 'testTiers', 'falsifiableCheck', 'humanJudgement', 'oversized', 'stages'],
   additionalProperties: false,
 }
 
-// One stage: build, then an independent verifier that reviews the diff and runs FAST gates only.
-// A builder that produced nothing is re-dispatched immediately — discovering that via a full
-// verifier pass is pure waste.
-async function stage(name, brief, extraChecks, prevNotes, phaseName = 'Build') {
+const BUILD_SCHEMA = {
+  type: 'object',
+  properties: {
+    filesChanged: { type: 'array', items: { type: 'string' } },
+    gatesGreen: { type: 'boolean' },
+    pushed: { type: 'boolean' },
+    summary: { type: 'string' },
+    unresolved: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['filesChanged', 'gatesGreen', 'pushed', 'summary', 'unresolved'],
+  additionalProperties: false,
+}
+
+const OPEN_SCHEMA = {
+  type: 'object',
+  properties: {
+    prNumber: { type: 'integer' },
+    headSha: { type: 'string' },
+  },
+  required: ['prNumber', 'headSha'],
+  additionalProperties: false,
+}
+
+// One builder, no separate verifier. A builder that produced nothing is re-dispatched immediately —
+// that is the one failure the later review genuinely cannot see, since there is no diff to review.
+async function build(name, brief, prevNotes) {
   let feedback = ''
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const built = await agent(
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const r = await agent(
       `${PREAMBLE}\n\n## YOUR ASSIGNMENT — ${name}\n${brief}\n` +
-        (prevNotes ? `\nPrevious stage notes: ${prevNotes}\n` : '') +
+        (prevNotes ? `\nPrevious pass: ${prevNotes}\n` : '') +
         feedback +
-        `\n\nRun the relevant checks yourself as you go. Tick the tasks you complete in ` +
-        `openspec/changes/${CHANGE}/tasks.md. Do NOT commit — an independent verifier runs next.\n` +
+        `\n\nWrite the code, tick what you complete in openspec/changes/${CHANGE}/tasks.md, then run the fast gates:\n` +
+        `  ${FAST_GATES}\n` +
+        `Do NOT run the full build, Playwright, docker compose or the smoke test. **The PR is already open, so your ` +
+        `push runs the entire suite in CI** — running it here duplicates something already in flight.\n` +
+        `Then git add -A && git commit -s && git push origin ${BRANCH}.\n` +
         `Report every file you created or modified. If you genuinely could not change anything, say so with the ` +
         `reason rather than reporting work you did not do.`,
-      {
-        label: `build:${name}${attempt > 1 ? `:retry${attempt}` : ''}`,
-        phase: phaseName,
-        schema: BUILD_SCHEMA,
-        effort: 'high',
-      },
+      { label: `build:${name}${attempt > 1 ? ':retry' : ''}`, phase: 'Build', schema: BUILD_SCHEMA, effort: 'high' },
     )
-
-    const changed = (built && built.filesChanged) || []
-    if (changed.length === 0) {
-      log(`${name} attempt ${attempt}: builder produced NO files — re-dispatching without a verifier pass`)
-      feedback =
-        `\n\n## PREVIOUS ATTEMPT PRODUCED NOTHING\nThe last builder for this stage finished without creating or ` +
-        `modifying a single file${built && built.summary ? ` (it reported: ${built.summary.slice(0, 300)})` : ''}. ` +
-        `Do not repeat that. Read the tasks, then actually write the code.`
-      continue
-    }
-
-    const v = await agent(
-      `You are the INDEPENDENT verifier for the ${name} stage of ${CHANGE}, in ${REPO} on branch ${BRANCH}.\n\n` +
-        `${ISOLATION}\n\n` +
-        `The builder reports it changed these files:\n${changed.map((f) => `  - ${f}`).join('\n')}\n` +
-        `and ticked: ${(built.tasksTicked || []).join(', ') || '(none reported)'}\n\n` +
-        `## Verify, in this order\n` +
-        `1. Confirm the work is REAL: \`git status --porcelain\` and \`git diff --stat\` actually show these changes. ` +
-        `A builder reporting work it did not do is the failure mode to catch first.\n` +
-        `2. Review the diff against this stage's brief and the change's specs. Does it do what was asked, and is it ` +
-        `a root-cause fix rather than a symptom patch?\n` +
-        `3. Run the FAST gates and confirm they pass:\n   ${FAST_GATES}\n` +
-        (extraChecks ? `4. Stage-specific checks:\n${extraChecks}\n` : '') +
-        `\n## Do NOT run\n` +
-        `The full \`turbo build\`, the Playwright e2e suite, docker compose, or the compose smoke test. A single ` +
-        `Integrate stage runs those once at the end, and CI re-runs everything on push. Re-running them per stage was ` +
-        `the dominant cost of the previous version of this workflow.\n\n` +
-        `Also confirm: docker-compose still defines exactly three services; ZQL and mutators only in packages/schema; ` +
-        `UUIDv7 minted at the call site, never inside a mutator body; no hardcoded colors or fonts; no secrets logged.\n\n` +
-        `If EVERYTHING passes: git add -A && git commit -s (Conventional Commit) && git push origin ${BRANCH}, and ` +
-        `set passed=true.\n` +
-        `If ANYTHING fails: do NOT commit, do NOT fix it yourself; set passed=false with concrete, actionable errors ` +
-        `in failures[].`,
-      { label: `verify:${name}`, phase: phaseName, schema: VERIFY_SCHEMA, effort: 'high' },
-    )
-
-    if (v?.passed) {
-      log(`${name} verified and committed (${changed.length} files)`)
-      return { passed: true, notes: v.notes, summary: built.summary }
-    }
-    const fails = v ? v.failures.join('\n- ') : 'verifier returned nothing'
-    log(`${name} attempt ${attempt} failed: ${fails.slice(0, 160)}`)
-    feedback = `\n\n## PREVIOUS ATTEMPT FAILED — fix the root cause, not the symptom\n- ${fails}\n\nRe-run the fast gates yourself before finishing.`
+    if (r && (r.filesChanged || []).length > 0) return r
+    log(`${name} attempt ${attempt}: builder produced NO files — re-dispatching`)
+    feedback =
+      `\n\n## THE PREVIOUS ATTEMPT PRODUCED NOTHING\nIt finished without creating or modifying a single file` +
+      `${r && r.summary ? ` (it said: ${r.summary.slice(0, 300)})` : ''}. Read the tasks, then actually write the code.`
   }
-  log(`${name} unverified after ${MAX_ATTEMPTS} attempts — continuing; Integrate and the PR review will catch it`)
-  return { passed: false, notes: `${name} unverified after ${MAX_ATTEMPTS} attempts`, summary: '' }
+  log(`${name} produced nothing twice — continuing; review will see an empty diff`)
+  return { filesChanged: [], gatesGreen: false, pushed: false, summary: '', unresolved: [`${name} produced nothing`] }
 }
-
-// Resuming a change whose proposal already exists and whose earlier stages are already committed.
-// Plan then works from the UNTICKED tasks rather than the whole file, so stopping a long build and
-// restarting it on this flow costs only the work that actually remains.
-const RESUME = Boolean(A.resume)
 
 phase('Propose')
-const propose = RESUME
-  ? await agent(
-      `${PREAMBLE}\n\n## Resume phase — no proposal to write\n` +
-        `${CHANGE} was already proposed and partly built; earlier stages are committed on ${BRANCH}. Do NOT create ` +
-        `or re-propose the change, and do NOT re-do completed work.\n` +
-        `Establish the true state and report it:\n` +
-        `1. git log --oneline ${BASE}..${BRANCH} — what has already landed.\n` +
-        `2. Read openspec/changes/${CHANGE}/tasks.md and list every task still marked \`[ ]\` or \`[~]\`, by section.\n` +
-        `3. Read openspec/changes/${CHANGE}/design.md, especially "## Decisions made during implementation" — ` +
-        `decisions taken by the earlier stages that the remaining work must honour.\n` +
-        `4. git status --porcelain must be clean; if it is not, say exactly what is uncommitted rather than ` +
-        `committing it yourself.\n` +
-        `5. Flag anything ticked that you cannot find evidence for in the diff — an earlier stage may have marked a ` +
-        `task done without doing it, and the remaining stages would then build on a false premise.\n\n` +
-        `Report: what landed, what remains (by task number), and any decisions the remaining work must respect.`,
-      { label: 'resume:assess', phase: 'Propose', effort: 'high' },
-    )
-  : await agent(
-  `${PREAMBLE}\n\n## Propose phase\nWrite the OpenSpec change artifacts for ${CHANGE}; do NOT implement anything yet.\n` +
-    `1. cd ${REPO} && npx -y @fission-ai/openspec@latest new change ${CHANGE}\n` +
-    `2. Read the mandatory references in your mission above, plus CLAUDE.md, PROCESS.md, VISION.md, DESIGN.md and ` +
-    `openspec/specs/ (the living behavior you must not regress). Write proposal.md (with a \`Docs:\` line in the ` +
-    `Impact section), design.md, the capability spec deltas, and tasks.md — including a \`## Documentation\` group ` +
-    `and explicit test tasks. Templates: \`npx -y @fission-ai/openspec@latest instructions <artifact> --change ` +
-    `${CHANGE} --json\`.\n` +
-    `3. Validate until clean: \`npx -y @fission-ai/openspec@latest validate ${CHANGE}\` (positional, NOT --change).\n\n` +
-    `**Sequence tasks.md in true dependency order** — a later stage is built directly from it, so anything a client ` +
-    `stage consumes must appear in an earlier section than the stage that consumes it. Getting this wrong makes a ` +
-    `downstream stage unbuildable.\n` +
-    `Judge the big-feature rule honestly (PROCESS.md §3): all three tiers iff the change touches ≥2 of {synced ` +
-    `entity/schema, mutator, permission surface, signature UI}. State your judgement and why; do not add e2e ` +
-    `reflexively.\n\n` +
-    `**Name the falsifiable check before any code exists.** In design.md, under "## How we will know this worked", ` +
-    `state the single test that would FAIL against today's main and PASS once this change is correct — concretely ` +
-    `enough that someone can run it. A change whose success cannot be checked should not be built autonomously; if ` +
-    `that is the case here, say so and name the human decision instead of pretending it is automatable. Some things ` +
-    `genuinely are not agent-checkable — whether a surface feels Linear-grade is the standing example — and those ` +
-    `belong in the same section, flagged for a human, not quietly dropped.\n\n` +
-    `Then commit the artifacts: git add -A && git commit -s && git push origin ${BRANCH}.\n` +
-    `Report the change directory and a one-paragraph summary.`,
-  { label: 'propose:write', phase: 'Propose', effort: 'high' },
-)
-
-// Fail here rather than letting a dead Propose cascade. Without this, a Propose agent that dies on a
-// transient API error returns null, Plan then has nothing to plan from and also returns null, and the
-// run aborts with "Plan phase produced no stages" — which points at the wrong phase and reads like a
-// planning bug rather than an outage. Observed exactly once, on a 529.
-if (!propose) {
-  throw new Error(
-    `change-build-flow: the ${RESUME ? 'resume assessment' : 'Propose'} phase produced nothing — the agent died ` +
-      `before returning (transient API error, or it exhausted its context). Nothing was committed; re-run the ` +
-      `workflow unchanged.`,
-  )
-}
-
-phase('Plan')
 const plan = await agent(
-  `${PREAMBLE}\n\n## Plan phase\nRead ${REPO}/openspec/changes/${CHANGE}/tasks.md, proposal.md and design.md, then ` +
-    `derive the IMPLEMENTATION STAGE ORDER from them. You are not writing code.\n\n` +
+  `${PREAMBLE}\n\n## Propose phase — artifacts AND plan, in one pass\n` +
     (RESUME
-      ? `**This is a RESUME.** Earlier stages are already committed. Plan ONLY the tasks still marked \`[ ]\` or ` +
-        `\`[~]\` — never re-do completed work, and never re-open a decision an earlier stage already made and logged ` +
-        `in design.md. A partially-done \`[~]\` task means only the stated remainder is in scope. If the assessment ` +
-        `above flagged a task ticked without evidence, put THAT back in scope explicitly and say why.\n\n`
-      : '') +
-    `Group the task sections into at most ${CEILING.maxStages} build stages in true dependency order. Rules:\n` +
-    `- A stage must not depend on anything a LATER stage produces. Walk the task graph and check this explicitly — ` +
-    `putting a consumer before its producer is the specific mistake this phase exists to prevent.\n` +
-    `- **Keep a single invariant inside a single stage, even when tasks.md splits it across sections.** Work that is ` +
-    `one idea — a privacy guarantee spanning schema, query and UI; a state machine spanning server and client; a ` +
-    `tightly coupled refactor — degrades badly when divided, because each builder then sees only a fragment of the ` +
-    `thing it must get right. Dependency order decides what comes first; cohesion decides what must stay together, ` +
-    `and cohesion wins. Prefer a larger coherent stage over two fragments of one guarantee.\n` +
-    `- Exclude the sections covering tests, documentation and final verification. Those are handled by dedicated ` +
-    `phases after your stages.\n` +
-    `- Each stage's brief must be specific enough to hand to a builder cold: what to build, in which packages, and ` +
-    `what "done" means.\n` +
-    `- extraChecks: cheap, stage-specific assertions a verifier can run WITHOUT docker or e2e — a targeted unit test, ` +
-    `a grep for a forbidden pattern, a schema inspection. Leave it empty rather than inventing one.\n\n` +
-    `Also carry forward, from the proposal: the test-tier judgement, the falsifiable check ("## How we will know this ` +
-    `worked"), and anything that needs human judgement because no agent can settle it. If the proposal failed to ` +
-    `state a falsifiable check, write one now — and if the change genuinely has none, say so plainly rather than ` +
-    `inventing a check that cannot fail.\n\nPrevious phase: ${propose}`,
-  { label: 'plan:stages', phase: 'Plan', schema: PLAN_SCHEMA, effort: 'high' },
+      ? `${CHANGE} was already proposed and partly built; earlier work is committed on ${BRANCH}. Do NOT re-propose. ` +
+        `Establish the true state: \`git log --oneline ${BASE}..${BRANCH}\`, the tasks still marked [ ] or [~], and ` +
+        `the decisions in design.md the remaining work must honour. Flag anything ticked you cannot find evidence ` +
+        `for in the diff. Plan ONLY what remains.\n\n`
+      : `1. cd ${REPO} && npx -y @fission-ai/openspec@latest new change ${CHANGE}\n` +
+        `2. Write proposal.md (with a \`Docs:\` line in Impact), design.md, the capability spec deltas, and tasks.md ` +
+        `with a \`## Documentation\` group and explicit test tasks. Templates: ` +
+        `\`npx -y @fission-ai/openspec@latest instructions <artifact> --change ${CHANGE} --json\`.\n` +
+        `3. Validate until clean: \`npx -y @fission-ai/openspec@latest validate ${CHANGE}\` (positional, NOT --change).\n` +
+        `4. Commit and push: git add -A && git commit -s && git push -u origin ${BRANCH}.\n\n`) +
+    `## Then plan the build, in the same pass\n` +
+    `Group the work into **ONE build pass, or at most ${CEILING.maxStages}**. This is deliberately tight. Stage ` +
+    `granularity used to exist so a per-stage verifier had something to verify; there is no such verifier now, and ` +
+    `every extra pass is another 30-45 minutes of serial wall clock. Two passes only when the second genuinely ` +
+    `cannot start until the first exists (a UI that needs its schema, say) — not merely because the work has two ` +
+    `topics.\n` +
+    `Exclude tests and documentation; a dedicated Close phase handles them.\n\n` +
+    `**Set \`oversized: true\` if this change should have been two or three changes.** Say so plainly — scope per ` +
+    `change is now the main cost driver, and a change that needs three build passes is a change that should have ` +
+    `been split. You are not being asked to split it yourself; you are being asked to say so.\n\n` +
+    `**Name the falsifiable check**: the single test that FAILS against today's ${BASE} and PASSES when this change ` +
+    `is correct, concretely enough to run. If success genuinely cannot be checked, say so and name the human ` +
+    `decision instead of inventing a check that cannot fail. Some things are not agent-checkable — whether a surface ` +
+    `feels Linear-grade is the standing example — and those belong in humanJudgement, not quietly dropped.\n` +
+    `Judge the big-feature rule honestly (PROCESS.md §3); do not add e2e reflexively.`,
+  { label: RESUME ? 'propose:resume' : 'propose:write', phase: 'Propose', schema: PLAN_SCHEMA, effort: 'high' },
 )
 
 if (!plan) {
   throw new Error(
-    `change-build-flow: the Plan agent died before returning (transient API error, or it exhausted its context). ` +
-      `Propose succeeded, so openspec/changes/${CHANGE}/ may already be committed on ${BRANCH} — re-run with ` +
-      `resume: true rather than from scratch.`,
+    `change-build-flow: the Propose phase produced nothing — the agent died before returning (transient API error, ` +
+      `or it exhausted its context). Re-run the workflow unchanged.`,
   )
 }
 if (!plan.stages || plan.stages.length === 0) {
   throw new Error(
-    `change-build-flow: the Plan agent returned zero stages for ${CHANGE}. That is a planning failure, not a crash — ` +
-      `check that openspec/changes/${CHANGE}/tasks.md actually contains implementation sections beyond tests, docs ` +
-      `and verification.`,
+    `change-build-flow: Propose returned zero build passes for ${CHANGE}. Check that ` +
+      `openspec/changes/${CHANGE}/tasks.md contains implementation sections beyond tests, docs and verification.`,
   )
 }
-log(`Plan: ${plan.stages.length} stages — ${plan.stages.map((s) => s.name).join(' → ')}`)
-log(`Test tiers: ${plan.testTiers}`)
+log(`Plan: ${plan.stages.length} pass(es) — ${plan.stages.map((s) => s.name).join(' → ')}`)
 log(`Falsifiable check: ${plan.falsifiableCheck || '(NONE STATED — this change cannot prove itself)'}`)
+if (plan.oversized) log(`⚠ Propose judged this change OVERSIZED — it should have been split. Note for next time.`)
 if (plan.humanJudgement) log(`Needs human judgement: ${plan.humanJudgement}`)
+
+// Open the PR before any code exists. This is the single largest saving in the flow: ci.yml triggers
+// on `pull_request`, so with no PR open a push to a feature branch runs nothing at all. With it open,
+// every build push runs lint, typecheck, tests, build, Playwright and the compose smoke test in
+// parallel with the next agent — which is what removed the need for a local Integrate phase entirely.
+phase('Open')
+const opened = await agent(
+  `${PREAMBLE}\n\n## Open the pull request NOW, before the code exists\n` +
+    `The proposal is committed and pushed. Open a DRAFT-quality PR immediately so that CI runs on every subsequent ` +
+    `push instead of only at the end.\n` +
+    `\`gh pr create --base ${BASE} --head ${BRANCH} --title ${JSON.stringify(A.prTitle || CHANGE)} --body\` — the body ` +
+    `should summarise openspec/changes/${CHANGE}/proposal.md and state plainly that the change is still being built. ` +
+    `Reuse the PR if one already exists.\n` +
+    `Report the PR number and the current head SHA. Do NOT wait for CI, do NOT merge, do NOT approve.`,
+  { label: 'open:pr', phase: 'Open', schema: OPEN_SCHEMA, effort: 'medium' },
+)
+if (opened) log(`PR #${opened.prNumber} open — CI now runs on every push`)
 
 phase('Build')
 const results = []
-const skipped = []
-let carry = propose
+let carry = plan.falsifiableCheck
 for (const s of plan.stages) {
   if (outOfBudget()) {
-    skipped.push(s.name)
-    log(`Budget floor reached — SKIPPING stage ${s.name} (${Math.round(budgetLeft() / 1000)}k tokens left)`)
-    continue
+    log(`Budget floor reached — stopping before ${s.name}`)
+    return {
+      change: CHANGE,
+      pr: opened?.prNumber ?? null,
+      stages: results,
+      stoppedBecause: `budget ceiling: fewer than ${CEILING.tokenFloor} tokens remained`,
+      unresolved: [`build pass ${s.name} never ran`, 'Close and Review were never reached'],
+      resumeHint: `Completed passes are committed on ${BRANCH}. Re-run with resume: true.`,
+      review: null,
+    }
   }
-  const r = await stage(
-    s.name,
-    `${s.brief}\n\nThis stage covers tasks.md sections: ${s.taskSections}.\n\n` +
-      `How this change proves itself: ${plan.falsifiableCheck}`,
-    s.extraChecks,
-    carry,
-    'Build',
-  )
-  results.push({ name: s.name, passed: r.passed })
-  carry = r.summary || r.notes
-}
-if (skipped.length) log(`⚠ ${skipped.length} stage(s) never ran: ${skipped.join(', ')}`)
-
-// Stop at the ceiling rather than spending the remainder on Tests, Docs, Integrate and a full PR
-// review over an incomplete branch. Returning a half-built branch with an honest account is a better
-// outcome than a polished review of work that was never finished — and it resumes cleanly, because
-// every completed stage is already committed and pushed.
-if (outOfBudget()) {
-  const unresolved = [
-    ...skipped.map((n) => `stage ${n} never ran`),
-    ...results.filter((r) => !r.passed).map((r) => `stage ${r.name} unverified`),
-    'Tests, Docs, Integrate and Review were never reached',
-  ]
-  log(`⚠ BUDGET CEILING REACHED — stopping. Unresolved:\n- ${unresolved.join('\n- ')}`)
-  return {
-    change: CHANGE,
-    stages: results,
-    skipped,
-    tests: false,
-    docs: false,
-    integrated: false,
-    falsifiableCheck: plan.falsifiableCheck,
-    humanJudgement: plan.humanJudgement,
-    unresolved,
-    stoppedBecause: `budget ceiling: fewer than ${CEILING.tokenFloor} tokens remained`,
-    review: null,
-    resumeHint:
-      `Completed stages are committed and pushed on ${BRANCH}. Re-run with a larger budget to continue from ` +
-      `${skipped[0] || 'Tests'}.`,
-  }
+  const r = await build(s.name, `${s.brief}\n\nHow this change proves itself: ${plan.falsifiableCheck}`, carry)
+  results.push({ name: s.name, files: (r.filesChanged || []).length, gatesGreen: r.gatesGreen })
+  carry = r.summary
 }
 
-phase('Tests')
-const tests = await stage(
-  'Tests',
-  `Write the test tiers this change committed to in its proposal: ${plan.testTiers}\n` +
-    `UNIT (Vitest, no DB): pure logic — validation, permission predicates, ordering/aggregation math, filter logic.\n` +
-    `INTEGRATION (Vitest, live Postgres): migrations, schema drift, permission SCOPING, mutator authz end to end.\n` +
-    `E2E (Playwright) only if the big-feature rule applies: keyboard flows, multi-client sync convergence.\n` +
-    `Write the specs now; the Integrate phase runs them live against a real stack. Every test must be able to FAIL — ` +
-    `no assertions that pass vacuously. Do not weaken any existing test.`,
-  `Confirm the new tests exist and are wired into the suite, and that \`pnpm turbo run test --filter=...[origin/${BASE}]\` ` +
-    `picks them up. Integration and e2e specs that need a live stack may skip here — Integrate runs them.`,
+phase('Close')
+const close = await build(
+  'TestsAndDocs',
+  `Finish the change: tests and documentation in one pass.\n\n` +
+    `**Tests** — the tiers this change committed to: ${plan.testTiers}\n` +
+    `UNIT (Vitest, no DB): pure logic. INTEGRATION (Vitest, live Postgres): migrations, drift, permission SCOPING, ` +
+    `mutator authz. E2E (Playwright) only if the big-feature rule applies. Every test must be able to FAIL — no ` +
+    `assertion that passes vacuously. The falsifiable check above is the one that matters most; make sure it exists ` +
+    `and that you have reasoned about why it fails on ${BASE}.\n\n` +
+    `**Docs** — PROCESS.md §2. The apps/docs pages for what this adds, wired into the sidebar; then EVERY root doc ` +
+    `this change makes stale: README, ROADMAP, TECHSTACK, .env.example (matching the Zod schema exactly), and any ` +
+    `reference/VISION/DESIGN doc whose content changed. If you learned something a reference/ harvest got wrong, fix ` +
+    `it — that is high-value and easy to skip.\n\n` +
+    `Run \`pnpm --filter @yapm/docs build\` as well as the fast gates. Integration and e2e specs needing a live stack ` +
+    `may skip locally — CI runs them on your push.`,
   carry,
 )
 
-phase('Docs')
-const docs = await stage(
-  'Docs',
-  `Satisfy the docs gate and the no-stale-root-docs rule (PROCESS.md §2).\n` +
-    `1. apps/docs (Astro Starlight): the user-facing pages for what this change adds, wired into the sidebar.\n` +
-    `2. Update EVERY root doc this change makes stale — README.md (status + feature list), ROADMAP.md (change ` +
-    `status), TECHSTACK.md (version baseline or changed decisions), .env.example (new env vars, matching the Zod ` +
-    `schema exactly), and any reference/VISION/DESIGN/PROCESS doc whose content this change alters.\n` +
-    `3. If you learned something about a library that the reference/ harvest got wrong, fix the reference doc. That ` +
-    `is high-value and easy to skip.`,
-  `\`pnpm --filter @yapm/docs build\` passes and the new pages are in the output. Cross-check .env.example against ` +
-    `the Zod env schema for drift in both directions.`,
-  tests.notes,
-)
-
-// The ONE expensive verification. Everything above ran fast gates; this is where docker comes up,
-// the full suite runs, and the live tests execute — once, not once per stage.
-phase('Integrate')
-const integrate = await agent(
-  `${PREAMBLE}\n\n## Integrate phase — the single full live verification\n` +
-    `Every stage so far ran fast gates only. This is the one place the whole thing is proven end to end. Run all of ` +
-    `it for real and never claim a pass you did not observe.\n\n` +
-    `1. \`pnpm turbo typecheck lint build test\` — the FULL suite, no filter.\n` +
-    `2. \`node scripts/check-boundaries.mjs\` and \`node scripts/check-catalog.mjs\`.\n` +
-    `3. Bring up your isolated stack and run the live tiers against it:\n` +
-    `   ${COMPOSE_ENV} ${COMPOSE} up -d --wait\n` +
-    `   Run the migrations, the schema-drift test, the integration tests, and the FULL Playwright suite — this ` +
-    `change's new specs plus every prior spec. Then \`${COMPOSE} down -v\`.\n` +
-    `4. Confirm docker-compose still defines exactly three services.\n\n` +
-    `If anything fails, FIX IT — you are the last line before review, so unlike the stage verifiers you are expected ` +
-    `to repair what you find. Diagnose root causes, not symptoms. Then commit and push.\n` +
-    `Report exactly which commands you ran, what failed, what you fixed, and the final state.\n\n` +
-    `Stage outcomes so far: ${results.map((r) => `${r.name}=${r.passed ? 'verified' : 'UNVERIFIED'}`).join(', ')}, ` +
-    `Tests=${tests.passed ? 'verified' : 'UNVERIFIED'}, Docs=${docs.passed ? 'verified' : 'UNVERIFIED'}. ` +
-    `Pay particular attention to anything marked UNVERIFIED.`,
-  { label: 'integrate:full', phase: 'Integrate', schema: VERIFY_SCHEMA, effort: 'high' },
-)
-log(`Integrate: ${integrate?.passed ? 'green' : 'RED'}`)
-
-phase('Sync')
-await agent(
-  `${PREAMBLE}\n\n## Sync phase — rebase ONLY\n` +
-    `### 🔴 You must not touch a pull request. Not create one, not merge one, not re-run its checks.\n` +
-    `\`gh pr create\`, \`gh pr merge\`, \`gh pr review\`, \`gh run rerun\` are all forbidden here. Reading state with ` +
-    `\`gh pr list\` or \`gh pr view\` is fine; changing it is not. The review flow that runs after you owns the entire ` +
-    `PR lifecycle, and its merge decision depends on review rounds that have NOT HAPPENED YET.\n` +
-    `This is not hypothetical. Twice now a Sync agent has created a PR, waited out its CI and squash-merged it — ` +
-    `landing the change on ${BASE} before a single review round ran, and stranding every subsequent review fix on an ` +
-    `orphaned branch. Both times CI was green, so it looked correct. Green CI means the code compiles and the tests ` +
-    `pass; it does not mean the change has been reviewed. Merging here destroys that distinction.\n` +
-    `If you find an open PR for this branch, LEAVE IT OPEN and say so in your report.\n\n` +
-    `### Your actual job\nAnother change may have merged to ${BASE} while you were building. Bring ${BRANCH} up to ` +
-    `date so that the review flow can later merge it cleanly:\n` +
-    `1. git fetch origin\n` +
-    `2. git rebase origin/${BASE}\n` +
-    `3. Resolve any conflicts. Expect them in ROADMAP.md and README.md — concurrent changes add rows in the same ` +
-    `places. Keep BOTH changes' content; never drop the other change's row to make a conflict go away. If you ` +
-    `conflict in a file that belongs to another change, keep THEIR version.\n` +
-    `4. Re-run \`pnpm turbo typecheck lint build test\` to confirm the rebase broke nothing, then ` +
-    `\`git push --force-with-lease origin ${BRANCH}\`.\n` +
-    `If ${BASE} has not moved, say so and continue.`,
-  { label: 'sync:rebase', phase: 'Sync', effort: 'medium' },
-)
-
-// An honest account of what this run did and did not achieve. Anything unverified, skipped, or
-// unprovable is named here rather than smoothed over — a fluent summary that hides a skipped stage
-// just moves the cost onto whoever reads it next.
 const unresolved = [
-  ...skipped.map((n) => `stage ${n} never ran (budget floor)`),
-  ...results.filter((r) => !r.passed).map((r) => `stage ${r.name} unverified after ${CEILING.stageAttempts} attempts`),
-  ...(tests.passed ? [] : ['Tests stage unverified']),
-  ...(docs.passed ? [] : ['Docs stage unverified']),
-  ...(integrate?.passed ? [] : ['Integrate did NOT go green']),
-  ...(plan.falsifiableCheck ? [] : ['no falsifiable check was ever stated for this change']),
+  ...results.filter((r) => !r.gatesGreen).map((r) => `build pass ${r.name} ended with red fast gates`),
+  ...(close.gatesGreen ? [] : ['Close ended with red fast gates']),
+  ...(close.unresolved || []),
+  ...(plan.falsifiableCheck ? [] : ['no falsifiable check was ever stated']),
+  ...(plan.oversized ? ['Propose judged this change oversized — it should have been split'] : []),
   ...(plan.humanJudgement ? [`needs human judgement: ${plan.humanJudgement}`] : []),
 ]
-
 if (unresolved.length) log(`⚠ Unresolved going into review:\n- ${unresolved.join('\n- ')}`)
 
 phase('Review')
-log('Handing off to the PR-review flow...')
+log(`Handing PR #${opened?.prNumber ?? '?'} to the review flow...`)
 const review = await workflow(
   { scriptPath: `${REPO}/.claude/workflows/pr-review-flow.js` },
   {
@@ -516,6 +317,7 @@ const review = await workflow(
     changeName: CHANGE,
     prTitle: A.prTitle || CHANGE,
     repoDir: REPO,
+    existingPr: opened?.prNumber ?? null,
     knownUnresolved: unresolved,
     falsifiableCheck: plan.falsifiableCheck,
   },
@@ -523,14 +325,12 @@ const review = await workflow(
 
 return {
   change: CHANGE,
+  pr: opened?.prNumber ?? null,
   stages: results,
-  skipped,
-  tests: tests.passed,
-  docs: docs.passed,
-  integrated: Boolean(integrate?.passed),
+  oversized: plan.oversized,
   falsifiableCheck: plan.falsifiableCheck,
   humanJudgement: plan.humanJudgement,
   unresolved,
-  stoppedBecause: skipped.length ? 'budget floor reached before all stages ran' : 'completed all planned stages',
+  stoppedBecause: 'completed all planned passes',
   review,
 }

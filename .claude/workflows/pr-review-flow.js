@@ -32,7 +32,11 @@ const REPO = A.repoDir || '/Users/thettwe/Works/yapm'
 const BRANCH = A.branch
 const BASE = A.base || 'main'
 const CHANGE = A.changeName || BRANCH
-const MAX_ROUNDS = 3
+// Two, not three. Across notifications, mentions, search and retro-board, round three never once
+// produced a critical or high finding — only polish, at roughly 40 min and 500K tokens a round. Round
+// two has produced confirmed highs, so it stays. The guaranteed verification round still applies, so a
+// clean second round is a real re-review of the last fix rather than an assumption.
+const MAX_ROUNDS = 2
 
 if (!BRANCH) throw new Error('pr-review-flow requires args.branch')
 
@@ -337,12 +341,21 @@ function renderFindings(list) {
 }
 
 phase('Open')
+// The build flow now opens the PR before writing any code, so CI runs on every build push rather than
+// only once at the end. When it hands us that PR number there is nothing to create — just read it.
 const opened = await agent(
-  `${CONTEXT}\n\nOpen a pull request for this change. In ${REPO}:\n` +
-    `1. Push the branch: git push -u origin ${BRANCH}.\n` +
-    `2. Open a PR to ${BASE}: gh pr create --base ${BASE} --head ${BRANCH} --title ${JSON.stringify(A.prTitle || CHANGE)} ` +
-    `--body describing what the change adds (summarize openspec/changes/${CHANGE}/proposal.md). Reuse the PR if one exists.\n` +
-    `3. Report the PR number, the full head SHA (git rev-parse ${BRANCH}), and git diff --stat ${BASE}...${BRANCH}.\n\n` +
+  `${CONTEXT}\n\n` +
+    (A.existingPr
+      ? `PR #${A.existingPr} is ALREADY OPEN for this branch — the build flow opened it before writing code so that ` +
+        `CI would run on every push. Do NOT create another one. In ${REPO}:\n` +
+        `1. Push anything not yet pushed: git push origin ${BRANCH}.\n` +
+        `2. Report PR #${A.existingPr}'s number, the full head SHA (git rev-parse ${BRANCH}), and ` +
+        `git diff --stat ${BASE}...${BRANCH}.\n\n`
+      : `Open a pull request for this change. In ${REPO}:\n` +
+        `1. Push the branch: git push -u origin ${BRANCH}.\n` +
+        `2. Open a PR to ${BASE}: gh pr create --base ${BASE} --head ${BRANCH} --title ${JSON.stringify(A.prTitle || CHANGE)} ` +
+        `--body describing what the change adds (summarize openspec/changes/${CHANGE}/proposal.md). Reuse the PR if one exists.\n` +
+        `3. Report the PR number, the full head SHA (git rev-parse ${BRANCH}), and git diff --stat ${BASE}...${BRANCH}.\n\n`) +
     `Do not run any gates here — CI starts on push and the review rounds run against the diff.`,
   { label: 'open:pr', phase: 'Open', schema: OPEN_SCHEMA, effort: 'medium' },
 )

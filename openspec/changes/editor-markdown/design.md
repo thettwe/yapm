@@ -258,4 +258,127 @@ fail.
 
 ## Decisions made during implementation
 
-<!-- Appended during the build phase: what was ambiguous, what was chosen, and why. -->
+### I1 — The manager gets UNRESOLVED extensions, not `resolveExtensions(...)`
+
+The plan said `new MarkdownManager({ extensions: resolveExtensions(createRichTextExtensions()) })`.
+Verified by running it: **`resolveExtensions` is not idempotent.** It expands StarterKit but keeps
+`starterKit` itself in the result (2 → 25 entries, no duplicate names), so resolving that result
+again expands it a second time — 49 entries, 24 duplicate names, and TipTap logs
+`Duplicate extension names found: [...]. This can lead to issues.`
+
+`MarkdownManager` stores the array it is given as `baseExtensions` and later calls
+`getSchema(this.baseExtensions)` (in `getSchemaParseDomTags`, reached from `parse`), and `getSchema`
+resolves. So pre-resolving means resolving twice. The manager already does
+`sortExtensions(flattenExtensions(extensions))` for its own registration, which is what
+`resolveExtensions` does. Passing `createRichTextExtensions()` directly produces byte-identical
+serialiser output on every probe case and no warning.
+
+### I2 — Block-leading escapes also apply after a `hardBreak`, not only to `content[0]`
+
+§D5 keys the block-leading escapes on "first child of a paragraph". A hard break emits a newline, so
+the text node *after* one also opens a line: `line` + hardBreak + `# after break` serialised to an
+unescaped `# after break` on its own line and re-parsed as a heading. The rule is now
+`node === parent.content[0] || previous sibling is a hardBreak`. The sibling scan is guarded by a
+cheap `^[ \t#\-+>|=\d]` prefilter, so it costs an `indexOf` only for text that could possibly begin
+a block construct.
+
+### I3 — A fourth paste refusal: a single unbroken run over a non-empty selection
+
+§D10 lists three refusals. Verified while wiring `handlePaste`: `@tiptap/extension-link`'s
+`linkOnPaste` (`helpers/pasteHandler.ts`) wraps a **non-empty selection** in a link when the
+clipboard holds one bare URL — and `EditorView.someProp` consults `editorProps` **before any
+plugin**, so this handler runs first and would have replaced the selection with the URL text
+instead. `marked` autolinks a bare URL, so the "conversion changes nothing" guard does not catch it.
+
+Fourth refusal: the selection is non-empty **and** the conversion yields exactly one paragraph
+holding one text node whose text equals the pasted text. That is precisely the bare-URL case;
+`**bold**` over a selection still converts, because the emitted text (`bold`) is not the pasted text.
+
+`Node.fromJSON` is also wrapped in a `try`: the clipboard is arbitrary input and falling through to
+ProseMirror's own paste is always safe.
+
+### I4 — `richTextSliceToMarkdown` is exported
+
+`clipboardTextSerializer` needs a `Slice` → markdown step (wrap bare inline content in a paragraph,
+then serialise). It is exported from `rich-text.tsx` rather than inlined in `editorProps` so the
+clipboard behaviour is reachable from a test without driving a real `copy` event through jsdom.
+
+### I5 — The boundary rule matches `import 'pkg'` as well as `from 'pkg'`
+
+Rule 3 was specified as "the same `from '<pkg>'` regex style as the two existing rules". A
+side-effect import — `import '@tiptap/core'` — has no `from`, and costs the server bundle exactly as
+much as a named one, so the pattern is `(?:from|import)\s+['"]…['"]`. Still one regex, no AST, no
+new dependency.
+
+### Evidence: rule 3 fires (task 1.4)
+
+```
+$ printf "import '@tiptap/core'\n" > packages/schema/src/__scratch-boundary.ts
+$ node scripts/check-boundaries.mjs
+Package boundary violations:
+
+  ✗ packages/schema/src/__scratch-boundary.ts: schema imports "@tiptap/*" — packages/schema MUST NOT
+    depend on the UI. apps/server imports @yapm/schema, so a TipTap, React or ProseMirror import here
+    ships an editor to the server. See packages/schema/src/rich-text/plaintext.ts: it imports NOTHING,
+    and that is why a rich-text walk is allowed to live in schema at all. The markdown serialiser
+    lives in packages/ui/src/lib/markdown.ts for this reason.
+EXIT=1
+
+$ rm packages/schema/src/__scratch-boundary.ts && node scripts/check-boundaries.mjs
+Boundaries OK: no package→app imports, no ZQL/mutator definitions outside packages/schema, no UI
+dependencies in packages/schema.
+EXIT=0
+```
+
+`import { useMemo } from 'react'` in the same scratch file fires the `react` rule; both import forms
+were checked.
+
+### Evidence: the graph did not split (task 1.2)
+
+```
+$ ls node_modules/.pnpm | grep -E '^@tiptap\+(core|pm|markdown)@'
+@tiptap+core@3.28.0_@tiptap+pm@3.28.0
+@tiptap+markdown@3.28.0_@tiptap+core@3.28.0_@tiptap+pm@3.28.0__@tiptap+pm@3.28.0
+@tiptap+pm@3.28.0
+```
+
+Exactly one `@tiptap/core` and one `@tiptap/pm`.
+
+### Evidence: the serialiser, run against this repo's extension set
+
+The falsifiable check (`a < b & c` / `# not a heading`) emits exactly
+`"a < b & c\n\n\\# not a heading"` and re-parses to the source document. Every §D5 row verified on
+both the emitted string and the re-parse:
+
+```
+"# h"          => "\# h"            "###### h"  => "\###### h"
+"- bullet"     => "\- bullet"       "+ bullet"  => "\+ bullet"
+"* bullet"     => "\* bullet"       "> not a quote" => "\> not a quote"
+"| a | b |"    => "\| a | b |"      "1. one"    => "1\. one"
+"1) one"       => "1\) one"         "---"       => "\---"
+"==="          => "\==="            "```js"     => "\`\`\`js"
+"    indented" => "indented"        "a < b & c" => "a < b & c"
+```
+
+Every one re-parses to a paragraph holding the original text. Code is verbatim in both contexts:
+`if (a < b && c) {}` survives a code block and a `code` mark unescaped and un-entitied. The whole
+supported node set round-trips equal after normalising both sides through
+`getSchema(createRichTextExtensions())`. Mentions: `ping @Ada Lovelace and @Fallback and  now`,
+with no `id=`/`label=` syntax, and `markdownToRichText('@Ada Lovelace')` yields plain text.
+Heading clamp: `#`/`##` → 2, `###`…`######` → 3. `''` → `EMPTY_DOC`.
+
+### Evidence: the editor surface (jsdom probes, deleted after running)
+
+Typing `# hello` yields `heading level 2`; `## two` still yields level 2 and `### three` still
+yields level 3, so the new rule takes nothing away. `[yapm](https://yapm.dev)` yields a link mark
+with that href and the text `yapm`. Neither fires inside a code block. Pasting
+`## Title\n\n- one\n- two` as `text/plain` converts to a heading and a bullet list; the same text
+with a `text/html` flavour present inserts `## Title` literally; `just a sentence` takes the plain
+path. `richTextSliceToMarkdown` over a whole document gives
+`"## Title\n\nping @Ada Lovelace a < b & c"` and over a partial inline selection `"ng @Ada Lovelace a < b"`.
+
+⚠️ For whoever writes the editor tests: jsdom needs `Range.prototype.getClientRects`,
+`Range.prototype.getBoundingClientRect` and `Element.prototype.scrollIntoView` stubbed, or every
+transaction that scrolls the selection into view throws `target.getClientRects is not a function`
+out of `prosemirror-view`.
+

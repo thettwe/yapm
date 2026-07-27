@@ -49,6 +49,7 @@ catalog:
   # resolution duplicates the ProseMirror `model` package and throws
   # `RangeError: Adding different instances of a keyed plugin` at runtime — invisible to typecheck.
   '@tiptap/extension-mention': 3.28.0
+  '@tiptap/markdown': 3.28.0
   '@tiptap/pm': 3.28.0
   '@tiptap/react': 3.28.0
   '@tiptap/starter-kit': 3.28.0

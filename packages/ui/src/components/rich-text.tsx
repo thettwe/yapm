@@ -1,10 +1,16 @@
 import Mention, { type MentionNodeAttrs } from '@tiptap/extension-mention'
+import { Node as ProseMirrorNode, Slice } from '@tiptap/pm/model'
 import { PluginKey } from '@tiptap/pm/state'
 import {
   EditorContent,
+  Extension,
   type Extensions,
+  type InputRule,
   type JSONContent,
+  markInputRule,
+  markPasteRule,
   mergeAttributes,
+  textblockTypeInputRule,
   useEditor,
   useEditorState,
 } from '@tiptap/react'
@@ -17,6 +23,7 @@ import {
   mentionOptionId,
   nextMentionIndex,
 } from '@yapm/ui/components/mention-list'
+import { markdownToRichText, richTextToMarkdown } from '@yapm/ui/lib/markdown'
 import { type MentionCandidate, matchMentions } from '@yapm/ui/lib/mention-match'
 import { cn } from '@yapm/ui/lib/utils'
 import {
@@ -88,6 +95,61 @@ const INERT_MENTION_SUGGESTION: Omit<
   allow: () => false,
 }
 
+// `[text](url)` typed, and the same pasted. Only ONE capture group, and it holds the link TEXT:
+// `markInputRule`/`markPasteRule` keep `match[match.length - 1]` and delete the rest, so a capture
+// group around the URL would make the URL the visible text.
+const MARKDOWN_LINK_INPUT = /\[([^\]]+)]\((?:[^\s)]+)\)$/
+const MARKDOWN_LINK_PASTE = /\[([^\]]+)]\((?:[^\s)]+)\)/g
+
+function markdownLinkHref(match: string): string {
+  return match.slice(match.lastIndexOf('](') + 2, -1)
+}
+
+// The two shortcuts the configured node set is missing, and nothing else — read the installed
+// extensions before adding a third.
+//
+// StarterKit generates the heading input rules FROM the configured levels, so `heading.levels =
+// [2, 3]` yields `/^(#{2,2})\s$/` and `/^(#{2,3})\s$/` and `# ` matches nothing. `# ` maps to
+// level 2, the largest heading this design system styles.
+//
+// `@tiptap/extension-link` ships paste rules for bare URLs and autolink, and NO input rules at all.
+const MarkdownShortcuts = Extension.create({
+  name: 'markdownShortcuts',
+
+  addInputRules() {
+    const rules: InputRule[] = []
+    const heading = this.editor.schema.nodes.heading
+    if (heading) {
+      rules.push(
+        textblockTypeInputRule({ find: /^#\s$/, type: heading, getAttributes: { level: 2 } }),
+      )
+    }
+    const link = this.editor.schema.marks.link
+    if (link) {
+      rules.push(
+        markInputRule({
+          find: MARKDOWN_LINK_INPUT,
+          type: link,
+          getAttributes: (match) => ({ href: markdownLinkHref(match[0]) }),
+        }),
+      )
+    }
+    return rules
+  },
+
+  addPasteRules() {
+    const link = this.editor.schema.marks.link
+    if (!link) return []
+    return [
+      markPasteRule({
+        find: MARKDOWN_LINK_PASTE,
+        type: link,
+        getAttributes: (match) => ({ href: markdownLinkHref(match[0]) }),
+      }),
+    ]
+  },
+})
+
 export interface RichTextExtensionOptions {
   resolveMentionName?: ((id: string) => string | undefined) | undefined
   mentionSuggestion?: Omit<SuggestionOptions<MentionCandidate, MentionNodeAttrs>, 'editor'>
@@ -123,6 +185,7 @@ export function createRichTextExtensions(options: RichTextExtensionOptions = {})
         ]
       },
     }),
+    MarkdownShortcuts,
   ]
 }
 
@@ -146,6 +209,54 @@ export function isRichTextEmpty(value: JSONContent | null | undefined): boolean 
   if (nodes.length === 0) return true
   if (nodes.map(collectText).join('').trim().length > 0) return false
   return !nodes.some(hasStructuralLeaf)
+}
+
+/**
+ * The `text/plain` clipboard flavour for a copied selection. `clipboardSerializer` — the
+ * `text/html` flavour carrying `data-pm-slice` — is deliberately untouched: it is already lossless
+ * for a yapm→yapm paste, and markdown is only what the text becomes when it leaves the building.
+ */
+export function richTextSliceToMarkdown(
+  slice: Slice,
+  resolveMentionName?: ((id: string) => string | undefined) | undefined,
+): string {
+  const nodes = (slice.content.toJSON() ?? []) as JSONContent[]
+  if (nodes.length === 0) return ''
+  // A partial selection inside one paragraph is a fragment of INLINE nodes, which is not a document.
+  const content =
+    slice.content.firstChild?.isInline === true ? [{ type: 'paragraph', content: nodes }] : nodes
+  return richTextToMarkdown({ type: 'doc', content }, { resolveMentionName })
+}
+
+function plainTextLines(content: readonly JSONContent[]): string[] | null {
+  const lines: string[] = []
+  for (const block of content) {
+    if (block.type !== 'paragraph') return null
+    const children = block.content ?? []
+    if (children.some((child) => child.type !== 'text' || (child.marks?.length ?? 0) > 0)) {
+      return null
+    }
+    lines.push(children.map((child) => child.text ?? '').join(''))
+  }
+  return lines
+}
+
+// The conversion contributes nothing ProseMirror's own plain-text path would not, so the plain path
+// keeps its cursor placement and its undo entry.
+function isPlainTextEquivalent(content: readonly JSONContent[], text: string): boolean {
+  const lines = plainTextLines(content)
+  return lines !== null && lines.join('\n\n') === text.trim()
+}
+
+// `@tiptap/extension-link`'s `linkOnPaste` wraps a NON-EMPTY selection in a link when the clipboard
+// holds one bare URL — and `EditorView.someProp` consults `editorProps` before any plugin, so a
+// markdown handler that converted here would replace the selected text instead of linking it.
+// A conversion whose whole output is the pasted text as one unbroken run is exactly that case.
+function isSingleTextRun(content: readonly JSONContent[], text: string): boolean {
+  if (content.length !== 1) return false
+  const children = content[0]?.type === 'paragraph' ? (content[0].content ?? []) : []
+  const only = children.length === 1 ? children[0] : undefined
+  return only?.type === 'text' && only.text === text.trim()
 }
 
 const contentClass = cn(
@@ -461,6 +572,50 @@ export function RichTextEditor({
         role: 'textbox',
         'aria-multiline': 'true',
         class: 'tiptap',
+      },
+      clipboardTextSerializer: (slice) =>
+        richTextSliceToMarkdown(slice, (id) => mentionNamesRef.current?.get(id)),
+      handlePaste: (view, event) => {
+        const clipboard = event.clipboardData
+        if (clipboard === null) return false
+        // A yapm→yapm paste carries `data-pm-slice`; a paste from a browser or another editor
+        // carries real HTML. Either way ProseMirror's HTML path beats a markdown round trip.
+        if (clipboard.types.includes('text/html')) return false
+
+        const text = clipboard.getData('text/plain')
+        if (text.trim() === '') return false
+
+        // Pasting a markdown snippet into a code block must insert the characters — that is what a
+        // code block is for.
+        const { doc, schema, selection } = view.state
+        const { $from } = selection
+        if ($from.parent.type.spec.code === true) return false
+        const code = schema.marks.code
+        if (
+          code &&
+          (code.isInSet($from.marks()) !== undefined ||
+            doc.rangeHasMark(selection.from, selection.to, code))
+        ) {
+          return false
+        }
+
+        try {
+          const content = markdownToRichText(text).content ?? []
+          if (content.length === 0) return false
+          if (isPlainTextEquivalent(content, text)) return false
+          if (!selection.empty && isSingleTextRun(content, text)) return false
+
+          const parsed = ProseMirrorNode.fromJSON(schema, { type: 'doc', content })
+          // ONE transaction, so one Cmd+Z restores the pre-paste document.
+          view.dispatch(
+            view.state.tr.replaceSelection(Slice.maxOpen(parsed.content)).scrollIntoView(),
+          )
+          return true
+        } catch {
+          // The clipboard is arbitrary user input and `Node.fromJSON` throws on anything the schema
+          // will not hold. Falling through to ProseMirror's own paste is always safe.
+          return false
+        }
       },
     },
     onUpdate: ({ editor: instance }) => onChange?.(instance.getJSON()),

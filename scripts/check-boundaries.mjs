@@ -16,6 +16,20 @@ const ZERO_DEFINITION_NAMES = [
   'defineMutators',
 ]
 
+// CLAUDE.md #3, "packages/schema has no UI dependencies", was a doc-level rule with nothing behind
+// it until this list existed. `apps/server` imports `@yapm/schema`, so any one of these in a schema
+// file quietly drags an editor's worth of graph into the server bundle — a bigger image nobody
+// attributes to the change that caused it, and something lint, typecheck and build all pass.
+const SCHEMA_FORBIDDEN_IMPORTS = [
+  '@tiptap/*',
+  '@yapm/ui',
+  'react',
+  'react-dom',
+  '@base-ui/react',
+  'lucide-react',
+  '@floating-ui/*',
+]
+
 const SCAN_ROOTS = ['apps', 'packages']
 const IGNORED_DIRS = new Set(['node_modules', 'dist', '.turbo', 'coverage', '.tanstack'])
 
@@ -79,6 +93,21 @@ for (const root of SCAN_ROOTS) {
         }
       }
     }
+
+    if (inSchema(rel)) {
+      for (const spec of SCHEMA_FORBIDDEN_IMPORTS) {
+        const wildcard = spec.endsWith('/*')
+        const base = wildcard ? spec.slice(0, -2) : spec
+        const tail = wildcard ? '/[^\'"]*' : '(/[^\'"]*)?'
+        // `import 'pkg'` as well as `from 'pkg'`: a side-effect import of an editor package is
+        // exactly as expensive to the server bundle as a named one.
+        if (new RegExp(`(?:from|import)\\s+['"]${base}${tail}['"]`).test(source)) {
+          violations.push(
+            `${rel}: schema imports "${spec}" — packages/schema MUST NOT depend on the UI. apps/server imports @yapm/schema, so a TipTap, React or ProseMirror import here ships an editor to the server. See packages/schema/src/rich-text/plaintext.ts: it imports NOTHING, and that is why a rich-text walk is allowed to live in schema at all. The markdown serialiser lives in packages/ui/src/lib/markdown.ts for this reason.`,
+          )
+        }
+      }
+    }
   }
 }
 
@@ -86,11 +115,11 @@ if (violations.length > 0) {
   console.error('Package boundary violations:\n')
   for (const v of violations) console.error(`  ✗ ${v}`)
   console.error(
-    '\nBoundaries: packages never import apps; all ZQL/mutator definitions live in packages/schema (CLAUDE.md constraints 2–3).',
+    '\nBoundaries: packages never import apps; all ZQL/mutator definitions live in packages/schema; packages/schema has no UI dependencies (CLAUDE.md constraints 2–3).',
   )
   process.exit(1)
 }
 
 console.log(
-  'Boundaries OK: no package→app imports, no ZQL/mutator definitions outside packages/schema.',
+  'Boundaries OK: no package→app imports, no ZQL/mutator definitions outside packages/schema, no UI dependencies in packages/schema.',
 )

@@ -6,20 +6,20 @@ point of the change, not a preference.
 
 ## 1. The pin and the boundary it depends on
 
-- [ ] 1.1 Add `'@tiptap/markdown': 3.28.0` to the catalog in `pnpm-workspace.yaml`, inside the
+- [x] 1.1 Add `'@tiptap/markdown': 3.28.0` to the catalog in `pnpm-workspace.yaml`, inside the
       existing TipTap block and under the comment that explains the exact-pin rule. **Exact, never a
       caret.** Add `"@tiptap/markdown": "catalog:"` to `packages/ui/package.json` dependencies.
       `pnpm install`.
-- [ ] 1.2 Verify the graph did not split: exactly one `@tiptap+core@3.28.0*` and one
+- [x] 1.2 Verify the graph did not split: exactly one `@tiptap+core@3.28.0*` and one
       `@tiptap+pm@3.28.0*` directory in `node_modules/.pnpm`. Record the counts. A split here is a
       runtime `RangeError` that typecheck and build both pass.
-- [ ] 1.3 Add the third rule to `scripts/check-boundaries.mjs`: no file under `packages/schema/` may
+- [x] 1.3 Add the third rule to `scripts/check-boundaries.mjs`: no file under `packages/schema/` may
       import `@tiptap/*`, `@yapm/ui`, `react`, `react-dom`, `@base-ui/react`, `lucide-react` or
       `@floating-ui/*`. Match the existing `from '<pkg>'` / `from '<pkg>/…'` style; no AST, no new
       dependency. The violation message names `packages/schema/src/rich-text/plaintext.ts` and why it
       imports nothing, so whoever trips the rule reads the reason instead of deleting it. Update the
       script's success line to mention three rules.
-- [ ] 1.4 **Test (unit, no DB)** Prove rule 3 fires: temporarily add `import '@tiptap/core'` to a
+- [x] 1.4 **Test (unit, no DB)** Prove rule 3 fires: temporarily add `import '@tiptap/core'` to a
       scratch file under `packages/schema/src/`, confirm `node scripts/check-boundaries.mjs` exits
       non-zero naming that file, then delete the scratch file and confirm it exits zero again. Record
       both outputs in design.md's implementation log — this rule has no unit test of its own, so the
@@ -27,28 +27,28 @@ point of the change, not a preference.
 
 ## 2. The conversion core — `packages/ui/src/lib/markdown.ts`, no editor required
 
-- [ ] 2.1 Create `packages/ui/src/lib/markdown.ts`. Import `MarkdownManager` from `@tiptap/markdown`
+- [x] 2.1 Create `packages/ui/src/lib/markdown.ts`. Import `MarkdownManager` from `@tiptap/markdown`
       and `resolveExtensions` / `getSchema` / `JSONContent` from **`@tiptap/react`** — `@tiptap/core`
       is a peer and is not resolvable from `packages/ui` (`reference/frontend-build.md` §11.1).
       Build one lazily-constructed module-level manager from
       `resolveExtensions(createRichTextExtensions())`.
-- [ ] 2.2 Implement `installPortableTextEncoding(manager)`: replace the manager's
+- [x] 2.2 Implement `installPortableTextEncoding(manager)`: replace the manager's
       `encodeTextForMarkdown` with a total function per design.md §D4/§D5 — verbatim inside a code
       context (parent `codeBlock`, or a `code` mark on the node), otherwise the inline escape set
       with **no HTML entity encoding**, plus the block-leading escapes when the node is the first
       child of a `paragraph`. Ordered-list escaping is `1\.`, not `\1.`. Throw with the method name
       if the hook is missing, so a version bump fails at construction rather than silently.
-- [ ] 2.3 Implement `normalizeForMarkdown(doc, resolveMentionName)` — the pure pre-walk: a mention
+- [x] 2.3 Implement `normalizeForMarkdown(doc, resolveMentionName)` — the pure pre-walk: a mention
       node becomes a text node `@` + (live name ?? stored label), contributing **nothing** when
       neither resolves (mirroring `richTextToPlainText`); an `underline` mark is stripped and its
       text kept; every other node recurses unchanged. This is the extension point change 17 extends —
       say so in a comment naming the change, not the mechanism.
-- [ ] 2.4 Implement `richTextToMarkdown(doc, options?)`: normalise, then serialise, then trim the
+- [x] 2.4 Implement `richTextToMarkdown(doc, options?)`: normalise, then serialise, then trim the
       trailing newline. `null`/`undefined`/an empty document returns `''`.
-- [ ] 2.5 Implement `markdownToRichText(md)`: parse, clamp heading levels per design.md §D6's table,
+- [x] 2.5 Implement `markdownToRichText(md)`: parse, clamp heading levels per design.md §D6's table,
       return `EMPTY_DOC` when the parse yields no content. Export both functions plus the options
       type; add nothing to `packages/schema`.
-- [ ] 2.6 Run `node scripts/check-boundaries.mjs` and `pnpm --filter @yapm/ui typecheck`.
+- [x] 2.6 Run `node scripts/check-boundaries.mjs` and `pnpm --filter @yapm/ui typecheck`.
 
 ## 3. The falsifiable check, before anything is wired to a surface
 
@@ -79,19 +79,19 @@ point of the change, not a preference.
 
 ## 4. The editor surface — `packages/ui/src/components/rich-text.tsx`
 
-- [ ] 4.1 Add a `markdownShortcuts` extension in `rich-text.tsx` (or a sibling module if it earns
+- [x] 4.1 Add a `markdownShortcuts` extension in `rich-text.tsx` (or a sibling module if it earns
       one): `textblockTypeInputRule` for `^#\s$` → heading level 2, and `markInputRule` +
       `markPasteRule` for `[text](url)` → the link mark, both imported from `@tiptap/react`. Include
       it in `createRichTextExtensions()` so the read-only renderer's node set stays identical to the
       editor's.
-- [ ] 4.2 Add `editorProps.clipboardTextSerializer`: build a document from the slice's fragment —
+- [x] 4.2 Add `editorProps.clipboardTextSerializer`: build a document from the slice's fragment —
       wrapping bare inline content in a paragraph — and return `richTextToMarkdown` of it, with the
       component's existing mention-name lookup as the resolver. Leave `clipboardSerializer`
       (the HTML flavour) alone.
-- [ ] 4.3 Add `editorProps.handlePaste` implementing design.md §D10's three refusals: an HTML flavour
+- [x] 4.3 Add `editorProps.handlePaste` implementing design.md §D10's three refusals: an HTML flavour
       present, a code context at the caret, or a conversion that changes nothing. On conversion,
       insert the parsed content as one transaction so a single undo restores the pre-paste document.
-- [ ] 4.4 Confirm the mention typeahead's keyboard contract is untouched: `handleRichTextKeyDown`,
+- [x] 4.4 Confirm the mention typeahead's keyboard contract is untouched: `handleRichTextKeyDown`,
       the consumed-event identity check and `exitSuggestion` behave exactly as before. Paste and copy
       add no keydown handling.
 

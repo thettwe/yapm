@@ -183,10 +183,39 @@ async function build(name, brief, prevNotes) {
       { label: `build:${name}${attempt > 1 ? ':retry' : ''}`, phase: 'Build', schema: BUILD_SCHEMA, effort: 'high' },
     )
     if (r && (r.filesChanged || []).length > 0) return r
-    log(`${name} attempt ${attempt}: builder produced NO files — re-dispatching`)
+
+    // "Reported nothing" and "died after writing" look identical from here, and the script cannot run
+    // `git status` to tell them apart. Ask before re-dispatching: a builder that died mid-response left
+    // its edits on disk, and blindly re-running one on top of a dirty tree is how work gets duplicated
+    // or clobbered. This is the same failure that left four files of confirmed fixes uncommitted on
+    // auto-status while CI went green against the previous head.
+    const salvage = await agent(
+      `${PREAMBLE}\n\n## Salvage check — did the last builder die after writing?\n` +
+        `The ${name} builder reported no files. That means one of two things, and they are ` +
+        `indistinguishable from outside: it genuinely did nothing, or it wrote files and then died ` +
+        `mid-response before reporting. **Do not assume the first.**\n\n` +
+        `1. \`git -C ${REPO} status --porcelain\` and \`git -C ${REPO} diff --stat\`. Clean tree → nothing was ` +
+        `salvaged; say so and stop, and the builder will be re-dispatched.\n` +
+        `2. Dirty tree → real work exists. Judge it against the assignment below: coherent and complete, or ` +
+        `half-applied? Finish what is incomplete.\n` +
+        `3. Run the fast gates:\n   ${FAST_GATES}\n` +
+        `   A dying agent often never reached the formatter, so \`pnpm lint\` may fail on formatting alone; ` +
+        `\`pnpm format\` fixes that.\n` +
+        `4. Gates green → git add -A && git commit -s && git push origin ${BRANCH}.\n\n` +
+        `Report honestly. A false "recovered" is worse than a clean report of nothing, because the next phase ` +
+        `will build on whatever you claim.\n\n## THE ASSIGNMENT THAT WAS RUNNING\n${brief}`,
+      { label: `salvage:${name}`, phase: 'Build', schema: BUILD_SCHEMA, effort: 'high' },
+    )
+    if (salvage && (salvage.filesChanged || []).length > 0) {
+      log(`${name}: salvaged ${salvage.filesChanged.length} file(s) from a dead builder`)
+      return salvage
+    }
+
+    log(`${name} attempt ${attempt}: builder produced NO files and the tree was clean — re-dispatching`)
     feedback =
       `\n\n## THE PREVIOUS ATTEMPT PRODUCED NOTHING\nIt finished without creating or modifying a single file` +
-      `${r && r.summary ? ` (it said: ${r.summary.slice(0, 300)})` : ''}. Read the tasks, then actually write the code.`
+      `${r && r.summary ? ` (it said: ${r.summary.slice(0, 300)})` : ''}, and a salvage check confirmed the working ` +
+      `tree was clean, so nothing was written and lost. Read the tasks, then actually write the code.`
   }
   log(`${name} produced nothing twice — continuing; review will see an empty diff`)
   return { filesChanged: [], gatesGreen: false, pushed: false, summary: '', unresolved: [`${name} produced nothing`] }

@@ -517,14 +517,44 @@ for (let round = 1; round <= MAX_ROUNDS; round++) {
     { label: `fix:r${round}`, phase: 'Fix', schema: FIX_SCHEMA, effort: 'high' },
   )
 
-  lastFixOk = Boolean(fix && fix.headSha && fix.gatesGreen)
-  if (fix && fix.headSha) reviewedSha = fix.headSha
-  if (fix && fix.unfixable) allUnfixable.push(...fix.unfixable)
+  // A fix agent that dies mid-response leaves its work ON DISK but unreported: the tool calls that
+  // edited files already ran, only the final message failed. Twice now that has produced a PR that
+  // looked complete and was not — auto-status had four files of confirmed fixes sitting uncommitted
+  // while CI went green against the previous head, because the workflow believed the failure.
+  // The script cannot run `git status` itself, so ask.
+  let salvaged = null
+  if (!fix || !fix.headSha) {
+    salvaged = await agent(
+      `${CONTEXT}\n\nThe round ${round} fix pass did not report back — it most likely died mid-response (a transient ` +
+        `API error) AFTER its edits had already been written to disk. **Do not assume nothing happened.**\n\n` +
+        `1. \`git -C ${REPO} status --porcelain\` and \`git -C ${REPO} diff\`. If the tree is CLEAN, nothing was ` +
+        `salvaged — say so and stop.\n` +
+        `2. If it is DIRTY, the fix pass got partway. Read the changes against the confirmed findings below and ` +
+        `judge them: are they a coherent, complete attempt, or half-applied? Finish anything left incomplete.\n` +
+        `3. Run the fast gates:\n   ${FAST_GATES}\n` +
+        `   A dying agent often never reached the formatter, so expect \`pnpm lint\` to fail on formatting; ` +
+        `\`pnpm format\` fixes that.\n` +
+        `4. If the gates pass, git add -A && git commit -s (message: fix(review): ...) && git push origin ${BRANCH}, ` +
+        `and report the head SHA.\n\n` +
+        `Report honestly whether you recovered real work or found an empty tree — a false "recovered" is worse than ` +
+        `a clean report of nothing.\n\nCONFIRMED FINDINGS THE PASS WAS APPLYING:\n${fixList}`,
+      { label: `salvage:r${round}`, phase: 'Fix', schema: FIX_SCHEMA, effort: 'high' },
+    )
+    if (salvaged?.headSha) {
+      log(`Round ${round}: salvaged uncommitted fix work from a dead agent — ${salvaged.headSha.slice(0, 8)}`)
+    }
+  }
+  const effectiveFix = fix && fix.headSha ? fix : salvaged
+
+  lastFixOk = Boolean(effectiveFix && effectiveFix.headSha && effectiveFix.gatesGreen)
+  if (effectiveFix && effectiveFix.headSha) reviewedSha = effectiveFix.headSha
+  if (effectiveFix && effectiveFix.unfixable) allUnfixable.push(...effectiveFix.unfixable)
   unverifiedFixes = confirmed.map((f) => `- [${effectiveSeverity(f)}] ${f.file} — ${f.summary}`)
   lastBlocking = blocking.map((f) => `- [${effectiveSeverity(f)}] ${f.file} — ${f.summary}`)
   log(
-    `Round ${round}: fixed ${fix ? fix.fixed.length : 0}, unfixable ${fix ? fix.unfixable.length : 0}, ` +
-      `fast gates ${lastFixOk ? 'green' : 'RED/not pushed'}`,
+    `Round ${round}: fixed ${effectiveFix ? effectiveFix.fixed.length : 0}, ` +
+      `unfixable ${effectiveFix ? effectiveFix.unfixable.length : 0}, ` +
+      `fast gates ${lastFixOk ? 'green' : 'RED/not pushed'}${salvaged?.headSha ? ' (salvaged)' : ''}`,
   )
 
   // The last fix pass is re-reviewed once, whatever severity its findings carried. Rating a round down

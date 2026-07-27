@@ -13,7 +13,10 @@ import {
 
 // The two accessors are `packages/schema`'s (the `db/attachment.ts` one-file rule), so the sweep's
 // own behaviour — what it deletes, in what order, and what it survives — is what this file tests.
-// The SQL those two emit is the schema package's business and is covered against live Postgres.
+// Both are MOCKED here, which means nothing below says anything about the SQL: the `for update`
+// claim, the transaction that wraps `removeBytes`, and the `created_at` cutoff are asserted against
+// live Postgres in `packages/schema/src/db/attachment.pg.test.ts`. `claim()` encodes the answer;
+// that file proves it.
 const listOrphanedAttachments = vi.hoisted(() => vi.fn())
 const collectOrphanedAttachment = vi.hoisted(() => vi.fn())
 

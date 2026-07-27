@@ -206,7 +206,9 @@ task is wrong.
 - [x] 9.2 **Test (integration)** the rest of the route contract in the same file: a viewer cannot
       upload; an upload naming a team the caller is not in is refused; an upload whose `issueId` is
       in a different team is refused; an oversized `Content-Length` is refused before the body is
-      read; a lying `Content-Length` is aborted mid-stream and leaves no readable object; an SVG
+      read; a chunked upload with **no** `Content-Length` is counted while reading and cut off at
+      the same ceiling — the other half of the limit, since `bodyLimit`'s two paths are exclusive
+      rather than belt-and-braces; an SVG
       round-trips as `application/octet-stream` + `Content-Disposition: attachment` and never as
       `image/svg+xml`; `/thumb` on a `has_thumbnail: false` row is the standard refusal; `DELETE` is
       idempotent and the second call is the standard refusal.
@@ -224,6 +226,14 @@ task is wrong.
       identical refusal. This is the only place the docker volume, the non-root uid and the native
       module are exercised together. Per PROCESS §3 this change touches a synced entity **and** a
       permission surface — two of the four — so all three tiers apply.
+- [x] 9.6 **Test (integration, live Postgres)** `packages/schema/src/db/attachment.pg.test.ts` — the
+      sweep's two statements, which 7.3 can only mock. `collectOrphanedAttachment` on an unattached
+      row holds the row under `for update` while `removeBytes` runs and has not yet issued the row
+      delete (read from `pg_stat_activity` on the sweep's own tagged connection, the only vantage
+      point from which the order inside the transaction is visible); an attached row is refused
+      without `removeBytes` being called at all; a throwing `removeBytes` rolls the delete back and
+      leaves the row for the next pass. Plus `listOrphanedAttachments`' `created_at` cutoff, its
+      both-edges-null filter, its ordering and its bound.
 
 ## 10. Documentation
 

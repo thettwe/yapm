@@ -279,9 +279,10 @@ export const envSchema = z
         z.enum(['true', 'false']),
       )
       .default('false'),
-    // The one hard limit on a single upload. Enforced by `hono/body-limit`, which rejects on the
-    // Content-Length header before a byte is read AND bounds the stream, so a lying header cannot
-    // be used to exhaust memory.
+    // The one hard limit on a single upload, enforced by `hono/body-limit` on whichever of two
+    // exclusive paths applies: an upload declaring a Content-Length over this ceiling is refused
+    // before a byte is read; one declaring no length (chunked) is counted as it arrives and cut
+    // off at the same ceiling.
     ATTACHMENT_MAX_BYTES: z.coerce.number().int().min(1024).max(1073741824).default(26214400),
     // How long an attachment with neither an issue nor a comment survives before the sweep takes
     // it. The sharp edge is written down rather than smoothed over: somebody who pastes an image

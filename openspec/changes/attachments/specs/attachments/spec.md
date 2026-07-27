@@ -228,10 +228,13 @@ sandboxes the response. The download filename SHALL be sanitised so it cannot in
 ### Requirement: Uploads are authenticated, team-scoped, size-bounded and streamed
 
 The system SHALL accept one file per upload request, require the caller to be a member of the target
-team with write access, reject the request before reading the body when the declared length exceeds
-the configured maximum, and enforce the same maximum while streaming. When an issue or comment is
-named on the upload, it SHALL be required to belong to the same team, so no cross-team edge can be
-created.
+team with write access, and bound every upload by the configured maximum through **whichever of two
+exclusive checks applies**: a request declaring a `Content-Length` above the maximum SHALL be refused
+before the body is read, and a request carrying no usable `Content-Length` SHALL have its bytes
+counted while reading and be refused the moment the running total passes the maximum. Both checks
+SHALL NOT apply to the same request — an over-size body is refused before it is buffered by exactly
+one of them. When an issue or comment is named on the upload, it SHALL be required to belong to the
+same team, so no cross-team edge can be created.
 
 #### Scenario: A non-member cannot upload into a team
 
@@ -247,11 +250,13 @@ created.
 
 - **WHEN** a request declares a content length above the configured maximum
 - **THEN** it is refused without the body being read
+- **AND** the body is not then counted a second time while reading
 
-#### Scenario: A lying content length is still bounded
+#### Scenario: An upload with no declared length is counted while reading
 
-- **WHEN** a request declares an acceptable length but streams more bytes than the maximum
-- **THEN** the upload is aborted and no partial object is left readable
+- **WHEN** a request carries no usable `Content-Length` and streams more bytes than the maximum
+- **THEN** it is refused the moment the running total passes the maximum
+- **AND** the upload is aborted with no partial object left readable
 
 #### Scenario: A cross-team edge cannot be forged at upload
 

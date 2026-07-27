@@ -643,9 +643,9 @@ Task 10.2 allowed for the page being absent; it was. It is written as the **manu
 operator runs today, with a `caution` aside saying the one-command version is unwritten, because a
 page that reads like a command reference for a command that does not exist is worse than no page.
 Design §D13's contract is the page's structure: local = `pg_dump` + `tar`, s3 = `pg_dump` only with
-the `attachment` table as the manifest, files captured before the database and restored after it,
-and the `zero-replica` volume deliberately not backed up (and deleted on restore, since a replica
-built from the old database must be rebuilt).
+the `attachment` table as the manifest, the database dumped before the files are captured and
+restored before they are unpacked, and the `zero-replica` volume deliberately not backed up (and
+deleted on restore, since a replica built from the old database must be rebuilt).
 
 ### I14 — Two tasks are deliberately left unticked, and CI owns both
 

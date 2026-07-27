@@ -471,10 +471,10 @@ is exactly the "a paste never notifies anybody" promise §D3 makes, broken from 
 **Decision: the markdown path does not consume raw HTML.** `marked`'s block (`html`) and inline
 (`tag`) tokenizers are switched off on the manager's `instance` — public getter, public `use()` —
 so the characters stay literal text, which is what somebody pasting `<div>` meant. One exception:
-`@tiptap/extension-italic` is the only extension here declaring `markdownOptions.htmlReopen`
-(`<em>`/`</em>`), which the serialiser itself emits for overlapping marks, so `<em>` is let through
-and yapm's own output still round-trips. `marked`'s `use()` wrapper delegates to the stock tokenizer
-on `false` and stops on `undefined`; that asymmetry is the whole mechanism.
+the pairs extensions declare as `markdownOptions.htmlReopen`, which the serialiser itself emits for
+overlapping marks, are let through so yapm's own output still round-trips. `marked`'s `use()`
+wrapper delegates to the stock tokenizer on `false` and stops on `undefined`; that asymmetry is the
+whole mechanism. §I14 records the two ways the first version of this exception was wrong.
 
 `coerceInbound` also replaces any inbound `mention` node with its label text, alongside the heading
 clamp. Redundant while the tokenizers are off, and kept anyway: the invariant is a promise, not an
@@ -497,8 +497,8 @@ not do. The escape table in the tests gained 1-, 2- and 3-space variants of ever
 
 **A heading's trailing hash run.** CommonMark reads a run of `#` at the end of an ATX heading as an
 optional *closing* sequence and discards it, so `## Plan #` came back as `Plan`. The text hook now
-escapes a trailing `(\s)(#+)$` on a heading's last text node. Nothing about the opening escape
-covered it.
+escapes a trailing `(^|\s)(#+)$` on a heading's last text node. Nothing about the opening escape
+covered it. (The anchor was `(\s)` until §I14 — see there for the heading the narrower one lost.)
 
 **A code block containing its own fence.** `codeBlock.renderMarkdown` hard-codes three backticks, so
 a block whose text contains a ``` line closed early: the tail of the code became prose and the block
@@ -546,3 +546,33 @@ Two defects the test found on the way:
 `pnpm install` (the workflow records the two ways giving it a toolchain turned main red), so the test
 for a builtins-only rule has to be builtins-only itself. It runs in that same job, and as
 `pnpm check:boundaries:test`.
+
+### I14 — The reopen exception was hard-coded, unanchored, and one heading short
+
+Three corrections to §I9 and §I11, all in `packages/ui/src/lib/markdown.ts`.
+
+**The allowlist was a literal `<em>`, and bold reopens too.** `@tiptap/extension-bold` declares
+`markdownOptions.htmlReopen` (`<strong>`/`</strong>`) exactly as italic does, so §I9's claim that
+italic was the only one was simply wrong. Which pair the serialiser reaches for depends on which
+mark opens first: bold-then-italic emits `**A*B***<em>C</em>` and italic-then-bold emits
+`*A**B***<strong>C</strong>`. Only the first order was tested, and it was the passing one; the
+second came back with the bold mark gone and the literal characters `<strong>C</strong>` in the
+document. The allowlist is now **derived** — `resolveExtensions()` over the same
+`createRichTextExtensions()` the manager is built from, collecting every `htmlReopen` open/close
+string, throwing if a tag is not bare or if the set comes back empty. A node set that gains another
+reopening mark is covered the day it is added rather than the day somebody notices.
+
+**The exception was a prefix test, so it re-opened the raw-HTML path for pasted prose.**
+`/^<\/?em>/` matched `<em class="x">` and, worse, matched a bare `</em>` anywhere in somebody's
+pasted text: `compare a</em>b` lost those five characters and gained an empty paragraph — the exact
+outcome the feature page promises is impossible. The matcher is now an **exact bare tag** built
+from the derived names, and the delegation is **balanced**: an opening tag is handed to `marked`
+only when its own closing tag is still ahead in the same run, a closing tag only when this parse
+delegated its opener. State is a depth map per tag name, cleared at the top of every
+`markdownToRichText` so an unclosed tag in one paste cannot license a stray closer in the next.
+
+**The heading escape needed whitespace in front of the run.** `(\s)(#+)$` cannot match a heading
+whose text *is* a hash run, so `# ` alone emitted `## #` — an ATX heading whose whole content is a
+closing sequence, which re-parses **empty**. Broadened to `(^|\s)(#+)$` on a heading's last text
+node. A run that is not at a word boundary (`Plan#`) is still left alone, because CommonMark does
+not read that as a closing sequence either.

@@ -1949,8 +1949,8 @@ own tokenizers on the manager's `instance` getter:
 ```ts
 manager.instance.use({
   tokenizer: {
-    html: () => undefined,                                   // block: never
-    tag: src => (/^<\/?em>/.test(src) ? false : undefined),  // inline: one exception
+    html: () => undefined,   // block: never
+    tag: src => …,           // inline: the serialiser's own reopen pairs, BALANCED, else undefined
   },
 })
 ```
@@ -1960,10 +1960,22 @@ tokenizer as `if (result === false) result = previous(...)` — so `false` **del
 tokenizer and `undefined` means "no match, keep scanning", which is what leaves the characters as
 text. Getting these the wrong way round silently disables nothing.
 
-The `<em>` exception is not cosmetic: `@tiptap/extension-italic` is the one extension in this node
-set that declares `markdownOptions.htmlReopen` (`<em>` / `</em>`), which the serialiser falls back to
-when overlapping marks cannot be written with `*` alone. Refusing all HTML would stop yapm's own
-output round-tripping.
+🚩 **The exception has to be derived, exact and balanced — all three.** It exists because the
+serialiser writes an overlap it cannot express with `*` alone as raw HTML, using the pair a mark
+declares under `markdownOptions.htmlReopen`:
+
+- **Derived.** `@tiptap/extension-italic` (`<em>`/`</em>`) is *not* the only one — `@tiptap/
+  extension-bold` declares `<strong>`/`</strong>` identically, and which pair you get depends on
+  which mark opens first (`**A*B***<em>C</em>` vs `*A**B***<strong>C</strong>`). Collect the tags
+  from `resolveExtensions(extensions)` via `getExtensionField(ext, 'markdownOptions')` instead of
+  listing them, and throw if the set comes back empty.
+- **Exact.** A prefix test like `/^<\/?em>/` also matches `<em class="x">`, which this serialiser
+  never emits. Match a bare tag and nothing else.
+- **Balanced.** A prefix test also matches a lone `</em>` in prose somebody pasted, and that hands
+  it straight back to `parseHTMLToken`: `compare a</em>b` loses five characters and gains an empty
+  paragraph. Delegate an opening tag only when its closing tag is still ahead in the same run, and a
+  closing tag only when this parse delegated its opener; keep a depth map per tag name and clear it
+  at the top of every parse.
 
 ⚠️ **`codeBlock.renderMarkdown` hard-codes a three-backtick fence**, so a code block whose text
 contains a ``` line closes early and its tail becomes prose. Fixed through the **public**

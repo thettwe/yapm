@@ -1,5 +1,10 @@
 import { MarkdownManager } from '@tiptap/markdown'
-import type { JSONContent } from '@tiptap/react'
+import {
+  type Extensions,
+  getExtensionField,
+  type JSONContent,
+  resolveExtensions,
+} from '@tiptap/react'
 import { createRichTextExtensions, EMPTY_DOC } from '@yapm/ui/components/rich-text'
 
 // Markdown is the INTERCHANGE format, never the storage format: the jsonb columns keep TipTap JSON
@@ -31,14 +36,10 @@ const INLINE_ESCAPES = /([\\`*_[\]~])/g
 const MAYBE_BLOCK_LEADING = /^[ \t#\-+>|=\d]/
 
 // CommonMark reads a run of `#` at the END of an ATX heading as an optional CLOSING sequence and
-// throws it away, so `## Plan #` comes back as `Plan`. Only a heading's last text node can carry one.
-const HEADING_TRAILING_HASHES = /(\s)(#+)$/
-
-// The only raw HTML this serialiser ever emits: `@tiptap/extension-italic` is the one extension in
-// this node set that declares `markdownOptions.htmlReopen` (`<em>` / `</em>`), which the serialiser
-// falls back to when overlapping marks cannot be written with `*` alone. Everything else that looks
-// like a tag came from the user and stays text — see `refuseRawHtml`.
-const SERIALISER_EMITTED_TAG = /^<\/?em>/
+// throws it away, so `## Plan #` comes back as `Plan`. Only a heading's last text node can carry
+// one, and the run can BE the whole node — `## #` re-parses as an EMPTY heading, losing the text —
+// so the anchor is "line start or whitespace", not whitespace alone.
+const HEADING_TRAILING_HASHES = /(^|\s)(#+)$/
 
 type TextEncoder = (text: string, node: JSONContent, parent?: JSONContent) => string
 
@@ -126,6 +127,51 @@ function installPortableTextEncoding(manager: MarkdownManager): void {
   }
 }
 
+// The only raw HTML this serialiser ever emits. A mark extension that cannot express an overlap
+// with its own delimiters declares `markdownOptions.htmlReopen` and the serialiser falls back to
+// that pair: `<em>`/`</em>` from `@tiptap/extension-italic` AND `<strong>`/`</strong>` from
+// `@tiptap/extension-bold`, both in this node set today.
+//
+// DERIVED from the registered extensions rather than listed, because listing is how the bold pair
+// went missing: `*A**B***<strong>C</strong>` re-parsed with the bold mark gone and the tag
+// characters sitting in the document as text. A node set that gains another reopening mark is
+// covered the day it is added.
+interface MarkdownOptionsField {
+  readonly htmlReopen?: { readonly open: string; readonly close: string } | undefined
+}
+
+// EXACT and bare — no attributes, nothing else inside the angle brackets. `<em class="x">` is not
+// something this serialiser can emit, so it is somebody's pasted text.
+const BARE_TAG = /^<\/?([a-zA-Z][a-zA-Z0-9-]*)>$/
+
+function htmlReopenTagNames(extensions: Extensions): readonly string[] {
+  const names = new Set<string>()
+  for (const extension of resolveExtensions(extensions)) {
+    const options = getExtensionField(extension, 'markdownOptions') as
+      | MarkdownOptionsField
+      | undefined
+    const reopen = options?.htmlReopen
+    if (reopen === undefined) continue
+    for (const tag of [reopen.open, reopen.close]) {
+      const name = BARE_TAG.exec(tag)?.[1]
+      if (name === undefined) {
+        throw new Error(
+          `markdownOptions.htmlReopen declares ${tag}, which is not a bare tag: the parse can only ` +
+            "let this serialiser's own output back in by exact tag, so the mark would round-trip as literal text.",
+        )
+      }
+      names.add(name)
+    }
+  }
+  if (names.size === 0) {
+    throw new Error(
+      'No extension declares markdownOptions.htmlReopen: @tiptap/markdown changed how it writes ' +
+        'overlapping marks, so this serialiser would emit HTML the parse refuses.',
+    )
+  }
+  return [...names]
+}
+
 // Markdown is a superset of HTML, and that is a liability for a paste path: a paragraph typed in a
 // terminal — `compare a<b and c>d` — has an inline tag in it as far as `marked` is concerned, and
 // `MarkdownManager.parseHTMLToken` hands what it finds to `generateJSON` against THIS EDITOR'S FULL
@@ -136,14 +182,36 @@ function installPortableTextEncoding(manager: MarkdownManager): void {
 // (`tag`) tokenizers are switched off and the characters stay literal text, which is what a person
 // pasting `<div>hello</div>` meant. `marked`'s `use()` wrapper falls through to the tokenizer it
 // replaced only when the replacement returns `false`; `undefined` means "no match here", which is
-// the whole mechanism — see `SERIALISER_EMITTED_TAG` for the one tag that is let through so this
-// serialiser's own output still round-trips.
-function refuseRawHtml(manager: MarkdownManager): void {
+// the whole mechanism.
+//
+// The exception is BALANCED, not merely tag-shaped, and that is what keeps the docs promise true:
+// an opening tag is delegated only when its own closing tag is still ahead in the same run, and a
+// closing tag only when this parse delegated its opener. `compare a</em>b` and `<em class="x">y</em>`
+// therefore keep every character instead of losing the tags and gaining an empty paragraph, while
+// `**A*B***<em>C</em>` — this serialiser's own output — still comes back as marks.
+const reopenDepth = new Map<string, number>()
+
+function refuseRawHtml(manager: MarkdownManager, tags: readonly string[]): void {
+  const alternation = tags.join('|')
+  const opening = new RegExp(`^<(${alternation})>`)
+  const closing = new RegExp(`^</(${alternation})>`)
+
   manager.instance.use({
     tokenizer: {
       html: () => undefined,
       tag(src: string) {
-        return SERIALISER_EMITTED_TAG.test(src) ? false : undefined
+        const opened = opening.exec(src)?.[1]
+        if (opened !== undefined) {
+          if (!src.includes(`</${opened}>`)) return undefined
+          reopenDepth.set(opened, (reopenDepth.get(opened) ?? 0) + 1)
+          return false
+        }
+        const closed = closing.exec(src)?.[1]
+        if (closed === undefined) return undefined
+        const depth = reopenDepth.get(closed) ?? 0
+        if (depth === 0) return undefined
+        reopenDepth.set(closed, depth - 1)
+        return false
       },
     },
   })
@@ -160,9 +228,10 @@ function manager(): MarkdownManager {
     // keeps `starterKit` itself in the result, so resolving twice yields 49 extensions with 24
     // duplicate names. The manager flattens and sorts what it is given, and later calls
     // `getSchema(extensions)` on the same array, which resolves again.
-    const instance = new MarkdownManager({ extensions: createRichTextExtensions() })
+    const extensions = createRichTextExtensions()
+    const instance = new MarkdownManager({ extensions })
     installPortableTextEncoding(instance)
-    refuseRawHtml(instance)
+    refuseRawHtml(instance, htmlReopenTagNames(extensions))
     cached = instance
   }
   return cached
@@ -257,6 +326,8 @@ function coerceInbound(node: JSONContent): JSONContent[] {
 }
 
 export function markdownToRichText(markdown: string): JSONContent {
+  // Per-parse state: an unclosed `<em>` in one paste must not license a stray `</em>` in the next.
+  reopenDepth.clear()
   const parsed = manager().parse(markdown)
   const content = (parsed.content ?? []).flatMap(coerceInbound)
   // The manager's empty output is `{type:'doc'}`, which is not a valid document for a schema whose

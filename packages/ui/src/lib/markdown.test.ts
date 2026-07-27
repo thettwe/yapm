@@ -155,6 +155,18 @@ test('a heading ending in a hash run keeps it', () => {
 
   expect(richTextToMarkdown(many)).toBe('### Sprint \\###')
   expect(roundTrip(many)).toEqual(normalize(many))
+
+  // The run can BE the whole node, and then there is no whitespace in front of it to anchor on:
+  // `## #` is an ATX heading whose entire content is a closing sequence, so it re-parses EMPTY and
+  // the text is gone. An escape keyed on a preceding space misses exactly this one.
+  const alone = doc({
+    type: 'heading',
+    attrs: { level: 2 },
+    content: [{ type: 'text', text: '#' }],
+  })
+
+  expect(richTextToMarkdown(alone)).toBe('## \\#')
+  expect(roundTrip(alone)).toEqual(normalize(alone))
 })
 
 test('a hash mid-heading, and a heading with no trailing hash, are left alone', () => {
@@ -419,6 +431,12 @@ const HTML_SHAPED: readonly (readonly [label: string, text: string])[] = [
   ['a self-closing element', 'line one<br/>line two'],
   ['an unknown element', '<yapm-thing a="1">x</yapm-thing>'],
   ['a script tag', '<script>alert(1)</script>'],
+  // The two the reopen exception is easiest to widen too far for. An `<em>` carrying ANY attribute
+  // is not something this serialiser can emit, and a closing tag with no opener in front of it is
+  // prose — both used to lose their characters and gain an empty paragraph.
+  ['an em tag with an attribute', '<em class="x">y</em>'],
+  ['an unmatched closing reopen tag', 'compare a</em>b'],
+  ['an unmatched opening reopen tag', 'a <strong>b'],
 ]
 
 for (const [label, text] of HTML_SHAPED) {
@@ -427,10 +445,12 @@ for (const [label, text] of HTML_SHAPED) {
   })
 }
 
-test('the one tag this serialiser emits itself still parses', () => {
-  // `@tiptap/extension-italic` declares `htmlReopen: { open: '<em>', close: '</em>' }`, which the
-  // serialiser falls back to when overlapping marks cannot be written with `*` alone. Refusing ALL
-  // HTML would make yapm's own output stop round-tripping, so `<em>` is the single exception.
+test('the tags this serialiser emits itself still parse', () => {
+  // `@tiptap/extension-italic` and `@tiptap/extension-bold` BOTH declare `markdownOptions.
+  // htmlReopen` — `<em>`/`</em>` and `<strong>`/`</strong>` — and the serialiser falls back to
+  // whichever pair an overlap needs when `*` alone cannot express it. Refusing ALL HTML would make
+  // yapm's own output stop round-tripping, so a BALANCED bare pair from that derived set is the
+  // exception; see the overlapping-marks tests below for the output that depends on it.
   expect(markdownToRichText('a <em>x</em> b')).toEqual(
     doc({
       type: 'paragraph',
@@ -441,7 +461,49 @@ test('the one tag this serialiser emits itself still parses', () => {
       ],
     }),
   )
+  expect(markdownToRichText('a <strong>x</strong> b')).toEqual(
+    doc({
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: 'a ' },
+        { type: 'text', text: 'x', marks: [{ type: 'bold' }] },
+        { type: 'text', text: ' b' },
+      ],
+    }),
+  )
 })
+
+// ── 3.5c Overlapping marks, which is the ONLY thing that emits a reopen tag ─────────────────────
+//
+// BOTH orders, because they take different branches: whichever mark opens first is written with
+// `*`, and the one left dangling past the overlap is reopened as HTML. Exercising only the italic
+// tail hid the bold tail entirely — `<strong>` was missing from the allowlist, so `**A*B***<strong>
+// C</strong>` came back with the bold mark gone and the tag characters sitting in the document.
+
+const OVERLAPS: readonly (readonly [
+  label: string,
+  marks: readonly [string, string],
+  out: string,
+])[] = [
+  ['bold opens first', ['bold', 'italic'], '**A*B***<em>C</em>'],
+  ['italic opens first', ['italic', 'bold'], '*A**B***<strong>C</strong>'],
+]
+
+for (const [label, [first, second], emitted] of OVERLAPS) {
+  test(`overlapping marks round-trip when ${label}`, () => {
+    const source = doc({
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: 'A', marks: [{ type: first }] },
+        { type: 'text', text: 'B', marks: [{ type: first }, { type: second }] },
+        { type: 'text', text: 'C', marks: [{ type: second }] },
+      ],
+    })
+
+    expect(richTextToMarkdown(source)).toBe(emitted)
+    expect(roundTrip(source)).toEqual(normalize(source))
+  })
+}
 
 // ── 3.6 The inbound clamp, empty input, and what markdown cannot carry ──────────────────────────
 

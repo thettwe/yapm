@@ -88,9 +88,11 @@ It deliberately does **not** convert in four cases:
 - **You pasted a bare URL over selected text.** The selection becomes a link to it rather than being
   replaced.
 
-**Anything that looks like an HTML tag stays text.** Pasting `<div>hello</div>`, or a sentence like
-`compare a<b and c>d`, gives you those exact characters. yapm never treats pasted plain text as
-markup, so nothing you paste can quietly become a mention, a heading or an empty paragraph.
+**Anything that looks like an HTML tag stays text.** Pasting `<div>hello</div>`, a sentence like
+`compare a<b and c>d`, or a stray `</em>` out of some log, gives you those exact characters —
+nothing you paste can quietly become a mention, a heading or an empty paragraph. The one exception
+is a matched bare `<em>…</em>` or `<strong>…</strong>`, which is what yapm itself writes when bold
+and italic overlap, so it has to come back as bold and italic.
 
 A conversion is **one undo**. Press undo once and the document is exactly as it was before the
 paste.

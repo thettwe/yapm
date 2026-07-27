@@ -56,27 +56,30 @@ test('subscribes to the team-scoped set only when a team is in context', () => {
   corpus()
   expect(synced.seen).toEqual(['issues.mine', 'projects.all', 'teams.all'])
 
+  // `issues.mine` spans every team the caller belongs to, so it is ABSENT under a team context:
+  // an on-device group carrying another team's issues while the server group is scoped to the open
+  // one would be two groups answering different questions.
   synced.seen = []
   corpus('team-1')
   expect([...synced.seen].sort()).toEqual([
     'cycles.byTeam',
     'issues.byTeam',
-    'issues.mine',
     'labels.byTeam',
     'projects.all',
     'teams.all',
     'triage.inbox',
   ])
+  expect(synced.seen).not.toContain('issues.mine')
 })
 
 // `issues.byTeam` filters `needsTriage` out and `triage.inbox` is where those rows live, so the two
-// subscriptions are BOTH required and they overlap by construction — an issue assigned to the
-// caller appears in `issues.mine` as well.
+// subscriptions are BOTH required and they overlap by construction — an issue you filed that is
+// still awaiting triage arrives through both.
 test('an issue reachable through two synced queries appears once', () => {
-  const row = issue({ id: 'issue-1', title: 'Replica resync' })
+  const row = issue({ id: 'issue-1', title: 'Replica resync', needsTriage: true })
   synced.rows = {
     'issues.byTeam': [row],
-    'issues.mine': [row],
+    'triage.inbox': [row],
     'teams.all': [TEAM],
   }
 
@@ -84,6 +87,21 @@ test('an issue reachable through two synced queries appears once', () => {
   expect(hits).toHaveLength(1)
   expect(hits[0]?.entry.id).toBe('issue-1')
   expect(hits[0]?.entry.issueKey).toBe('ENG-1')
+})
+
+// The palette is one team, in BOTH groups (D15). `issues.mine` reaches across teams, so a row that
+// only that query could deliver must not reach the team-scoped surface's on-device group.
+test('a row from another team cannot reach the team-scoped corpus', () => {
+  synced.rows = {
+    'issues.byTeam': [issue({ id: 'here', number: 1, title: 'Replica resync here' })],
+    'issues.mine': [
+      issue({ id: 'elsewhere', number: 2, teamId: 'team-2', title: 'Replica resync elsewhere' }),
+    ],
+    'teams.all': [TEAM],
+  }
+
+  const hits = corpus('team-1').current.search('replica')
+  expect(hits.map((hit) => hit.entry.id)).toEqual(['here'])
 })
 
 // The half of the falsifiable check the on-device pass owns: `matchesText` matches title and issue

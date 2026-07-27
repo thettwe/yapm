@@ -54,7 +54,12 @@ import { type IssueRowData, STATUS_LABEL, STATUS_TO_KIND } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
 import { useSearchCursor } from '@/search/cursor'
 import { filterPaletteGroups, type PaletteGroup, type PaletteRow } from '@/search/palette-rows'
-import { localSearchRows, type SearchRow, serverSearchRows } from '@/search/results'
+import {
+  localSearchRows,
+  type SearchRow,
+  serverSearchRows,
+  withoutLocalDuplicates,
+} from '@/search/results'
 import {
   SEARCH_EMPTY_REFINE,
   SEARCH_EMPTY_STALE,
@@ -404,8 +409,8 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
     [isRoot, corpus, search, teamId],
   )
   const serverRows = useMemo(
-    () => (isRoot ? serverSearchRows(server.results) : []),
-    [isRoot, server.results],
+    () => (isRoot ? withoutLocalDuplicates(localRows, serverSearchRows(server.results)) : []),
+    [isRoot, localRows, server.results],
   )
 
   const escalate = isRoot && search.trim().length > 0
@@ -482,7 +487,12 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
               {localRows.length > 0 ? (
                 <CommandGroup heading={SEARCH_GROUP_LOCAL}>
                   {localRows.map((row) => (
-                    <ResultItem key={row.id} row={row} onOpen={openRow} />
+                    <ResultItem
+                      key={row.id}
+                      row={row}
+                      active={row.id === active}
+                      onOpen={openRow}
+                    />
                   ))}
                 </CommandGroup>
               ) : null}
@@ -511,7 +521,12 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
                   <CommandSeparator alwaysRender />
                   <CommandGroup heading={SEARCH_GROUP_SERVER}>
                     {serverRows.map((row) => (
-                      <ResultItem key={row.id} row={row} onOpen={openRow} />
+                      <ResultItem
+                        key={row.id}
+                        row={row}
+                        active={row.id === active}
+                        onOpen={openRow}
+                      />
                     ))}
                     {serverLine === undefined ? null : (
                       <p
@@ -563,7 +578,19 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
   )
 }
 
-function ResultItem({ row, onOpen }: { row: SearchRow; onOpen: (row: SearchRow) => void }) {
+// `active` is threaded from the palette's own cursor rather than read back out of `cmdk`: the
+// cursor is controlled here (D8), so this component already knows. Without it the row would carry
+// only `CommandItem`'s wash and lose the accent rule, and the same primitive would look different
+// selected in the palette than it does on `/search`.
+function ResultItem({
+  row,
+  active,
+  onOpen,
+}: {
+  row: SearchRow
+  active: boolean
+  onOpen: (row: SearchRow) => void
+}) {
   return (
     <CommandItem value={row.id} onSelect={() => onOpen(row)} className="h-auto p-0">
       <SearchResultRow
@@ -572,6 +599,7 @@ function ResultItem({ row, onOpen }: { row: SearchRow; onOpen: (row: SearchRow) 
         title={row.title}
         snippet={row.snippet}
         states={row.states}
+        active={active}
         className="rounded-control"
       />
     </CommandItem>

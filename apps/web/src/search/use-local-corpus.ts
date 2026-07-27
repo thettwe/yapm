@@ -11,7 +11,7 @@ import {
 } from '@yapm/schema'
 import { useCallback, useMemo, useRef } from 'react'
 
-// Structural row shapes, narrow on purpose: this hook reads seven synced queries and needs six
+// Structural row shapes, narrow on purpose: this hook reads up to six synced queries and needs six
 // fields from them. Declaring what it reads keeps the corpus builder honest about its inputs and
 // keeps a schema change that adds a column from silently widening what search walks.
 export interface CorpusIssueRow {
@@ -113,7 +113,12 @@ export function useLocalSearchCorpus(teamId?: string): LocalSearchCorpus {
   const [labelsRaw] = useQuery(
     scoped === undefined ? false : queries.labels.byTeam({ teamId: scoped }),
   )
-  const [mineRaw, mineResult] = useQuery(queries.issues.mine())
+  // Gated the same way the four above are, and for the same reason: `issues.mine` spans every team
+  // the caller belongs to, so leaving it subscribed under a team context would put another team's
+  // issues in "On this device" while "From the server" is scoped to the open one — two groups
+  // disagreeing about scope, which is exactly what D15 says the palette must never do. Off the
+  // team surfaces it is the on-device pass's only issue source, which is D15's thinner half.
+  const [mineRaw, mineResult] = useQuery(scoped === undefined ? queries.issues.mine() : false)
   const [projectsRaw] = useQuery(queries.projects.all())
   const [teamsRaw] = useQuery(queries.teams.all())
 
@@ -200,9 +205,9 @@ export function useLocalSearchCorpus(teamId?: string): LocalSearchCorpus {
   )
 
   const loaded =
-    mineResult.type === 'complete' &&
-    (scoped === undefined ||
-      (teamIssuesResult.type === 'complete' && triageResult.type === 'complete'))
+    scoped === undefined
+      ? mineResult.type === 'complete'
+      : teamIssuesResult.type === 'complete' && triageResult.type === 'complete'
 
   return { search, size: byIdentity.size, loaded }
 }

@@ -24,6 +24,11 @@ Every result the server adds is **appended strictly at the end of the list**. No
 changes position, and the cursor is anchored to the row's identity rather than to its index — so
 arrowing while the server is still thinking is safe.
 
+An issue both passes find appears **once**, in the on-device group. Only the duplicate is dropped,
+and only from the tail, so nothing above it moves. A comment hit stays even when its issue is
+already listed: that is different text about the same issue, and it is the half your browser
+structurally cannot answer.
+
 ## Where to search
 
 There is exactly **one** keyboard shortcut, and it is the one you already use.
@@ -208,8 +213,15 @@ shape that would break that. No AI path reads it, and search adds no agent tool.
 ## Ranking
 
 **On device**, in order: an exact issue-key match, then a title prefix, then a title substring, then
-a substring of the body text, and last a partial issue key — so typing `ng-1` still finds `ENG-12`,
-ranked below every real title hit rather than above it. Ties break on most-recently-updated.
+a substring of the body text, then a partial issue key — so typing `ng-1` still finds `ENG-12`,
+ranked below every real title hit rather than above it — and last an **abbreviation**: a query that
+spells out successive word beginnings, so `cs` reaches `Change status` and `eng12` reaches `ENG-12`.
+Ties break on most-recently-updated.
+
+The abbreviation tier is deliberately the strictest kind: every character has to land at the start
+of a word, in order. `log` does *not* find "Landing page for the org". A looser rule would make the
+issue list's text filter — which shares this predicate exactly, so the two can never disagree about
+what "matches" means — feel like it was matching at random.
 
 **On the server**, Postgres's own relevance rank, with the title weighted above the description or
 comment body. Recency is a **tiebreak only**, never a blended weight — a recency coefficient needs
@@ -217,8 +229,9 @@ real usage data to calibrate, and inventing one now would be a number nobody cou
 
 Both are fully deterministic: the same query over the same data produces the same order, every time.
 
-Search is **not fuzzy**. There is no typo tolerance, no synonyms and no stemming by default — the
-default text configuration is language-neutral rather than English-specific, because yapm is for
+Beyond that abbreviation rule, search is **not fuzzy**. There is no typo tolerance, no synonyms and
+no stemming by default — the default text configuration is language-neutral rather than
+English-specific, because yapm is for
 self-hosters everywhere and stemming would quietly optimise for English teams. An operator can
 change it; see [Search index](/self-hosting/search-index/#choosing-a-text-search-configuration).
 

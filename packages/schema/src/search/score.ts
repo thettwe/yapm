@@ -9,12 +9,17 @@ import { normalizeQuery } from './tokenize.js'
 // dropping that would silently narrow the list filter, and ranking it above a title hit would put
 // every issue whose key contains the letter you just typed at the top. Appending it keeps the
 // predicate identical to today's and leaves the specified ordering untouched.
+// `abbreviation` is appended below `issue-key-partial` for the same reason `issue-key-partial` was
+// appended below the four: dropping it would silently NARROW what already matched. The palette used
+// to hand `cmdk` its rows, and `cmdk` scores a fuzzy subsequence — so `cs` reached "Change status"
+// and `eng12` reached `ENG-12`. Taking filtering off `cmdk` (D8) has to keep the reach it replaced.
 export const SEARCH_TIERS = [
   'issue-key',
   'title-prefix',
   'title-substring',
   'body-substring',
   'issue-key-partial',
+  'abbreviation',
 ] as const
 
 export type SearchTier = (typeof SEARCH_TIERS)[number]
@@ -43,6 +48,46 @@ export function searchTierRank(tier: SearchTier): number {
   return SEARCH_TIERS.indexOf(tier)
 }
 
+const NON_WORD = /[^\p{L}\p{N}]+/u
+
+/**
+ * A WORD-BOUNDARY subsequence: the needle has to be spellable as a run of successive word prefixes.
+ * `cs` reaches "change status", `gti` reaches "go to inbox" and `eng12` reaches `ENG-12`, while
+ * `log` does NOT reach "Landing page for the org" — a plain character subsequence would, and that
+ * looseness is what makes an unranked list filter feel broken.
+ *
+ * Deliberately over the title and the issue key only. A subsequence over a two-thousand-character
+ * body would match almost any query, and the body already has a tier of its own.
+ */
+function matchesAbbreviation(haystack: string, compact: string): boolean {
+  const words = haystack.split(NON_WORD).filter((word) => word.length > 0)
+  if (words.length === 0) return false
+
+  // Memoised on the (word, needle position) pair, so the walk is linear in their product rather
+  // than exponential in the backtracking.
+  const exhausted = new Set<number>()
+  const stride = compact.length + 1
+
+  const walk = (wordIndex: number, needleIndex: number): boolean => {
+    if (needleIndex === compact.length) return true
+    if (wordIndex >= words.length) return false
+    const state = wordIndex * stride + needleIndex
+    if (exhausted.has(state)) return false
+    if (walk(wordIndex + 1, needleIndex)) return true
+
+    const word = words[wordIndex] ?? ''
+    const reach = Math.min(word.length, compact.length - needleIndex)
+    for (let taken = 1; taken <= reach; taken += 1) {
+      if (word[taken - 1] !== compact[needleIndex + taken - 1]) break
+      if (walk(wordIndex + 1, needleIndex + taken)) return true
+    }
+    exhausted.add(state)
+    return false
+  }
+
+  return walk(0, 0)
+}
+
 // The best tier a candidate reaches, or `undefined` when it does not match at all. An empty query
 // matches NOTHING here: an unranked "everything" is the filter's meaning of a blank text axis, not
 // search's, and the filter keeps that behaviour at its own call site.
@@ -61,6 +106,14 @@ export function scoreSearchText(fields: SearchTextFields, query: string): Search
   if (body !== undefined && body.length > 0 && body.includes(needle)) return 'body-substring'
 
   if (key?.includes(needle)) return 'issue-key-partial'
+
+  // Last, and only for a needle worth abbreviating: a single character is already covered by the
+  // substring tiers, and treating it as an abbreviation would match nearly every row.
+  const compact = needle.replace(/[^\p{L}\p{N}]+/gu, '')
+  if (compact.length >= 2) {
+    if (matchesAbbreviation(title, compact)) return 'abbreviation'
+    if (key !== undefined && matchesAbbreviation(key, compact)) return 'abbreviation'
+  }
 
   return undefined
 }

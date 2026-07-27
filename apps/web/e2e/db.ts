@@ -185,6 +185,17 @@ function richTextDoc(text: string): string {
   })
 }
 
+// The attachment upload names its team by id, and the id never appears in the UI — the team is
+// created through the real dialog and read back here by the name the test gave it.
+export async function findTeamId(db: Database, name: string): Promise<string> {
+  const row = await db.db
+    .selectFrom('team')
+    .select('id')
+    .where('name', '=', name)
+    .executeTakeFirstOrThrow()
+  return row.id
+}
+
 export async function findUserId(db: Database, email: string): Promise<string> {
   const row = await db.db
     .selectFrom('user')

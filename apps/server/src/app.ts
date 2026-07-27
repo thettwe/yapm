@@ -15,6 +15,7 @@ export interface AppOptions {
   connectorAdmin?: Hono
   aiAdmin?: Hono
   search?: Hono
+  files?: Hono
 }
 
 const QUIET_PATHS = new Set(['/healthz', '/readyz'])
@@ -69,6 +70,10 @@ export function createApp(options: AppOptions): Hono {
 
   if (options.search) {
     app.route('/', options.search)
+  }
+
+  if (options.files) {
+    app.route('/', options.files)
   }
 
   if (options.zero) {

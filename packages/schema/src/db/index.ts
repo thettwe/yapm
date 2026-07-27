@@ -17,6 +17,25 @@ export {
   setAiProviderKey,
   upsertAiConfig,
 } from './ai-config.js'
+export type {
+  AttachmentReaderQuery,
+  AttachmentRow,
+  AttachTarget,
+  CreateAttachmentInput,
+  OrphanedAttachmentsOptions,
+  TargetScopeQuery,
+  UploadScopeQuery,
+} from './attachment.js'
+export {
+  attachAttachment,
+  canUploadToTeam,
+  collectOrphanedAttachment,
+  createAttachment,
+  deleteAttachment,
+  findAttachmentForReader,
+  listOrphanedAttachments,
+  targetsAreInTeam,
+} from './attachment.js'
 export type { Database, DatabaseOptions } from './client.js'
 export { createDatabase, pingDatabase } from './client.js'
 export type {
@@ -153,6 +172,9 @@ export {
   seedWorkspace,
 } from './seed.js'
 export type {
+  Attachment,
+  AttachmentTable,
+  AttachmentUpdate,
   CiCheck,
   CiCheckTable,
   CiCheckUpdate,
@@ -198,6 +220,7 @@ export type {
   Label,
   LabelTable,
   LabelUpdate,
+  NewAttachment,
   NewCiCheck,
   NewComment,
   NewConnectorConfig,

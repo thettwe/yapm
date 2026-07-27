@@ -295,6 +295,21 @@ export const queries = defineQueries({
       return q.one()
     }),
   },
+  attachments: {
+    // Team-scoped like every other work-data query: a non-member gets an empty result, viewers
+    // read. `createdAt asc` so the Files list is upload order and a new row appends rather than
+    // reshuffling what somebody is looking at.
+    //
+    // THERE IS NO `attachment` MUTATOR ANYWHERE, AND THE ABSENCE IS DELIBERATE. Every other synced
+    // table has at least one; this one has none, because a row without bytes is meaningless and a
+    // Zero mutator cannot carry bytes. Every write — insert on upload, attach on save, delete —
+    // happens on the REST path, where the row and the object move together. Consequences, all
+    // wanted: a client cannot forge an attachment row, and the derived agent-tool registry gains
+    // nothing it could call.
+    byIssue: defineQuery(z.object({ issueId: z.string() }), ({ args, ctx }) =>
+      teamScoped(zql.attachment.where('issueId', args.issueId).orderBy('createdAt', 'asc'), ctx),
+    ),
+  },
   retroVotes: {
     // SELF-SCOPED for the same reason and with the same deviation: a voter sees their own dots (which
     // is how the remaining-budget readout stays instant and offline-correct), and everyone else reads
@@ -330,3 +345,4 @@ export const RETRO_DRAFTS_MINE_QUERY_NAME = 'retroDrafts.mine'
 export const RETRO_VOTES_MINE_QUERY_NAME = 'retroVotes.mine'
 export const NOTIFICATIONS_MINE_QUERY_NAME = 'notifications.mine'
 export const SUBSCRIPTIONS_MINE_QUERY_NAME = 'subscriptions.mine'
+export const ATTACHMENTS_BY_ISSUE_QUERY_NAME = 'attachments.byIssue'

@@ -32,6 +32,8 @@ export default defineConfig({
             { label: 'Email delivery', slug: 'self-hosting/email' },
             { label: 'Sync connection & recovery', slug: 'self-hosting/sync-recovery' },
             { label: 'Search index', slug: 'self-hosting/search-index' },
+            { label: 'Attachments', slug: 'self-hosting/attachments' },
+            { label: 'Backup & restore', slug: 'self-hosting/backup-restore' },
           ],
         },
       ],

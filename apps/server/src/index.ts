@@ -27,12 +27,14 @@ import {
 import { createConnectorAdminRoutes } from './connectors/admin-routes.js'
 import { createGithubConnector, githubConnector } from './connectors/github/index.js'
 import { createGithubWebhookRoute } from './connectors/github/routes.js'
-import { databaseCheck, nonGatingCheck, replicationCheck } from './health.js'
+import { databaseCheck, gatingCheck, nonGatingCheck, replicationCheck } from './health.js'
 import { type Scheduler, startScheduler } from './jobs/scheduler.js'
 import { createLogger, type Logger } from './logger.js'
 import { createMailer } from './mail/index.js'
 import { createSearchFreshnessProbe } from './search/freshness.js'
 import { createSearchRoutes } from './search/routes.js'
+import { createStorageProvider } from './storage/index.js'
+import { createFileRoutes } from './storage/routes.js'
 import { createSessionContextResolver } from './zero/context.js'
 import { createZeroDatabase } from './zero/db-provider.js'
 
@@ -164,6 +166,10 @@ async function main(): Promise<void> {
   const mailer = createMailer(env, logger)
   const mail = mailEnv(env)
 
+  // NEVER null, unlike the mailer: an instance with no byte store cannot show an image somebody
+  // pasted, so `local` is what an unconfigured instance gets and it is complete.
+  const storage = createStorageProvider(env, logger)
+
   const cycles =
     env.CYCLE_MAINTENANCE === 'true'
       ? {
@@ -206,6 +212,12 @@ async function main(): Promise<void> {
       ...(cycles ? { cycles } : {}),
       notifications,
       ...(search ? { search } : {}),
+      // A fourth independent block on the SAME pg-boss instance.
+      attachments: {
+        provider: storage,
+        graceHours: env.ATTACHMENT_ORPHAN_GRACE_HOURS,
+        cron: env.ATTACHMENT_GC_CRON,
+      },
     })
   } catch (error) {
     logger.error({ err: error }, 'failed to start the background job scheduler')
@@ -229,6 +241,11 @@ async function main(): Promise<void> {
       // behind it is O(corpus), so recomputing it per probe would be the readiness check costing
       // more than the traffic it guards.
       nonGatingCheck('search', searchFreshness),
+      // GATING, unlike search freshness: a read-only or missing volume means every upload fails and
+      // every image 404s, which is an instance that should not take traffic. For the local provider
+      // this is a write-and-unlink probe in the configured directory, so a container with no
+      // persistent mount fails at boot rather than at somebody's first paste.
+      gatingCheck('storage', () => storage.health()),
     ],
     webDistDir: env.WEB_DIST_DIR,
     authRoutes: createAuthRoutes({
@@ -247,6 +264,13 @@ async function main(): Promise<void> {
       logger,
       textConfig: env.SEARCH_TEXT_CONFIG,
       statementTimeoutMs: env.SEARCH_STATEMENT_TIMEOUT_MS,
+    }),
+    files: createFileRoutes({
+      auth,
+      db: database.db,
+      provider: storage,
+      logger,
+      maxBytes: env.ATTACHMENT_MAX_BYTES,
     }),
     zero: {
       dbProvider,

@@ -15,6 +15,7 @@ import * as m0013 from './0013_notifications.js'
 import * as m0014 from './0014_mentions.js'
 import * as m0015 from './0015_search.js'
 import * as m0016 from './0016_auto_status.js'
+import * as m0017 from './0017_attachments.js'
 
 export const migrations: Record<string, Migration> = {
   '0001_workspace': m0001,
@@ -33,6 +34,7 @@ export const migrations: Record<string, Migration> = {
   '0014_mentions': m0014,
   '0015_search': m0015,
   '0016_auto_status': m0016,
+  '0017_attachments': m0017,
 }
 
 export const migrationProvider: MigrationProvider = {

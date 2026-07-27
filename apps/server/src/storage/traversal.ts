@@ -1,0 +1,35 @@
+// The traversal table, shared by both provider tests because the guarantee is that the two are
+// PEERS: a key the local provider refuses must be a key the S3 provider refuses, byte for byte,
+// before either touches a filesystem or builds a request. A table in one test file and a different
+// one in the other is how the two drift into disagreeing about what a key is.
+//
+// Not a test file itself (vitest would report it as having no tests), and not exported from
+// `index.ts` — it exists only for the two suites beside it.
+//
+// NUL is spelled `\u0000`, never as a literal byte. A raw NUL in the source makes git classify this
+// file as binary, and a table nobody can read a diff of is a table that rots.
+export const REJECTED_KEYS: readonly string[] = [
+  '',
+  '..',
+  '../../etc/passwd',
+  '/019fa434-4e31-77f8-b778-f7ba02c5619f/019fa434-4e31-77f8-b778-f7ba02c5619e',
+  '019fa434-4e31-77f8-b778-f7ba02c5619f/../../etc/passwd',
+  '019fa434-4e31-77f8-b778-f7ba02c5619f\\019fa434-4e31-77f8-b778-f7ba02c5619e',
+  '019fa434-4e31-77f8-b778-f7ba02c5619f/019fa434-4e31-77f8-b778-f7ba02c5619e\u0000',
+  '019fa434-4e31-77f8-b778-f7ba02c5619f/019fa434-4e31-77f8-b778-f7ba02c5619e\u0000.png',
+  // A third segment: two teams deep is not a key shape, however well-formed the UUIDs are.
+  '019fa434-4e31-77f8-b778-f7ba02c5619f/019fa434-4e31-77f8-b778-f7ba02c5619e/019fa434-4e31-77f8-b778-f7ba02c5619d',
+  // Non-hex characters inside an otherwise well-shaped UUID.
+  '019fa434-4e31-77f8-b778-f7ba02c5619g/019fa434-4e31-77f8-b778-f7ba02c5619e',
+  // The suffix is one `.thumb`, not a chain of them.
+  '019fa434-4e31-77f8-b778-f7ba02c5619f/019fa434-4e31-77f8-b778-f7ba02c5619e.thumb.thumb',
+  '019fa434-4e31-77f8-b778-f7ba02c5619f/019fa434-4e31-77f8-b778-f7ba02c5619e.png',
+  // Only one half of the pair.
+  '019fa434-4e31-77f8-b778-f7ba02c5619f',
+  '019fa434-4e31-77f8-b778-f7ba02c5619f/',
+]
+
+export const TEAM_ID = '019fa434-4e31-77f8-b778-f7ba02c5619f'
+export const ATTACHMENT_ID = '019fa434-4e31-77f8-b778-f7ba02c5619e'
+export const VALID_KEY = `${TEAM_ID}/${ATTACHMENT_ID}`
+export const VALID_THUMB_KEY = `${VALID_KEY}.thumb`

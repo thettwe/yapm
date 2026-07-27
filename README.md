@@ -60,7 +60,10 @@ lightweight, workspace-level projects with computed progress and a keyboard-firs
 three switchable themes (Warm, Focused, Editorial) with a custom accent color · a first-party
 **GitHub connector** (admin-configured) that ingests PR, CI, review, and deploy state into the
 work graph, so every issue row's **reality strip** shows live PR state, a CI health dot, and review
-age — with a **divergence flag** when a human status disagrees with git · a **BYO-key AI
+age — with a **divergence flag** when a human status disagrees with git, and **opt-in status
+automation** that closes the loop the flag opens: turn it on for a team and a linked pull request
+opening moves its issue to In Review, merging moves it to Done — forward only, never over a canceled
+or untriaged issue, off by default, and enabling it changes no existing issue · a **BYO-key AI
 foundation** (bring your own Anthropic / Gemini / OpenAI key, admin-configured, off until you
 enable it) whose first feature is a team-internal, evidence-linked **cycle digest** — pre-computed
 at cycle close, team-level and blameless, with a raw linked-evidence fallback when AI is off ·
@@ -95,7 +98,8 @@ the foundation (gateway, agent-as-actor tools, the AI-over-work-graph substrate)
 PM-facing digest and an **AI-facilitated** retro — drafting themes and candidate actions on top of
 the retrospective that already ships — build on it next. Then DORA and review-health metrics
 computed from the graph — team-level only, never individual scorecards. More connectors
-(GitLab, …) slot into the same framework with no feature-code change.
+(GitLab, …) slot into the same framework with no feature-code change — inheriting the reality strip
+and the status automation above for free.
 
 ## Quickstart
 

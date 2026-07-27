@@ -21,7 +21,7 @@ falsifiable check (5) before the UI, so the behaviour is proven before it is exp
       types. The target map is `merged → done`, `open → in_review`, everything else `null`.
 - [x] 1.5 Export the module from `packages/schema/src/index.ts`. Run
       `node scripts/check-boundaries.mjs` — nothing new may cross a package boundary.
-- [ ] 1.6 **Test (unit, no DB)** `packages/schema/src/zero/auto-status.test.ts`: a table driving every
+- [x] 1.6 **Test (unit, no DB)** `packages/schema/src/zero/auto-status.test.ts`: a table driving every
       guard to `null` one at a time (off; event before `autoStatusSince`; no state edge; needs_triage;
       canceled; human newer than the event) and every transition that must fire (`todo → in_review` on
       open, `in_progress → done` on merge, `backlog → done` on merge). Plus: `draft` and `closed`
@@ -40,7 +40,7 @@ falsifiable check (5) before the UI, so the behaviour is proven before it is exp
 - [x] 2.3 Add both to the Zero schema in `packages/schema/src/zero/schema.ts` as
       `number().from('auto_status_since').optional()` and
       `number().from('last_human_status_at').optional()`.
-- [ ] 2.4 **Test (integration)** extend `packages/schema/src/db/schema-drift.test.ts` so both columns
+- [x] 2.4 **Test (integration)** extend `packages/schema/src/db/schema-drift.test.ts` so both columns
       are asserted present in Postgres **and** in the Zero schema.
 - [x] 2.5 **Verify on the live stack before building on it** (the `search` I1 precedent): bring up
       `POSTGRES_HOST_PORT=5446 ZERO_CACHE_HOST_PORT=4854 YAPM_HOST_PORT=3006 docker compose -p yapm-as
@@ -65,12 +65,12 @@ falsifiable check (5) before the UI, so the behaviour is proven before it is exp
 - [x] 3.4 Classify `team.setAutoStatus` in `packages/schema/src/zero/ai-tools.ts` —
       `MUTATOR_TOOL_KINDS` (`write`) and the args map. The registry is exhaustive by construction and
       its test fails until this is done.
-- [ ] 3.5 **Test (unit)** in `packages/schema/src/zero/mutators.issue.test.ts`: a status write under a
+- [x] 3.5 **Test (unit)** in `packages/schema/src/zero/mutators.issue.test.ts`: a status write under a
       member ctx stamps `lastHumanStatusAt`, and the same write under `SYSTEM_AUTH_CONTEXT` leaves it
       untouched. In `packages/schema/src/zero/mutators.test.ts` (where the team mutators are already
       tested): `team.setAutoStatus` is rejected for a member and for a viewer before any existence
       check, accepted for an admin, and disabling writes `null`.
-- [ ] 3.6 **Test (unit)** a guard test that enumerates the shared mutator set, selects every mutator
+- [x] 3.6 **Test (unit)** a guard test that enumerates the shared mutator set, selects every mutator
       whose body writes `issue.status`, and asserts each stamps the column for a human ctx and not for
       the system principal — so a fifth status-writing mutator added later fails here rather than
       silently opening the hole.
@@ -91,25 +91,25 @@ falsifiable check (5) before the UI, so the behaviour is proven before it is exp
 - [x] 4.3 Confirm `apps/server/src/connectors/github/` is untouched by this change — a `git diff
       --stat` over that directory must be empty. That absence is the firewall property, not a
       convention.
-- [ ] 4.4 **Test (unit)** `packages/schema/src/zero/work-graph.test.ts` additions using the existing
+- [x] 4.4 **Test (unit)** `packages/schema/src/zero/work-graph.test.ts` additions using the existing
       fake transaction: the open edge and the merge edge each write once; a redelivery of the same
       mutation writes nothing; an activity bump on an already-merged PR writes nothing; a stale
       out-of-order mutation links but writes no status.
 
 ## 5. The falsifiable check, against live Postgres
 
-- [ ] 5.1 **Test (integration)** `packages/schema/src/zero/auto-status.pg.test.ts`, the scenario named
+- [x] 5.1 **Test (integration)** `packages/schema/src/zero/auto-status.pg.test.ts`, the scenario named
       in design.md §"How we will know this worked": two teams (T1 opted in an hour ago, T2 `NULL`),
       one `todo` issue each, the same two `upsertPullRequest` mutations driven through the real
       `applyWorkGraphMutations` path. Assert T1 goes `in_review` then `done`; T2 stays `todo` **and**
       `computeDivergence` returns `status_behind_merge`; a verbatim replay of the merged mutation is
       inert; and a member's post-merge move to `in_progress` survives a later merged-PR delivery, with
       divergence firing. Self-gated by `describe.skipIf(DATABASE_URL === undefined)`.
-- [ ] 5.2 **Test (integration)** the epoch guard on its own: a merged pull request whose `updatedAt`
+- [x] 5.2 **Test (integration)** the epoch guard on its own: a merged pull request whose `updatedAt`
       precedes `auto_status_since` drives nothing, which is the first-install-backfill safety property.
-- [ ] 5.3 **Test (integration)** an untriaged issue and a canceled issue are each left alone by a
+- [x] 5.3 **Test (integration)** an untriaged issue and a canceled issue are each left alone by a
       merged pull request, and the untriaged one stays in the triage inbox query.
-- [ ] 5.4 Run 5.1–5.3 against the `yapm-as` stack and record the actual output. If any assertion
+- [x] 5.4 Run 5.1–5.3 against the `yapm-as` stack and record the actual output. If any assertion
       passes against `main`, the check is not falsifiable and must be strengthened before proceeding.
 
 ## 6. The admin surface
@@ -124,10 +124,10 @@ falsifiable check (5) before the UI, so the behaviour is proven before it is exp
       decision, not only in the docs.
 - [x] 6.3 Confirm the section is invisible and unreachable for a non-admin, riding the page's existing
       admin gate rather than adding a second one.
-- [ ] 6.4 **Test (unit)** a component test for the section: renders each team's state, invokes the
+- [x] 6.4 **Test (unit)** a component test for the section: renders each team's state, invokes the
       mutator with `null` when disabling and a timestamp when enabling, and renders nothing for a
       non-admin.
-- [ ] 6.5 **Test (E2E)** `apps/web/e2e/auto-status.spec.ts` against the 3-container stack: as an
+- [x] 6.5 **Test (E2E)** `apps/web/e2e/auto-status.spec.ts` against the 3-container stack: as an
       admin, reach the control with Tab only, activate with Enter, reload, and assert it still reads
       enabled (the value round-tripped through Postgres and back down the sync socket). Assert a
       member session cannot reach the control.
@@ -136,40 +136,40 @@ falsifiable check (5) before the UI, so the behaviour is proven before it is exp
 
 ## 7. Documentation
 
-- [ ] 7.1 New `apps/docs/src/content/docs/features/auto-status.md`: what fires and what never fires,
+- [x] 7.1 New `apps/docs/src/content/docs/features/auto-status.md`: what fires and what never fires,
       the guard ladder in plain language, how to turn it on, the since-epoch guarantee, the honest
       caveat that a stale magic word in a branch name can move the wrong issue, and how it relates to
       the divergence flag.
-- [ ] 7.2 Add the sidebar entry to `apps/docs/astro.config.mjs` under Features.
-- [ ] 7.3 Update `apps/docs/src/content/docs/features/delivery-signals.md`: divergence is now
+- [x] 7.2 Add the sidebar entry to `apps/docs/astro.config.mjs` under Features.
+- [x] 7.3 Update `apps/docs/src/content/docs/features/delivery-signals.md`: divergence is now
       explicitly what happens when automation is off or blocked, and goes quiet by construction when
       a transition fires.
-- [ ] 7.4 Update `apps/docs/src/content/docs/self-hosting/github-connector.md`: a pointer to the
+- [x] 7.4 Update `apps/docs/src/content/docs/self-hosting/github-connector.md`: a pointer to the
       per-team toggle, the statement that no App scope changes, and that nothing is written back to
       GitHub.
-- [ ] 7.5 **`ROADMAP.md`, all four contradictions**: amend the wedge line (10) to describe what yapm
+- [x] 7.5 **`ROADMAP.md`, all four contradictions**: amend the wedge line (10) to describe what yapm
       actually does — PR state drives issue status **for teams that opt in**; correct row 8's false
       "PR linking + auto-status" claim to linking only; remove "automatic status transitions" from the
       Post-v1 Phase 2 entry (60), leaving CI/deploy ingestion and the DORA views; and add row 14 for
       this change plus a sentence in the "Where v1 actually stands" paragraph.
-- [ ] 7.6 **`VISION.md`** Phase 2 (87): reconcile it with ROADMAP — the opt-in half of "automatic
+- [x] 7.6 **`VISION.md`** Phase 2 (87): reconcile it with ROADMAP — the opt-in half of "automatic
       status transitions" ships in Phase 1, so Phase 2 keeps CI/deploy ingestion and the metric views.
-- [ ] 7.7 `README.md` "What works today": the opt-in automation, in one clause, beside the divergence
+- [x] 7.7 `README.md` "What works today": the opt-in automation, in one clause, beside the divergence
       flag it now completes.
-- [ ] 7.8 `TECHSTACK.md` connector-framework row (34): name status automation as the second thing a
+- [x] 7.8 `TECHSTACK.md` connector-framework row (34): name status automation as the second thing a
       new connector inherits from the union, so the firewall claim stays concrete.
-- [ ] 7.9 Assert `.env.example` and the Zod config schema are unchanged by this change. A feature that
+- [x] 7.9 Assert `.env.example` and the Zod config schema are unchanged by this change. A feature that
       grew a config knob has broken the "one nullable column" promise; the check is mechanical.
-- [ ] 7.10 `pnpm --filter @yapm/docs build` passes.
+- [x] 7.10 `pnpm --filter @yapm/docs build` passes.
 
 ## 8. Verification
 
-- [ ] 8.1 `pnpm turbo lint typecheck test build` clean, with the actual output recorded.
-- [ ] 8.2 Integration and E2E suites run against the `yapm-as` compose stack
+- [x] 8.1 `pnpm turbo lint typecheck test build` clean, with the actual output recorded.
+- [x] 8.2 Integration and E2E suites run against the `yapm-as` compose stack
       (`POSTGRES_HOST_PORT=5446 ZERO_CACHE_HOST_PORT=4854 YAPM_HOST_PORT=3006`,
       `docker compose -p yapm-as`), including the compose smoke test.
-- [ ] 8.3 Walk every scenario in `openspec/changes/auto-status/specs/**` and confirm each is true of
+- [x] 8.3 Walk every scenario in `openspec/changes/auto-status/specs/**` and confirm each is true of
       the built system, naming the test or the observation that establishes it.
-- [ ] 8.4 Confirm no prior change regressed: divergence behaviour for an automation-off team is
+- [x] 8.4 Confirm no prior change regressed: divergence behaviour for an automation-off team is
       byte-identical, the cycle-rollover job still passes with the shared principal, and the
       `ai-tools` exhaustiveness test is green.

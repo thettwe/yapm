@@ -744,3 +744,146 @@ belong to the test phase:
 29 files / 280 tests. `biome ci .` checked 457 files with no fixes applied.
 `node scripts/check-boundaries.mjs` clean. `git diff --stat -- packages/ui` and
 `git diff --stat -- apps/server/src/connectors/github/` are both **empty**.
+
+*(Documentation phase.)*
+
+### I17 — The ROADMAP contradiction was four sentences, and three of them needed different fixes
+
+The mission named the contradiction; resolving it turned out to need three *different* kinds of
+edit, not one find-and-replace, and it is worth recording which is which so a later reader does not
+"tidy" one back:
+
+- **The wedge line (V1 scope, locked)** was *aspirational and is now true, with a qualifier*. Amended
+  in place to `PR state drives issue status **for teams that opt in** (off by default; the divergence
+  flag is what happens otherwise)`. Editing a line inside a section headed "locked" was the
+  judgement call. It is right: the line described an intent the code did not keep, and the change
+  the maintainer authorised is precisely what makes it keepable. Deleting the clause would have been
+  the alternative, and it would have thrown away the wedge.
+- **Row 8 (`connectors`)** was *factually false and stays false forever* — that change shipped
+  linking and nothing else. Corrected to "branch/PR ↔ issue linking (linking only — driving issue
+  status is change 14)". Not softened, because a shipped-and-archived row claiming a feature it did
+  not ship is how the gap survived eight changes without anyone noticing.
+- **ROADMAP §Post-v1 Phase 2 and VISION §Phase 2** were *correct when written and are now half
+  correct*. "Automatic status transitions" is not simply deleted from either: the PR-driven half
+  shipped, and the deploy/CI-driven half genuinely still needs an `issue↔deployment` edge nobody has
+  modelled. Both entries now say which half moved and why the remainder is still Phase 2, and
+  VISION's Phase 1 gains the opt-in transitions so the two phase lists agree with each other rather
+  than each being separately defensible.
+
+The fourth sentence — the "Where v1 actually stands" paragraph and the "V1 is now complete" list —
+was not contradictory so much as silently incomplete. It listed two gaps the locked scope named and
+never built; this was a third, and it is added with the same shape (the gap, its own `grep` evidence,
+and what closed it) rather than as a footnote.
+
+### I18 — `reference/connectors.md` §1.3's "auto-status" means the opposite of this feature's name
+
+Found during the reference sweep, and the highest-value docs fix in this phase because it is a live
+trap rather than a stale sentence. §1.3 reads *"escalate to write only when auto-status-write /
+back-linking ships"* — where "auto-status-write" means **writing a status back to GitHub**, which
+would cost an `issues: write` scope and force every installer to re-approve. This change ships a
+feature called *status automation* that costs **no scope at all**, because the only thing it writes
+is yapm's own `issue` row.
+
+Left as-is, a future contributor reading that bullet while implementing or extending this feature
+would reasonably conclude the App needs escalating. The bullet is reworded to say "writing *to
+GitHub*", and a second bullet states the distinction explicitly by name. The reference doc's harvested
+claims are untouched — this is a disambiguation of our own annotation, not a correction of GitHub's
+documentation.
+
+### I19 — Task 7.9 discharged by `git diff`, and PROCESS.md §2's mechanical check does not exist
+
+`git diff main --name-only | grep -E '^(\.env\.example|apps/server/src/config/)'` exits 1 (no
+matches) and `git diff main --numstat -- .env.example` is empty: `.env.example` and the Zod schema in
+`apps/server/src/config/env.ts` are byte-identical to `main`, which is the whole of the
+`self-host-deploy` "No new environment variable" scenario.
+
+Noted while doing it, and deliberately **not** fixed here: PROCESS.md §2 claims "mechanical checks
+catch the detectable cases (`.env.example` vs the Zod schema)", and
+`grep -rn "env.example" --include='*.ts' --include='*.mjs' apps packages scripts .github` returns
+nothing — no such check is implemented anywhere. That is a pre-existing gap in a *different*
+promise, and a change whose defining property is "adds no configuration" is the wrong place to
+introduce a config-drift test that could fail for reasons unrelated to it. Recorded so it is
+findable rather than discovered again.
+
+### I20 — Docs gate output
+
+`pnpm --filter @yapm/docs build`: **18 pages built**, `[build] Complete!`, including
+`/features/auto-status/index.html`. The two messages it emits — `Entry docs → 404 was not found` and
+the `@astrojs/sitemap` `site`-option warning — are both pre-existing on `main` and unrelated.
+`pnpm biome check` over `apps/docs`, `README.md`, `ROADMAP.md`, `TECHSTACK.md`, `VISION.md` and
+`reference/connectors.md`: 4 files checked, no fixes applied (Biome does not parse `.md`). Every
+cross-page anchor written this phase was verified against the built HTML's generated `id`s —
+`#the-divergence-flag`, `#the-since-guarantee`, `#when-a-person-and-a-pull-request-disagree` and
+`#flagging-versus-fixing` all resolve.
+
+### I21 — Two test tasks (6.4, 6.5) had no artefact and were written in the integrate phase
+
+The test phase left `packages/schema` and the docs complete but produced neither the settings
+component test (task 6.4) nor `apps/web/e2e/auto-status.spec.ts` (task 6.5), and the change's own
+`status-automation` spec has a Requirement whose four scenarios — keyboard-only enable, persistence
+across a reload, non-admin cannot reach the control, tokenized in every theme — are provable only
+there. Both were written here rather than deferred, because the alternative is a capability whose
+admin surface is asserted by nothing.
+
+`apps/web/src/settings/status-automation.test.tsx` renders the real `ConnectorsView` (not an
+extracted sub-component) so the admin gate under test is the page's own, and mocks exactly three
+seams: `@rocicorp/zero/react`, `@/auth/use-membership`, and the REST connector client. Eight tests:
+both states side by side, the enable/disable args, the row following the synced column rather than
+local state, a rejected write retracting the announcement, the polite live region, the non-admin
+seeing nothing, the toggle being a real tab stop, and no per-person counter anywhere in the section.
+
+### I22 — The e2e tab bound is the page's own tabbable count, not a constant
+
+`tabTo` first tried a fixed 60 stops. That passed on a fresh database and failed on a populated one:
+the section renders one row per team, the e2e database is shared across the whole suite, and by the
+end of a run the target team sits below thirty other rows. A fixed bound turns "how many teams exist
+right now" into a test outcome. The bound is now `document.querySelectorAll(<tabbable>).length + 2`
+— a control that IS in the tab order is reached within one full cycle by definition, and one that is
+not still fails rather than hanging, which is the only property the assertion needs.
+
+### I23 — The theme matrix must seed `yapm:pref`, NOT drive the appearance popover
+
+First written to drive the real appearance popover, on the reasoning that a localStorage write races
+zero-cache pushing the stored preference back over it. That is true in isolation and wrong for this
+suite: the popover writes a synced `user_preference` row, and the shared `admin@example.test`
+account deliberately has none until `theme.spec.ts` runs last. Creating one in a spec that sorts
+second gives every later preset matrix a synced value that overrides its localStorage seed.
+
+Measured, not reasoned about: the popover version passed its own spec and failed five others —
+`connectors`, `digest`, `issues`, `projects`, `retro` — each with `Expected: "focused" / Received:
+"warm"`. Reverting to the seed-and-reload pattern every sibling spec already uses returned the suite
+to 74/74. The lesson is recorded because the popover version *looks* more correct in review: it
+drives the real control instead of a cache, and it is the one that breaks the suite.
+
+The matrix also collects `body` background, row text color and row border across the six
+preset×mode combinations and asserts six distinct triples, so a hardcoded color anywhere in the
+section collapses the set and fails rather than rendering wrong in five themes quietly.
+
+### I24 — `auto-status.pg.test.ts` did not typecheck as delivered
+
+`queries.triage.inbox.fn(...) as BuiltQuery` — TS2352, "neither type sufficiently overlaps". The
+existing precedent in `mutators.notification.pg.test.ts` and `mutators.mentions.pg.test.ts` is
+`as unknown as BuiltQuery`, hoisted out of the `apply` callback; matched. Five files also failed
+`biome ci` on formatting. Both are the signature of a phase whose gates were never run.
+
+### I25 — Integrate gate output
+
+- `pnpm turbo typecheck lint build test --force` with `DATABASE_URL` pointed at the isolated stack:
+  **17 tasks successful**. `@yapm/schema` 45 files / **673 tests** (every `.pg.test.ts` executed,
+  none skipped), `@yapm/server` 32 / 236, `@yapm/web` 30 / 288, `@yapm/ui` 6 / 85, `@yapm/email`
+  3 / 23. `@yapm/docs` built 18 pages.
+- `node scripts/check-boundaries.mjs`, `node scripts/check-catalog.mjs` (9 manifests, 82 entries)
+  and `node scripts/check-image-manifests.mjs`: all pass.
+- Full Playwright suite against `yapm-as` from empty volumes: **74 passed** (6.5m), including this
+  change's three new specs. An earlier run on the same code showed `board.spec.ts:305` and
+  `triage.spec.ts:193` timing out at 60s on palette hydration; both pass on re-run and on the clean
+  run, and neither touches a team with automation enabled. Pre-existing flakes, not regressions.
+- Compose smoke test on the **production image**, built and run as `yapm-as-smoke` on ports
+  3016/4864: `/readyz` reports `database ok`, `replication ok (wal_level=logical, slot zero_0_a
+  active)`, and `scripts/smoke.mjs` signed up, served the SPA and connected Zero sync. Migration
+  `0016_auto_status` is the newest row in `kysely_migration`, and both columns landed as
+  `timestamp with time zone`, nullable, no default — the fresh-install path, not just the upgrade
+  path.
+- `docker/docker-compose.yml` parses to exactly three services: `postgres`, `yapm`, `zero-cache`.
+- `git diff --stat main...HEAD -- apps/server/src/connectors/github/` is empty: the union firewall
+  holds against the merge base, not just against the working tree.

@@ -16,6 +16,7 @@ export default defineConfig({
             { label: 'Triage', slug: 'features/triage' },
             { label: 'Projects & roadmap', slug: 'features/projects' },
             { label: 'Delivery signals', slug: 'features/delivery-signals' },
+            { label: 'Status automation', slug: 'features/auto-status' },
             { label: 'Cycle digest', slug: 'features/cycle-digest' },
             { label: 'Retrospectives', slug: 'features/retrospectives' },
             { label: 'Notifications', slug: 'features/notifications' },

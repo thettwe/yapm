@@ -5,12 +5,7 @@ import { SearchIcon } from 'lucide-react'
 import { type KeyboardEvent, useCallback, useEffect, useId, useMemo, useRef } from 'react'
 import { ownsKeyboard } from '@/lib/keyboard'
 import { useSearchCursor } from '@/search/cursor'
-import {
-  localSearchRows,
-  type SearchRow,
-  serverSearchRows,
-  withoutLocalDuplicates,
-} from '@/search/results'
+import { localSearchRows, type SearchRow } from '@/search/results'
 import {
   SEARCH_EMPTY_REFINE,
   SEARCH_EMPTY_STALE,
@@ -22,6 +17,7 @@ import {
 } from '@/search/states'
 import { useLocalSearchCorpus } from '@/search/use-local-corpus'
 import { useOpenSearchResult } from '@/search/use-open-result'
+import { useDedupedServerRows } from '@/search/use-server-rows'
 import { useServerSearch } from '@/search/use-server-search'
 
 export interface SearchViewProps {
@@ -60,10 +56,7 @@ export function SearchView({ query, onQueryChange }: SearchViewProps) {
     () => localSearchRows(corpus.search(query), fallbackTeamId),
     [corpus, query, fallbackTeamId],
   )
-  const serverRows = useMemo(
-    () => withoutLocalDuplicates(localRows, serverSearchRows(server.results)),
-    [localRows, server.results],
-  )
+  const serverRows = useDedupedServerRows(query, localRows, server.results)
 
   const rowIds = useMemo(
     () => [...localRows, ...serverRows].map((row) => row.id),

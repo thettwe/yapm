@@ -29,6 +29,11 @@ and only from the tail, so nothing above it moves. A comment hit stays even when
 already listed: that is different text about the same issue, and it is the half your browser
 structurally cannot answer.
 
+That decision is made once, at the moment the server answers. If a row syncs to your browser
+*afterwards* it is added to the on-device group above — it never removes a result you are already
+looking at, because a list that deletes the row under your cursor is worse than a list that briefly
+shows one thing twice.
+
 ## Where to search
 
 There is exactly **one** keyboard shortcut, and it is the one you already use.

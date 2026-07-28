@@ -31,6 +31,7 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     archived_at: { nullable: true, hasDefault: false },
     auto_status_since: { nullable: true, hasDefault: false },
     ai_retro_draft_since: { nullable: true, hasDefault: false },
+    ai_retired_spend_usd: { nullable: false, hasDefault: true },
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },
@@ -498,8 +499,10 @@ async function createAuthUserTable(db: Kysely<DB>): Promise<void> {
 // Columns that exist in Postgres and are DELIBERATELY absent from the Zero schema — an allowlisted
 // asymmetry, asserted below rather than tolerated. A column reaching this set is a decision, not an
 // oversight: `retro_ai_draft.claimed_at` is the tail's claim stamp, scheduling state rather than
-// artifact state, and syncing it would put job internals on every client.
-const ZERO_OMITTED_COLUMNS = new Set(['retro_ai_draft.claimed_at'])
+// artifact state, and syncing it would put job internals on every client; `team.ai_retired_spend_usd`
+// is billing accounting the spend cap reads server-side, and syncing it would push a team-row update
+// to every client every time a facilitator rewinds a retro.
+const ZERO_OMITTED_COLUMNS = new Set(['retro_ai_draft.claimed_at', 'team.ai_retired_spend_usd'])
 
 const DATABASE_URL = process.env.DATABASE_URL
 

@@ -1,4 +1,4 @@
-import { type DigestContent, newId } from '@yapm/schema'
+import { type DigestContent, newId, type RetroSeedRef } from '@yapm/schema'
 import {
   createDatabase,
   type Database,
@@ -196,6 +196,80 @@ export async function readRetroAiDraft(
     .where('retro_id', '=', retroId)
     .executeTakeFirstOrThrow()
   return { status: draft.status, proposals: Number(proposals.count) }
+}
+
+export interface SeedRetroAiProposal {
+  category: 'win' | 'loss' | 'improvement'
+  summary: string
+  confidence?: 'high' | 'medium' | 'low'
+  // Evidence the CLIENT can name from its own rows: a work-graph id or a computed seed metric key.
+  // A ref the client cannot resolve renders no chip at all, which is the point of citing real ones.
+  refs?: readonly RetroSeedRef[]
+}
+
+export interface SeedRetroAiDraftOptions {
+  retroId: string
+  teamId: string
+  status?: 'ready' | 'ai_off' | 'failed' | 'pending'
+  proposals?: readonly SeedRetroAiProposal[]
+}
+
+// Seed the AI retro artifact directly, mirroring `seedCycleDigest`: both rows are Zero-synced, so
+// they replicate to the signed-in member's client and render exactly as the background tail's output
+// would. The tail itself needs a provider key and is covered headless by
+// `apps/server/src/ai/retro-draft.pg.test.ts`; what only a browser can prove is the section on screen.
+//
+// The team's opt-in is stamped with the draft, because a draft can only exist for a team that
+// consented — the surface is gated on that column and a seeded row without it would render nothing.
+export async function seedRetroAiDraft(
+  db: Database,
+  options: SeedRetroAiDraftOptions,
+): Promise<string> {
+  const id = newId()
+  const now = new Date()
+  const status = options.status ?? 'ready'
+  await db.db
+    .updateTable('team')
+    .set({ ai_retro_draft_since: now })
+    .where('id', '=', options.teamId)
+    .where('ai_retro_draft_since', 'is', null)
+    .execute()
+
+  await db.db
+    .insertInto('retro_ai_draft')
+    .values({
+      id,
+      retro_id: options.retroId,
+      team_id: options.teamId,
+      status,
+      provider: status === 'ready' ? 'anthropic' : null,
+      model: status === 'ready' ? 'mock-model-1' : null,
+      estimated_cost_usd: status === 'ready' ? 0.01 : null,
+      generated_at: status === 'ready' ? now : null,
+      created_at: now,
+      updated_at: now,
+    })
+    .execute()
+
+  const proposals = options.proposals ?? []
+  for (const [rank, proposal] of proposals.entries()) {
+    await db.db
+      .insertInto('retro_ai_proposal')
+      .values({
+        id: newId(),
+        draft_id: id,
+        retro_id: options.retroId,
+        team_id: options.teamId,
+        category: proposal.category,
+        summary: proposal.summary,
+        confidence: proposal.confidence ?? 'high',
+        refs: JSON.stringify(proposal.refs ?? []) as never,
+        rank,
+        created_at: now,
+      })
+      .execute()
+  }
+  return id
 }
 
 // A TipTap document holding one paragraph, which is the shape both `issue.description` and

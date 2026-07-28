@@ -32,10 +32,21 @@ AI can do to a retrospective. yapm does not solve that with a hidden flag or a f
 the retro is in `brainstorm` **the rows do not exist** — there is nothing to hide, and no filter that
 could one day be written wrong.
 
+That rule runs backwards too. A facilitator may step the retro back to `brainstorm` — it is a legal
+single step, and people write cards again when they get there — so the draft and its proposals are
+**deleted** on the way back rather than left on screen. Advancing again drafts afresh from the same
+cycle facts. The first run's estimated cost stays counted against your workspace's AI spend, because
+it was really spent.
+
 The visible cost is that the draft appears a few seconds *after* the reveal rather than instantly. A
 quiet line reads "Drafting wins, losses and improvements from this cycle's work…", and it is replaced
 by the proposals when they arrive — no reload, no button to press. In practice the facilitator has
-just uncovered a board of cards and the team spends the next minutes reading them.
+just uncovered a board of cards and the team spends the next minutes reading them. Both transitions
+are announced to a screen reader through one live region, so the section does not change silently.
+
+That line is **bounded**: if nothing completes the run — an operator has switched the background pass
+off instance-wide — it disappears after a minute or two and the data panel is the whole surface again,
+rather than a spinner nobody will ever see resolve.
 
 The other consequence is that **you pay only for retros you actually run.** A cycle that closes into
 a retro nobody opens costs nothing, because nothing was generated.
@@ -51,9 +62,10 @@ Two things about enabling it:
 
 - **It never backfills.** Turning it on drafts nothing into a retro that has already advanced past
   `brainstorm`. The next retro to be revealed is the first one drafted into.
-- **Every member can see whether it is on**, because the setting lives on the team row that already
-  syncs to everyone. Only an admin can change it. A model participating in your team's retro is not
-  something that should be knowable only to the person who switched it on.
+- **The setting is on the team, not in server-only config.** It lives on the team row, which already
+  syncs to every member's client, rather than in an env var only the operator can read — so a model
+  participating in a team's retro is a property of that team rather than of the deployment. Today the
+  switch itself is surfaced in *Settings → AI*, which is admin-only, and only an admin can change it.
 
 Turning it off stops the next draft. It deletes nothing already drafted.
 
@@ -178,6 +190,7 @@ is still there — it is the raw-evidence fallback, and it was there before the 
 | The provider errored or returned unusable output | Nothing. The failure is logged server-side, not shown to the team |
 | Every proposal was dropped by a validator | Nothing. Silence is a correct answer for a thin cycle |
 | The background pass has not finished yet | One quiet "drafting…" line, replaced by the proposals when they land |
+| The background pass is switched off instance-wide | The drafting line for a minute or two, then nothing — the row is never completed, so the section stands down |
 
 A category with no surviving proposal renders no heading — you will not see an empty "Losses".
 

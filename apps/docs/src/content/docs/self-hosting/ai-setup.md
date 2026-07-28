@@ -46,8 +46,11 @@ A per-workspace UI key wins over the instance-default env key for the same provi
 
 The two feature gates are deliberately **independent**: a team may want one artifact and not the
 other, and both spend on the same key, so turning one off must never silently turn the other off.
-Setting `AI_RETRO_DRAFT=false` stops the background pass entirely — a retro that was already advanced
-leaves a pending row behind, which is harmless and drains if you turn it back on.
+Setting `AI_RETRO_DRAFT=false` stops the background pass entirely. An opted-in team's reveal still
+stamps a pending row, and with nothing to complete it the retro shows its drafting line for a minute
+or two and then falls back to the team's own data panel — no error, and nothing stuck on screen. The
+rows are harmless and drain if you turn the pass back on. To make the capability wholly invisible for
+a team, turn that team off in *Settings → AI* instead.
 
 ## What each AI feature costs you, and when
 

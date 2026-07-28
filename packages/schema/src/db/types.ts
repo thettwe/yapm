@@ -76,6 +76,11 @@ export interface TeamTable {
   // team consented" — unlike `auto_status_since` the epoch is NOT an event filter, because the draft
   // is triggered by a live phase advance and has no historical backlog to guard against.
   ai_retro_draft_since: TimestampOrNull
+  // AI spend that happened on this team's work and whose artifact row is gone — today only a retro
+  // draft discarded when a facilitator steps back to `brainstorm`. Monotonic, never decremented, and
+  // absent from the Zero schema: `getWorkspaceAiSpendUsd` counts it so the cap keeps seeing money
+  // that was really spent.
+  ai_retired_spend_usd: Generated<number>
   created_at: Generated<Timestamp>
   updated_at: Generated<Timestamp>
 }

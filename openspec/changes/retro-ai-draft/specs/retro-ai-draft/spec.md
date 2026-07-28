@@ -69,6 +69,16 @@ before the advance it does not exist for anyone.
 - **WHEN** a member is writing cards in a retro in `brainstorm` on an opted-in team
 - **THEN** no AI draft or proposal row exists in that member's synced data, in any other member's, or in the database
 
+#### Scenario: Stepping back to brainstorm removes the artifact
+
+- **WHEN** a facilitator steps a retro back from `group` to `brainstorm`, where people write cards again
+- **THEN** the draft row and every proposal row are deleted rather than filtered out of view, the next forward advance drafts afresh, and the estimated cost of the deleted run remains counted in the workspace's AI spend total
+
+#### Scenario: A reveal never restarts a finished draft
+
+- **WHEN** the reveal branch runs for a retro that already carries a draft row
+- **THEN** that row is left exactly as it is — its status, provider, model, token counts and estimated cost unchanged — and no second provider call is made for it
+
 #### Scenario: The draft appears shortly after the reveal
 
 - **WHEN** the facilitator advances from `brainstorm` to `group`
@@ -221,6 +231,11 @@ write it at all.
 - **WHEN** a draft reaches `ready`
 - **THEN** its estimated cost is stored on the artifact and is included in the workspace's running AI spend total
 
+#### Scenario: A discarded run's cost is not refunded
+
+- **WHEN** a `ready` draft is deleted because its retro stepped back to `brainstorm`
+- **THEN** the workspace's running AI spend total is unchanged by the deletion, so the cap keeps counting money that was really spent
+
 ### Requirement: A keyboard-operable draft section that is absent when AI is off
 
 The retro SHALL render the AI's proposals in a section adjacent to the auto-seeded data panel and
@@ -245,7 +260,12 @@ in both light and dark. Reading the section SHALL NOT newly wait on the network.
 #### Scenario: Drafting in progress is visible and quiet
 
 - **WHEN** the facilitator has just advanced to `group` and the background pass has not finished
-- **THEN** the section shows a single unobtrusive in-progress line and replaces it with the proposals when they arrive, with no reload
+- **THEN** the section shows a single unobtrusive in-progress line and replaces it with the proposals when they arrive, with no reload, and both transitions are announced through one persistent live region rather than by inserting a status node
+
+#### Scenario: An in-progress state that will never resolve stands down
+
+- **WHEN** the completion pass is disabled instance-wide, so a stamped row is never completed
+- **THEN** the in-progress line stops rendering after a bounded interval and the seeded data panel is the whole surface again, with no error and nothing left claiming to be in progress
 
 #### Scenario: The whole section works from the keyboard
 

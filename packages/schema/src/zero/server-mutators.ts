@@ -6,6 +6,7 @@ import {
   type Transaction,
 } from '@rocicorp/zero'
 import { type Kysely, sql } from 'kysely'
+import { recordRetiredAiSpend } from '../db/cycle-digest.js'
 import {
   autoSubscribeMentioned,
   deleteSubscriptionsForMember,
@@ -190,10 +191,17 @@ async function publishRetroDrafts(
 //   3. Nothing else. No enqueue, no `boss.send` — `packages/schema` has no pg-boss dependency and
 //      must not acquire one. A row IS the queue; a self-re-arming tail claims it.
 //
-// `newId()` is called HERE, at the call site, and is used only on insert (§D7): the upsert is keyed
-// on the unique `retro_id`, so a re-run of the authoritative mutator finds the existing row and
-// discards the fresh id. Safe because this branch never runs on the client's optimistic pass, so
-// there is no rebase to corrupt — the same reasoning `upsertCycleDigest` established.
+// `newId()` is called HERE, at the call site, and is used only on insert (§D7). Safe because this
+// branch never runs on the client's optimistic pass, so there is no rebase to corrupt — the same
+// reasoning `upsertCycleDigest` established.
+//
+// ONE DRAFT PER RETRO, PRODUCED ONCE. An existing row is left EXACTLY as it is rather than upserted
+// back to `pending`: a re-run of this branch (a retried mutation, a facilitator who advanced twice)
+// would otherwise reset a finished run — NULLing its provider, model, token counts and
+// `estimated_cost_usd`, which erases a real cost from the workspace total the spend cap is checked
+// against and buys a second, unbudgeted provider call on somebody's BYO key. There is no regenerate
+// button in this release for the same reason; the only way to a second draft is the step back below,
+// which deletes the first one and carries its cost forward first.
 async function stampRetroAiDraft(
   tx: Transaction,
   retro: { id: string; teamId: string },
@@ -206,6 +214,11 @@ async function stampRetroAiDraft(
     .executeTakeFirst()
   if (!team?.ai_retro_draft_since) return
 
+  const existing = (await tx.run(zql.retro_ai_draft.where('retroId', retro.id).one())) as
+    | { id: string }
+    | undefined
+  if (existing !== undefined) return
+
   await upsertRetroAiDraft(tx, {
     id: newId(),
     teamId: retro.teamId,
@@ -213,6 +226,27 @@ async function stampRetroAiDraft(
     status: 'pending',
     now: at,
   })
+}
+
+// THE REVERSE OF THE LAZY TRIGGER, and the other half of what makes design §D1's anchoring argument
+// true. Stepping back from `group` to `brainstorm` is a legal single step, and it puts every
+// participant back to writing cards — so the artifact must GO, not be hidden: the requirement is that
+// during `brainstorm` the rows do not exist, in the database and in every member's replica, and a
+// client-side or query-level phase filter is exactly what it forbids. The delete runs through the
+// shared transaction, so it replicates like any other write; `retro_ai_proposal.draft_id` cascades.
+//
+// The run's estimated cost is carried onto the team FIRST. The money was spent whether or not the
+// row survives, and `getWorkspaceAiSpendUsd` sums live rows — so deleting one would take its cost
+// back out of the total and the cap would under-fire on the very team that just spent twice.
+async function discardRetroAiDraft(tx: Transaction, retroId: string): Promise<void> {
+  const draft = (await tx.run(zql.retro_ai_draft.where('retroId', retroId).one())) as
+    | { id: string; teamId: string; status: string; estimatedCostUsd?: number | null }
+    | undefined
+  if (draft === undefined) return
+  if (draft.status === 'ready' && draft.estimatedCostUsd != null) {
+    await recordRetiredAiSpend(serverDb(tx), draft.teamId, draft.estimatedCostUsd)
+  }
+  await tx.mutate.retro_ai_draft.delete({ id: draft.id })
 }
 
 // Every case this leaves to the shared mutator (no caller, no card, no retro) is one the shared
@@ -775,6 +809,10 @@ export function createServerMutators() {
         await mutators.retro.setPhase.fn({ tx, args, ctx })
         if (tx.location !== 'server') return
         if (before === undefined) return
+        if (before.phase === 'group' && args.to === 'brainstorm') {
+          await discardRetroAiDraft(tx, args.id)
+          return
+        }
         if (before.phase !== 'brainstorm' || args.to !== 'group') return
         await publishRetroDrafts(
           tx,

@@ -11,17 +11,24 @@ import type { RetroAiDraftRow, RetroAiProposalRow } from '@/retro/retro-ai-panel
 // wire name — a `.one()` query hands back a row, the others an array, exactly as zero-cache does.
 const harness = vi.hoisted(() => ({
   rows: {} as Record<string, unknown>,
+  // Every query the render actually asked zero-cache for. An opted-out team must ask for none.
+  requested: [] as string[],
 }))
 
 vi.mock('@rocicorp/zero/react', () => ({
   useQuery: (request: unknown) => {
     const name = (request as { query: { queryName: string } }).query.queryName
+    harness.requested.push(name)
     // A missing `.one()` row is `undefined`, not `[]` — the absence case has to be the real absence.
     return [name in harness.rows ? harness.rows[name] : [], { type: 'complete' }]
   },
 }))
 
-import { RetroAiPanel } from '@/retro/retro-ai-panel'
+import { RETRO_AI_PENDING_VISIBLE_MS, RetroAiPanel } from '@/retro/retro-ai-panel'
+
+function subscribed(): string[] {
+  return [...new Set(harness.requested)]
+}
 
 const ISSUES_QUERY = 'issues.byTeam'
 
@@ -82,10 +89,20 @@ function proposal(overrides: Partial<RetroAiProposalRow> = {}): RetroAiProposalR
   }
 }
 
+// A draft row as the reveal writes one: `createdAt` is the stamp the in-progress line is bounded by,
+// so a test that wants "in progress" has to hand back a row that really is fresh.
+function draftRow(status: RetroAiDraftRow['status'], createdAt = Date.now()): RetroAiDraftRow {
+  return { status, createdAt }
+}
+
 function mount(
   draft: RetroAiDraftRow | undefined,
   proposals: readonly RetroAiProposalRow[],
-  handlers: { onOpenIssue?: (id: string) => void; onOpenMetric?: (ref: unknown) => void } = {},
+  handlers: {
+    onOpenIssue?: (id: string) => void
+    onOpenMetric?: (ref: unknown) => void
+    aiRetroDraftSince?: number | null
+  } = {},
 ) {
   harness.rows = {
     [RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME]: draft,
@@ -96,6 +113,7 @@ function mount(
     <RetroAiPanel
       retroId="retro-1"
       teamId="team-1"
+      aiRetroDraftSince={handlers.aiRetroDraftSince === undefined ? 1 : handlers.aiRetroDraftSince}
       seed={SEED}
       onOpenIssue={handlers.onOpenIssue ?? (() => {})}
       onOpenMetric={handlers.onOpenMetric ?? (() => {})}
@@ -105,6 +123,7 @@ function mount(
 
 beforeEach(() => {
   harness.rows = {}
+  harness.requested = []
 })
 
 // The absence cases are the substrate's requirement, not a nicety: the change-10 seed panel is the
@@ -116,17 +135,26 @@ test('nothing renders when there is no draft row at all', () => {
 })
 
 test.each(['ai_off', 'failed'] as const)('nothing renders for a %s draft', (status) => {
-  mount({ status }, [proposal()])
+  mount(draftRow(status), [proposal()])
   expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
 })
 
 test('nothing renders for a ready draft whose proposals were all dropped', () => {
-  mount({ status: 'ready' }, [])
+  mount(draftRow('ready'), [])
   expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
 })
 
+// The team's own consent, read off the synced `team` row: with it null the component that holds the
+// two artifact queries is never mounted, so an opted-out team subscribes to nothing extra.
+test('a team that never opted in renders nothing and subscribes to nothing', () => {
+  mount(draftRow('ready'), [proposal()], { aiRetroDraftSince: null })
+
+  expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+  expect(subscribed()).toEqual([])
+})
+
 test('pending renders one quiet line and claims nothing', () => {
-  mount({ status: 'pending' }, [])
+  mount(draftRow('pending'), [])
 
   const pending = screen.getByTestId('retro-ai-pending')
   expect(pending.textContent).toContain('Drafting')
@@ -135,10 +163,51 @@ test('pending renders one quiet line and claims nothing', () => {
   expect(screen.queryByTestId('retro-ai-unratified')).toBeNull()
 })
 
+// With the tail switched off instance-wide (`AI_RETRO_DRAFT=false`) the reveal still stamps a row and
+// nothing ever completes it. A "drafting…" line that never resolves is the one state the docs promise
+// cannot happen; past the window the section stands down and leaves the seed panel as the fallback.
+test('a pending row nothing ever completes stops claiming to be in progress', () => {
+  mount(draftRow('pending', Date.now() - RETRO_AI_PENDING_VISIBLE_MS - 1_000), [])
+
+  expect(screen.queryByTestId('retro-ai-pending')).toBeNull()
+  expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+})
+
+// The live region is one node across both states, so the transition is spoken. Mounting a fresh
+// `role="status"` element together with its text announces nothing at all.
+test('the drafting state and its resolution are both announced', () => {
+  const { rerender } = mount(draftRow('pending'), [])
+  expect(screen.getByTestId('retro-ai-announcement').textContent).toContain('Drafting')
+
+  harness.rows = {
+    [RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME]: draftRow('ready'),
+    [RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME]: [
+      proposal({ id: 'w-1' }),
+      proposal({ id: 'l-1', category: 'loss' }),
+      proposal({ id: 'l-2', category: 'loss', rank: 1 }),
+    ],
+    [ISSUES_QUERY]: [ISSUE],
+  }
+  rerender(
+    <RetroAiPanel
+      retroId="retro-1"
+      teamId="team-1"
+      aiRetroDraftSince={1}
+      seed={SEED}
+      onOpenIssue={() => {}}
+      onOpenMetric={() => {}}
+    />,
+  )
+
+  const region = screen.getByTestId('retro-ai-announcement')
+  expect(region).toHaveAttribute('aria-live', 'polite')
+  expect(region.textContent).toBe('AI draft ready: 1 win, 2 losses.')
+})
+
 // The stored order is `category` (alphabetical) then `rank`; the reader wants Wins, Losses,
 // Improvements. The panel imposes that order rather than inheriting the query's.
 test('a ready draft renders its categories in canonical order, labelled as unratified', () => {
-  mount({ status: 'ready' }, [
+  mount(draftRow('ready'), [
     proposal({ id: 'i-1', category: 'improvement', summary: 'Start reviews earlier.' }),
     proposal({ id: 'l-1', category: 'loss', summary: 'Two issues carried a second time.' }),
     proposal({ id: 'w-1', category: 'win', summary: 'Everything in scope shipped.' }),
@@ -157,7 +226,7 @@ test('a ready draft renders its categories in canonical order, labelled as unrat
 })
 
 test('proposals within a category follow rank, not insertion order', () => {
-  mount({ status: 'ready' }, [
+  mount(draftRow('ready'), [
     proposal({ id: 'w-2', rank: 1, summary: 'Second win.' }),
     proposal({ id: 'w-1', rank: 0, summary: 'First win.' }),
   ])
@@ -171,7 +240,7 @@ test('proposals within a category follow rank, not insertion order', () => {
 // The load-bearing one. The model points at a metric KEY; the number and the delta come from the
 // client seed. A number the model typed into the ref label is never displayed.
 test('a metric chip renders the seed value and delta, never the number on the row', () => {
-  mount({ status: 'ready' }, [
+  mount(draftRow('ready'), [
     proposal({
       refs: [
         { kind: 'widget', id: 'time_to_first_review', label: 'review wait 999h, up 500h' },
@@ -195,7 +264,7 @@ test('a metric chip renders the seed value and delta, never the number on the ro
 })
 
 test('every evidence chip is a focusable control, in the order the proposal cites them', () => {
-  mount({ status: 'ready' }, [
+  mount(draftRow('ready'), [
     proposal({
       refs: [
         { kind: 'issue', id: 'issue-1' },
@@ -220,7 +289,7 @@ test('every evidence chip is a focusable control, in the order the proposal cite
 })
 
 test('a reference the client cannot name from its own rows renders no chip', () => {
-  mount({ status: 'ready' }, [
+  mount(draftRow('ready'), [
     proposal({
       refs: [
         { kind: 'issue', id: 'issue-not-synced', label: 'trust me' },
@@ -239,7 +308,7 @@ test('activating a chip opens the entity or reveals the metric tile', () => {
   const onOpenIssue = vi.fn()
   const onOpenMetric = vi.fn()
   mount(
-    { status: 'ready' },
+    draftRow('ready'),
     [
       proposal({
         refs: [
@@ -265,7 +334,7 @@ test('activating a chip opens the entity or reveals the metric tile', () => {
 // Team-level only, all the way to the DOM: there is no identity dimension on a proposal row, so
 // there is nothing per-person to render — asserted rather than assumed.
 test('no avatar, no image and no per-person attribution anywhere in the section', () => {
-  mount({ status: 'ready' }, [proposal(), proposal({ id: 'w-2', rank: 1, category: 'loss' })])
+  mount(draftRow('ready'), [proposal(), proposal({ id: 'w-2', rank: 1, category: 'loss' })])
 
   const panel = screen.getByTestId('retro-ai-panel')
   expect(panel.querySelector('img')).toBeNull()

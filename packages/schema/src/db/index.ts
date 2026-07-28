@@ -77,6 +77,7 @@ export {
   cyclesNeedingDigest,
   getCycleDigestByCycle,
   getWorkspaceAiSpendUsd,
+  recordRetiredAiSpend,
 } from './cycle-digest.js'
 export type { PullRequestSource } from './cycle-facts.js'
 export { cycleFactsForTeam, pullRequestSourcesForCycleFacts } from './cycle-facts.js'

@@ -12,7 +12,7 @@ import {
 import { Badge } from '@yapm/ui/components/badge'
 import { cn } from '@yapm/ui/lib/utils'
 import { ChartNoAxesColumnIcon, ExternalLinkIcon, SparklesIcon } from 'lucide-react'
-import { type ReactNode, useMemo } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import {
   buildEvidenceIndex,
   type DigestIssueRow,
@@ -58,11 +58,17 @@ export interface RetroAiProposalRow {
 
 export interface RetroAiDraftRow {
   readonly status: AiArtifactStatus
+  // When the reveal stamped the row. The in-progress line is bounded by it (see below).
+  readonly createdAt: number
 }
 
 export interface RetroAiPanelProps {
   retroId: string
   teamId: string
+  // The team's own opt-in, off the `team` row every member already syncs. Null is off, and the panel
+  // then subscribes to NOTHING: a team without the capability issues no extra query, which is what
+  // "byte-identical to the retro that ships without this capability" has to mean.
+  aiRetroDraftSince: number | null
   // The same seed the panel above renders, so a cited metric key resolves to the identical number.
   seed: RetroSeed | null
   onOpenIssue: (issueId: string) => void
@@ -70,7 +76,22 @@ export interface RetroAiPanelProps {
   onOpenMetric: (ref: RetroSeedRef) => void
 }
 
-export function RetroAiPanel({
+// How long a `pending` row is allowed to say "drafting…". The tail re-arms every few seconds, so a
+// run that is genuinely in flight resolves far inside this; past it the row is not in progress, it is
+// stuck — the tail is switched off instance-wide (`AI_RETRO_DRAFT=false`), or its chain and watchdog
+// are both down. A spinner nothing will ever replace is worse than no spinner: the seed panel is the
+// documented fallback and it is already on screen.
+export const RETRO_AI_PENDING_VISIBLE_MS = 120_000
+
+// The opt-in gate, and the reason it is a wrapper rather than an `if` inside the body: hooks cannot
+// be skipped, so the only way to not issue the two artifact queries is to not mount the component
+// that holds them.
+export function RetroAiPanel(props: RetroAiPanelProps) {
+  if (props.aiRetroDraftSince === null) return null
+  return <OptedInRetroAiPanel {...props} />
+}
+
+function OptedInRetroAiPanel({
   retroId,
   teamId,
   seed,
@@ -91,12 +112,26 @@ export function RetroAiPanel({
   )
 
   const draft = (draftRow ?? null) as RetroAiDraftRow | null
+  const pendingSince = draft?.status === 'pending' ? draft.createdAt : null
+
+  // Nothing here polls. One timer, armed only while a `pending` row is still inside its window, so
+  // the line disappears on its own for a reader who was watching when it was stamped.
+  const [clock, setClock] = useState(() => Date.now())
+  useEffect(() => {
+    if (pendingSince === null) return
+    const remaining = pendingSince + RETRO_AI_PENDING_VISIBLE_MS - Date.now()
+    if (remaining <= 0) return
+    const handle = window.setTimeout(() => setClock(Date.now()), remaining)
+    return () => window.clearTimeout(handle)
+  }, [pendingSince])
+
   if (draft === null) return null
 
   if (draft.status === 'pending') {
+    if (clock - draft.createdAt >= RETRO_AI_PENDING_VISIBLE_MS) return null
     return (
-      <AiSection>
-        <p className="mt-2 text-[11.5px] text-text-2" role="status" data-testid="retro-ai-pending">
+      <AiSection announcement="Drafting wins, losses and improvements from this cycle's work.">
+        <p className="mt-2 text-[11.5px] text-text-2" data-testid="retro-ai-pending">
           Drafting wins, losses and improvements from this cycle's work…
         </p>
       </AiSection>
@@ -106,7 +141,7 @@ export function RetroAiPanel({
   if (draft.status !== 'ready' || groups.length === 0) return null
 
   return (
-    <AiSection unratified>
+    <AiSection unratified announcement={readyAnnouncement(groups)}>
       <div className="mt-3 flex flex-col gap-3" data-testid="retro-ai-groups">
         {groups.map((group) => (
           <section
@@ -153,11 +188,18 @@ export function RetroAiPanel({
 
 // The section chrome, shared by the drafting line and the drafted proposals so the surface does not
 // move under the reader when the background pass finishes.
+//
+// The live region is part of that chrome rather than of either branch, and that is the point: it is
+// the SAME node across the transition, so a screen reader is told "drafting…" when the section
+// appears and told what arrived when the proposals land. A `role="status"` element inserted together
+// with its own text announces neither — the region has to exist before the text changes.
 function AiSection({
   unratified = false,
+  announcement,
   children,
 }: {
   unratified?: boolean
+  announcement: string
   children: ReactNode
 }) {
   return (
@@ -166,6 +208,9 @@ function AiSection({
       aria-labelledby="retro-ai-heading"
       data-testid="retro-ai-panel"
     >
+      <p className="sr-only" role="status" aria-live="polite" data-testid="retro-ai-announcement">
+        {announcement}
+      </p>
       <div className="flex flex-wrap items-center gap-2">
         <SparklesIcon className="size-4 text-text-2" aria-hidden="true" />
         <h2 id="retro-ai-heading" className="text-[13px] font-semibold text-text-1">
@@ -180,6 +225,24 @@ function AiSection({
       {children}
     </section>
   )
+}
+
+// What the reader is told when the background pass finishes: the counts, in the order they are drawn.
+// Nothing model-authored is spoken — a summary read aloud out of context would be exactly the
+// unratified claim the section spends a line of copy disclaiming.
+const CATEGORY_UNIT: Record<RetroProposalCategory, readonly [string, string]> = {
+  win: ['win', 'wins'],
+  loss: ['loss', 'losses'],
+  improvement: ['improvement', 'improvements'],
+}
+
+function readyAnnouncement(groups: readonly CategoryGroup[]): string {
+  const counted = groups.map((group) => {
+    const [one, many] = CATEGORY_UNIT[group.category]
+    const count = group.proposals.length
+    return `${count} ${count === 1 ? one : many}`
+  })
+  return `AI draft ready: ${counted.join(', ')}.`
 }
 
 interface CategoryGroup {

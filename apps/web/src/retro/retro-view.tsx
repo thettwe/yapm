@@ -256,6 +256,7 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
     <RetroShell
       teamId={teamId}
       teamKey={team.key}
+      aiRetroDraftSince={team.aiRetroDraftSince ?? null}
       retro={retro}
       columns={columns}
       cards={cards}
@@ -280,6 +281,9 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
 interface RetroShellProps {
   teamId: string
   teamKey: string
+  // Read off the synced team row, threaded down rather than re-queried, so the AI section is not
+  // mounted at all for a team that never opted in.
+  aiRetroDraftSince: number | null
   retro: RetroRowData
   columns: readonly RetroColumnData[]
   cards: readonly RetroCardData[]
@@ -415,6 +419,7 @@ interface RetroSurfaceProps extends RetroShellProps {
 function RetroSurface({
   teamId,
   teamKey,
+  aiRetroDraftSince,
   retro,
   columns,
   cards,
@@ -647,6 +652,7 @@ function RetroSurface({
       <RetroAiPanel
         retroId={retro.id}
         teamId={teamId}
+        aiRetroDraftSince={aiRetroDraftSince}
         seed={seed}
         onOpenIssue={openIssue}
         onOpenMetric={onOpenEvidence}

@@ -12,6 +12,11 @@ import type { CycleDigest, DB } from './types.js'
 // the limit — silently under-firing, the worst kind of cap. `scripts/check-boundaries.mjs` rule 4
 // fails a second `sum('estimated_cost_usd')` anywhere else under `packages/schema/src`. Adding a
 // third artifact table is one entry here; forgetting one is a billing surprise on someone else's key.
+//
+// The third arm is not an artifact at all: an artifact row can be DELETED while the money it cost is
+// gone for good — a retro AI draft is discarded when a facilitator steps back to `brainstorm`, and a
+// deleted row would take its cost out of this total. `team.ai_retired_spend_usd` is where that spend
+// is carried instead (see `recordRetiredAiSpend`), so the cap never forgets a run that happened.
 export async function getWorkspaceAiSpendUsd(db: Kysely<DB>, workspaceId: string): Promise<number> {
   const digests = db
     .selectFrom('cycle_digest')
@@ -27,11 +32,35 @@ export async function getWorkspaceAiSpendUsd(db: Kysely<DB>, workspaceId: string
     .where('team.workspace_id', '=', workspaceId)
     .where('retro_ai_draft.status', '=', 'ready')
 
+  const retired = db
+    .selectFrom('team')
+    .select(sql<number | null>`team.ai_retired_spend_usd`.as('cost'))
+    .where('team.workspace_id', '=', workspaceId)
+
   const row = await db
-    .selectFrom(digests.unionAll(retroDrafts).as('artifact'))
+    .selectFrom(digests.unionAll(retroDrafts).unionAll(retired).as('artifact'))
     .select((eb) => eb.fn.coalesce(eb.fn.sum('artifact.cost'), sql<number>`0`).as('total'))
     .executeTakeFirst()
   return Number(row?.total ?? 0)
+}
+
+// The one writer of that accumulator. Called when an artifact row carrying a real, `ready` cost is
+// about to be deleted, so the money survives the row. Monotonic on purpose: it is never decremented
+// and never reset, because nothing refunds a provider call.
+//
+// It deliberately does not touch `team.updated_at` — this is billing accounting, not team state, and
+// bumping the row would push a sync tick to every client every time somebody rewinds a retro.
+export async function recordRetiredAiSpend(
+  db: Kysely<DB>,
+  teamId: string,
+  costUsd: number,
+): Promise<void> {
+  if (!Number.isFinite(costUsd) || costUsd <= 0) return
+  await db
+    .updateTable('team')
+    .set({ ai_retired_spend_usd: sql<number>`team.ai_retired_spend_usd + ${costUsd}` })
+    .where('id', '=', teamId)
+    .execute()
 }
 
 // Server read of a cycle's digest row (the clients read it via the `digests` synced query; this is

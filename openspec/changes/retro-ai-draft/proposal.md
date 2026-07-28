@@ -143,7 +143,9 @@ validator drops any output naming a member), and **#2 Opinionated defaults, real
   timestamptz null`; `retro_ai_draft` (unique on `retro_id`, cascade from `retro`, column types
   mirroring `cycle_digest` exactly, plus a `claimed_at timestamptz` the tail claims on so two app
   replicas cannot double-spend a BYO key); `retro_ai_proposal` (cascade from `retro_ai_draft`,
-  `refs jsonb`, CHECK on `category` and `confidence`). New `zero/ai-content.ts` (the shared
+  `refs jsonb`, CHECK on `category` and `confidence`); and **`0019_ai_retired_spend`** —
+  `team.ai_retired_spend_usd double precision not null default 0`, the accumulator that keeps a
+  discarded run's cost inside the workspace spend total (design §I19). New `zero/ai-content.ts` (the shared
   walkers), `zero/retro/ai-draft.ts` (the content schema + validators + the server-only write
   helpers), `db/retro-facts.ts` (`retroFactsForCycle`). Modified: `zero/digest.ts` (adapters),
   `zero/context.ts` (`AI_ARTIFACT_STATUSES`), `zero/schema.ts` (+2 tables, +1 column, +2

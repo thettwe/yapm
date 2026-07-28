@@ -915,3 +915,81 @@ Schema grew by 5 — `zero/retro/ai-artifact-absence.test.ts` (I16). The 173 and
 pg-gated integration suites: no `DATABASE_URL` in this pass, and CI runs them on the push. The full
 `turbo build`, Playwright and the compose smoke test were deliberately not run here (PROCESS.md §4 —
 CI is the gate of record and duplicating an in-flight run is what that section removed).
+
+### I18 — One draft per retro, and the step back deletes it (review round 1)
+
+Two halves of one hole, found in review. The reveal branch upserted unconditionally, so any second
+run of it reset a finished draft to `pending` — NULLing provider, model, token counts and
+`estimated_cost_usd`. And the only way to reach a second run is the legal single step back from
+`group` to `brainstorm`, which left the drafted section on screen while everybody wrote cards again:
+exactly the artifact-during-`brainstorm` state D1 chose lazy generation to make impossible, and the
+one the spec says SHALL NOT exist.
+
+Fixed as one shape rather than two patches:
+
+- `stampRetroAiDraft` reads the retro's row first and **returns having written nothing** when one
+  exists. One draft per retro, produced once — the same reason this release refuses a regenerate
+  button.
+- The server `setPhase` override gains the reverse case: `group → brainstorm` **deletes** the draft
+  through the shared transaction, and `retro_ai_proposal.draft_id` cascades. No client-side guard and
+  no query-level phase filter, both of which the requirement forbids. The next forward advance finds
+  no row and stamps a fresh `pending` one.
+
+### I19 — `team.ai_retired_spend_usd`, because a deleted artifact must not refund itself
+
+The delete above opened a second hole immediately: `getWorkspaceAiSpendUsd` sums the cost of LIVE
+`ready` artifacts, so deleting a draft takes its cost back out of the workspace total — and the team
+that just stepped back is about to spend a second time on the same retro. A cap that forgets money is
+the silent under-firing `cycle-digest.ts` already warns about in a comment.
+
+`0019_ai_retired_spend` adds `team.ai_retired_spend_usd double precision not null default 0`: a
+monotonic per-team accumulator, written only when an artifact carrying a real `ready` cost is about
+to be deleted, and read as a third arm of the one spend union. It is deliberately absent from the
+Zero schema (allowlisted in the drift test beside `retro_ai_draft.claimed_at`) — it is billing
+accounting rather than team state, and syncing it would push a team-row update to every client every
+time a facilitator rewinds a retro. Writing it does not touch `team.updated_at` for the same reason.
+
+A ledger table was the alternative and was not worth a fourth AI table: nothing reads per-run history,
+and the number the cap needs is a single sum per workspace. It also takes migration **0019**, so
+change 19's migration is now `0020_retro_ratification` (ROADMAP and SCOPE updated).
+
+**Residual, stated rather than hidden.** A worker that claimed a row, called the provider, and returns
+while the facilitator has stepped back in the meantime will write its result into a row that no longer
+exists — `upsertRetroAiDraft` inserts, so a `ready` artifact reappears for a retro back in
+`brainstorm`, until the next advance (which leaves it alone). The window is the length of one provider
+call, the money is still recorded, and closing it means making a completion never insert — which would
+change the semantics every completion test in `apps/server` depends on. Left as it is, deliberately.
+
+### I20 — The in-progress line is bounded by the row's own `createdAt`
+
+With `AI_RETRO_DRAFT=false` an opted-in team's reveal still stamps a `pending` row and nothing ever
+completes it, so the panel said "Drafting…" forever — while `.env.example` and the setup page both
+described that configuration as harmless. The row already carries `createdAt`, so the line renders
+only inside `RETRO_AI_PENDING_VISIBLE_MS` (two minutes, far longer than a real run and far shorter
+than a stuck one) and otherwise renders nothing, leaving the seed panel as the documented fallback.
+One `setTimeout`, armed only while a fresh `pending` row is on screen, so the line also disappears
+under a reader who was watching. Both docs now say what actually happens.
+
+Threading the instance flag into `createServerMutators` was the alternative. It would stop the row
+being written at all, but it also drops the documented "rows drain if you turn the tail back on"
+property, and it leaves the same unbounded line whenever the tail is merely down rather than off.
+
+### I21 — The gate, the live region, and the drafted section in a real browser
+
+Three smaller review findings, all in the surface:
+
+- **`RetroAiPanel` is gated on `team.aiRetroDraftSince`.** It was mounted unconditionally and
+  subscribed both artifact queries before knowing whether the team had opted in — two extra synced
+  queries for a team with the capability off, which "byte-identical" cannot mean. Hooks cannot be
+  skipped, so the gate is a wrapper component: the opted-out case returns before the component that
+  holds the queries is mounted. `retro-view.tsx` threads the column down; nothing new is queried.
+- **One persistent `aria-live` region.** The old `role="status"` node was inserted together with its
+  own text and then unmounted when the proposals arrived, so a screen-reader user was told nothing at
+  either step. The region now lives in the section chrome, present in both branches, and its text
+  changes — the pattern the AI settings page already uses.
+- **A third e2e case.** Both existing cases assert the section is ABSENT, so the signature UI had
+  never rendered in a browser. `seedRetroAiDraft` (mirroring `seedCycleDigest`) seeds a `ready` draft
+  citing a real issue id and the always-present `total` metric key; the case tabs in from
+  `retro-seed-toggle` with no pointer, opens the issue from its chip, collapses the seed panel and
+  activates the metric chip to prove the panel is revealed with that tile focused, then runs the
+  three presets × light/dark loop.

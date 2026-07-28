@@ -51,6 +51,51 @@ model id from your provider (a cheap, fast model is a good default — the cycle
 summarize-and-structure task, not a reasoning marathon). Pick a workspace **default provider** to
 choose which configured provider runs.
 
+## Product areas (optional)
+
+The [cycle digest](/features/cycle-digest/) can describe **where** work landed — by product area,
+not by file. That needs one thing from you: an ordered map from repository path prefixes to area
+labels, in *Settings → AI → Product areas*. Each row is:
+
+| Field | Meaning |
+|---|---|
+| **Path prefix** | A literal path prefix, e.g. `apps/server/src/billing/`. No globs, no regex — a prefix is what a directory tree needs, and a regex in a form field is a denial-of-service surface. |
+| **Area** | The label the digest uses, e.g. `Billing`. Reuse a label across several prefixes freely. |
+| **Sensitive** | The digest reports when the cycle touched this area. It reports; it does not judge. |
+| **Internal** | Work landing *only* in internal areas is collapsed into one "N internal improvements" line. Good for tooling, CI config, and dependency chores. |
+
+**Order is semantic: the first matching prefix wins.** Put the narrow rule above the broad one —
+`apps/server/src/billing/ → Billing` before `apps/server/ → Backend`, or every billing change is
+reported as generic backend work. The editor's move-up / move-down buttons are keyboard-operable for
+exactly this reason.
+
+A path no rule matches is labeled **`unmapped`**, which is a reserved label — yapm never falls
+through to the raw path. Don't use `unmapped` as an area name of your own.
+
+**An empty map is the off switch.** With no rules, yapm makes **zero** extra GitHub calls and the
+digest is byte-for-byte what it was before. You do not opt out; you opt in.
+
+### The GitHub rate budget this spends
+
+Area labels come from GitHub's changed-file metadata, one request per pull request in the closing
+cycle. That draws on the same per-installation primary rate budget (**5,000 requests/hour**) as the
+connector's reconciliation sweep, so the draw is bounded three ways:
+
+1. **Zero when the map is empty** — no rules, no requests.
+2. **At most 50 pull requests per cycle.** Past that the digest says its area grouping is partial
+   rather than pretending to be exhaustive. The cap is a constant, not an environment variable: it is
+   a safety bound on a shared budget, not a preference.
+3. **A remaining-quota floor of 500.** If the installation's reported remaining quota drops below
+   that mid-run, enrichment stops for the rest of the run. Reconciliation is the connector's
+   load-bearing job and a digest must never be the thing that starves it.
+
+Requests are made **serially**, per GitHub's own guidance on secondary rate limits. If GitHub is slow
+or erroring, the digest still completes — un-enriched, never failed.
+
+Nothing from the response is persisted: no column, no cache table. yapm reads the metadata, converts
+paths to labels, and drops it. **Diff content is never read** — see
+[what the model sees](/features/cycle-digest/#what-the-model-sees-and-what-it-does-not).
+
 ## Spend and estimated cost
 
 Because it is your key, **you pay for inference.** yapm surfaces an **estimated** per-run cost and
@@ -65,7 +110,9 @@ The BYO-key model means your work-graph data is sent only to **your** provider u
 yapm never proxies it through a hosted service. Keys are encrypted at rest, decrypted only in
 server memory for the duration of one call, and never logged. The AI is only ever fed **team-level
 aggregates** — no per-person data reaches the model — and it has no outbound network tools, so it
-cannot exfiltrate what it reads.
+cannot exfiltrate what it reads. **Your source code never reaches a provider:** yapm reads
+changed-file metadata to derive product-area labels and never reads a diff, and the labels — not the
+paths — are what the model is given.
 
 ## What "AI off" looks like
 

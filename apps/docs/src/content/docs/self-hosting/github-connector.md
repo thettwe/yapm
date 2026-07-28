@@ -53,6 +53,28 @@ that opt in, the issue's status) and guarantees yapm never modifies your GitHub.
 Issues + Pull requests to **Read & write** if you later want yapm to post back-reference comments on
 PRs — that forces installers to re-approve.
 
+### Changed-file metadata (no extra permission)
+
+If you configure the cycle digest's [product-area map](/self-hosting/ai-setup/), yapm additionally
+reads **which files** a merged pull request touched — the filename, the change status, and the number
+of changed lines — to convert those paths into product-area labels.
+
+That read is `GET /repos/{owner}/{repo}/pulls/{n}/files`, which GitHub serves under the
+**Pull requests: Read-only** permission already in the table above. **No new permission, and no
+re-consent from installers.** It is a read; yapm still never modifies your GitHub.
+
+What yapm does with the response is as important as the permission:
+
+- **Diff content is never read.** GitHub returns a `patch` field per file whether or not it is asked
+  for, plus `blob_url`, `raw_url` and `contents_url`. yapm drops all four the moment the response
+  arrives, before any other part of the system can see them. A test asserts this against a mock that
+  *does* return a patch.
+- **Nothing is persisted.** No file list, no path, no size, no cache table — the metadata exists in
+  memory for the length of one digest run and is discarded.
+- **Zero requests until you opt in.** With no area map configured, this read never happens. See
+  [the rate budget](/self-hosting/ai-setup/#the-github-rate-budget-this-spends) for the caps that
+  bound it when you do.
+
 ## 4. Subscribe to events
 
 Check exactly: **Pull request**, **Push**, **Check run**, **Check suite**, **Status**,

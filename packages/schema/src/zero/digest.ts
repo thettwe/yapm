@@ -187,7 +187,10 @@ const CODE_CALL_SHAPE = /\b[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*\(/
 const ALL_DIGITS = /^\d+$/
 
 function isPathToken(token: string): boolean {
-  const trimmed = token.replace(/^[^\w./-]+/, '').replace(/[^\w./-]+$/, '')
+  // Strip surrounding punctuation, INCLUDING a trailing dot: a path never ends in one, and leaving
+  // it attached turns a sentence-final date (`2026/07/28.`) into a non-numeric final segment and so
+  // into a false positive.
+  const trimmed = token.replace(/^[^\w/]+/, '').replace(/[^\w/]+$/, '')
   if (!trimmed.includes('/')) return false
   const segments = trimmed.split('/')
   // `24/7`, `14/30`, `2026/07/28` — numeric pairs and dates are never a path, whatever their arity.

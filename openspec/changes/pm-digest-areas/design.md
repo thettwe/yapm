@@ -351,3 +351,48 @@ spend-cap edit from clobbering it.
 **`reconcile.test.ts`'s client mock gained a `listFiles` stub.** `pulls.listFiles` is a required
 member of `GithubRestClient`, so the existing structurally-typed mock no longer compiled. The stub
 resolves an empty list and is never called by reconciliation.
+
+**The path-token trim now strips a trailing dot (a real defect the allowlist test found).** Task 6.3
+requires `2026/07/28` to survive the disclosure validator. It did not: the token trim kept `.` in its
+allowed set so that an extension mid-token stayed intact, which left a sentence-final date as
+`2026/07/28.` — three segments, the last non-numeric, so the ≥2-slash rule fired. The trim now keeps
+only word characters and `/` at the edges, so surrounding punctuation of any kind is stripped while
+interior dots (the extension rule's whole job) are untouched. This is the case that justifies writing
+the allowlist as an assertion rather than as a comment.
+
+**`enrichCycleFactsWithAreas` is unit-tested with `vi.mock('@yapm/schema/db')`, not a live database.**
+The three behaviours that matter most — the 50-call cap, the mid-run rate-limit stop, and the
+degrade-to-un-enriched failure path — cannot be provoked by writing rows; they need a harness that
+controls what the provider returns and when. This follows the precedent `apps/server/src/jobs/
+search-tail.test.ts` set for exactly the same reason. The two things that genuinely need Postgres get
+their own gated files: `packages/schema/src/db/cycle-facts.pg.test.ts` proves
+`pullRequestSourcesForCycleFacts` returns only its projected fields and only the team's own rows, and
+`packages/schema/src/db/ai-config.pg.test.ts` proves the map round-trips through
+`connector_config.config` (reading the raw jsonb column, and asserting no `repo_mapping` row was
+created) and is refused for a non-admin.
+
+**The falsifiable check runs the REAL seam, not a stubbed reader.** `apps/server/src/ai/areas.test.ts`
+builds its `ChangedFilesReader` from the actual `listChangedFiles` over an octokit-shaped mock whose
+response carries `patch`, `blob_url`, `raw_url`, `contents_url` and `sha`. A stubbed reader would have
+tested the enrichment loop against a type that cannot hold patch content in the first place — which
+proves nothing. It then asserts one chain end to end: the patch enters, `apps/server/src/billing/
+refund.ts` becomes `Billing`, the captured `{system, input}` contains `Billing` and none of the patch
+text / the path / the bare `.ts`, and an item the model echoed back naming `src/auth/session.ts` is
+absent from the stored row.
+
+**`pullRequestSourcesForCycleFacts` is asserted at five keys, not four.** Task 6.7 says "four
+columns", meaning the four `pull_request` columns; the joined `external_installation_id` makes five
+fields on the returned object. The test asserts the exact five-key set, which is the property that
+matters (no title, no `head_sha`, no identity column can arrive by accident).
+
+**No new docs page; three existing pages grew.** PROCESS.md §2 asks for the pages this change adds.
+This change adds no surface a reader would look for under a new title — it deepens the cycle digest,
+the AI setup guide and the GitHub connector guide — so all three were extended in place and the
+sidebar is unchanged. `.env.example` is deliberately untouched: the call cap and the rate-limit floor
+are safety bounds on a shared budget, not operator preferences, so they are constants.
+
+**`reference/connectors.md` gained §3.6.** The harvest had the rate-limit facts but nothing about
+`GET /pulls/{n}/files`, which is the endpoint this whole change rests on. The new section records the
+verified permission level, the 3000-file ceiling, the `per_page` maximum, the full Diff Entry field
+list, and the fact that GitHub documents no parameter suppressing `patch` — verified against
+docs.github.com on 2026-07-28, not recalled.

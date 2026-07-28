@@ -116,22 +116,22 @@ Ordered so the app runs after every task. Groups 1–5 are the build pass; 6 is 
 
 ## 6. Tests
 
-- [ ] 6.1 Unit (`packages/schema/src/zero/areas.test.ts`): first-match-wins ordering; case and
+- [x] 6.1 Unit (`packages/schema/src/zero/areas.test.ts`): first-match-wins ordering; case and
       leading-slash normalization; an unmatched path yields `unmapped` and never the raw path; an
       empty rule set yields `unmapped` for everything; every `changeSizeBand` boundary.
-- [ ] 6.2 Unit (`packages/schema/src/zero/cycle-facts.test.ts`, extended): the area aggregates,
+- [x] 6.2 Unit (`packages/schema/src/zero/cycle-facts.test.ts`, extended): the area aggregates,
       sensitive set, and internal-improvement count; internal-improvement issues remain in
       `facts.issues`; **a facts object built with no area input is deep-equal to the pre-change
       output** (the additivity guard `feat/retro-ai-draft` depends on).
-- [ ] 6.3 Unit (`packages/schema/src/zero/digest.test.ts`, extended): each of the four leak shapes
+- [x] 6.3 Unit (`packages/schema/src/zero/digest.test.ts`, extended): each of the four leak shapes
       drops its item; the headline blanks but clean items survive; every allowlisted form
       (`CI/CD`, `I/O`, `A/B`, `and/or`, `24/7`, `14/30`, `2026/07/28`) is retained; an emptied
       section is removed.
-- [ ] 6.4 Unit (`apps/server/src/connectors/github/files.test.ts`): **the mock returns `patch`,
+- [x] 6.4 Unit (`apps/server/src/connectors/github/files.test.ts`): **the mock returns `patch`,
       `blob_url`, `raw_url`, `contents_url`, `sha`, `additions`, `deletions`** — assert the
       projected value has exactly three keys and that a JSON serialization of the result contains
       none of the dropped values.
-- [ ] 6.5 **The falsifiable check** (`apps/server/src/ai/areas.test.ts`): mocked
+- [x] 6.5 **The falsifiable check** (`apps/server/src/ai/areas.test.ts`): mocked
       `pulls.listFiles` returns a file named `apps/server/src/billing/refund.ts` **with a `patch`
       field**; the area map is `apps/server/src/billing/ → Billing (sensitive)`; a mocked gateway
       captures its arguments and echoes back an item whose summary is
@@ -139,36 +139,36 @@ Ordered so the app runs after every task. Groups 1–5 are the build pass; 6 is 
       contains no patch text, no `refund.ts`, no `apps/server/src/billing`, no `.ts`; it does
       contain `Billing`; the stored digest content contains no item mentioning
       `src/auth/session.ts`; and no row anywhere records a filename.
-- [ ] 6.6 Unit (`apps/server/src/ai/areas.test.ts`): zero provider calls when the area map is
+- [x] 6.6 Unit (`apps/server/src/ai/areas.test.ts`): zero provider calls when the area map is
       empty; the call cap truncates deterministically and still produces a digest; a remaining
       quota below the floor stops enrichment mid-run; a throwing provider yields a `ready`
       un-enriched digest, never `failed`.
-- [ ] 6.7 Integration (`packages/schema/src/db/cycle-facts.pg.test.ts`, extended):
+- [x] 6.7 Integration (`packages/schema/src/db/cycle-facts.pg.test.ts`, extended):
       `pullRequestSourcesForCycleFacts` returns exactly the four columns for the team's PRs and
       nothing for another team's; `describe.skipIf(DATABASE_URL === undefined)`.
-- [ ] 6.8 Integration (`packages/schema/src/db/ai-config.pg.test.ts` or the existing AI-config pg
+- [x] 6.8 Integration (`packages/schema/src/db/ai-config.pg.test.ts` or the existing AI-config pg
       test): the area map round-trips through `connector_config.config`; updating the spend cap
       alone leaves it intact; a non-admin context is rejected.
-- [ ] 6.9 Per PROCESS.md §3's big-feature rule this change touches at most one of {synced
+- [x] 6.9 Per PROCESS.md §3's big-feature rule this change touches at most one of {synced
       entity/schema, mutator, permission surface, signature UI} — **no new Playwright e2e**.
       Confirm the existing e2e suite still passes unchanged.
-- [ ] 6.10 `pnpm turbo lint typecheck test build` green; `check-boundaries` green (no UI import in
+- [x] 6.10 `pnpm turbo lint typecheck test build` green; `check-boundaries` green (no UI import in
       `packages/schema`, no octokit import outside `apps/server/src/connectors`).
 
 ## 7. Documentation
 
-- [ ] 7.1 `apps/docs/src/content/docs/features/cycle-digest.md`: product areas, change-size bands,
+- [x] 7.1 `apps/docs/src/content/docs/features/cycle-digest.md`: product areas, change-size bands,
       sensitive-area flags, the "N internal improvements" collapse, and an explicit **what the
       model sees / does not see** section stating that patch content is never read.
-- [ ] 7.2 `apps/docs/src/content/docs/self-hosting/ai-setup.md`: configuring the product-area map
+- [x] 7.2 `apps/docs/src/content/docs/self-hosting/ai-setup.md`: configuring the product-area map
       (ordered prefixes, first match wins, `sensitive` and `internal`, the reserved `unmapped`
       label), and the GitHub rate-limit draw with its three bounds and the fact that an empty map
       costs nothing.
-- [ ] 7.3 `apps/docs/src/content/docs/self-hosting/github-connector.md`: the digest reads
+- [x] 7.3 `apps/docs/src/content/docs/self-hosting/github-connector.md`: the digest reads
       changed-file **metadata** under the already-required Pull requests: Read-only permission —
       no new permission, no re-consent, nothing persisted, patch content never read.
-- [ ] 7.4 `README.md` feature list; `ROADMAP.md` row 21 status **and** a note that the family was
+- [x] 7.4 `README.md` feature list; `ROADMAP.md` row 21 status **and** a note that the family was
       reordered (21 ships before 20, to the existing team-internal digest); `openspec/SCOPE-ai-features.md`
       records the reorder and why. State in the PR that `.env.example` is deliberately unchanged —
       the rate budget is a constant, not an operator knob.
-- [ ] 7.5 `pnpm --filter @yapm/docs build` passes and no root doc is left stale.
+- [x] 7.5 `pnpm --filter @yapm/docs build` passes and no root doc is left stale.

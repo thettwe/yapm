@@ -66,7 +66,12 @@ opening moves its issue to In Review, merging moves it to Done — forward only,
 or untriaged issue, off by default, and enabling it changes no existing issue · a **BYO-key AI
 foundation** (bring your own Anthropic / Gemini / OpenAI key, admin-configured, off until you
 enable it) whose first feature is a team-internal, evidence-linked **cycle digest** — pre-computed
-at cycle close, team-level and blameless, with a raw linked-evidence fallback when AI is off ·
+at cycle close, team-level and blameless, with a raw linked-evidence fallback when AI is off, and
+told in terms of **your product areas**: map path prefixes to area labels once and the digest groups
+the cycle by area, bands each change by size, flags the sensitive areas it touched, and collapses
+tooling churn into one "N internal improvements" line, because yapm converts paths into labels
+*before* the model runs and **never reads a diff** — the file list is fetched under the GitHub
+permission you already granted, used, and thrown away ·
 a **data-seeded retrospective**, opened automatically when a cycle closes, whose gather-data phase
 is already filled in from the team's own cycles (and from PR/CI data when a connector is
 configured), with **anonymity guaranteed at the storage layer** — the card→author binding lives in

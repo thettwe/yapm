@@ -1050,3 +1050,53 @@ is silent and it is not a surface — asserted both ways: the region exists and 
 anything to announce, and an **opted-out** team still renders no region at all, because `RetroAiPanel`
 returns before mounting the component that holds it. The docs' claim that "both transitions are
 announced through one live region" is now literally true rather than half true, so it stands as written.
+
+### I24 — The e2e's second case was navigating to a page the Cycles link does not exist on
+
+The one CI failure on this PR. `retro-ai.spec.ts`'s "opted in with nothing configured" case was the
+only spec in the file that had never executed anywhere — written in the Close pass, first run in CI —
+and it timed out at 180s inside `completedCycleWithRetro`, waiting on `getByRole('link', 'Cycles')`.
+
+**A test-authoring defect, not a product one, and the page snapshot says so.** The other two cases
+enter the helper straight out of `createTeam`, which leaves the browser on the team's *Issues* view.
+This case detours through `/settings/ai` to flip the toggle through the real admin surface, then
+returns via `page.goto('/')` and the workspace root's team link — which points at
+`/teams/$teamId`, the team **detail** page. That page renders `TeamDetail`'s two buttons (Issues,
+Board) and no `ViewSwitch`, so there is no Cycles link on it, and the click waited out the whole
+test timeout for an element that was never going to appear. Reproduced verbatim on the isolated
+stack before anything was changed; the captured snapshot shows the detail page with `Issues` and
+`Board` and nothing else.
+
+The return trip now goes through a shared `openTeam(page, teamKey)` — the two lines `createTeam`
+already used, extracted — so both entries into the helper land on the same view. `completedCycleWithRetro`
+additionally asserts the `Issue views` navigation is mounted before reaching for a link inside it, so
+a future caller arriving from somewhere without one fails in seconds with the reason named instead of
+burning a test timeout.
+
+Fixing that exposed the second half of the same case, which had also never run: the tab walk from the
+seed panel asserted `BODY` never appears in six steps, and there are only three focusable controls
+after the seed toggle on that page. Tabbing past the last control in the document legitimately parks
+`activeElement` on the body before wrapping around, and that is **indistinguishable** from the
+stranding the walk exists to catch — so a walk that can run off the end asserts nothing either way.
+The walk is now bounded at the board (`tabTo(page, 'retro-card')`), which is the property the scenario
+is actually about — the absent section leaves no hole between the seed panel and the cards — and
+`tabTo` already fails loudly on both a stranded `BODY` and a walk that never arrives. `tabTrail` had
+no other caller and is gone.
+
+Neither half was slowed down or retried into passing. `apps/web/e2e/retro-ai.spec.ts`, full file,
+twice, against `POSTGRES_HOST_PORT=5450 ZERO_CACHE_HOST_PORT=4858 YAPM_HOST_PORT=3010`:
+
+```
+Running 3 tests using 1 worker
+  ✓ 1 … a team that never opted in runs its retro exactly as it does … (3.2s)
+  ✓ 2 … opted in with nothing configured, the advance succeeds …      (6.9s)
+  ✓ 3 … a drafted section is keyboard-operable end to end …           (5.8s)
+  3 passed (19.4s)
+
+Running 3 tests using 1 worker
+  ✓ 1 … (3.1s)   ✓ 2 … (6.8s)   ✓ 3 … (6.1s)
+  3 passed (20.4s)
+```
+
+The failing case went from a 180s timeout to ~7s, which is the shape of the fix: it was never slow,
+it was waiting on something absent.

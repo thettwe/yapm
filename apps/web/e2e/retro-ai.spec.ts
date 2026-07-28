@@ -43,6 +43,17 @@ async function enterApp(page: Page): Promise<void> {
   })
 }
 
+// From the workspace root into the team's Issues view. The root links a team to its DETAIL page,
+// which renders no view switch — Cycles, Retros and the rest are reachable only from a team
+// sub-view, so every later navigation depends on landing here rather than there.
+async function openTeam(page: Page, teamKey: string): Promise<void> {
+  const link = page.getByRole('link', { name: new RegExp(teamKey) })
+  await expect(link).toBeVisible({ timeout: 20_000 })
+  await link.click()
+  await page.getByRole('link', { name: 'Issues' }).click()
+  await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
+}
+
 async function createTeam(page: Page): Promise<string> {
   const teamKey = randomKey()
   await page.getByTestId('create-team').click()
@@ -50,11 +61,7 @@ async function createTeam(page: Page): Promise<string> {
   await dialog.getByLabel('Name').fill(unique('Retro AI team'))
   await dialog.getByLabel('Key').fill(teamKey)
   await dialog.getByRole('button', { name: 'Create team' }).click()
-  const link = page.getByRole('link', { name: new RegExp(teamKey) })
-  await expect(link).toBeVisible({ timeout: 20_000 })
-  await link.click()
-  await page.getByRole('link', { name: 'Issues' }).click()
-  await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
+  await openTeam(page, teamKey)
   return teamKey
 }
 
@@ -85,6 +92,12 @@ async function createCycle(page: Page, name: string, startOffset: number, endOff
 // A retro hangs off a completed cycle, and completing one opens its retro through the same mutator
 // the scheduler uses.
 async function completedCycleWithRetro(page: Page): Promise<void> {
+  // The Cycles link lives in the team view switch. Assert the switch is mounted first so a caller
+  // that arrived from somewhere without one fails here, named and in seconds, instead of waiting
+  // out the whole test timeout on a link that is never going to appear.
+  await expect(page.getByRole('navigation', { name: 'Issue views' })).toBeVisible({
+    timeout: 20_000,
+  })
   await page.getByRole('link', { name: 'Cycles' }).click()
   await expect(page.getByRole('button', { name: 'New cycle' })).toBeVisible({ timeout: 20_000 })
   const first = unique('AI retro sprint')
@@ -159,23 +172,6 @@ async function tabTo(page: Page, testId: string, steps = 14): Promise<void> {
   throw new Error(`never reached ${testId} with the keyboard`)
 }
 
-// Tab forward from wherever focus is and record where it lands. `BODY` means focus was stranded,
-// which is the failure this walk exists to catch.
-async function tabTrail(page: Page, steps: number): Promise<string[]> {
-  const trail: string[] = []
-  for (let i = 0; i < steps; i += 1) {
-    await page.keyboard.press('Tab')
-    trail.push(
-      await page.evaluate(() => {
-        const active = document.activeElement
-        if (active === null || active === document.body) return 'BODY'
-        return active.getAttribute('data-testid') ?? active.tagName
-      }),
-    )
-  }
-  return trail
-}
-
 test('a team that never opted in runs its retro exactly as it does without this capability', async ({
   page,
 }) => {
@@ -229,7 +225,7 @@ test('opted in with nothing configured, the advance succeeds and the section is 
   page.on('pageerror', (error) => crashes.push(error.message))
 
   await page.goto('/')
-  await page.getByRole('link', { name: new RegExp(teamKey) }).click()
+  await openTeam(page, teamKey)
   await completedCycleWithRetro(page)
   const retroId = await openRetro(page)
   await runToGroup(page)
@@ -250,10 +246,13 @@ test('opted in with nothing configured, the advance succeeds and the section is 
   await expect(page.locator(PANEL)).toHaveCount(0)
   await expect(page.getByTestId('retro-ai-pending')).toHaveCount(0)
 
-  // Tab order from the seed panel through the (absent) section into the board is unbroken.
+  // Tab order from the seed panel through the (absent) section into the board is unbroken: the
+  // panel's own control hands focus onward to a card, with no stranded stop where the section
+  // would have been. The walk is bounded at the board deliberately — Tab past the last control in
+  // the document legitimately puts `activeElement` on the body, which is indistinguishable from
+  // the stranding this exists to catch, so a walk that can run off the end asserts nothing.
   await page.getByTestId('retro-seed-toggle').focus()
-  const trail = await tabTrail(page, 6)
-  expect(trail).not.toContain('BODY')
+  await tabTo(page, 'retro-card', 4)
 
   // Nothing this change's surfaces said on the console, and nothing crashed. Scoped by name rather
   // than asserted empty, following `notifications.spec.ts`: the retro board carries a pre-existing

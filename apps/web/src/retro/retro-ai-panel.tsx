@@ -299,7 +299,10 @@ function MetricChip({
       className={CHIP}
       aria-label={`${metric.label}: ${value}${delta === null ? '' : `, ${delta}`} — show this figure`}
       data-testid="retro-ai-evidence-metric"
-      data-metric={metric.key}
+      // NOT `data-metric`: that is the attribute `seedWidgetSelector` matches, and a chip carrying it
+      // would be a second match for its own selector — activating it could focus itself instead of
+      // the seed tile it points at.
+      data-metric-key={metric.key}
       onClick={() => onOpen({ kind: 'widget', id: metric.key, label: metric.label })}
     >
       <ChartNoAxesColumnIcon className="size-3" aria-hidden="true" />

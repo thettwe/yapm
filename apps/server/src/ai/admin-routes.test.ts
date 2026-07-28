@@ -161,6 +161,81 @@ describe.skipIf(DATABASE_URL === undefined)('createAiAdminRoutes — admin surfa
     expect(row?.ciphertext).not.toContain(secret)
   })
 
+  it('round-trips the ordered area map and leaves it intact when only the spend cap changes', async () => {
+    const { adminId } = await freshWorkspace()
+    const areas = [
+      { prefix: 'apps/server/src/billing/', area: 'Billing', sensitive: true },
+      { prefix: 'apps/server/', area: 'Backend' },
+      { prefix: 'packages/config/', area: 'Tooling', internal: true },
+    ]
+    const post = await routes().request('/api/v1/ai', {
+      method: 'POST',
+      headers: { 'x-test-user': adminId, 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: true, areas }),
+    })
+    expect(post.status).toBe(200)
+    const posted = (await post.json()) as { status: { areas: unknown[] } | null }
+    // Order is semantic (first match wins), so the array must come back in the order it went in.
+    expect(posted.status?.areas).toEqual(areas)
+
+    // An unrelated update — the spend cap — must not clobber the map.
+    const capped = await routes().request('/api/v1/ai', {
+      method: 'POST',
+      headers: { 'x-test-user': adminId, 'content-type': 'application/json' },
+      body: JSON.stringify({ spendCapUsd: 12.5 }),
+    })
+    const cappedBody = (await capped.json()) as {
+      status: { areas: unknown[]; spendCapUsd: number | null } | null
+    }
+    expect(cappedBody.status?.spendCapUsd).toBe(12.5)
+    expect(cappedBody.status?.areas).toEqual(areas)
+
+    // And a GET reflects the same ordered map.
+    const get = await routes().request('/api/v1/ai', { headers: { 'x-test-user': adminId } })
+    const gotten = (await get.json()) as { status: { areas: unknown[] } | null }
+    expect(gotten.status?.areas).toEqual(areas)
+  })
+
+  it('rejects a non-admin reading or writing the area map, before the map is touched', async () => {
+    const { adminId, memberId, viewerId } = await freshWorkspace()
+    await routes().request('/api/v1/ai', {
+      method: 'POST',
+      headers: { 'x-test-user': adminId, 'content-type': 'application/json' },
+      body: JSON.stringify({ areas: [{ prefix: 'apps/server/src/billing/', area: 'Billing' }] }),
+    })
+    for (const user of [memberId, viewerId]) {
+      const get = await routes().request('/api/v1/ai', { headers: { 'x-test-user': user } })
+      expect(get.status).toBe(403)
+      expect(await get.text()).not.toContain('Billing')
+
+      const post = await routes().request('/api/v1/ai', {
+        method: 'POST',
+        headers: { 'x-test-user': user, 'content-type': 'application/json' },
+        body: JSON.stringify({ areas: [] }),
+      })
+      expect(post.status).toBe(403)
+    }
+    // The map an admin wrote is still there — the refused writes changed nothing.
+    const get = await routes().request('/api/v1/ai', { headers: { 'x-test-user': adminId } })
+    const body = (await get.json()) as { status: { areas: unknown[] } | null }
+    expect(body.status?.areas).toHaveLength(1)
+  })
+
+  it('refuses a malformed area rule with 400 and stores nothing', async () => {
+    const { adminId } = await freshWorkspace()
+    for (const areas of [[{ prefix: '', area: 'Billing' }], [{ prefix: 'a/' }], 'not-an-array']) {
+      const response = await routes().request('/api/v1/ai', {
+        method: 'POST',
+        headers: { 'x-test-user': adminId, 'content-type': 'application/json' },
+        body: JSON.stringify({ areas }),
+      })
+      expect(response.status).toBe(400)
+    }
+    const get = await routes().request('/api/v1/ai', { headers: { 'x-test-user': adminId } })
+    const body = (await get.json()) as { status: { areas: unknown[] } | null }
+    expect(body.status ?? { areas: [] }).toMatchObject({ areas: [] })
+  })
+
   it('refuses to store a key when the encryption codec is unavailable', async () => {
     const { adminId } = await freshWorkspace()
     const response = await routes(false).request('/api/v1/ai/keys/anthropic', {

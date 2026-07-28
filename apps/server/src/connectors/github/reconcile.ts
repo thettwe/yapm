@@ -18,7 +18,7 @@ import type { GithubPullRequest, GithubReview } from './payloads.js'
 // satisfies it structurally, so reconciliation is tested with zero network I/O.
 export interface GithubRestResponse<T> {
   status: number
-  headers: { etag?: string | undefined }
+  headers: { etag?: string | undefined; 'x-ratelimit-remaining'?: string | undefined }
   data: T
 }
 
@@ -72,6 +72,17 @@ export interface GithubRestClient {
         repo: string
         pull_number: number
       }): Promise<GithubRestResponse<GithubReview[]>>
+      // Declares EXACTLY the three fields the seam reads. The real response is much wider — it
+      // carries `patch`, `blob_url`, `raw_url`, `contents_url`, `sha`, `additions`, `deletions`
+      // whether or not they are asked for, and GitHub offers no parameter to suppress them — and a
+      // wider object satisfies a narrower interface structurally. Declaring the narrow type
+      // documents intent; `projectChangedFile` in `files.ts` is what enforces it at runtime.
+      listFiles(params: {
+        owner: string
+        repo: string
+        pull_number: number
+        per_page: number
+      }): Promise<GithubRestResponse<{ filename: string; status: string; changes: number }[]>>
     }
     checks: {
       listForRef(params: {

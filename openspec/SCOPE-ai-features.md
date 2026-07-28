@@ -179,6 +179,17 @@ operator-visible tuning signal. No migration.
 
 ## 4. The PM-digest family
 
+> **Reordered after this scoping pass, and built in the new order: 21 ships before 20.**
+> The finding above — that `0009_connectors.ts:72–89` stores no PR body, no labels, no commit table,
+> no paths and no diffs — means change 20 on its own would have handed a PM a re-voiced list of
+> ticket titles, and would have asked for a second authorization axis to carry it. So the maintainer
+> inverted the pair: **build the substance first, on the team-internal digest that already ships**,
+> then judge whether the disclosure boundary is worth its cost with something real to look at.
+> Change 21 was built on `feat/pm-digest-areas` against the existing team-internal cycle digest and
+> needs nothing from change 20 — no new synced entity, no new read predicate, no migration. The
+> ordering below is kept as written so the original reasoning stays auditable; only the build order
+> changed.
+
 ### 20 · `pm-digest-boundary` — the disclosure boundary, with deliberately unremarkable content
 
 The irreversible permission and schema work, done while the content is provably harmless.
@@ -222,6 +233,14 @@ nothing. Change 20 alone gives a PM a re-voiced list of ticket titles. It is cor
 engineering sequence and it is not yet the product.
 
 ### 21 · `pm-digest-areas` — product areas from file metadata, no patch content
+
+**Built first of the family (branch `feat/pm-digest-areas`), against the existing team-internal
+cycle digest.** Every claim below survived contact with the code; the permission claim was
+re-verified against GitHub's own permissions reference rather than trusted from the docs page
+(`GET /repos/{owner}/{repo}/pulls/{pull_number}/files` is listed at access level **read** under the
+repository *Pull requests* permission — now recorded in `reference/connectors.md` §3.6 along with the
+3000-file ceiling, the `per_page` maximum of 100, and the fact that GitHub documents no parameter
+that suppresses `patch`).
 
 The actual differentiator, and it does **not** need patch content.
 

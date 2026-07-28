@@ -64,6 +64,25 @@ export {
   needsApproval,
 } from './zero/ai-tools.js'
 export type {
+  AreaDefinition,
+  AreaMap,
+  AreaRule,
+  ChangeSizeBand,
+  PathAreas,
+} from './zero/areas.js'
+export {
+  areaCatalogFromRules,
+  areaMapSchema,
+  areaRuleSchema,
+  areasForPaths,
+  CHANGE_SIZE_BANDS,
+  changeSizeBand,
+  matchArea,
+  RESERVED_AREA_MESSAGE,
+  UNMAPPED_AREA,
+  XL_CHANGE_THRESHOLD,
+} from './zero/areas.js'
+export type {
   AutoStatusContext,
   AutoStatusInput,
   AutoStatusPullRequestInput,
@@ -161,14 +180,17 @@ export {
 export type { CycleDigestWrite } from './zero/cycle-digest.js'
 export { upsertCycleDigest } from './zero/cycle-digest.js'
 export type {
+  CycleAreaCoverage,
+  CycleAreaFacts,
   CycleFacts,
   CycleFactsCounts,
   CycleFactsInput,
   CycleFactsIssueInput,
   CycleFactsPr,
   CycleIssueFacts,
+  WithCycleAreasInput,
 } from './zero/cycle-facts.js'
-export { buildCycleFacts } from './zero/cycle-facts.js'
+export { buildCycleFacts, withCycleAreas } from './zero/cycle-facts.js'
 export type { CycleOrderRow } from './zero/cycles.js'
 export {
   compareCycles,
@@ -192,6 +214,7 @@ export {
   computeDivergence,
 } from './zero/delivery.js'
 export type {
+  DigestAreaCoverage,
   DigestConfidence,
   DigestContent,
   DigestEvidenceKind,
@@ -200,19 +223,24 @@ export type {
   DigestItemKind,
   DigestSection,
   RosterMember,
+  StoredDigestContent,
 } from './zero/digest.js'
 export {
+  contentDisclosesPaths,
   contentNamesMember,
   DIGEST_CONFIDENCE_LEVELS,
   DIGEST_EVIDENCE_KINDS,
   DIGEST_ITEM_KINDS,
+  digestAreaCoverageSchema,
   digestContentSchema,
   digestEvidenceRefSchema,
   digestItemSchema,
   digestSectionSchema,
+  dropItemsDisclosingPaths,
   dropItemsNamingMembers,
   dropUncitedItems,
   rosterNameNeedles,
+  storedDigestContentSchema,
 } from './zero/digest.js'
 export type { MutationErrorDetails } from './zero/errors.js'
 export { isMutationErrorDetails, MutationError, MutationErrorCode } from './zero/errors.js'

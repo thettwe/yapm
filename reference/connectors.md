@@ -278,6 +278,32 @@ Source: https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-r
 - On secondary limit: `retry-after` header → *"you should not retry your request until after that many seconds has elapsed."* If `x-ratelimit-remaining` is `0`, wait until `x-ratelimit-reset`.
 - **Best practice (verbatim):** *"To avoid exceeding secondary rate limits, you should make requests serially instead of concurrently… implement a queue system."* ← this *is* why §3.3 serializes per installation.
 
+### 3.6 Changed-file metadata — `GET /pulls/{n}/files` (verified 2026-07-28)
+
+Source: https://docs.github.com/en/rest/pulls/pulls (List pull requests files) and
+https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens
+
+- **Permission: `Pull requests` → read.** The permissions reference lists
+  `GET /repos/{owner}/{repo}/pulls/{pull_number}/files` at access level **read** under the
+  repository *Pull requests* permission. yapm's App already requires `Pull requests: Read-only`
+  (§1.3), so reading changed-file metadata costs **no new permission and no installer re-consent**.
+- **Bounds (verbatim):** *"Responses include a maximum of 3000 files."* `per_page` maximum is
+  **100**; the default is 30.
+- **Response fields per entry (the "Diff Entry" schema):** `sha`, `filename`, `status`, `additions`,
+  `deletions`, `changes`, `blob_url`, `raw_url`, `contents_url`, `patch`, `previous_filename`.
+- **`patch` is returned whether or not you ask for it.** The docs name **no parameter that
+  suppresses it** — it is simply an optional field the server omits for binary or very large diffs.
+  Anything that must not see diff text therefore has to *project the response*, at the seam, before
+  any value is handed to a caller. `blob_url` / `raw_url` / `contents_url` are unconditional too and
+  each embeds the full path. In yapm that projection is
+  `projectChangedFile` in `apps/server/src/connectors/github/files.ts`, whose `ChangedFile` type has
+  no field capable of holding patch content, and whose test's mock **returns `patch`** so the drop is
+  asserted rather than assumed.
+- Each call costs **1 primary-rate point** against the installation's 5,000/hr budget (§3.5), so a
+  caller that fans out over a cycle's pull requests needs its own cap and its own remaining-quota
+  floor read off `x-ratelimit-remaining`. There is no ETag win here: the reconcile sweep's
+  conditional-request trick (§3.4) does not apply to a one-shot per-PR read.
+
 **octokit auto-handling (verified `@octokit/plugin-throttling` `index.d.ts`):** add `throttle` to Octokit options; it wraps a Bottleneck limiter and calls `onRateLimit` / `onSecondaryRateLimit` handlers with `retryAfter`. `ThrottlingOptionsBase` fields (verified): `enabled`, `fallbackSecondaryRateRetryAfter`, `retryAfterBaseValue`, `onRateLimit` (required). `@octokit/plugin-retry` (installed) auto-retries transient failures. Recommend enabling both on every installation client, and returning `true` from the handlers only for a bounded retry count.
 
 ---

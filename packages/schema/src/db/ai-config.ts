@@ -1,6 +1,7 @@
 import type { Kysely } from 'kysely'
 import * as z from 'zod'
 import type { SecretCodec } from '../secrets/codec.js'
+import { type AreaMap, areaMapSchema } from '../zero/areas.js'
 import { AI_PROVIDERS, type AiProvider, type AuthContext, canManage } from '../zero/context.js'
 import {
   ConnectorAuthorizationError,
@@ -27,11 +28,14 @@ export const aiConfigDataSchema = z.object({
   defaultProvider: aiProviderSchema.optional(),
   models: z.partialRecord(aiProviderSchema, z.string().min(1)).default({}),
   spendCapUsd: z.number().positive().optional(),
+  // The ordered path→product-area map. Server-only like the rest of this blob, and an EMPTY map is
+  // the off switch for area enrichment: no provider call is made at all.
+  areas: areaMapSchema,
 })
 
 export type AiConfigData = z.infer<typeof aiConfigDataSchema>
 
-const EMPTY_CONFIG: AiConfigData = { models: {} }
+const EMPTY_CONFIG: AiConfigData = { models: {}, areas: [] }
 
 // Parse a stored `config` jsonb into the typed AI settings, tolerating a legacy/empty blob.
 function parseConfig(config: unknown): AiConfigData {
@@ -158,6 +162,8 @@ export interface RedactedAiStatus {
   spendSoFarUsd: number
   // Which providers have a stored key (names only — never the key material).
   configuredProviders: AiProvider[]
+  // The ordered path→area map. Admin-only, like everything else here.
+  areas: AreaMap
 }
 
 // Admin-gated. Everything the AI settings UI renders — the toggle, default provider, chosen
@@ -185,5 +191,6 @@ export async function getRedactedAiStatus(
     spendCapUsd: data.spendCapUsd ?? null,
     spendSoFarUsd,
     configuredProviders,
+    areas: data.areas,
   }
 }

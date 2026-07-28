@@ -1,6 +1,6 @@
 import type { Transaction } from '@rocicorp/zero'
 import type { CycleDigestStatus } from './context.js'
-import type { DigestContent } from './digest.js'
+import type { StoredDigestContent } from './digest.js'
 import { zql } from './schema.js'
 
 // The server-only authoritative write path for `cycle_digest`, mirroring `applyWorkGraphMutation`:
@@ -16,7 +16,8 @@ export interface CycleDigestWrite {
   readonly teamId: string
   readonly cycleId: string
   readonly status: CycleDigestStatus
-  readonly content: DigestContent | null
+  // The model's validated content plus yapm's own coverage arithmetic (never a model-writable field).
+  readonly content: StoredDigestContent | null
   readonly provider: string | null
   readonly model: string | null
   // Wall clock the digest was produced; null until `ready`.

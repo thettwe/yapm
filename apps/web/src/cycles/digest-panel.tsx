@@ -1,15 +1,16 @@
 import { useQuery } from '@rocicorp/zero/react'
 import {
   type CycleDigestStatus,
-  type DigestContent,
   type DigestItemKind,
   queries,
+  type StoredDigestContent,
 } from '@yapm/schema'
 import { Badge } from '@yapm/ui/components/badge'
 import { cn } from '@yapm/ui/lib/utils'
 import { ExternalLinkIcon, SparklesIcon } from 'lucide-react'
 import { useMemo } from 'react'
 import {
+  areaCoverageNote,
   buildCycleFallback,
   buildEvidenceIndex,
   type CycleFallback,
@@ -51,7 +52,7 @@ export function CycleDigestPanel({
   const fallback = useMemo(() => buildCycleFallback(issues, deployments), [issues, deployments])
 
   const status = digest?.status as CycleDigestStatus | undefined
-  const content = (digest?.content ?? null) as DigestContent | null
+  const content = (digest?.content ?? null) as StoredDigestContent | null
 
   if (cycle.status !== 'completed' && digest === undefined) return null
 
@@ -96,14 +97,24 @@ function DigestNarrative({
   onOpenIssue,
 }: {
   digest: DigestRow
-  content: DigestContent
+  content: StoredDigestContent
   index: EvidenceIndex
   onOpenIssue: (issueId: string) => void
 }) {
+  // yapm's own arithmetic, rendered as yapm's own sentence — the same rule the counts follow. The
+  // model is told the grouping is partial; the reader is TOLD it, deterministically.
+  const coverage = areaCoverageNote(content.areaCoverage)
+
   return (
     <div className="flex flex-col gap-4" data-testid="digest-narrative">
       {content.headline.trim().length > 0 ? (
         <p className="text-sm text-text-1">{content.headline}</p>
+      ) : null}
+
+      {coverage !== null ? (
+        <p className="text-[11px] text-text-3" data-testid="digest-area-coverage">
+          {coverage}
+        </p>
       ) : null}
 
       {content.sections.map((section) => (

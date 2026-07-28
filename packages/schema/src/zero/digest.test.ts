@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  contentDisclosesPaths,
   contentNamesMember,
   type DigestContent,
+  type DigestItem,
+  dropItemsDisclosingPaths,
   dropItemsNamingMembers,
   dropUncitedItems,
   rosterNameNeedles,
@@ -217,5 +220,130 @@ describe('name-validator — team-level / blameless backstop', () => {
     )
     expect(rosterNameNeedles([])).toEqual([])
     expect(contentNamesMember(content(), [])).toBe(false)
+  })
+})
+
+describe('disclosure validator — no path, extension, fence or code identifier survives', () => {
+  const clean: DigestItem = {
+    kind: 'shipped',
+    summary: 'Guest checkout went live in Billing.',
+    evidenceRefs: [{ kind: 'issue', id: 'issue-1' }],
+    confidence: 'high',
+  }
+
+  function withSummary(summary: string): DigestContent {
+    return content({
+      headline: 'The team shipped in Billing and Web.',
+      sections: [
+        {
+          title: 'What shipped',
+          items: [
+            { ...clean },
+            {
+              kind: 'highlight',
+              summary,
+              evidenceRefs: [{ kind: 'issue', id: 'issue-2' }],
+              confidence: 'medium',
+            },
+          ],
+        },
+      ],
+    })
+  }
+
+  // The four leak shapes design D6 names, plus the capitalised bare filename the `.js` product-name
+  // carve-out must not exempt — the only disclosure shape a slash-free item has left.
+  const leaks: Record<string, string> = {
+    'a slash-bearing path token': 'Reworked apps/server/src/billing to shorten the window.',
+    'a source-file extension': 'Reworked refund.ts to shorten the window.',
+    'a backtick / code fence': 'Reworked the `refund window` constant.',
+    'a code identifier call': 'Reworked session.refresh() so the window shortens.',
+    'a capitalised bare filename': 'Updated Button.tsx to fix the reorder.',
+    'a capitalised bare filename ending .ts': 'Session.ts now expires idle tabs.',
+    'a capitalised bare filename ending .vue': 'App.vue was split in two.',
+  }
+
+  for (const [shape, summary] of Object.entries(leaks)) {
+    it(`drops the item disclosing ${shape}, keeping the clean one`, () => {
+      const dirty = withSummary(summary)
+      expect(contentDisclosesPaths(dirty)).toBe(true)
+      const result = dropItemsDisclosingPaths(dirty)
+      expect(result.sections[0]?.items).toHaveLength(1)
+      expect(result.sections[0]?.items[0]?.summary).toBe(clean.summary)
+      expect(contentDisclosesPaths(result)).toBe(false)
+      expect(JSON.stringify(result)).not.toContain(summary)
+    })
+  }
+
+  it('flags a two-slash directory path with no extension at all', () => {
+    expect(contentDisclosesPaths(withSummary('Work landed under packages/schema.'))).toBe(true)
+    expect(contentDisclosesPaths(withSummary('Work landed under src/billing.'))).toBe(true)
+  })
+
+  it('blanks a disclosing headline but keeps the clean items', () => {
+    const dirty = content({
+      headline: 'The team reworked apps/server/src/billing/refund.ts.',
+      sections: [{ title: 'What shipped', items: [{ ...clean }] }],
+    })
+    const result = dropItemsDisclosingPaths(dirty)
+    expect(result.headline).toBe('')
+    expect(result.sections[0]?.items).toHaveLength(1)
+    expect(contentDisclosesPaths(result)).toBe(false)
+  })
+
+  it('drops a section whose TITLE discloses, and removes a section the item drop emptied', () => {
+    const dirty = content({
+      headline: 'Cycle 8.',
+      sections: [
+        { title: 'Changes in apps/web/routes', items: [{ ...clean }] },
+        {
+          title: 'Risks',
+          items: [
+            {
+              kind: 'risk',
+              summary: 'Flaky check in .github/workflows/ci.yml.',
+              evidenceRefs: [{ kind: 'ci_check', id: 'check-1' }],
+              confidence: 'low',
+            },
+          ],
+        },
+        { title: 'What shipped', items: [{ ...clean }] },
+      ],
+    })
+    const result = dropItemsDisclosingPaths(dirty)
+    expect(result.sections.map((section) => section.title)).toEqual(['What shipped'])
+  })
+
+  it('retains ordinary prose that merely contains a slash or a dot', () => {
+    const allowlisted = [
+      'The CI/CD pipeline stayed green.',
+      'I/O wait fell across Billing.',
+      'The A/B test in Web concluded.',
+      'The and/or filter now parses.',
+      'On-call moved to 24/7.',
+      'Only 14/30 checks were rerun.',
+      'The cycle closed on 2026/07/28.',
+      'Latency improved by 2.5 percent.',
+      'Version 2.1 of the plan editor shipped.',
+      // A runtime or framework NAME is product prose, not a filename: the capitalised identifier
+      // before the dot is what tells them apart, and a real path still discloses by its slashes.
+      'Tooling moved to Node.js 24.',
+      'The Next.js upgrade landed in Web.',
+      'Vue.js and D3.js were both dropped.',
+    ]
+    for (const summary of allowlisted) {
+      const candidate = withSummary(summary)
+      expect(contentDisclosesPaths(candidate), summary).toBe(false)
+      expect(dropItemsDisclosingPaths(candidate).sections[0]?.items, summary).toHaveLength(2)
+    }
+  })
+
+  it('leaves a fully clean digest byte-identical', () => {
+    const cleanContent = content({
+      headline: 'The team shipped in Billing and Web.',
+      sections: [{ title: 'What shipped', items: [{ ...clean }] }],
+    })
+    expect(contentDisclosesPaths(cleanContent)).toBe(false)
+    expect(dropItemsDisclosingPaths(cleanContent)).toEqual(cleanContent)
   })
 })

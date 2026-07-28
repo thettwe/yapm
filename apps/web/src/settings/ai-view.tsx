@@ -1,9 +1,23 @@
-import { AI_PROVIDERS, type AiProvider } from '@yapm/schema'
+import {
+  AI_PROVIDERS,
+  type AiProvider,
+  type AreaRule,
+  RESERVED_AREA_MESSAGE,
+  UNMAPPED_AREA,
+} from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { Input } from '@yapm/ui/components/input'
 import { Label } from '@yapm/ui/components/label'
 import { Select } from '@yapm/ui/components/select'
-import { CheckIcon, KeyIcon, TrashIcon, XIcon } from 'lucide-react'
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CheckIcon,
+  KeyIcon,
+  PlusIcon,
+  TrashIcon,
+  XIcon,
+} from 'lucide-react'
 import { type FormEvent, useCallback, useEffect, useId, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import {
@@ -155,6 +169,10 @@ function AiCard({ data, onChanged }: { data: AiStatusResponse; onChanged: () => 
 
       {status ? (
         <WorkspaceDefaults status={status} onChanged={onChanged} setError={setActionError} />
+      ) : null}
+
+      {status ? (
+        <AreaMapEditor status={status} onChanged={onChanged} setError={setActionError} />
       ) : null}
     </div>
   )
@@ -429,5 +447,250 @@ function WorkspaceDefaults({
         </p>
       </div>
     </div>
+  )
+}
+
+// The product-area map. Rule ORDER is semantic — the first matching prefix wins — so reordering is a
+// first-class edit and must be fully operable from the keyboard: move up / move down are buttons, not
+// a drag gesture.
+function AreaMapEditor({
+  status,
+  onChanged,
+  setError,
+}: {
+  status: NonNullable<AiStatusResponse['status']>
+  onChanged: () => Promise<void>
+  setError: (message: string | undefined) => void
+}) {
+  const fieldId = useId()
+  const [rules, setRules] = useState<AreaRule[]>(status.areas)
+  const [busy, setBusy] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [focusTarget, setFocusTarget] = useState<string | undefined>(undefined)
+  const [announcement, setAnnouncement] = useState('')
+
+  useEffect(() => {
+    if (focusTarget === undefined) return
+    document.getElementById(focusTarget)?.focus()
+    setFocusTarget(undefined)
+  }, [focusTarget])
+
+  const rowId = (index: number, part: string) => `${fieldId}-${index}-${part}`
+
+  const update = (index: number, patch: Partial<AreaRule>) => {
+    setRules((current) =>
+      current.map((rule, position) => (position === index ? { ...rule, ...patch } : rule)),
+    )
+  }
+
+  const move = (index: number, delta: number) => {
+    const target = index + delta
+    if (target < 0 || target >= rules.length) return
+    const moving = rules[index]
+    setRules((current) => {
+      const next = [...current]
+      const [moved] = next.splice(index, 1)
+      if (moved) next.splice(target, 0, moved)
+      return next
+    })
+    // At either end the button that made the move is the one the move DISABLES, so focusing it is a
+    // no-op that leaves focus on an index-keyed node now belonging to a different rule — and the next
+    // press silently moves the wrong row back. Focus the opposite arrow, which is always enabled.
+    setFocusTarget(
+      target === 0
+        ? rowId(0, 'down')
+        : target === rules.length - 1
+          ? rowId(target, 'up')
+          : rowId(target, delta < 0 ? 'up' : 'down'),
+    )
+    setAnnouncement(
+      `${moving?.area.trim() || 'Rule'} moved to position ${target + 1} of ${rules.length}.`,
+    )
+  }
+
+  const remove = (index: number) => {
+    setRules((current) => current.filter((_, position) => position !== index))
+    setFocusTarget(`${fieldId}-add`)
+  }
+
+  const add = () => {
+    setRules((current) => [...current, { prefix: '', area: '' }])
+    setFocusTarget(rowId(rules.length, 'prefix'))
+  }
+
+  const incomplete = rules.some(
+    (rule) => rule.prefix.trim().length === 0 || rule.area.trim().length === 0,
+  )
+  // The same rule the schema enforces, said where the admin is typing rather than only in the docs.
+  const usesReservedLabel = rules.some((rule) => rule.area.trim().toLowerCase() === UNMAPPED_AREA)
+  const blockedReason = incomplete
+    ? 'Every rule needs a path prefix and an area label.'
+    : usesReservedLabel
+      ? RESERVED_AREA_MESSAGE
+      : undefined
+
+  const save = async () => {
+    setBusy(true)
+    setError(undefined)
+    try {
+      await updateAiConfig({
+        areas: rules.map((rule) => ({
+          prefix: rule.prefix.trim(),
+          area: rule.area.trim(),
+          ...(rule.sensitive ? { sensitive: true } : {}),
+          ...(rule.internal ? { internal: true } : {}),
+        })),
+      })
+      setSaved(true)
+      window.setTimeout(() => setSaved(false), 1500)
+      await onChanged()
+    } catch {
+      setError('Could not save the product-area map.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section
+      aria-labelledby={`${fieldId}-heading`}
+      className="flex flex-col gap-3 border-t border-border pt-4"
+      data-testid="area-map-editor"
+    >
+      <header className="flex flex-col gap-1">
+        <h2 id={`${fieldId}-heading`} className="text-sm font-semibold text-text-1">
+          Product areas
+        </h2>
+        <p className="text-xs text-text-3">
+          Map repository path prefixes to product-area labels. The digest describes work by these
+          labels; the file paths themselves are never sent to the model. Rules are matched in order
+          and the first matching prefix wins, so put the most specific prefix first. A path that
+          matches no rule becomes the reserved label{' '}
+          <span className="font-medium">{UNMAPPED_AREA}</span>. With no rules at all, yapm requests
+          no file metadata from GitHub and the digest is exactly what it was before.
+        </p>
+      </header>
+
+      {rules.length === 0 ? (
+        <p className="text-xs text-text-3" data-testid="area-map-empty">
+          No areas configured.
+        </p>
+      ) : (
+        <ol className="flex flex-col gap-2">
+          {rules.map((rule, index) => (
+            <li
+              // Order IS a rule's identity here — a content-derived key would remount the row on
+              // every keystroke and lose focus mid-edit.
+              key={index}
+              className="flex flex-wrap items-end gap-2 rounded-control border border-border p-2"
+            >
+              <div className="flex flex-col gap-1">
+                <Label htmlFor={rowId(index, 'prefix')} className="text-[11px] text-text-3">
+                  Path prefix
+                </Label>
+                <Input
+                  id={rowId(index, 'prefix')}
+                  value={rule.prefix}
+                  onChange={(event) => update(index, { prefix: event.target.value })}
+                  placeholder="apps/server/src/billing/"
+                  className="h-7 w-64 text-sm"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor={rowId(index, 'area')} className="text-[11px] text-text-3">
+                  Area label
+                </Label>
+                <Input
+                  id={rowId(index, 'area')}
+                  value={rule.area}
+                  onChange={(event) => update(index, { area: event.target.value })}
+                  placeholder="Billing"
+                  className="h-7 w-44 text-sm"
+                />
+              </div>
+              <Button
+                size="sm"
+                variant={rule.sensitive ? 'default' : 'outline'}
+                aria-pressed={rule.sensitive === true}
+                onClick={() => update(index, { sensitive: !rule.sensitive })}
+                data-testid={`area-sensitive-${index}`}
+              >
+                Sensitive
+              </Button>
+              <Button
+                size="sm"
+                variant={rule.internal ? 'default' : 'outline'}
+                aria-pressed={rule.internal === true}
+                onClick={() => update(index, { internal: !rule.internal })}
+                data-testid={`area-internal-${index}`}
+              >
+                Internal
+              </Button>
+              <div className="ml-auto flex items-center gap-1">
+                <Button
+                  id={rowId(index, 'up')}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Move ${rule.area || 'rule'} earlier`}
+                  disabled={index === 0}
+                  onClick={() => move(index, -1)}
+                >
+                  <ArrowUpIcon />
+                </Button>
+                <Button
+                  id={rowId(index, 'down')}
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Move ${rule.area || 'rule'} later`}
+                  disabled={index === rules.length - 1}
+                  onClick={() => move(index, 1)}
+                >
+                  <ArrowDownIcon />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Remove ${rule.area || 'rule'}`}
+                  onClick={() => remove(index)}
+                >
+                  <TrashIcon />
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          id={`${fieldId}-add`}
+          size="sm"
+          variant="outline"
+          onClick={add}
+          data-testid="area-add"
+        >
+          <PlusIcon />
+          Add area
+        </Button>
+        <Button
+          size="sm"
+          disabled={busy || blockedReason !== undefined}
+          onClick={save}
+          data-testid="area-map-save"
+        >
+          {saved ? <CheckIcon /> : null}
+          Save areas
+        </Button>
+        {blockedReason !== undefined ? (
+          <span className="text-[11px] text-text-3" role="status" data-testid="area-map-blocked">
+            {blockedReason}
+          </span>
+        ) : null}
+      </div>
+
+      <p className="sr-only" role="status" aria-live="polite" data-testid="area-map-announcement">
+        {announcement}
+      </p>
+    </section>
   )
 }

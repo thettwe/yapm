@@ -78,7 +78,8 @@ export {
   getCycleDigestByCycle,
   getWorkspaceAiSpendUsd,
 } from './cycle-digest.js'
-export { cycleFactsForTeam } from './cycle-facts.js'
+export type { PullRequestSource } from './cycle-facts.js'
+export { cycleFactsForTeam, pullRequestSourcesForCycleFacts } from './cycle-facts.js'
 export type {
   AcceptInviteOptions,
   AcceptInviteRefusal,

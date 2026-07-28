@@ -60,6 +60,9 @@ describe('reconcileInstallation', () => {
               ],
             }),
           ),
+          // Reconciliation never calls this — the digest job does. Present only to satisfy the
+          // client interface.
+          listFiles: vi.fn().mockResolvedValue(response({ data: [] })),
         },
         checks: {
           listForRef: vi.fn().mockResolvedValue(

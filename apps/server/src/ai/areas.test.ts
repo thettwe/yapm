@@ -37,7 +37,7 @@ vi.mock('@yapm/schema/db', () => ({
 
 import { enrichCycleFactsWithAreas } from './areas.js'
 import { buildDigestInput, runCycleDigest } from './digest.js'
-import type { AiGateway, GenerateStructuredOptions } from './gateway.js'
+import type { AiGateway, GenerateStructuredOptions, ResolvedModel } from './gateway.js'
 
 // The patch body GitHub returns for a one-line change to the refund window — the research's own
 // headline example, and exactly the text that must never reach a model.
@@ -156,6 +156,29 @@ function capturingLogger(): { logger: Logger; lines: string[] } {
   return { logger, lines }
 }
 
+// The enrichment gate asks the gateway whether a model resolves at all — the same predicate the
+// digest run itself uses. `resolving` stands for "toggle on, provider chosen, key present";
+// `unresolved` stands for every way that can fail, which is exactly the point: this harness cannot
+// tell them apart, and neither can the gate.
+function resolvingGateway(): Pick<AiGateway, 'resolveModel'> & { calls: string[] } {
+  const calls: string[] = []
+  return {
+    calls,
+    resolveModel: (workspaceId: string) => {
+      calls.push(workspaceId)
+      return Promise.resolve({
+        model: 'mock-model' as unknown as ResolvedModel['model'],
+        provider: 'anthropic' as const,
+        modelId: 'mock-model',
+      })
+    },
+  }
+}
+
+function unresolvedGateway(): Pick<AiGateway, 'resolveModel'> {
+  return { resolveModel: () => Promise.resolve(null) }
+}
+
 interface CapturedCall {
   system: string
   input: string
@@ -237,7 +260,7 @@ describe('the falsifiable check — a patch field enters the seam and reaches no
     const facts = factsFor(['pr-1'])
 
     const enriched = await enrichCycleFactsWithAreas(
-      { db: fakeDb(), changedFilesReader: reader },
+      { db: fakeDb(), changedFilesReader: reader, gateway: resolvingGateway() },
       { workspaceId: 'ws-1', facts },
     )
     expect(calls).toEqual([480])
@@ -336,7 +359,7 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
     const facts = factsFor(['pr-1'])
 
     const result = await enrichCycleFactsWithAreas(
-      { db: fakeDb(), changedFilesReader: reader },
+      { db: fakeDb(), changedFilesReader: reader, gateway: resolvingGateway() },
       { workspaceId: 'ws-1', facts },
     )
     expect(calls).toEqual([])
@@ -350,30 +373,43 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
     const facts = factsFor(['pr-1'])
     expect(
       await enrichCycleFactsWithAreas(
-        { db: fakeDb(), changedFilesReader: reader },
+        { db: fakeDb(), changedFilesReader: reader, gateway: resolvingGateway() },
         { workspaceId: 'ws-1', facts },
       ),
     ).toBe(facts)
     expect(calls).toEqual([])
   })
 
-  // A workspace with AI switched off gets an `ai_off` digest whatever this step gathers, so every
-  // call it would have made is someone else's rate budget spent on nothing.
-  it('makes ZERO provider calls when AI is configured but switched OFF', async () => {
-    reads.aiConfig.mockResolvedValue({ enabled: false, data: { models: {}, areas: RULES } })
-    reads.prSources.mockResolvedValue(sourcesFor(['pr-1']))
-    const { reader, calls } = readerOver([fileEntry(BILLING_PATH)])
-    const facts = factsFor(['pr-1'])
+  // A cycle whose digest will end `ai_off` gets nothing out of enrichment, so every call it would
+  // have made is someone else's rate budget spent on nothing. The gate asks the gateway, so the
+  // toggle, a missing provider and an unresolvable key are ONE condition here — the same one
+  // `runCycleDigest` will evaluate a moment later.
+  const aiOffCauses: Record<string, unknown> = {
+    'AI is switched OFF': { enabled: false, data: { models: {}, areas: RULES } },
+    'AI is on but no provider or key resolves': {
+      enabled: true,
+      data: { models: {}, areas: RULES },
+    },
+  }
 
-    expect(
-      await enrichCycleFactsWithAreas(
-        { db: fakeDb(), changedFilesReader: reader },
-        { workspaceId: 'ws-1', facts },
-      ),
-    ).toBe(facts)
-    expect(calls).toEqual([])
-    expect(reads.prSources).not.toHaveBeenCalled()
-  })
+  for (const [cause, config] of Object.entries(aiOffCauses)) {
+    it(`makes ZERO provider calls when ${cause}`, async () => {
+      reads.aiConfig.mockResolvedValue(config)
+      reads.prSources.mockResolvedValue(sourcesFor(['pr-1']))
+      const { reader, calls } = readerOver([fileEntry(BILLING_PATH)])
+      const facts = factsFor(['pr-1'])
+
+      expect(
+        await enrichCycleFactsWithAreas(
+          { db: fakeDb(), changedFilesReader: reader, gateway: unresolvedGateway() },
+          { workspaceId: 'ws-1', facts },
+        ),
+      ).toBe(facts)
+      expect(calls).toEqual([])
+      expect(reads.prSources).not.toHaveBeenCalled()
+      expect(reads.spend).not.toHaveBeenCalled()
+    })
+  }
 
   it('makes ZERO provider calls once the workspace is over its spend cap', async () => {
     reads.aiConfig.mockResolvedValue({
@@ -387,7 +423,7 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
 
     expect(
       await enrichCycleFactsWithAreas(
-        { db: fakeDb(), changedFilesReader: reader },
+        { db: fakeDb(), changedFilesReader: reader, gateway: resolvingGateway() },
         { workspaceId: 'ws-1', facts },
       ),
     ).toBe(facts)
@@ -403,11 +439,14 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
     reads.spend.mockResolvedValue(4.99)
     reads.prSources.mockResolvedValue(sourcesFor(['pr-1']))
     const { reader, calls } = readerOver([fileEntry(BILLING_PATH)])
+    const gateway = resolvingGateway()
 
     const result = await enrichCycleFactsWithAreas(
-      { db: fakeDb(), changedFilesReader: reader },
+      { db: fakeDb(), changedFilesReader: reader, gateway },
       { workspaceId: 'ws-1', facts: factsFor(['pr-1']) },
     )
+    // The gate ran, and it ran for THIS workspace — not a re-derived local copy of the rule.
+    expect(gateway.calls).toEqual(['ws-1'])
     expect(calls).toEqual([480])
     expect(result.areas).toEqual([{ area: 'Billing', issueCount: 1, prCount: 1, sensitive: true }])
   })
@@ -416,7 +455,7 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
     const facts = factsFor(['pr-1'])
     expect(
       await enrichCycleFactsWithAreas(
-        { db: fakeDb(), changedFilesReader: null },
+        { db: fakeDb(), changedFilesReader: null, gateway: resolvingGateway() },
         { workspaceId: 'ws-1', facts },
       ),
     ).toBe(facts)
@@ -429,7 +468,7 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
     const { reader, calls } = readerOver([fileEntry(BILLING_PATH)])
 
     const result = await enrichCycleFactsWithAreas(
-      { db: fakeDb(), changedFilesReader: reader },
+      { db: fakeDb(), changedFilesReader: reader, gateway: resolvingGateway() },
       { workspaceId: 'ws-1', facts: factsFor(prIds) },
     )
 
@@ -457,7 +496,7 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
     )
 
     const result = await enrichCycleFactsWithAreas(
-      { db: fakeDb(), changedFilesReader: reader, logger },
+      { db: fakeDb(), changedFilesReader: reader, gateway: resolvingGateway(), logger },
       { workspaceId: 'ws-1', facts: factsFor(prIds) },
     )
 
@@ -479,7 +518,7 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
     const { reader } = readerOver(page)
 
     const result = await enrichCycleFactsWithAreas(
-      { db: fakeDb(), changedFilesReader: reader },
+      { db: fakeDb(), changedFilesReader: reader, gateway: resolvingGateway() },
       { workspaceId: 'ws-1', facts: factsFor(['pr-1']) },
     )
 
@@ -489,12 +528,54 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
     expect(buildDigestInput(result)).toContain('touched more files than yapm reads in one page')
   })
 
+  // The internal collapse is a claim that EVERY area the work touched is internal. A truncated file
+  // list cannot support it: the labels are a prefix, so the sensitive area could be in the files yapm
+  // never read. Same reasoning the unmapped label already gets.
+  it('refuses to collapse a TRUNCATED pull request into an internal improvement', async () => {
+    const internalRules: AreaRule[] = [
+      { prefix: 'apps/server/src/infra/', area: 'Infra', internal: true },
+      ...RULES,
+    ]
+    reads.aiConfig.mockResolvedValue({ enabled: true, data: { models: {}, areas: internalRules } })
+    reads.prSources.mockResolvedValue(sourcesFor(['pr-1']))
+    const fullPage = Array.from({ length: 100 }, (_, index) =>
+      fileEntry(`apps/server/src/infra/file-${index}.ts`, 1),
+    )
+
+    const truncated = await enrichCycleFactsWithAreas(
+      {
+        db: fakeDb(),
+        changedFilesReader: readerOver(fullPage).reader,
+        gateway: resolvingGateway(),
+      },
+      { workspaceId: 'ws-1', facts: factsFor(['pr-1']) },
+    )
+    expect(truncated.areas).toEqual([
+      { area: 'Infra', issueCount: 1, prCount: 1, sensitive: false },
+    ])
+    expect(truncated.areaCoverage).toEqual({ enriched: 1, skipped: 0, partial: 1 })
+    expect(truncated.internalImprovements).toBe(0)
+
+    // The identical work, read completely, IS an internal improvement — so the refusal above is the
+    // truncation signal doing its job, not the internal flag failing to apply.
+    const complete = await enrichCycleFactsWithAreas(
+      {
+        db: fakeDb(),
+        changedFilesReader: readerOver(fullPage.slice(0, 99)).reader,
+        gateway: resolvingGateway(),
+      },
+      { workspaceId: 'ws-1', facts: factsFor(['pr-1']) },
+    )
+    expect(complete.areaCoverage).toEqual({ enriched: 1, skipped: 0 })
+    expect(complete.internalImprovements).toBe(1)
+  })
+
   it('records no partial count when every file list fit in one page', async () => {
     reads.prSources.mockResolvedValue(sourcesFor(['pr-1']))
     const { reader } = readerOver([fileEntry(BILLING_PATH)])
 
     const result = await enrichCycleFactsWithAreas(
-      { db: fakeDb(), changedFilesReader: reader },
+      { db: fakeDb(), changedFilesReader: reader, gateway: resolvingGateway() },
       { workspaceId: 'ws-1', facts: factsFor(['pr-1']) },
     )
     expect(result.areaCoverage).toEqual({ enriched: 1, skipped: 0 })
@@ -509,7 +590,7 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
     const { reader, calls } = readerOver([fileEntry(BILLING_PATH)])
     expect(
       await enrichCycleFactsWithAreas(
-        { db: fakeDb(), changedFilesReader: reader },
+        { db: fakeDb(), changedFilesReader: reader, gateway: resolvingGateway() },
         { workspaceId: 'ws-1', facts },
       ),
     ).toBe(facts)
@@ -525,7 +606,7 @@ describe('the stored digest carries yapm-computed area coverage', () => {
     reads.prSources.mockResolvedValue(sourcesFor(prIds))
     const { reader } = readerOver([fileEntry(BILLING_PATH)])
     const enriched = await enrichCycleFactsWithAreas(
-      { db: fakeDb(), changedFilesReader: reader },
+      { db: fakeDb(), changedFilesReader: reader, gateway: resolvingGateway() },
       { workspaceId: 'ws-1', facts: factsFor(prIds) },
     )
 
@@ -591,7 +672,7 @@ describe('enrichCycleFactsWithAreas — a failing changed-files provider degrade
     const throwing: ChangedFilesReader = () => Promise.reject(new Error('502 Bad Gateway'))
 
     const result = await enrichCycleFactsWithAreas(
-      { db: fakeDb(), changedFilesReader: throwing, logger },
+      { db: fakeDb(), changedFilesReader: throwing, gateway: resolvingGateway(), logger },
       { workspaceId: 'ws-1', facts },
     )
     expect(result).toBe(facts)
@@ -604,7 +685,7 @@ describe('enrichCycleFactsWithAreas — a failing changed-files provider degrade
     const facts = factsFor(['pr-1'])
     const throwing: ChangedFilesReader = () => Promise.reject(new Error('502 Bad Gateway'))
     const enriched = await enrichCycleFactsWithAreas(
-      { db: fakeDb(), changedFilesReader: throwing },
+      { db: fakeDb(), changedFilesReader: throwing, gateway: resolvingGateway() },
       { workspaceId: 'ws-1', facts },
     )
 

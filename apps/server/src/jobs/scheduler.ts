@@ -207,7 +207,12 @@ async function registerCycleJobs(options: RegisterCycleJobsOptions): Promise<voi
         // network I/O inside the cycle-maintenance pass would let a slow GitHub response delay
         // every other team's rollover. It never throws and never blocks the digest.
         const facts = await enrichCycleFactsWithAreas(
-          { db, changedFilesReader: digest.changedFilesReader ?? null, logger },
+          {
+            db,
+            changedFilesReader: digest.changedFilesReader ?? null,
+            gateway: digest.gateway,
+            logger,
+          },
           job.data,
         )
         const result = await runCycleDigest(

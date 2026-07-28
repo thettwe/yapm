@@ -251,12 +251,16 @@ describe('disclosure validator — no path, extension, fence or code identifier 
     })
   }
 
-  // The four leak shapes design D6 names.
+  // The four leak shapes design D6 names, plus the capitalised bare filename the `.js` product-name
+  // carve-out must not exempt — the only disclosure shape a slash-free item has left.
   const leaks: Record<string, string> = {
     'a slash-bearing path token': 'Reworked apps/server/src/billing to shorten the window.',
     'a source-file extension': 'Reworked refund.ts to shorten the window.',
     'a backtick / code fence': 'Reworked the `refund window` constant.',
     'a code identifier call': 'Reworked session.refresh() so the window shortens.',
+    'a capitalised bare filename': 'Updated Button.tsx to fix the reorder.',
+    'a capitalised bare filename ending .ts': 'Session.ts now expires idle tabs.',
+    'a capitalised bare filename ending .vue': 'App.vue was split in two.',
   }
 
   for (const [shape, summary] of Object.entries(leaks)) {

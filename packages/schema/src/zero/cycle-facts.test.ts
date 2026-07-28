@@ -370,6 +370,43 @@ describe('buildCycleFacts — area aggregates, team-level and yapm-computed', ()
     expect(onlyUnmapped.internalImprovements).toBe(0)
   })
 
+  // The same reasoning as unmapped work: a TRUNCATED file list makes the label set a prefix, so
+  // "every area this touched is internal" is a claim about files that were never read.
+  it('never treats work read from a truncated file list as an internal improvement', () => {
+    const internalOnly = {
+      cycle: { id: 'cycle-1', teamId: 'team-1', name: 'Cycle 9' },
+      areaCatalog: [{ area: 'Tooling', internal: true }],
+      issues: [
+        {
+          id: 'issue-internal',
+          number: 3,
+          title: 'Bump the linter',
+          status: 'done' as const,
+          pullRequests: [
+            {
+              id: 'pr-c',
+              number: 3,
+              title: null,
+              state: 'merged' as const,
+              areas: ['Tooling'],
+              changedLines: 4,
+            },
+          ],
+        },
+      ],
+    }
+    expect(buildCycleFacts(internalOnly).internalImprovements).toBe(1)
+    expect(
+      buildCycleFacts({
+        ...internalOnly,
+        issues: internalOnly.issues.map((issue) => ({
+          ...issue,
+          pullRequests: issue.pullRequests.map((pr) => ({ ...pr, truncated: true })),
+        })),
+      }).internalImprovements,
+    ).toBe(0)
+  })
+
   // The prompt asks the model to restate `prCount` verbatim, so a pull request that closes two
   // issues must be ONE pull request in the grouping — counting it per issue would put a number in the
   // digest that no entity in the graph supports.
@@ -435,6 +472,23 @@ describe('withCycleAreas — the same derivation, layered onto already-built fac
     expect(layered.touchedSensitiveAreas).toEqual(direct.touchedSensitiveAreas)
     expect(layered.internalImprovements).toBe(direct.internalImprovements)
     expect(layered.issues).toEqual(direct.issues)
+  })
+
+  // Both entry points delegate to the one derivation, so the truncation disqualification must hold
+  // on the worker's path too — that is the path the digest job actually takes.
+  it('carries the truncation signal through to the internal collapse', () => {
+    const prAreas = new Map([['pr-c', { areas: ['Tooling'], changedLines: 4, truncated: true }]])
+    const layered = withCycleAreas(bare, { prAreas, catalog })
+    expect(layered.areas).toEqual([
+      { area: 'Tooling', issueCount: 1, prCount: 1, sensitive: false },
+    ])
+    expect(layered.internalImprovements).toBe(0)
+    expect(
+      withCycleAreas(bare, {
+        prAreas: new Map([['pr-c', { areas: ['Tooling'], changedLines: 4 }]]),
+        catalog,
+      }).internalImprovements,
+    ).toBe(1)
   })
 
   it('records partial coverage without inventing an area layer', () => {

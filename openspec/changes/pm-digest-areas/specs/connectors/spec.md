@@ -63,8 +63,11 @@ memory.
 ### Requirement: The changed-file draw on the rate limit is bounded and stated
 
 Listing files for every pull request in a cycle is a new draw on the same installation rate limit
-that reconciliation depends on. The system SHALL bound it three ways: it SHALL make **zero**
-provider calls when the workspace has configured no area rules; it SHALL cap the number of
+that reconciliation depends on. The system SHALL bound it four ways: it SHALL make **zero**
+provider calls when the workspace has configured no area rules; it SHALL make **zero** provider
+calls when the digest that would consume the result cannot run — evaluated by asking the same
+gateway predicate the digest run itself uses, so the AI toggle, the provider, the key and the
+spend cap are one condition and not a re-derived copy of one; it SHALL cap the number of
 per-cycle `listFiles` calls at a fixed constant, enriching pull requests in a deterministic order
 so a truncated run is reproducible; and it SHALL stop enriching for the remainder of a run when
 the installation's reported remaining rate-limit quota falls below a floor, recording that it did
@@ -80,6 +83,12 @@ Permission story: unchanged.
 - **WHEN** a cycle closes in a workspace with no area rules configured
 - **THEN** no `listFiles` call is made and the rate-limit consumption is unchanged from before this
   capability existed
+
+#### Scenario: A workspace whose digest will end `ai_off` spends nothing
+
+- **WHEN** a cycle closes in a workspace that has area rules but no model the gateway can resolve —
+  AI switched off, no provider chosen, or no key configured
+- **THEN** no `listFiles` call is made, and the same is true once the workspace is over its spend cap
 
 #### Scenario: A large cycle is capped, not unbounded
 

@@ -18,6 +18,7 @@ import {
   RATE_LIMIT_FLOOR,
 } from '../connectors/github/files.js'
 import type { Logger } from '../logger.js'
+import type { AiGateway } from './gateway.js'
 import { exceedsSpendCap } from './model-catalog.js'
 
 // The transient area-enrichment step, run inside the EXISTING cycle-digest worker immediately
@@ -36,6 +37,9 @@ export interface EnrichCycleFactsDeps {
   db: Kysely<DB>
   // Null when the GitHub connector is disabled. The digest then runs un-enriched.
   changedFilesReader: ChangedFilesReader | null
+  // The SAME gateway `runCycleDigest` will be handed. Only `resolveModel` is used, and only as the
+  // one predicate that decides whether the digest can run at all — see the gate below.
+  gateway: Pick<AiGateway, 'resolveModel'>
   logger?: Logger
 }
 
@@ -64,12 +68,6 @@ export async function enrichCycleFactsWithAreas(
 
   try {
     const config = await getAiConfig(deps.db, workspaceId)
-    // A workspace that turned AI off is going to get an `ai_off` digest whatever this step gathers,
-    // so gathering it spends someone else's rate budget for nothing. An existing row is
-    // authoritative over any env instance default (`gateway.ts` resolveModel), and a workspace with
-    // no row has no area map either, so the empty-map guard below still covers it.
-    if (config !== null && !config.enabled) return facts
-
     const rules = config?.data.areas ?? []
     // ZERO provider calls until an admin opts in. The feature costs nothing against the shared
     // installation rate budget until the workspace decides it is worth something.
@@ -78,15 +76,24 @@ export async function enrichCycleFactsWithAreas(
     const prIds = pullRequestIds(facts)
     if (prIds.length === 0) return facts
 
-    // Same reason as the toggle: past the cap the run is refused before the model is called, so the
-    // enrichment that would have fed it is pure waste.
+    // A run that will end `ai_off` spends someone else's rate budget for nothing. The condition for
+    // that is master toggle AND provider AND resolvable key, and `resolveModel` IS that condition —
+    // asking it, rather than re-deriving a subset here, is what keeps this gate from drifting away
+    // from `gateway.ts` the next time the resolution rules change.
+    if ((await deps.gateway.resolveModel(workspaceId)) === null) return facts
+
+    // The one condition `resolveModel` does not cover: past the cap the run is refused before the
+    // model is called, so the enrichment that would have fed it is pure waste.
     const spendSoFarUsd = await getWorkspaceAiSpendUsd(deps.db, workspaceId)
     if (exceedsSpendCap(spendSoFarUsd, config?.data.spendCapUsd ?? null)) return facts
 
     const sources = await pullRequestSourcesForCycleFacts(deps.db, facts.teamId, prIds)
     if (sources.length === 0) return facts
 
-    const prAreas = new Map<string, { areas: readonly string[]; changedLines: number }>()
+    const prAreas = new Map<
+      string,
+      { areas: readonly string[]; changedLines: number; truncated?: boolean }
+    >()
     let enriched = 0
     let skipped = 0
     let partial = 0
@@ -113,6 +120,9 @@ export async function enrichCycleFactsWithAreas(
         // A truncated file list is banded by what truncation already proves — more than a page of
         // files is "big and everywhere" — rather than by the prefix that happened to be read.
         changedLines: result.truncated ? Math.max(changedLines, XL_CHANGE_THRESHOLD) : changedLines,
+        // The signal itself travels with the labels: the area set is a PREFIX, so downstream
+        // aggregates that read "these are all the areas it touched" must not be computed from it.
+        ...(result.truncated ? { truncated: true } : {}),
       })
       if (result.truncated) partial += 1
       enriched += 1

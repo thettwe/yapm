@@ -189,16 +189,22 @@ export function dropItemsNamingMembers(
 const SOURCE_FILE_EXTENSION =
   /\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs|rb|java|kt|swift|c|h|cpp|cs|php|sql|sh|yml|yaml|toml|json|css|scss|html|vue|svelte)\b/gi
 
-// A CAPITALISED identifier immediately before the dot is a product name, not a filename: `Node.js`,
-// `Next.js`, `Vue.js`, `D3.js` are ordinary delivery prose and dropping those items would silently
-// eat legitimate content. A real path still discloses through its slashes, which is why giving this
-// up costs only the bare, slash-free, capitalised filename — and this is defence in depth, not the
-// boundary.
+// A CAPITALISED identifier immediately before `.js` is a runtime or framework name, not a filename:
+// `Node.js`, `Next.js`, `Vue.js`, `D3.js` are ordinary delivery prose and dropping those items would
+// silently eat legitimate content. The carve-out is scoped to `.js` — the ONE extension that appears
+// in such names — because widening it to the whole list would exempt every capitalised bare filename
+// (`Button.tsx`, `Session.ts`, `App.vue`), which is a real disclosure shape and the only one a
+// slash-free item has left.
 const PRODUCT_NAME_BEFORE_DOT = /[A-Z][A-Za-z0-9]*$/
+const PRODUCT_NAME_EXTENSION = '.js'
 
 function textCarriesSourceExtension(text: string): boolean {
   for (const match of text.matchAll(SOURCE_FILE_EXTENSION)) {
-    if (PRODUCT_NAME_BEFORE_DOT.test(text.slice(0, match.index))) continue
+    if (
+      match[0].toLowerCase() === PRODUCT_NAME_EXTENSION &&
+      PRODUCT_NAME_BEFORE_DOT.test(text.slice(0, match.index))
+    )
+      continue
     return true
   }
   return false

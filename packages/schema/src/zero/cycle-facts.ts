@@ -24,6 +24,9 @@ export interface CycleFactsPr {
   // happens at the enrichment step, before anything reaches this file.
   readonly areas?: readonly string[]
   readonly changedLines?: number
+  // True when the area set above was read from a TRUNCATED file list — a prefix of what the pull
+  // request actually touched, so absent labels prove nothing.
+  readonly truncated?: boolean
 }
 
 export interface CycleFactsIssueInput {
@@ -169,6 +172,7 @@ export function buildCycleFacts(input: CycleFactsInput): CycleFacts {
         id: pr.id,
         ...(pr.areas === undefined ? {} : { areas: pr.areas }),
         ...(pr.changedLines === undefined ? {} : { changedLines: pr.changedLines }),
+        ...(pr.truncated === undefined ? {} : { truncated: pr.truncated }),
       })),
     })),
     input.areaCatalog,
@@ -195,6 +199,7 @@ interface AreaPrInput {
   readonly id: string
   readonly areas?: readonly string[]
   readonly changedLines?: number
+  readonly truncated?: boolean
 }
 
 interface AreaIssueInput {
@@ -234,8 +239,10 @@ function deriveAreaFacts(
     const labels = new Set<string>()
     let changedLines = 0
     let sawChangedLines = false
+    let sawTruncated = false
     for (const pr of issue.prs) {
       if (pr.areas === undefined) continue
+      if (pr.truncated) sawTruncated = true
       for (const label of new Set(pr.areas)) {
         labels.add(label)
         const ids = prIdsByLabel.get(label) ?? new Set<string>()
@@ -256,10 +263,12 @@ function deriveAreaFacts(
     })
     // An internal improvement is work whose every label is an admin-marked internal area. An
     // unmapped label disqualifies it — yapm does not know where that work landed, so it is not
-    // entitled to collapse it.
-    const internal = sorted.every(
-      (label) => label !== UNMAPPED_AREA && flags.get(label)?.internal === true,
-    )
+    // entitled to collapse it. A TRUNCATED file list disqualifies it for the identical reason: the
+    // labels are a prefix of what the pull request touched, so "every area it touched is internal"
+    // is a claim about files yapm never read.
+    const internal =
+      !sawTruncated &&
+      sorted.every((label) => label !== UNMAPPED_AREA && flags.get(label)?.internal === true)
     if (internal) internalImprovements += 1
   }
 
@@ -293,7 +302,12 @@ export interface WithCycleAreasInput {
   // the same pull-request evidence ids `buildCycleFacts` already computed.
   readonly prAreas: ReadonlyMap<
     string,
-    { readonly areas: readonly string[]; readonly changedLines?: number }
+    {
+      readonly areas: readonly string[]
+      readonly changedLines?: number
+      // Set when the file list was a full page — the labels are a prefix, not the whole set.
+      readonly truncated?: boolean
+    }
   >
   readonly catalog?: readonly AreaDefinition[]
   readonly coverage?: CycleAreaCoverage

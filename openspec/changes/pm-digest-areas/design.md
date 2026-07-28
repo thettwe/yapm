@@ -400,6 +400,16 @@ step bands such a pull request at the `xl` floor and counts it into a new option
 sensitive area touched only by the 101st file was silently absent from a grouping presented as
 complete.
 
+**Truncation travels with the labels, not only with the size band.** The first version of the signal
+reached two places — the `xl` floor and the `partial` counter — and stopped there, so a truncated
+pull request whose visible first page happened to fall entirely in internal areas was still counted
+as a routine internal improvement. That is the same claim the code already refuses to make about
+unmapped work: "every area this touched is internal" is unsupportable when the labels are a prefix of
+what the pull request touched. `truncated` is now carried per pull request into `prAreas` (and the
+matching optional field on `CycleFactsPr`, so both `deriveAreaFacts` entry points agree), and an
+issue with any truncated pull request is disqualified from the collapse. It keeps its `xl` band, its
+areas and its evidence — only the "nothing to see here" collapse is withheld.
+
 **Area coverage is a stored, yapm-authored line, not a prompt request.** Two docs pages promised that
 a partially-mapped cycle "says so", and the only implementation was a prompt line asking the model not
 to treat the grouping as exhaustive — a request, not a guarantee, and nothing rendered. The coverage
@@ -408,23 +418,30 @@ now rides in the stored `cycle_digest.content` jsonb (no column, no migration: `
 requests". The model-facing schema stays `digestContentSchema` and the stored blob is a separate
 `storedDigestContentSchema`, because a field the model could fill is a number the model could invent.
 
-**Enrichment is gated on the AI toggle and the spend cap, not only on the map.** The step consulted
-`config.data.areas` alone, so a workspace with a map but AI switched off — or past its cap — spent up
-to 50 GitHub calls per closing cycle on a digest guaranteed to end `ai_off`. Both are now checked
-before any provider call, using the config already in hand: an existing row's `enabled` is
-authoritative over any env default (the same rule `gateway.ts` follows), and a workspace with no row
-has no area map either, so the empty-map guard still covers it.
+**Enrichment asks the gateway whether the digest can run; it does not re-derive the answer.** The
+step first consulted `config.data.areas` alone, so a workspace with a map but AI off — or past its
+cap — spent up to 50 GitHub calls per closing cycle on a digest guaranteed to end `ai_off`. The first
+fix re-derived the toggle locally, which covered two of the three conditions `gateway.ts` actually
+applies: a workspace with AI on, an area map, and no resolvable provider or key still paid the full
+50 calls. `EnrichCycleFactsDeps` now takes the SAME gateway the worker hands `runCycleDigest` and
+gates on `resolveModel(workspaceId) === null`, so toggle, provider and key are one predicate with one
+definition that cannot drift. The spend cap stays a separate check — `resolveModel` does not consider
+it — and a workspace with no config row has no area map either, so the empty-map guard still runs
+first and costs nothing.
 
 **`prCount` counts distinct pull requests.** The aggregate incremented once per (issue, label) pair,
 so a pull request closing three issues was three pull requests in a number the prompt asks the model
 to restate verbatim. It now accumulates a set of pull-request ids per label.
 
-**A capitalised identifier before a source extension is a product name.** The disclosure validator
-tested its extension list against whole item text, so ordinary delivery prose — `Node.js`, `Next.js`,
-`Vue.js`, `D3.js` — was classified as a path disclosure and the item silently dropped. The extension
-match is now skipped when a capitalised identifier immediately precedes the dot. The cost is the bare,
-slash-free, capitalised filename (`Button.tsx` alone in a sentence); any real path still discloses
-through its slashes, and this validator is defence in depth, not the boundary (D6).
+**A capitalised identifier before `.js` is a runtime name — and the carve-out stops there.** The
+disclosure validator tested its extension list against whole item text, so ordinary delivery prose —
+`Node.js`, `Next.js`, `Vue.js`, `D3.js` — was classified as a path disclosure and the item silently
+dropped. Skipping the match on any capitalised identifier before the dot fixed that but paid for it
+across the whole extension list: `Button.tsx`, `Session.ts` and `App.vue` stopped being disclosures
+too, and a bare capitalised filename is the only shape a slash-free item has left. The carve-out is
+therefore scoped to `.js`, the one extension that appears in runtime and framework names; every
+allowlisted string still passes, and `digest.test.ts` now carries three capitalised bare filenames in
+its leak table so re-widening it fails a test rather than passing quietly.
 
 **`unmapped` is refused, not merely documented.** The reserved label was enforced nowhere: an admin
 could author an area called `unmapped` and make "yapm could not place this work" indistinguishable

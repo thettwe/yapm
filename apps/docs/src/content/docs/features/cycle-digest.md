@@ -50,7 +50,10 @@ With a map configured, the digest gains four things:
   it. It reports, it does not judge.
 - **The internal-improvements collapse** — mark an area *internal* (tooling, CI config, chores) and
   work landing only there is collapsed into a single "N internal improvements" line instead of one
-  item per issue. Those issues stay in the cycle's own evidence; only the narration collapses.
+  item per issue. Those issues stay in the cycle's own evidence; only the narration collapses. The
+  collapse is a claim that *every* area the work touched is internal, so yapm withholds it whenever
+  it could not place the work completely — an unmapped path, or a pull request larger than the one
+  page of files yapm reads. Uncertain work is narrated, never quietly filed as routine.
 
 Work under a path no rule covers is labeled **`unmapped`** — never the raw path. So a partial map is
 useful immediately, and an incomplete one is honest about its gaps rather than silently wrong. If

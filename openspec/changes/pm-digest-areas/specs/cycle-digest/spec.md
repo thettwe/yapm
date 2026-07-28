@@ -117,6 +117,13 @@ unchanged; the run is still server-side under the system principal with no tools
 - **THEN** the input carries a computed internal-improvement count and the prompt directs a single
   collapsed line rather than an item per issue
 
+#### Scenario: Incompletely placed work is never collapsed
+
+- **WHEN** an issue's area labels came from an unmapped path, or from a pull request whose file list
+  was truncated, and every label yapm did see is internal
+- **THEN** the issue is NOT counted as an internal improvement, because "every area this touched is
+  internal" is a claim about files yapm did not read
+
 ### Requirement: Area enrichment never blocks or fails the digest
 
 The digest job SHALL treat area enrichment as best-effort. A provider error, a timeout, a

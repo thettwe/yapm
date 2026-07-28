@@ -1,4 +1,10 @@
-import { AI_PROVIDERS, type AiProvider, type AuthContext, newId } from '@yapm/schema'
+import {
+  AI_PROVIDERS,
+  type AiProvider,
+  type AuthContext,
+  areaRuleSchema,
+  newId,
+} from '@yapm/schema'
 import {
   ConnectorAuthorizationError,
   type DB,
@@ -48,6 +54,9 @@ const configBody = z.object({
   defaultProvider: providerSchema.nullable().optional(),
   models: z.partialRecord(providerSchema, z.string().min(1)).optional(),
   spendCapUsd: z.number().positive().nullable().optional(),
+  // The ordered path→area map, replaced wholesale when present. Order is semantic (first match
+  // wins), so a merge would silently change which rule applies.
+  areas: z.array(areaRuleSchema).optional(),
 })
 
 const keyBody = z.object({ value: z.string().min(1) })
@@ -106,9 +115,11 @@ export function createAiAdminRoutes(options: AiAdminRoutesOptions): Hono {
     const body = parsed.data
 
     const existing = await getAiConfig(db, workspaceId)
-    const current = existing?.data ?? { models: {} }
+    const current = existing?.data ?? { models: {}, areas: [] }
     const nextConfig = {
       models: { ...current.models, ...(body.models ?? {}) },
+      // Omitted ⇒ the stored map is left untouched, so changing the spend cap never clobbers it.
+      areas: body.areas ?? current.areas,
       ...(body.defaultProvider === undefined
         ? current.defaultProvider === undefined
           ? {}

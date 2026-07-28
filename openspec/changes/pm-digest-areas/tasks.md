@@ -4,7 +4,7 @@ Ordered so the app runs after every task. Groups 1–5 are the build pass; 6 is 
 
 ## 1. The pure area layer in `packages/schema`
 
-- [ ] 1.1 Create `packages/schema/src/zero/areas.ts`: `areaRuleSchema`
+- [x] 1.1 Create `packages/schema/src/zero/areas.ts`: `areaRuleSchema`
       (`{ prefix: string.min(1), area: string.min(1), sensitive?: boolean, internal?: boolean }`),
       `areaMapSchema = z.array(areaRuleSchema).default([])`, the exported reserved label
       `UNMAPPED_AREA = 'unmapped'`, `CHANGE_SIZE_BANDS = ['xs','s','m','l','xl']`, a pure
@@ -12,11 +12,11 @@ Ordered so the app runs after every task. Groups 1–5 are the build pass; 6 is 
       ≥1000), and a pure `matchArea(rules, path): AreaRule | null` that normalizes the path (strip
       leading `./` and `/`, lowercase-compare) and returns the **first** matching prefix. Literal
       prefixes only — no glob, no regex. Zero imports beyond `zod`.
-- [ ] 1.2 Add `areasForPaths(rules, paths): { areas: string[]; sensitive: string[]; internalOnly: boolean }`
+- [x] 1.2 Add `areasForPaths(rules, paths): { areas: string[]; sensitive: string[]; internalOnly: boolean }`
       to the same file: every path maps to a rule's `area` or to `UNMAPPED_AREA`; `internalOnly` is
       true only when the path list is non-empty and every matched rule is `internal`. Deduplicate
       and sort labels so output is deterministic.
-- [ ] 1.3 Extend `packages/schema/src/zero/cycle-facts.ts` **additively only** — no rename, no
+- [x] 1.3 Extend `packages/schema/src/zero/cycle-facts.ts` **additively only** — no rename, no
       restructure, no changed shape for an existing caller (`feat/retro-ai-draft` consumes this
       file concurrently):
       - `CycleFactsPr` gains `readonly areas?: readonly string[]` and
@@ -28,12 +28,12 @@ Ordered so the app runs after every task. Groups 1–5 are the build pass; 6 is 
       - `CycleFacts` gains `readonly areas?: readonly CycleAreaFacts[]`
         (`{ area, issueCount, prCount, sensitive }`), `readonly touchedSensitiveAreas?: readonly string[]`,
         `readonly internalImprovements?: number`, and `readonly areaCoverage?: { enriched: number; skipped: number }`.
-- [ ] 1.4 Add one internal `deriveAreaFacts` helper in `cycle-facts.ts` and two entry points into
+- [x] 1.4 Add one internal `deriveAreaFacts` helper in `cycle-facts.ts` and two entry points into
       it: `buildCycleFacts` populates the new fields when its input carries area data, and a new
       exported pure `withCycleAreas(facts, { prAreas, catalog, coverage })` layers them onto an
       already-built `CycleFacts`. Internal-improvement issues stay in `facts.issues`; the collapse
       is the count only. When no area data is supplied every new field stays `undefined`.
-- [ ] 1.5 Add `dropItemsDisclosingPaths(content)` and `contentDisclosesPaths(content)` to
+- [x] 1.5 Add `dropItemsDisclosingPaths(content)` and `contentDisclosesPaths(content)` to
       `packages/schema/src/zero/digest.ts` as structural siblings of `dropItemsNamingMembers`:
       same walker, drop the item, blank the headline, remove emptied sections. Leak shapes: a
       `/`-bearing path token (a segment carrying a file extension, or ≥2 slashes, or a segment in
@@ -41,32 +41,32 @@ Ordered so the app runs after every task. Groups 1–5 are the build pass; 6 is 
       an `identifier.method()` shape. Non-match allowlist: `CI/CD`, `I/O`, `A/B`, `and/or`,
       `<digits>/<digits>`, and date forms. Do **not** copy `rosterNameNeedles` or add a second
       cite-or-omit walker.
-- [ ] 1.6 Add `areas: areaMapSchema` to `aiConfigDataSchema` in
+- [x] 1.6 Add `areas: areaMapSchema` to `aiConfigDataSchema` in
       `packages/schema/src/db/ai-config.ts`, surface it on `RedactedAiStatus`, and confirm
       `upsertAiConfig` still leaves the stored map untouched when `config` is omitted.
-- [ ] 1.7 Add `pullRequestSourcesForCycleFacts(db, teamId, prIds)` to
+- [x] 1.7 Add `pullRequestSourcesForCycleFacts(db, teamId, prIds)` to
       `packages/schema/src/db/cycle-facts.ts`: an **explicit column list** of
       `pull_request.(id, repo, number, installation_id)` joined to
       `connector_installation.external_installation_id`, filtered by `team_id`, ordered by
       `pull_request.id`. Never `selectAll()`.
-- [ ] 1.8 Export the new public surface from `packages/schema/src/index.ts` and
+- [x] 1.8 Export the new public surface from `packages/schema/src/index.ts` and
       `packages/schema/src/db/index.ts`. `pnpm turbo typecheck` is green and the existing digest
       behaviour is unchanged.
 
 ## 2. The provider seam
 
-- [ ] 2.1 Extend `GithubRestClient` in `apps/server/src/connectors/github/reconcile.ts` with
+- [x] 2.1 Extend `GithubRestClient` in `apps/server/src/connectors/github/reconcile.ts` with
       `pulls.listFiles({ owner, repo, pull_number, per_page })` returning
       `GithubRestResponse<{ filename: string; status: string; changes: number }[]>`, and add
       `'x-ratelimit-remaining'?: string` to `GithubRestResponse['headers']`. Declare only the
       fields read — a wider real response satisfies it structurally.
-- [ ] 2.2 Create `apps/server/src/connectors/github/files.ts` with the closed type
+- [x] 2.2 Create `apps/server/src/connectors/github/files.ts` with the closed type
       `ChangedFile = { path: string; status: string; changes: number }` (no field can hold patch
       content), a `projectChangedFile` that is the **only** constructor of it, and
       `listChangedFiles(client, owner, repo, number)` that maps every entry through the projection
       before returning. Export `MAX_PR_FILE_CALLS = 50` and `RATE_LIMIT_FLOOR = 500`, and return
       the observed remaining quota so the caller can stop.
-- [ ] 2.3 Expose the installation client to non-connector callers without leaking octokit: add a
+- [x] 2.3 Expose the installation client to non-connector callers without leaking octokit: add a
       narrow `changedFilesReader` accessor to the `GithubConnector` surface
       (`apps/server/src/connectors/github/service.ts` + `index.ts`) that resolves an external
       installation id to a client and calls `listChangedFiles`. Absent GitHub App env ⇒ the
@@ -74,7 +74,7 @@ Ordered so the app runs after every task. Groups 1–5 are the build pass; 6 is 
 
 ## 3. Transient enrichment inside the existing digest job
 
-- [ ] 3.1 Create `apps/server/src/ai/areas.ts` with
+- [x] 3.1 Create `apps/server/src/ai/areas.ts` with
       `enrichCycleFactsWithAreas(deps, { workspaceId, facts }): Promise<CycleFacts>`:
       read the workspace AI config; **return `facts` unchanged and make zero provider calls when
       `areas` is empty or the reader is null**; otherwise read the PR sources
@@ -82,33 +82,33 @@ Ordered so the app runs after every task. Groups 1–5 are the build pass; 6 is 
       order up to `MAX_PR_FILE_CALLS`, stop when remaining quota < `RATE_LIMIT_FLOOR`, map paths
       through `areasForPaths` and `changeSizeBand`, then return `withCycleAreas(...)`. Persist
       nothing. Never throw: any error logs and returns the un-enriched facts.
-- [ ] 3.2 Wire it into `apps/server/src/jobs/scheduler.ts`: the existing `CYCLE_DIGEST_QUEUE`
+- [x] 3.2 Wire it into `apps/server/src/jobs/scheduler.ts`: the existing `CYCLE_DIGEST_QUEUE`
       worker calls `enrichCycleFactsWithAreas` immediately before `runCycleDigest`. Add the
       optional reader to `DigestSchedulerOptions`. No new queue, no second `boss.start()`, no new
       cron.
-- [ ] 3.3 Wire the reader through `apps/server/src/index.ts` — `github.changedFilesReader` into
+- [x] 3.3 Wire the reader through `apps/server/src/index.ts` — `github.changedFilesReader` into
       `cycles.digest`. The digest still runs (un-enriched) when the connector is disabled.
 
 ## 4. Prompt altitude and the disclosure validator in the run
 
-- [ ] 4.1 Extend `DIGEST_SYSTEM_PROMPT` in `apps/server/src/ai/digest.ts`: describe work by
+- [x] 4.1 Extend `DIGEST_SYSTEM_PROMPT` in `apps/server/src/ai/digest.ts`: describe work by
       product-area label; never emit a file path, filename, extension, code fence or code
       identifier; collapse internal-area work into one "N internal improvements" line using the
       supplied count. Keep the existing rules verbatim.
-- [ ] 4.2 Extend `buildDigestInput` to state the area grouping, size bands, touched sensitive
+- [x] 4.2 Extend `buildDigestInput` to state the area grouping, size bands, touched sensitive
       areas and internal-improvement count in the **trusted computed values** section — outside
       the untrusted fence — and to omit the whole area paragraph when the facts carry no area
       layer.
-- [ ] 4.3 Apply `dropItemsDisclosingPaths` in `runCycleDigest` after `dropItemsNamingMembers`.
+- [x] 4.3 Apply `dropItemsDisclosingPaths` in `runCycleDigest` after `dropItemsNamingMembers`.
 
 ## 5. The admin area-map surface
 
-- [ ] 5.1 Accept `areas` in the `configBody` Zod schema of `apps/server/src/ai/admin-routes.ts`
+- [x] 5.1 Accept `areas` in the `configBody` Zod schema of `apps/server/src/ai/admin-routes.ts`
       and return it from the GET. Admin-gated by the existing middleware; a non-admin is rejected
       before the map is read.
-- [ ] 5.2 Add the `areas` field to `apps/web/src/settings/ai.ts`'s mirrored types and request
+- [x] 5.2 Add the `areas` field to `apps/web/src/settings/ai.ts`'s mirrored types and request
       helpers.
-- [ ] 5.3 Add the area-map editor section to `apps/web/src/settings/ai-view.tsx`: an ordered list
+- [x] 5.3 Add the area-map editor section to `apps/web/src/settings/ai-view.tsx`: an ordered list
       of `prefix → area` rows with `sensitive` / `internal` toggles, add, remove, and **keyboard**
       move-up / move-down (order is semantic — first match wins). Tokens only, AA contrast, correct
       in all three presets light and dark, fully operable without a pointer. Explain the reserved

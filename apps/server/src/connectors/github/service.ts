@@ -19,6 +19,7 @@ import type { Logger } from '../../logger.js'
 import type { ZeroDatabase } from '../../zero/db-provider.js'
 import { createGithubApp, type GithubApp, githubSecretsFromEnv } from './app.js'
 import { type GithubConnectorSecrets, githubConnector } from './connector.js'
+import { type ChangedFilesReader, listChangedFiles, splitRepoFullName } from './files.js'
 import { type KnownPullRequest, reconcileInstallation } from './reconcile.js'
 import { processGithubDelivery } from './worker.js'
 
@@ -42,6 +43,10 @@ export interface GithubConnectorOptions {
 export interface GithubConnector {
   readonly enabled: boolean
   readonly secrets: GithubConnectorSecrets | null
+  // Projected changed-file metadata for a pull request, for callers outside `connectors/github`
+  // (the cycle-digest job). Null when the GitHub App env is absent — the same disabled path as
+  // everything else on this surface — and the caller simply skips enrichment.
+  readonly changedFilesReader: ChangedFilesReader | null
   enqueue(delivery: NormalizedDelivery): Promise<void>
   processDelivery(delivery: NormalizedDelivery): Promise<void>
   reconcileOnce(): Promise<void>
@@ -78,6 +83,7 @@ function createDeliveryDedupe(): DeliveryDedupe {
 const disabledConnector: GithubConnector = {
   enabled: false,
   secrets: null,
+  changedFilesReader: null,
   enqueue: () => Promise.resolve(),
   processDelivery: () => Promise.resolve(),
   reconcileOnce: () => Promise.resolve(),
@@ -234,6 +240,16 @@ export function createGithubConnector(options: GithubConnectorOptions): GithubCo
     }
   }
 
+  // Read-only, transient, and never persisted: the digest job asks which files a PR touched, maps
+  // the paths to admin-authored area labels, and discards the response. Runs under the same
+  // installation token as reconciliation, inside the permissions the connector already documents.
+  const changedFilesReader: ChangedFilesReader = async (request) => {
+    const target = splitRepoFullName(request.repoFullName)
+    if (!target) return { files: [], rateLimitRemaining: null }
+    const client = await app.installationClient(request.externalInstallationId)
+    return listChangedFiles(client, target.owner, target.repo, request.number)
+  }
+
   const enqueue = (delivery: NormalizedDelivery): Promise<void> =>
     boss
       .send(GITHUB_WEBHOOK_QUEUE, delivery, {
@@ -244,6 +260,7 @@ export function createGithubConnector(options: GithubConnectorOptions): GithubCo
   return {
     enabled: true,
     secrets,
+    changedFilesReader,
     enqueue,
     processDelivery,
     reconcileOnce,

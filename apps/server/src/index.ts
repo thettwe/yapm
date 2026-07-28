@@ -176,7 +176,13 @@ async function main(): Promise<void> {
           cron: env.CYCLE_MAINTENANCE_CRON,
           // Pre-compute a cycle digest at close unless disabled. Per-workspace AI config is
           // resolved at job time, so enabling AI via the admin UI takes effect without a restart.
-          ...(env.AI_DIGEST_ON_CYCLE_CLOSE === 'true' ? { digest: { gateway: aiGateway } } : {}),
+          // The changed-file reader is null when the GitHub App env is absent; the digest then runs
+          // un-enriched, exactly as before.
+          ...(env.AI_DIGEST_ON_CYCLE_CLOSE === 'true'
+            ? {
+                digest: { gateway: aiGateway, changedFilesReader: github.changedFilesReader },
+              }
+            : {}),
         }
       : undefined
 

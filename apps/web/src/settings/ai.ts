@@ -1,4 +1,4 @@
-import type { AiProvider } from '@yapm/schema'
+import type { AiProvider, AreaRule } from '@yapm/schema'
 
 // Mirrors the server's `RedactedAiStatus` (the server-only AI surface, never synced through Zero):
 // the toggle, chosen models, spend cap, and which providers have a key — NO key material, only the
@@ -11,6 +11,8 @@ export interface RedactedAiStatus {
   // Per-workspace ESTIMATED running total (sum of every ready digest's estimated cost).
   spendSoFarUsd: number
   configuredProviders: AiProvider[]
+  // The ordered path→product-area map. Order is semantic: the first matching prefix wins.
+  areas: AreaRule[]
 }
 
 export interface AiStatusResponse {
@@ -31,6 +33,8 @@ export interface AiConfigPatch {
   defaultProvider?: AiProvider | null
   models?: Partial<Record<AiProvider, string>>
   spendCapUsd?: number | null
+  // Replaced wholesale when sent; omitted leaves the stored map untouched.
+  areas?: AreaRule[]
 }
 
 const BASE = '/api/v1/ai'

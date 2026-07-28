@@ -4,6 +4,19 @@ export {
   type GithubConnectorSecrets,
   githubConnector,
 } from './connector.js'
+export type {
+  ChangedFile,
+  ChangedFilesReader,
+  ChangedFilesRequest,
+  ChangedFilesResult,
+} from './files.js'
+export {
+  listChangedFiles,
+  MAX_PR_FILE_CALLS,
+  projectChangedFile,
+  RATE_LIMIT_FLOOR,
+  splitRepoFullName,
+} from './files.js'
 export { mapGithubEvent } from './map.js'
 export { parseGithubDelivery } from './parse-delivery.js'
 export { type GithubRestClient, isNotModified, reconcileInstallation } from './reconcile.js'

@@ -310,4 +310,44 @@ tolerates a legacy blob today).
 
 ## Decisions made during implementation
 
-<!-- Appended during the build phase: what was ambiguous, what was chosen, and why. -->
+**`projectChangedFile` takes the declared element type, not `unknown`.** D2 sketched
+`projectChangedFile(entry: unknown)`. The seam only ever receives values typed by
+`GithubRestClient`'s own narrow declaration, so an `unknown` parameter would have added a runtime
+narrowing step that could only fail on a shape TypeScript already rejects. The parameter is typed
+`{ filename, status, changes }`; structural typing means the wide octokit object still satisfies it
+and the explicit three-field construction is what drops everything else. The guarantee D2 asks for —
+"no caller can hold an unprojected entry" — is unchanged, and `ChangedFile` still has no field able
+to carry patch content.
+
+**`areaCatalogFromRules` was added to `zero/areas.ts`.** The tasks name `areaCatalog` on
+`CycleFactsInput` but not how the enrichment step obtains one. Deriving it from the ordered rules in
+the same pure module (collapsing duplicate labels, flag-set-anywhere-wins) keeps the rules the single
+source of truth; the alternative — the worker hand-building a catalog — would have let the map and
+the catalog disagree about which area is sensitive.
+
+**`splitRepoFullName` and a `repoFullName` reader parameter.** `pull_request.repo` stores GitHub's
+full name (`owner/repo`), so the reader takes that string and splits it at the connector boundary
+rather than making every caller know the provider's naming convention. An unsplittable value returns
+an empty file list instead of throwing — enrichment is best-effort and must never fail the digest.
+
+**The disclosure validator has no maintained allowlist.** D6 lists `CI/CD`, `I/O`, `A/B`, `and/or`,
+`24/7`, `<digits>/<digits>` and dates as non-matches. Implementing them as a literal allowlist would
+be a list that goes stale the first time someone writes `pass/fail`. Instead the three leak
+sub-rules D6 names (a segment carrying a source extension, ≥2 slashes, a segment in the source-dir
+set) are the only things that match, with an all-numeric-segments check running first so
+`2026/07/28` is not caught by the ≥2-slash rule. Every form D6 names is retained as a consequence of
+the rules rather than as an exception to them, which is what task 6.3 asserts.
+
+**`withCycleAreas` records coverage even when nothing was derived.** If a run made calls but every
+PR came back with no mapped files, `areaCoverage` is still attached so a reader can tell "enrichment
+ran and found nothing" from "enrichment never ran". `buildCycleFacts` never sets it, so the
+additivity guard is untouched.
+
+**The admin route replaces the area map wholesale.** Every other field in `configBody` merges. The
+area map cannot: order is semantic (first match wins), so merging an array would silently change
+which rule applies. Omitting `areas` leaves the stored map exactly as it was, which is what keeps a
+spend-cap edit from clobbering it.
+
+**`reconcile.test.ts`'s client mock gained a `listFiles` stub.** `pulls.listFiles` is a required
+member of `GithubRestClient`, so the existing structurally-typed mock no longer compiled. The stub
+resolves an empty list and is never called by reconciliation.

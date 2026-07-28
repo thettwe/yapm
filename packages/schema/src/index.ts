@@ -64,6 +64,23 @@ export {
   needsApproval,
 } from './zero/ai-tools.js'
 export type {
+  AreaDefinition,
+  AreaMap,
+  AreaRule,
+  ChangeSizeBand,
+  PathAreas,
+} from './zero/areas.js'
+export {
+  areaCatalogFromRules,
+  areaMapSchema,
+  areaRuleSchema,
+  areasForPaths,
+  CHANGE_SIZE_BANDS,
+  changeSizeBand,
+  matchArea,
+  UNMAPPED_AREA,
+} from './zero/areas.js'
+export type {
   AutoStatusContext,
   AutoStatusInput,
   AutoStatusPullRequestInput,
@@ -161,14 +178,17 @@ export {
 export type { CycleDigestWrite } from './zero/cycle-digest.js'
 export { upsertCycleDigest } from './zero/cycle-digest.js'
 export type {
+  CycleAreaCoverage,
+  CycleAreaFacts,
   CycleFacts,
   CycleFactsCounts,
   CycleFactsInput,
   CycleFactsIssueInput,
   CycleFactsPr,
   CycleIssueFacts,
+  WithCycleAreasInput,
 } from './zero/cycle-facts.js'
-export { buildCycleFacts } from './zero/cycle-facts.js'
+export { buildCycleFacts, withCycleAreas } from './zero/cycle-facts.js'
 export type { CycleOrderRow } from './zero/cycles.js'
 export {
   compareCycles,
@@ -202,6 +222,7 @@ export type {
   RosterMember,
 } from './zero/digest.js'
 export {
+  contentDisclosesPaths,
   contentNamesMember,
   DIGEST_CONFIDENCE_LEVELS,
   DIGEST_EVIDENCE_KINDS,
@@ -210,6 +231,7 @@ export {
   digestEvidenceRefSchema,
   digestItemSchema,
   digestSectionSchema,
+  dropItemsDisclosingPaths,
   dropItemsNamingMembers,
   dropUncitedItems,
   rosterNameNeedles,

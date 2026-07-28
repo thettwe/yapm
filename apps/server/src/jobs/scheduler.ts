@@ -3,8 +3,10 @@ import { cycleFactsForTeam, cyclesNeedingDigest, type DB } from '@yapm/schema/db
 import { createServerMutators } from '@yapm/schema/server'
 import type { Kysely } from 'kysely'
 import { fromKysely, PgBoss, type QueuePolicy } from 'pg-boss'
+import { enrichCycleFactsWithAreas } from '../ai/areas.js'
 import { runCycleDigest } from '../ai/digest.js'
 import type { AiGateway } from '../ai/gateway.js'
+import type { ChangedFilesReader } from '../connectors/github/files.js'
 import type { Logger } from '../logger.js'
 import type { Mailer } from '../mail/index.js'
 import type { StorageProvider } from '../storage/provider.js'
@@ -51,6 +53,9 @@ export interface DigestSchedulerOptions {
   // The BYO-key gateway. Present ⇒ a digest is pre-computed at cycle close (gated by
   // AI_DIGEST_ON_CYCLE_CLOSE upstream); absent ⇒ no digest job is scheduled and no facts are read.
   gateway: AiGateway
+  // Present ⇒ the worker may enrich the facts with product-area labels before generating. Absent or
+  // null (no GitHub App env) ⇒ the digest runs exactly as it did before, un-enriched.
+  changedFilesReader?: ChangedFilesReader | null
 }
 
 export interface CycleSchedulerOptions {
@@ -197,6 +202,14 @@ async function registerCycleJobs(options: RegisterCycleJobsOptions): Promise<voi
     await boss.createQueue(CYCLE_DIGEST_QUEUE)
     await boss.work<CycleDigestJobData>(CYCLE_DIGEST_QUEUE, { batchSize: 1 }, async (jobs) => {
       for (const job of jobs) {
+        // Area enrichment happens HERE, in the worker, not at enqueue: the digest queue is already
+        // `batchSize: 1`, which serializes the provider calls for free, and putting unbounded
+        // network I/O inside the cycle-maintenance pass would let a slow GitHub response delay
+        // every other team's rollover. It never throws and never blocks the digest.
+        const facts = await enrichCycleFactsWithAreas(
+          { db, changedFilesReader: digest.changedFilesReader ?? null, logger },
+          job.data,
+        )
         const result = await runCycleDigest(
           {
             gateway: digest.gateway,
@@ -204,7 +217,7 @@ async function registerCycleJobs(options: RegisterCycleJobsOptions): Promise<voi
             dbProvider,
             onError: (error) => logger.error({ err: error }, 'cycle digest run failed'),
           },
-          job.data,
+          { workspaceId: job.data.workspaceId, facts },
         )
         logger.info(
           { cycleId: job.data.facts.cycleId, status: result.status },

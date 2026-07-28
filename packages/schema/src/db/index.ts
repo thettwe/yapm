@@ -123,6 +123,8 @@ export {
   describeReplicationStatus,
   readReplicationStatus,
 } from './replication.js'
+export type { RetroFacts } from './retro-facts.js'
+export { retroFactsForCycle } from './retro-facts.js'
 export type {
   EnsureSearchIndexResult,
   EnsureSearchIndexStatus,
@@ -238,6 +240,8 @@ export type {
   NewLabel,
   NewNotification,
   NewPullRequest,
+  NewRetroAiDraft,
+  NewRetroAiProposal,
   NewReview,
   NewSavedView,
   NewSearchDocument,
@@ -251,6 +255,11 @@ export type {
   PullRequest,
   PullRequestTable,
   PullRequestUpdate,
+  RetroAiDraft,
+  RetroAiDraftTable,
+  RetroAiDraftUpdate,
+  RetroAiProposal,
+  RetroAiProposalTable,
   Review,
   ReviewTable,
   ReviewUpdate,

@@ -93,12 +93,22 @@ export const AI_PROVIDERS = ['anthropic', 'google', 'openai'] as const
 
 export type AiProvider = (typeof AI_PROVIDERS)[number]
 
-// The lifecycle of a pre-computed cycle digest. `pending` = job enqueued/not-yet-run; `ready` =
-// an AI narrative was generated + validated; `ai_off` = AI disabled/keyless/spend-capped (the
-// cycle view falls back to raw linked evidence); `failed` = the run errored (same fallback).
-export const CYCLE_DIGEST_STATUSES = ['pending', 'ready', 'failed', 'ai_off'] as const
+// The lifecycle of EVERY pre-computed AI artifact — the cycle digest and the retro draft alike.
+// `pending` = enqueued/not-yet-run; `ready` = generated + validated; `ai_off` = AI disabled /
+// keyless / spend-capped (the consumer falls back to raw linked evidence); `failed` = the run
+// errored (same fallback). One union so a second artifact table cannot invent a fifth state.
+export const AI_ARTIFACT_STATUSES = ['pending', 'ready', 'failed', 'ai_off'] as const
 
-export type CycleDigestStatus = (typeof CYCLE_DIGEST_STATUSES)[number]
+export type AiArtifactStatus = (typeof AI_ARTIFACT_STATUSES)[number]
+
+// The CHECK-constraint text every AI artifact table's `status` column carries, spelled ONCE so a
+// later migration cannot drift from `0010_ai`'s. Migrations wrap it in `sql.raw`; this module stays
+// free of a kysely import because the client bundle imports it.
+export const AI_ARTIFACT_STATUS_CHECK = `status in (${AI_ARTIFACT_STATUSES.map((status) => `'${status}'`).join(', ')})`
+
+export const CYCLE_DIGEST_STATUSES = AI_ARTIFACT_STATUSES
+
+export type CycleDigestStatus = AiArtifactStatus
 
 export const CONNECTOR_STATUSES = ['disabled', 'pending', 'connected', 'error'] as const
 

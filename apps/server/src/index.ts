@@ -28,6 +28,7 @@ import { createConnectorAdminRoutes } from './connectors/admin-routes.js'
 import { createGithubConnector, githubConnector } from './connectors/github/index.js'
 import { createGithubWebhookRoute } from './connectors/github/routes.js'
 import { databaseCheck, gatingCheck, nonGatingCheck, replicationCheck } from './health.js'
+import { RETRO_AI_DRAFT_INTERVAL_SECONDS } from './jobs/retro-draft.js'
 import { type Scheduler, startScheduler } from './jobs/scheduler.js'
 import { createLogger, type Logger } from './logger.js'
 import { createMailer } from './mail/index.js'
@@ -209,6 +210,16 @@ async function main(): Promise<void> {
         }
       : undefined
 
+  // The lazy retro-draft tail, gated separately from the digest because a team may want one and not
+  // the other and both spend on the same BYO key. The gateway is always constructed and resolves the
+  // workspace's AI config at run time, so an instance with no key configured is not a special case
+  // here: `generateStructured` returns null and the artifact is written `ai_off`. Nothing drafts at
+  // all for a team that has not opted in, whatever this is set to.
+  const retroDraft =
+    env.AI_RETRO_DRAFT === 'true'
+      ? { gateway: aiGateway, intervalSeconds: RETRO_AI_DRAFT_INTERVAL_SECONDS }
+      : undefined
+
   let scheduler: Scheduler | undefined
   try {
     scheduler = await startScheduler({
@@ -224,6 +235,8 @@ async function main(): Promise<void> {
         graceHours: env.ATTACHMENT_ORPHAN_GRACE_HOURS,
         cron: env.ATTACHMENT_GC_CRON,
       },
+      // A fifth independent block on the SAME pg-boss instance.
+      ...(retroDraft ? { retroDraft } : {}),
     })
   } catch (error) {
     logger.error({ err: error }, 'failed to start the background job scheduler')

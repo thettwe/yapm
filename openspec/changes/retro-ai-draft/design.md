@@ -412,3 +412,185 @@ and passes when this change is correct.
 ## Decisions made during implementation
 
 <!-- Appended during the build phase: what was ambiguous, what was chosen, and why. -->
+
+### I1 — `refs jsonb` replicates; the write-worker applied both tables verbatim (task 2.6)
+
+Verified on the live stack before anything was built on it, from `down -v`, on ports 5450/4858/3010.
+`0018_retro_ai` applied against a **running** zero-cache. The change-streamer logged one `ddlStart`
+per statement and the write-worker applied both tables; the DDL it received is the DDL Kysely emitted,
+CHECK constraints and unique constraint included:
+
+```
+{"worker":"change-streamer","component":"change-source","tag":"CREATE TABLE","query":
+ "create table \"retro_ai_draft\" (\"id\" uuid primary key, \"retro_id\" uuid not null references
+  \"retro\" (\"id\") on delete cascade, \"team_id\" uuid not null references \"team\" (\"id\") on
+  delete cascade, \"status\" text default 'pending' not null check (status in ('pending', 'ready',
+  'failed', 'ai_off')), \"claimed_at\" timestamptz, \"provider\" text, \"model\" text,
+  \"input_token\" integer, \"output_token\" integer, \"estimated_cost_usd\" double precision,
+  \"generated_at\" timestamptz, \"created_at\" timestamptz default now() not null, \"updated_at\"
+  timestamptz default now() not null, constraint \"retro_ai_draft_retro_key\" unique (\"retro_id\"))",
+ "event":{"type":"ddlStart","schema":{"tables":43,"indexes":106},"previousSchema":null}}
+...
+"message":"create-table retro_ai_draft"
+"message":"create-table retro_ai_proposal"
+```
+
+Then the replica volume was deleted and zero-cache recreated, forcing a full initial copy
+(46 upstream tables). **`refs jsonb` is on the replication path, confirmed rather than assumed:**
+
+```
+{"initSchema":"1ibmlmatqnk","tx":4,"state":{"table":"retro_ai_proposal","columns":
+ ["category","confidence","created_at","draft_id","id","rank","refs","retro_id","summary","team_id"],
+ "rows":0,"totalRows":0,"totalBytes":8192},
+ "message":"Computed initial download state for retro_ai_proposal (0.648 ms)"}
+
+{"table":"retro_ai_proposal","columns":[…,{"column":"refs","upstreamType":"jsonb","clientType":null},…]}
+```
+
+Two findings worth recording:
+
+1. **`claimed_at` replicates to the replica even though it is absent from the Zero schema** — the
+   initial-copy column list for `retro_ai_draft` includes it. That is expected and harmless: Zero
+   replicates the Postgres table and the *schema* decides what syncs to a client. The asymmetry is
+   now asserted from both sides in `schema-drift.test.ts` (`ZERO_OMITTED_COLUMNS`), so neither half
+   can drift silently.
+2. Deleting the replica volume under a running change-streamer logged one `ERROR "Unexpected
+   undefined value"` before the fresh copy started, and the container came back **healthy** with the
+   full 46-table copy. That is an artifact of yanking the volume mid-stream, not of this migration.
+
+Teardown: `docker compose -p yapm-rd -f docker/docker-compose.dev.yml down -v`.
+
+### I2 — `AI_ARTIFACT_STATUS_CHECK` is a plain string, and `0010_ai` was rewritten to use it
+
+§D4.3 says the CHECK text is exported once so `0018` cannot drift from `0010`. `context.ts` is
+imported by the client bundle, so it must not acquire a kysely import — the constant is therefore a
+plain string derived from `AI_ARTIFACT_STATUSES`, and both migrations wrap it in `sql.raw(...)`.
+`0010_ai.ts` was edited to consume it. Editing an applied migration is normally forbidden; this one
+is safe because the emitted DDL is byte-identical (confirmed in the I1 log above:
+`check (status in ('pending', 'ready', 'failed', 'ai_off'))`), and leaving the old spelling in place
+would have defeated the entire point of exporting it.
+
+### I3 — `getWorkspaceAiSpendUsd` unions rather than sums twice
+
+The two artifact tables have no common parent to join through, so the accessor selects
+`estimated_cost_usd` from each (scoped by workspace and `status = 'ready'`), `unionAll`s them, and
+sums the union once. One `sum('estimated_cost_usd')` in the codebase, which is what boundary rule 4
+enforces — a second `sum` per table would have tripped the rule it exists to satisfy.
+
+### I4 — `rankRetroProposals`, not `rank` inside `sanitizeRetroDraft`
+
+§D6 says `rank` is the 0-based index within the category after capping. Assigning it inside
+`sanitizeRetroDraft` would make that function's return type diverge from `RetroDraftContent`, which
+the adapters and `capRetroProposals` are typed against. It is a separate one-line pure function,
+called by the job at the point rows are minted. `sanitizeRetroDraft` stays a
+`RetroDraftContent → RetroDraftContent` chain, which is what makes it unit-testable without a job.
+
+### I5 — Boundary rule 5 checks IMPORTS, not mentions
+
+The first cut grepped for the bare words `runAgent` / `buildAgentTools`, and immediately failed
+`apps/server/src/ai/retro-draft.ts` — whose header comment *documents* that it never reaches the
+agent loop. A rule that punishes the comment explaining it is the wrong rule. It now parses named
+import/export clauses, so every import form counts and prose does not. A fixture test pins both
+directions.
+
+### I6 — `RETRO_AI_DRAFT_INTERVAL_SECONDS` is a constant, not an env var
+
+Task 6.5 adds only `AI_RETRO_DRAFT`. The tail still needs a re-arm delay; reusing
+`SEARCH_INDEX_INTERVAL_SECONDS` for it would conflate two unrelated knobs, so the interval is a
+5-second module constant in `jobs/retro-draft.ts`, alongside the watchdog cron and for the same
+reason the scheduler already gives: there is no reason an operator would turn it.
+
+### I7 — The recording Kysely proxy has to be transparent, not just permissive
+
+The table/column recorder in both allowlist tests returns non-intercepted members straight off the
+target. Returning them *unbound* made kysely's raw-`sql` path throw
+`Cannot read private member #props from an object whose class did not declare it` — the method ran
+with the Proxy as `this`. Non-intercepted functions are now `.bind(target)`. Recorded here because
+the failure looks like a kysely bug and is not.
+
+### I8 — Two narrowings in the D11 assertions, both stated rather than quietly dropped
+
+- **The identity-key walk is over KEYS, not values, and that is the point.** The fixture deliberately
+  puts a real member's display name and email handle inside an issue title and a PR title, because
+  anyone who can title an issue can do that. The guarantee is that yapm supplies no identity
+  *dimension* and that the name-validator drops any *output* naming a member — both asserted. A test
+  that also demanded no member name anywhere in the model's input would be asserting something the
+  product does not and cannot promise.
+- **The unauthenticated evaluation of the two new queries is not in the server test.** `denyAll` is
+  an empty `or()`, which the real zero-server executor compiles to invalid SQL rather than to a false
+  predicate. It is covered where the harness models that shape:
+  `queries.anonymity.pg.test.ts`, whose registry walk asserts covered == registry and therefore grew
+  by exactly these two queries with no allowlist edit (task 7.3).
+
+Two further scoping notes on the same test. The tail is **global by design** — it sweeps every
+pending row on the instance — so assertions are scoped to this fixture's retro (attributed by a
+per-run cycle name) rather than to the tail's aggregate return, which a sibling suite's leftover row
+would otherwise perturb. And the recorded table set for the whole pass is larger than §D2's
+fact-assembly allowlist by exactly four entries, each annotated in the test: `cycle_digest` +
+`retro_ai_draft` (the spend accessor's union), `retro` (the tail's own join to find the cycle), and
+`user` + `workspace_member` (the roster, read *after* the model call). The fact assembly's own set is
+asserted to equal the §D2 list exactly in `packages/schema/src/db/retro-facts.pg.test.ts`.
+
+### I9 — `search/isolation.test.ts` grew by two modules, and the pg test stopped naming the table
+
+That guard is a *symbol* check over every AI module, so a test that listed `search_document` among the
+tables it asserts are untouched tripped it. The set-equality assertion already excludes the table, so
+the name came out and a comment says why. Going the other way, `zero/retro/ai-draft.ts` and
+`db/retro-facts.ts` were **added** to the guard's module list on the day they were written — the retro
+is the surface where a searchable projection of every comment would be most tempting.
+
+### I10 — Task 4.4's "equal to what the client seed-model produces"
+
+`packages/schema` cannot import `apps/web`, so the assertion is expressed the way the property
+actually holds: `retroFactsForCycle` and the client panel both call `buildRetroSeed`, and the test
+feeds `buildRetroSeed` the same rows by hand and asserts the metrics are identical. One definition,
+two callers — proven at the definition rather than across a boundary the boundary script forbids.
+
+### The falsifiable check, run (task 7.2)
+
+```
+$ DATABASE_URL=postgres://yapm:yapm@localhost:5450/yapm pnpm --filter @yapm/server test retro-draft.pg
+$ vitest run retro-draft.pg
+
+ RUN  v4.1.10 /Users/thettwe/Works/yapm-wt/retro-ai-draft/apps/server
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  15:47:59
+   Duration  898ms (transform 149ms, setup 0ms, import 320ms, tests 145ms, environment 0ms)
+```
+
+Both cases in that file together cover (a)–(f). Supporting suites, same stack:
+
+```
+$ DATABASE_URL=… pnpm --filter @yapm/schema test
+ Test Files  53 passed (53)
+      Tests  786 passed (786)
+
+$ DATABASE_URL=… pnpm --filter @yapm/server test
+ Test Files  42 passed (42)
+      Tests  364 passed (364)
+```
+
+Fast gates, all green:
+
+```
+$ pnpm turbo run typecheck '--filter=...[origin/main]'
+ Tasks:    6 successful, 6 total
+
+$ pnpm lint
+$ biome ci .
+Checked 520 files in 132ms. No fixes applied.
+
+$ DATABASE_URL=… pnpm turbo run test '--filter=...[origin/main]'
+ Tasks:    6 successful, 6 total
+
+$ node scripts/check-boundaries.mjs
+Boundaries OK: no package→app imports, no ZQL/mutator definitions outside packages/schema, no UI
+dependencies in packages/schema.
+
+$ node --test scripts/lib/boundaries.test.mjs
+ℹ pass 27  ℹ fail 0
+```
+
+`digest.test.ts` passes **unchanged** — the regression proof for the D4.1 refactor (task 1.3).

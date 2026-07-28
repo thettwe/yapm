@@ -435,6 +435,41 @@ export const setTeamAutoStatus = defineMutator(setTeamAutoStatusArgs, async ({ t
   })
 })
 
+export const setTeamAiRetroDraftArgs = z.object({
+  id: z.string().min(1),
+  // The switch, exactly as `setTeamAutoStatus` spells it: null is off, any instant is on. Only
+  // null-ness is read; the epoch actually stored is `updatedAt`.
+  since: timestamp.nullable(),
+  updatedAt: timestamp,
+})
+
+export type SetTeamAiRetroDraftArgs = z.infer<typeof setTeamAiRetroDraftArgs>
+
+// Opting a team into AI retro drafting. Mirrors `setTeamAutoStatus` exactly, for the reasons that
+// mutator records: `canManage` runs BEFORE the team is loaded, so a non-admin learns nothing about
+// whether the id exists; the instant is minted at the CALL SITE and carried in args, because a
+// `Date.now()` here would differ between the optimistic and authoritative passes.
+//
+// Unlike `auto_status_since` the stored epoch is NOT an event filter — the draft is triggered by a
+// live phase advance, so there is no historical backlog to guard against. Non-null means on; that is
+// the whole rule. The column keeps the timestamp anyway, as provenance for "when did this team
+// consent to its key being spent".
+export const setTeamAiRetroDraft = defineMutator(
+  setTeamAiRetroDraftArgs,
+  async ({ tx, args, ctx }) => {
+    if (!canManage(ctx)) throw notAuthorized(args.id)
+
+    const target = await tx.run(zql.team.where('id', args.id).one())
+    if (!target) throw notAuthorized(args.id)
+
+    await tx.mutate.team.update({
+      id: args.id,
+      aiRetroDraftSince: args.since === null ? null : args.updatedAt,
+      updatedAt: args.updatedAt,
+    })
+  },
+)
+
 export const addTeamMemberArgs = z.object({
   id: z.string().min(1),
   teamId: z.string().min(1),
@@ -2773,6 +2808,7 @@ export const mutators = defineMutators({
     rename: renameTeam,
     archive: archiveTeam,
     setAutoStatus: setTeamAutoStatus,
+    setAiRetroDraft: setTeamAiRetroDraft,
     addMember: addTeamMember,
     removeMember: removeTeamMember,
   },

@@ -1,5 +1,6 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely'
 import type {
+  AiArtifactStatus,
   CiConclusion,
   ConnectorConfigData,
   ConnectorLinkSource,
@@ -25,8 +26,9 @@ import type {
   ThemePreset,
   WorkspaceRole,
 } from '../zero/context.js'
-import type { DigestContent } from '../zero/digest.js'
+import type { DigestConfidence, DigestContent } from '../zero/digest.js'
 import type { IssueFilter, IssueSort } from '../zero/filter.js'
+import type { RetroProposalCategory } from '../zero/retro/ai-draft.js'
 import type { RetroSeedRef } from '../zero/retro/seed.js'
 
 export type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>
@@ -70,6 +72,10 @@ export interface TeamTable {
   // Opt-in status automation, off by default. Null is off; a timestamp is both "on" and the epoch
   // every transition's event instant is compared against, so enabling never rewrites history.
   auto_status_since: TimestampOrNull
+  // Opt-in AI retro drafting, off by default. Null is off; a timestamp is "on, and this is when the
+  // team consented" — unlike `auto_status_since` the epoch is NOT an event filter, because the draft
+  // is triggered by a live phase advance and has no historical backlog to guard against.
+  ai_retro_draft_since: TimestampOrNull
   created_at: Generated<Timestamp>
   updated_at: Generated<Timestamp>
 }
@@ -522,6 +528,43 @@ export interface RetroPresenceTable {
   last_seen_at: Generated<Timestamp>
 }
 
+// The second AI artifact (change 18): one AI-drafted retro per retro, written server-side ONLY over
+// the Zero write path. `claimed_at` is the tail's claim stamp — job scheduling state, present here
+// and deliberately ABSENT from the Zero schema, an asymmetry the drift test asserts rather than
+// tolerates. No `assignee`/`author`/`user_id` dimension: the blameless guarantee is schema-level
+// here exactly as it is on `cycle_digest`.
+export interface RetroAiDraftTable {
+  id: string
+  retro_id: string
+  team_id: string
+  status: Generated<AiArtifactStatus>
+  claimed_at: TimestampOrNull
+  provider: Nullable<string>
+  model: Nullable<string>
+  input_token: Nullable<number>
+  output_token: Nullable<number>
+  estimated_cost_usd: Nullable<number>
+  generated_at: TimestampOrNull
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// One sanitized proposal. Rows rather than a `content` jsonb because change 19 keys reactions and
+// provenance on a stable proposal id and needs a real FK target. `refs` is the cite-or-omit
+// evidence, already narrowed to ids yapm computed; `rank` is the 0-based order within the category.
+export interface RetroAiProposalTable {
+  id: string
+  draft_id: string
+  retro_id: string
+  team_id: string
+  category: RetroProposalCategory
+  summary: string
+  confidence: DigestConfidence
+  refs: JsonWithDefault<readonly RetroSeedRef[]>
+  rank: number
+  created_at: Generated<Timestamp>
+}
+
 // One row per person per event. The FOUR-COLUMN NATURAL KEY IS THE PRIMARY KEY — nothing is
 // minted anywhere in the notification path, so a mutator re-run during rebase can neither
 // duplicate a row nor change one, and `on conflict do nothing` is answered by the PK index itself.
@@ -660,6 +703,8 @@ export interface DB {
   retro_vote_tally: RetroVoteTallyTable
   retro_action: RetroActionTable
   retro_presence: RetroPresenceTable
+  retro_ai_draft: RetroAiDraftTable
+  retro_ai_proposal: RetroAiProposalTable
   notification: NotificationTable
   issue_subscription: IssueSubscriptionTable
   search_document: SearchDocumentTable
@@ -786,6 +831,13 @@ export type NewRetroAction = Insertable<RetroActionTable>
 
 export type RetroPresence = Selectable<RetroPresenceTable>
 export type NewRetroPresence = Insertable<RetroPresenceTable>
+
+export type RetroAiDraft = Selectable<RetroAiDraftTable>
+export type NewRetroAiDraft = Insertable<RetroAiDraftTable>
+export type RetroAiDraftUpdate = Updateable<RetroAiDraftTable>
+
+export type RetroAiProposal = Selectable<RetroAiProposalTable>
+export type NewRetroAiProposal = Insertable<RetroAiProposalTable>
 
 export type Notification = Selectable<NotificationTable>
 export type NewNotification = Insertable<NotificationTable>

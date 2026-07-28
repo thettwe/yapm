@@ -51,6 +51,19 @@ export {
   tokenizeQuery,
 } from './search/index.js'
 export type {
+  AiArtifact,
+  AiArtifactGroup,
+  AiArtifactItem,
+  AiArtifactRef,
+  RosterMember,
+} from './zero/ai-content.js'
+export {
+  aiArtifactNamesMember,
+  dropAiItemsNamingMembers,
+  dropUncitedAiItems,
+  rosterNameNeedles,
+} from './zero/ai-content.js'
+export type {
   ActiveToolOptions,
   AgentAuditEntry,
   MutatorToolSpec,
@@ -103,6 +116,7 @@ export type {
   NormalizedDelivery,
 } from './zero/connector-framework.js'
 export type {
+  AiArtifactStatus,
   AiProvider,
   AuthContext,
   CiConclusion,
@@ -135,6 +149,8 @@ export type {
 } from './zero/context.js'
 export {
   ACTIONABLE_NOTIFICATION_KINDS,
+  AI_ARTIFACT_STATUS_CHECK,
+  AI_ARTIFACT_STATUSES,
   AI_PROVIDERS,
   CI_CONCLUSIONS,
   CONNECTOR_LINK_SOURCES,
@@ -222,7 +238,6 @@ export type {
   DigestItem,
   DigestItemKind,
   DigestSection,
-  RosterMember,
   StoredDigestContent,
 } from './zero/digest.js'
 export {
@@ -239,7 +254,6 @@ export {
   dropItemsDisclosingPaths,
   dropItemsNamingMembers,
   dropUncitedItems,
-  rosterNameNeedles,
   storedDigestContentSchema,
 } from './zero/digest.js'
 export type { MutationErrorDetails } from './zero/errors.js'
@@ -273,6 +287,7 @@ export type {
   RetractRetroVoteArgs,
   SetPreferenceArgs,
   SetRetroPhaseArgs,
+  SetTeamAiRetroDraftArgs,
   SetTeamAutoStatusArgs,
   StartRetroTimerArgs,
   UnfollowIssueArgs,
@@ -462,6 +477,8 @@ export {
   setRetroFacilitatorArgs,
   setRetroPhase,
   setRetroPhaseArgs,
+  setTeamAiRetroDraft,
+  setTeamAiRetroDraftArgs,
   setTeamAutoStatus,
   setTeamAutoStatusArgs,
   startRetroTimer,
@@ -521,6 +538,8 @@ export {
   PROJECT_GET_QUERY_NAME,
   PROJECTS_ALL_QUERY_NAME,
   queries,
+  RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME,
+  RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME,
   RETRO_DETAIL_QUERY_NAME,
   RETRO_DRAFTS_MINE_QUERY_NAME,
   RETRO_VOTES_MINE_QUERY_NAME,
@@ -534,6 +553,23 @@ export {
   WORKSPACE_CURRENT_QUERY_NAME,
 } from './zero/queries.js'
 export { initialRanks, rankBetween } from './zero/rank.js'
+export type {
+  RankedRetroProposal,
+  RetroDraftContent,
+  RetroDraftProposal,
+  RetroProposalCategory,
+} from './zero/retro/ai-draft.js'
+export {
+  capRetroProposals,
+  RETRO_PROPOSAL_CATEGORIES,
+  RETRO_PROPOSALS_PER_CATEGORY,
+  rankRetroProposals,
+  retroDraftContentSchema,
+  retroDraftFromArtifact,
+  retroDraftProposalSchema,
+  retroDraftToArtifact,
+  sanitizeRetroDraft,
+} from './zero/retro/ai-draft.js'
 export type { RetroColumnTemplate, RetroWriteOp } from './zero/retro/phase.js'
 export {
   isAdjacentPhase,

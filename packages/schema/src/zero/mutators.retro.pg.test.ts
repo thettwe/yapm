@@ -904,4 +904,78 @@ describe.skipIf(DATABASE_URL === undefined)('retro mutators against Postgres', (
       expect(await countOf('retro', 'id', second)).toBe(0)
     })
   })
+
+  // THE LAZY TRIGGER. Off by default: the advance an opted-out team makes is byte-identical to the
+  // one it made before this change existed.
+  describe('the AI draft is stamped at the reveal, and only for a team that opted in', () => {
+    async function setOptIn(since: number | null): Promise<void> {
+      await apply((tx) =>
+        mutators.team.setAiRetroDraft.fn({
+          tx,
+          args: { id: teamId, since, updatedAt: Date.now() },
+          ctx: ADMIN,
+        }),
+      )
+    }
+
+    it('writes no draft row at all when the team never opted in', async () => {
+      await setOptIn(null)
+      const cardsBefore = await countOf('retro_card', 'retro_id', retroId)
+
+      await moveTo('group')
+
+      expect(await countOf('retro_ai_draft', 'retro_id', retroId)).toBe(0)
+      expect(await countOf('retro_ai_proposal', 'retro_id', retroId)).toBe(0)
+      // The rest of the advance is untouched: the publish still ran.
+      expect(await countOf('retro_card', 'retro_id', retroId)).toBe(cardsBefore)
+    })
+
+    it('writes exactly one pending row when the team opted in', async () => {
+      await setOptIn(Date.now())
+
+      await moveTo('group')
+
+      const rows_ = await rows(
+        sql<{ status: string; claimed_at: Date | null }>`
+          select status, claimed_at from retro_ai_draft where retro_id = ${retroId}
+        `,
+      )
+      expect(rows_).toHaveLength(1)
+      expect(rows_[0]?.status).toBe('pending')
+      // The tail claims; the mutator never does.
+      expect(rows_[0]?.claimed_at).toBeNull()
+    })
+
+    it('still yields exactly one row when the authoritative mutation is retried', async () => {
+      await setOptIn(Date.now())
+
+      await moveTo('group')
+      const first = await rows(
+        sql<{ id: string }>`select id from retro_ai_draft where retro_id = ${retroId}`,
+      )
+
+      // A facilitator stepping back and forward runs the reveal branch a second time, which is the
+      // same shape a retried mutation takes. `retro_id` is unique, so the upsert finds the existing
+      // row and the freshly minted id is discarded.
+      await moveTo('brainstorm')
+      await moveTo('group')
+
+      expect(await countOf('retro_ai_draft', 'retro_id', retroId)).toBe(1)
+      const second = await rows(
+        sql<{ id: string }>`select id from retro_ai_draft where retro_id = ${retroId}`,
+      )
+      expect(second[0]?.id).toBe(first[0]?.id)
+    })
+
+    it('does not stamp a draft on any other phase advance', async () => {
+      await setOptIn(Date.now())
+      await moveTo('group')
+      await sql`delete from retro_ai_draft where retro_id = ${retroId}`.execute(database.db)
+
+      await moveTo('vote')
+      await moveTo('discuss')
+
+      expect(await countOf('retro_ai_draft', 'retro_id', retroId)).toBe(0)
+    })
+  })
 })

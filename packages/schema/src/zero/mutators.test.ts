@@ -21,6 +21,7 @@ import {
   renameWorkspace,
   revokeInvite,
   setPreferenceArgs,
+  setTeamAiRetroDraft,
   setTeamAutoStatus,
   WORKSPACE_NAME_MAX_LENGTH,
 } from './mutators.js'
@@ -408,6 +409,68 @@ describe('team.setAutoStatus', () => {
     const { tx, calls } = fakeTx([{ id }])
     await setTeamAutoStatus.fn({ tx, args: { id, since: 10, updatedAt: 10 }, ctx: ADMIN })
     expect(calls.map((call) => call.table)).toEqual(['team'])
+  })
+})
+
+// Mirrors `team.setAutoStatus` because the mutator does: same authority order, same call-site epoch,
+// same null-is-off. Both switches are per-team consent to an automation, and divergence between them
+// would be worse than the imperfection they share (design §D8).
+describe('team.setAiRetroDraft', () => {
+  it.each([
+    ['a member', MEMBER],
+    ['a viewer', VIEWER],
+    ['a non-member', NON_MEMBER],
+    ['an unauthenticated caller', undefined],
+  ])('rejects %s before any existence read', async (_label, ctx) => {
+    const id = newId()
+    const { tx, calls, runQueue } = fakeTx([{ id }])
+    const error = await capture(
+      setTeamAiRetroDraft.fn({ tx, args: { id, since: 10, updatedAt: 10 }, ctx }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+    // The team was never loaded, so a non-admin learns nothing about whether the id exists.
+    expect(runQueue).toHaveLength(1)
+  })
+
+  it('rejects an admin pointing at a team that does not exist, with the same generic error', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([undefined])
+    const error = await capture(
+      setTeamAiRetroDraft.fn({ tx, args: { id, since: 10, updatedAt: 10 }, ctx: ADMIN }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it('lets an admin opt the team in with the epoch the call site minted', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id }])
+    await setTeamAiRetroDraft.fn({ tx, args: { id, since: 10, updatedAt: 10 }, ctx: ADMIN })
+    expect(calls).toEqual([
+      { table: 'team', verb: 'update', value: { id, aiRetroDraftSince: 10, updatedAt: 10 } },
+    ])
+  })
+
+  it('lets an admin opt back out by writing null', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id }])
+    await setTeamAiRetroDraft.fn({ tx, args: { id, since: null, updatedAt: 12 }, ctx: ADMIN })
+    expect(calls).toEqual([
+      { table: 'team', verb: 'update', value: { id, aiRetroDraftSince: null, updatedAt: 12 } },
+    ])
+  })
+
+  it.each([
+    ['back-dated', 0],
+    ['forward-dated', 9_000],
+  ])("stores the write's own instant, not a %s epoch", async (_label, since) => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id }])
+    await setTeamAiRetroDraft.fn({ tx, args: { id, since, updatedAt: 5_000 }, ctx: ADMIN })
+    expect(calls).toEqual([
+      { table: 'team', verb: 'update', value: { id, aiRetroDraftSince: 5_000, updatedAt: 5_000 } },
+    ])
   })
 })
 

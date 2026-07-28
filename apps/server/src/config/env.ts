@@ -223,6 +223,16 @@ export const envSchema = z
         z.enum(['true', 'false']),
       )
       .default('true'),
+    // The lazy retro-draft tail, on the EXISTING pg-boss instance and gated INDEPENDENTLY of
+    // AI_DIGEST_ON_CYCLE_CLOSE. Off means the tail is never registered: `pending` rows accumulate
+    // harmlessly and drain if it is turned back on. Nothing drafts for a team that has not opted in,
+    // whatever this is set to.
+    AI_RETRO_DRAFT: z
+      .preprocess(
+        (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+        z.enum(['true', 'false']),
+      )
+      .default('true'),
     // Server-side search index maintenance, on the EXISTING pg-boss instance. Off means the
     // `/api/v1/search` route keeps answering — with whatever the index already holds — rather than
     // failing; the on-device pass is unaffected either way.
@@ -396,6 +406,8 @@ export const EXPECTED_FORMAT: Record<string, string> = {
     'one of anthropic | google | openai — the instance-default AI provider, or unset',
   AI_DIGEST_ON_CYCLE_CLOSE:
     "'true' to pre-compute a cycle digest when a cycle closes (default), or 'false' to disable it",
+  AI_RETRO_DRAFT:
+    "'true' to run the lazy retro AI draft tail (default), or 'false' to disable it — per-team opt-in still applies",
   SEARCH_INDEX:
     "'true' to maintain the server-side search index in the background (default), or 'false' to disable it",
   SEARCH_INDEX_INTERVAL_SECONDS:

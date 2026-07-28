@@ -10,6 +10,7 @@ import {
   table,
 } from '@rocicorp/zero'
 import type {
+  AiArtifactStatus,
   CiConclusion,
   ConnectorLinkSource,
   CycleDigestStatus,
@@ -32,6 +33,9 @@ import type {
   ThemePreset,
   WorkspaceRole,
 } from './context.js'
+import type { DigestConfidence } from './digest.js'
+import type { RetroProposalCategory } from './retro/ai-draft.js'
+import type { RetroSeedRef } from './retro/seed.js'
 
 const workspace = table('workspace')
   .columns({
@@ -62,6 +66,8 @@ const team = table('team')
     archivedAt: number().from('archived_at').optional(),
     // Opt-in status automation: absent is off, a timestamp is on-since-then.
     autoStatusSince: number().from('auto_status_since').optional(),
+    // Opt-in AI retro drafting: absent is off, a timestamp is on-since-then.
+    aiRetroDraftSince: number().from('ai_retro_draft_since').optional(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })
@@ -416,6 +422,47 @@ const retroVoteTally = table('retro_vote_tally')
     updatedAt: number().from('updated_at'),
   })
   .primaryKey('targetId')
+
+// The second AI artifact (change 18), team-scoped and CLIENT-READ-ONLY like `cycle_digest`: written
+// only through the server-only Zero `Transaction` helpers, never a client mutator, which is what
+// makes "yapm computed these numbers" true.
+//
+// `claimed_at` IS DELIBERATELY ABSENT. It is the tail's claim stamp — job scheduling state, not
+// artifact state — and syncing it would put job internals on every client. The drift test asserts
+// that asymmetry rather than tolerating it. Do not add it here.
+const retroAiDraft = table('retro_ai_draft')
+  .columns({
+    id: string(),
+    retroId: string().from('retro_id'),
+    teamId: string().from('team_id'),
+    status: enumeration<AiArtifactStatus>(),
+    provider: string().optional(),
+    model: string().optional(),
+    inputToken: number().from('input_token').optional(),
+    outputToken: number().from('output_token').optional(),
+    estimatedCostUsd: number().from('estimated_cost_usd').optional(),
+    generatedAt: number().from('generated_at').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
+// One sanitized proposal. `refs` is the cite-or-omit evidence, already narrowed to ids yapm
+// computed; `rank` orders within `category`. No identity dimension, by construction.
+const retroAiProposal = table('retro_ai_proposal')
+  .columns({
+    id: string(),
+    draftId: string().from('draft_id'),
+    retroId: string().from('retro_id'),
+    teamId: string().from('team_id'),
+    category: enumeration<RetroProposalCategory>(),
+    summary: string(),
+    confidence: enumeration<DigestConfidence>(),
+    refs: json<readonly RetroSeedRef[]>(),
+    rank: number(),
+    createdAt: number().from('created_at'),
+  })
+  .primaryKey('id')
 
 const retroAction = table('retro_action')
   .columns({
@@ -1034,6 +1081,42 @@ const retroActionRelationships = relationships(retroAction, ({ one }) => ({
   }),
 }))
 
+const retroAiDraftRelationships = relationships(retroAiDraft, ({ one, many }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  retro: one({
+    sourceField: ['retroId'],
+    destField: ['id'],
+    destSchema: retro,
+  }),
+  proposals: many({
+    sourceField: ['id'],
+    destField: ['draftId'],
+    destSchema: retroAiProposal,
+  }),
+}))
+
+const retroAiProposalRelationships = relationships(retroAiProposal, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  retro: one({
+    sourceField: ['retroId'],
+    destField: ['id'],
+    destSchema: retro,
+  }),
+  draft: one({
+    sourceField: ['draftId'],
+    destField: ['id'],
+    destSchema: retroAiDraft,
+  }),
+}))
+
 const retroPresenceRelationships = relationships(retroPresence, ({ one }) => ({
   team: one({
     sourceField: ['teamId'],
@@ -1133,6 +1216,8 @@ export const schema = createSchema({
     retroVoteTally,
     retroAction,
     retroPresence,
+    retroAiDraft,
+    retroAiProposal,
     notification,
     issueSubscription,
     attachment,
@@ -1167,6 +1252,8 @@ export const schema = createSchema({
     retroVoteTallyRelationships,
     retroActionRelationships,
     retroPresenceRelationships,
+    retroAiDraftRelationships,
+    retroAiProposalRelationships,
     notificationRelationships,
     issueSubscriptionRelationships,
     attachmentRelationships,

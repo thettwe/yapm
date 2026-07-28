@@ -20,9 +20,15 @@ const SEARCH_MODULE = join(repoRoot, 'packages/schema/src/db/search.ts')
 const AI_DIRECTORY = join(repoRoot, 'apps/server/src/ai')
 const AI_MODULES = [
   'packages/schema/src/zero/digest.ts',
+  'packages/schema/src/zero/ai-content.ts',
   'packages/schema/src/zero/ai-tools.ts',
   'packages/schema/src/zero/cycle-facts.ts',
   'packages/schema/src/db/cycle-facts.ts',
+  // The retro AI draft's own assembly and content layer, added the day they were written: the retro
+  // is the one surface where a searchable projection of every comment would be most tempting and
+  // most damaging.
+  'packages/schema/src/zero/retro/ai-draft.ts',
+  'packages/schema/src/db/retro-facts.ts',
 ].map((path) => join(repoRoot, path))
 
 function typescriptFilesIn(dir: string): string[] {

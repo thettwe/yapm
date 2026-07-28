@@ -3,17 +3,33 @@ import { sql } from 'kysely'
 import type { CycleDigest, DB } from './types.js'
 
 // The per-workspace running spend total the gateway's optional cap is checked against: the sum of
-// every `ready` digest's ESTIMATED cost across the workspace's teams. Cheap read; the pre-compute
-// job passes it as `spendSoFarUsd` so a run past the cap is refused (and written `ai_off`).
+// every `ready` AI artifact's ESTIMATED cost across the workspace's teams. Cheap read; each
+// pre-compute job passes it as `spendSoFarUsd` so a run past the cap is refused (and written
+// `ai_off`).
+//
+// THERE IS EXACTLY ONE OF THESE, and it must name EVERY artifact table. A table missing from this
+// union is invisible to the cap, so a capped workspace keeps spending someone's BYO key long past
+// the limit — silently under-firing, the worst kind of cap. `scripts/check-boundaries.mjs` rule 4
+// fails a second `sum('estimated_cost_usd')` anywhere else under `packages/schema/src`. Adding a
+// third artifact table is one entry here; forgetting one is a billing surprise on someone else's key.
 export async function getWorkspaceAiSpendUsd(db: Kysely<DB>, workspaceId: string): Promise<number> {
-  const row = await db
+  const digests = db
     .selectFrom('cycle_digest')
     .innerJoin('team', 'team.id', 'cycle_digest.team_id')
-    .select((eb) =>
-      eb.fn.coalesce(eb.fn.sum('cycle_digest.estimated_cost_usd'), sql<number>`0`).as('total'),
-    )
+    .select('cycle_digest.estimated_cost_usd as cost')
     .where('team.workspace_id', '=', workspaceId)
     .where('cycle_digest.status', '=', 'ready')
+
+  const retroDrafts = db
+    .selectFrom('retro_ai_draft')
+    .innerJoin('team', 'team.id', 'retro_ai_draft.team_id')
+    .select('retro_ai_draft.estimated_cost_usd as cost')
+    .where('team.workspace_id', '=', workspaceId)
+    .where('retro_ai_draft.status', '=', 'ready')
+
+  const row = await db
+    .selectFrom(digests.unionAll(retroDrafts).as('artifact'))
+    .select((eb) => eb.fn.coalesce(eb.fn.sum('artifact.cost'), sql<number>`0`).as('total'))
     .executeTakeFirst()
   return Number(row?.total ?? 0)
 }

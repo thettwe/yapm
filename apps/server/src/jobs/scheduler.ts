@@ -19,6 +19,7 @@ import {
   runNotificationEmailSweep,
   runNotificationRetention,
 } from './notifications.js'
+import { RETRO_AI_DRAFT_QUEUE, runRetroAiDraftTail } from './retro-draft.js'
 import {
   runSearchIndexTail,
   runSearchReconcile,
@@ -30,6 +31,7 @@ export const CYCLE_MAINTENANCE_QUEUE = 'cycle-maintenance'
 export const CYCLE_DIGEST_QUEUE = 'cycle-digest'
 export { ATTACHMENT_GC_QUEUE } from './attachments.js'
 export { NOTIFICATION_EMAIL_QUEUE, NOTIFICATION_RETENTION_QUEUE } from './notifications.js'
+export { RETRO_AI_DRAFT_QUEUE } from './retro-draft.js'
 export { SEARCH_INDEX_QUEUE, SEARCH_RECONCILE_QUEUE } from './search.js'
 
 // The tail's safety net. pg-boss cron granularity is one minute, which is far coarser than the
@@ -37,6 +39,11 @@ export { SEARCH_INDEX_QUEUE, SEARCH_RECONCILE_QUEUE } from './search.js'
 // why it is a constant rather than an environment variable. Everything an operator would plausibly
 // turn is one.
 const SEARCH_INDEX_WATCHDOG_CRON = '* * * * *'
+
+// The retro-draft tail's own safety net, and it exists for exactly the reason the search one does:
+// pg-boss cron granularity is one minute, far coarser than the re-arm interval, so this is only ever
+// the heal path for a lost or failed job. Same constant-not-env reasoning.
+const RETRO_AI_DRAFT_WATCHDOG_CRON = '* * * * *'
 
 // The manual-completion sweep bound: a cycle completed by hand (through the shared `cycle.complete`
 // mutator, which the scheduler never re-selects) is picked up for a digest by the next maintenance
@@ -85,6 +92,15 @@ export interface SearchSchedulerOptions {
   textConfig: string
 }
 
+// Present ⇒ the lazy retro-draft tail is registered on the SHARED boss. Absent (AI_RETRO_DRAFT=false,
+// or no gateway at all) ⇒ it is not, and `pending` rows accumulate harmlessly and drain if it is
+// turned back on. Gated INDEPENDENTLY of `cycles.digest`: a workspace may want one artifact and not
+// the other, and the two spend on the same key for different reasons.
+export interface RetroDraftSchedulerOptions {
+  gateway: AiGateway
+  intervalSeconds: number
+}
+
 // Present ⇒ the orphaned-attachment sweep is registered on the SHARED boss. Absent ⇒ it is not,
 // and unattached uploads simply accumulate — which is a disk-space question, never a correctness
 // one, so it is independently gated like every other block.
@@ -104,6 +120,7 @@ export interface StartSchedulerOptions {
   notifications?: NotificationSchedulerOptions
   search?: SearchSchedulerOptions
   attachments?: AttachmentSchedulerOptions
+  retroDraft?: RetroDraftSchedulerOptions
   // Injected by tests so the queue topology — which queues exist, and on what cron — is assertable
   // without a database or real polling. Mirrors the GitHub connector's `boss?:`.
   boss?: PgBoss
@@ -125,7 +142,7 @@ interface CycleDigestJobData {
 // `pgboss` schema on a fresh volume — a boot race invisible in dev and ugly exactly once, on a
 // self-hoster's first `docker compose up`.
 export async function startScheduler(options: StartSchedulerOptions): Promise<Scheduler> {
-  const { db, dbProvider, logger, cycles, notifications, search, attachments } = options
+  const { db, dbProvider, logger, cycles, notifications, search, attachments, retroDraft } = options
 
   const boss = options.boss ?? new PgBoss({ db: fromKysely(db), schema: 'pgboss' })
   if (options.boss === undefined) {
@@ -169,6 +186,16 @@ export async function startScheduler(options: StartSchedulerOptions): Promise<Sc
       logger.error(
         { err: error },
         'attachment job registration failed; other scheduled jobs continue',
+      )
+    }
+  }
+  if (retroDraft) {
+    try {
+      await registerRetroDraftJobs({ boss, db, dbProvider, logger, retroDraft })
+    } catch (error) {
+      logger.error(
+        { err: error },
+        'retro AI draft job registration failed; other scheduled jobs continue',
       )
     }
   }
@@ -378,6 +405,52 @@ async function registerSearchJobs(options: RegisterSearchJobsOptions): Promise<v
   logger.info(
     { intervalSeconds, reconcileCron, textConfig, watchdogCron: SEARCH_INDEX_WATCHDOG_CRON },
     'search index maintenance scheduled',
+  )
+}
+
+interface RegisterRetroDraftJobsOptions {
+  boss: PgBoss
+  db: Kysely<DB>
+  dbProvider: ZeroDatabase
+  logger: Logger
+  retroDraft: RetroDraftSchedulerOptions
+}
+
+// A FIFTH independent block on the SHARED `boss` — no second `PgBoss`, no second `boss.start()`.
+//
+// This is `SEARCH_INDEX_QUEUE`'s shape, deliberately and line for line, because the failure modes are
+// identical: the draft has to appear seconds after a facilitator reveals the board, which pg-boss's
+// one-minute cron granularity cannot do, so the worker RE-ARMS itself and a one-minute cron watchdog
+// heals a chain broken by a lost or failed job.
+//
+// THE POLICY IS `short`, NOT `exclusive`. `exclusive` allows one job queued *or active*, so the
+// re-arm issued from inside the active job is rejected and the chain dies after exactly one pass,
+// silently, leaving the watchdog to draft once a minute forever. `short` allows one job QUEUED and
+// unlimited active: the re-arm always succeeds, and a watchdog tick is dropped whenever the chain is
+// alive, so chains cannot multiply.
+//
+// The re-arm is in a `finally`, so a pass that throws does not stop drafting until the next watchdog
+// tick.
+async function registerRetroDraftJobs(options: RegisterRetroDraftJobsOptions): Promise<void> {
+  const { boss, db, dbProvider, logger } = options
+  const { gateway, intervalSeconds } = options.retroDraft
+
+  await ensurePolicy(boss, RETRO_AI_DRAFT_QUEUE, 'short')
+  await boss.work(RETRO_AI_DRAFT_QUEUE, async () => {
+    try {
+      await runRetroAiDraftTail({ db, dbProvider, gateway, logger })
+    } finally {
+      await boss.send(RETRO_AI_DRAFT_QUEUE, {}, { startAfter: intervalSeconds })
+    }
+  })
+  await boss.schedule(RETRO_AI_DRAFT_QUEUE, RETRO_AI_DRAFT_WATCHDOG_CRON)
+  // The chain's first link. Without it a fresh boot waits up to a minute for the watchdog, which for
+  // a facilitator who just revealed a board is a minute of "drafting…".
+  await boss.send(RETRO_AI_DRAFT_QUEUE, {}, { startAfter: intervalSeconds })
+
+  logger.info(
+    { intervalSeconds, watchdogCron: RETRO_AI_DRAFT_WATCHDOG_CRON },
+    'retro AI draft tail scheduled',
   )
 }
 

@@ -130,3 +130,61 @@ export function detectRichTextSkew(doc: unknown, types: RichTextSkewKnownTypes):
   }
   return CLEAN
 }
+
+const EMPTY_PARAGRAPH = { type: 'paragraph' }
+
+function stripValue(
+  value: unknown,
+  known: { nodes: ReadonlySet<string>; marks: ReadonlySet<string> },
+): unknown {
+  const node = asNode(value)
+  if (node === undefined) return undefined
+  if (typeof node.type === 'string' && !known.nodes.has(node.type)) return undefined
+
+  const source = node as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const [key, entry] of Object.entries(source)) {
+    if (key === 'content' && Array.isArray(entry)) {
+      out[key] = entry.map((child) => stripValue(child, known)).filter((c) => c !== undefined)
+      continue
+    }
+    if (key === 'marks' && Array.isArray(entry)) {
+      out[key] = entry.filter((entryMark) => {
+        const mark = asNode(entryMark)
+        return mark !== undefined && typeof mark.type === 'string' && known.marks.has(mark.type)
+      })
+      continue
+    }
+    out[key] = entry
+  }
+  return out
+}
+
+/**
+ * The most of a skewed document this bundle can still show.
+ *
+ * NOT a nicety and not the same thing as the pruning the guard exists to prevent. A ProseMirror
+ * schema does not skip a node type it has never heard of — `Node.fromJSON` throws `Unknown node
+ * type`, and the editor catches that and substitutes an EMPTY document. So a blocked document
+ * handed to a renderer unaltered draws a banner over a blank box, and the reader is told content is
+ * missing while being shown none of the content that is not. Dropping the unrepresentable nodes
+ * here is what leaves the rest on screen.
+ *
+ * The difference from the hazard: this output is never written back. It is a read-only projection
+ * for one render, and the surface that shows it has no editor and no `onChange`.
+ */
+export function stripUnknownRichText(doc: unknown, types: RichTextSkewKnownTypes): unknown {
+  const known = { nodes: asSet(types.knownNodeTypes), marks: asSet(types.knownMarkTypes) }
+  // Same stand-down as the detector: a caller that could not build a schema must not be handed an
+  // empty document in place of the one it asked to render.
+  if (known.nodes.size === 0) return doc
+
+  const stripped = asNode(stripValue(doc, known))
+  if (stripped === undefined) return { type: 'doc', content: [EMPTY_PARAGRAPH] }
+  // A doc whose every child was unrepresentable is legal JSON and an illegal ProseMirror document —
+  // `doc` is `block+`. One empty paragraph is what an empty editor holds anyway.
+  if (Array.isArray(stripped.content) && stripped.content.length === 0) {
+    return { ...(stripped as Record<string, unknown>), content: [EMPTY_PARAGRAPH] }
+  }
+  return stripped
+}

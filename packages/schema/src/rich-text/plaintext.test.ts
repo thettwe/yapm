@@ -26,12 +26,11 @@ function image(attrs: Record<string, unknown>): unknown {
   return { type: 'image', attrs }
 }
 
-// ASSEMBLED, not written literally. The capability-at-rest guard in
-// `apps/server/src/storage/no-capability.test.ts` greps this directory for any attribute whose
-// value opens with an absolute URL, and unlike its sibling word-grep it does not exclude test files
-// (`attachments` §I6). A test asserting that such a value is DROPPED would otherwise trip the guard
-// that exists to stop one being STORED — as would a comment quoting the pattern.
-const TRACKING_PIXEL_URL = `${'https:'}//tracker.example/pixel.png`
+// Written literally, which it could not be until the capability-at-rest guard in
+// `apps/server/src/storage/no-capability.test.ts` gained the `.test.ts` exclusion its sibling
+// word-grep has had since `attachments` §I6. A test asserting such a value is DROPPED has to name
+// it; the guard is about what shipped source can store.
+const TRACKING_PIXEL_URL = 'https://tracker.example/pixel.png'
 
 function cell(...content: unknown[]): unknown {
   return { type: 'tableCell', content }
@@ -348,17 +347,33 @@ describe('sanitizeRichText', () => {
   // The ban is what makes "no URL is ever stored" true rather than merely intended: the client
   // node type has no `src` and refuses to parse a pasted `<img>`, but only this pass binds a
   // client that was not built from this bundle.
-  it('refuses a URL-shaped attachmentId or alt on the authoritative pass', () => {
+  it('refuses a URL-shaped attachmentId on the authoritative pass', () => {
     for (const hostile of [
       TRACKING_PIXEL_URL,
       '//tracker.example/p.png',
       '  javascript:alert(1)',
       'DATA:image/png;base64,AAAA',
     ]) {
-      const sanitized = sanitizeRichText(doc(image({ attachmentId: hostile, alt: hostile }))) as {
+      const sanitized = sanitizeRichText(doc(image({ attachmentId: hostile, alt: 'a shot' }))) as {
         content: { attrs: Record<string, unknown> }[]
       }
-      expect(sanitized.content[0]?.attrs).toEqual({ attachmentId: '', alt: '', width: 'full' })
+      expect(sanitized.content[0]?.attrs).toEqual({
+        attachmentId: '',
+        alt: 'a shot',
+        width: 'full',
+      })
+    }
+  })
+
+  // The ban is on the ID, and only on the id. Alt text is display prose that never reaches an
+  // `href` or a `src`, and the URL pattern matches any sentence whose first word ends in a colon —
+  // which is most of the alt text anybody writes for a screenshot of an error.
+  it('keeps alt text whose first word ends in a colon', () => {
+    for (const alt of ['Error: 500 on login', 'Screenshot: the login page', 'note://not-a-url']) {
+      const sanitized = sanitizeRichText(doc(image({ attachmentId: 'a-1', alt }))) as {
+        content: { attrs: Record<string, unknown> }[]
+      }
+      expect(sanitized.content[0]?.attrs).toEqual({ attachmentId: 'a-1', alt, width: 'full' })
     }
   })
 

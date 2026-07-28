@@ -6,6 +6,7 @@ import { detectRichTextSkew } from '@yapm/schema'
 import {
   createRichTextExtensions,
   RichTextEditor,
+  RichTextRenderer,
   richTextKnownTypes,
 } from '@yapm/ui/components/rich-text'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -85,7 +86,7 @@ function nodeTypesIn(doc: JSONContent): string[] {
 }
 
 describe('the hazard is real, not hypothetical', () => {
-  it('TipTap silently prunes an image and a table loaded into a bundle that lacks them', () => {
+  it('TipTap discards the WHOLE document when it holds a node type this bundle lacks', () => {
     const element = document.createElement('div')
     document.body.append(element)
     const editor = new Editor({
@@ -95,12 +96,13 @@ describe('the hazard is real, not hypothetical', () => {
     })
     editors.push(editor)
 
-    const types = nodeTypesIn(editor.getJSON())
-    expect(types).not.toContain('image')
-    expect(types).not.toContain('table')
-    // The surviving paragraph is what makes this a SILENT prune rather than a failed load: the
-    // document still looks like a document, and one keystroke would autosave it over the real one.
-    expect(types).toContain('paragraph')
+    // Not a prune. `Node.fromJSON` throws `Unknown node type: image`, TipTap logs a warning and
+    // substitutes an EMPTY document — so the paragraph that had nothing wrong with it is gone too,
+    // and one keystroke would autosave this over the real description. Pinned exactly, because a
+    // future version quietly switching to a partial prune changes what the guard has to cover.
+    expect(editor.getJSON()).toEqual({ type: 'doc', content: [{ type: 'paragraph' }] })
+    expect(editor.getText()).not.toContain('Repro:')
+    expect(nodeTypesIn(editor.getJSON())).not.toContain('image')
   })
 })
 
@@ -141,6 +143,9 @@ describe('the write is structurally refused', () => {
     )
 
     expect(screen.getByTestId('rich-text-blocked')).toBeInTheDocument()
+    // The banner sits over what CAN be shown, not over a blank box: TipTap would have thrown the
+    // whole document away, so the unrepresentable node is dropped before the renderer sees it.
+    expect(screen.getByText('Keep me')).toBeInTheDocument()
     // THE assertion that maps to the data loss: with no editable region there is no `onUpdate`, so
     // `issue-detail.tsx`'s 500ms debounce never reaches `mutators.issue.update`.
     expect(container.querySelector('[contenteditable="true"]')).toBeNull()
@@ -162,6 +167,27 @@ describe('the write is structurally refused', () => {
   it('says why, in a status region a screen reader announces', () => {
     render(<RichTextEditor ariaLabel="Description" defaultValue={DOC_WITH_UNKNOWN_NODE} />)
     expect(screen.getByRole('status')).toHaveTextContent(/newer version of yapm/i)
+  })
+
+  // The reader's half of the same requirement: a rendered document with content invisibly missing
+  // is the failure one step downstream, and the renderer has no page to reload into a fix.
+  it('tells a reader too, without offering a Reload they cannot act on', async () => {
+    const { container } = render(<RichTextRenderer value={DOC_WITH_UNKNOWN_NODE} />)
+
+    expect(screen.getByTestId('rich-text-blocked')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(/newer version of yapm/i)
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(container.querySelector('[contenteditable="true"]')).toBeNull()
+    expect(await screen.findByText('Keep me')).toBeInTheDocument()
+  })
+
+  it('round-trips this bundle’s own node types through the renderer', async () => {
+    const { container } = render(<RichTextRenderer value={DOC_WITH_NEW_NODES} />)
+
+    expect(screen.queryByTestId('rich-text-blocked')).toBeNull()
+    expect(await screen.findByTestId('rich-text-image')).toBeInTheDocument()
+    expect(container.querySelector('table')).not.toBeNull()
+    expect(container.querySelector('th')?.textContent).toBe('Env')
   })
 
   it('leaves an ordinary document fully editable', () => {

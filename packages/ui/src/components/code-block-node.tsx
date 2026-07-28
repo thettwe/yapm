@@ -4,8 +4,12 @@ import { CODE_LANGUAGES, canonicalCodeLanguage } from '@yapm/ui/lib/code-languag
 /**
  * The code block's node view. The language control is a NATIVE `<select>` — it is a list of sixteen
  * strings, and a native select is both the keyboard-correct and the screen-reader-correct control
- * for that. Tab inside a code block inserts a tab character, which is what a code block is for, so
- * the selector is reached by tabbing to it from outside the block rather than from within.
+ * for that.
+ *
+ * It binds no key of its own, and must not: it is `contentEditable={false}` inside the editable
+ * region, so the browser's own traversal already makes it the next tab stop after the editor root.
+ * That only holds while `@tiptap/extension-code-block`'s `enableTabIndentation` stays at its default
+ * of `false` — turning it on would swallow Tab inside the block and strand this control.
  *
  * It lists only REGISTERED grammars, so it never offers a language this bundle cannot highlight.
  */

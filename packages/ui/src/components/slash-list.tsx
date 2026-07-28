@@ -2,6 +2,7 @@ import type { Editor, Range } from '@tiptap/react'
 import { cn } from '@yapm/ui/lib/utils'
 import {
   CodeIcon,
+  Columns3Icon,
   Heading2Icon,
   Heading3Icon,
   ImageIcon,
@@ -10,7 +11,10 @@ import {
   type LucideIcon,
   MinusIcon,
   QuoteIcon,
+  Rows3Icon,
   TableIcon,
+  Trash2Icon,
+  XIcon,
 } from 'lucide-react'
 
 /**
@@ -30,6 +34,13 @@ export interface SlashCommand {
   /** Extra words the filter matches, so "bullet" finds the list and "hr" finds the divider. */
   readonly keywords: readonly string[]
   readonly Icon: LucideIcon
+  /**
+   * Whether the command appears in the menu AT ALL, as opposed to appearing greyed. Omitted means
+   * always. The table-structure commands use it: "Delete row" offered in an empty paragraph is not
+   * a command the reader could not use here, it is a command about a thing that does not exist —
+   * and five of them would bury the nine blocks the menu is for.
+   */
+  readonly listed?: (editor: Editor) => boolean
   readonly enabled: (editor: Editor, context: SlashRunContext) => boolean
   /**
    * Deletes the trigger range and applies the command in ONE transaction — TipTap's `chain()`
@@ -58,6 +69,26 @@ function blockCommand(
     run: (editor, range) => {
       apply(editor.chain().focus().deleteRange(range)).run()
     },
+  }
+}
+
+/**
+ * A command that acts on the table the caret is already in. Listed only there — see
+ * `SlashCommand.listed` — which is also the condition the spec's scenario is written under: the
+ * structure commands are reachable from the toolbar AND from the insert menu when the caret is
+ * inside a table.
+ */
+function tableCommand(
+  id: string,
+  title: string,
+  hint: string,
+  keywords: readonly string[],
+  Icon: LucideIcon,
+  apply: (chain: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>,
+): SlashCommand {
+  return {
+    ...blockCommand(id, title, hint, keywords, Icon, apply, (editor) => editor.isActive('table')),
+    listed: (editor) => editor.isActive('table'),
   }
 }
 
@@ -126,6 +157,46 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     // A table inside a table is not reachable in this UI at all, and the cell schema forbids it.
     (editor) => !editor.isActive('table') && editor.can().insertTable({ rows: 3, cols: 3 }),
   ),
+  tableCommand(
+    'addRowAfter',
+    'Add row below',
+    'A new row under this one',
+    ['row', 'add', 'insert', 'table'],
+    Rows3Icon,
+    (chain) => chain.addRowAfter(),
+  ),
+  tableCommand(
+    'deleteRow',
+    'Delete row',
+    'Remove the row the caret is in',
+    ['row', 'delete', 'remove', 'table'],
+    MinusIcon,
+    (chain) => chain.deleteRow(),
+  ),
+  tableCommand(
+    'addColumnAfter',
+    'Add column after',
+    'A new column to the right',
+    ['column', 'col', 'add', 'insert', 'table'],
+    Columns3Icon,
+    (chain) => chain.addColumnAfter(),
+  ),
+  tableCommand(
+    'deleteColumn',
+    'Delete column',
+    'Remove the column the caret is in',
+    ['column', 'col', 'delete', 'remove', 'table'],
+    XIcon,
+    (chain) => chain.deleteColumn(),
+  ),
+  tableCommand(
+    'deleteTable',
+    'Delete table',
+    'Remove the whole table',
+    ['table', 'delete', 'remove'],
+    Trash2Icon,
+    (chain) => chain.deleteTable(),
+  ),
   {
     id: 'image',
     title: 'Image',
@@ -168,6 +239,21 @@ export function matchSlashCommands(query: string): readonly SlashCommand[] {
       command.title.toLowerCase().includes(needle) ||
       command.keywords.some((keyword) => keyword.startsWith(needle)),
   )
+}
+
+/**
+ * The rows the menu shows for a query, in one place: `listed` decides membership, `enabled` decides
+ * whether a member is greyed. The two are different questions — a command about a table the caret
+ * is not in has nothing to grey out.
+ */
+export function slashOptionsFor(
+  query: string,
+  editor: Editor,
+  context: SlashRunContext,
+): SlashOption[] {
+  return matchSlashCommands(query)
+    .filter((command) => command.listed === undefined || command.listed(editor))
+    .map((command) => ({ command, disabled: !command.enabled(editor, context) }))
 }
 
 export function slashOptionId(listboxId: string, index: number): string {
@@ -257,8 +343,12 @@ export function SlashList({
               aria-selected={active}
               aria-disabled={item.disabled ? true : undefined}
               data-active={active || undefined}
+              // A disabled row drops one ink step, to `text-2` rather than `text-3`: it still has
+              // to be READ — the whole point of showing it is the reason it carries — and `text-3`
+              // clears AA only as large text. Asserted in `styles/contrast.test.ts`.
               className={cn(
-                'flex cursor-default items-center gap-2 border-l-2 px-2 py-1.5 text-[13px] text-text-1 select-none',
+                'flex cursor-default items-center gap-2 border-l-2 px-2 py-1.5 text-[13px] select-none',
+                item.disabled ? 'text-text-2' : 'text-text-1',
                 active ? 'border-accent-strong bg-accent-soft' : 'border-transparent',
               )}
               // The caret has to stay put: a mousedown inside the popup would blur the editor and
@@ -267,7 +357,10 @@ export function SlashList({
               onMouseEnter={() => onActiveChange?.(index)}
               onClick={() => onSelect(index)}
             >
-              <command.Icon aria-hidden="true" className="size-4 shrink-0 text-text-2" />
+              <command.Icon
+                aria-hidden="true"
+                className={cn('size-4 shrink-0', item.disabled ? 'text-text-3' : 'text-text-2')}
+              />
               <span className="flex min-w-0 flex-col">
                 <span className="truncate">{command.title}</span>
                 <span className="truncate text-[11px] text-text-2">

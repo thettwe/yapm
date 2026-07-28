@@ -202,6 +202,49 @@ describe('the insert menu is keyboard-operable', () => {
     await tick()
     expect(state()?.items[0]?.disabled).toBe(true)
   })
+
+  // The spec's "exposed twice" scenario: the structure commands are reachable from the toolbar AND
+  // from the insert menu, and the scenario is written under "the caret is inside a table" — which
+  // is also the only place they mean anything.
+  const STRUCTURE = ['Add row below', 'Delete row', 'Add column after', 'Delete column']
+
+  it('offers the table structure commands inside a table', async () => {
+    const { editor, state } = harness()
+    editor.commands.insertTable({ rows: 2, cols: 2, withHeaderRow: true })
+    type(editor, '/')
+    await tick()
+    expect(titles(state())).toEqual(expect.arrayContaining([...STRUCTURE, 'Delete table']))
+    expect(state()?.items.filter((item) => STRUCTURE.includes(item.command.title))).toEqual(
+      STRUCTURE.map(() => expect.objectContaining({ disabled: false })),
+    )
+  })
+
+  it('lists none of them outside a table, where there is nothing for them to act on', async () => {
+    const { editor, state } = harness()
+    type(editor, '/')
+    await tick()
+    const offered = titles(state())
+    for (const title of [...STRUCTURE, 'Delete table']) expect(offered).not.toContain(title)
+    expect(offered).toContain('Table')
+  })
+
+  it('inserts a row from the menu, taking the trigger text with it', async () => {
+    const { editor, state } = harness()
+    editor.commands.insertTable({ rows: 2, cols: 2, withHeaderRow: true })
+    const rowsIn = (): number =>
+      (editor.getJSON().content ?? []).flatMap((node) =>
+        node.type === 'table' ? (node.content ?? []) : [],
+      ).length
+    const before = rowsIn()
+
+    type(editor, '/add')
+    await tick()
+    expect(titles(state())[0]).toBe('Add row below')
+    expect(press(editor, 'Enter').handled).toBe(true)
+
+    expect(rowsIn()).toBe(before + 1)
+    expect(editor.getText()).not.toContain('/add')
+  })
 })
 
 // THE REGRESSION THIS CHANGE IS MOST LIKELY TO CAUSE. The wrapper stands down on the IDENTITY of

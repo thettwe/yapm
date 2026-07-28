@@ -1,12 +1,19 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 const zero = vi.hoisted(() => ({
   rows: [] as unknown[],
 }))
 
+const api = vi.hoisted(() => ({ remove: vi.fn(async () => undefined) }))
+
 vi.mock('@rocicorp/zero/react', () => ({
   useQuery: () => [zero.rows, { type: 'complete' }],
+}))
+
+vi.mock('@/issues/attachments/upload', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/issues/attachments/upload')>()),
+  deleteAttachment: api.remove,
 }))
 
 import { FilesSection, formatBytes } from './files-section'
@@ -24,6 +31,7 @@ const ROW = {
 
 beforeEach(() => {
   zero.rows = [ROW]
+  api.remove.mockClear()
 })
 
 test('sizes read the way a file manager writes them', () => {
@@ -44,6 +52,25 @@ test('names the download and the remove control after the file itself', () => {
   expect(download).toHaveAttribute('download', 'stalled-sync.png')
   expect(screen.getByRole('button', { name: 'Remove stalled-sync.png' })).toBeInTheDocument()
   expect(screen.getByText(/240 kB · Ada Lovelace/)).toBeInTheDocument()
+})
+
+// The one destructive control on this surface asks first, through the app's OWN dialog — a
+// `window.confirm` is browser chrome that picks up none of the three presets and neither light nor
+// dark, and it would have been the only such surface in the product.
+test('removing a file asks first, in a themed dialog that names the file', async () => {
+  render(<FilesSection issueId="i1" teamId="t1" canWrite userNames={NAMES} />)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove stalled-sync.png' }))
+  const dialog = await screen.findByRole('dialog')
+  expect(dialog).toHaveTextContent('Remove stalled-sync.png?')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(api.remove).not.toHaveBeenCalled()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove stalled-sync.png' }))
+  fireEvent.click(await screen.findByRole('button', { name: /^Remove$/ }))
+  await waitFor(() => expect(api.remove).toHaveBeenCalledExactlyOnceWith(ROW.id))
 })
 
 // A viewer reads everything and writes nothing — here as everywhere else. The download stays,

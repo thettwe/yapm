@@ -7,8 +7,10 @@ Files section (8) that lists what they produce; tokens and CSS (9) last of the b
 surface that needs a token exists to be styled. Tests (10) and documentation (11) are the close
 phase's.
 
-`apps/server` is untouched by this change. If a task here edits it, the task is wrong — assert it in
-12.3 rather than assuming it.
+`apps/server`'s SHIPPED SOURCE is untouched by this change. If a task here edits it, the task is
+wrong — assert it in 12.3 rather than assuming it. The one exception is the capability-at-rest guard
+test, which names the directories this change writes into and was pointing at one that never
+existed; see §I22.
 
 ## 1. Dependencies
 
@@ -238,7 +240,10 @@ phase's.
 - [x] 11.1 `apps/docs/src/content/docs/features/rich-text.md` (new): images, tables, code blocks, the
       insert menu, keyboard shortcuts for each, and an honest section on the "reload to edit" state —
       what causes it, why it exists, and that the deploy which introduced it has a one-window
-      exposure the guard cannot cover. Add the sidebar entry in `apps/docs/astro.config.mjs`.
+      exposure the guard cannot cover. Add the sidebar entry in `apps/docs/astro.config.mjs` **and
+      the Features bullet in `apps/docs/src/content/docs/index.md`**, in sidebar order — every
+      feature change before this one added one, and the close gate only covers pages it is told
+      about.
 - [x] 11.2 `apps/docs/src/content/docs/features/markdown.md`: add the new node rows to the "what
       markdown carries" and "what markdown cannot carry" tables — GFM table, image path, code fence
       language; block content inside a table cell flattens.
@@ -263,7 +268,9 @@ phase's.
       record it. If it is over budget, shrink the language list — the design does not change.
 - [x] 12.3 Assert the untouched surfaces:
       `git diff --stat origin/main -- apps/server packages/schema/src/migrations packages/schema/src/zero`
-      should show nothing. No migration, no Zero schema change, no new synced query, no new mutator.
+      should show nothing **except `apps/server/src/storage/no-capability.test.ts`**, whose rule (c)
+      pointed at a directory this change was expected to create and did not — see §I22. No shipped
+      server source, no migration, no Zero schema change, no new synced query, no new mutator.
 - [x] 12.4 Manual check in a real browser, because jsdom cannot see it: with the mention popup and
       the insert menu both reachable in one comment composer, Escape from each dismisses only that
       popup and never discards the draft.

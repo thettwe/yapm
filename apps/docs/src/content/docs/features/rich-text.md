@@ -22,6 +22,10 @@ Nine commands: Heading 2, Heading 3, Bullet list, Numbered list, Quote, Code blo
 Divider. Inserting one is **a single undo** — press undo once and both the block and the `/` you
 typed are gone.
 
+With the caret inside a table the menu grows five more — **Add row below**, **Delete row**, **Add
+column after**, **Delete column** and **Delete table**. They appear only there, because there is
+nothing for them to act on anywhere else.
+
 The menu does not open where a `/` is a character you meant: not mid-word (`and/or` stays
 `and/or`), not inside a code block, and not inside inline code. A command that cannot apply where the
 caret is — a table inside a table, or an image where there is nothing to upload to — is shown greyed
@@ -69,7 +73,9 @@ and yapm serves the bytes only to people who can read the issue. See
 
 With the caret inside a table the toolbar grows a row of controls: **Add row below**, **Delete row**,
 **Add column after**, **Delete column**, **Toggle header row**, **Delete table**. Each is a real
-button with a name a screen reader reads out.
+button with a name a screen reader reads out. The same structure commands — bar the header toggle —
+are in the `/` menu while the caret is in a table, so you never have to leave the keyboard to reach
+them.
 
 **Columns cannot be resized, on purpose.** A column width would be a stored value that syncs to
 everyone and changes under them when a colleague drags a handle — and a drag handle is a
@@ -118,14 +124,15 @@ Here is exactly what that is, because the honest explanation is short.
 
 The set of things a description can contain — images, tables, code blocks — is decided by the
 version of yapm **your browser loaded**, not by the one on the server. A tab you left open before an
-upgrade does not know about anything the upgrade added. Editors of this kind silently discard
-content they do not recognise, so that tab would quietly delete a colleague's table the moment you
-typed a character into the description, and it would then be saved that way.
+upgrade does not know about anything the upgrade added, and an editor handed one block it cannot
+represent does not drop that block — it throws the **whole document** away and starts you on an
+empty one. So that tab would quietly replace a colleague's description with nothing at all the
+moment you typed a character into it, and it would then be saved that way.
 
 So yapm refuses. When it loads a document containing something this tab cannot represent, it shows
-you the document read-only with that bar, and will not save. Reload and everything is there and
-editable again. The worst case is a stale tab that will not save until you reload it — never a table
-that vanished without anyone noticing.
+you the parts it *can* represent, read-only, under that bar, and will not save. Reload and
+everything is there and editable again. The worst case is a stale tab that will not save until you
+reload it — never a description that vanished without anyone noticing.
 
 Readers see the same notice on a document they can only read, so nobody is looking at a page with
 content invisibly missing.

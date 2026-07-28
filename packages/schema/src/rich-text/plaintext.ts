@@ -299,7 +299,11 @@ function sanitizedImageAttrs(node: UnknownNode): Record<string, unknown> {
     // opaque and the renderer computes the path, so anything with a scheme or a protocol-relative
     // prefix is dropped to '' and the node degrades to a placeholder rather than storing a URL.
     attachmentId: URL_SHAPED.test(id) ? '' : id,
-    alt: URL_SHAPED.test(alt) ? '' : alt,
+    // `alt` is NOT tested against it. Alt text is display prose, never an `href` and never a `src`,
+    // and the pattern matches any sentence whose first word is followed by a colon — "Error: 500 on
+    // login" is the alt text somebody actually writes for a screenshot of that error, and deleting
+    // it would protect nothing while destroying the one thing search can read about a picture.
+    alt,
     width: IMAGE_WIDTHS.has(width) ? width : DEFAULT_IMAGE_WIDTH,
   }
 }

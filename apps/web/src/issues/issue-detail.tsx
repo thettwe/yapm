@@ -48,7 +48,7 @@ import {
   UserXIcon,
   XIcon,
 } from 'lucide-react'
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useMemo, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import { FilesSection } from '@/issues/attachments/files-section'
 import { attachmentSrc, uploadAttachment } from '@/issues/attachments/upload'
@@ -58,6 +58,7 @@ import {
   type LinkedIssueRow,
   linkedEntitiesFor,
 } from '@/issues/delivery'
+import { useDescriptionAutosave } from '@/issues/description-autosave'
 import { FollowControl } from '@/issues/follow-control'
 import { buildMentionables, mentionNamesFor } from '@/issues/mentionables'
 import {
@@ -400,40 +401,27 @@ function IssueDetailBody({
   }
 
   // Description edits stay local-first: the optimistic mutator applies instantly, but the
-  // authoritative write is debounced so a burst of keystrokes settles into one update. The
-  // pending edit is flushed on unmount (closing the panel) so nothing is lost.
-  const pendingDoc = useRef<RichTextValue | null>(null)
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // authoritative write is debounced so a burst of keystrokes settles into one update.
+  const description = (issue.description as RichTextValue | null) ?? null
 
-  const flushDescription = useCallback(() => {
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current)
-      saveTimer.current = null
-    }
-    const doc = pendingDoc.current
-    if (doc === null) return
-    pendingDoc.current = null
-    void run(
-      zero.mutate(
-        mutators.issue.update({
-          id: issue.id,
-          description: doc as unknown as ReadonlyJSONValue,
-          updatedAt: Date.now(),
-        }),
-      ),
-    )
-  }, [issue.id, run, zero])
-
-  const saveDescription = useCallback(
+  const commitDescription = useCallback(
     (doc: RichTextValue) => {
-      pendingDoc.current = doc
-      if (saveTimer.current) clearTimeout(saveTimer.current)
-      saveTimer.current = setTimeout(flushDescription, 500)
+      void run(
+        zero.mutate(
+          mutators.issue.update({
+            id: issue.id,
+            description: doc as unknown as ReadonlyJSONValue,
+            updatedAt: Date.now(),
+          }),
+        ),
+      )
     },
-    [flushDescription],
+    [issue.id, run, zero],
   )
 
-  useEffect(() => () => flushDescription(), [flushDescription])
+  // The synced document is passed in, not just the callback: an armed debounce has to be cancelled
+  // when that document turns out to hold something this bundle cannot represent.
+  const { save: saveDescription } = useDescriptionAutosave(description, commitDescription)
 
   // Bound to THIS issue and THIS team, so `packages/ui` never learns either. The editor's whole
   // knowledge of uploading is a callback that answers with an opaque id or a reason.
@@ -492,16 +480,16 @@ function IssueDetailBody({
                 ariaLabel="Issue description"
                 placeholder="Add a description…"
                 minHeight="7rem"
-                defaultValue={(issue.description as RichTextValue | null) ?? null}
+                defaultValue={description}
                 mentionables={mentionables}
                 mentionNames={mentionNames}
                 resolveAttachmentSrc={attachmentSrc}
                 onUploadImage={uploadImage}
                 onChange={saveDescription}
               />
-            ) : issue.description ? (
+            ) : description ? (
               <RichTextRenderer
-                value={issue.description as RichTextValue}
+                value={description}
                 mentionNames={mentionNames}
                 resolveAttachmentSrc={attachmentSrc}
               />

@@ -627,8 +627,8 @@ that will be worked around rather than read.
 
 ### Evidence: the falsifiable check can fail (task 10.8, first leg)
 
-`packages/ui/src/components/rich-text.skew.test.tsx`, 6 tests, all green. Neutering the guard — one
-`if (false && skew.blocked)` in `RichTextEditor`, restored afterwards — fails **2 of 6**:
+`packages/ui/src/components/rich-text.skew.test.tsx`, 8 tests, all green. Neutering the guard — one
+`if (false && skew.blocked)` in `RichTextEditor`, restored afterwards — fails **2 of 8**:
 
 ```
 × the write is structurally refused > renders the blocked state, exposes no editable region,
@@ -637,11 +637,30 @@ that will be worked around rather than read.
 × the write is structurally refused > says why, in a status region a screen reader announces
 ```
 
-The other four are the hazard and the detector, which do not depend on the component: leg 1 builds a
-real `Editor` over the extension set with the five new node types removed and observes TipTap prune
-the image and the table while leaving the paragraph behind, and leg 2 reports that same document
-blocked against that same reduced schema. Both are unwritable against `origin/main`, where neither
-the node types nor `detectRichTextSkew` exist.
+The same neutering applied to `RichTextRenderer` fails exactly one more — *tells a reader too,
+without offering a Reload they cannot act on* — and pointing `RichTextBlocked` back at the raw
+`value` instead of the stripped projection fails two, both on the surviving paragraph.
+
+The rest are the hazard and the detector, which do not depend on the component: leg 1 builds a real
+`Editor` over the extension set with the five new node types removed and observes what TipTap
+actually does with the document, and leg 2 reports that same document blocked against that same
+reduced schema. Both are unwritable against `origin/main`, where neither the node types nor
+`detectRichTextSkew` exist.
+
+**What leg 1 observes is worse than the plan assumed, and the assertion now pins it.** The plan said
+"prune"; ProseMirror does not prune. `Node.fromJSON` throws `RangeError: Unknown node type: image`,
+TipTap logs a warning and substitutes an EMPTY document, so the paragraph that had nothing wrong
+with it goes too:
+
+```
+JSON: {"type":"doc","content":[{"type":"paragraph"}]}
+```
+
+Leg 1 asserted `types).toContain('paragraph')` — satisfied by the auto-inserted empty one, so it
+could not tell a partial prune from total loss. It now asserts the exact document and that the text
+`Repro:` is gone. Two consequences beyond the test: the docs page said the editor "silently discards
+content they do not recognise" one block at a time and now says what happens, and `RichTextBlocked`
+had to stop handing the raw document to the renderer — see §I23.
 
 ### I12 — Task 6.2: the slash trigger is its OWN extension, not a second `suggestions` entry
 
@@ -918,3 +937,115 @@ no cancel of its own.
 - **Task 12.1** — the full `lint typecheck test build` with live Postgres. The close phase ran the
   fast gates and the docs build; the PR runs the whole suite, including the `pg` and `e2e` jobs,
   which is where the two new files above are first executed against a database and a browser.
+
+## Review round 1 — decisions taken while fixing
+
+### I22 — The capability guard pointed at a directory that never existed, and fixing it costs a diff in `apps/server`
+
+Rule (c) of `apps/server/src/storage/no-capability.test.ts` scanned
+`packages/ui/src/editor` — a path §D13 planted ahead of this change and this change never created,
+because the image node went into `packages/ui/src/components`. The whole client-side image
+implementation was therefore unscanned, and rule (c) passed over an empty file list, which is the
+exact failure mode rule (a) already carries a `expect(files.length)` floor against.
+
+It now scans `packages/schema/src/rich-text`, `packages/ui/src/components`, `packages/ui/src/lib`
+and `apps/web/src/issues/attachments`, with a floor of 30 files so a stale path fails loudly next
+time, and with the `.test.ts` exclusion §I11 asked for — extended to `.stories.tsx` for the same
+reason, since `avatar.stories.tsx` legitimately names a real avatar URL. `plaintext.test.ts`'s
+tracking-pixel fixture is a literal again as a result.
+
+This is a diff in `apps/server`, which task 12.3 asserted would be empty. The task now names the
+exception: the guard is a test **about** the directories this change writes into, it is the only
+`apps/server` file touched, and no shipped server source, migration, Zero schema, synced query or
+mutator moved. Leaving it stale to preserve a clean `git diff --stat` would have been preserving the
+statistic rather than the property it stands for.
+
+### I23 — The blocked state has to strip, because ProseMirror does not
+
+`RichTextBlocked` handed the raw document to `RichTextRendererSurface`, on the assumption the
+renderer would show what it could and skip the rest. It does not: the same `RangeError` leg 1 now
+pins applies to the renderer, so the banner sat over a **blank box** and told the reader content was
+missing while showing them none of the content that was not.
+
+`stripUnknownRichText(doc, knownTypes)` is a new pure function beside `detectRichTextSkew`, in
+`packages/schema` for the same reason its neighbour is: it walks raw JSON and imports nothing. It
+drops nodes and marks whose `type` is unknown and keeps the siblings, and substitutes one empty
+paragraph if nothing survives, because `doc` is `block+` and an empty one would throw in turn.
+
+It is not a re-introduction of the hazard. The hazard is a lossy document being **written back**;
+this output is a read-only projection for one render, on a surface that has no editor, no `onChange`
+and no `onSubmit`. The distinction is what the comment on the function says, so nobody later reaches
+for it on a write path.
+
+### I24 — The URL ban is on the id, and only on the id
+
+`sanitizedImageAttrs` ran the `URL_SHAPED` test over `alt` as well as `attachmentId`. That pattern
+is `^\s*[a-z][a-z0-9+.-]*:` — it matches any string whose first word ends in a colon, so
+`Error: 500 on login` and `Screenshot: the login page` were silently deleted on every authoritative
+pass. Alt text of exactly that shape is what somebody writes for a screenshot of an error, and it is
+the only thing about a picture the search index can read.
+
+The ban exists because a URL in a synced node is a capability at rest; `alt` is never an `href` and
+never a `src` — the path is computed from `attachmentId` — so testing it protected nothing. Narrowed
+to the id, with a regression case for the colon shape.
+
+### I25 — The table-structure commands are LISTED contextually, not greyed permanently
+
+The `rich-content-editing` scenario asks for add-row, add-column, delete-row, delete-column and
+delete-table "as labelled controls in the editor toolbar **and from the insert menu**". Only the
+toolbar half shipped.
+
+The straightforward reading — add them with `enabled: (editor) => editor.isActive('table')` — puts
+five rows including three deletions permanently in a menu whose whole job is inserting a block, and
+makes `/tabl` in an empty paragraph offer "Delete table". So `SlashCommand` gained a `listed`
+predicate, distinct from `enabled`: `enabled` answers "could you use this here", `listed` answers
+"is this even about something that exists". The five appear only with the caret inside a table,
+which is also the condition the scenario is written under. `enabled` still carries the greying, and
+Table and Image still use it.
+
+The e2e's `toHaveCount(9)` is asserted at a paragraph and stays correct. `slash-menu.test.tsx` gains
+three cases: the commands are offered and enabled inside a table, none of them is listed outside
+one, and "Add row below" chosen from the menu adds a row and takes the trigger text with it.
+
+### I26 — A disabled row is now actually greyed, in both popups
+
+The docs said an unavailable command "is shown greyed with a reason"; `SlashList` applied no
+disabled styling at all — the only difference was the sub-line text. The row now drops one ink step
+to `text-2` (not `text-3`, which clears AA only as large text and this row exists to be read), and
+its icon to `text-3`. Mirrored on `MentionList`'s ineligible row so the two popups say "unavailable"
+the same way.
+
+### I27 — The autosave debounce is cancelled by the guard, not merely outrun by it
+
+The guard is structural in the editor and was advisory everywhere else: `issue-detail.tsx` armed a
+500 ms timer on every keystroke, and nothing cancelled it when the synced description turned out to
+name a node type this bundle cannot represent. The editor flipped read-only; the timer fired anyway
+and wrote the pre-block document, which under LWW is the loss the guard exists to refuse — reached
+by the one path the guard did not cover.
+
+Extracted to `apps/web/src/issues/description-autosave.ts`, which takes the synced document as well
+as the commit callback so it can run `richTextSkew` on the write path: the timer is cancelled the
+moment the document goes out of range, `flush` re-checks rather than trusting that it was, and the
+unmount flush is subject to the same check. Six jsdom cases; three of them fail with the check
+removed.
+
+### I28 — Two smaller corrections
+
+- **`[&_pre]:pt-7`** reserved the band the code block's language selector sits in, but lived in
+  `contentClass`, which the read-only renderer shares — where the selector is never rendered. Moved
+  onto the editable `EditorContent` only, so a code block somebody is reading keeps its symmetric
+  padding.
+- **A deleted attachment** rendered as the browser's own broken-image glyph: the bordered alt-text
+  placeholder was reachable only when no resolver was supplied, while the docs promised the image
+  "degrades to its alt text". The node view now tracks a load failure keyed by `attachmentId` and
+  falls back to the same placeholder. Three cases in `image-node.test.tsx`.
+- **The `<select>`'s comment** justified its keyboard design with "Tab inside a code block inserts a
+  tab character". `@tiptap/extension-code-block` 3.28.0 defaults `enableTabIndentation` to `false`
+  and nothing turns it on, so that was never true here. Rewritten to state the constraint that is:
+  the control is `contentEditable={false}` inside the editable region and needs no binding, which
+  holds only while the option stays off.
+- **The remove-file confirm** was a `window.confirm` — the only browser-chrome dialog in the
+  product, unable to pick up any of the three presets or light/dark, and no keyboard surface of
+  yapm's own. Replaced with the existing `Dialog` primitive, destructive-variant Confirm plus
+  Cancel, `initialFocus`, naming the file in its title. That settles the canonical pattern for the
+  next destructive surface: it is `Dialog`, not the platform.

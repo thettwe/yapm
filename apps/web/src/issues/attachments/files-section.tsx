@@ -2,6 +2,13 @@ import { useQuery } from '@rocicorp/zero/react'
 import { queries } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { DetailSection } from '@yapm/ui/components/detail-field'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@yapm/ui/components/dialog'
 import { PaperclipIcon, Trash2Icon } from 'lucide-react'
 import { useState } from 'react'
 import { attachmentSrc, deleteAttachment, uploadAttachment } from '@/issues/attachments/upload'
@@ -70,6 +77,7 @@ export function FilesSection({
   const [attachments] = useQuery(queries.attachments.byIssue({ issueId }))
   const [error, setError] = useState<string | undefined>(undefined)
   const [busy, setBusy] = useState(false)
+  const [pendingRemoval, setPendingRemoval] = useState<AttachmentRow | null>(null)
   const rows = attachments as readonly AttachmentRow[]
 
   async function upload(file: File): Promise<void> {
@@ -80,9 +88,7 @@ export function FilesSection({
   }
 
   async function remove(row: AttachmentRow): Promise<void> {
-    // A confirm, because deleting an attachment removes the bytes as well as the row and nothing
-    // undoes it. The image node in a description that named it degrades to its alt text.
-    if (!window.confirm(`Remove ${row.filename}? This cannot be undone.`)) return
+    setPendingRemoval(null)
     setError(await deleteAttachment(row.id))
   }
 
@@ -130,7 +136,7 @@ export function FilesSection({
                   size="icon-xs"
                   aria-label={`Remove ${row.filename}`}
                   className="text-text-2"
-                  onClick={() => void remove(row)}
+                  onClick={() => setPendingRemoval(row)}
                 >
                   <Trash2Icon />
                 </Button>
@@ -159,6 +165,36 @@ export function FilesSection({
           {error}
         </p>
       ) : null}
+
+      {/* Deleting an attachment removes the bytes as well as the row and nothing undoes it, so it
+          asks first — through the app's own Dialog rather than `window.confirm`, which is browser
+          chrome that picks up none of the three presets and neither light nor dark. */}
+      <Dialog
+        open={pendingRemoval !== null}
+        onOpenChange={(next) => {
+          if (!next) setPendingRemoval(null)
+        }}
+      >
+        <DialogContent initialFocus>
+          <DialogTitle>Remove {pendingRemoval?.filename}?</DialogTitle>
+          <DialogDescription>
+            This deletes the file itself, not just the link to it, and it cannot be undone. An image
+            in a description that named it degrades to its alt text.
+          </DialogDescription>
+          <div className="flex justify-end gap-2">
+            <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (pendingRemoval !== null) void remove(pendingRemoval)
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DetailSection>
   )
 }

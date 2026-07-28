@@ -19,6 +19,7 @@ export {
   detectRichTextSkew,
   RICH_TEXT_SCHEMA_VERSION,
   RICH_TEXT_SCHEMA_VERSION_ATTR,
+  stripUnknownRichText,
 } from './rich-text/schema-version.js'
 export type {
   LocalSearchCandidate,

@@ -41,6 +41,7 @@ import {
   IMAGE_NODE_TYPE,
   type RichTextSkew,
   type RichTextSkewKnownTypes,
+  stripUnknownRichText,
 } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { CodeBlockNodeView } from '@yapm/ui/components/code-block-node'
@@ -52,12 +53,12 @@ import {
   nextMentionIndex,
 } from '@yapm/ui/components/mention-list'
 import {
-  matchSlashCommands,
   SlashList,
   type SlashOption,
   type SlashRunContext,
   slashAnnouncement,
   slashOptionId,
+  slashOptionsFor,
 } from '@yapm/ui/components/slash-list'
 import { lowlight, PLAIN_TEXT_LANGUAGE } from '@yapm/ui/lib/code-languages'
 import {
@@ -706,13 +707,16 @@ const contentClass = cn(
   '[&_td>p]:my-0 [&_th>p]:my-0',
   // ProseMirror's own cell-selection class, so a keyboard cell selection is visible at all.
   '[&_.selectedCell]:bg-accent-soft',
-  // The code block's language selector sits in the padding, so the first line is not underneath it.
-  '[&_pre]:pt-7',
   '[&_img]:my-2 [&_img]:block [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-control',
   // The image node's selected cue is an OUTLINE on the focus-ring token, never a colour swap: a
   // `NodeSelection` is how an image is reached, given alt text and deleted from the keyboard.
   '[&_.ProseMirror-selectednode]:outline [&_.ProseMirror-selectednode]:outline-2 [&_.ProseMirror-selectednode]:outline-offset-2 [&_.ProseMirror-selectednode]:outline-ring',
 )
+
+// Reserved for the code block's language selector, which the node view renders only when the editor
+// is editable. On the read-only renderer there is no selector, so this band would be an empty
+// asymmetric strip above every code block somebody is merely reading.
+const editableContentClass = '[&_pre]:pt-7'
 
 export interface RichTextKeyEvent {
   key: string
@@ -1023,13 +1027,7 @@ export function createSlashController(host: SlashHost): SlashController {
       container: host.containerSelector,
       placement: 'bottom-start',
       allow: ({ state, range }) => slashAllowed(state, range),
-      items: ({ query, editor }) => {
-        const context = host.context()
-        return matchSlashCommands(query).map((command) => ({
-          command,
-          disabled: !command.enabled(editor, context),
-        }))
-      },
+      items: ({ query, editor }) => slashOptionsFor(query, editor, host.context()),
       // The trigger range and the command land in ONE transaction; see `SlashCommand.run`.
       command: ({ editor, range, props }) => {
         props.command.run(editor, range, host.context())
@@ -1137,6 +1135,14 @@ function RichTextBlocked({
   onCancel?: (() => void) | undefined
   showReload: boolean
 }) {
+  // The banner has to sit over the readable REMAINDER, not over a blank box. ProseMirror throws on
+  // a node type it does not declare and TipTap answers with an empty document, so what survives has
+  // to be computed before the renderer ever sees it. Read-only, never written back.
+  const visible = useMemo(
+    () => stripUnknownRichText(value ?? EMPTY_DOC, richTextKnownTypes()) as JSONContent,
+    [value],
+  )
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: Escape still dismisses the surface holding this
     <div
@@ -1170,7 +1176,7 @@ function RichTextBlocked({
       </div>
       <div className="px-3 py-2" style={minHeight === undefined ? undefined : { minHeight }}>
         <RichTextRendererSurface
-          value={value}
+          value={visible}
           mentionNames={mentionNames}
           resolveAttachmentSrc={resolveAttachmentSrc}
         />
@@ -1432,7 +1438,11 @@ function RichTextEditorSurface({
             {placeholder}
           </p>
         ) : null}
-        <EditorContent editor={editor} className={contentClass} style={{ minHeight }} />
+        <EditorContent
+          editor={editor}
+          className={cn(contentClass, editable && editableContentClass)}
+          style={{ minHeight }}
+        />
       </div>
       {/* PERSISTENT, and outside the popup's portal. A polite region that appears with its text
           already in it is not reliably spoken — assistive technology announces CHANGES to a region

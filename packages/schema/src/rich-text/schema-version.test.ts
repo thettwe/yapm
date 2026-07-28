@@ -4,6 +4,7 @@ import {
   detectRichTextSkew,
   RICH_TEXT_SCHEMA_VERSION,
   RICH_TEXT_SCHEMA_VERSION_ATTR,
+  stripUnknownRichText,
 } from './schema-version.js'
 
 const KNOWN = {
@@ -160,5 +161,59 @@ describe('sanitizeRichText stamps the schema version', () => {
   it('a sanitized document is never blocked by the detector it stamps for', () => {
     const stamped = sanitizeRichText(doc([paragraph(text('a'))]))
     expect(detectRichTextSkew(stamped, KNOWN)).toEqual({ blocked: false })
+  })
+})
+
+describe('stripUnknownRichText', () => {
+  it('drops an unknown node and keeps its known siblings', () => {
+    const stripped = stripUnknownRichText(
+      doc([paragraph(text('keep me')), { type: 'callout', content: [paragraph(text('gone'))] }]),
+      KNOWN,
+    )
+    expect(stripped).toEqual(doc([paragraph(text('keep me'))]))
+  })
+
+  it('drops an unknown mark and keeps the text it was on', () => {
+    const stripped = stripUnknownRichText(
+      doc([paragraph(text('inked', [{ type: 'bold' }, { type: 'highlight' }]))]),
+      KNOWN,
+    )
+    expect(stripped).toEqual(doc([paragraph(text('inked', [{ type: 'bold' }]))]))
+  })
+
+  it('drops an unknown node nested inside a known one', () => {
+    const stripped = stripUnknownRichText(
+      doc([{ type: 'paragraph', content: [text('a'), { type: 'emoji' }, text('b')] }]),
+      KNOWN,
+    )
+    expect(stripped).toEqual(doc([paragraph(text('a'), text('b'))]))
+  })
+
+  // `doc` is `block+`: a document whose every child was unrepresentable is legal JSON and an
+  // illegal ProseMirror document, and handing that to a renderer throws exactly the way the
+  // unstripped document would have.
+  it('leaves one empty paragraph when nothing survives', () => {
+    expect(stripUnknownRichText(doc([{ type: 'callout' }]), KNOWN)).toEqual(
+      doc([{ type: 'paragraph' }]),
+    )
+  })
+
+  it('preserves attributes, including the version stamp, on the nodes it keeps', () => {
+    const stamped = doc([paragraph(text('a'))], { [RICH_TEXT_SCHEMA_VERSION_ATTR]: 99 })
+    expect(stripUnknownRichText(stamped, KNOWN)).toEqual(stamped)
+  })
+
+  it('returns the document untouched when the caller could not build a schema', () => {
+    const value = doc([{ type: 'callout' }])
+    expect(stripUnknownRichText(value, { knownNodeTypes: [], knownMarkTypes: [] })).toEqual(value)
+  })
+
+  it('is total on malformed input', () => {
+    for (const value of ['a string', 42, null, undefined, []]) {
+      expect(stripUnknownRichText(value, KNOWN)).toEqual({
+        type: 'doc',
+        content: [{ type: 'paragraph' }],
+      })
+    }
   })
 })

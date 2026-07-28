@@ -189,12 +189,17 @@ test.describe('rich content', () => {
     // the key rather than the roster. It is read through `aria-expanded` and the empty-state copy,
     // NOT through the listbox: with zero options the `<ul>` has no box and Playwright rightly calls
     // it hidden. `mentions.spec.ts` owns the populated case.
+    //
+    // `exact: true` is load-bearing: the popup's copy also reaches the editor's persistent polite
+    // status region, which appends a full stop. Without it the locator matches both and Playwright
+    // refuses in strict mode.
+    const emptyRoster = page.getByText('No teammates to mention', { exact: true })
     await page.keyboard.type('@')
     await expect(composer).toHaveAttribute('aria-expanded', 'true', { timeout: 20_000 })
-    await expect(page.getByText('No teammates to mention')).toBeVisible({ timeout: 10_000 })
+    await expect(emptyRoster).toBeVisible({ timeout: 10_000 })
     await page.keyboard.press('Escape')
     await expect(composer).toHaveAttribute('aria-expanded', 'false', { timeout: 10_000 })
-    await expect(page.getByText('No teammates to mention')).toHaveCount(0)
+    await expect(emptyRoster).toHaveCount(0)
     await expect(composer).toContainText(DRAFT)
     await expect(panel).toBeVisible()
 

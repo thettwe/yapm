@@ -902,6 +902,13 @@ Rewritten to read the state rather than the element: `aria-expanded` on the edit
 `aria-expanded` is the contract a screen reader reads, and the listbox element is an implementation
 of it. The populated case stays where it already was, in `mentions.spec.ts`.
 
+The second run failed the same test one line further on, for a reason worth writing down: the
+empty-state copy reaches the DOM **twice**, once in the popup's `<p>` and once in the editor's
+persistent polite status region, which appends a full stop. `getByText` refused in strict mode.
+`{ exact: true }` distinguishes them — and the duplication is not a defect, it is the announcement
+mechanism `mentions` deliberately mounted for the editor's whole life so the first announcement is
+not lost.
+
 Task 12.4 is closed by the e2e spec's third test rather than by a manual pass: the `@` list and the
 `/` menu are opened in **one** comment composer, Escape dismisses each without touching the draft or
 the panel, and then the same key with nothing open dismisses the panel — the control that makes the

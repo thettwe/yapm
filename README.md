@@ -76,7 +76,12 @@ a **data-seeded retrospective**, opened automatically when a cycle closes, whose
 is already filled in from the team's own cycles (and from PR/CI data when a connector is
 configured), with **anonymity guaranteed at the storage layer** — the card→author binding lives in
 a server-only table the sync schema cannot name — and actions that become real, numbered issues in
-the next cycle · a keyboard-first **notification inbox** at `/inbox` with an unread badge, for
+the next cycle, plus an opt-in, per-team **AI draft** in that retro: at the moment the facilitator
+reveals the board (never before it, so there is nothing to anchor on while people are still writing
+their own cards), the model drafts at most three wins, three losses and three improvements, each one
+*citing* a work-graph entity or one of yapm's own computed metrics — it points at a number, it never
+types one — reading no cards, no comments and nobody's name, and labelled "AI-drafted, not agreed"
+because nothing it writes is the team's conclusion · a keyboard-first **notification inbox** at `/inbox` with an unread badge, for
 assignments (including triage routing) and comments on issues you're involved in — written only on
 the server so a rebased optimistic mutation can never duplicate or re-send one, readable **only by
 its recipient with no admin bypass**, and optionally emailed as one batched, debounced digest per
@@ -116,9 +121,12 @@ understand quietly deleted.
 ## What's next
 
 **BYO-key AI agents** that read and act through the same permissions as a human —
-the foundation (gateway, agent-as-actor tools, the AI-over-work-graph substrate) is in; a governed
-PM-facing digest and an **AI-facilitated** retro — drafting themes and candidate actions on top of
-the retrospective that already ships — build on it next. Then DORA and review-health metrics
+the foundation (gateway, agent-as-actor tools, the AI-over-work-graph substrate) is in, and the
+AI-facilitated retro's first half now drafts into a real retro. Next: **agreeing and disagreeing**
+with a drafted proposal — a reaction synced only to the person who cast it, a verdict computed once
+when the retro leaves voting, a single disagreement marking a proposal contested, and one keystroke
+from an agreed improvement to a real numbered issue — and a governed PM-facing digest that is the
+first AI output in yapm to cross a permission boundary. Then DORA and review-health metrics
 computed from the graph — team-level only, never individual scorecards. More connectors
 (GitLab, …) slot into the same framework with no feature-code change — inheriting the reality strip
 and the status automation above for free.

@@ -212,9 +212,28 @@ which is how you cluster cards without a pointer. On your own draft during `brai
 opens the editor and `Backspace` (or `Delete`) removes it. In the actions list, `⌘/Ctrl+Enter`
 converts the focused action into an issue. `Esc` always leaves the editor you are in.
 
+## The AI draft
+
+Optionally, and **off for every team until an admin turns it on**, a model reads the same cycle facts
+the data panel is built from and drafts up to three wins, three losses and three improvements into the
+retro — each one citing a work-graph entity or one of the panel's own computed metrics. It appears
+directly below the data panel, a few seconds after the facilitator reveals the board, and it is
+labelled *AI-drafted, not agreed* because in this release nothing the model writes becomes the team's
+conclusion.
+
+It is drafted **at the `brainstorm` → `group` advance**, never before: while the retro is in
+`brainstorm` the rows do not exist, so there is nothing for the team to anchor on while they are still
+writing their own cards. It reads **no cards, no comments, no votes and nobody's name** — the anonymity
+boundary above is untouched, because the pipeline reads no retro content at all.
+
+With no team opted in, or with no AI provider configured, the retro is exactly the retro described
+above and nothing renders. See [Retro AI draft](/features/retro-ai-draft/) for what the model is given,
+what it is never given, and the two residuals stated plainly.
+
 ## What is next
 
-An **AI-facilitated retro** — drafting themes and candidate actions from the same seed, under the
-same permissions, with the same cite-or-omit grounding as the cycle digest — is a later change. It
-builds on this surface; it does not replace it. Nothing in a retrospective calls a model today.
+**Agreeing and disagreeing with a proposal** — a self-scoped reaction, a verdict computed once when
+the retro leaves `vote`, a minority veto that marks a proposal contested, and one keystroke from an
+agreed improvement to a real numbered issue — is the next change on this surface. It builds on the
+board and the draft; it replaces neither.
 

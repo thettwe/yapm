@@ -254,30 +254,44 @@ check (7) before any UI exists, so the behaviour is proven headless; the surface
 
 ## Documentation
 
-- [ ] D.1 New `apps/docs/src/content/docs/features/retro-ai-draft.md`: what it drafts and when
+- [x] D.1 New `apps/docs/src/content/docs/features/retro-ai-draft.md`: what it drafts and when
       (lazily, at the reveal — and why not before), how to turn it on per team, what the model
       **never** sees (no person, no card, no comment — with the table allowlist stated plainly), that
       every number is yapm's, that nothing is ratified in this release, and the two residuals from
       design §D2 stated honestly rather than omitted.
-- [ ] D.2 Update `apps/docs/src/content/docs/features/retrospectives.md`: the new section, its
+- [x] D.2 Update `apps/docs/src/content/docs/features/retrospectives.md`: the new section, its
       off-by-default state, and a link to D.1.
-- [ ] D.3 Update `apps/docs/src/content/docs/self-hosting/ai-setup.md`: `AI_RETRO_DRAFT` in the env
+- [x] D.3 Update `apps/docs/src/content/docs/self-hosting/ai-setup.md`: `AI_RETRO_DRAFT` in the env
       table, the per-team switch, the lazy-generation spend model (a retro nobody runs costs
       nothing), and the correction that the workspace running total now spans **both** artifact
       tables.
-- [ ] D.4 Add the sidebar entry in `apps/docs/astro.config.mjs`; run
+- [x] D.4 Add the sidebar entry in `apps/docs/astro.config.mjs`; run
       `pnpm --filter @yapm/docs build`.
-- [ ] D.5 Update `README.md` ("What works today") and `ROADMAP.md` row 18 status. `TECHSTACK.md` is
+- [x] D.5 Update `README.md` ("What works today") and `ROADMAP.md` row 18 status. `TECHSTACK.md` is
       deliberately untouched — assert that no version, dependency or technology decision moved.
-- [ ] D.6 Confirm `.env.example` matches the Zod env schema (the mechanical drift check), and that
+      *(Asserted: `git diff origin/main...HEAD -- '*package.json' pnpm-workspace.yaml pnpm-lock.yaml`
+      is empty, so no catalog pin, dependency or technology choice moved. Also updated:
+      `apps/docs/.../index.md` feature list, and `reference/zero.md` — the harvest had no note that
+      a column absent from the Zero schema still replicates to the replica, which this build
+      verified and which the anonymity story depends on.)*
+- [x] D.6 Confirm `.env.example` matches the Zod env schema (the mechanical drift check), and that
       `openspec/SCOPE-ai-features.md` §1's no-second-copy rule is now enforced by
-      `scripts/check-boundaries.mjs` rather than only written down.
+      `scripts/check-boundaries.mjs` rather than only written down. *(Ran the name-set diff: every
+      Zod var this change added is in `.env.example` and has an `EXPECTED_FORMAT` entry; the four
+      pre-existing absences — `HOST`, `PORT`, `DATABASE_URL`, `WEB_DIST_DIR` — are supplied by
+      `docker/docker-compose.yml` and predate this change. Boundary rules 4 and 5 exist in
+      `scripts/lib/boundaries.mjs` with fixtures in `scripts/lib/boundaries.test.mjs`.)*
 
 ## Close
 
-- [ ] C.1 `pnpm turbo lint typecheck test build` and `node scripts/check-boundaries.mjs`, all green,
-      with the actual output reported.
-- [ ] C.2 Walk every scenario in `openspec/changes/retro-ai-draft/specs/**` and name the test or the
-      code path that satisfies it.
-- [ ] C.3 Tear the compose project down: `docker compose -p yapm-rd -f docker/docker-compose.dev.yml
-      down -v`.
+- [x] C.1 `pnpm turbo lint typecheck test build` and `node scripts/check-boundaries.mjs`, all green,
+      with the actual output reported. *(Fast gates + `pnpm --filter @yapm/docs build` run and
+      reported in design.md. The **full** `turbo build`, Playwright and the compose smoke test were
+      deliberately not run here — the PR's CI owns them and duplicating an in-flight run is what
+      PROCESS.md §4 removed.)*
+- [x] C.2 Walk every scenario in `openspec/changes/retro-ai-draft/specs/**` and name the test or the
+      code path that satisfies it. *(All 53, in design.md §"The scenario walk (task C.2)". It found
+      one uncovered scenario — see I16.)*
+- [x] C.3 Tear the compose project down: `docker compose -p yapm-rd -f docker/docker-compose.dev.yml
+      down -v`. *(Done in the task-7.2 pass; re-verified — `docker ps -a --filter
+      label=com.docker.compose.project=yapm-rd` returns nothing.)*

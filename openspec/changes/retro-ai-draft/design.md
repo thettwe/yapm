@@ -710,3 +710,208 @@ The e2e preset matrix that a `ready` draft would need is **not** in `retro-ai.sp
 neither e2e case has a provider and so neither can produce a rendered proposal — asserting the theme
 matrix against a section that is correctly absent would assert nothing. The rendered surface's palette
 is pinned by the contrast case above and its structure by `retro-ai-panel.test.tsx`.
+
+### I16 — The client-mutator absence needed a test, because an absence never fails on its own
+
+The scenario walk below turned up one spec scenario with no proof behind it: `local-first-sync`'s
+*"the client mutator map contains no mutator that writes either artifact table"*. Change 9 shipped the
+same guarantee for `cycle_digest` on a comment alone, and a comment does not fail CI.
+
+`packages/schema/src/zero/retro/ai-artifact-absence.test.ts` is the sibling of the shipped
+`attachment-absence.test.ts`, in the same shape and for the same reason: both tables are in the Zero
+schema, `mutatorToolNames()` (exhaustive over `defineMutators` by construction) contains no
+`retroAiDraft.*` / `retroAiProposal.*` entry, `mutators.ts` never writes either table and never
+imports `ai-draft-writes`, and — the half that stops the whole thing passing vacuously —
+`server-mutators.ts` **does** import it and **does** call `upsertRetroAiDraft`. So the day somebody
+adds `retroAiProposal.create` "to render optimistically", both the forgery and the newly AI-callable
+tool fail a test rather than a review.
+
+The `cycle_digest` equivalent is left alone deliberately: adding a second absence test for a shipped
+table in a change that does not touch it is the kind of scope drift that hides a regression.
+
+### The scenario walk (task C.2)
+
+Every scenario in `openspec/changes/retro-ai-draft/specs/**`, with the test or code path that
+satisfies it. 53 scenarios across 7 capabilities. Shorthands: `RD.pg` =
+`apps/server/src/ai/retro-draft.pg.test.ts` (the D11 falsifiable check), `RD.unit` =
+`apps/server/src/ai/retro-draft.test.ts`, `TAIL` = `apps/server/src/jobs/retro-draft.test.ts`,
+`PANEL` = `apps/web/src/retro/retro-ai-panel.test.tsx`, `TOGGLE` =
+`apps/web/src/settings/retro-ai-draft.test.tsx`, `E2E` = `apps/web/e2e/retro-ai.spec.ts`.
+
+**`retro-ai-draft` — off until a team opts in**
+
+| Scenario | Satisfied by |
+|---|---|
+| A team that never opted in sees nothing | `RD.pg` "writes nothing when the team never opted in"; `mutators.retro.pg.test.ts` "writes no draft row at all when the team never opted in"; `E2E` case 1 |
+| A new team defaults to off | `0018_retro_ai.ts` — the column is nullable with no default; `schema-drift.test.ts`; `TOGGLE` "off is what a team looks like by default" |
+| Only an admin can opt a team in | `mutators.test.ts` `setAiRetroDraft` member/viewer rejection **before** the existence check, plus the same generic error for a missing team |
+| Opting in does not backfill | `server-mutators.ts` writes only inside the live `brainstorm → group` branch; `mutators.retro.pg.test.ts` "does not stamp a draft on any other phase advance" |
+| The instance switch is independent of the digest switch | `TAIL` "registers nothing when the block is absent (AI_RETRO_DRAFT=false)" and "gates independently of the cycle digest block" |
+
+**`retro-ai-draft` — lazy at the reveal**
+
+| Scenario | Satisfied by |
+|---|---|
+| Nothing to anchor on during brainstorm | `RD.pg` assertion (d) — zero rows in both tables *because none were created*; `E2E` case 1 asserts the replica holds neither table |
+| The draft appears shortly after the reveal | `mutators.retro.pg.test.ts` "writes exactly one pending row when the team opted in"; `RD.pg` end to end; `PANEL` "pending renders one quiet line" |
+| Two replicas do not double-spend | `TAIL` "claims the row BEFORE the provider call" and "skips a row whose claim was taken by another worker, with no provider call" |
+| A crashed worker does not strand a draft | The claim statement's five-minute reclaim predicate (§D1), exercised by `TAIL`'s claim tests |
+| A broken chain heals | `TAIL` "creates the short-policy queue, the watchdog cron and the first link" and "re-arms in a finally even when the pass throws" |
+
+**`retro-ai-draft` — identity-free input**
+
+| Scenario | Satisfied by |
+|---|---|
+| No identity reaches the model | `RD.pg` (a) — the identity-key walk over the object handed to `generateStructured`; `retro-facts.pg.test.ts` "returns an object graph with no identity-shaped key at any depth" |
+| The review author column is never selected | `retro-facts.pg.test.ts` "touches exactly the allowlisted tables and never selects an identity column" (the recording proxy); the explicit column list in `db/retro-facts.ts` with the reason at that line |
+| No retro content is read | Same recorder, asserted as set **equality** against the §D2 seven; `RD.pg` (a) |
+| Metrics are not recomputed | `retro-facts.pg.test.ts` "computes the same metrics the shared builder computes from the same rows" (I10 — one definition, two callers) |
+
+**`retro-ai-draft` — typed, cited, capped**
+
+| Scenario | Satisfied by |
+|---|---|
+| An uncited proposal is dropped | `retro/ai-draft.test.ts` "strips a hallucinated id and an unknown metric key, and drops a proposal left with none"; `RD.pg` (c) |
+| A proposal naming a member is dropped | `retro/ai-draft.test.ts` "drops the name-bearing proposal while its siblings survive"; `ai-content.test.ts`; `RD.pg` (c) |
+| More than three per bucket is impossible | `retro/ai-draft.test.ts` "caps six clean wins to exactly three, in model order" and "caps AFTER the drops" |
+| The model points at a number rather than typing one | `PANEL` "a metric chip renders the seed value and delta, never the number on the row"; `retro/ai-draft.test.ts` "keeps a proposal citing a real widget metric key" |
+| An injected instruction is treated as data | `RD.unit` "keeps the injected instruction inside the fence and out of the system prompt"; `RD.pg`, whose fixture echoes the injection back |
+| No tool is ever mounted | `RD.unit` "no tools" assertion on the gateway call; `RD.pg` (b); boundary rule 5 with its fixtures in `scripts/lib/boundaries.test.mjs` |
+
+**`retro-ai-draft` — the artifact**
+
+| Scenario | Satisfied by |
+|---|---|
+| A client cannot forge a proposal | `zero/retro/ai-artifact-absence.test.ts` (I16) |
+| A non-member reads nothing | `queries.anonymity.pg.test.ts`, whose registry walk covers both new queries by construction (task 7.3) |
+| Deleting the retro removes the artifact | `0018_retro_ai.ts` — `ON DELETE CASCADE` on both `retro_id` edges; asserted present by `schema-drift.test.ts` |
+| The run's cost is recorded and counted | `RD.pg` (f) — `getWorkspaceAiSpendUsd` rises when the `ready` draft is written |
+
+**`retro-ai-draft` — the surface**
+
+| Scenario | Satisfied by |
+|---|---|
+| The section is absent when AI is off | `PANEL` render-nothing cases; `E2E` case 2 polls Postgres to `ai_off`, then asserts the replica *holds* the row and still nothing renders |
+| Drafting in progress is visible and quiet | `PANEL` "pending renders one quiet line and claims nothing" |
+| The whole section works from the keyboard | `PANEL` "every evidence chip is a focusable control, in the order the proposal cites them" and "activating a chip opens the entity or reveals the metric tile"; `E2E` asserts tab order is unbroken (narrowed by I12) |
+| It is correct in every theme | `packages/ui/src/styles/contrast.test.ts` "the retro panel ink meets AA on the section wash and the chip wash (>= 4.5)", all six presets |
+| The draft is labelled as unratified | `PANEL` "a ready draft renders its categories in canonical order, labelled as unratified" (and I13 — `pending` omits it) |
+
+**`retrospective` (MODIFIED)**
+
+| Scenario | Satisfied by |
+|---|---|
+| No synced query yields an anonymous card's author | `queries.anonymity.pg.test.ts`, unchanged and now covering two more queries |
+| An anonymous card syncs with no author value | Change 10, unchanged; `schema-drift.test.ts` "still keeps retro_card_author out of the Zero schema" |
+| The author can still be authorized server-side | Change 10, unchanged |
+| Anonymity cannot be flipped once cards exist | Change 10, unchanged |
+| An automated retro contributor reads no card | `retro-facts.pg.test.ts` table-set equality; `RD.pg` (a), whose fixture opens an anonymous retro with published cards from two authors |
+| The retro is unchanged when the capability is off | `E2E` case 1; `RD.pg` (e) |
+| Proposals never take over a format's columns | `retro-view.tsx` mounts the panel beside `RetroSeedPanel`, never in the board; `PANEL` renders no column |
+| The section is reachable and operable by keyboard | `PANEL` chip-order and activation cases; `E2E` tab order |
+| Nothing in the section records an opinion | `PANEL` "no avatar, no image and no per-person attribution anywhere in the section"; there is no reaction control and no mutator to call — ratification is change 19 |
+
+**`local-first-sync` (ADDED)**
+
+| Scenario | Satisfied by |
+|---|---|
+| A member of the team reads the artifact | `queries.ts` `retroAiDrafts.byRetro` / `retroAiProposals.byRetro`, both `teamScoped`; `E2E` case 2 asserts the row reaches the replica |
+| A non-member receives nothing | `queries.anonymity.pg.test.ts` registry walk |
+| No client mutator exists | `zero/retro/ai-artifact-absence.test.ts` (I16) |
+| Before the advance there is nothing to sync | `RD.pg` (d); `E2E` case 1 |
+| Scheduling state does not sync | `schema-drift.test.ts` "keeps retro_ai_draft.claimed_at in Postgres and out of the Zero schema" — the asymmetry asserted from both sides |
+
+**`ai-agent` (MODIFIED)**
+
+| Scenario | Satisfied by |
+|---|---|
+| Uncited item is dropped | `ai-content.test.ts` "narrows refs to the known set and drops an item left with none"; `digest.test.ts` unchanged |
+| Numbers come from yapm | `PANEL` seed-value-not-row-value case |
+| AI-off renders raw evidence | The change-10 seed panel is the fallback, unchanged (§D10); `PANEL` renders nothing for `ai_off` |
+| A second consumer reuses the validators unchanged | `ai-content.test.ts` walks a shape that is *not* `DigestContent`; `digest.test.ts` passes **untouched** (the D4.1 regression proof); boundary rule 4 forbids a second copy |
+| A cited metric key renders yapm's number | `PANEL` metric-chip case; `retro/ai-draft.test.ts` widget-ref case |
+| No egress channel exists | `RD.unit` no-tools assertion; boundary rule 5 |
+| The model cannot name an individual | `RD.pg` (a) and (c); `retro-facts.pg.test.ts` identity walk |
+| External text is data, not instructions | `RD.unit` fence assertions |
+| Render is exfil-safe | `PANEL` "a reference the client cannot name from its own rows renders no chip", plus I11 — `ref.label` is never rendered |
+| A consumer inside an anonymous surface reads none of it | `retro-facts.pg.test.ts` table-set equality; `RD.pg` (a) |
+| An identity column on a work-graph table stays out | `retro-facts.pg.test.ts` column recorder — `review.author` specifically |
+
+**`ai-gateway` (MODIFIED)**
+
+| Scenario | Satisfied by |
+|---|---|
+| Cost is estimated and labeled | Change 9, unchanged; `RD.unit` writes provider/model/usage/cost on `ready` |
+| Spend cap refuses a run | `RD.unit` spend-capped branch ⇒ `ai_off` |
+| Model IDs are never hardcoded | Change 9, unchanged — the run resolves the workspace's configured model |
+| A second consumer's spend counts against the same cap | `RD.pg` (f); `getWorkspaceAiSpendUsd`'s union (I3); boundary rule 4's single-`sum` guard |
+
+**`self-host-deploy` (MODIFIED)**
+
+| Scenario | Satisfied by |
+|---|---|
+| Container count is unchanged | `docker/docker-compose.yml` is not in this change's diff at all |
+| AI runs within the existing app process | Unchanged from change 9 |
+| AI keys reuse the encrypted connector surface | Unchanged from change 9 |
+| A second AI consumer adds no runner | `TAIL` "creates the short-policy queue, the watchdog cron and the first link" — one more block on the existing boss, no second `boss.start()` |
+| Consumers are switched independently | `TAIL` "gates independently of the cycle digest block" and "registers nothing when the block is absent" |
+
+**`teams` (ADDED)**
+
+| Scenario | Satisfied by |
+|---|---|
+| A new team defaults to no AI participation | Nullable column, no default; `TOGGLE` default-off case |
+| Admin enables and disables participation | `mutators.test.ts` "lets an admin opt the team in with the epoch the call site minted" / "opt back out by writing null" |
+| Non-admin cannot write the setting | `mutators.test.ts` member/viewer rejection before any existence check |
+| Members can read the setting | The column rides the already-synced `team` row; `schema-drift.test.ts` asserts `aiRetroDraftSince` is in the Zero schema |
+| The toggle is keyboard-operable and tokenized | `TOGGLE` "the toggle is a real button in the tab order and announces politely"; `contrast.test.ts` |
+| The setting touches nothing else | `mutators.retro.pg.test.ts` opted-out case — the advance's other rows are unchanged; `RD.pg` (e) |
+
+**Two scenarios rest on a code path rather than a new test, and say so**: "a crashed worker does not
+strand a draft" (the reclaim predicate is one clause of the claim statement `TAIL` already exercises;
+a test would have to sleep five minutes or inject a clock) and "deleting the retro removes the
+artifact" (a Postgres `ON DELETE CASCADE` asserted present by the drift test rather than exercised).
+Both are noted here rather than claimed as covered.
+
+### I17 — Boundary rule 4 fired on the new absence test, and the test moved rather than the rule
+
+The I16 test greps `mutators.ts` for `mutate.retro_ai_draft`, and the first cut spelled that as
+`new RegExp(\`\\bmutate\\.${table}\\b\`)` — which is exactly the shape rule 4 reserves for the one
+word-boundary member-name walker, so `check-boundaries.mjs` refused it.
+
+The rule is right and the test was wrong. Exempting `*.test.ts` from rule 4 would have been the easy
+fix and the wrong one: a name walker defined in a test helper is still a second name walker, and it
+would drift from the real one exactly as silently. The test now uses `String.includes`, which is all
+it ever needed — the table names are not prefixes of anything.
+
+### Fast gates after the tests-and-docs pass (group D + Close), all green
+
+```
+$ pnpm turbo run typecheck '--filter=...[origin/main]'
+ Tasks:    6 successful, 6 total
+
+$ pnpm lint
+$ biome ci .
+Checked 525 files in 154ms. No fixes applied.
+
+$ pnpm turbo run test '--filter=...[origin/main]' --force
+ Tasks:    6 successful, 6 total
+@yapm/schema:test   Tests  618 passed | 173 skipped (791)
+@yapm/ui:test       Tests  234 passed (234)
+@yapm/server:test   Tests  265 passed | 99 skipped (364)
+@yapm/web:test      Tests  317 passed (317)
+
+$ node scripts/check-boundaries.mjs
+Boundaries OK: …
+$ node --test scripts/lib/boundaries.test.mjs
+ℹ pass 27  ℹ fail 0
+
+$ pnpm --filter @yapm/docs build
+[build] 23 page(s) built in 2.37s
+[build] Complete!
+```
+
+Schema grew by 5 — `zero/retro/ai-artifact-absence.test.ts` (I16). The 173 and 99 skips are the
+pg-gated integration suites: no `DATABASE_URL` in this pass, and CI runs them on the push. The full
+`turbo build`, Playwright and the compose smoke test were deliberately not run here (PROCESS.md §4 —
+CI is the gate of record and duplicating an in-flight run is what that section removed).

@@ -227,7 +227,16 @@ describe.skipIf(DATABASE_URL === undefined)('runRetroAiDraft (live db, faked gat
       })
       .execute()
 
-    return { workspaceId, teamId, cycleId, retroId, issueId, userName: 'Casey Rivera' }
+    // The `pending` row the phase advance stamps. Seeded here because `runRetroAiDraft` only ever
+    // COMPLETES a claimed row — it is update-only by construction, so a fixture without this row would
+    // be exercising a path the product does not have.
+    const draftId = newId()
+    await database.db
+      .insertInto('retro_ai_draft')
+      .values({ id: draftId, team_id: teamId, retro_id: retroId, status: 'pending' })
+      .execute()
+
+    return { workspaceId, teamId, cycleId, retroId, issueId, draftId, userName: 'Casey Rivera' }
   }
 
   async function withDb<T>(run: (database: Database) => Promise<T>): Promise<T> {
@@ -424,6 +433,54 @@ describe.skipIf(DATABASE_URL === undefined)('runRetroAiDraft (live db, faked gat
       expect(result).toEqual({ status: 'ready', proposals: 0 })
       expect((await draftRow(database, retroId))?.status).toBe('ready')
       expect(await proposals(database, retroId)).toEqual([])
+
+      await database.db.deleteFrom('workspace').where('id', '=', workspaceId).execute()
+    })
+  }, 30_000)
+
+  // The race the update-only completion exists for: a facilitator may step back to `brainstorm` — which
+  // DELETES the draft — while a claimed run is still inside its provider call. An inserting completion
+  // resurrected a `ready` artifact into the one phase that must not have one, and `stampRetroAiDraft`
+  // leaves an existing row alone, so the resurrected row was never replaced or removed either.
+  it('writes nothing when the draft was discarded mid-call, and still records the cost', async () => {
+    await withDb(async (database) => {
+      const { workspaceId, teamId, cycleId, retroId, issueId } = await seed(database)
+      const facts = (await retroFactsForCycle(database.db, teamId, cycleId)) as RetroFacts
+
+      const gateway: AiGateway = {
+        resolveModel: async () => null,
+        generateStructured: async () => {
+          await database.db.deleteFrom('retro_ai_draft').where('retro_id', '=', retroId).execute()
+          return {
+            object: {
+              proposals: [
+                {
+                  category: 'win',
+                  summary: 'Guest checkout shipped inside the cycle.',
+                  refs: [{ kind: 'issue', id: issueId }],
+                  confidence: 'high',
+                },
+              ],
+            } as never,
+            provider: 'anthropic',
+            modelId: 'test-model',
+            usage: usageOf(100, 50),
+            estimatedCostUsd: 0.25,
+          }
+        },
+        runAgent: async () => null,
+      }
+
+      const result = await runRetroAiDraft(
+        { gateway, db: database.db, dbProvider: createZeroDatabase(database.db) },
+        { workspaceId, retroId, facts },
+      )
+
+      expect(result).toEqual({ status: 'ready', proposals: 0, discarded: true })
+      expect(await draftRow(database, retroId)).toBeUndefined()
+      expect(await proposals(database, retroId)).toEqual([])
+      // The money outlived the row: carried onto the team, so the cap cannot forget a call that ran.
+      expect(await getWorkspaceAiSpendUsd(database.db, workspaceId)).toBeCloseTo(0.25)
 
       await database.db.deleteFrom('workspace').where('id', '=', workspaceId).execute()
     })

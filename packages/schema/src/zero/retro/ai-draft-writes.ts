@@ -25,6 +25,13 @@ export interface RetroAiDraftWrite {
   readonly estimatedCostUsd?: number | null
   // Deterministic write clock (keeps the write idempotent under retry).
   readonly now: number
+  // UPDATE THE EXISTING ROW OR DO NOTHING, returning null when there is none. Every write that
+  // COMPLETES a run sets this, and the reason is a race the artifact's whole anchoring argument turns
+  // on: a facilitator may step back to `brainstorm` — which deletes the draft — while a claimed run is
+  // still inside its provider call. An inserting completion would resurrect a `ready` draft into a
+  // retro that is back to writing cards, and `stampRetroAiDraft` (which leaves an existing row alone)
+  // would then never replace or remove it. Only the phase advance inserts.
+  readonly updateOnly?: boolean
 }
 
 export interface UpsertRetroAiDraftResult {
@@ -32,10 +39,11 @@ export interface UpsertRetroAiDraftResult {
   readonly inserted: boolean
 }
 
+// Null means "there is no row to write and none was created" — only possible under `updateOnly`.
 export async function upsertRetroAiDraft(
   tx: Transaction,
   write: RetroAiDraftWrite,
-): Promise<UpsertRetroAiDraftResult> {
+): Promise<UpsertRetroAiDraftResult | null> {
   const existing = (await tx.run(zql.retro_ai_draft.where('retroId', write.retroId).one())) as
     | { id: string }
     | undefined
@@ -55,6 +63,7 @@ export async function upsertRetroAiDraft(
     await tx.mutate.retro_ai_draft.update({ id: existing.id, ...fields })
     return { id: existing.id, inserted: false }
   }
+  if (write.updateOnly === true) return null
   await tx.mutate.retro_ai_draft.insert({
     id: write.id,
     teamId: write.teamId,

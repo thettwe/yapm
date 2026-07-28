@@ -130,7 +130,14 @@ export async function runRetroAiDraftTail(
     else result.failed += 1
 
     logger.info(
-      { retroId: row.retro_id, status: run.status, proposals: run.proposals },
+      {
+        retroId: row.retro_id,
+        status: run.status,
+        proposals: run.proposals,
+        // True when the run finished into a row a step back had already deleted: nothing was stored,
+        // and the cost was carried onto the team instead.
+        discarded: run.discarded === true,
+      },
       'retro AI draft computed',
     )
   }
@@ -139,7 +146,10 @@ export async function runRetroAiDraftTail(
 }
 
 // Written through the same server-only Zero path as every other status, so the row a client reads is
-// always produced by the authoritative writer.
+// always produced by the authoritative writer. UPDATE-ONLY for the same reason every completion in
+// `runRetroAiDraft` is: this row was claimed a moment ago, and if it is gone the facilitator stepped
+// back to `brainstorm` and deleted it — writing it again would resurrect an artifact into the one phase
+// that must not have one.
 async function writeAiOff(input: { dbProvider: ZeroDatabase; row: PendingDraft }): Promise<void> {
   const { dbProvider, row } = input
   const now = Date.now()
@@ -150,6 +160,7 @@ async function writeAiOff(input: { dbProvider: ZeroDatabase; row: PendingDraft }
       retroId: row.retro_id,
       status: 'ai_off',
       now,
+      updateOnly: true,
     })
   })
 }

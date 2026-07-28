@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME,
   RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME,
@@ -150,6 +150,8 @@ test('a team that never opted in renders nothing and subscribes to nothing', () 
   mount(draftRow('ready'), [proposal()], { aiRetroDraftSince: null })
 
   expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+  // Not even the live region: an opted-out team's retro is the retro that ships without this feature.
+  expect(screen.queryByTestId('retro-ai-announcement')).toBeNull()
   expect(subscribed()).toEqual([])
 })
 
@@ -173,11 +175,27 @@ test('a pending row nothing ever completes stops claiming to be in progress', ()
   expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
 })
 
-// The live region is one node across both states, so the transition is spoken. Mounting a fresh
-// `role="status"` element together with its text announces nothing at all.
-test('the drafting state and its resolution are both announced', () => {
+// The live region is one node for the whole life of the retro, and it is EMPTY when it mounts: a
+// `role="status"` element inserted together with its own text announces nothing at all, and in the live
+// path the first state to appear is `pending`. So the region has to predate even the drafting notice —
+// which is why it is rendered outside the branching and its text arrives a tick later.
+test('the live region exists, empty, before there is anything to announce', () => {
+  mount(undefined, [])
+
+  const region = screen.getByTestId('retro-ai-announcement')
+  expect(region).toHaveAttribute('aria-live', 'polite')
+  expect(region.textContent).toBe('')
+  // And the section itself is still absent: an empty live region is not a surface.
+  expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+})
+
+test('the drafting state and its resolution are both announced', async () => {
   const { rerender } = mount(draftRow('pending'), [])
-  expect(screen.getByTestId('retro-ai-announcement').textContent).toContain('Drafting')
+  // Empty on the mount that inserts it, then spoken — the transition a screen reader can hear.
+  expect(screen.getByTestId('retro-ai-announcement').textContent).toBe('')
+  await waitFor(() =>
+    expect(screen.getByTestId('retro-ai-announcement').textContent).toContain('Drafting'),
+  )
 
   harness.rows = {
     [RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME]: draftRow('ready'),
@@ -201,7 +219,9 @@ test('the drafting state and its resolution are both announced', () => {
 
   const region = screen.getByTestId('retro-ai-announcement')
   expect(region).toHaveAttribute('aria-live', 'polite')
-  expect(region.textContent).toBe('AI draft ready: 1 win, 2 losses.')
+  await waitFor(() => expect(region.textContent).toBe('AI draft ready: 1 win, 2 losses.'))
+  // The SAME node throughout: a region replaced on the transition would announce nothing.
+  expect(screen.getByTestId('retro-ai-announcement')).toBe(region)
 })
 
 // The stored order is `category` (alphabetical) then `rank`; the reader wants Wins, Losses,

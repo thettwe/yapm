@@ -144,7 +144,13 @@ describe('runRetroAiDraftTail', () => {
     expect(seams.run).not.toHaveBeenCalled()
     expect(seams.upsert).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ status: 'ai_off', retroId: PENDING.retro_id }),
+      // `updateOnly` is the half that matters: the row was claimed a moment ago, so if it is gone the
+      // facilitator stepped back and deleted it, and this write must not bring it back.
+      expect.objectContaining({
+        status: 'ai_off',
+        retroId: PENDING.retro_id,
+        updateOnly: true,
+      }),
     )
   })
 

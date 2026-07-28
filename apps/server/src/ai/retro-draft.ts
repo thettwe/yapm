@@ -8,7 +8,12 @@ import {
   SYSTEM_AUTH_CONTEXT,
   sanitizeRetroDraft,
 } from '@yapm/schema'
-import { type DB, getWorkspaceAiSpendUsd, type RetroFacts } from '@yapm/schema/db'
+import {
+  type DB,
+  getWorkspaceAiSpendUsd,
+  type RetroFacts,
+  recordRetiredAiSpend,
+} from '@yapm/schema/db'
 import { replaceRetroAiProposals, upsertRetroAiDraft } from '@yapm/schema/server'
 import type { Kysely } from 'kysely'
 import type { ZeroDatabase } from '../zero/db-provider.js'
@@ -79,8 +84,13 @@ export interface RunRetroAiDraftInput {
 }
 
 export interface RunRetroAiDraftResult {
+  // The status the RUN resolved to, which is not always a status on a row: see `discarded`.
   status: AiArtifactStatus
   proposals: number
+  // The facilitator stepped back to `brainstorm` while this run was in its provider call, so the row
+  // it was completing is gone and nothing was written. Set only when that happened, so the ordinary
+  // result stays exactly the two fields every caller and test already reads.
+  discarded?: true
 }
 
 // The roster (names/handles) for the deterministic name-validator backstop. This is the ONLY identity
@@ -102,6 +112,10 @@ export async function runRetroAiDraft(
   const now = deps.now?.() ?? Date.now()
   const { facts, retroId, workspaceId } = input
 
+  // EVERY write here COMPLETES a claimed `pending` row, so it is update-only: the row this run owns
+  // was created by the phase advance, and if a facilitator stepped back to `brainstorm` mid-call it was
+  // deliberately deleted. Re-inserting it would put a `ready` artifact on screen while the team is
+  // writing cards again — the state lazy generation exists to make impossible. Null means gone.
   const write = (
     status: AiArtifactStatus,
     fields: Partial<{
@@ -113,7 +127,7 @@ export async function runRetroAiDraft(
       estimatedCostUsd: number | null
       content: RetroDraftContent
     }> = {},
-  ): Promise<number> =>
+  ): Promise<number | null> =>
     deps.dbProvider.transaction(async (tx) => {
       const draft = await upsertRetroAiDraft(tx, {
         id: newId(),
@@ -127,7 +141,9 @@ export async function runRetroAiDraft(
         outputToken: fields.outputToken ?? null,
         estimatedCostUsd: fields.estimatedCostUsd ?? null,
         now,
+        updateOnly: true,
       })
+      if (draft === null) return null
       const rows = fields.content
         ? rankRetroProposals(fields.content).map((proposal) => ({ id: newId(), ...proposal }))
         : []
@@ -165,6 +181,15 @@ export async function runRetroAiDraft(
       outputToken: result.usage.outputTokens ?? null,
       estimatedCostUsd: result.estimatedCostUsd,
     })
+    // The row went away mid-call. The MONEY did not: this is the one completion carrying a real cost,
+    // and `getWorkspaceAiSpendUsd` sums live rows — so the cost is carried onto the team the same way
+    // `discardRetroAiDraft` carries a deleted `ready` row's, and the cap never forgets the call.
+    if (proposals === null) {
+      if (result.estimatedCostUsd !== null) {
+        await recordRetiredAiSpend(deps.db, facts.teamId, result.estimatedCostUsd)
+      }
+      return { status: 'ready', proposals: 0, discarded: true }
+    }
     // A `ready` draft with zero surviving proposals is still `ready`; the panel renders nothing.
     // Silence is a correct answer for a thin cycle.
     return { status: 'ready', proposals }

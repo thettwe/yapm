@@ -732,7 +732,8 @@ table in a change that does not touch it is the kind of scope drift that hides a
 ### The scenario walk (task C.2)
 
 Every scenario in `openspec/changes/retro-ai-draft/specs/**`, with the test or code path that
-satisfies it. 53 scenarios across 7 capabilities. Shorthands: `RD.pg` =
+satisfies it. 74 scenarios across 7 capabilities — every one has a row, checked mechanically rather
+than eyeballed (`grep '^#### Scenario: ' specs/**` against the tables below). Shorthands: `RD.pg` =
 `apps/server/src/ai/retro-draft.pg.test.ts` (the D11 falsifiable check), `RD.unit` =
 `apps/server/src/ai/retro-draft.test.ts`, `TAIL` = `apps/server/src/jobs/retro-draft.test.ts`,
 `PANEL` = `apps/web/src/retro/retro-ai-panel.test.tsx`, `TOGGLE` =
@@ -753,6 +754,9 @@ satisfies it. 53 scenarios across 7 capabilities. Shorthands: `RD.pg` =
 | Scenario | Satisfied by |
 |---|---|
 | Nothing to anchor on during brainstorm | `RD.pg` assertion (d) — zero rows in both tables *because none were created*; `E2E` case 1 asserts the replica holds neither table |
+| Stepping back to brainstorm removes the artifact | `mutators.retro.pg.test.ts` "deletes the draft and its proposals when a facilitator steps back to brainstorm" (I18) |
+| A run that finishes after the step back writes nothing | `RD.unit` "writes nothing when the draft was discarded mid-call, and still records the cost" — the faked gateway deletes the row from inside the provider call (I22) |
+| A reveal never restarts a finished draft | `mutators.retro.pg.test.ts` "leaves a finished draft exactly as it is rather than re-pending it" (I18) |
 | The draft appears shortly after the reveal | `mutators.retro.pg.test.ts` "writes exactly one pending row when the team opted in"; `RD.pg` end to end; `PANEL` "pending renders one quiet line" |
 | Two replicas do not double-spend | `TAIL` "claims the row BEFORE the provider call" and "skips a row whose claim was taken by another worker, with no provider call" |
 | A crashed worker does not strand a draft | The claim statement's five-minute reclaim predicate (§D1), exercised by `TAIL`'s claim tests |
@@ -786,13 +790,15 @@ satisfies it. 53 scenarios across 7 capabilities. Shorthands: `RD.pg` =
 | A non-member reads nothing | `queries.anonymity.pg.test.ts`, whose registry walk covers both new queries by construction (task 7.3) |
 | Deleting the retro removes the artifact | `0018_retro_ai.ts` — `ON DELETE CASCADE` on both `retro_id` edges; asserted present by `schema-drift.test.ts` |
 | The run's cost is recorded and counted | `RD.pg` (f) — `getWorkspaceAiSpendUsd` rises when the `ready` draft is written |
+| A discarded run's cost is not refunded | `mutators.retro.pg.test.ts` "deletes the draft and its proposals when a facilitator steps back to brainstorm" asserts the total is unchanged at 0.25; `RD.unit` "writes nothing when the draft was discarded mid-call, and still records the cost" (I19, I22) |
 
 **`retro-ai-draft` — the surface**
 
 | Scenario | Satisfied by |
 |---|---|
 | The section is absent when AI is off | `PANEL` render-nothing cases; `E2E` case 2 polls Postgres to `ai_off`, then asserts the replica *holds* the row and still nothing renders |
-| Drafting in progress is visible and quiet | `PANEL` "pending renders one quiet line and claims nothing" |
+| Drafting in progress is visible and quiet | `PANEL` "pending renders one quiet line and claims nothing", plus "the live region exists, empty, before there is anything to announce" and "the drafting state and its resolution are both announced" (I23) |
+| An in-progress state that will never resolve stands down | `PANEL` "a pending row nothing ever completes stops claiming to be in progress" (I20) |
 | The whole section works from the keyboard | `PANEL` "every evidence chip is a focusable control, in the order the proposal cites them" and "activating a chip opens the entity or reveals the metric tile"; `E2E` asserts tab order is unbroken (narrowed by I12) |
 | It is correct in every theme | `packages/ui/src/styles/contrast.test.ts` "the retro panel ink meets AA on the section wash and the chip wash (>= 4.5)", all six presets |
 | The draft is labelled as unratified | `PANEL` "a ready draft renders its categories in canonical order, labelled as unratified" (and I13 — `pending` omits it) |
@@ -803,7 +809,7 @@ satisfies it. 53 scenarios across 7 capabilities. Shorthands: `RD.pg` =
 |---|---|
 | No synced query yields an anonymous card's author | `queries.anonymity.pg.test.ts`, unchanged and now covering two more queries |
 | An anonymous card syncs with no author value | Change 10, unchanged; `schema-drift.test.ts` "still keeps retro_card_author out of the Zero schema" |
-| The author can still be authorized server-side | Change 10, unchanged |
+| The author of an anonymous card can still be authorized server-side | Change 10, unchanged |
 | Anonymity cannot be flipped once cards exist | Change 10, unchanged |
 | An automated retro contributor reads no card | `retro-facts.pg.test.ts` table-set equality; `RD.pg` (a), whose fixture opens an anonymous retro with published cards from two authors |
 | The retro is unchanged when the capability is off | `E2E` case 1; `RD.pg` (e) |
@@ -951,14 +957,8 @@ time a facilitator rewinds a retro. Writing it does not touch `team.updated_at` 
 
 A ledger table was the alternative and was not worth a fourth AI table: nothing reads per-run history,
 and the number the cap needs is a single sum per workspace. It also takes migration **0019**, so
-change 19's migration is now `0020_retro_ratification` (ROADMAP and SCOPE updated).
-
-**Residual, stated rather than hidden.** A worker that claimed a row, called the provider, and returns
-while the facilitator has stepped back in the meantime will write its result into a row that no longer
-exists — `upsertRetroAiDraft` inserts, so a `ready` artifact reappears for a retro back in
-`brainstorm`, until the next advance (which leaves it alone). The window is the length of one provider
-call, the money is still recorded, and closing it means making a completion never insert — which would
-change the semantics every completion test in `apps/server` depends on. Left as it is, deliberately.
+change 19's migration is now `0020_retro_ratification` and change 20's is `0021_pm_digest` (ROADMAP and
+SCOPE updated). Changes 21–23 declare no migration, so nothing further moves.
 
 ### I20 — The in-progress line is bounded by the row's own `createdAt`
 
@@ -993,3 +993,60 @@ Three smaller review findings, all in the surface:
   `retro-seed-toggle` with no pointer, opens the issue from its chip, collapses the seed panel and
   activates the metric chip to prove the panel is revealed with that tile focused, then runs the
   three presets × light/dark loop.
+
+### I22 — A completion never inserts, so a step back mid-call cannot resurrect the draft (review round 2)
+
+I19 left this as a stated residual and review round 2 refused it, correctly: it is not a cosmetic
+window. A worker claims a `pending` row, calls the provider, and while that call is in flight the
+facilitator steps back to `brainstorm` — which deletes the draft. The completion then *re-inserted* the
+row `discardRetroAiDraft` had just removed, so a `ready` artifact and its proposals rendered while the
+retro was back to writing cards: precisely the artifact-during-`brainstorm` state the spec says SHALL
+NOT exist. And because I18 made `stampRetroAiDraft` leave an existing row alone, the resurrected row was
+never replaced or removed either — the next advance found a `ready` row and the retro was stuck with a
+draft nobody could regenerate.
+
+The root cause is that one function served two callers with opposite needs. **Only the phase advance
+creates a draft; every other write completes one.** So `RetroAiDraftWrite` gains `updateOnly`, and
+`upsertRetroAiDraft` returns `null` instead of taking the insert branch when it is set:
+
+- `runRetroAiDraft`'s `write` helper sets it for all three completions (`ready`, `failed`, `ai_off`).
+  On `null` it skips `replaceRetroAiProposals` entirely — there is no draft to hang proposals on.
+- The `ready` path, the one completion carrying a real `estimatedCostUsd`, calls
+  `recordRetiredAiSpend` before returning, for exactly the I19 reason: the provider call happened, and
+  `getWorkspaceAiSpendUsd` sums live rows, so a discarded run's cost has to land on the team or the cap
+  forgets money that was spent. The result carries `discarded: true` and the tail logs it.
+- The tail's `writeAiOff` sets it too. That row was claimed a moment ago; if it is gone, the same step
+  back removed it.
+
+`stampRetroAiDraft` is untouched — it is the one writer that may insert.
+
+**The fixture had been hiding it.** `retro-draft.test.ts` called `runRetroAiDraft` against a retro with
+no draft row at all, so every completion test was exercising an insert the product never performs. The
+seed now stamps the `pending` row the phase advance would have, and a new case makes the race itself
+falsifiable: the faked gateway deletes the draft *from inside* `generateStructured`, and the test
+asserts no draft row, no proposals, and `getWorkspaceAiSpendUsd` still reporting the 0.25 the call cost.
+
+**Narrower residual, stated.** Two advances inside one provider call (back to `brainstorm`, forward to
+`group` again) leave a fresh `pending` row that the in-flight completion updates by `retro_id`, so that
+row goes `ready` carrying the earlier call's output and the tail never claims it. The outcome is benign
+— same retro, same cycle facts, correct phase, one draft — which is why the write stays keyed on
+`retro_id` rather than threading the claimed row's id through `runRetroAiDraft`.
+
+### I23 — The live region is unconditional, and its text arrives a tick later
+
+I21 moved the `aria-live` region into the section chrome so it survived the pending → ready transition.
+Review round 2 pointed out that this only fixes the *second* announcement. In the live path the section
+first appears in the `pending` state, so the region was still being inserted into the DOM together with
+its own text — the exact non-announcing pattern I21's own comment cites — and the drafting notice was
+spoken by nothing.
+
+The region is now rendered by `OptedInRetroAiPanel` **outside** the null/drafting/drafted branching, so
+it is the same node for the whole life of the retro, and its text is held in state written by an effect
+one tick after mount. The region therefore always predates anything it has to say, including the first
+thing. `AiSection` no longer knows about announcements at all.
+
+The cost is one empty `sr-only` paragraph in the DOM for an opted-in team whose retro has no draft. It
+is silent and it is not a surface — asserted both ways: the region exists and is empty before there is
+anything to announce, and an **opted-out** team still renders no region at all, because `RetroAiPanel`
+returns before mounting the component that holds it. The docs' claim that "both transitions are
+announced through one live region" is now literally true rather than half true, so it stands as written.

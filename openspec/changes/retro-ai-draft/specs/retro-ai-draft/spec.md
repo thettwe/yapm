@@ -58,7 +58,9 @@ that a lost or failed pass cannot stop drafting indefinitely.
 
 The completion pass SHALL claim a row before calling a provider, in a single statement, so that two
 application replicas cannot spend a workspace's API key twice for one retro; a claim SHALL become
-reclaimable after a bounded interval so a crashed worker does not strand a draft forever.
+reclaimable after a bounded interval so a crashed worker does not strand a draft forever. A
+completion SHALL only update an artifact row that still exists and SHALL NOT create one, so that a
+run finishing after the artifact was deliberately removed cannot bring it back.
 
 Work-graph placement: the artifact hangs off `retro`, which hangs off `team`. Sync/permission story:
 the row is written exclusively by the server through the shared transaction and is read team-scoped;
@@ -73,6 +75,11 @@ before the advance it does not exist for anyone.
 
 - **WHEN** a facilitator steps a retro back from `group` to `brainstorm`, where people write cards again
 - **THEN** the draft row and every proposal row are deleted rather than filtered out of view, the next forward advance drafts afresh, and the estimated cost of the deleted run remains counted in the workspace's AI spend total
+
+#### Scenario: A run that finishes after the step back writes nothing
+
+- **WHEN** a claimed run returns from its provider call after the facilitator has already stepped the retro back to `brainstorm`, so the row it was completing has been deleted
+- **THEN** no draft row and no proposal row is created, the retro stays free of an artifact while people write cards, and the finished run's estimated cost is still counted in the workspace's AI spend total
 
 #### Scenario: A reveal never restarts a finished draft
 

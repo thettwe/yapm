@@ -647,8 +647,9 @@ function RetroSurface({
       />
 
       {/* Beside the seed panel, never inside the board: the AI's categories are Wins/Losses/
-          Improvements and two of the four retro formats have no such columns. Absent entirely
-          unless a draft row exists and has something to say. */}
+          Improvements and two of the four retro formats have no such columns. Draws nothing at all
+          unless a draft row exists and has something to say — only the empty live region that has to
+          predate the first thing it announces. */}
       <RetroAiPanel
         retroId={retro.id}
         teamId={teamId}

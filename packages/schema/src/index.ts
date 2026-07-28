@@ -78,7 +78,9 @@ export {
   CHANGE_SIZE_BANDS,
   changeSizeBand,
   matchArea,
+  RESERVED_AREA_MESSAGE,
   UNMAPPED_AREA,
+  XL_CHANGE_THRESHOLD,
 } from './zero/areas.js'
 export type {
   AutoStatusContext,
@@ -212,6 +214,7 @@ export {
   computeDivergence,
 } from './zero/delivery.js'
 export type {
+  DigestAreaCoverage,
   DigestConfidence,
   DigestContent,
   DigestEvidenceKind,
@@ -220,6 +223,7 @@ export type {
   DigestItemKind,
   DigestSection,
   RosterMember,
+  StoredDigestContent,
 } from './zero/digest.js'
 export {
   contentDisclosesPaths,
@@ -227,6 +231,7 @@ export {
   DIGEST_CONFIDENCE_LEVELS,
   DIGEST_EVIDENCE_KINDS,
   DIGEST_ITEM_KINDS,
+  digestAreaCoverageSchema,
   digestContentSchema,
   digestEvidenceRefSchema,
   digestItemSchema,
@@ -235,6 +240,7 @@ export {
   dropItemsNamingMembers,
   dropUncitedItems,
   rosterNameNeedles,
+  storedDigestContentSchema,
 } from './zero/digest.js'
 export type { MutationErrorDetails } from './zero/errors.js'
 export { isMutationErrorDetails, MutationError, MutationErrorCode } from './zero/errors.js'

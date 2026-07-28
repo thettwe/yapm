@@ -1,13 +1,13 @@
 import {
   type CycleDigestStatus,
   type CycleFacts,
-  type DigestContent,
   digestContentSchema,
   dropItemsDisclosingPaths,
   dropItemsNamingMembers,
   dropUncitedItems,
   newId,
   type RosterMember,
+  type StoredDigestContent,
   SYSTEM_AUTH_CONTEXT,
   upsertCycleDigest,
 } from '@yapm/schema'
@@ -78,9 +78,15 @@ function areaParagraph(facts: CycleFacts): string[] {
       `Internal improvements computed by yapm: ${facts.internalImprovements}. Collapse that work into one item reading "${facts.internalImprovements} internal improvements".`,
     )
   }
-  if (facts.areaCoverage !== undefined && facts.areaCoverage.skipped > 0) {
+  const coverage = facts.areaCoverage
+  if (coverage !== undefined && coverage.skipped > 0) {
     lines.push(
-      `Area coverage is partial: ${facts.areaCoverage.enriched} pull requests were mapped and ${facts.areaCoverage.skipped} were not. Do not treat the grouping as exhaustive.`,
+      `Area coverage is partial: ${coverage.enriched} pull requests were mapped and ${coverage.skipped} were not. Do not treat the grouping as exhaustive.`,
+    )
+  }
+  if (coverage?.partial !== undefined && coverage.partial > 0) {
+    lines.push(
+      `${coverage.partial} of the mapped pull requests touched more files than yapm reads in one page, so their area lists are partial. Do not treat those as exhaustive either.`,
     )
   }
   return lines
@@ -125,7 +131,7 @@ export async function runCycleDigest(
   const write = (
     status: CycleDigestStatus,
     fields: Partial<{
-      content: DigestContent | null
+      content: StoredDigestContent | null
       provider: string | null
       model: string | null
       generatedAt: number | null
@@ -176,9 +182,15 @@ export async function runCycleDigest(
     // digest.
     const known = new Set(facts.evidenceIds)
     const roster = await loadRoster(deps.db, workspaceId)
-    const content = dropItemsDisclosingPaths(
-      dropItemsNamingMembers(dropUncitedItems(result.object, known), roster),
-    )
+    // The coverage arithmetic is attached AFTER generation, from yapm's own count — the same
+    // "numbers come from yapm, never the model" rule the counts follow. It is what lets the reader
+    // be told the grouping is partial instead of the model being asked to remember to say so.
+    const content: StoredDigestContent = {
+      ...dropItemsDisclosingPaths(
+        dropItemsNamingMembers(dropUncitedItems(result.object, known), roster),
+      ),
+      ...(facts.areaCoverage === undefined ? {} : { areaCoverage: facts.areaCoverage }),
+    }
 
     await write('ready', {
       content,

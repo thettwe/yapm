@@ -70,24 +70,31 @@ reported as generic backend work. The editor's move-up / move-down buttons are k
 exactly this reason.
 
 A path no rule matches is labeled **`unmapped`**, which is a reserved label — yapm never falls
-through to the raw path. Don't use `unmapped` as an area name of your own.
+through to the raw path. `unmapped` is refused as an area name of your own: the editor blocks the
+save and says why.
 
 **An empty map is the off switch.** With no rules, yapm makes **zero** extra GitHub calls and the
 digest is byte-for-byte what it was before. You do not opt out; you opt in.
 
 ### The GitHub rate budget this spends
 
-Area labels come from GitHub's changed-file metadata, one request per pull request in the closing
-cycle. That draws on the same per-installation primary rate budget (**5,000 requests/hour**) as the
-connector's reconciliation sweep, so the draw is bounded three ways:
+Area labels come from GitHub's changed-file metadata, one request per pull request linked to an
+issue in the closing cycle — whatever state that pull request is in. That draws on the same
+per-installation primary rate budget (**5,000 requests/hour**) as the connector's reconciliation
+sweep, so the draw is bounded four ways:
 
 1. **Zero when the map is empty** — no rules, no requests.
-2. **At most 50 pull requests per cycle.** Past that the digest says its area grouping is partial
-   rather than pretending to be exhaustive. The cap is a constant, not an environment variable: it is
-   a safety bound on a shared budget, not a preference.
+2. **At most 50 pull requests per cycle.** Past that the digest states, in yapm's own words above
+   the narrative, how many of the cycle's pull requests the grouping covers — it never presents a
+   partial grouping as exhaustive. The cap is a constant, not an environment variable: it is a
+   safety bound on a shared budget, not a preference.
 3. **A remaining-quota floor of 500.** If the installation's reported remaining quota drops below
    that mid-run, enrichment stops for the rest of the run. Reconciliation is the connector's
    load-bearing job and a digest must never be the thing that starves it.
+4. **One page of files per pull request.** yapm reads the first 100 changed files and does not
+   paginate — a pull request touching more than that is already "big and everywhere". Such a pull
+   request is banded `xl`, its area list is reported as partial, and the digest says so rather than
+   presenting a first-100-files view as the whole change.
 
 Requests are made **serially**, per GitHub's own guidance on secondary rate limits. If GitHub is slow
 or erroring, the digest still completes — un-enriched, never failed.

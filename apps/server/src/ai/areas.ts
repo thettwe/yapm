@@ -1,5 +1,16 @@
-import { areaCatalogFromRules, areasForPaths, type CycleFacts, withCycleAreas } from '@yapm/schema'
-import { type DB, getAiConfig, pullRequestSourcesForCycleFacts } from '@yapm/schema/db'
+import {
+  areaCatalogFromRules,
+  areasForPaths,
+  type CycleFacts,
+  withCycleAreas,
+  XL_CHANGE_THRESHOLD,
+} from '@yapm/schema'
+import {
+  type DB,
+  getAiConfig,
+  getWorkspaceAiSpendUsd,
+  pullRequestSourcesForCycleFacts,
+} from '@yapm/schema/db'
 import type { Kysely } from 'kysely'
 import {
   type ChangedFilesReader,
@@ -7,6 +18,7 @@ import {
   RATE_LIMIT_FLOOR,
 } from '../connectors/github/files.js'
 import type { Logger } from '../logger.js'
+import { exceedsSpendCap } from './model-catalog.js'
 
 // The transient area-enrichment step, run inside the EXISTING cycle-digest worker immediately
 // before `runCycleDigest`. It reads which files each merged PR touched, converts every path into an
@@ -52,6 +64,12 @@ export async function enrichCycleFactsWithAreas(
 
   try {
     const config = await getAiConfig(deps.db, workspaceId)
+    // A workspace that turned AI off is going to get an `ai_off` digest whatever this step gathers,
+    // so gathering it spends someone else's rate budget for nothing. An existing row is
+    // authoritative over any env instance default (`gateway.ts` resolveModel), and a workspace with
+    // no row has no area map either, so the empty-map guard below still covers it.
+    if (config !== null && !config.enabled) return facts
+
     const rules = config?.data.areas ?? []
     // ZERO provider calls until an admin opts in. The feature costs nothing against the shared
     // installation rate budget until the workspace decides it is worth something.
@@ -60,12 +78,18 @@ export async function enrichCycleFactsWithAreas(
     const prIds = pullRequestIds(facts)
     if (prIds.length === 0) return facts
 
+    // Same reason as the toggle: past the cap the run is refused before the model is called, so the
+    // enrichment that would have fed it is pure waste.
+    const spendSoFarUsd = await getWorkspaceAiSpendUsd(deps.db, workspaceId)
+    if (exceedsSpendCap(spendSoFarUsd, config?.data.spendCapUsd ?? null)) return facts
+
     const sources = await pullRequestSourcesForCycleFacts(deps.db, facts.teamId, prIds)
     if (sources.length === 0) return facts
 
     const prAreas = new Map<string, { areas: readonly string[]; changedLines: number }>()
     let enriched = 0
     let skipped = 0
+    let partial = 0
 
     for (const [index, source] of sources.entries()) {
       if (enriched >= MAX_PR_FILE_CALLS) {
@@ -83,10 +107,14 @@ export async function enrichCycleFactsWithAreas(
         rules,
         result.files.map((file) => file.path),
       )
+      const changedLines = result.files.reduce((total, file) => total + file.changes, 0)
       prAreas.set(source.id, {
         areas,
-        changedLines: result.files.reduce((total, file) => total + file.changes, 0),
+        // A truncated file list is banded by what truncation already proves — more than a page of
+        // files is "big and everywhere" — rather than by the prefix that happened to be read.
+        changedLines: result.truncated ? Math.max(changedLines, XL_CHANGE_THRESHOLD) : changedLines,
       })
+      if (result.truncated) partial += 1
       enriched += 1
 
       if (result.rateLimitRemaining !== null && result.rateLimitRemaining < RATE_LIMIT_FLOOR) {
@@ -102,7 +130,7 @@ export async function enrichCycleFactsWithAreas(
     return withCycleAreas(facts, {
       prAreas,
       catalog: areaCatalogFromRules(rules),
-      coverage: { enriched, skipped },
+      coverage: { enriched, skipped, ...(partial > 0 ? { partial } : {}) },
     })
   } catch (error) {
     deps.logger?.error(

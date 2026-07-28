@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   type ChangedFile,
+  FILES_PER_PAGE,
   listChangedFiles,
   MAX_PR_FILE_CALLS,
   projectChangedFile,
@@ -151,6 +152,19 @@ describe('listChangedFiles — the projection happens AT the seam', () => {
   it('returns an empty file list for a PR that touched nothing', async () => {
     const { client } = mockClient([])
     expect((await listChangedFiles(client, 'a', 'b', 1)).files).toEqual([])
+  })
+
+  // yapm reads ONE page. Saying so is the difference between a coarse label and a wrong one: an area
+  // touched only by the 101st file is invisible, so the caller has to know the view is a prefix.
+  it('reports truncation when the response fills the single page it asks for', async () => {
+    const full = Array.from({ length: FILES_PER_PAGE }, (_, index) =>
+      entry({ filename: `apps/server/src/billing/file-${index}.ts` }),
+    )
+    expect((await listChangedFiles(mockClient(full).client, 'a', 'b', 1)).truncated).toBe(true)
+
+    const short = full.slice(0, FILES_PER_PAGE - 1)
+    expect((await listChangedFiles(mockClient(short).client, 'a', 'b', 1)).truncated).toBe(false)
+    expect((await listChangedFiles(mockClient([]).client, 'a', 'b', 1)).truncated).toBe(false)
   })
 })
 

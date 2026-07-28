@@ -35,9 +35,10 @@ moved, one large change landed in a sensitive area, plus four internal improveme
 **Product areas** are what turn one into the other.
 
 An admin maps repository path prefixes to area labels — `apps/server/src/billing/ → Billing`,
-`apps/web/ → Web` — in *Settings → AI*. When a cycle closes, yapm asks GitHub which files each
-merged pull request touched, converts every path into its area label, and **throws the file list
-away**. Nothing about it is stored, and the model is only ever shown labels.
+`apps/web/ → Web` — in *Settings → AI*. When a cycle closes, yapm asks GitHub which files each pull
+request linked to one of the cycle's issues touched — whatever state that pull request is in —
+converts every path into its area label, and **throws the file list away**. Nothing about it is
+stored, and the model is only ever shown labels.
 
 With a map configured, the digest gains four things:
 
@@ -53,8 +54,9 @@ With a map configured, the digest gains four things:
 
 Work under a path no rule covers is labeled **`unmapped`** — never the raw path. So a partial map is
 useful immediately, and an incomplete one is honest about its gaps rather than silently wrong. If
-yapm could only map some of the cycle's pull requests, the digest says so instead of presenting a
-partial grouping as the whole picture.
+yapm could only map some of the cycle's pull requests, the digest says so in a line yapm writes
+itself — *"Area grouping covers 50 of 60 pull requests"* — rather than presenting a partial grouping
+as the whole picture. Like every number in the digest, that one is counted by yapm, not the model.
 
 **An empty map costs nothing.** Areas are off until an admin writes a rule: with no rules, yapm makes
 no extra GitHub call and the digest is exactly what it was before. See
@@ -65,10 +67,12 @@ no extra GitHub call and the digest is exactly what it was before. See
 The digest's safety properties are structural — enforced by what is *never assembled*, not by asking
 the model nicely.
 
-**It sees:** the cycle name; the yapm-computed counts; per-issue titles, statuses and their linked
-PR titles, CI conclusions and evidence ids; and, when a map is configured, the area labels, the
-change-size bands, the sensitive-area list and the internal-improvement count. Everything numeric is
-computed by yapm and handed over to be restated.
+**It sees:** the cycle name; the yapm-computed counts; per-issue titles and statuses, each issue's
+CI conclusions and the evidence ids of its linked PRs and checks; and, when a map is configured, the
+area labels, the change-size bands, the sensitive-area list and the internal-improvement count.
+Everything numeric is computed by yapm and handed over to be restated. Issue titles are
+human-authored text, passed through as **untrusted data** the model may summarize and must never
+obey.
 
 **It never sees:**
 
@@ -77,9 +81,11 @@ computed by yapm and handed over to be restated.
   This is a deliberate limit, not an oversight: a digest that quoted your source would need a secret
   scanner to be safe, and the guarantee worth keeping is that the worst a bad run can produce is a
   bad paragraph, never a leak.
-- **File paths, filenames or extensions.** The path→area substitution happens *before* the model is
-  called, so there is no path in its context to disclose. As a backstop, yapm also drops any item
-  whose text contains a path, a filename extension, a code fence or a code identifier.
+- **Any file path yapm derived.** The path→area substitution happens *before* the model is called
+  and it is total, so nothing yapm computes from your repository reaches the model as a path,
+  filename or extension. What yapm cannot unsay is a path a human typed into an issue title — that
+  travels with the title, as untrusted data — so as a backstop yapm drops any generated item whose
+  text contains a path, a filename extension, a code fence or a code identifier.
 - **Any person.** No assignee, author, reviewer or commit-author dimension exists anywhere in the
   data — see below.
 - **The internet.** The AI step has no tools and no outbound network access, so it cannot fetch or

@@ -7,6 +7,7 @@ import {
   CHANGE_SIZE_BANDS,
   changeSizeBand,
   matchArea,
+  RESERVED_AREA_MESSAGE,
   UNMAPPED_AREA,
 } from './areas.js'
 
@@ -156,5 +157,16 @@ describe('areaMapSchema', () => {
     expect(areaMapSchema.safeParse([{ prefix: 'a/', area: 'A', sensitive: true }]).success).toBe(
       true,
     )
+  })
+
+  // Reserved has to mean refused: an area an admin named `unmapped` would make "yapm could not place
+  // this work" indistinguishable from "this work is in that area", and the reader could not tell.
+  it('refuses the reserved label in any casing, with the message the editor shows', () => {
+    for (const area of [UNMAPPED_AREA, 'Unmapped', ' UNMAPPED ']) {
+      const parsed = areaMapSchema.safeParse([{ prefix: 'a/', area }])
+      expect(parsed.success, area).toBe(false)
+      expect(parsed.error?.issues[0]?.message).toBe(RESERVED_AREA_MESSAGE)
+    }
+    expect(areaMapSchema.safeParse([{ prefix: 'a/', area: 'Unmapped Work' }]).success).toBe(true)
   })
 })

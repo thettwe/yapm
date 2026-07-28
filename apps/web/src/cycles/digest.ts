@@ -3,11 +3,12 @@ import {
   type CiHealth,
   type CycleDigestStatus,
   ciHealthFromConclusion,
-  type DigestContent,
+  type DigestAreaCoverage,
   type DigestEvidenceRef,
   type IssueStatus,
   isUnfinished,
   type PullRequestState,
+  type StoredDigestContent,
 } from '@yapm/schema'
 
 // The cycle-view digest model: pure helpers that turn the synced work-graph rows into (1) the
@@ -53,10 +54,30 @@ export interface DigestDeploymentRow {
 // resolves to the raw-evidence fallback.
 export function hasNarrative(
   status: CycleDigestStatus | undefined,
-  content: DigestContent | null | undefined,
-): content is DigestContent {
+  content: StoredDigestContent | null | undefined,
+): content is StoredDigestContent {
   if (status !== 'ready' || !content) return false
   return content.sections.some((section) => section.items.length > 0)
+}
+
+// The area grouping's coverage, as a sentence YAPM writes — never the model. Null when the grouping
+// covered everything it looked at, because a complete grouping needs no caveat; a partial one is
+// stated outright rather than left for a reader to infer from an area that is quietly missing.
+export function areaCoverageNote(coverage: DigestAreaCoverage | undefined): string | null {
+  if (!coverage) return null
+  const total = coverage.enriched + coverage.skipped
+  const partial = coverage.partial ?? 0
+  if (coverage.skipped === 0 && partial === 0) return null
+  const sentences: string[] = []
+  if (coverage.skipped > 0) {
+    sentences.push(`Area grouping covers ${coverage.enriched} of ${total} pull requests.`)
+  }
+  if (partial > 0) {
+    sentences.push(
+      `${partial} pull ${partial === 1 ? 'request' : 'requests'} touched more files than yapm reads at once, so ${partial === 1 ? 'its area list is' : 'their area lists are'} partial.`,
+    )
+  }
+  return sentences.join(' ')
 }
 
 // The resolved target for one evidence ref: an in-app issue to open, an external entity URL (PR or

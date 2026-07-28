@@ -370,6 +370,33 @@ describe('buildCycleFacts — area aggregates, team-level and yapm-computed', ()
     expect(onlyUnmapped.internalImprovements).toBe(0)
   })
 
+  // The prompt asks the model to restate `prCount` verbatim, so a pull request that closes two
+  // issues must be ONE pull request in the grouping — counting it per issue would put a number in the
+  // digest that no entity in the graph supports.
+  it('counts a pull request that closes two issues once', () => {
+    const shared = buildCycleFacts({
+      cycle: { id: 'cycle-1', teamId: 'team-1', name: 'Cycle 9' },
+      areaCatalog: [{ area: 'Billing', sensitive: true }],
+      issues: ['issue-one', 'issue-two'].map((id) => ({
+        id,
+        number: id === 'issue-one' ? 1 : 2,
+        title: 'Refund window',
+        status: 'done' as const,
+        pullRequests: [
+          {
+            id: 'pr-shared',
+            number: 9,
+            title: null,
+            state: 'merged' as const,
+            areas: ['Billing'],
+            changedLines: 12,
+          },
+        ],
+      })),
+    })
+    expect(shared.areas).toEqual([{ area: 'Billing', issueCount: 2, prCount: 1, sensitive: true }])
+  })
+
   it('carries no identity dimension once the area layer is present', () => {
     const keys = allKeys(facts)
     for (const forbidden of ['assignee', 'author', 'reviewer', 'creator', 'userId', 'user_id']) {

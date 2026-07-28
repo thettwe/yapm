@@ -1,6 +1,7 @@
 import type { DigestContent, DigestEvidenceRef } from '@yapm/schema'
 import { describe, expect, it } from 'vitest'
 import {
+  areaCoverageNote,
   buildCycleFallback,
   buildEvidenceIndex,
   type DigestDeploymentRow,
@@ -118,5 +119,29 @@ describe('buildCycleFallback', () => {
     // Only deploys touching a repo linked from the cycle's PRs are shown.
     expect(fallback.deployments.map((d) => d.id)).toEqual(['dep-1'])
     expect(fallback.shipped[0]?.prs[0]?.ciHealth).toBeNull()
+  })
+})
+
+// yapm's own arithmetic, said in yapm's own sentence. A complete grouping needs no caveat; a partial
+// one is stated outright rather than left to a reader to infer from an area that is quietly missing.
+describe('areaCoverageNote', () => {
+  it('says nothing when the grouping covered everything it read', () => {
+    expect(areaCoverageNote(undefined)).toBeNull()
+    expect(areaCoverageNote({ enriched: 12, skipped: 0 })).toBeNull()
+  })
+
+  it('states how much of the cycle the grouping covers', () => {
+    expect(areaCoverageNote({ enriched: 50, skipped: 10 })).toBe(
+      'Area grouping covers 50 of 60 pull requests.',
+    )
+  })
+
+  it('states a pull request mapped from only part of its files', () => {
+    expect(areaCoverageNote({ enriched: 3, skipped: 0, partial: 1 })).toBe(
+      '1 pull request touched more files than yapm reads at once, so its area list is partial.',
+    )
+    expect(areaCoverageNote({ enriched: 3, skipped: 1, partial: 2 })).toBe(
+      'Area grouping covers 3 of 4 pull requests. 2 pull requests touched more files than yapm reads at once, so their area lists are partial.',
+    )
   })
 })

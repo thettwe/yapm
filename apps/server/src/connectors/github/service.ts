@@ -245,7 +245,7 @@ export function createGithubConnector(options: GithubConnectorOptions): GithubCo
   // installation token as reconciliation, inside the permissions the connector already documents.
   const changedFilesReader: ChangedFilesReader = async (request) => {
     const target = splitRepoFullName(request.repoFullName)
-    if (!target) return { files: [], rateLimitRemaining: null }
+    if (!target) return { files: [], rateLimitRemaining: null, truncated: false }
     const client = await app.installationClient(request.externalInstallationId)
     return listChangedFiles(client, target.owner, target.repo, request.number)
   }

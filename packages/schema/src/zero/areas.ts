@@ -8,9 +8,22 @@ import * as z from 'zod'
 // The substitution is TOTAL. There is no input, including an empty rule set, for which a raw path
 // is returned: an unmatched path becomes `UNMAPPED_AREA`. Pure, no dependency beyond zod.
 
+// The reserved fallback label. Reserved rather than pass-through: a fall-through that leaked the raw
+// path would destroy the whole safety claim on the first repository an admin had not finished mapping.
+export const UNMAPPED_AREA = 'unmapped'
+
+// Reserved means REFUSED, not merely documented: an area an admin called `unmapped` would make "yapm
+// could not place this work" indistinguishable from "this work is in that area".
+export const RESERVED_AREA_MESSAGE = `"${UNMAPPED_AREA}" is a reserved label — choose another area name.`
+
 export const areaRuleSchema = z.object({
   prefix: z.string().min(1),
-  area: z.string().min(1),
+  area: z
+    .string()
+    .min(1)
+    .refine((value) => value.trim().toLowerCase() !== UNMAPPED_AREA, {
+      message: RESERVED_AREA_MESSAGE,
+    }),
   // Touching this area is a risk signal worth surfacing; never a judgement about the change.
   sensitive: z.boolean().optional(),
   // Work here collapses into one "N internal improvements" line rather than being narrated.
@@ -24,13 +37,13 @@ export const areaMapSchema = z.array(areaRuleSchema).default([])
 export type AreaRule = z.infer<typeof areaRuleSchema>
 export type AreaMap = z.infer<typeof areaMapSchema>
 
-// The reserved fallback label. Reserved rather than pass-through: a fall-through that leaked the raw
-// path would destroy the whole safety claim on the first repository an admin had not finished mapping.
-export const UNMAPPED_AREA = 'unmapped'
-
 export const CHANGE_SIZE_BANDS = ['xs', 's', 'm', 'l', 'xl'] as const
 
 export type ChangeSizeBand = (typeof CHANGE_SIZE_BANDS)[number]
+
+// The `xl` floor, exported so a caller holding a TRUNCATED file list can band a pull request by what
+// truncation already proves — "big and everywhere" — rather than by the prefix it happened to see.
+export const XL_CHANGE_THRESHOLD = 1000
 
 // A band, never the raw churn: a band is the decision-grade fact, and a raw line count invites the
 // model to editorialize about it.
@@ -38,7 +51,7 @@ export function changeSizeBand(totalChanges: number): ChangeSizeBand {
   if (totalChanges < 10) return 'xs'
   if (totalChanges < 50) return 's'
   if (totalChanges < 250) return 'm'
-  if (totalChanges < 1000) return 'l'
+  if (totalChanges < XL_CHANGE_THRESHOLD) return 'l'
   return 'xl'
 }
 

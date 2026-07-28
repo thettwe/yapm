@@ -391,6 +391,53 @@ the AI setup guide and the GitHub connector guide — so all three were extended
 sidebar is unchanged. `.env.example` is deliberately untouched: the call cap and the rate-limit floor
 are safety bounds on a shared budget, not operator preferences, so they are constants.
 
+**Truncation is reported at the seam, not inferred later.** D7 says a pull request touching more than
+100 files "is banded `xl` from what was seen and its area set is marked partial", but the seam
+returned no signal that the page was full, so nothing downstream could mark anything. `ChangedFilesResult`
+now carries `truncated`, set when the response fills the single page yapm asks for; the enrichment
+step bands such a pull request at the `xl` floor and counts it into a new optional
+`areaCoverage.partial`, which the input builder states as its own trusted line. Without the signal, a
+sensitive area touched only by the 101st file was silently absent from a grouping presented as
+complete.
+
+**Area coverage is a stored, yapm-authored line, not a prompt request.** Two docs pages promised that
+a partially-mapped cycle "says so", and the only implementation was a prompt line asking the model not
+to treat the grouping as exhaustive — a request, not a guarantee, and nothing rendered. The coverage
+now rides in the stored `cycle_digest.content` jsonb (no column, no migration: `content` is already
+`json()`), attached AFTER generation, and the digest panel renders "Area grouping covers N of M pull
+requests". The model-facing schema stays `digestContentSchema` and the stored blob is a separate
+`storedDigestContentSchema`, because a field the model could fill is a number the model could invent.
+
+**Enrichment is gated on the AI toggle and the spend cap, not only on the map.** The step consulted
+`config.data.areas` alone, so a workspace with a map but AI switched off — or past its cap — spent up
+to 50 GitHub calls per closing cycle on a digest guaranteed to end `ai_off`. Both are now checked
+before any provider call, using the config already in hand: an existing row's `enabled` is
+authoritative over any env default (the same rule `gateway.ts` follows), and a workspace with no row
+has no area map either, so the empty-map guard still covers it.
+
+**`prCount` counts distinct pull requests.** The aggregate incremented once per (issue, label) pair,
+so a pull request closing three issues was three pull requests in a number the prompt asks the model
+to restate verbatim. It now accumulates a set of pull-request ids per label.
+
+**A capitalised identifier before a source extension is a product name.** The disclosure validator
+tested its extension list against whole item text, so ordinary delivery prose — `Node.js`, `Next.js`,
+`Vue.js`, `D3.js` — was classified as a path disclosure and the item silently dropped. The extension
+match is now skipped when a capitalised identifier immediately precedes the dot. The cost is the bare,
+slash-free, capitalised filename (`Button.tsx` alone in a sentence); any real path still discloses
+through its slashes, and this validator is defence in depth, not the boundary (D6).
+
+**`unmapped` is refused, not merely documented.** The reserved label was enforced nowhere: an admin
+could author an area called `unmapped` and make "yapm could not place this work" indistinguishable
+from "this work is in that area". `areaRuleSchema` now refuses it case-insensitively with a message
+the editor shows inline and the Save button blocks on, so the rule is stated where the name is typed.
+
+**Reorder focus moves to the arrow the move leaves enabled.** Moving a rule to the first or last
+position targeted the arrow the move had just disabled, so `.focus()` was a no-op and focus stayed on
+an index-keyed node now belonging to a different rule — the next press silently undid the move. Focus
+now goes to the opposite arrow at either end, the move is announced in a polite live region, and
+`apps/web/src/settings/area-map.test.tsx` drives add → edit → toggle → reorder → remove and asserts
+`document.activeElement` after each move.
+
 **`reference/connectors.md` gained §3.6.** The harvest had the rate-limit facts but nothing about
 `GET /pulls/{n}/files`, which is the endpoint this whole change rests on. The new section records the
 verified permission level, the 3000-file ceiling, the `per_page` maximum, the full Diff Entry field

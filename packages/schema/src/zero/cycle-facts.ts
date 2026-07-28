@@ -2,7 +2,7 @@ import { type AreaDefinition, type ChangeSizeBand, changeSizeBand, UNMAPPED_AREA
 import type { CiConclusion, IssueStatus, PullRequestState } from './context.js'
 import { FINISHED_ISSUE_STATUSES } from './cycles.js'
 import { type CiHealth, ciHealthFromConclusion } from './delivery.js'
-import type { DigestEvidenceRef } from './digest.js'
+import type { DigestAreaCoverage, DigestEvidenceRef } from './digest.js'
 
 // The team-scoped narrowed read that feeds the model, computed by yapm — NOT the model. This is
 // where the blameless guarantee is structural: the input rows and every output field are
@@ -69,11 +69,9 @@ export interface CycleAreaFacts {
 }
 
 // How much of the cycle the enrichment step actually covered, so a truncated run is visible rather
-// than silently indistinguishable from a cycle whose work touched nothing.
-export interface CycleAreaCoverage {
-  readonly enriched: number
-  readonly skipped: number
-}
+// than silently indistinguishable from a cycle whose work touched nothing. One definition, shared
+// with the stored digest blob, so the facts and what a reader is shown cannot drift.
+export type CycleAreaCoverage = DigestAreaCoverage
 
 export interface CycleFactsCounts {
   readonly total: number
@@ -226,7 +224,10 @@ function deriveAreaFacts(
 
   const perIssue = new Map<string, { areas: readonly string[]; sizeBand?: ChangeSizeBand }>()
   const issueCounts = new Map<string, number>()
-  const prCounts = new Map<string, number>()
+  // Label → the DISTINCT pull requests that touched it. A set, not a counter: one pull request that
+  // closes three issues is one pull request, and the prompt asks the model to restate this number
+  // verbatim, so counting it three times would put a wrong number in the digest.
+  const prIdsByLabel = new Map<string, Set<string>>()
   let internalImprovements = 0
 
   for (const issue of issues) {
@@ -237,7 +238,9 @@ function deriveAreaFacts(
       if (pr.areas === undefined) continue
       for (const label of new Set(pr.areas)) {
         labels.add(label)
-        prCounts.set(label, (prCounts.get(label) ?? 0) + 1)
+        const ids = prIdsByLabel.get(label) ?? new Set<string>()
+        ids.add(pr.id)
+        prIdsByLabel.set(label, ids)
       }
       if (pr.changedLines !== undefined) {
         changedLines += pr.changedLines
@@ -263,7 +266,7 @@ function deriveAreaFacts(
   const areas = [...issueCounts.keys()].sort().map<CycleAreaFacts>((area) => ({
     area,
     issueCount: issueCounts.get(area) ?? 0,
-    prCount: prCounts.get(area) ?? 0,
+    prCount: prIdsByLabel.get(area)?.size ?? 0,
     sensitive: flags.get(area)?.sensitive === true,
   }))
 

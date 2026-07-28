@@ -144,8 +144,9 @@ Ordered so the app runs after every task. Groups 1–5 are the build pass; 6 is 
       quota below the floor stops enrichment mid-run; a throwing provider yields a `ready`
       un-enriched digest, never `failed`.
 - [x] 6.7 Integration (`packages/schema/src/db/cycle-facts.pg.test.ts`, extended):
-      `pullRequestSourcesForCycleFacts` returns exactly the four columns for the team's PRs and
-      nothing for another team's; `describe.skipIf(DATABASE_URL === undefined)`.
+      `pullRequestSourcesForCycleFacts` returns exactly the four `pull_request` columns plus the
+      joined `external_installation_id` — five fields, no more — for the team's PRs and nothing for
+      another team's; `describe.skipIf(DATABASE_URL === undefined)`.
 - [x] 6.8 Integration (`packages/schema/src/db/ai-config.pg.test.ts` or the existing AI-config pg
       test): the area map round-trips through `connector_config.config`; updating the spend cap
       alone leaves it intact; a non-admin context is rejected.

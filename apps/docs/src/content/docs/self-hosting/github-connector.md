@@ -56,8 +56,9 @@ PRs — that forces installers to re-approve.
 ### Changed-file metadata (no extra permission)
 
 If you configure the cycle digest's [product-area map](/self-hosting/ai-setup/), yapm additionally
-reads **which files** a merged pull request touched — the filename, the change status, and the number
-of changed lines — to convert those paths into product-area labels.
+reads **which files** a pull request linked to an issue in the closing cycle touched — whatever
+state that pull request is in, merged or not. It reads the filename, the change status, and the
+number of changed lines, and converts those paths into product-area labels.
 
 That read is `GET /repos/{owner}/{repo}/pulls/{n}/files`, which GitHub serves under the
 **Pull requests: Read-only** permission already in the table above. **No new permission, and no
@@ -71,6 +72,8 @@ What yapm does with the response is as important as the permission:
   *does* return a patch.
 - **Nothing is persisted.** No file list, no path, no size, no cache table — the metadata exists in
   memory for the length of one digest run and is discarded.
+- **One page per pull request.** yapm reads the first 100 changed files and does not paginate; a
+  larger pull request is mapped from that first page and the digest reports its area list as partial.
 - **Zero requests until you opt in.** With no area map configured, this read never happens. See
   [the rate budget](/self-hosting/ai-setup/#the-github-rate-budget-this-spends) for the caps that
   bound it when you do.

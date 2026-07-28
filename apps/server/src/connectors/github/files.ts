@@ -20,8 +20,9 @@ export const RATE_LIMIT_FLOOR = 500
 
 // One page, the maximum GitHub allows. No pagination: a PR touching more than 100 files is already
 // "big and everywhere", and paginating to the documented 3000-file ceiling to refine a label that
-// coarse is not worth the quota.
-const FILES_PER_PAGE = 100
+// coarse is not worth the quota. A full page is REPORTED as truncation rather than passed off as the
+// whole set — see `ChangedFilesResult.truncated`.
+export const FILES_PER_PAGE = 100
 
 // A CLOSED three-field type. There is no field capable of holding patch content, so a later change
 // that tried to carry it would fail to compile rather than fail quietly.
@@ -46,6 +47,10 @@ export interface ChangedFilesResult {
   // The installation's reported remaining primary-rate-limit quota, or null when the provider did
   // not report one. The caller stops enriching below `RATE_LIMIT_FLOOR`.
   readonly rateLimitRemaining: number | null
+  // True when the response filled the single page yapm asks for, so `files` is a PREFIX of what the
+  // pull request touched. Carried rather than swallowed: a caller that presented a partial file set
+  // as complete would under-map an area a file past the page boundary is the only one to touch.
+  readonly truncated: boolean
 }
 
 export async function listChangedFiles(
@@ -66,6 +71,7 @@ export async function listChangedFiles(
     // Projected BEFORE returning, so no caller can ever hold an unprojected entry.
     files: response.data.map(projectChangedFile),
     rateLimitRemaining: Number.isNaN(parsed) ? null : parsed,
+    truncated: response.data.length >= FILES_PER_PAGE,
   }
 }
 

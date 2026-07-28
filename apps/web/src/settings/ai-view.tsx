@@ -1,4 +1,10 @@
-import { AI_PROVIDERS, type AiProvider, type AreaRule, UNMAPPED_AREA } from '@yapm/schema'
+import {
+  AI_PROVIDERS,
+  type AiProvider,
+  type AreaRule,
+  RESERVED_AREA_MESSAGE,
+  UNMAPPED_AREA,
+} from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { Input } from '@yapm/ui/components/input'
 import { Label } from '@yapm/ui/components/label'
@@ -461,6 +467,7 @@ function AreaMapEditor({
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState(false)
   const [focusTarget, setFocusTarget] = useState<string | undefined>(undefined)
+  const [announcement, setAnnouncement] = useState('')
 
   useEffect(() => {
     if (focusTarget === undefined) return
@@ -479,13 +486,26 @@ function AreaMapEditor({
   const move = (index: number, delta: number) => {
     const target = index + delta
     if (target < 0 || target >= rules.length) return
+    const moving = rules[index]
     setRules((current) => {
       const next = [...current]
       const [moved] = next.splice(index, 1)
       if (moved) next.splice(target, 0, moved)
       return next
     })
-    setFocusTarget(rowId(target, delta < 0 ? 'up' : 'down'))
+    // At either end the button that made the move is the one the move DISABLES, so focusing it is a
+    // no-op that leaves focus on an index-keyed node now belonging to a different rule — and the next
+    // press silently moves the wrong row back. Focus the opposite arrow, which is always enabled.
+    setFocusTarget(
+      target === 0
+        ? rowId(0, 'down')
+        : target === rules.length - 1
+          ? rowId(target, 'up')
+          : rowId(target, delta < 0 ? 'up' : 'down'),
+    )
+    setAnnouncement(
+      `${moving?.area.trim() || 'Rule'} moved to position ${target + 1} of ${rules.length}.`,
+    )
   }
 
   const remove = (index: number) => {
@@ -501,6 +521,13 @@ function AreaMapEditor({
   const incomplete = rules.some(
     (rule) => rule.prefix.trim().length === 0 || rule.area.trim().length === 0,
   )
+  // The same rule the schema enforces, said where the admin is typing rather than only in the docs.
+  const usesReservedLabel = rules.some((rule) => rule.area.trim().toLowerCase() === UNMAPPED_AREA)
+  const blockedReason = incomplete
+    ? 'Every rule needs a path prefix and an area label.'
+    : usesReservedLabel
+      ? RESERVED_AREA_MESSAGE
+      : undefined
 
   const save = async () => {
     setBusy(true)
@@ -645,16 +672,25 @@ function AreaMapEditor({
           <PlusIcon />
           Add area
         </Button>
-        <Button size="sm" disabled={busy || incomplete} onClick={save} data-testid="area-map-save">
+        <Button
+          size="sm"
+          disabled={busy || blockedReason !== undefined}
+          onClick={save}
+          data-testid="area-map-save"
+        >
           {saved ? <CheckIcon /> : null}
           Save areas
         </Button>
-        {incomplete ? (
-          <span className="text-[11px] text-text-3" role="status">
-            Every rule needs a path prefix and an area label.
+        {blockedReason !== undefined ? (
+          <span className="text-[11px] text-text-3" role="status" data-testid="area-map-blocked">
+            {blockedReason}
           </span>
         ) : null}
       </div>
+
+      <p className="sr-only" role="status" aria-live="polite" data-testid="area-map-announcement">
+        {announcement}
+      </p>
     </section>
   )
 }

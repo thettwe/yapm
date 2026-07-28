@@ -321,6 +321,11 @@ describe('disclosure validator — no path, extension, fence or code identifier 
       'The cycle closed on 2026/07/28.',
       'Latency improved by 2.5 percent.',
       'Version 2.1 of the plan editor shipped.',
+      // A runtime or framework NAME is product prose, not a filename: the capitalised identifier
+      // before the dot is what tells them apart, and a real path still discloses by its slashes.
+      'Tooling moved to Node.js 24.',
+      'The Next.js upgrade landed in Web.',
+      'Vue.js and D3.js were both dropped.',
     ]
     for (const summary of allowlisted) {
       const candidate = withSummary(summary)

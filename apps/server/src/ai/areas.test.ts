@@ -357,6 +357,61 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
     expect(calls).toEqual([])
   })
 
+  // A workspace with AI switched off gets an `ai_off` digest whatever this step gathers, so every
+  // call it would have made is someone else's rate budget spent on nothing.
+  it('makes ZERO provider calls when AI is configured but switched OFF', async () => {
+    reads.aiConfig.mockResolvedValue({ enabled: false, data: { models: {}, areas: RULES } })
+    reads.prSources.mockResolvedValue(sourcesFor(['pr-1']))
+    const { reader, calls } = readerOver([fileEntry(BILLING_PATH)])
+    const facts = factsFor(['pr-1'])
+
+    expect(
+      await enrichCycleFactsWithAreas(
+        { db: fakeDb(), changedFilesReader: reader },
+        { workspaceId: 'ws-1', facts },
+      ),
+    ).toBe(facts)
+    expect(calls).toEqual([])
+    expect(reads.prSources).not.toHaveBeenCalled()
+  })
+
+  it('makes ZERO provider calls once the workspace is over its spend cap', async () => {
+    reads.aiConfig.mockResolvedValue({
+      enabled: true,
+      data: { models: {}, areas: RULES, spendCapUsd: 5 },
+    })
+    reads.spend.mockResolvedValue(5)
+    reads.prSources.mockResolvedValue(sourcesFor(['pr-1']))
+    const { reader, calls } = readerOver([fileEntry(BILLING_PATH)])
+    const facts = factsFor(['pr-1'])
+
+    expect(
+      await enrichCycleFactsWithAreas(
+        { db: fakeDb(), changedFilesReader: reader },
+        { workspaceId: 'ws-1', facts },
+      ),
+    ).toBe(facts)
+    expect(calls).toEqual([])
+    expect(reads.prSources).not.toHaveBeenCalled()
+  })
+
+  it('still enriches while the workspace is under its spend cap', async () => {
+    reads.aiConfig.mockResolvedValue({
+      enabled: true,
+      data: { models: {}, areas: RULES, spendCapUsd: 5 },
+    })
+    reads.spend.mockResolvedValue(4.99)
+    reads.prSources.mockResolvedValue(sourcesFor(['pr-1']))
+    const { reader, calls } = readerOver([fileEntry(BILLING_PATH)])
+
+    const result = await enrichCycleFactsWithAreas(
+      { db: fakeDb(), changedFilesReader: reader },
+      { workspaceId: 'ws-1', facts: factsFor(['pr-1']) },
+    )
+    expect(calls).toEqual([480])
+    expect(result.areas).toEqual([{ area: 'Billing', issueCount: 1, prCount: 1, sensitive: true }])
+  })
+
   it('makes ZERO provider calls when the GitHub connector is disabled', async () => {
     const facts = factsFor(['pr-1'])
     expect(
@@ -413,6 +468,39 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
     expect(result.issues.filter((issue) => issue.areas !== undefined)).toHaveLength(2)
   })
 
+  // yapm reads one page of files. A pull request that filled it is mapped from a PREFIX of what it
+  // touched, so it is banded by what truncation already proves and counted as partially mapped —
+  // never presented as a complete grouping.
+  it('bands a truncated pull request xl and records it as partially mapped', async () => {
+    reads.prSources.mockResolvedValue(sourcesFor(['pr-1']))
+    const page = Array.from({ length: 100 }, (_, index) =>
+      fileEntry(`apps/server/src/billing/file-${index}.ts`, 1),
+    )
+    const { reader } = readerOver(page)
+
+    const result = await enrichCycleFactsWithAreas(
+      { db: fakeDb(), changedFilesReader: reader },
+      { workspaceId: 'ws-1', facts: factsFor(['pr-1']) },
+    )
+
+    // 100 files × 1 change = 100 lines, which alone would band `m`.
+    expect(result.issues[0]?.sizeBand).toBe('xl')
+    expect(result.areaCoverage).toEqual({ enriched: 1, skipped: 0, partial: 1 })
+    expect(buildDigestInput(result)).toContain('touched more files than yapm reads in one page')
+  })
+
+  it('records no partial count when every file list fit in one page', async () => {
+    reads.prSources.mockResolvedValue(sourcesFor(['pr-1']))
+    const { reader } = readerOver([fileEntry(BILLING_PATH)])
+
+    const result = await enrichCycleFactsWithAreas(
+      { db: fakeDb(), changedFilesReader: reader },
+      { workspaceId: 'ws-1', facts: factsFor(['pr-1']) },
+    )
+    expect(result.areaCoverage).toEqual({ enriched: 1, skipped: 0 })
+    expect(buildDigestInput(result)).not.toContain('touched more files than yapm reads')
+  })
+
   it('never runs when the cycle has no linked pull request', async () => {
     const facts = buildCycleFacts({
       cycle: { id: 'cycle-1', teamId: 'team-1', name: 'Cycle 8' },
@@ -426,6 +514,72 @@ describe('enrichCycleFactsWithAreas — what it refuses to spend', () => {
       ),
     ).toBe(facts)
     expect(calls).toEqual([])
+  })
+})
+
+// The coverage arithmetic is yapm's, so the reader is TOLD the grouping is partial rather than the
+// model being asked to remember to mention it. It rides in the stored blob, not a new column.
+describe('the stored digest carries yapm-computed area coverage', () => {
+  it('writes the coverage yapm counted, and never a coverage the model wrote', async () => {
+    const prIds = Array.from({ length: 60 }, (_, index) => `pr-${String(index).padStart(3, '0')}`)
+    reads.prSources.mockResolvedValue(sourcesFor(prIds))
+    const { reader } = readerOver([fileEntry(BILLING_PATH)])
+    const enriched = await enrichCycleFactsWithAreas(
+      { db: fakeDb(), changedFilesReader: reader },
+      { workspaceId: 'ws-1', facts: factsFor(prIds) },
+    )
+
+    const { gateway, captured } = capturingGateway({
+      headline: 'Billing moved.',
+      sections: [
+        {
+          title: 'What shipped',
+          items: [
+            {
+              kind: 'shipped',
+              summary: 'Billing shortened the refund window.',
+              evidenceRefs: [{ kind: 'issue', id: 'issue-0' }],
+              confidence: 'high',
+            },
+          ],
+        },
+      ],
+    })
+    const { dbProvider, writes } = fakeDbProvider()
+    await runCycleDigest(
+      { gateway, db: fakeDb(), dbProvider },
+      { workspaceId: 'ws-1', facts: enriched },
+    )
+
+    const stored = writes[0] as { content: { areaCoverage?: unknown } | null }
+    expect(stored.content?.areaCoverage).toEqual({ enriched: 50, skipped: 10 })
+    // The model-facing schema has no coverage field at all, so it cannot supply one.
+    expect(Object.keys(captured[0] ?? {})).not.toContain('areaCoverage')
+  })
+
+  it('stores no coverage key at all for an un-enriched cycle', async () => {
+    const { gateway } = capturingGateway({
+      headline: 'The team shipped one issue.',
+      sections: [
+        {
+          title: 'What shipped',
+          items: [
+            {
+              kind: 'shipped',
+              summary: 'The refund window shortened.',
+              evidenceRefs: [{ kind: 'issue', id: 'issue-0' }],
+              confidence: 'high',
+            },
+          ],
+        },
+      ],
+    })
+    const { dbProvider, writes } = fakeDbProvider()
+    await runCycleDigest(
+      { gateway, db: fakeDb(), dbProvider },
+      { workspaceId: 'ws-1', facts: factsFor(['pr-1']) },
+    )
+    expect(writes[0]).not.toHaveProperty('content.areaCoverage')
   })
 })
 

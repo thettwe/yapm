@@ -43,16 +43,37 @@ export const digestSectionSchema = z.object({
 })
 
 // The whole artifact: a short narrative TL;DR (prose only — every consequential NUMBER is computed
-// by yapm and lives in the cited facts, not here) plus evidence-linked sections.
+// by yapm and lives in the cited facts, not here) plus evidence-linked sections. This is the
+// MODEL-FACING schema: it is what `generateObject` is given, so nothing yapm authors may appear in it.
 export const digestContentSchema = z.object({
   headline: z.string(),
   sections: z.array(digestSectionSchema),
+})
+
+// How much of the cycle the area-enrichment step actually covered. yapm's own arithmetic, never the
+// model's: it is attached AFTER generation and rendered as a yapm-authored line, so "the grouping is
+// partial" is a stated fact rather than something the model was asked to remember to mention.
+export const digestAreaCoverageSchema = z.object({
+  // Pull requests whose changed files were read and mapped.
+  enriched: z.number(),
+  // Pull requests left unmapped by the per-cycle call cap or the rate-limit floor.
+  skipped: z.number(),
+  // Pull requests mapped from their first page of files only — the area set is a partial view.
+  partial: z.number().optional(),
+})
+
+// The STORED digest blob: the model's content plus yapm's coverage arithmetic. Separate from the
+// model-facing schema on purpose — a field the model could fill is a number the model could invent.
+export const storedDigestContentSchema = digestContentSchema.extend({
+  areaCoverage: digestAreaCoverageSchema.optional(),
 })
 
 export type DigestEvidenceRef = z.infer<typeof digestEvidenceRefSchema>
 export type DigestItem = z.infer<typeof digestItemSchema>
 export type DigestSection = z.infer<typeof digestSectionSchema>
 export type DigestContent = z.infer<typeof digestContentSchema>
+export type DigestAreaCoverage = z.infer<typeof digestAreaCoverageSchema>
+export type StoredDigestContent = z.infer<typeof storedDigestContentSchema>
 
 // Cite-evidence-or-omit. Drops any item whose `evidenceRefs` is empty; when a `knownEvidenceIds`
 // set is supplied (the ids yapm computed for this cycle), each ref is first narrowed to that set so
@@ -166,7 +187,22 @@ export function dropItemsNamingMembers(
 // Source-file extensions. The list is closed on purpose: a "looks like an extension" heuristic would
 // eat ordinary prose ("v2.1 rollout", "St. Louis") for no gain.
 const SOURCE_FILE_EXTENSION =
-  /\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs|rb|java|kt|swift|c|h|cpp|cs|php|sql|sh|yml|yaml|toml|json|css|scss|html|vue|svelte)\b/i
+  /\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs|rb|java|kt|swift|c|h|cpp|cs|php|sql|sh|yml|yaml|toml|json|css|scss|html|vue|svelte)\b/gi
+
+// A CAPITALISED identifier immediately before the dot is a product name, not a filename: `Node.js`,
+// `Next.js`, `Vue.js`, `D3.js` are ordinary delivery prose and dropping those items would silently
+// eat legitimate content. A real path still discloses through its slashes, which is why giving this
+// up costs only the bare, slash-free, capitalised filename — and this is defence in depth, not the
+// boundary.
+const PRODUCT_NAME_BEFORE_DOT = /[A-Z][A-Za-z0-9]*$/
+
+function textCarriesSourceExtension(text: string): boolean {
+  for (const match of text.matchAll(SOURCE_FILE_EXTENSION)) {
+    if (PRODUCT_NAME_BEFORE_DOT.test(text.slice(0, match.index))) continue
+    return true
+  }
+  return false
+}
 
 // Directory names that only ever appear in a repository layout.
 const SOURCE_DIRECTORY_SEGMENTS = new Set([
@@ -201,7 +237,7 @@ function isPathToken(token: string): boolean {
   // keep up to date.
   return segments.some(
     (segment) =>
-      SOURCE_FILE_EXTENSION.test(segment) || SOURCE_DIRECTORY_SEGMENTS.has(segment.toLowerCase()),
+      textCarriesSourceExtension(segment) || SOURCE_DIRECTORY_SEGMENTS.has(segment.toLowerCase()),
   )
 }
 
@@ -209,7 +245,7 @@ function textDisclosesPath(text: string): boolean {
   // Any backtick at all: a code fence or an inline code span is a disclosure shape regardless of
   // what it wraps.
   if (text.includes('`')) return true
-  if (SOURCE_FILE_EXTENSION.test(text)) return true
+  if (textCarriesSourceExtension(text)) return true
   if (CODE_CALL_SHAPE.test(text)) return true
   return text.split(/\s+/).some(isPathToken)
 }

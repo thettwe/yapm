@@ -71,7 +71,9 @@ existed; see §I22.
       `resolveAttachmentSrc?: (attachmentId: string, variant: 'thumb' | 'full') => string` to
       `RichTextExtensionOptions` and thread it through `RichTextEditor` and `RichTextRenderer` props.
 - [x] 3.3 Harden `sanitizeRichText` for image nodes: drop every attribute outside the permitted three
-      and reject any URL-shaped value (`/^\s*[a-z][a-z0-9+.-]*:|^\/\//i`). This runs on the
+      and reject a URL-shaped `attachmentId` (`/^\s*[a-z][a-z0-9+.-]*:|^\/\//i`). The test is on the
+      identifier only — `alt` is display prose the renderer never dereferences, and that pattern
+      matches any sentence whose first word ends in a colon (design.md §I24). This runs on the
       authoritative pass, so it is what makes "no URL is ever stored" true rather than merely
       intended. **Test (unit)** in the existing `plaintext.test.ts`.
 - [x] 3.4 Add a React node view for the image (`packages/ui/src/components/image-node.tsx`):

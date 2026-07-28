@@ -149,11 +149,12 @@ Image.extend({
   `'small' | 'medium' | 'full'`, default `'full'` — a **bucket**, not a pixel count, so there is no
   resize handle and no layout arithmetic in a synced attribute.
 - **No `src`, ever.** `sanitizeRichText` deletes any attribute on an `image` node that is not one of
-  the three, and additionally refuses any attribute value matching `/^\s*[a-z][a-z0-9+.-]*:|^\/\//i`
-  — i.e. anything URL-shaped. Enforcing it in the shared sanitizer means it holds on the
-  **authoritative** pass, so a crafted client cannot store one. A CI grep (mirroring the storage
-  package's capability guard) asserts no `src` string is written into an image node anywhere in
-  `packages/ui` or `apps/web`.
+  the three, and additionally refuses an `attachmentId` matching `/^\s*[a-z][a-z0-9+.-]*:|^\/\//i`
+  — i.e. anything URL-shaped. (As proposed the pattern ran over every attribute; it was narrowed to
+  the identifier during implementation — see §I24.) Enforcing it in the shared sanitizer means it
+  holds on the **authoritative** pass, so a crafted client cannot store one. A CI grep (mirroring
+  the storage package's capability guard) asserts no `src` string is written into an image node
+  anywhere in `packages/ui` or `apps/web`.
 - **The URL is computed at render time.** `packages/ui` must not know the API base — packages never
   import apps (CLAUDE.md #3), and `FILES_API_BASE` is exported from `apps/server`. So
   `createRichTextExtensions` takes a new option

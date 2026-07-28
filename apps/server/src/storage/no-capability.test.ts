@@ -46,10 +46,6 @@ const RICH_TEXT_DIRS = [
   join(repoRoot, 'apps/web/src/issues/attachments'),
 ]
 
-// The count is a floor, not a total: it fails the day the paths go stale again, and does not have
-// to be revised every time a component is added.
-const RICH_TEXT_FILE_FLOOR = 30
-
 // A test and a Storybook story are not shipped source, and both have to be able to NAME the thing
 // they assert the absence of — see rule (a), which has excluded `.test.ts` since `attachments` §I6
 // for exactly this reason. The invariant is about what a synced document can carry.
@@ -120,10 +116,17 @@ describe('the storage seam can never mint a capability (task 8.1)', () => {
   // capability-at-rest this whole design refuses. The renderer computes `/api/v1/files/<id>` from
   // an opaque id; there is nothing to store but the id.
   it('puts no http(s) URL in a rich-text or editor attribute', () => {
-    const files = RICH_TEXT_DIRS.flatMap(typescriptFilesIn).filter(isShippedSource)
     // A guard over a directory that does not exist is a guard that proves nothing — which is what
-    // this rule was until the paths above were corrected.
-    expect(files.length).toBeGreaterThanOrEqual(RICH_TEXT_FILE_FLOOR)
+    // this rule was until the paths above were corrected. Asserted PER DIRECTORY: an aggregate
+    // floor is cleared by whichever directory happens to be largest, so three of the four could go
+    // stale without it tripping. This names the path that went stale, and never has to be revised
+    // when a component is added or removed.
+    for (const dir of RICH_TEXT_DIRS) {
+      const scanned = typescriptFilesIn(dir).filter(isShippedSource)
+      expect(scanned.length, relative(repoRoot, dir)).toBeGreaterThan(0)
+    }
+
+    const files = RICH_TEXT_DIRS.flatMap(typescriptFilesIn).filter(isShippedSource)
 
     const offenders = files
       .map((file) => ({

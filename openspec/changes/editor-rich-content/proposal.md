@@ -118,7 +118,9 @@ This is the one part of the change that cannot be fixed in a follow-up.
   runtime, not at build. `highlight.js` is **BSD-3-Clause**, the first non-MIT/Apache runtime
   dependency in the client bundle.
 - **Tooling**: `scripts/check-boundaries.mjs` or a sibling guard gains the mirror of the storage
-  capability rule — no URL-shaped string may be written into an image node's attributes.
+  capability rule — no URL-shaped string may be written into an image node's *identifier* attribute,
+  and no attribute outside the permitted set may be written at all. `alt` is display prose the
+  renderer never dereferences and is exempt (design.md §I24).
 - **Docs:** `apps/docs/src/content/docs/features/rich-text.md` (new — images, tables, code blocks,
   the slash menu, and the honest "reload to edit" behaviour), `apps/docs/astro.config.mjs` (one
   sidebar entry), `apps/docs/src/content/docs/features/markdown.md` (the new node rows in "what

@@ -75,9 +75,12 @@ and a coarse width bucket — and nothing else. It SHALL NOT carry a `src`, an a
 relative path. The rendering surface SHALL compute the byte path from the id.
 
 The prohibition SHALL be enforced in the shared sanitizer, so it holds on the authoritative pass and
-a crafted client cannot store a URL: any attribute on an image node outside the permitted set SHALL
-be removed, and any attribute value that is URL-shaped SHALL be rejected. Pasted HTML SHALL NOT
-parse into an image node at all.
+a crafted client cannot store a URL: any attribute outside the permitted set SHALL be removed, and
+any URL-shaped value in an image node's *identifier* attribute (`attachmentId`) SHALL be rejected.
+The ban is on the attribute the renderer dereferences. `alt` is display prose — never an `href` and
+never a `src` — and SHALL NOT be tested for URL shape, because that test deletes ordinary alt text
+of the form `Error: 500 on login` while protecting nothing (see design.md §I24). Pasted HTML SHALL
+NOT parse into an image node at all.
 
 Work-graph placement: the node references an `attachment` row, which is anchored to a team and
 optionally to an issue or comment. Sync/permission story: unchanged from the attachments capability
@@ -87,8 +90,8 @@ route. A member of another team who receives the id can read nothing.
 #### Scenario: An inserted image stores only an id
 
 - **WHEN** an image is uploaded and inserted into a document
-- **THEN** the stored node holds the attachment id, the alt text and the width bucket, and no field
-  of it contains a URL, a path, or a scheme
+- **THEN** the stored node holds the attachment id, the alt text and the width bucket, and no
+  attribute the renderer dereferences — the id — contains a URL, a path, or a scheme
 
 #### Scenario: A pasted HTML image does not become an image node
 
@@ -97,9 +100,16 @@ route. A member of another team who receives the id can read nothing.
 
 #### Scenario: A crafted document cannot store a URL
 
-- **WHEN** a client submits a document whose image node carries a `src` or any URL-shaped attribute
-- **THEN** the shared sanitizer removes it before the authoritative write, so the stored document
-  holds no URL
+- **WHEN** a client submits a document whose image node carries a `src`, any other attribute outside
+  the permitted set, or a URL-shaped `attachmentId`
+- **THEN** the shared sanitizer removes the extra attributes and empties the URL-shaped id before the
+  authoritative write, so no attribute the renderer dereferences holds a URL
+
+#### Scenario: Alt text that looks like a scheme is not destroyed
+
+- **WHEN** an image node's `alt` reads `Error: 500 on login` — prose whose first word ends in a colon
+- **THEN** the alt text survives the authoritative sanitizer verbatim, because it is display prose
+  that is never an `href` and never a `src` (design.md §I24)
 
 #### Scenario: An image is selectable and removable without a pointer
 

@@ -50,6 +50,8 @@ import {
 } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
+import { FilesSection } from '@/issues/attachments/files-section'
+import { attachmentSrc, uploadAttachment } from '@/issues/attachments/upload'
 import {
   DIVERGENCE_LABEL,
   deliveryView,
@@ -217,6 +219,13 @@ export function IssueDetail({
     [members, workspaceMembers, users, userId],
   )
 
+  // The whole roster, unlike `mentionNames`: an uploader's name is a fact about a row in the Files
+  // list, not a claim that they can read the issue, so it does not carry the mention scoping.
+  const userNames = useMemo(
+    () => new Map(users.map((user) => [user.id, user.name ?? user.email ?? user.id])),
+    [users],
+  )
+
   // Scoped to the people who can read this issue, not to the whole roster: a mention of somebody
   // who cannot read it must render as inert text rather than as a resolved chip.
   const mentionNames = useMemo(
@@ -251,6 +260,7 @@ export function IssueDetail({
       members={members}
       mentionables={mentionables}
       mentionNames={mentionNames}
+      userNames={userNames}
       labelOptions={labels.map((label) => ({
         id: label.id,
         name: label.name,
@@ -323,6 +333,7 @@ function IssueDetailBody({
   members,
   mentionables,
   mentionNames,
+  userNames,
   labelOptions,
   cycleOptions,
   deployments,
@@ -335,6 +346,7 @@ function IssueDetailBody({
   members: readonly MemberOption[]
   mentionables: readonly MentionCandidate[]
   mentionNames: ReadonlyMap<string, string>
+  userNames: ReadonlyMap<string, string>
   labelOptions: readonly LabelRow[]
   cycleOptions: readonly CycleOption[]
   deployments: readonly DeploymentRow[]
@@ -423,6 +435,13 @@ function IssueDetailBody({
 
   useEffect(() => () => flushDescription(), [flushDescription])
 
+  // Bound to THIS issue and THIS team, so `packages/ui` never learns either. The editor's whole
+  // knowledge of uploading is a callback that answers with an opaque id or a reason.
+  const uploadImage = useCallback(
+    (file: File) => uploadAttachment({ file, teamId, issueId: issue.id }),
+    [teamId, issue.id],
+  )
+
   const assigneeName =
     issue.assignee?.name ?? issue.assignee?.email ?? (issue.assigneeId ? 'Unknown' : 'Unassigned')
 
@@ -476,17 +495,27 @@ function IssueDetailBody({
                 defaultValue={(issue.description as RichTextValue | null) ?? null}
                 mentionables={mentionables}
                 mentionNames={mentionNames}
+                resolveAttachmentSrc={attachmentSrc}
+                onUploadImage={uploadImage}
                 onChange={saveDescription}
               />
             ) : issue.description ? (
               <RichTextRenderer
                 value={issue.description as RichTextValue}
                 mentionNames={mentionNames}
+                resolveAttachmentSrc={attachmentSrc}
               />
             ) : (
               <p className="text-sm text-text-3">No description.</p>
             )}
           </DetailSection>
+
+          <FilesSection
+            issueId={issue.id}
+            teamId={teamId}
+            canWrite={canWrite}
+            userNames={userNames}
+          />
 
           <CommentThread
             issueId={issue.id}
@@ -494,6 +523,7 @@ function IssueDetailBody({
             canWrite={canWrite}
             mentionables={mentionables}
             mentionNames={mentionNames}
+            onUploadImage={uploadImage}
           />
         </div>
 
@@ -902,12 +932,14 @@ function CommentThread({
   canWrite,
   mentionables,
   mentionNames,
+  onUploadImage,
 }: {
   issueId: string
   comments: readonly CommentRow[]
   canWrite: boolean
   mentionables: readonly MentionCandidate[]
   mentionNames: ReadonlyMap<string, string>
+  onUploadImage: (file: File) => Promise<{ attachmentId: string } | { error: string }>
 }) {
   const zero = useZero()
   const { userId, canManage } = useMembership()
@@ -982,6 +1014,8 @@ function CommentThread({
                     defaultValue={comment.body as RichTextValue}
                     mentionables={mentionables}
                     mentionNames={mentionNames}
+                    resolveAttachmentSrc={attachmentSrc}
+                    onUploadImage={onUploadImage}
                     onSubmit={(doc) => {
                       void run(
                         zero.mutate(
@@ -1000,6 +1034,7 @@ function CommentThread({
                   <RichTextRenderer
                     value={comment.body as RichTextValue}
                     mentionNames={mentionNames}
+                    resolveAttachmentSrc={attachmentSrc}
                   />
                 )}
               </CommentCard>
@@ -1013,6 +1048,7 @@ function CommentThread({
             onError={setError}
             mentionables={mentionables}
             mentionNames={mentionNames}
+            onUploadImage={onUploadImage}
           />
         ) : null}
         {error !== undefined ? (
@@ -1030,11 +1066,13 @@ function CommentComposer({
   onError,
   mentionables,
   mentionNames,
+  onUploadImage,
 }: {
   onPost: (doc: RichTextValue) => Promise<string | undefined>
   onError: (message: string | undefined) => void
   mentionables: readonly MentionCandidate[]
   mentionNames: ReadonlyMap<string, string>
+  onUploadImage: (file: File) => Promise<{ attachmentId: string } | { error: string }>
 }) {
   const [draft, setDraft] = useState<RichTextValue | null>(null)
   const [seq, setSeq] = useState(0)
@@ -1059,6 +1097,8 @@ function CommentComposer({
         minHeight="3rem"
         mentionables={mentionables}
         mentionNames={mentionNames}
+        resolveAttachmentSrc={attachmentSrc}
+        onUploadImage={onUploadImage}
         onChange={setDraft}
         onSubmit={submit}
       />

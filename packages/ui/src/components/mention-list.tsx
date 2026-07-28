@@ -1,5 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@yapm/ui/components/avatar'
 import type { MentionCandidate } from '@yapm/ui/lib/mention-match'
+import { nextRovingIndex } from '@yapm/ui/lib/roving-index'
 import { cn } from '@yapm/ui/lib/utils'
 
 // Shown when the application marks somebody ineligible but supplies no reason of its own. A
@@ -11,26 +12,9 @@ export function mentionOptionId(listboxId: string, index: number): string {
   return `${listboxId}-option-${index}`
 }
 
-/**
- * The movement half of the keyboard contract, kept pure so the popup's owner can call it from a
- * ProseMirror `handleKeyDown` — which must answer synchronously — and so a test can assert it
- * without a DOM. Returns `null` for a key this list does not own, which the caller reads as "not
- * ours, let the editor have it".
- */
+/** The shared roving-index helper under this list's own name; see `lib/roving-index.ts`. */
 export function nextMentionIndex(key: string, current: number, count: number): number | null {
-  if (count === 0) return null
-  switch (key) {
-    case 'ArrowDown':
-      return (current + 1) % count
-    case 'ArrowUp':
-      return (current - 1 + count) % count
-    case 'Home':
-      return 0
-    case 'End':
-      return count - 1
-    default:
-      return null
-  }
+  return nextRovingIndex(key, current, count)
 }
 
 export function mentionEmptyStateText(query: string): string {

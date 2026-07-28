@@ -131,70 +131,70 @@ phase's.
 
 ## 6. The insert menu
 
-- [ ] 6.1 Add `export const SLASH_PLUGIN_KEY = new PluginKey('yapm-slash')` at module level beside
+- [x] 6.1 Add `export const SLASH_PLUGIN_KEY = new PluginKey('yapm-slash')` at module level beside
       `MENTION_PLUGIN_KEY`, and `createSlashController(host)` with the same host interface as
       `createMentionController` — including `consume(event)`. **Read the Escape handling around
       `handleRichTextKeyDown` and `MentionHost.consume` first**: the `consumed`-identity mechanism,
       not `defaultPrevented`, is what keeps Escape from discarding the draft, and a second
       suggestion plugin is exactly what could regress it.
-- [ ] 6.2 Register the slash suggestion as a second entry in the mention extension's `suggestions`
+- [x] 6.2 Register the slash suggestion as a second entry in the mention extension's `suggestions`
       array (it is array-shaped for exactly this), or as its own `Suggestion`-carrying extension if
       reading the installed `.d.ts` shows the array is mention-node-specific. Whichever is true, say
       which in the implementation log.
-- [ ] 6.3 Create `packages/ui/src/components/slash-list.tsx` — a **separate** component from
+- [x] 6.3 Create `packages/ui/src/components/slash-list.tsx` — a **separate** component from
       `MentionList` (design §D6). Extract only the pure roving-index helper as shared code. Listbox
       semantics, `aria-activedescendant` on the editable, a persistent polite status region, and a
       per-row disabled state for a command that cannot apply here.
-- [ ] 6.4 Define the command list: Heading 2, Heading 3, Bullet list, Numbered list, Quote, Code
+- [x] 6.4 Define the command list: Heading 2, Heading 3, Bullet list, Numbered list, Quote, Code
       block, Table, Image, Divider — each with `title`, `keywords`, icon, `enabled(editor)` and a
       `run(editor, range)` that deletes the trigger range and applies the command in **one**
       transaction so one Cmd+Z undoes the whole insertion.
-- [ ] 6.5 Gate the trigger: only at the start of a textblock or after whitespace, never inside a code
+- [x] 6.5 Gate the trigger: only at the start of a textblock or after whitespace, never inside a code
       block, an inline code mark, or where a block insert is illegal.
-- [ ] 6.6 Add table structure controls to the editor toolbar, shown when `editor.isActive('table')`:
+- [x] 6.6 Add table structure controls to the editor toolbar, shown when `editor.isActive('table')`:
       add/delete row, add/delete column, delete table, toggle header row — real buttons with
       `aria-label`s. Add alt-text and remove controls shown when an image node is selected.
 
 ## 7. Uploading from the editor
 
-- [ ] 7.1 Add `onUploadImage?: (file: File) => Promise<{ attachmentId: string } | { error: string }>`
+- [x] 7.1 Add `onUploadImage?: (file: File) => Promise<{ attachmentId: string } | { error: string }>`
       to `RichTextEditorProps`. `packages/ui` performs no fetch and knows no API path.
-- [ ] 7.2 Wire the three triggers: the `/image` command (file picker), paste of an image blob, drop
+- [x] 7.2 Wire the three triggers: the `/image` command (file picker), paste of an image blob, drop
       of an image file. A drop of a non-image file is **not** handled by the editor.
-- [ ] 7.3 Show upload progress as a ProseMirror **decoration**, not a node (design §D10): nothing
+- [x] 7.3 Show upload progress as a ProseMirror **decoration**, not a node (design §D10): nothing
       enters the document until the bytes are stored, so a failed upload cannot leave a node naming
       an attachment that does not exist. On failure the decoration is replaced by an inline error
       naming the reason.
-- [ ] 7.4 Create `apps/web/src/issues/attachments/upload.ts`: multipart `POST /api/v1/files` with
+- [x] 7.4 Create `apps/web/src/issues/attachments/upload.ts`: multipart `POST /api/v1/files` with
       `teamId` and `issueId`, `credentials: 'include'`, mapping `413` and the standard byte-identical
       refusal to human copy. Pass `resolveAttachmentSrc` and `onUploadImage` into the description
       editor and the comment composer from `issue-detail.tsx`.
 
 ## 8. The Files section
 
-- [ ] 8.1 Add a `Files` section to `apps/web/src/issues/issue-detail.tsx` reading the existing
+- [x] 8.1 Add a `Files` section to `apps/web/src/issues/issue-detail.tsx` reading the existing
       `attachments.byIssue` synced query — no new query, no new mutator, no ZQL outside
       `packages/schema`.
-- [ ] 8.2 Create the list component: filename, size, uploader, relative time, a download link to
+- [x] 8.2 Create the list component: filename, size, uploader, relative time, a download link to
       `/api/v1/files/<id>`, and a remove button for `canWrite` that calls
       `DELETE /api/v1/files/<id>` with a confirm. Keyboard-navigable rows; each control has an
       accessible name identifying its file. Quiet empty state with an upload control.
-- [ ] 8.3 Confirm a `viewer` sees downloads and no remove affordance, and that a non-member's query
+- [x] 8.3 Confirm a `viewer` sees downloads and no remove affordance, and that a non-member's query
       is empty (the scoping is already proven by `queries.attachments.pg.test.ts`; this is a UI
       assertion, not a re-proof).
 
 ## 9. Tokens and CSS
 
-- [ ] 9.1 Add the `--code-*` family — `keyword`, `string`, `number`, `comment`, `function`, `type`,
+- [x] 9.1 Add the `--code-*` family — `keyword`, `string`, `number`, `comment`, `function`, `type`,
       `punctuation` — to all six theme blocks in `packages/ui/src/styles/globals.css`, derived from
       each preset's existing hues rather than invented, each ≥ 4.5:1 against that preset's
       `--bg-hover`.
-- [ ] 9.2 Map the `hljs-*` classes to those tokens in one block. Load **no** `highlight.js`
+- [x] 9.2 Map the `hljs-*` classes to those tokens in one block. Load **no** `highlight.js`
       stylesheet. Unmapped classes inherit `--text-1` so an unmapped token is plain, never invisible.
-- [ ] 9.3 Add table, code-block and image rules to the editor's `contentClass`, strictly tokenized:
+- [x] 9.3 Add table, code-block and image rules to the editor's `contentClass`, strictly tokenized:
       table borders and header surface, code-block surface and padding, image max-width and selected
       outline using the focus-ring token.
-- [ ] 9.4 Extend `packages/ui/src/styles/contrast.test.ts` to assert every `--code-*` token in every
+- [x] 9.4 Extend `packages/ui/src/styles/contrast.test.ts` to assert every `--code-*` token in every
       preset, light and dark, against `--bg-hover`.
 
 ## 10. Tests
@@ -206,12 +206,12 @@ phase's.
       blocked against those known-type sets; (c) `RichTextEditor` given a document holding an unknown
       node type renders the blocked state, exposes no editable region, and fires no `onChange` after
       simulated input. All three legs must fail against `origin/main`.
-- [ ] 10.2 **Test (unit)** the slash menu in `packages/ui`: `/` opens at the start of a paragraph and
+- [x] 10.2 **Test (unit)** the slash menu in `packages/ui`: `/` opens at the start of a paragraph and
       does not open mid-word, in a code block or in a code mark; arrow keys move the active option;
       Enter inserts in one transaction that a single undo reverses; a disabled command does not
       insert. Remember the jsdom stubs `editor-markdown` recorded — `Range.prototype.getClientRects`,
       `getBoundingClientRect` and `Element.prototype.scrollIntoView`.
-- [ ] 10.3 **Test (unit) — the Escape regression.** With the slash menu open, Escape closes the menu,
+- [x] 10.3 **Test (unit) — the Escape regression.** With the slash menu open, Escape closes the menu,
       `onCancel` is **not** called, and the draft survives; with no popup open, Escape still calls
       `onCancel`; the mention popup's existing behaviour is unchanged. Falsify it by removing
       `host.consume` from the slash controller and confirm it fails.
@@ -221,7 +221,7 @@ phase's.
       coerces.
 - [x] 10.5 **Test (unit)** the plaintext walker: an image's alt is projected, table cells do not weld
       together, a mention inside a table cell is still extracted by `extractMentionIds`.
-- [ ] 10.6 **Test (unit)** `contrast.test.ts` covers the new tokens (this is 9.4; listed here so the
+- [x] 10.6 **Test (unit)** `contrast.test.ts` covers the new tokens (this is 9.4; listed here so the
       close phase does not skip it).
 - [ ] 10.7 **Test (e2e)** `apps/web/e2e/rich-content.spec.ts` — the change touches a mutator
       (`sanitizeRichText`) and signature UI, which is 2 of PROCESS §3's four, so all three tiers

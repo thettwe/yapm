@@ -643,12 +643,99 @@ the image and the table while leaving the paragraph behind, and leg 2 reports th
 blocked against that same reduced schema. Both are unwritable against `origin/main`, where neither
 the node types nor `detectRichTextSkew` exist.
 
+### I12 — Task 6.2: the slash trigger is its OWN extension, not a second `suggestions` entry
+
+The plan allowed either, and asked which. Reading the installed 3.28.0 `.d.ts` and `index.js`
+settles it: **the array is mention-node-specific**, in its type and in its behaviour.
+
+- `suggestions: Array<Omit<SuggestionOptions<SuggestionItem, Attrs>, 'editor'>>` where
+  `Attrs extends Record<string, any> = MentionNodeAttrs`. A command list is not an attribute set.
+- `getSuggestions()` runs every entry through `getSuggestionOptions()`, which injects a default
+  `command` that inserts a node of `extensionName` (`mention`) and a default `allow` that tests
+  `schema.nodes.mention`. Both are overridable, and overriding both would mean every field that
+  makes the entry a *mention* entry is dead.
+- Worse than dead: `renderHTML` and `renderText` call `getSuggestionFromChar(this, attrs
+  .mentionSuggestionChar)` on **every mention node**, which re-derives the whole array. A `/` entry
+  would be walked on every render of every mention chip, forever, for nothing.
+
+So `SlashCommands` is a plain `Extension` whose `addProseMirrorPlugins` returns
+`[Suggestion({ editor: this.editor, ...options.suggestion })]`, and returns `[]` when no suggestion
+is configured — unlike the mention node, which always instantiates one and needed
+`INERT_MENTION_SUGGESTION` because of it. The read-only renderer therefore carries no `/` trigger at
+all rather than one that can never match.
+
+### I13 — The trigger gate is three refusals, and the third one is a schema question
+
+`allowedPrefixes: [' ']` does the "start of a textblock or after whitespace" half on its own:
+`findSuggestionMatch` tests the single character before the match against `^[<prefixes>\0]?$`, and
+the empty string (nothing before it) passes. `and/or` typed in prose sees `d` and returns null.
+
+`slashAllowed` adds the rest: a code block (`parent.type.spec.code`), an inline code mark, and —
+the one that is not obvious — **a textblock whose container cannot hold a block**. Expressed as
+`$from.node(-1).canReplaceWith($from.index(-1), $from.indexAfter(-1), bulletList)` rather than as a
+list of node names, so it stays true when a node type is added. Every command in the menu is a block
+insert, so a place where a list is illegal is a place where the whole menu is a lie.
+
+### I14 — Upload progress is a decoration, and the failure chip is cleared by the next edit
+
+§D10 says the placeholder is a decoration; it does not say what happens to a FAILED one. Left
+forever it is litter; removed immediately it is a message nobody read. It is cleared by the next
+transaction that changes the document — so the reason is on screen when the user looks up, and gone
+by the time they have typed past it. Implemented in the plugin's `apply`, which is the only place
+that sees every transaction.
+
+Two things the plan did not name and which fell out of writing it:
+
+- **The image-paste check has to run BEFORE the `text/html` hand-off.** A screenshot pasted from the
+  system clipboard carries `text/html` as well as the blob, and that HTML is an `<img>` naming a
+  `blob:` URL no other client could ever resolve. Putting the check second would silently pick the
+  useless flavour on macOS.
+- **The upload id is a module counter, not `newId()`.** It names a decoration inside one editor's
+  plugin state for the length of one request; it is never written to a document and nothing rebases
+  over it. Borrowing a UUIDv7 would imply CLAUDE.md #4 had something to say here.
+
+### I15 — `--code-punctuation` IS the body ink, and `--code-type` is a rotated hue
+
+Forty-two hand-picked values is what §D5 asked for; two of the seven needed a rule rather than a
+pick.
+
+- **`--code-punctuation` is each preset's `--text-1`, unchanged.** Punctuation carries no meaning of
+  its own — colouring it is decoration, and decorating it in seven ways across six presets is
+  decoration nobody can review. The token exists so a later theme *can* move it.
+- **`--code-type` is the string hue rotated +35° toward teal.** No preset palette carries a cool
+  green, and in `warm` the accent and the urgent hue collapse to within a few percent of each other
+  once both are fitted for contrast — two syntax classes that are the same colour is worse than one
+  derived hue.
+
+Everything else is a preset token (in-review, done, in-progress, accent, text-3) with its lightness
+moved until it clears 4.5:1 against that preset's composited `--bg-hover`. `--code-comment` is in
+the assertion list deliberately: dim is how a comment is conventionally distinguished, and dim is
+the one thing WCAG will not have, so it is distinguished by hue instead.
+
+### Evidence: three more falsifications (task 10.8)
+
+| Reverted | Test that failed | Assertion |
+|---|---|---|
+| `host.consume(event)` in `createSlashController`'s `onKeyDown` (`if (false && handled)`) | `Escape dismisses only the menu > closes the menu, leaves the draft alone, and never calls onCancel` | `expected "spy" to not be called at all` — the wrapper stops standing down and `onCancel` discards the draft |
+| `SlashCommand.run`'s single chain, split into `deleteRange` then the command | `inserts on Enter in ONE transaction, and one undo reverses it` | `AssertionError: expected 2 to be 1` |
+| `--code-comment` in `warm light` set back to its unfitted source `#9a9186` | `warm light tokens meet WCAG AA > every syntax token meets AA on the code-block surface` | `--code-comment: expected 2.6404762638269714 to be greater than or equal to 4.5` |
+
+Each was restored immediately. With the previous pass's skew falsification that is four.
+
 ### Not done in this pass
 
-Groups 6–9, 11 and 12 are the later passes'. Two items inside groups 1–5 are also open and are named
+Groups 11 and 12 are the close phase's, and three items inside the build groups are open and named
 rather than ticked:
 
 - **Task 3.8** — the real-browser check that the editor constructs with all three node types and that
   `prosemirror-model` is loaded exactly once. jsdom cannot see a duplicated `prosemirror-model`; the
   `node_modules/.pnpm` evidence in I1 is necessary but not sufficient.
 - **Task 12.2** — the client bundle delta from `lowlight` + `highlight.js` + the three extensions.
+- **Task 12.4** — the manual browser check that Escape from EACH of the two popups dismisses only
+  that popup. The unit test in `slash-menu.test.tsx` drives ProseMirror's real `handleKeyDown` and
+  the real wrapper predicate, which is as close as jsdom gets; what it cannot see is
+  `prosemirror-view`'s own `captureKeyDown` calling `preventDefault()` on the way past, which is the
+  exact mechanism the contract is about. It stays open, and 10.7's e2e leg is where it lands.
+
+Task 10.8 is left unticked for the same reason: the falsification table above covers three of the
+new tests, but 10.7's e2e tier does not exist yet and the close phase owns both together.

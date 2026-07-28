@@ -120,6 +120,20 @@
   --status-urgent: #cc5a40;
   --signal-sync: #3e8c63;
 
+  /* Syntax colours. Each is one of this preset's own hues — the in-review violet, the done green,
+     the in-progress amber, the accent, the text ramp — with its lightness moved until it clears
+     4.5:1 against this preset's `--bg-hover`, the code block's surface. `--code-type` is the string
+     hue rotated toward teal, because no preset palette carries a cool green of its own.
+     `--code-punctuation` IS the body ink: punctuation carries no meaning of its own, and colouring
+     it would be decoration. Every value is asserted by `styles/contrast.test.ts`. */
+  --code-keyword: #6259bf;
+  --code-string: #337452;
+  --code-number: #8d5e1a;
+  --code-comment: #6e665c;
+  --code-function: #a74c2f;
+  --code-type: #337174;
+  --code-punctuation: #2b2620;
+
   --type-ui: "Figtree Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --type-heading: "Figtree Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --type-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -161,6 +175,14 @@
   --status-done: #5b63d6;
   --status-urgent: #e2593f;
   --signal-sync: #3f9e7c;
+
+  --code-keyword: #5860d5;
+  --code-string: #307a5f;
+  --code-number: #8f6417;
+  --code-comment: #686d75;
+  --code-function: #9049d2;
+  --code-type: #367587;
+  --code-punctuation: #17181a;
 
   --type-ui:
     "Inter Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
@@ -206,6 +228,14 @@
   --status-urgent: #d9741c;
   --signal-sync: #2f9068;
 
+  --code-keyword: #6253de;
+  --code-string: #277756;
+  --code-number: #8e610f;
+  --code-comment: #6d695f;
+  --code-function: #c82f17;
+  --code-type: #2a7382;
+  --code-punctuation: #14130f;
+
   --type-ui: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --type-heading: "Fraunces Variable", Georgia, "Times New Roman", serif;
   --type-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -248,6 +278,14 @@
   --status-done: #59a57b;
   --status-urgent: #df6a4e;
   --signal-sync: #5eb489;
+
+  --code-keyword: #9089da;
+  --code-string: #59a57b;
+  --code-number: #e7ab44;
+  --code-comment: #948a7f;
+  --code-function: #e88e63;
+  --code-type: #59a3a5;
+  --code-punctuation: #f1ebe3;
 }
 
 /* Focused — dark. Colors only. */
@@ -276,6 +314,14 @@
   --status-done: #6e79f0;
   --status-urgent: #e2593f;
   --signal-sync: #3f9e7c;
+
+  --code-keyword: #6e79f0;
+  --code-string: #3f9e7c;
+  --code-number: #e0a63c;
+  --code-comment: #7e838c;
+  --code-function: #af6ef0;
+  --code-type: #408ca1;
+  --code-punctuation: #e9eaec;
 }
 
 /* Editorial — dark. Colors only. */
@@ -304,6 +350,14 @@
   --status-done: #4fae83;
   --status-urgent: #f0872e;
   --signal-sync: #4fae83;
+
+  --code-keyword: #9b8cf5;
+  --code-string: #4fae83;
+  --code-number: #e7a93a;
+  --code-comment: #86837a;
+  --code-function: #ff5a3c;
+  --code-type: #4fa2ae;
+  --code-punctuation: #f1efea;
 }
 
 /* shadcn/Base-UI contract aliases → semantic tokens. One rule, re-resolved per themed
@@ -339,6 +393,77 @@
   --chart-3: var(--status-done);
   --chart-4: var(--accent);
   --chart-5: var(--status-urgent);
+}
+
+/* highlight.js emits `hljs-*` class names and ships ~250 theme stylesheets of hardcoded hex to
+   colour them. NONE of them is loaded — a fixed palette cannot be correct in three presets across
+   light and dark, and the AA assertion in `styles/contrast.test.ts` would have nothing to check.
+   This is the whole of the mapping, and it maps to tokens only.
+
+   A class NOT in this list inherits `--text-1` from the block, so an unmapped grammar token renders
+   as plain code — never as invisible text on its own background, which is what a partial hardcoded
+   theme does. */
+.hljs-keyword,
+.hljs-literal,
+.hljs-selector-tag,
+.hljs-doctag,
+.hljs-name {
+  color: var(--code-keyword);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-char.escape_,
+.hljs-addition,
+.hljs-quote {
+  color: var(--code-string);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--code-number);
+}
+
+.hljs-comment,
+.hljs-meta,
+.hljs-deletion {
+  color: var(--code-comment);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-section,
+.hljs-built_in,
+.hljs-selector-id {
+  color: var(--code-function);
+}
+
+.hljs-type,
+.hljs-title.class_,
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-property,
+.hljs-selector-class,
+.hljs-params {
+  color: var(--code-type);
+}
+
+.hljs-punctuation,
+.hljs-operator,
+.hljs-tag {
+  color: var(--code-punctuation);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 600;
 }
 
 @layer base {

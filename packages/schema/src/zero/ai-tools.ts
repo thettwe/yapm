@@ -60,6 +60,7 @@ import {
   setPreferenceArgs,
   setRetroFacilitatorArgs,
   setRetroPhaseArgs,
+  setTeamAiRetroDraftArgs,
   setTeamAutoStatusArgs,
   startRetroTimerArgs,
   stopRetroTimerArgs,
@@ -117,6 +118,9 @@ const MUTATOR_TOOL_KINDS: Record<string, ToolKind> = {
   // Opting a team into status automation. A plain write: it is per-team, instantly reversible, and
   // its epoch means enabling it rewrites nothing that already happened.
   'team.setAutoStatus': 'write',
+  // Opting a team into AI retro drafting. A plain write for the same reasons: per-team, instantly
+  // reversible, and it drafts nothing until a facilitator advances a retro out of `brainstorm`.
+  'team.setAiRetroDraft': 'write',
   'team.addMember': 'write',
   'team.removeMember': 'destructive',
   'invite.create': 'write',
@@ -193,6 +197,7 @@ const MUTATOR_TOOL_ARGS: Record<string, z.ZodType> = {
   'team.rename': renameTeamArgs,
   'team.archive': archiveTeamArgs,
   'team.setAutoStatus': setTeamAutoStatusArgs,
+  'team.setAiRetroDraft': setTeamAiRetroDraftArgs,
   'team.addMember': addTeamMemberArgs,
   'team.removeMember': removeTeamMemberArgs,
   'invite.create': createInviteArgs,

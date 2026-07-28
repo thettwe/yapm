@@ -19,6 +19,7 @@ export default defineConfig({
             { label: 'Status automation', slug: 'features/auto-status' },
             { label: 'Cycle digest', slug: 'features/cycle-digest' },
             { label: 'Retrospectives', slug: 'features/retrospectives' },
+            { label: 'Retro AI draft', slug: 'features/retro-ai-draft' },
             { label: 'Notifications', slug: 'features/notifications' },
             { label: 'Mentions', slug: 'features/mentions' },
             { label: 'Images, tables & code', slug: 'features/rich-text' },

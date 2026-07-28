@@ -1,6 +1,7 @@
 import { sql } from 'kysely'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { createDatabase, type Database } from '../db/client.js'
+import { getWorkspaceAiSpendUsd } from '../db/cycle-digest.js'
 import { migrateToLatest } from '../db/migrate.js'
 import { newId } from '../id.js'
 import type { AuthContext, RetroPhase } from './context.js'
@@ -902,6 +903,128 @@ describe.skipIf(DATABASE_URL === undefined)('retro mutators against Postgres', (
       )
       expect(await countOf('retro', 'cycle_id', cycleId)).toBe(1)
       expect(await countOf('retro', 'id', second)).toBe(0)
+    })
+  })
+
+  // THE LAZY TRIGGER. Off by default: the advance an opted-out team makes is byte-identical to the
+  // one it made before this change existed.
+  describe('the AI draft is stamped at the reveal, and only for a team that opted in', () => {
+    async function setOptIn(since: number | null): Promise<void> {
+      await apply((tx) =>
+        mutators.team.setAiRetroDraft.fn({
+          tx,
+          args: { id: teamId, since, updatedAt: Date.now() },
+          ctx: ADMIN,
+        }),
+      )
+    }
+
+    it('writes no draft row at all when the team never opted in', async () => {
+      await setOptIn(null)
+      const cardsBefore = await countOf('retro_card', 'retro_id', retroId)
+
+      await moveTo('group')
+
+      expect(await countOf('retro_ai_draft', 'retro_id', retroId)).toBe(0)
+      expect(await countOf('retro_ai_proposal', 'retro_id', retroId)).toBe(0)
+      // The rest of the advance is untouched: the publish still ran.
+      expect(await countOf('retro_card', 'retro_id', retroId)).toBe(cardsBefore)
+    })
+
+    it('writes exactly one pending row when the team opted in', async () => {
+      await setOptIn(Date.now())
+
+      await moveTo('group')
+
+      const rows_ = await rows(
+        sql<{ status: string; claimed_at: Date | null }>`
+          select status, claimed_at from retro_ai_draft where retro_id = ${retroId}
+        `,
+      )
+      expect(rows_).toHaveLength(1)
+      expect(rows_[0]?.status).toBe('pending')
+      // The tail claims; the mutator never does.
+      expect(rows_[0]?.claimed_at).toBeNull()
+    })
+
+    // THE STEP BACK. Back in `brainstorm` everybody is writing cards again, and the requirement is
+    // that the artifact does not exist then — in the database or in anyone's replica — rather than
+    // being filtered out of view. So the reveal's row is deleted, its proposals cascade, and the
+    // money the finished run cost is carried onto the team first so the spend cap never forgets it.
+    it('deletes the draft and its proposals when a facilitator steps back to brainstorm', async () => {
+      await setOptIn(Date.now())
+      await sql`update team set ai_retired_spend_usd = 0 where id = ${teamId}`.execute(database.db)
+      await moveTo('group')
+      const draftId =
+        (
+          await rows(sql<{ id: string }>`select id from retro_ai_draft where retro_id = ${retroId}`)
+        )[0]?.id ?? ''
+      await sql`
+        update retro_ai_draft set status = 'ready', estimated_cost_usd = 0.25 where id = ${draftId}
+      `.execute(database.db)
+      await sql`
+        insert into retro_ai_proposal (id, draft_id, retro_id, team_id, category, summary, confidence, rank)
+        values (${newId()}, ${draftId}, ${retroId}, ${teamId}, 'win', 'Everything in scope shipped.', 'high', 0)
+      `.execute(database.db)
+
+      await moveTo('brainstorm')
+
+      expect(await countOf('retro_ai_draft', 'retro_id', retroId)).toBe(0)
+      expect(await countOf('retro_ai_proposal', 'retro_id', retroId)).toBe(0)
+      // The row is gone; the run's cost is not. A deleted artifact that took its cost with it would
+      // leave the cap under-firing on the team that just spent twice.
+      expect(await getWorkspaceAiSpendUsd(database.db, workspaceId)).toBeCloseTo(0.25)
+
+      // And the next reveal drafts again, from a fresh `pending` row rather than the old one.
+      await moveTo('group')
+      const after = await rows(
+        sql<{
+          id: string
+          status: string
+        }>`select id, status from retro_ai_draft where retro_id = ${retroId}`,
+      )
+      expect(after).toHaveLength(1)
+      expect(after[0]?.status).toBe('pending')
+      expect(after[0]?.id).not.toBe(draftId)
+    })
+
+    // One draft per retro, produced once: a reveal that finds a finished run leaves it alone. Resetting
+    // it to `pending` would NULL the provider, the token counts and the cost — erasing a real run from
+    // the workspace total — and buy a second provider call on somebody's BYO key.
+    it('leaves a finished draft exactly as it is rather than re-pending it', async () => {
+      await setOptIn(Date.now())
+      const draftId = newId()
+      await sql`
+        insert into retro_ai_draft (id, retro_id, team_id, status, provider, model, estimated_cost_usd)
+        values (${draftId}, ${retroId}, ${teamId}, 'ready', 'anthropic', 'test-model', 0.42)
+      `.execute(database.db)
+
+      await moveTo('group')
+
+      const after = await rows(
+        sql<{
+          id: string
+          status: string
+          provider: string | null
+          estimated_cost_usd: number | null
+        }>`
+          select id, status, provider, estimated_cost_usd from retro_ai_draft where retro_id = ${retroId}
+        `,
+      )
+      expect(after).toHaveLength(1)
+      expect(after[0]).toMatchObject({ id: draftId, status: 'ready', provider: 'anthropic' })
+      expect(Number(after[0]?.estimated_cost_usd)).toBeCloseTo(0.42)
+    })
+
+    it('does not stamp a draft on any other phase advance', async () => {
+      await setOptIn(Date.now())
+      await moveTo('group')
+      await sql`delete from retro_ai_draft where retro_id = ${retroId}`.execute(database.db)
+
+      await moveTo('vote')
+      await moveTo('discuss')
+
+      expect(await countOf('retro_ai_draft', 'retro_id', retroId)).toBe(0)
     })
   })
 })

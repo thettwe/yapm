@@ -530,6 +530,11 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
       'savedViews.byTeam': { teamId },
       'digests.byCycle': { cycleId: cycle1 },
       'digests.byTeam': { teamId },
+      // The two AI-draft queries, inside the proof by construction: the walk asserts covered ==
+      // registry, so a query this change added cannot escape it. Their rows carry NO identity
+      // dimension at all, which is why no `IDENTITY_BY_DESIGN` entry is needed for either.
+      'retroAiDrafts.byRetro': { retroId: anonymousRetroId },
+      'retroAiProposals.byRetro': { retroId: anonymousRetroId },
       'retros.byTeam': { teamId },
       'retros.detail': { id: anonymousRetroId },
       'retroDrafts.mine': { retroId: anonymousRetroId },

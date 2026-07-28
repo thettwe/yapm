@@ -40,16 +40,40 @@ absent means AI stays off.
 | `AI_OPENAI_API_KEY` | OpenAI dashboard | instance-default OpenAI key, or unset |
 | `AI_DEFAULT_PROVIDER` | `anthropic` \| `google` \| `openai` | which of the above is the instance default; enables AI without a DB config row |
 | `AI_DIGEST_ON_CYCLE_CLOSE` | `true` (default) \| `false` | gates the cycle-digest pre-compute job |
+| `AI_RETRO_DRAFT` | `true` (default) \| `false` | gates the [retro AI draft](/features/retro-ai-draft/) background pass |
 
 A per-workspace UI key wins over the instance-default env key for the same provider.
+
+The two feature gates are deliberately **independent**: a team may want one artifact and not the
+other, and both spend on the same key, so turning one off must never silently turn the other off.
+Setting `AI_RETRO_DRAFT=false` stops the background pass entirely. An opted-in team's reveal still
+stamps a pending row, and with nothing to complete it the retro shows its drafting line for a minute
+or two and then falls back to the team's own data panel — no error, and nothing stuck on screen. The
+rows are harmless and drain if you turn the pass back on. To make the capability wholly invisible for
+a team, turn that team off in *Settings → AI* instead.
+
+## What each AI feature costs you, and when
+
+Both features are per-workspace opt-in through a provider key, and each has a second switch of its
+own. Neither runs on an instance that has not configured AI.
+
+| Feature | Second switch | Runs when |
+|---|---|---|
+| [Cycle digest](/features/cycle-digest/) | none — on for every team once AI is on | a cycle closes, pre-computed off the hot path |
+| [Retro AI draft](/features/retro-ai-draft/) | **per team, off by default**, in *Settings → AI* | a facilitator advances a retro out of `brainstorm` |
+
+The retro draft's generation is **lazy** on purpose, and that is the spend model as much as it is the
+safety model: a cycle that closes into a retro nobody ever runs costs **nothing**, because nothing is
+generated until somebody reveals the board. There is no sweep over old retros and no backfill when you
+enable a team.
 
 ## Choosing a model
 
 Model IDs and prices change often, so yapm treats the model as **runtime configuration**, never a
 hardcoded list: in *Settings → AI* the model is a plain text field per provider. Enter a current
-model id from your provider (a cheap, fast model is a good default — the cycle digest is a bounded
-summarize-and-structure task, not a reasoning marathon). Pick a workspace **default provider** to
-choose which configured provider runs.
+model id from your provider (a cheap, fast model is a good default — both shipped features are
+bounded summarize-and-structure tasks, not reasoning marathons). Pick a workspace **default
+provider** to choose which configured provider runs.
 
 ## Product areas (optional)
 
@@ -115,6 +139,11 @@ clearly labeled "estimated." You can set an optional **spend cap** in *Settings 
 workspace's estimated spend reaches the cap, further runs are refused (they behave exactly like
 AI-off).
 
+The running total counts **every** AI artifact the workspace has produced — cycle digests and retro
+drafts alike — so the cap fires on your actual spend rather than on one feature's share of it. Each
+feature added to yapm joins that total; a cap that quietly under-fired because a new feature spent
+outside it would be the worst kind of cap to ship on somebody else's key.
+
 ## Privacy
 
 The BYO-key model means your work-graph data is sent only to **your** provider under **your** key —
@@ -125,6 +154,12 @@ cannot exfiltrate what it reads. **Your source code never reaches a provider:** 
 changed-file metadata to derive product-area labels and never reads a diff, and the labels — not the
 paths — are what the model is given.
 
+That holds even where the surface itself is sensitive. The [retro AI draft](/features/retro-ai-draft/)
+runs beside a board of anonymous cards and reads **none of them**: its fact assembly names seven
+work-graph tables and no retro content table, no comment table and no identity-bearing column, with a
+test asserting the set is exactly those seven. The roster of member names is loaded only *after* the
+model answers, and only to drop any output that names somebody.
+
 ## What "AI off" looks like
 
 Turn AI off (or leave it unconfigured, hit the spend cap, or have a provider outage) and nothing
@@ -133,5 +168,8 @@ breaks:
 - The [cycle digest](/features/cycle-digest/) shows its **raw linked-evidence** fallback — the
   cycle's shipped and carried issues with their linked PRs, CI/deploy status, and scope delta —
   instead of the AI narrative. Opening a cycle is never blocked on a model call.
+- The [retro AI draft](/features/retro-ai-draft/) section is simply **absent**, with no error and no
+  empty state. The retro's seeded data panel is its raw-evidence fallback, and it was there before
+  the AI was — so a retro on an AI-less instance is byte-identical to one built without the feature.
 - The AI settings screen stays available to admins so you can turn it back on at any time; enabling
   it takes effect without a restart.

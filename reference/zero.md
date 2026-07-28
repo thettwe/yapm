@@ -1855,6 +1855,29 @@ Source: <https://zero.rocicorp.dev/docs/zql>, `zql/src/query/query.d.ts` (1.8.0)
 >
 > Any other Postgres type is **silently dropped from replication** (column missing from synced data) with a warning at `zero-cache` startup. Workaround: add a Postgres trigger mapping it to a supported type (e.g. `polygon` → `json`).
 
+> **Replication ≠ sync, and the distinction is load-bearing.** A table or column that is absent from
+> `schema.ts` still lands in `zero-cache`'s SQLite replica: replication follows the Postgres
+> publication (`for tables in schema public` by default), and the *schema* decides only what is
+> served to a client. Verified on yapm's stack while applying `0018_retro_ai` — the initial-copy log
+> lists `retro_ai_draft.claimed_at`, a column deliberately omitted from `schema.ts`, and the same is
+> true of `retro_card_author`, a whole table the sync schema never names:
+>
+> ```
+> {"state":{"table":"retro_ai_draft","columns":[…,"claimed_at",…]},
+>  "message":"Computed initial download state for retro_ai_draft"}
+> ```
+>
+> So "absent from the Zero schema" is a **client-side** guarantee — no query can name it, so no
+> browser ever holds it — and *not* a claim that the bytes stay in Postgres alone. `zero-cache` is a
+> trusted component of the deployment, and any privacy promise written down has to say so. Two
+> practical consequences: an omitted column is a legitimate way to keep scheduling or moderation
+> state off clients, and a drift test should assert such an asymmetry deliberately rather than
+> tolerating any difference between Postgres and `schema.ts`.
+>
+> `jsonb` replicates normally, including on a table created while `zero-cache` is running: the
+> change-streamer applies the DDL live (one `ddlStart` per statement) and the column appears with
+> `upstreamType: "jsonb"` in the next initial copy.
+
 ### 9.2 `Query` interface (verbatim from 1.8.0 `.d.ts`)
 
 ```ts

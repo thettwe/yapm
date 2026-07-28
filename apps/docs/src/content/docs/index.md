@@ -31,6 +31,10 @@ runs as three containers you own.
 - [Retrospectives](/features/retrospectives/) — a retro that opens with your cycle's own delivery
   data already gathered, anonymity guaranteed at the storage layer, and actions that become real
   issues in the next cycle, at `/teams/<teamId>/retros`.
+- [Retro AI draft](/features/retro-ai-draft/) — opt in, per team, to have the AI draft up to three
+  wins, losses and improvements into a retro at the moment the board is revealed, each citing a
+  work-graph entity or one of yapm's own computed metrics. It reads no cards, no comments and
+  nobody's name, and nothing it drafts is agreed by the team.
 - [Notifications](/features/notifications/) — a keyboard-first per-user inbox at `/inbox` for
   assignments and comments on issues you are involved in, with an unread badge and optional batched
   email. No admin, of any role, can read your inbox. Turn mail on with

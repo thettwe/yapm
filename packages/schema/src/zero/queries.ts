@@ -214,6 +214,27 @@ export const queries = defineQueries({
       teamScoped(zql.cycle_digest.where('teamId', args.teamId).orderBy('generatedAt', 'desc'), ctx),
     ),
   },
+  retroAiDrafts: {
+    // The AI-drafted retro artifact: team-scoped and client-read-only, written server-side only.
+    // No phase filter, and none is needed — the row is created LAZILY at the `brainstorm → group`
+    // advance, so during `brainstorm` there is nothing to hide (design §D1). At most one per retro.
+    byRetro: defineQuery(z.object({ retroId: z.string() }), ({ args, ctx }) =>
+      teamScoped(zql.retro_ai_draft.where('retroId', args.retroId), ctx).one(),
+    ),
+  },
+  retroAiProposals: {
+    // Ordered by category then rank so the panel renders Wins/Losses/Improvements in a stable order
+    // without sorting client-side.
+    byRetro: defineQuery(z.object({ retroId: z.string() }), ({ args, ctx }) =>
+      teamScoped(
+        zql.retro_ai_proposal
+          .where('retroId', args.retroId)
+          .orderBy('category', 'asc')
+          .orderBy('rank', 'asc'),
+        ctx,
+      ),
+    ),
+  },
   retros: {
     // Team-scoped like every other work-data query. Viewers read; non-members get an empty result.
     byTeam: defineQuery(z.object({ teamId: z.string() }), ({ args, ctx }) =>
@@ -339,6 +360,8 @@ export const DEPLOYMENTS_BY_TEAM_QUERY_NAME = 'deployments.byTeam'
 export const SAVED_VIEWS_BY_TEAM_QUERY_NAME = 'savedViews.byTeam'
 export const DIGESTS_BY_CYCLE_QUERY_NAME = 'digests.byCycle'
 export const DIGESTS_BY_TEAM_QUERY_NAME = 'digests.byTeam'
+export const RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME = 'retroAiDrafts.byRetro'
+export const RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME = 'retroAiProposals.byRetro'
 export const RETROS_BY_TEAM_QUERY_NAME = 'retros.byTeam'
 export const RETRO_DETAIL_QUERY_NAME = 'retros.detail'
 export const RETRO_DRAFTS_MINE_QUERY_NAME = 'retroDrafts.mine'

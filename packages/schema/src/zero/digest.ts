@@ -1,4 +1,19 @@
 import * as z from 'zod'
+import {
+  type AiArtifact,
+  type AiArtifactGroup,
+  type AiArtifactItem,
+  aiArtifactNamesMember,
+  dropAiItemsNamingMembers,
+  dropUncitedAiItems,
+  type RosterMember,
+} from './ai-content.js'
+
+// The roster type and the needle builder now live with the shared walkers; re-exported here so no
+// call site moved and `digest.test.ts` passes unchanged — that unchanged pass is the regression
+// proof for the whole refactor.
+export type { RosterMember } from './ai-content.js'
+export { rosterNameNeedles } from './ai-content.js'
 
 // The substrate's TYPED structured-output contract + its deterministic validators. Pure — no SDK,
 // DB, or UI import. The gateway (`apps/server`) asks the model to emit exactly a `DigestContent`
@@ -75,106 +90,74 @@ export type DigestContent = z.infer<typeof digestContentSchema>
 export type DigestAreaCoverage = z.infer<typeof digestAreaCoverageSchema>
 export type StoredDigestContent = z.infer<typeof storedDigestContentSchema>
 
-// Cite-evidence-or-omit. Drops any item whose `evidenceRefs` is empty; when a `knownEvidenceIds`
-// set is supplied (the ids yapm computed for this cycle), each ref is first narrowed to that set so
-// a hallucinated/invented evidence id cannot survive, then the item is dropped if nothing real
-// remains. A section left with no items is removed. Deterministic and pure.
+// The `DigestContent ↔ AiArtifact` adapters. Each normalized node carries its `source` so the
+// digest-only fields (`kind`, `confidence`, the section `title`) survive a walk that knows nothing
+// about them — the walkers only ever spread and filter, never construct a node.
+interface DigestArtifactItem extends AiArtifactItem {
+  readonly source: DigestItem
+}
+
+interface DigestArtifactGroup extends AiArtifactGroup {
+  readonly source: DigestSection
+}
+
+function toArtifact(content: DigestContent): AiArtifact {
+  return {
+    headline: content.headline,
+    groups: content.sections.map(
+      (section): DigestArtifactGroup => ({
+        heading: section.title,
+        source: section,
+        items: section.items.map(
+          (item): DigestArtifactItem => ({
+            summary: item.summary,
+            refs: item.evidenceRefs,
+            source: item,
+          }),
+        ),
+      }),
+    ),
+  }
+}
+
+function fromArtifact(artifact: AiArtifact): DigestContent {
+  return {
+    headline: artifact.headline ?? '',
+    sections: artifact.groups.map((group) => {
+      const section = (group as DigestArtifactGroup).source
+      return {
+        ...section,
+        items: group.items.map((item) => ({
+          ...(item as DigestArtifactItem).source,
+          evidenceRefs: item.refs as readonly DigestEvidenceRef[] as DigestEvidenceRef[],
+        })),
+      }
+    }),
+  }
+}
+
+// Cite-evidence-or-omit, over the shared walker.
 export function dropUncitedItems(
   content: DigestContent,
   knownEvidenceIds?: ReadonlySet<string>,
 ): DigestContent {
-  const sections = content.sections
-    .map((section) => ({
-      ...section,
-      items: section.items
-        .map((item) =>
-          knownEvidenceIds
-            ? {
-                ...item,
-                evidenceRefs: item.evidenceRefs.filter((ref) => knownEvidenceIds.has(ref.id)),
-              }
-            : item,
-        )
-        .filter((item) => item.evidenceRefs.length > 0),
-    }))
-    .filter((section) => section.items.length > 0)
-  return { ...content, sections }
+  return fromArtifact(dropUncitedAiItems(toArtifact(content), knownEvidenceIds))
 }
 
-// A workspace member as the name-validator needs them: the display name and/or email. No other
-// field is consulted — the roster is the ONLY identity data anywhere near the pipeline (it never
-// reaches the model; it is the after-the-fact backstop).
-export interface RosterMember {
-  readonly name?: string | null
-  readonly email?: string | null
-}
-
-// The set of case-normalized needles a digest must not contain: each member's full display name
-// and their email local-part (handle). Kept to the exact roster strings (not fuzzy tokens) so
-// common first names in prose never trigger a false block, per the design's matching strategy.
-export function rosterNameNeedles(roster: readonly RosterMember[]): string[] {
-  const needles = new Set<string>()
-  for (const member of roster) {
-    const name = member.name?.trim().toLowerCase()
-    if (name && name.length >= 2) needles.add(name)
-    const email = member.email?.trim().toLowerCase()
-    if (email) {
-      const handle = email.split('@')[0]
-      if (handle && handle.length >= 3) needles.add(handle)
-    }
-  }
-  return [...needles]
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-// Match each needle on WORD BOUNDARIES, not raw substring: a member/handle like `ian` must flag
-// "Ian shipped X" but never false-block common words such as "median" or "guardian". This is the
-// "exact needle, never false-block on common words" behavior design.md decision 131 promises.
-function textNamesMember(text: string, needles: readonly string[]): boolean {
-  if (needles.length === 0) return false
-  return needles.some((needle) => new RegExp(`\\b${escapeRegExp(needle)}\\b`, 'i').test(text))
-}
-
-// The deterministic name-validator backstop: true when any headline/item text names a workspace
-// member. Even a fully injected model cannot name a person (the identity dimension is never in its
-// context), but this rejects the output before it is shown as defense in depth.
+// The deterministic name-validator backstop, over the shared walker.
 export function contentNamesMember(
   content: DigestContent,
   roster: readonly RosterMember[],
 ): boolean {
-  const needles = rosterNameNeedles(roster)
-  if (needles.length === 0) return false
-  if (textNamesMember(content.headline, needles)) return true
-  return content.sections.some(
-    (section) =>
-      textNamesMember(section.title, needles) ||
-      section.items.some((item) => textNamesMember(item.summary, needles)),
-  )
+  return aiArtifactNamesMember(toArtifact(content), roster)
 }
 
-// The applied backstop: drop any item that names a member (and blank the headline if it does), so a
-// single bad line never blocks the rest of an otherwise-clean digest. Sections emptied by the drop
-// are removed. Pure.
+// The applied backstop, over the shared walker.
 export function dropItemsNamingMembers(
   content: DigestContent,
   roster: readonly RosterMember[],
 ): DigestContent {
-  const needles = rosterNameNeedles(roster)
-  if (needles.length === 0) return content
-  const sections = content.sections
-    .filter((section) => !textNamesMember(section.title, needles))
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => !textNamesMember(item.summary, needles)),
-    }))
-    .filter((section) => section.items.length > 0)
-  return {
-    headline: textNamesMember(content.headline, needles) ? '' : content.headline,
-    sections,
-  }
+  return fromArtifact(dropAiItemsNamingMembers(toArtifact(content), roster))
 }
 
 // The DISCLOSURE validator — a structural sibling of the name validator above, and deliberately not

@@ -61,9 +61,9 @@ to fall back to. That is a spec delta owned by change 20 alone, not shared work.
 
 | # | Change | Migration | Est. files | Why here |
 |---|---|---|---|---|
-| 18 | `retro-ai-draft` | `0018_retro_ai` | ~22 | Additive to a live ceremony, permission boundary unchanged. Answers "is the draft worth reading?" cheaply. Owns the three shared refactors. |
-| 19 | `retro-ratification` | `0019_retro_ratification` | ~17 | Only worth building once 18's drafts are known to be worth ratifying. |
-| 20 | `pm-digest-boundary` | `0020_pm_digest` | ~22 | The first change in the repo whose output crosses a permission boundary. Ships the boundary while the content is provably harmless. |
+| 18 | `retro-ai-draft` | `0018_retro_ai` + `0019_ai_retired_spend` | ~22 | Additive to a live ceremony, permission boundary unchanged. Answers "is the draft worth reading?" cheaply. Owns the three shared refactors. |
+| 19 | `retro-ratification` | `0020_retro_ratification` | ~17 | Only worth building once 18's drafts are known to be worth ratifying. |
+| 20 | `pm-digest-boundary` | `0021_pm_digest` | ~22 | The first change in the repo whose output crosses a permission boundary. Ships the boundary while the content is provably harmless. |
 | 21 | `pm-digest-areas` | none | ~14 | The actual PM differentiator. Needs 20's boundary to exist first. |
 | 22 | `retro-ai-loop-close` | none | ~8 | Small; only compounds after two retros have run. Foldable into 18 only if 18 comes in light — it will not. |
 | 23 | `pm-digest-governance` | none | ~12 | Makes "governed" true rather than rhetorical. Must merge before any doc or marketing copy says "auditable" or "retention-bounded". |

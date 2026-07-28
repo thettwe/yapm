@@ -70,6 +70,79 @@ test('rule 3: the same imports outside packages/schema are allowed', () => {
   }
 })
 
+// Rule 4: the AI substrate's three single-definition guarantees. Each row is (label, source, the
+// file that legitimately owns it, a fragment of the expected message).
+const SINGLE_DEFINITION_VIOLATIONS = [
+  [
+    'a second needle builder',
+    'export function rosterNameNeedles(roster) {\n  return roster\n}\n',
+    'packages/schema/src/zero/ai-content.ts',
+    'a second `rosterNameNeedles`',
+  ],
+  [
+    'a second word-boundary name walker',
+    `const hit = new RegExp(\`\\\\b\${needle}\\\\b\`, "i").test(text)\n`,
+    'packages/schema/src/zero/ai-content.ts',
+    'a second word-boundary member-name walker',
+  ],
+  [
+    'a second spend accessor',
+    "const total = eb.fn.sum('cycle_digest.estimated_cost_usd')\n",
+    'packages/schema/src/db/cycle-digest.ts',
+    'a second `sum(estimated_cost_usd)`',
+  ],
+]
+
+for (const [label, source, owner, fragment] of SINGLE_DEFINITION_VIOLATIONS) {
+  test(`rule 4: ${label} elsewhere under packages/schema is a violation`, () => {
+    const found = messages(SCHEMA_FILE, source)
+
+    assert.equal(found.length, 1)
+    assert.ok(found[0].includes(fragment), found[0])
+  })
+
+  test(`rule 4: ${label} in the file that owns it is allowed`, () => {
+    assert.deepEqual(messages(owner, source), [])
+  })
+
+  test(`rule 4: ${label} outside packages/schema is not this rule's business`, () => {
+    assert.deepEqual(messages('apps/server/src/ai/digest.ts', source), [])
+  })
+}
+
+test('rule 4: re-exporting the needle builder is not a second definition', () => {
+  assert.deepEqual(
+    messages(SCHEMA_FILE, "export { rosterNameNeedles } from './ai-content.js'\n"),
+    [],
+  )
+})
+
+test('rule 5: the retro-AI server modules may not reach the agent loop', () => {
+  for (const file of ['apps/server/src/ai/retro-draft.ts', 'apps/server/src/jobs/retro-draft.ts']) {
+    const found = messages(file, "import { runAgent } from './agent.js'\n")
+
+    assert.equal(found.length, 1)
+    assert.match(found[0], /structured-output ONLY/)
+  }
+})
+
+test('rule 5: a comment saying the module never uses runAgent is not a violation', () => {
+  assert.deepEqual(
+    messages(
+      'apps/server/src/ai/retro-draft.ts',
+      '// Structured output ONLY: no ToolSet, no activeTools, never runAgent.\n',
+    ),
+    [],
+  )
+})
+
+test('rule 5: the cycle digest is not covered by the retro-AI agent ban', () => {
+  assert.deepEqual(
+    messages('apps/server/src/ai/digest.ts', "import { buildAgentTools } from './tools.js'\n"),
+    [],
+  )
+})
+
 test('a clean schema source produces no violation at all', () => {
   const clean = [
     "import { z } from 'zod'",

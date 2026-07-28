@@ -15,6 +15,14 @@ vi.mock('@/auth/use-membership', () => ({
   useMembership: () => ({ canManage: membership.canManage }),
 }))
 
+// The view also holds the synced retro-draft opt-in section, which reads teams through Zero. An
+// empty team list is the right stub here: this file is about the REST-backed area map, and no team
+// means that section has no row to draw beside it. `retro-ai-draft.test.tsx` owns its behavior.
+vi.mock('@rocicorp/zero/react', () => ({
+  useQuery: () => [[], { type: 'complete' }],
+  useZero: () => ({ mutate: vi.fn() }),
+}))
+
 import { AiSettingsView } from './ai-view'
 
 interface Recorded {

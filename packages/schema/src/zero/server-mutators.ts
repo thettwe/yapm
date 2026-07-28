@@ -6,6 +6,7 @@ import {
   type Transaction,
 } from '@rocicorp/zero'
 import { type Kysely, sql } from 'kysely'
+import { recordRetiredAiSpend } from '../db/cycle-digest.js'
 import {
   autoSubscribeMentioned,
   deleteSubscriptionsForMember,
@@ -20,6 +21,7 @@ import {
   recordNotifications,
 } from '../db/notification.js'
 import type { DB } from '../db/types.js'
+import { newId } from '../id.js'
 import type { AuthContext, NotificationKind, NotificationSubjectType } from './context.js'
 import { MutationError, MutationErrorCode } from './errors.js'
 import { addedMentionIds } from './mentions/diff.js'
@@ -49,6 +51,7 @@ import {
   commentRecipients,
   NOTIFICATION_RECIPIENT_CAP,
 } from './notifications/recipients.js'
+import { upsertRetroAiDraft } from './retro/ai-draft-writes.js'
 import {
   bumpRetroVoteTally,
   isRetroCardAuthor,
@@ -70,6 +73,15 @@ export {
 } from '../db/issue-subscription.js'
 export type { NotificationEvent } from '../db/notification.js'
 export { recordNotifications } from '../db/notification.js'
+// The retro AI artifact's server-only write path, reachable only from `@yapm/schema/server` for the
+// same reason the two above are: it is authoritative, it uses the shared Zero `Transaction`, and it
+// is never registered in the client `mutators` map.
+export type {
+  RetroAiDraftWrite,
+  RetroAiProposalWrite,
+  UpsertRetroAiDraftResult,
+} from './retro/ai-draft-writes.js'
+export { replaceRetroAiProposals, upsertRetroAiDraft } from './retro/ai-draft-writes.js'
 
 // Atomically claim the next per-team issue number. The row lock on `issue_sequence`
 // serializes concurrent creates within a team; different teams take different rows and never
@@ -164,6 +176,77 @@ async function publishRetroDrafts(
       authorId: draft.authorId,
     })
   }
+}
+
+// THE LAZY TRIGGER (design §D1). The AI draft is generated at the REVEAL, not at cycle close: during
+// `brainstorm` the row does not exist, so there is nothing for a participant to read before writing
+// their own cards and no phase filter to get wrong. This runs in the same transaction as the publish
+// above, immediately after it.
+//
+// Three steps, in this order:
+//   1. Read `team.ai_retro_draft_since`. NULL ⇒ RETURN HAVING WRITTEN NOTHING. The consent gate is
+//      checked first, so an opted-out team's transaction is byte-identical to what it was before
+//      this change.
+//   2. Upsert a `pending` `retro_ai_draft`.
+//   3. Nothing else. No enqueue, no `boss.send` — `packages/schema` has no pg-boss dependency and
+//      must not acquire one. A row IS the queue; a self-re-arming tail claims it.
+//
+// `newId()` is called HERE, at the call site, and is used only on insert (§D7). Safe because this
+// branch never runs on the client's optimistic pass, so there is no rebase to corrupt — the same
+// reasoning `upsertCycleDigest` established.
+//
+// ONE DRAFT PER RETRO, PRODUCED ONCE. An existing row is left EXACTLY as it is rather than upserted
+// back to `pending`: a re-run of this branch (a retried mutation, a facilitator who advanced twice)
+// would otherwise reset a finished run — NULLing its provider, model, token counts and
+// `estimated_cost_usd`, which erases a real cost from the workspace total the spend cap is checked
+// against and buys a second, unbudgeted provider call on somebody's BYO key. There is no regenerate
+// button in this release for the same reason; the only way to a second draft is the step back below,
+// which deletes the first one and carries its cost forward first.
+async function stampRetroAiDraft(
+  tx: Transaction,
+  retro: { id: string; teamId: string },
+  at: number,
+): Promise<void> {
+  const team = await serverDb(tx)
+    .selectFrom('team')
+    .select('ai_retro_draft_since')
+    .where('id', '=', retro.teamId)
+    .executeTakeFirst()
+  if (!team?.ai_retro_draft_since) return
+
+  const existing = (await tx.run(zql.retro_ai_draft.where('retroId', retro.id).one())) as
+    | { id: string }
+    | undefined
+  if (existing !== undefined) return
+
+  await upsertRetroAiDraft(tx, {
+    id: newId(),
+    teamId: retro.teamId,
+    retroId: retro.id,
+    status: 'pending',
+    now: at,
+  })
+}
+
+// THE REVERSE OF THE LAZY TRIGGER, and the other half of what makes design §D1's anchoring argument
+// true. Stepping back from `group` to `brainstorm` is a legal single step, and it puts every
+// participant back to writing cards — so the artifact must GO, not be hidden: the requirement is that
+// during `brainstorm` the rows do not exist, in the database and in every member's replica, and a
+// client-side or query-level phase filter is exactly what it forbids. The delete runs through the
+// shared transaction, so it replicates like any other write; `retro_ai_proposal.draft_id` cascades.
+//
+// The run's estimated cost is carried onto the team FIRST. The money was spent whether or not the
+// row survives, and `getWorkspaceAiSpendUsd` sums live rows — so deleting one would take its cost
+// back out of the total and the cap would under-fire on the very team that just spent twice.
+async function discardRetroAiDraft(tx: Transaction, retroId: string): Promise<void> {
+  const draft = (await tx.run(zql.retro_ai_draft.where('retroId', retroId).one())) as
+    | { id: string; teamId: string; status: string; estimatedCostUsd?: number | null }
+    | undefined
+  if (draft === undefined) return
+  if (draft.status === 'ready' && draft.estimatedCostUsd != null) {
+    await recordRetiredAiSpend(serverDb(tx), draft.teamId, draft.estimatedCostUsd)
+  }
+  await tx.mutate.retro_ai_draft.delete({ id: draft.id })
 }
 
 // Every case this leaves to the shared mutator (no caller, no card, no retro) is one the shared
@@ -721,17 +804,22 @@ export function createServerMutators() {
       // board arrives a sync tick later.
       setPhase: defineMutator(setRetroPhaseArgs, async ({ tx, args, ctx }) => {
         const before = (await tx.run(zql.retro.where('id', args.id).one())) as
-          | { id: string; phase: string; isAnonymous: boolean }
+          | { id: string; teamId: string; phase: string; isAnonymous: boolean }
           | undefined
         await mutators.retro.setPhase.fn({ tx, args, ctx })
         if (tx.location !== 'server') return
         if (before === undefined) return
+        if (before.phase === 'group' && args.to === 'brainstorm') {
+          await discardRetroAiDraft(tx, args.id)
+          return
+        }
         if (before.phase !== 'brainstorm' || args.to !== 'group') return
         await publishRetroDrafts(
           tx,
           { id: args.id, isAnonymous: before.isAnonymous },
           args.updatedAt,
         )
+        await stampRetroAiDraft(tx, { id: args.id, teamId: before.teamId }, args.updatedAt)
       }),
       // The timer's end is recomputed from the SERVER clock, which is authoritative, so a skewed
       // client cannot shift the moment every other client counts down to.

@@ -118,6 +118,17 @@ export function buildRetroSeedFor(
   })
 }
 
+// The lookup behind a cited metric key: an AI proposal points at a key and the surface renders THIS
+// metric — yapm's own value, computed here — rather than any number the model typed.
+export function findSeedMetric(seed: RetroSeed | null, key: string): RetroSeedMetric | null {
+  if (seed === null) return null
+  for (const section of seed.sections) {
+    const metric = section.metrics.find((candidate) => candidate.key === key)
+    if (metric !== undefined) return metric
+  }
+  return null
+}
+
 export function formatSeedValue(metric: RetroSeedMetric): string {
   switch (metric.unit) {
     case 'hours':

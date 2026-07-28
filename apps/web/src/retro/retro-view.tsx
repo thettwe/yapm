@@ -44,6 +44,7 @@ import {
   retroCan,
 } from '@/retro/model'
 import { RetroActions } from '@/retro/retro-actions'
+import { RetroAiPanel } from '@/retro/retro-ai-panel'
 import { RetroBoard } from '@/retro/retro-board'
 import { RetroCommandProvider, useRetroCommand } from '@/retro/retro-command'
 import { RetroSeedPanel, seedWidgetSelector } from '@/retro/retro-seed-panel'
@@ -255,6 +256,7 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
     <RetroShell
       teamId={teamId}
       teamKey={team.key}
+      aiRetroDraftSince={team.aiRetroDraftSince ?? null}
       retro={retro}
       columns={columns}
       cards={cards}
@@ -279,6 +281,9 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
 interface RetroShellProps {
   teamId: string
   teamKey: string
+  // Read off the synced team row, threaded down rather than re-queried, so the AI section is not
+  // mounted at all for a team that never opted in.
+  aiRetroDraftSince: number | null
   retro: RetroRowData
   columns: readonly RetroColumnData[]
   cards: readonly RetroCardData[]
@@ -414,6 +419,7 @@ interface RetroSurfaceProps extends RetroShellProps {
 function RetroSurface({
   teamId,
   teamKey,
+  aiRetroDraftSince,
   retro,
   columns,
   cards,
@@ -551,6 +557,18 @@ function RetroSurface({
     retro.timerEndsAt,
   ])
 
+  // One handler for both the action list's issue link and the AI draft's evidence chips.
+  const openIssue = useCallback(
+    (issueId: string) => {
+      void navigate({
+        to: '/teams/$teamId/issues',
+        params: { teamId },
+        search: { open: issueId },
+      })
+    },
+    [navigate, teamId],
+  )
+
   const seconds = countdownSeconds(retro.timerEndsAt, now)
   const live = livePresence(presence, now)
   const remaining = remainingVotes(retro.votesPerParticipant, votes)
@@ -628,6 +646,19 @@ function RetroSurface({
         onSeedCard={onSeedCard}
       />
 
+      {/* Beside the seed panel, never inside the board: the AI's categories are Wins/Losses/
+          Improvements and two of the four retro formats have no such columns. Draws nothing at all
+          unless a draft row exists and has something to say — only the empty live region that has to
+          predate the first thing it announces. */}
+      <RetroAiPanel
+        retroId={retro.id}
+        teamId={teamId}
+        aiRetroDraftSince={aiRetroDraftSince}
+        seed={seed}
+        onOpenIssue={openIssue}
+        onOpenMetric={onOpenEvidence}
+      />
+
       <div className="flex min-h-0 flex-1">
         <RetroBoard
           retro={retro}
@@ -674,13 +705,7 @@ function RetroSurface({
           onOpenComposer={onOpenActionComposer}
           onCloseComposer={onCloseActionComposer}
           api={api}
-          onOpenIssue={(issueId) => {
-            void navigate({
-              to: '/teams/$teamId/issues',
-              params: { teamId },
-              search: { open: issueId },
-            })
-          }}
+          onOpenIssue={openIssue}
         />
       </div>
     </div>

@@ -1,6 +1,5 @@
 import { type Kysely, sql } from 'kysely'
-
-const CYCLE_DIGEST_STATUS_CHECK = sql`status in ('pending', 'ready', 'failed', 'ai_off')`
+import { AI_ARTIFACT_STATUS_CHECK } from '../zero/context.js'
 
 // The team-scoped, Zero-synced cycle-digest artifact — the flagship consumer of the AI substrate.
 // One row per cycle (unique on `cycle_id`), written server-side only by the pre-compute job over
@@ -18,7 +17,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       col.notNull().references('cycle.id').onDelete('cascade'),
     )
     .addColumn('status', 'text', (col) =>
-      col.notNull().defaultTo('pending').check(CYCLE_DIGEST_STATUS_CHECK),
+      col.notNull().defaultTo('pending').check(sql.raw(AI_ARTIFACT_STATUS_CHECK)),
     )
     .addColumn('content', 'jsonb')
     .addColumn('provider', 'text')

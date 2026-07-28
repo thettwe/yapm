@@ -60,6 +60,46 @@ function inSchema(rel) {
   return rel.startsWith('packages/schema/')
 }
 
+// Rule 4, the AI-substrate single-definition rule (`SCOPE-ai-features.md` §1). Each of these three
+// exists EXACTLY ONCE under `packages/schema/src`, and a second copy is the failure mode the rule
+// exists to catch:
+//   - a second `rosterNameNeedles` or a second word-boundary member-name walker means the blameless
+//     guarantee is enforced in two places and drifts in one of them;
+//   - a second `sum('estimated_cost_usd')` means one of them will miss an artifact table, and a
+//     spend cap that misses a table under-fires silently on someone else's BYO key.
+// The check is a definition check, not a usage check: importing or re-exporting these is the point.
+const SINGLE_DEFINITION_RULES = [
+  {
+    // `export function rosterNameNeedles(` — a re-export (`export { rosterNameNeedles } from`) is
+    // deliberately not matched.
+    pattern: /\b(?:export\s+)?(?:async\s+)?function\s+rosterNameNeedles\b/,
+    owner: 'packages/schema/src/zero/ai-content.ts',
+    reason:
+      'a second `rosterNameNeedles`. The needle builder is defined ONCE, in packages/schema/src/zero/ai-content.ts — import it',
+  },
+  {
+    // The word-boundary name walker: a `new RegExp` with a `\b...\b` body. One implementation,
+    // beside the needles it consumes.
+    pattern: /new RegExp\(\s*[`'"]\\\\b/,
+    owner: 'packages/schema/src/zero/ai-content.ts',
+    reason:
+      'a second word-boundary member-name walker. There is ONE, in packages/schema/src/zero/ai-content.ts — adapt your artifact onto `AiArtifact` and reuse `dropAiItemsNamingMembers`',
+  },
+  {
+    pattern: /sum\(\s*['"][\w.]*estimated_cost_usd['"]\s*\)/,
+    owner: 'packages/schema/src/db/cycle-digest.ts',
+    reason:
+      'a second `sum(estimated_cost_usd)`. The workspace spend total is ONE accessor — `getWorkspaceAiSpendUsd` in packages/schema/src/db/cycle-digest.ts — and it must union EVERY AI artifact table, or a spend cap silently under-fires',
+  },
+]
+
+// Rule 5. The retro-AI server modules are structured-output only: `generateStructured`, no tools,
+// no agent loop. That is what makes "the worst case is a bad paragraph, never a bad action or a
+// leak" true for this shape, and it is a grep rather than a convention because an agent import is
+// one autocomplete away.
+const NO_AGENT_FILES = ['apps/server/src/ai/retro-draft.ts', 'apps/server/src/jobs/retro-draft.ts']
+const AGENT_SYMBOLS = ['buildAgentTools', 'runAgent']
+
 /**
  * @param rel POSIX-separated repo-relative path of the file.
  * @param source Its full text.
@@ -67,6 +107,36 @@ function inSchema(rel) {
  */
 export function findViolations(rel, source) {
   const violations = []
+
+  if (inSchema(rel)) {
+    for (const rule of SINGLE_DEFINITION_RULES) {
+      if (rel === rule.owner) continue
+      if (rule.pattern.test(source)) violations.push(`${rel}: ${rule.reason}`)
+    }
+  }
+
+  if (NO_AGENT_FILES.includes(rel)) {
+    // Imported, not merely mentioned: these files DOCUMENT that they never reach the agent loop, and
+    // a comment saying so must not fail the rule that enforces it. Every import form counts.
+    const imported = new Set(
+      [...source.matchAll(/(?:import|export)\s*(?:type\s*)?\{([^}]*)\}/g)].flatMap((match) =>
+        match[1].split(',').map((name) =>
+          name
+            .trim()
+            .replace(/^type\s+/, '')
+            .split(/\s+as\s+/)[0]
+            .trim(),
+        ),
+      ),
+    )
+    for (const symbol of AGENT_SYMBOLS) {
+      if (imported.has(symbol)) {
+        violations.push(
+          `${rel}: imports "${symbol}" — the retro AI draft is structured-output ONLY (no tools, no agent loop, no outbound egress)`,
+        )
+      }
+    }
+  }
 
   if (inPackages(rel)) {
     for (const app of APP_PACKAGES) {

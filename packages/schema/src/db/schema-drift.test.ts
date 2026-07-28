@@ -30,6 +30,8 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     key: { nullable: false, hasDefault: false },
     archived_at: { nullable: true, hasDefault: false },
     auto_status_since: { nullable: true, hasDefault: false },
+    ai_retro_draft_since: { nullable: true, hasDefault: false },
+    ai_retired_spend_usd: { nullable: false, hasDefault: true },
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },
@@ -368,6 +370,36 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     focus_target: { nullable: true, hasDefault: false },
     last_seen_at: { nullable: false, hasDefault: true },
   },
+  // The second AI artifact (change 18). Column types mirror `cycle_digest` exactly, plus
+  // `claimed_at` — the tail's claim stamp, present here and DELIBERATELY absent from the Zero
+  // schema (`ZERO_OMITTED_COLUMNS`, asserted below).
+  retro_ai_draft: {
+    id: { nullable: false, hasDefault: false },
+    retro_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    status: { nullable: false, hasDefault: true },
+    claimed_at: { nullable: true, hasDefault: false },
+    provider: { nullable: true, hasDefault: false },
+    model: { nullable: true, hasDefault: false },
+    input_token: { nullable: true, hasDefault: false },
+    output_token: { nullable: true, hasDefault: false },
+    estimated_cost_usd: { nullable: true, hasDefault: false },
+    generated_at: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  retro_ai_proposal: {
+    id: { nullable: false, hasDefault: false },
+    draft_id: { nullable: false, hasDefault: false },
+    retro_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    category: { nullable: false, hasDefault: false },
+    summary: { nullable: false, hasDefault: false },
+    confidence: { nullable: false, hasDefault: false },
+    refs: { nullable: false, hasDefault: true },
+    rank: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+  },
   // THE ANONYMITY BOUNDARY. Server-only: in the Kysely DB interface and the migrations, and
   // deliberately absent from the Zero schema (asserted below), so an anonymous card's author is
   // unreachable by any synced query rather than merely unselected.
@@ -463,6 +495,14 @@ async function createAuthUserTable(db: Kysely<DB>): Promise<void> {
     )
   `.execute(db)
 }
+
+// Columns that exist in Postgres and are DELIBERATELY absent from the Zero schema — an allowlisted
+// asymmetry, asserted below rather than tolerated. A column reaching this set is a decision, not an
+// oversight: `retro_ai_draft.claimed_at` is the tail's claim stamp, scheduling state rather than
+// artifact state, and syncing it would put job internals on every client; `team.ai_retired_spend_usd`
+// is billing accounting the spend cap reads server-side, and syncing it would push a team-row update
+// to every client every time a facilitator rewinds a retro.
+const ZERO_OMITTED_COLUMNS = new Set(['retro_ai_draft.claimed_at', 'team.ai_retired_spend_usd'])
 
 const DATABASE_URL = process.env.DATABASE_URL
 
@@ -653,9 +693,9 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
       }
 
       for (const column of actualColumns.keys()) {
-        if (!expected.has(column)) {
-          problems.push(`${name}.${column}: in database but not in the Zero schema`)
-        }
+        if (expected.has(column)) continue
+        if (ZERO_OMITTED_COLUMNS.has(`${name}.${column}`)) continue
+        problems.push(`${name}.${column}: in database but not in the Zero schema`)
       }
 
       const pk = pkByTable.get(name) ?? []
@@ -715,9 +755,50 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
   // `issue.last_human_status_at` because a default would fabricate human intent on rows nobody
   // touched. Both must be `timestamptz`, because the guard ladder compares them against event
   // instants; an integer column here would compare wrong rather than fail.
+  // The two new AI artifact tables, in BOTH directions and by name, because the whole change rests
+  // on them syncing: a table in Postgres but not the Zero schema renders nothing, and a table in the
+  // Zero schema but not Postgres fails the replica's initial copy at boot.
+  it.each(['retro_ai_draft', 'retro_ai_proposal'])(
+    'carries %s in Postgres and in the Zero schema',
+    (name) => {
+      expect(
+        tables.map((candidate) => candidate.name),
+        `${name} is missing from Postgres`,
+      ).toContain(name)
+      expect(
+        tableShapes().map((candidate) => candidate.serverName),
+        `${name} is missing from the Zero schema`,
+      ).toContain(name)
+    },
+  )
+
+  // The allowlisted asymmetry, asserted from both sides so neither half can drift silently: it is
+  // in Postgres (the claim statement needs it) and it is NOT in the Zero schema (job internals do
+  // not belong on a client). Merge-blocking in both directions.
+  it('keeps retro_ai_draft.claimed_at in Postgres and out of the Zero schema', () => {
+    const actual = tables.find((candidate) => candidate.name === 'retro_ai_draft')
+    const column = actual?.columns.find((candidate) => candidate.name === 'claimed_at')
+    expect(column, 'retro_ai_draft.claimed_at is missing from Postgres').toBeDefined()
+    expect(column?.dataType).toBe('timestamptz')
+    expect(column?.isNullable).toBe(true)
+
+    const shape = tableShapes().find((candidate) => candidate.serverName === 'retro_ai_draft')
+    expect(shape?.columns.map((candidate) => candidate.serverName)).not.toContain('claimed_at')
+    expect(ZERO_OMITTED_COLUMNS.has('retro_ai_draft.claimed_at')).toBe(true)
+  })
+
+  // And the other half of the anonymity boundary, re-asserted here because this change adds a NEW
+  // server-side read path near the retro: the card -> author binding still has no Zero table.
+  it('still keeps retro_card_author out of the Zero schema', () => {
+    expect(tableShapes().map((candidate) => candidate.serverName)).not.toContain(
+      'retro_card_author',
+    )
+  })
+
   it.each([
     ['team', 'auto_status_since'],
     ['issue', 'last_human_status_at'],
+    ['team', 'ai_retro_draft_since'],
   ])('carries %s.%s as a nullable timestamptz in Postgres', (table, column) => {
     const actual = tables.find((candidate) => candidate.name === table)
     const found = actual?.columns.find((candidate) => candidate.name === column)
@@ -733,6 +814,7 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
   it.each([
     ['team', 'auto_status_since'],
     ['issue', 'last_human_status_at'],
+    ['team', 'ai_retro_draft_since'],
   ])('exposes %s.%s through the Zero schema as an optional number', (table, column) => {
     const shape = tableShapes().find((candidate) => candidate.serverName === table)
     const found = shape?.columns.find((candidate) => candidate.serverName === column)

@@ -78,6 +78,23 @@ function over(value: string, surface: string): string {
   return `#${channel(0)}${channel(1)}${channel(2)}`
 }
 
+// A Tailwind `/nn` opacity wash: the token resolved against the surface it is painted on, then
+// painted at `alpha` over that same surface. The browser mixes in oklab and this mixes in sRGB, so
+// the number is an approximation of the composite — close enough to catch a token edit that breaks
+// AA, which is what this file is for.
+function wash(value: string, surface: string, alpha: number): string {
+  const opaque = over(value, surface).replace('#', '')
+  const base = surface.replace('#', '')
+  const channel = (index: number): string => {
+    const top = Number.parseInt(opaque.slice(index * 2, index * 2 + 2), 16)
+    const bottom = Number.parseInt(base.slice(index * 2, index * 2 + 2), 16)
+    return Math.round(top * alpha + bottom * (1 - alpha))
+      .toString(16)
+      .padStart(2, '0')
+  }
+  return `#${channel(0)}${channel(1)}${channel(2)}`
+}
+
 describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   const surfaces = ['--bg', '--bg-elevated', '--bg-sidebar'] as const
 
@@ -155,6 +172,21 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
       '--code-punctuation',
     ] as const) {
       expect(contrastRatio(hex(t, token), surface), token).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
+  // The retro panels — the seed panel and the AI draft beside it. Both sit on a 40% sidebar wash
+  // over the base surface, their proposal cards on the elevated surface, and their evidence chips on
+  // a 50% soft-accent wash over those cards. Every ink in both is `text-1` or `text-2`: the AI
+  // section's category label, its confidence note and its chips all step up to `text-2` rather than
+  // dimming to `text-3`, precisely so the whole surface lands inside this assertion.
+  it('the retro panel ink meets AA on the section wash and the chip wash (>= 4.5)', () => {
+    const section = wash(hex(t, '--bg-sidebar'), hex(t, '--bg'), 0.4)
+    const chip = wash(t['--accent-soft'] ?? '', hex(t, '--bg-elevated'), 0.5)
+    for (const surface of [section, hex(t, '--bg-elevated'), chip]) {
+      for (const ink of ['--text-1', '--text-2'] as const) {
+        expect(contrastRatio(hex(t, ink), surface), ink).toBeGreaterThanOrEqual(AA_NORMAL)
+      }
     }
   })
 

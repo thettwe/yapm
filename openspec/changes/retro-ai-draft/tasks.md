@@ -222,32 +222,35 @@ check (7) before any UI exists, so the behaviour is proven headless; the surface
 
 ## 8. The two surfaces
 
-- [ ] 8.1 Create `apps/web/src/retro/retro-ai-panel.tsx`: the section, its category groups, its
+- [x] 8.1 Create `apps/web/src/retro/retro-ai-panel.tsx`: the section, its category groups, its
       "AI-drafted, not agreed" line, the `pending` drafting state, and the evidence chips. A metric
       chip reads the **already-computed client seed** for its value and delta (never a number from
       the row) and on activation reveals the seed panel and focuses the tile via the shipped
       `seedWidgetSelector(metricKey)`. Existing `Badge`/`Button` only; no new component in
       `packages/ui`; every color and font from a token.
-- [ ] 8.2 Wire it into `apps/web/src/retro/retro-view.tsx` beside `RetroSeedPanel`, reading
+- [x] 8.2 Wire it into `apps/web/src/retro/retro-view.tsx` beside `RetroSeedPanel`, reading
       `queries.retroAiDrafts.byRetro` and `queries.retroAiProposals.byRetro`. Render nothing when the
       draft row is absent, `ai_off`, `failed`, or `ready` with zero proposals.
-- [ ] 8.3 Add a "Retro AI draft" per-team section to the admin AI settings surface: one row per team,
+- [x] 8.3 Add a "Retro AI draft" per-team section to the admin AI settings surface: one row per team,
       one keyboard-operable toggle each, driven by Zero (the team rows are already synced, so the
       toggle is optimistic and costs no round trip) and calling `team.setAiRetroDraft` with an
       instant minted at the call site. Mirror the auto-status section's shape.
-- [ ] 8.4 **Test (unit)** `apps/web/src/retro/retro-ai-panel.test.tsx`: nothing renders for an absent
+- [x] 8.4 **Test (unit)** `apps/web/src/retro/retro-ai-panel.test.tsx`: nothing renders for an absent
       row, `ai_off`, `failed` and an empty `ready`; the `pending` state renders one line; a ready
       draft renders its categories in order with the "not agreed" label present; a metric chip
       renders yapm's value from the seed and **not** any number carried on the proposal row; every
       chip is a `button` in DOM order.
-- [ ] 8.5 **Test (e2e)** `apps/web/e2e/retro-ai.spec.ts` against the real stack: with the team opted
+- [x] 8.5 **Test (e2e)** `apps/web/e2e/retro-ai.spec.ts` against the real stack: with the team opted
       out, advancing a retro to `group` produces no AI section and the retro is operable exactly as
       `retro.spec.ts` expects; with the team opted in and no provider configured, the advance still
       succeeds, the artifact resolves `ai_off`, nothing renders, and the browser console logs no
       error. Tab order from the seed panel through the (absent) section is unbroken. No provider key
-      is needed for either case, which is why this is an e2e rather than a mock.
-- [ ] 8.6 Verify the panel and the admin toggle in Warm, Focused and Editorial, light and dark, and
-      check AA contrast on the category chips and the "not agreed" label. Record the check.
+      is needed for either case, which is why this is an e2e rather than a mock. *(Written; executed
+      by the PR's CI Playwright job, not locally.)*
+- [x] 8.6 Verify the panel and the admin toggle in Warm, Focused and Editorial, light and dark, and
+      check AA contrast on the category chips and the "not agreed" label. Record the check. *(Recorded
+      in design.md as an assertion in `packages/ui/src/styles/contrast.test.ts` plus the measured
+      ratios for all six presets — see I15 and "The three-preset contrast check".)*
 
 ## Documentation
 

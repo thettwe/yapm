@@ -546,6 +546,68 @@ actually holds: `retroFactsForCycle` and the client panel both call `buildRetroS
 feeds `buildRetroSeed` the same rows by hand and asserts the metrics are identical. One definition,
 two callers — proven at the definition rather than across a boundary the boundary script forbids.
 
+### I11 — The panel renders no model-authored text except the summary
+
+Writing the surface turned up something the validator chain does not cover: `refs[].label` is
+model-authored and **nothing scrubs it**. `dropAiItemsNamingMembers` walks the headline, the group
+headings and the item summaries — not ref labels. So a label is the one place an injected member name
+could still reach a reader, past a chain designed to make that impossible.
+
+The panel therefore discards `ref.label` outright. It calls the shipped `resolveEvidence` with
+`{kind, id}` only, so the label falls back to yapm's own naming from the synced row (`#12`,
+`acme/app#7`), and a metric chip is labelled and valued from the client seed by key. A ref the client
+cannot name from its own rows resolves to `plain` and the chip is **dropped** rather than rendered as
+an inert word — every chip on screen is therefore both interactive and named by yapm.
+
+The shipped cycle-digest panel (change 9) does render `ref.label`. That is a pre-existing residual of
+the same shape, bounded by the same fact — the model's input carries no identity dimension, so a name
+in a label has to have been injected through an issue or PR title first. It is recorded here rather
+than fixed, because reshaping a shipped surface in a UI-only pass of a different change is how an
+unrelated regression gets in. **The retro panel's own answer is structural: no model text but the
+summary, which the validator does cover.**
+
+### I12 — An external evidence chip is an `<a>`, not a `<button>`
+
+Task 8.4 asks that every chip be "a `button` in DOM order". A PR or CI-check chip navigates to an
+external URL, and the shipped digest panel renders exactly that as an anchor — middle-click, copy-link
+and the screen-reader "link" role all follow from the element, not from a handler. Making it a button
+that calls `window.open` would trade all of that for element uniformity.
+
+So the assertion is narrowed and stated: **every chip is a real focusable control in `refs` order, and
+every in-app chip (issue, metric) is a `button`.** The spec's requirement — "every proposal's evidence
+references SHALL be activatable", and the keyboard scenario, which names the issue and metric
+references — is met either way.
+
+### I13 — Only non-empty categories render, and `pending` makes no claim
+
+Two small calls the specs leave open:
+
+- A category with no surviving proposal renders **no heading at all**, rather than an empty "Losses".
+  The seed panel's empty states and the digest fallback both establish that this codebase does not draw
+  a hollow container; a validator dropping every loss is not a finding about losses.
+- The `pending` state renders the section heading and the one drafting line, but **not** the
+  "AI-drafted, not agreed" label. Nothing is drafted yet, so there is nothing yet to disclaim; the
+  label appears with the content it is about.
+
+### I14 — The panel reads its own queries, including `issues.byTeam`
+
+`retro-view.tsx` already syncs `queries.issues.byTeam` for the seed, and the panel needs those rows to
+name an entity chip. It re-reads the same query rather than taking the rows down two prop layers:
+Zero serves it out of the same local view, so there is no new sync surface and no round trip, and the
+panel stays testable against three query names instead of a widening prop bag. This follows
+`CycleDigestPanel`, which reads `queries.deployments.byTeam` itself for the same reason.
+
+The one thing threaded in as a prop is the **seed**, deliberately: a cited metric must resolve to the
+identical object the panel above is rendering, and passing it guarantees that rather than hoping two
+`useMemo`s agree.
+
+### I15 — Both confidence levels are `text-2`
+
+The digest panel dims "medium confidence" to `text-3`. At 11px that is below AA on the washed section
+surface, and a note the reader cannot read is not a note. Both levels are `text-2` here and the
+distinction is carried by the words. Same reasoning as D-16 (retro-board): the quiet signal is the
+wording, never a colour that has to be squinted at.
+
 ### The falsifiable check, run (task 7.2)
 
 ```
@@ -594,3 +656,57 @@ $ node --test scripts/lib/boundaries.test.mjs
 ```
 
 `digest.test.ts` passes **unchanged** — the regression proof for the D4.1 refactor (task 1.3).
+
+### The three-preset contrast check, recorded (task 8.6)
+
+Recorded as an **assertion rather than a claim**: `packages/ui/src/styles/contrast.test.ts` gained a
+case for the two surfaces this section actually paints on, so a future token edit that breaks it fails
+CI instead of being noticed by a reader. The section is a 40% `--bg-sidebar` wash over `--bg`, each
+proposal card is `--bg-elevated`, and each evidence chip is a 50% `--accent-soft` wash over the card.
+Every ink in the section is `--text-1` or `--text-2` — the category badge, the confidence note and the
+chips all sit at `text-2` rather than dimming to `text-3` (I15), precisely so the whole surface lands
+inside one assertion. The measured ratios, all six presets:
+
+| Preset | section wash · text-1 / text-2 | card · text-1 / text-2 | chip wash · text-1 / text-2 |
+|---|---|---|---|
+| warm light | 13.43 / 5.30 | 14.99 / 5.92 | 13.67 / 5.40 |
+| warm dark | 15.45 / 6.93 | 13.91 / 6.24 | 12.51 / 5.61 |
+| focused light | 17.47 / 5.93 | 17.77 / 6.03 | 16.65 / 5.65 |
+| focused dark | 16.26 / 7.28 | 14.74 / 6.60 | 13.44 / 6.02 |
+| editorial light | 17.67 / 5.29 | 18.59 / 5.56 | 17.33 / 5.19 |
+| editorial dark | 17.02 / 6.76 | 15.73 / 6.25 | 14.52 / 5.77 |
+
+Worst case 5.19 against a 4.5 bar. The blend is computed in sRGB while the browser mixes in oklab, so
+each number is an approximation of the composite — the margin is what makes that acceptable, and it is
+stated rather than glossed. `--accent-line` and `--border` carry chip and card edges and are *not*
+asserted at 3:1: neither is the sole carrier of anything, since each chip is also a wash and a label,
+and each card also has an opaque surface.
+
+Fast gates after the surfaces pass (group 8), all green:
+
+```
+$ pnpm turbo run typecheck '--filter=...[origin/main]'
+ Tasks:    6 successful, 6 total
+
+$ pnpm lint
+$ biome ci .
+Checked 524 files in 135ms. No fixes applied.
+
+$ pnpm turbo run test '--filter=...[origin/main]'
+ Tasks:    6 successful, 6 total
+@yapm/web:test   Test Files  34 passed (34)   Tests  317 passed (317)
+@yapm/ui:test    Test Files  11 passed (11)   Tests  234 passed (234)
+
+$ node scripts/check-boundaries.mjs
+Boundaries OK: …
+$ node --test scripts/lib/boundaries.test.mjs
+ℹ pass 27  ℹ fail 0
+```
+
+Web grew by 18 tests: 12 in `retro-ai-panel.test.tsx` and 6 in `retro-ai-draft.test.tsx`. Playwright,
+the full build and the compose smoke test were **not** run in this pass — the PR's CI owns them.
+
+The e2e preset matrix that a `ready` draft would need is **not** in `retro-ai.spec.ts`, because
+neither e2e case has a provider and so neither can produce a rendered proposal — asserting the theme
+matrix against a section that is correctly absent would assert nothing. The rendered surface's palette
+is pinned by the contrast case above and its structure by `retro-ai-panel.test.tsx`.

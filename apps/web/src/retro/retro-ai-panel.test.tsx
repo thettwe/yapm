@@ -1,0 +1,272 @@
+import { fireEvent, render, screen } from '@testing-library/react'
+import {
+  RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME,
+  RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME,
+  type RetroSeed,
+} from '@yapm/schema'
+import { beforeEach, expect, test, vi } from 'vitest'
+import type { RetroAiDraftRow, RetroAiProposalRow } from '@/retro/retro-ai-panel'
+
+// The two artifact queries plus the issue query the panel resolves entity chips against, keyed by
+// wire name — a `.one()` query hands back a row, the others an array, exactly as zero-cache does.
+const harness = vi.hoisted(() => ({
+  rows: {} as Record<string, unknown>,
+}))
+
+vi.mock('@rocicorp/zero/react', () => ({
+  useQuery: (request: unknown) => {
+    const name = (request as { query: { queryName: string } }).query.queryName
+    return [harness.rows[name] ?? [], { type: 'complete' }]
+  },
+}))
+
+import { RetroAiPanel } from '@/retro/retro-ai-panel'
+
+const ISSUES_QUERY = 'issues.byTeam'
+
+// One metric, with a value and a delta yapm computed. `999` never appears here — it appears only on
+// the proposal row's ref label, which is model-authored text this surface must not display.
+const SEED: RetroSeed = {
+  cycleId: 'cycle-1',
+  cycleName: 'Sprint 7',
+  sections: [
+    {
+      key: 'flow',
+      title: 'Flow',
+      state: 'ready',
+      metrics: [
+        {
+          key: 'time_to_first_review',
+          label: 'Time to first review',
+          value: 9,
+          unit: 'hours',
+          trend: [7, 9],
+          delta: 2,
+          betterWhen: 'lower',
+          caption: 'Reviews started later than last cycle.',
+        },
+      ],
+    },
+  ],
+}
+
+const ISSUE = {
+  id: 'issue-1',
+  number: 12,
+  title: 'Fix the reconnect loop',
+  status: 'done',
+  issueLinks: [
+    {
+      pullRequest: {
+        id: 'pr-1',
+        number: 7,
+        state: 'merged',
+        url: 'https://github.com/acme/app/pull/7',
+        repo: 'acme/app',
+        ciChecks: [],
+      },
+    },
+  ],
+}
+
+function proposal(overrides: Partial<RetroAiProposalRow> = {}): RetroAiProposalRow {
+  return {
+    id: 'proposal-1',
+    category: 'win',
+    summary: 'Work merged faster once reviews started sooner.',
+    confidence: 'high',
+    refs: [{ kind: 'issue', id: 'issue-1' }],
+    rank: 0,
+    ...overrides,
+  }
+}
+
+function mount(
+  draft: RetroAiDraftRow | undefined,
+  proposals: readonly RetroAiProposalRow[],
+  handlers: { onOpenIssue?: (id: string) => void; onOpenMetric?: (ref: unknown) => void } = {},
+) {
+  harness.rows = {
+    [RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME]: draft,
+    [RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME]: proposals,
+    [ISSUES_QUERY]: [ISSUE],
+  }
+  return render(
+    <RetroAiPanel
+      retroId="retro-1"
+      teamId="team-1"
+      seed={SEED}
+      onOpenIssue={handlers.onOpenIssue ?? (() => {})}
+      onOpenMetric={handlers.onOpenMetric ?? (() => {})}
+    />,
+  )
+}
+
+beforeEach(() => {
+  harness.rows = {}
+})
+
+// The absence cases are the substrate's requirement, not a nicety: the change-10 seed panel is the
+// raw-evidence fallback and it is already on screen, so a banner about a failed run would be noise
+// about a feature the team may not know it has.
+test('nothing renders when there is no draft row at all', () => {
+  mount(undefined, [])
+  expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+})
+
+test.each(['ai_off', 'failed'] as const)('nothing renders for a %s draft', (status) => {
+  mount({ status }, [proposal()])
+  expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+})
+
+test('nothing renders for a ready draft whose proposals were all dropped', () => {
+  mount({ status: 'ready' }, [])
+  expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+})
+
+test('pending renders one quiet line and claims nothing', () => {
+  mount({ status: 'pending' }, [])
+
+  const pending = screen.getByTestId('retro-ai-pending')
+  expect(pending.textContent).toContain('Drafting')
+  expect(screen.queryAllByTestId('retro-ai-proposal')).toHaveLength(0)
+  // Nothing is drafted yet, so there is nothing to disclaim yet.
+  expect(screen.queryByTestId('retro-ai-unratified')).toBeNull()
+})
+
+// The stored order is `category` (alphabetical) then `rank`; the reader wants Wins, Losses,
+// Improvements. The panel imposes that order rather than inheriting the query's.
+test('a ready draft renders its categories in canonical order, labelled as unratified', () => {
+  mount({ status: 'ready' }, [
+    proposal({ id: 'i-1', category: 'improvement', summary: 'Start reviews earlier.' }),
+    proposal({ id: 'l-1', category: 'loss', summary: 'Two issues carried a second time.' }),
+    proposal({ id: 'w-1', category: 'win', summary: 'Everything in scope shipped.' }),
+  ])
+
+  const groups = screen.getAllByTestId('retro-ai-category')
+  expect(groups.map((group) => group.dataset.category)).toEqual(['win', 'loss', 'improvement'])
+  expect(groups.map((group) => group.querySelector('h3')?.textContent)).toEqual([
+    'Wins',
+    'Losses',
+    'Improvements',
+  ])
+
+  const label = screen.getByTestId('retro-ai-unratified')
+  expect(label.textContent).toContain('AI-drafted, not agreed')
+})
+
+test('proposals within a category follow rank, not insertion order', () => {
+  mount({ status: 'ready' }, [
+    proposal({ id: 'w-2', rank: 1, summary: 'Second win.' }),
+    proposal({ id: 'w-1', rank: 0, summary: 'First win.' }),
+  ])
+
+  expect(screen.getAllByTestId('retro-ai-proposal').map((row) => row.textContent)).toEqual([
+    expect.stringContaining('First win.'),
+    expect.stringContaining('Second win.'),
+  ])
+})
+
+// The load-bearing one. The model points at a metric KEY; the number and the delta come from the
+// client seed. A number the model typed into the ref label is never displayed.
+test('a metric chip renders the seed value and delta, never the number on the row', () => {
+  mount({ status: 'ready' }, [
+    proposal({
+      refs: [
+        { kind: 'widget', id: 'time_to_first_review', label: 'review wait 999h, up 500h' },
+        { kind: 'issue', id: 'issue-1', label: 'Dana was slow' },
+      ],
+    }),
+  ])
+
+  const chip = screen.getByTestId('retro-ai-evidence-metric')
+  expect(chip.textContent).toContain('Time to first review')
+  expect(chip.textContent).toContain('9h')
+  expect(chip.textContent).toContain('+2h vs. last cycle')
+
+  const panel = screen.getByTestId('retro-ai-panel')
+  expect(panel.textContent).not.toContain('999')
+  expect(panel.textContent).not.toContain('500')
+  // The other half of the same rule: an entity chip is named from the synced row, so a model-authored
+  // label — which no validator scrubs — cannot reach the reader either.
+  expect(panel.textContent).not.toContain('Dana')
+  expect(screen.getByTestId('retro-ai-evidence-issue').textContent).toBe('#12')
+})
+
+test('every evidence chip is a focusable control, in the order the proposal cites them', () => {
+  mount({ status: 'ready' }, [
+    proposal({
+      refs: [
+        { kind: 'issue', id: 'issue-1' },
+        { kind: 'widget', id: 'time_to_first_review' },
+        { kind: 'pull_request', id: 'pr-1' },
+      ],
+    }),
+  ])
+
+  const row = screen.getByTestId('retro-ai-proposal')
+  const chips = [...row.querySelectorAll('button, a')]
+  expect(chips.map((chip) => chip.getAttribute('data-testid'))).toEqual([
+    'retro-ai-evidence-issue',
+    'retro-ai-evidence-metric',
+    'retro-ai-evidence-external',
+  ])
+  for (const chip of chips) expect(chip).not.toHaveAttribute('tabindex', '-1')
+
+  const first = chips[0] as HTMLElement
+  first.focus()
+  expect(first).toHaveFocus()
+})
+
+test('a reference the client cannot name from its own rows renders no chip', () => {
+  mount({ status: 'ready' }, [
+    proposal({
+      refs: [
+        { kind: 'issue', id: 'issue-not-synced', label: 'trust me' },
+        { kind: 'widget', id: 'metric-that-does-not-exist' },
+        { kind: 'issue', id: 'issue-1' },
+      ],
+    }),
+  ])
+
+  const row = screen.getByTestId('retro-ai-proposal')
+  expect([...row.querySelectorAll('button, a')]).toHaveLength(1)
+  expect(row.textContent).not.toContain('trust me')
+})
+
+test('activating a chip opens the entity or reveals the metric tile', () => {
+  const onOpenIssue = vi.fn()
+  const onOpenMetric = vi.fn()
+  mount(
+    { status: 'ready' },
+    [
+      proposal({
+        refs: [
+          { kind: 'issue', id: 'issue-1' },
+          { kind: 'widget', id: 'time_to_first_review' },
+        ],
+      }),
+    ],
+    { onOpenIssue, onOpenMetric },
+  )
+
+  fireEvent.click(screen.getByTestId('retro-ai-evidence-issue'))
+  expect(onOpenIssue).toHaveBeenCalledWith('issue-1')
+
+  fireEvent.click(screen.getByTestId('retro-ai-evidence-metric'))
+  expect(onOpenMetric).toHaveBeenCalledWith({
+    kind: 'widget',
+    id: 'time_to_first_review',
+    label: 'Time to first review',
+  })
+})
+
+// Team-level only, all the way to the DOM: there is no identity dimension on a proposal row, so
+// there is nothing per-person to render — asserted rather than assumed.
+test('no avatar, no image and no per-person attribution anywhere in the section', () => {
+  mount({ status: 'ready' }, [proposal(), proposal({ id: 'w-2', rank: 1, category: 'loss' })])
+
+  const panel = screen.getByTestId('retro-ai-panel')
+  expect(panel.querySelector('img')).toBeNull()
+  expect(panel.textContent).not.toMatch(/\bby\s+\w+@/i)
+})

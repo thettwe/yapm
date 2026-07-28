@@ -176,6 +176,28 @@ export async function seedCycleDigest(
     .execute()
 }
 
+// The AI retro artifact, read straight from Postgres. The row is written by the phase-advance
+// mutator and completed by the background tail, so a spec that wants to see the resolved state has
+// to read the source of truth rather than the DOM — the whole point of the `ai_off` case is that the
+// DOM shows nothing either way.
+export async function readRetroAiDraft(
+  db: Database,
+  retroId: string,
+): Promise<{ status: string; proposals: number } | null> {
+  const draft = await db.db
+    .selectFrom('retro_ai_draft')
+    .select(['id', 'status'])
+    .where('retro_id', '=', retroId)
+    .executeTakeFirst()
+  if (draft === undefined) return null
+  const proposals = await db.db
+    .selectFrom('retro_ai_proposal')
+    .select(({ fn }) => fn.countAll<string>().as('count'))
+    .where('retro_id', '=', retroId)
+    .executeTakeFirstOrThrow()
+  return { status: draft.status, proposals: Number(proposals.count) }
+}
+
 // A TipTap document holding one paragraph, which is the shape both `issue.description` and
 // `comment.body` carry on the wire.
 function richTextDoc(text: string): string {

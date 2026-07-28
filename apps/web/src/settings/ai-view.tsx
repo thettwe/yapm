@@ -1,7 +1,10 @@
+import { useQuery, useZero } from '@rocicorp/zero/react'
 import {
   AI_PROVIDERS,
   type AiProvider,
   type AreaRule,
+  mutators,
+  queries,
   RESERVED_AREA_MESSAGE,
   UNMAPPED_AREA,
 } from '@yapm/schema'
@@ -20,6 +23,7 @@ import {
 } from 'lucide-react'
 import { type FormEvent, useCallback, useEffect, useId, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
+import { runMutation } from '@/lib/mutation'
 import {
   type AiStatusResponse,
   fetchAiConfig,
@@ -92,7 +96,137 @@ function AiSettingsAdmin() {
           {error}
         </p>
       ) : null}
+
+      <RetroDraftSection />
     </section>
+  )
+}
+
+// Which teams let a model draft into their retrospective. Unlike the card above — REST because the
+// provider config is server-only — this is a synced Zero column, so the toggle is an optimistic
+// shared-mutator write with no round trip, and it renders whether or not the REST call succeeded.
+// Deliberately the same shape as the connectors page's status-automation section: same authority
+// gate, same call-site instant, same live-region announcement.
+function RetroDraftSection() {
+  const [teams] = useQuery(queries.teams.all())
+  const headingId = useId()
+  const [announcement, setAnnouncement] = useState('')
+  const [error, setError] = useState<string | undefined>(undefined)
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="flex flex-col gap-3 rounded-card border border-border p-4"
+      data-testid="retro-ai-draft-settings"
+    >
+      <header className="flex flex-col gap-1">
+        <h2 id={headingId} className="font-heading text-base font-semibold text-text-1">
+          Retro AI draft
+        </h2>
+        <p className="text-sm text-text-2">
+          Off for every team until you turn it on here. For a team with this on, advancing a retro
+          out of brainstorm asks the model to draft up to three wins, three losses and three
+          improvements from that cycle's work graph. It reads no cards, no comments and nobody's
+          name; every figure it points at is yapm's own; and nothing it drafts is agreed by the
+          team. Turning it on drafts nothing into a retro that has already moved on.
+        </p>
+      </header>
+
+      <p
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        data-testid="retro-ai-draft-announcement"
+      >
+        {announcement}
+      </p>
+
+      {error !== undefined ? (
+        <p className="text-sm text-status-urgent" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {teams.length === 0 ? (
+        <p className="text-[12.5px] text-text-2" data-testid="retro-ai-draft-empty">
+          No teams yet. Create a team to choose whether a model drafts into its retrospectives.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {teams.map((team) => (
+            <RetroDraftRow
+              key={team.id}
+              id={team.id}
+              name={team.name}
+              teamKey={team.key}
+              since={team.aiRetroDraftSince ?? null}
+              onAnnounce={setAnnouncement}
+              onError={setError}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function RetroDraftRow({
+  id,
+  name,
+  teamKey,
+  since,
+  onAnnounce,
+  onError,
+}: {
+  id: string
+  name: string
+  teamKey: string
+  since: number | null
+  onAnnounce: (message: string) => void
+  onError: (message: string | undefined) => void
+}) {
+  const zero = useZero()
+  const enabled = since !== null
+
+  async function toggle() {
+    onError(undefined)
+    // Minted here, at the call site: a `Date.now()` inside the mutator body would differ between the
+    // optimistic pass and every rebase.
+    const now = Date.now()
+    const write = zero.mutate(
+      mutators.team.setAiRetroDraft({ id, since: enabled ? null : now, updatedAt: now }),
+    )
+    onAnnounce(`Retro AI draft ${enabled ? 'disabled' : 'enabled'} for ${name}.`)
+    const failure = await runMutation(write)
+    if (failure !== undefined) {
+      onAnnounce('')
+      onError(failure)
+    }
+  }
+
+  return (
+    <li
+      className="flex flex-wrap items-center gap-3 rounded-control border border-border p-3"
+      data-testid="retro-ai-draft-row"
+      data-team-key={teamKey}
+    >
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm font-medium text-text-1">{name}</span>
+        <span className="text-xs text-text-2">{enabled ? 'On' : 'Off'}</span>
+      </div>
+      <Button
+        size="sm"
+        variant={enabled ? 'outline' : 'default'}
+        onClick={toggle}
+        aria-label={`${enabled ? 'Disable' : 'Enable'} the retro AI draft for ${name}, currently ${
+          enabled ? 'on' : 'off'
+        }`}
+        data-testid="retro-ai-draft-toggle"
+        data-enabled={enabled ? 'true' : 'false'}
+      >
+        {enabled ? 'Disable' : 'Enable'}
+      </Button>
+    </li>
   )
 }
 

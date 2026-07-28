@@ -16,7 +16,8 @@ const harness = vi.hoisted(() => ({
 vi.mock('@rocicorp/zero/react', () => ({
   useQuery: (request: unknown) => {
     const name = (request as { query: { queryName: string } }).query.queryName
-    return [harness.rows[name] ?? [], { type: 'complete' }]
+    // A missing `.one()` row is `undefined`, not `[]` — the absence case has to be the real absence.
+    return [name in harness.rows ? harness.rows[name] : [], { type: 'complete' }]
   },
 }))
 

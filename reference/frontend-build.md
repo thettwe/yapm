@@ -1773,12 +1773,13 @@ and `LEFTHOOK=0 git commit …` to bypass.
 
 ---
 
-## 11. TipTap 3.28 — editor, mention extension, suggestion plugin
+## 11. TipTap 3.28 — editor, mention, suggestion, markdown, image/table/code-block
 
-Added 2026-07-25 while building `mentions`. Every claim below was read from the **installed**
-`.d.ts` under `node_modules/.pnpm/` after `pnpm install`, or observed at runtime in a real browser —
-not from the published docs and not from memory. TipTap v3's API differs from v2 in exactly the
-places an agent is most likely to guess.
+Added 2026-07-25 while building `mentions`; §11.6 added by `editor-markdown`, §11.7–11.8 by
+`editor-rich-content`. Every claim below was read from the **installed** `.d.ts` under
+`node_modules/.pnpm/` after `pnpm install`, or observed at runtime in a real browser — not from the
+published docs and not from memory. TipTap v3's API differs from v2 in exactly the places an agent is
+most likely to guess.
 
 ### 11.1 Pin the whole graph to one exact version
 
@@ -2016,6 +2017,79 @@ baked into a manager instance and one lazily-built manager serves every call.
 ⚠️ **`parse('')` returns `{type:'doc'}`** — not a valid document for a schema whose `doc` requires
 `block+`. Substitute a document holding one empty paragraph.
 
+### 11.7 Image, table and code-block extensions — read from the installed `.d.ts`
+
+Everything here was read out of `node_modules` at 3.28.0, not recalled. Four packages, all at the
+same exact pin as the rest of the graph (§11.1), and **`@tiptap/extension-code-block` is declared in
+`packages/ui/package.json` even though StarterKit already bundles a code block**: `-code-block-lowlight`
+peer-requires it exactly and imports it at runtime, so under pnpm's strict layout an undeclared peer
+resolves inside starter-kit's own `node_modules` — a second `prosemirror-model`, and a throw at
+runtime that typecheck, lint and `vite build` all pass.
+
+| Package | Exports | Option shapes that are not what you would guess |
+|---|---|---|
+| `@tiptap/extension-image` | `Image` (default + named), `ImageOptions`, `SetImageOptions`, `inputRegex` | Default attributes are `src`/`alt`/`title`/`width`/`height` and `parseHTML` is `img[src]`. The resize option is **`resize`**, not `resizable`, and it is an object-or-`false` defaulting to `false`. Ships `parseMarkdown`/`renderMarkdown` that read `attrs.src` |
+| `@tiptap/extension-table` | **Both** the four individual extensions — `Table`, `TableRow`, `TableHeader`, `TableCell` — **and** a `TableKit` bundle. Also `renderTableToMarkdown`, `escapeTableCellPipes`, `preprocessTablePipes`, `createTable`, `TableView`, `DEFAULT_CELL_LINE_SEPARATOR` | The resizing option is **`resizable: boolean`**, already defaulting to `false`. `goToNextCell` / `goToPreviousCell` are real commands and are the Tab bindings the extension ships |
+| `@tiptap/extension-code-block` | `CodeBlock`, `CodeBlockOptions` | Its `renderMarkdown` hard-codes three backticks — the defect §11.6 corrects |
+| `@tiptap/extension-code-block-lowlight` | `CodeBlockLowlight`, `CodeBlockLowlightOptions` | The lowlight option is plainly **`lowlight`** (typed `any`), alongside `defaultLanguage` |
+
+🚩 **`@tiptap/extension-table` already ships markdown in both directions**, which is easy to miss and
+expensive to re-implement: `renderMarkdown` → `renderTableToMarkdown`, a `parseMarkdown` that builds
+`tableRow`/`tableHeader`/`tableCell`, and a `markdownTokenizer` registering GFM table parsing with
+`marked`. yapm **corrects** it rather than replacing it, on the public `NodeConfig` field:
+
+- a `|` typed as prose splits the cell — `escapeTableCellPipes` only escapes inside backtick code
+  spans, so `a | b` emits `| a | b |` and re-parses one column wider. Wrap the `helpers` object so
+  `renderChildren` escapes pipes in what it returns, and walk backslash pairs rather than using a
+  regex (the text encoder has already escaped backslashes; `\\` must not gain a third);
+- a multi-block cell emits **U+001F**. `DEFAULT_CELL_LINE_SEPARATOR` is the unit separator and the
+  renderer's own `collapseWhitespace` is `/\s+/`, which does not match it. Pass `cellLineSeparator: ' '`.
+
+**`Gapcursor` is in this StarterKit** (from `@tiptap/extensions`, added unless `gapcursor: false`),
+verified in `starter-kit/dist/index.js` — the arrow-key exit from a table depends on it.
+
+**The curated grammar set is fifteen plus plain text**, registered explicitly on a `createLowlight()`
+instance: `bash`, `css`, `diff`, `dockerfile`, `go`, `javascript`, `json`, `markdown`, `plaintext`,
+`python`, `rust`, `sql`, `typescript`, `xml`, `yaml`. **Not `lowlight.common`** — that is ~37
+grammars and would dominate the client bundle for languages a small dev team does not paste.
+
+🚩 **Reach `lowlight` through an adapter, never the raw instance.** `LowlightPlugin` decides whether
+to highlight with `lowlight.listLanguages().includes(language)` — *registered names, not aliases* —
+or `highlight.getLanguage(language)` against the **global** `highlight.js/lib/core` singleton, which
+`createLowlight()`'s private instance never populates (verified: `core.getLanguage('typescript')` is
+`false` after registering it on the instance). So a ` ```ts ` block fails both gates and falls
+through to `highlightAuto` — a detection pass per keystroke. The adapter answers for the accepted
+alias set and refuses to throw, since `lowlight.highlight` throws on an unknown name and a document
+is user-controlled input. Set `defaultLanguage: 'plaintext'` for the same reason: without it every
+unlabelled block runs `highlightAuto` on every transaction.
+
+### 11.8 Schema skew: the deployed bundle versions the schema, not the database
+
+The hazard, stated once because it is not recoverable after the fact: **TipTap drops node and mark
+types it does not declare when it parses a document.** A tab still running the previous build has no
+`image` or `table` node type, so the description it loads is already pruned by the time it renders —
+and the first keystroke autosaves the pruned version over the real one. LWW makes it the truth.
+Nothing errors, nothing is logged, and no review catches content that disappeared in somebody's
+browser two weeks earlier. Two tabs open across a deploy is enough.
+
+yapm's answer is to **refuse the write**, not to reconcile:
+
+- `packages/schema/src/rich-text/schema-version.ts` — `RICH_TEXT_SCHEMA_VERSION`, a pure
+  `detectRichTextSkew(doc, { knownNodeTypes, knownMarkTypes })` walking the **raw stored JSON**
+  before any parse, and no imports at all, so the server can reach it without an editor.
+- The known-type sets are **derived** — `Object.keys(getSchema(createRichTextExtensions()).nodes)`
+  and `.marks` — never hand-listed, so a node added to the editor is covered without a second edit.
+- The stamp is written by **`sanitizeRichText`**, the one funnel every description and comment
+  mutator already runs through, on both the optimistic and the authoritative pass. It is pure and
+  mints nothing, so rebase never visibly rewrites the user's text. The `doc` node deliberately
+  declares **no** `schemaVersion` attribute — an editor strips it on load and `getJSON()` never emits
+  it, which is what stops the stamp from itself being a schema change an older bundle would prune.
+- Blocked is **structural**: `RichTextEditor` branches before an editor exists and renders a
+  read-only surface plus a banner, so `onChange`/`onSubmit` cannot fire because nothing is wired.
+
+⚠️ **The guard cannot cover its own deploy.** A tab running the build *before* it shipped has none of
+this code and will still prune. That window is one deploy wide and closes permanently after it.
+
 ---
 
 ## 12. Source URLs
@@ -2051,5 +2125,9 @@ baked into a manager instance and one lazily-built manager serves every call.
 - lefthook configuration — <https://lefthook.dev/configuration/index.html>
 - lefthook commitlint example — <https://github.com/evilmartians/lefthook/blob/master/docs/examples/commitlint.md>
 - TipTap mention extension — <https://tiptap.dev/docs/editor/extensions/nodes/mention>
+- TipTap image extension — <https://tiptap.dev/docs/editor/extensions/nodes/image>
+- TipTap table extension — <https://tiptap.dev/docs/editor/extensions/nodes/table>
+- TipTap code-block-lowlight — <https://tiptap.dev/docs/editor/extensions/nodes/code-block-lowlight>
+- lowlight — <https://github.com/wooorm/lowlight>
 - TipTap suggestion utility — <https://tiptap.dev/docs/editor/api/utilities/suggestion>
 - prosemirror-view `captureKeyDown` — <https://github.com/ProseMirror/prosemirror-view/blob/master/src/capturekeys.ts>

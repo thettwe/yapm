@@ -1,5 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@yapm/ui/components/avatar'
 import type { MentionCandidate } from '@yapm/ui/lib/mention-match'
+import { nextRovingIndex } from '@yapm/ui/lib/roving-index'
 import { cn } from '@yapm/ui/lib/utils'
 
 // Shown when the application marks somebody ineligible but supplies no reason of its own. A
@@ -11,26 +12,9 @@ export function mentionOptionId(listboxId: string, index: number): string {
   return `${listboxId}-option-${index}`
 }
 
-/**
- * The movement half of the keyboard contract, kept pure so the popup's owner can call it from a
- * ProseMirror `handleKeyDown` — which must answer synchronously — and so a test can assert it
- * without a DOM. Returns `null` for a key this list does not own, which the caller reads as "not
- * ours, let the editor have it".
- */
+/** The shared roving-index helper under this list's own name; see `lib/roving-index.ts`. */
 export function nextMentionIndex(key: string, current: number, count: number): number | null {
-  if (count === 0) return null
-  switch (key) {
-    case 'ArrowDown':
-      return (current + 1) % count
-    case 'ArrowUp':
-      return (current - 1 + count) % count
-    case 'Home':
-      return 0
-    case 'End':
-      return count - 1
-    default:
-      return null
-  }
+  return nextRovingIndex(key, current, count)
 }
 
 export function mentionEmptyStateText(query: string): string {
@@ -143,8 +127,11 @@ export function MentionList({
               // text-1/text-2: `--accent-strong` over `--accent-soft` measures ~3.9 in three of
               // the six presets, and the row a screen reader calls selected is the one a sighted
               // reader most needs to read. Asserted in `styles/contrast.test.ts`.
+              // An ineligible row drops one ink step, the same one `SlashList` uses, so the two
+              // popups say "unavailable" the same way.
               className={cn(
-                'flex cursor-default items-center gap-2 border-l-2 px-2 py-1.5 text-[13px] text-text-1 select-none',
+                'flex cursor-default items-center gap-2 border-l-2 px-2 py-1.5 text-[13px] select-none',
+                item.eligible ? 'text-text-1' : 'text-text-2',
                 active ? 'border-accent-strong bg-accent-soft' : 'border-transparent',
               )}
               // The caret has to stay put: a mousedown inside the popup would blur the editor and

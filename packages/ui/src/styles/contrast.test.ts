@@ -137,6 +137,27 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     }
   })
 
+  // The syntax palette. `--bg-hover` is the code block's surface, and several presets define it as
+  // a wash, so the comparison is against the composited colour rather than the declared one.
+  //
+  // `--code-comment` is in this list on purpose: it is where every syntax theme in the world fails
+  // AA, because "dim" is how a comment is conventionally distinguished, and dim is the one thing
+  // WCAG will not have. It is distinguished here by hue and by the `.hljs-emphasis` italic instead.
+  it('every syntax token meets AA on the code-block surface (>= 4.5)', () => {
+    const surface = over(t['--bg-hover'] ?? '', hex(t, '--bg'))
+    for (const token of [
+      '--code-keyword',
+      '--code-string',
+      '--code-number',
+      '--code-comment',
+      '--code-function',
+      '--code-type',
+      '--code-punctuation',
+    ] as const) {
+      expect(contrastRatio(hex(t, token), surface), token).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
   it('on-accent text on the accent fill meets AA (>= 4.5)', () => {
     expect(contrastRatio(hex(t, '--on-accent'), hex(t, '--accent'))).toBeGreaterThanOrEqual(
       AA_NORMAL,

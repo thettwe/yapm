@@ -1,6 +1,7 @@
 import { mustGetMutator, type Transaction } from '@rocicorp/zero'
 import { describe, expect, it } from 'vitest'
 import { newId } from '../id.js'
+import { RICH_TEXT_SCHEMA_VERSION } from '../rich-text/schema-version.js'
 import { type AuthContext, SYSTEM_AUTH_CONTEXT } from './context.js'
 import { MutationErrorCode, mutationErrorCode } from './errors.js'
 import { mutators } from './mutators.js'
@@ -14,6 +15,9 @@ const NON_MEMBER: AuthContext = { userID: 'user-outsider', role: null }
 const TEAM_ID = '019f8f00-0000-7000-8000-0000000000aa'
 const OTHER_TEAM_ID = '019f8f00-0000-7000-8000-0000000000bb'
 const DOC = { type: 'doc', content: [] }
+// What `sanitizeRichText` stores: the same document plus the schema-version stamp that lets a client
+// tell a document written by a NEWER bundle from one it can safely save over.
+const STORED_DOC = { type: 'doc', attrs: { schemaVersion: RICH_TEXT_SCHEMA_VERSION }, content: [] }
 
 interface RecordedCall {
   table: string
@@ -377,7 +381,7 @@ describe('comment mutators', () => {
           issueId,
           teamId: TEAM_ID,
           authorId: MEMBER.userID,
-          body: DOC,
+          body: STORED_DOC,
           createdAt: 5,
           updatedAt: 5,
         },

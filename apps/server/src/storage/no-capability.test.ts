@@ -35,12 +35,23 @@ const CAPABILITY_WORDS = [
   'getUrl',
 ]
 
-// Where change 17 will add the TipTap image node. The guard is in place BEFORE the code it guards
-// exists, which is the only time it is cheap.
+// Where the image node ACTUALLY lives, now that change 17 has written it. `packages/ui/src/editor`
+// — the directory this list was planted with — was never created, so the whole client-side image
+// implementation went unscanned and the rule below passed over nothing at all. Named after the
+// directories, not the files, so a second editor module is covered the day it is added.
 const RICH_TEXT_DIRS = [
   join(repoRoot, 'packages/schema/src/rich-text'),
-  join(repoRoot, 'packages/ui/src/editor'),
+  join(repoRoot, 'packages/ui/src/components'),
+  join(repoRoot, 'packages/ui/src/lib'),
+  join(repoRoot, 'apps/web/src/issues/attachments'),
 ]
+
+// A test and a Storybook story are not shipped source, and both have to be able to NAME the thing
+// they assert the absence of — see rule (a), which has excluded `.test.ts` since `attachments` §I6
+// for exactly this reason. The invariant is about what a synced document can carry.
+function isShippedSource(file: string): boolean {
+  return !/\.(test|stories)\.tsx?$/.test(file)
+}
 
 function typescriptFilesIn(dir: string): string[] {
   if (!existsSync(dir)) return []
@@ -85,7 +96,7 @@ describe('the storage seam can never mint a capability (task 8.1)', () => {
   // produced has to name the thing it is asserting the absence of, and this file is the extreme
   // case of that. The invariant is about what the server can do, not about what its tests can say.
   it('names no presigning symbol anywhere in shipped storage source', () => {
-    const files = typescriptFilesIn(STORAGE_DIR).filter((file) => !/\.test\.tsx?$/.test(file))
+    const files = typescriptFilesIn(STORAGE_DIR).filter(isShippedSource)
     // A guard over an empty directory is a guard that proves nothing.
     expect(files.length).toBeGreaterThanOrEqual(6)
 
@@ -104,9 +115,19 @@ describe('the storage seam can never mint a capability (task 8.1)', () => {
   // (c) No stored image node may carry an absolute URL — because a URL in a synced document is the
   // capability-at-rest this whole design refuses. The renderer computes `/api/v1/files/<id>` from
   // an opaque id; there is nothing to store but the id.
-  it('puts no http(s) URL in a rich-text or editor attribute, before change 17 writes the node', () => {
-    const files = RICH_TEXT_DIRS.flatMap(typescriptFilesIn)
-    // These directories are allowed not to exist yet; when they do, they are scanned.
+  it('puts no http(s) URL in a rich-text or editor attribute', () => {
+    // A guard over a directory that does not exist is a guard that proves nothing — which is what
+    // this rule was until the paths above were corrected. Asserted PER DIRECTORY: an aggregate
+    // floor is cleared by whichever directory happens to be largest, so three of the four could go
+    // stale without it tripping. This names the path that went stale, and never has to be revised
+    // when a component is added or removed.
+    for (const dir of RICH_TEXT_DIRS) {
+      const scanned = typescriptFilesIn(dir).filter(isShippedSource)
+      expect(scanned.length, relative(repoRoot, dir)).toBeGreaterThan(0)
+    }
+
+    const files = RICH_TEXT_DIRS.flatMap(typescriptFilesIn).filter(isShippedSource)
+
     const offenders = files
       .map((file) => ({
         file: relative(repoRoot, file),

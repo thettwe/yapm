@@ -38,6 +38,9 @@ runs as three containers you own.
 - [Mentions](/features/mentions/) — type `@` in a description or comment to pull a teammate in,
   from a list that opens instantly and offline, tells you when a name cannot be reached, and
   subscribes the person you named to the issue — reversibly, from the issue itself.
+- [Images, tables & code](/features/rich-text/) — press `/` for an insert menu of blocks, upload an
+  image straight into a description, build a table you can Tab through, and write code blocks
+  highlighted in your own theme. Every file an issue holds is listed in one Files section.
 - [Markdown](/features/markdown/) — type markdown to format, paste markdown in, and copy markdown
   out that reads correctly in a terminal or a chat message. Rich text stays the storage format; an
   in-app copy/paste stays lossless.

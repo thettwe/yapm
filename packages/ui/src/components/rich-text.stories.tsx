@@ -127,3 +127,103 @@ export function MentionsReadOnly() {
     </PresetGrid>
   )
 }
+
+// A document naming a node type this bundle does not declare — what a tab left open across a deploy
+// loads. TipTap has already pruned the unknown node by the time this renders, so the editor refuses
+// to exist at all: one keystroke in an editable surface would autosave the pruned document over the
+// real one, and LWW would make it the truth.
+const skewed: JSONContent = {
+  type: 'doc',
+  content: [
+    {
+      type: 'paragraph',
+      content: [{ type: 'text', text: 'The steps to reproduce are in the table below.' }],
+    },
+    {
+      type: 'callout',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Gone.' }] }],
+    },
+  ],
+}
+
+export function BlockedBySchemaSkew() {
+  return (
+    <PresetGrid>
+      <RichTextEditor ariaLabel="Description" defaultValue={skewed} minHeight="6rem" />
+    </PresetGrid>
+  )
+}
+
+export function BlockedBySchemaSkewReadOnly() {
+  return (
+    <PresetGrid>
+      <RichTextRenderer value={skewed} />
+    </PresetGrid>
+  )
+}
+
+// Every surface the tokenized CSS added: table borders and header wash, the code block's surface
+// and its `--code-*` syntax palette, and the image node's bordered placeholder. Rendered across all
+// six presets, which is the only way to see that no hardcoded colour crept in — `highlight.js`
+// ships ~250 theme stylesheets of hex and NONE of them is loaded.
+const richContent: JSONContent = {
+  type: 'doc',
+  content: [
+    {
+      type: 'table',
+      content: [
+        {
+          type: 'tableRow',
+          content: [
+            {
+              type: 'tableHeader',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Environment' }] }],
+            },
+            {
+              type: 'tableHeader',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Reproduced' }] }],
+            },
+          ],
+        },
+        {
+          type: 'tableRow',
+          content: [
+            {
+              type: 'tableCell',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'production' }] }],
+            },
+            {
+              type: 'tableCell',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'every time' }] }],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      type: 'codeBlock',
+      attrs: { language: 'typescript' },
+      content: [
+        {
+          type: 'text',
+          text: '// retries forever\nexport async function reconnect(socket: Socket): Promise<number> {\n  const attempts = 3\n  return socket.open() ? attempts : 0\n}',
+        },
+      ],
+    },
+    {
+      type: 'image',
+      attrs: {
+        attachmentId: '019702c7-0000-7000-8000-000000000001',
+        alt: 'The stalled sync badge',
+      },
+    },
+  ],
+}
+
+export function TablesCodeAndImages() {
+  return (
+    <PresetGrid>
+      <RichTextEditor ariaLabel="Description" defaultValue={richContent} minHeight="6rem" />
+    </PresetGrid>
+  )
+}

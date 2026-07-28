@@ -73,6 +73,22 @@ a wrong key means `/readyz` never goes green — deliberately, so the failure su
 rather than at somebody's first paste. If you run the server outside the container, set
 `STORAGE_LOCAL_DIR` to a path your user can write.
 
+## Where users meet this
+
+Two surfaces, both shipped and both using only the routes below — no second upload path, no second
+permission check:
+
+- **The editor.** `/image` in the [insert menu](/features/rich-text/), a pasted screenshot, or a
+  dropped image file uploads and then places an image in the description or comment. Nothing enters
+  the document until the bytes are stored, so a failed upload cannot leave a document naming a file
+  that does not exist.
+- **The Files section** on every issue, listing everything attached to it — including images the
+  editor uploaded, because a file is a row and the image in the text only names it. It accepts any
+  file type, not only images.
+
+Nothing on this page changes because those exist. The variables, the limits, the sweep and the
+backup story below are exactly as they were.
+
 ## Uploading and serving
 
 Uploads go to `POST /api/v1/files` as `multipart/form-data` — one file per request, with the owning
@@ -142,7 +158,8 @@ with access to the owning team.** There is no link you can paste into a public b
 ## The orphan sweep
 
 Somebody pastes an image into a comment and then closes the tab. The bytes were uploaded; the comment
-never existed. Nothing links them, and without a sweep they would accumulate forever.
+never existed. Nothing links them, and without a sweep they would accumulate forever. That is now a
+path a real person can walk rather than a hypothetical, and the sweep that handles it is unchanged.
 
 A nightly job on `ATTACHMENT_GC_CRON` (default `23 4 * * *`) collects every attachment that has
 **neither an issue nor a comment** and was created more than `ATTACHMENT_ORPHAN_GRACE_HOURS` ago

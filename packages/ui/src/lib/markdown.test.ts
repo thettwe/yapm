@@ -565,3 +565,128 @@ test('underline under a mark markdown CAN carry keeps the portable half', () => 
 test('no trailing newline survives serialisation', () => {
   expect(richTextToMarkdown(doc(paragraph('one'), paragraph('two')))).toBe('one\n\ntwo')
 })
+
+// ── The node types `editor-rich-content` adds ───────────────────────────────────────────────────
+
+const RESOLVE_SRC = (id: string) => `/api/v1/files/${id}`
+
+function cell(text: string, type: 'tableCell' | 'tableHeader' = 'tableCell'): JSONContent {
+  return { type, content: [paragraph(text)] }
+}
+
+function row(...cells: JSONContent[]): JSONContent {
+  return { type: 'tableRow', content: cells }
+}
+
+test('a table emits a GFM pipe table and comes back a table', () => {
+  const source = doc(
+    {
+      type: 'table',
+      content: [
+        row(cell('Env', 'tableHeader'), cell('Status', 'tableHeader')),
+        row(cell('prod'), cell('1002 open')),
+      ],
+    },
+    paragraph('after'),
+  )
+
+  const markdown = richTextToMarkdown(source)
+  expect(markdown).toContain('| Env')
+  expect(markdown).toContain('| ---')
+  expect(markdown).toContain('| prod')
+  expect(roundTrip(source)).toEqual(normalize(source))
+})
+
+// 3.28.0's `renderTableToMarkdown` escapes pipes only inside backtick code spans, so a pipe typed as
+// prose in a cell silently becomes a column boundary and the table comes back a column wider.
+test('a pipe inside a cell is escaped and does not split the cell', () => {
+  const source = doc({
+    type: 'table',
+    content: [
+      row(cell('A', 'tableHeader'), cell('B', 'tableHeader')),
+      row(cell('a | b'), cell('c')),
+    ],
+  })
+
+  expect(richTextToMarkdown(source)).toContain('a \\| b')
+  expect(roundTrip(source)).toEqual(normalize(source))
+})
+
+// The library's default cell separator is U+001F, which `collapseWhitespace` does not match — it
+// reaches the clipboard as a literal control character.
+const UNIT_SEPARATOR = String.fromCharCode(31)
+
+test('two paragraphs in one cell flatten to a space-joined line, with no control character', () => {
+  const markdown = richTextToMarkdown(
+    doc({
+      type: 'table',
+      content: [
+        row(cell('H', 'tableHeader')),
+        row({ type: 'tableCell', content: [paragraph('one'), paragraph('two')] }),
+      ],
+    }),
+  )
+
+  expect(markdown).toContain('one two')
+  expect(markdown).not.toContain(UNIT_SEPARATOR)
+})
+
+test('an image emits a path, and only when a resolver names one', () => {
+  const source = doc({ type: 'image', attrs: { attachmentId: 'att-1', alt: 'login 500' } })
+
+  expect(richTextToMarkdown(source, { resolveAttachmentSrc: RESOLVE_SRC })).toBe(
+    '![login 500](/api/v1/files/att-1)',
+  )
+  expect(
+    richTextToMarkdown(doc({ type: 'image', attrs: { attachmentId: 'att-1', alt: '' } }), {
+      resolveAttachmentSrc: RESOLVE_SRC,
+    }),
+  ).toBe('![](/api/v1/files/att-1)')
+  // No resolver, no path this bundle can name: the alt text is what is left, and `![alt]()` would
+  // re-parse as an image with an empty target.
+  expect(richTextToMarkdown(source)).toBe('login 500')
+})
+
+// An image node names an `attachment` row that must exist and be team-scoped; a pasted URL names
+// nothing this instance owns. Same principle as "a paste never mints a mention".
+test('an inbound image degrades to a link labelled with its alt', () => {
+  const parsed = markdownToRichText('![login 500](https://example.test/a.png)')
+  expect(parsed.content?.[0]).toEqual({
+    type: 'paragraph',
+    content: [
+      {
+        type: 'text',
+        text: 'login 500',
+        marks: [{ type: 'link', attrs: { href: 'https://example.test/a.png' } }],
+      },
+    ],
+  })
+  expect(JSON.stringify(parsed)).not.toContain('"image"')
+})
+
+test('an inbound image with no alt keeps its URL as the label', () => {
+  const parsed = markdownToRichText('![](https://example.test/a.png)')
+  expect(JSON.stringify(parsed)).toContain('https://example.test/a.png')
+  expect(JSON.stringify(parsed)).not.toContain('"image"')
+})
+
+test('a code fence keeps a registered language and coerces an unregistered one', () => {
+  const registered = markdownToRichText('```ts\nconst a = 1\n```')
+  expect(registered.content?.[0]?.attrs?.language).toBe('ts')
+
+  const unregistered = markdownToRichText('```elixir\nIO.puts 1\n```')
+  expect(unregistered.content?.[0]?.attrs?.language).toBe('plaintext')
+  expect(unregistered.content?.[0]?.content?.[0]?.text).toBe('IO.puts 1')
+
+  const bare = markdownToRichText('```\nplain\n```')
+  expect(bare.content?.[0]?.attrs?.language).toBeNull()
+})
+
+test('a plaintext code block emits a bare fence rather than a labelled one', () => {
+  const source = doc({
+    type: 'codeBlock',
+    attrs: { language: 'plaintext' },
+    content: [{ type: 'text', text: 'just words' }],
+  })
+  expect(richTextToMarkdown(source)).toBe('```\njust words\n```')
+})

@@ -22,6 +22,24 @@ function doc(...content: unknown[]): unknown {
   return { type: 'doc', content }
 }
 
+function image(attrs: Record<string, unknown>): unknown {
+  return { type: 'image', attrs }
+}
+
+// Written literally, which it could not be until the capability-at-rest guard in
+// `apps/server/src/storage/no-capability.test.ts` gained the `.test.ts` exclusion its sibling
+// word-grep has had since `attachments` §I6. A test asserting such a value is DROPPED has to name
+// it; the guard is about what shipped source can store.
+const TRACKING_PIXEL_URL = 'https://tracker.example/pixel.png'
+
+function cell(...content: unknown[]): unknown {
+  return { type: 'tableCell', content }
+}
+
+function row(...content: unknown[]): unknown {
+  return { type: 'tableRow', content }
+}
+
 const NESTED = doc(
   paragraph(text('Ship '), mention({ id: 'u-1', label: 'Alice' }), text(' today')),
   {
@@ -136,6 +154,76 @@ describe('richTextToPlainText', () => {
     expect(richTextToPlainText(long).length).toBeGreaterThan(9000)
   })
 
+  it("projects an image's alt text, trimmed and length-capped", () => {
+    expect(
+      richTextToPlainText(doc(image({ attachmentId: 'a-1', alt: '  login page 500  ' }))),
+    ).toBe('login page 500')
+    expect(
+      richTextToPlainText(doc(image({ attachmentId: 'a-1', alt: 'x'.repeat(500) }))),
+    ).toHaveLength(300)
+  })
+
+  it('contributes nothing for an image with no alt, and still ends a line', () => {
+    const document = doc(
+      paragraph(text('before')),
+      image({ attachmentId: 'a-1' }),
+      paragraph(text('after')),
+    )
+    expect(richTextToPlainText(document)).toBe('before\nafter')
+  })
+
+  // The default block handling would end a line after every cell, and — once blank lines are
+  // dropped — a row would arrive at the search index as three separate lines. Welding them is the
+  // other failure: `1002open` is a token nobody types.
+  it('separates cells within a row and rows from each other', () => {
+    const document = doc({
+      type: 'table',
+      content: [
+        row(cell(paragraph(text('Env'))), cell(paragraph(text('Status')))),
+        row(cell(paragraph(text('prod'))), cell(paragraph(text('1002 open')))),
+      ],
+    })
+    expect(richTextToPlainText(document)).toBe('Env Status\nprod 1002 open')
+  })
+
+  it('flattens block content inside a cell onto the row line', () => {
+    const document = doc({
+      type: 'table',
+      content: [
+        row(
+          cell(paragraph(text('one')), paragraph(text('two'))),
+          cell({ type: 'paragraph', content: [text('a'), { type: 'hardBreak' }, text('b')] }),
+        ),
+      ],
+    })
+    expect(richTextToPlainText(document)).toBe('one two a b')
+  })
+
+  it('reaches a mention inside a table cell', () => {
+    const document = doc({
+      type: 'table',
+      content: [
+        row(
+          cell(paragraph(mention({ id: 'u-1', label: 'Alice' }))),
+          cell(paragraph(text('owner'))),
+        ),
+      ],
+    })
+    expect(richTextToPlainText(document)).toBe('@Alice owner')
+    expect(extractMentionIds(document)).toEqual(['u-1'])
+  })
+
+  // Already correct by default, and asserted so a later refactor of the default cannot silently
+  // change it.
+  it('keeps a code block verbatim as one block', () => {
+    const document = doc({
+      type: 'codeBlock',
+      attrs: { language: 'ts' },
+      content: [text('const a = 1')],
+    })
+    expect(richTextToPlainText(document)).toBe('const a = 1')
+  })
+
   it('returns an empty string for a malformed document rather than throwing', () => {
     for (const value of [
       undefined,
@@ -228,9 +316,74 @@ describe('sanitizeRichText', () => {
     expect(extractMentionIds(sanitized)).toEqual([])
   })
 
+  // The document node itself gains a `schemaVersion` stamp — asserted on its own in
+  // `schema-version.test.ts`. Everything BELOW the doc is what this asserts is untouched.
   it('leaves every non-mention node and its attributes alone', () => {
     const document = doc({ type: 'heading', attrs: { level: 2 }, content: [text('Title')] })
-    expect(sanitizeRichText(document)).toEqual(document)
+    const sanitized = sanitizeRichText(document) as { content: unknown[] }
+    expect(sanitized.content).toEqual((document as { content: unknown[] }).content)
+  })
+
+  it('keeps only attachmentId, alt and width on an image node', () => {
+    const sanitized = sanitizeRichText(
+      doc(
+        image({
+          attachmentId: '019702c7-0000-7000-8000-000000000001',
+          alt: '  login page 500  ',
+          width: 'small',
+          src: TRACKING_PIXEL_URL,
+          title: 'dropped',
+        }),
+      ),
+    ) as { content: { attrs: Record<string, unknown> }[] }
+
+    expect(sanitized.content[0]?.attrs).toEqual({
+      attachmentId: '019702c7-0000-7000-8000-000000000001',
+      alt: 'login page 500',
+      width: 'small',
+    })
+  })
+
+  // The ban is what makes "no URL is ever stored" true rather than merely intended: the client
+  // node type has no `src` and refuses to parse a pasted `<img>`, but only this pass binds a
+  // client that was not built from this bundle.
+  it('refuses a URL-shaped attachmentId on the authoritative pass', () => {
+    for (const hostile of [
+      TRACKING_PIXEL_URL,
+      '//tracker.example/p.png',
+      '  javascript:alert(1)',
+      'DATA:image/png;base64,AAAA',
+    ]) {
+      const sanitized = sanitizeRichText(doc(image({ attachmentId: hostile, alt: 'a shot' }))) as {
+        content: { attrs: Record<string, unknown> }[]
+      }
+      expect(sanitized.content[0]?.attrs).toEqual({
+        attachmentId: '',
+        alt: 'a shot',
+        width: 'full',
+      })
+    }
+  })
+
+  // The ban is on the ID, and only on the id. Alt text is display prose that never reaches an
+  // `href` or a `src`, and the URL pattern matches any sentence whose first word ends in a colon —
+  // which is most of the alt text anybody writes for a screenshot of an error.
+  it('keeps alt text whose first word ends in a colon', () => {
+    for (const alt of ['Error: 500 on login', 'Screenshot: the login page', 'note://not-a-url']) {
+      const sanitized = sanitizeRichText(doc(image({ attachmentId: 'a-1', alt }))) as {
+        content: { attrs: Record<string, unknown> }[]
+      }
+      expect(sanitized.content[0]?.attrs).toEqual({ attachmentId: 'a-1', alt, width: 'full' })
+    }
+  })
+
+  it('defaults a missing or out-of-range image width to full', () => {
+    for (const width of [undefined, 'gigantic', 12]) {
+      const sanitized = sanitizeRichText(doc(image({ attachmentId: 'a-1', width }))) as {
+        content: { attrs: Record<string, unknown> }[]
+      }
+      expect(sanitized.content[0]?.attrs).toEqual({ attachmentId: 'a-1', alt: '', width: 'full' })
+    }
   })
 
   it('is deterministic and idempotent, and mints nothing', () => {

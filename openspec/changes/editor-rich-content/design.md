@@ -889,6 +889,19 @@ Two corrections a docs pass caught that reading would not have:
   now constructs an editor with all three node types in a real Chromium and would fail on the
   `RangeError` a duplicate produces, which is most of it; a deliberate `document.querySelectorAll`
   count of ProseMirror instances is not written. I1's `node_modules/.pnpm` evidence still stands.
+### I21 — CI found one thing, and it was an assertion that looked right
+
+First e2e run: **77 passed, 1 failed**, and the failure was the new third test's mention leg —
+`getByRole('listbox', { name: 'Mention a teammate' })` resolved 43 times and was `hidden` every one
+of them. Not a defect in the product: this workspace has one person, an author is never in their own
+mention list, so the roster is empty — and `MentionList` renders its empty-state copy as a **sibling**
+of the `<ul>`, which therefore has no content and no box. Playwright is right to call it hidden.
+
+Rewritten to read the state rather than the element: `aria-expanded` on the editable flipping
+`true` → `false`, plus the empty-state copy appearing and going. That is a better assertion anyway —
+`aria-expanded` is the contract a screen reader reads, and the listbox element is an implementation
+of it. The populated case stays where it already was, in `mentions.spec.ts`.
+
 Task 12.4 is closed by the e2e spec's third test rather than by a manual pass: the `@` list and the
 `/` menu are opened in **one** comment composer, Escape dismisses each without touching the draft or
 the panel, and then the same key with nothing open dismisses the panel — the control that makes the

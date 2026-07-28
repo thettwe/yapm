@@ -184,13 +184,17 @@ test.describe('rich content', () => {
     await composer.click()
     await page.keyboard.type(`${DRAFT} `)
 
-    // The mention list opens even with nobody to offer — the author is never in their own list — and
-    // that is enough: what is under test is the key, not the roster.
+    // The mention list opens even with nobody to offer — the author is never in their own list, so
+    // this workspace of one has an empty roster — and that is enough, because what is under test is
+    // the key rather than the roster. It is read through `aria-expanded` and the empty-state copy,
+    // NOT through the listbox: with zero options the `<ul>` has no box and Playwright rightly calls
+    // it hidden. `mentions.spec.ts` owns the populated case.
     await page.keyboard.type('@')
-    const mentions = page.getByRole('listbox', { name: 'Mention a teammate' })
-    await expect(mentions).toBeVisible({ timeout: 20_000 })
+    await expect(composer).toHaveAttribute('aria-expanded', 'true', { timeout: 20_000 })
+    await expect(page.getByText('No teammates to mention')).toBeVisible({ timeout: 10_000 })
     await page.keyboard.press('Escape')
-    await expect(mentions).toBeHidden({ timeout: 10_000 })
+    await expect(composer).toHaveAttribute('aria-expanded', 'false', { timeout: 10_000 })
+    await expect(page.getByText('No teammates to mention')).toHaveCount(0)
     await expect(composer).toContainText(DRAFT)
     await expect(panel).toBeVisible()
 

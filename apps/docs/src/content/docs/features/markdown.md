@@ -31,6 +31,10 @@ into the formatting it describes.
 | `` `code` `` | `Inline code` |
 | `[text](url)` | A link labelled *text* |
 
+Tables, images and code blocks arrive through the [insert menu](/features/rich-text/) rather than
+through a marker you type — a `|` on its own line is a `|`, not the start of a table. They still
+travel as markdown in both directions, which is what the rest of this page is about.
+
 `# ` and `## ` deliberately produce the same heading. yapm has two heading sizes, not six: an issue
 description already sits inside a page with its own title, so a third level of hierarchy above the
 one you are writing in has nowhere to go.
@@ -57,6 +61,14 @@ Paste that into a terminal, a Slack message or a `git commit -m`, and it reads e
 Characters like `<`, `&` and `>` arrive as themselves rather than as `&lt;`, `&amp;` and `&gt;` —
 which is what most markdown converters emit, and which is unreadable anywhere outside a markdown
 renderer.
+
+Three blocks carry more than their text:
+
+| Block | Comes out as |
+|---|---|
+| A table | A GFM pipe table, with a `\|` you typed inside a cell escaped so the columns survive |
+| An image | `![alt text](/api/v1/files/<id>)` — the alt text you gave it, and the path this yapm serves it from |
+| A code block | A fence carrying its language (` ```sql `), sized long enough to hold a ` ``` ` inside the code |
 
 A paragraph that *begins* with something markdown would read as structure — `# `, `- `, `1. `, `> `,
 `| `, with or without a space or two in front of it — comes out with a backslash, so pasting it back
@@ -87,6 +99,15 @@ It deliberately does **not** convert in four cases:
   cursor lands where you expect.
 - **You pasted a bare URL over selected text.** The selection becomes a link to it rather than being
   replaced.
+
+A pasted GFM pipe table becomes a real table. A pasted fence becomes a code block, and its language
+is kept when yapm highlights that language and set to plain text when it does not — the code is
+never altered either way.
+
+**A pasted `![alt](url)` becomes a link labelled with its alt text, not an image.** An image in yapm
+names a file this workspace stores; a URL in someone else's markdown names a file it does not. Making
+it a link keeps the address you pasted, visible and clickable, instead of a broken picture. Upload the
+image and it becomes a real one.
 
 **Anything that looks like an HTML tag stays text.** Pasting `<div>hello</div>`, a sentence like
 `compare a<b and c>d`, or a stray `</em>` out of some log, gives you those exact characters —
@@ -124,6 +145,9 @@ encoded into a syntax that renders as literal punctuation somewhere else.
 | **Mention identity** | A mention becomes a readable name; the link to the person does not survive (see above) |
 | **Leading indentation** | Four or more leading spaces mean "code block" in markdown, and there is no way to escape a space. A paragraph you indented comes out flush |
 | **A backtick inside inline code** | `` `a `b` c` `` needs a longer fence than yapm currently emits, so that one span may re-parse oddly. The characters themselves are never altered |
+| **An image's bytes** | The path in `![alt](/api/v1/files/…)` is served by *this* yapm, to people signed in to it. Pasted somewhere else it is a relative path that resolves to nothing. The alt text is what carries the meaning |
+| **Structure inside a table cell** | A cell holding two paragraphs or a list comes out as one line of text — GFM has no way to say "block" inside a cell. Nothing is dropped; it is flattened |
+| **A header-less table** | GFM tables always have a header row. A yapm table with its header toggled off comes out with an empty header above it; every row of yours is intact underneath |
 
 Headings deeper than yapm has are folded rather than dropped: pasting `#### Four` gives you yapm's
 smaller heading with its text intact, not a missing line.

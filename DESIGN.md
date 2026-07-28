@@ -29,6 +29,13 @@ yapm ships a **tokenized theme system**, decided 2026-07-24. Every component ref
 
 All presets and any custom accent MUST pass WCAG contrast in both light and dark.
 
+**Syntax highlighting is a token family, not a stylesheet.** `editor-rich-content` added seven
+`--code-*` tokens (keyword, string, number, comment, function, type, punctuation) to every preset in
+both modes, each derived from that preset's own hues and asserted at AA against the code block's
+surface. **No `highlight.js` theme is ever loaded** — the ~250 it ships hard-code hex, which is
+exactly the "hunting hardcoded colors" this section exists to prevent — and an `hljs-*` class with no
+mapping inherits `--text-1`, so an unmapped token is plain rather than invisible.
+
 ## Issue list: how yapm differs from Linear and Plane
 
 Warm differentiates visually; these differentiate **structurally**. The thesis: **every other tracker's row shows *intention* (a status a human set); yapm's row shows *reality* (state derived from the linked PR ↔ CI ↔ deploy).** That is "reality over ritual" (VISION #3) expressed in the primary surface, and no competitor can copy it without rebuilding their data model.

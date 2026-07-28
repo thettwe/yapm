@@ -99,8 +99,14 @@ what makes the permission check identical for both providers ·
 **markdown as the interchange format** — type markdown to format, paste markdown in, and copy
 markdown *out* that actually reads correctly in a terminal or a Slack message (no `&lt;` entities,
 and a paragraph that starts with `#` comes back a paragraph), while rich text stays the storage
-format and an in-app copy/paste stays lossless. The editor and Files UI that put attachments in
-front of you are next.
+format and an in-app copy/paste stays lossless ·
+**images, tables and syntax-highlighted code** in descriptions and comments, reached with a `/`
+insert menu that is fully keyboard-operable (as are table navigation and selecting or removing an
+image), with syntax colours drawn from your theme's tokens rather than a highlighter's stylesheet —
+plus a **Files** section on every issue listing everything attached to it, and a refusal that matters:
+a browser tab left open across an upgrade is shown its issue **read-only** with a "reload to edit"
+notice instead of silently saving back a description with the images and tables it could not
+understand quietly deleted.
 
 ## What's next
 

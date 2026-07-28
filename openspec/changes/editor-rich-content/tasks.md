@@ -223,35 +223,35 @@ phase's.
       together, a mention inside a table cell is still extracted by `extractMentionIds`.
 - [x] 10.6 **Test (unit)** `contrast.test.ts` covers the new tokens (this is 9.4; listed here so the
       close phase does not skip it).
-- [ ] 10.7 **Test (e2e)** `apps/web/e2e/rich-content.spec.ts` — the change touches a mutator
+- [x] 10.7 **Test (e2e)** `apps/web/e2e/rich-content.spec.ts` — the change touches a mutator
       (`sanitizeRichText`) and signature UI, which is 2 of PROCESS §3's four, so all three tiers
       apply. Keyboard-only: open the insert menu, insert a table, Tab between cells, Escape without
       losing the draft; and an image upload through the real multipart route appearing both in the
       document and in the Files section. Note `attachments` §I10: this harness runs the server on the
       host, not the runtime image.
-- [ ] 10.8 Falsify at least three of the new tests by reverting the code they cover, and record which
+- [x] 10.8 Falsify at least three of the new tests by reverting the code they cover, and record which
       assertions fail in design.md §"Decisions made during implementation". A test that cannot fail
       is not a test.
 
 ## 11. Documentation
 
-- [ ] 11.1 `apps/docs/src/content/docs/features/rich-text.md` (new): images, tables, code blocks, the
+- [x] 11.1 `apps/docs/src/content/docs/features/rich-text.md` (new): images, tables, code blocks, the
       insert menu, keyboard shortcuts for each, and an honest section on the "reload to edit" state —
       what causes it, why it exists, and that the deploy which introduced it has a one-window
       exposure the guard cannot cover. Add the sidebar entry in `apps/docs/astro.config.mjs`.
-- [ ] 11.2 `apps/docs/src/content/docs/features/markdown.md`: add the new node rows to the "what
+- [x] 11.2 `apps/docs/src/content/docs/features/markdown.md`: add the new node rows to the "what
       markdown carries" and "what markdown cannot carry" tables — GFM table, image path, code fence
       language; block content inside a table cell flattens.
-- [ ] 11.3 `apps/docs/src/content/docs/self-hosting/attachments.md`: the editor upload path and the
+- [x] 11.3 `apps/docs/src/content/docs/self-hosting/attachments.md`: the editor upload path and the
       Files section now exist; the operator-facing GC and backup story is unchanged and says so.
-- [ ] 11.4 `README.md` "What works today" and `ROADMAP.md` (row 18 → shipped, and the editor gap
+- [x] 11.4 `README.md` "What works today" and `ROADMAP.md` (row 18 → shipped, and the editor gap
       closed without implying export is).
-- [ ] 11.5 `TECHSTACK.md`: six new catalog entries and the **BSD-3-Clause** line for `highlight.js` —
+- [x] 11.5 `TECHSTACK.md`: six new catalog entries and the **BSD-3-Clause** line for `highlight.js` —
       the first non-MIT/Apache runtime dependency in the client bundle.
-- [ ] 11.6 `reference/frontend-build.md` §11.7 (new): the verified exports and option shapes of the
+- [x] 11.6 `reference/frontend-build.md` §11.7 (new): the verified exports and option shapes of the
       four extensions as read from the installed `.d.ts`, the curated language list and why it is not
       `common`, and the schema-skew mechanism with the reason the stamp lives in the sanitizer.
-- [ ] 11.7 Walk all ten CLAUDE.md constraints and record the verdict for each in design.md, the way
+- [x] 11.7 Walk all ten CLAUDE.md constraints and record the verdict for each in design.md, the way
       `attachments` §I11 did — do not assume none moved.
 
 ## 12. Verification
@@ -259,11 +259,11 @@ phase's.
 - [ ] 12.1 `pnpm turbo lint typecheck test build` with the actual output reported. Tests need live
       Postgres: `POSTGRES_HOST_PORT=5449 ZERO_CACHE_HOST_PORT=4857 YAPM_HOST_PORT=3009 docker compose -p yapm-rc -f docker/docker-compose.dev.yml up -d`,
       torn down with the matching `down -v`.
-- [ ] 12.2 Measure the client bundle delta from `lowlight` + `highlight.js` + the three extensions and
+- [x] 12.2 Measure the client bundle delta from `lowlight` + `highlight.js` + the three extensions and
       record it. If it is over budget, shrink the language list — the design does not change.
-- [ ] 12.3 Assert the untouched surfaces:
+- [x] 12.3 Assert the untouched surfaces:
       `git diff --stat origin/main -- apps/server packages/schema/src/migrations packages/schema/src/zero`
       should show nothing. No migration, no Zero schema change, no new synced query, no new mutator.
-- [ ] 12.4 Manual check in a real browser, because jsdom cannot see it: with the mention popup and
+- [x] 12.4 Manual check in a real browser, because jsdom cannot see it: with the mention popup and
       the insert menu both reachable in one comment composer, Escape from each dismisses only that
       popup and never discards the draft.

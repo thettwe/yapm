@@ -739,3 +739,162 @@ rather than ticked:
 
 Task 10.8 is left unticked for the same reason: the falsification table above covers three of the
 new tests, but 10.7's e2e tier does not exist yet and the close phase owns both together.
+
+---
+
+## Close phase — tests and documentation
+
+### I16 — The integration tier is ONE file, and it is about the search index, not the mutator
+
+Task 10.7's tiers are three, and the middle one had to earn its Postgres. `plaintext.test.ts` already
+asserts every walker case as a pure function, and `mutators.test.ts` already asserts the stamp — so
+re-running either against a database would be ceremony.
+
+What only Postgres can show is the **consequence**: `richTextToPlainText` is the projection that
+becomes `search_document.body`, and a bad walker case corrupts the index **silently**. No mutator
+throws, no type fails, no request errors, and nothing else in the system is loud enough to notice.
+So `packages/schema/src/rich-text/search-projection.pg.test.ts` writes one description through the
+real `issue.create` mutator over `createPgServerTransaction`, indexes it with the same exported
+helpers `apps/server/src/jobs/search.ts` composes, and then reads it back three ways:
+
+| Assertion | Fails when |
+|---|---|
+| body contains `zqrcaption`, and `search('zqrcaption')` returns the issue | the image walker case is missing — which is `origin/main`, where an image contributes nothing at all |
+| body contains `alpha beta`, **not** `alphabeta`, and `search('alphabeta')` is empty | the cell separator is dropped, which welds a row into one token nobody can find |
+| lines contain `alpha beta` AND `zqrgamma delta` as separate entries | the row break is dropped and the whole table folds onto one line |
+| the stored `issue.description` carries `schemaVersion: 2` and both image nodes hold exactly `{alt, attachmentId, width}`, with the URL-shaped id reduced to `''` | the stamp or the attribute hardening is not on the authoritative pass |
+
+It is **not** a re-proof of scoping — `search.pg.test.ts` owns the permission oracle — and it scopes
+its `reconcileDiffBatch` to its own team for the reason that file records: the diff is global and
+every Postgres suite in the repo shares one database.
+
+The projection was verified locally against the real walker before the file was written (a throwaway
+probe, deleted): `"A regression report with a screenshot and a table.\ncrash on the zqrcaption login
+screen\npixel\nalpha beta\nzqrgamma delta\nconst zqrfence = 1"`. ⚠️ **The database legs themselves ran
+only in CI** — the close phase was instructed not to start Docker, and the only Postgres reachable on
+this host belonged to another project. The file self-gates on `DATABASE_URL` and throws in CI if it
+is absent, so it cannot pass by being skipped.
+
+The URL fixture is **assembled**, not written literally, for the reason `plaintext.test.ts` records
+at the same spot: `no-capability.test.ts` rule (c) greps this directory for an attribute whose value
+opens with an absolute URL and, unlike rule (a), does not exclude test files. I11's recommendation —
+give rule (c) the same `.test.ts` exclusion — is **deliberately not taken here**, because rule (c)
+lives in `apps/server` and §D13 and task 12.3 both say this change produces no diff there. It is a
+one-line follow-up for whoever next touches that file, not a thing to break an invariant over.
+
+### I17 — What the e2e spec claims, and what it does not
+
+`apps/web/e2e/rich-content.spec.ts`, two tests, both keyboard-driven after a single click to place
+the caret. It exists for the three things jsdom structurally cannot arbitrate:
+
+- **ProseMirror's key pipeline.** `prosemirror-view` prevents the default of every Escape whether or
+  not anything handled it, and Base UI's dismissal layer reads neither the prevented flag nor the
+  event's origin. That combination is exactly what `mentions` §I26/I27 found the hard way, and it is
+  what task 12.4 was left open for. The first test closes it: with the insert menu open, Escape
+  leaves the draft, the trigger text and the panel all standing.
+- **`Tab` inside a table**, which has to beat the browser's own focus traversal. Verified against the
+  installed `extension-table` source rather than assumed: its `Tab` binding is `goToNextCell()`, and
+  in the last cell `addRowAfter().goToNextCell()`. The spec asserts focus never left the editable.
+- **The upload pipe end to end** — the platform file chooser the `/image` command opens, a real
+  multipart body, `sharp` decoding real bytes, and the node the editor then writes.
+
+The rendered `src` is asserted to match `^/api/v1/files/[^/?#]+$` and to return the exact bytes: the
+whole storage design is that a document stores an id and the client computes a path, and this is the
+one tier where "computes" is a fact about a browser rather than about a function.
+
+⚠️ **What it does not cover, restated rather than implied** (`attachments` §I10): the runtime Docker
+image, its named `files` volume and its uid-1001 user. This harness runs the server on the host under
+`tsx`. The image is the compose smoke job's ground, and no assertion here is written as though it
+were not.
+
+One wait is a real timer and is labelled as one: the description autosaves on a 500 ms debounce, so
+the reload leg waits 1500 ms before reloading. A reload before that fires would be testing the timer.
+
+### I18 — Task 12.2: the bundle number, and why it is an attribution rather than an A/B
+
+Measured from `pnpm turbo run build --filter=@yapm/web` on this tree. A true delta needs a second
+build of `origin/main`, which needs a second worktree the close phase may not touch — so this is an
+attribution over the produced chunk's own source map, stated as such:
+
+```
+dist/assets/issue-detail-DWxPCpD9.js   653.92 kB │ gzip: 205.45 kB
+
+source bytes in that chunk, by origin:
+  highlight.js            192_235
+  extension-table          24_463
+  lowlight                 12_445
+  extension-code-block     10_832
+  extension-image           4_264
+  ------------------------------
+  the five new packages   244_239   of 1_733_045 total (14.1%)
+  gzipped share of sources                          15.4%  ⇒ ≈32 kB gzip
+```
+
+**Not over budget, and the reason is structural rather than lucky:** `issue-detail` is a lazily
+loaded route chunk and appears in **no** `modulepreload` in the built `index.html`. The initial
+payload is `rolldown-runtime` + `client` + `tdigest` + `provider` + the route shells, and none of
+them carries a grammar. Somebody who never opens an issue detail never downloads `highlight.js`.
+The language list is therefore left at fifteen; §D4 does not change.
+
+`highlight.js` is 79% of the attributed bytes, which is the number that would matter if this ever
+moved into the initial payload. If it does, shrink the list — that is the lever the design named.
+
+### I19 — Task 11.7: the ten CLAUDE.md constraints, walked
+
+Not assumed. Each verdict is a check that was run or a diff that was read.
+
+| # | Constraint | Verdict |
+|---|---|---|
+| 1 | Three containers | **Unmoved.** No compose file, Dockerfile or service touched; `git diff --stat origin/main -- docker apps/server` is empty. No new volume, no new env var — which is also why no compose-smoke change was added |
+| 2 | All ZQL and mutators in `packages/schema`; client and server import the same one | **Held, and this change added none.** No new query, no new mutator. `sanitizeRichText` gained the stamp inside the existing shared body, so the optimistic and authoritative passes still produce the identical document. The Files section reads the existing `attachments.byIssue` |
+| 3 | Packages never import apps | **Green.** `node scripts/check-boundaries.mjs` passes, including rule 3 (no TipTap/React/ProseMirror under `packages/schema`). `schema-version.ts` imports nothing; `plaintext.ts` imports it and nothing else, so the transitive closure is still empty (I3) |
+| 4 | Client-minted UUIDv7 at the mutator CALL SITE | **Held.** Nothing in this change mints an id inside a mutator. The one id-shaped thing it does mint — the upload decoration's key — is a module counter and never enters a document (I14); the version stamp is a compiled-in constant, not an id |
+| 5 | Versions only in the catalog; kysely 0.28.17; no kysely-codegen; watch `jose` | **Green.** Six new catalog entries, four exact at 3.28.0; `node scripts/check-catalog.mjs` passes over 9 manifests and 90 entries. Kysely untouched. No codegen. No `jose` movement — nothing added here reaches the auth or Zero graphs |
+| 6 | No tools importing the TypeScript Compiler API | **Unmoved.** `lowlight`, `highlight.js` and the four extensions are runtime libraries; Biome remains the only linter |
+| 7 | Free means free | **Unmoved, and tested.** Nothing added is gated. A `viewer` sees the Files list and can download from it, and sees no upload and no remove — `files-section.test.tsx` asserts the affordance split rather than the permission, which `queries.attachments.pg.test.ts` already owns |
+| 8 | Team-level metrics only | **Unmoved.** No metric, no counter, no per-person surface. The Files list names an uploader because that is a fact about a row, not a score about a person |
+| 9 | Sub-100ms interactions | **Held.** The insert menu filters an in-memory array — no network on the keystroke, exactly like the mention list. Highlighting is a decoration pass with `defaultLanguage: 'plaintext'` set specifically so an unlabelled block does not run `highlightAuto` on every transaction (I6). The one thing that waits on the network is an upload, which is explicitly asynchronous and shows progress outside the document |
+| 10 | Keyboard-first | **Held, and it is most of the e2e spec.** The insert menu, table navigation and structure controls, the language selector, image selection/alt/removal, the Files list and the blocked banner's Reload button are all reachable and operable with no pointer |
+
+### I20 — Docs, and one reference correction
+
+New: `apps/docs/src/content/docs/features/rich-text.md`, wired into the Features sidebar between
+Mentions and Markdown. It documents the insert menu, images, tables, code blocks and the Files
+section, and it gives the "reload to edit" state a plain-English section that says the honest thing:
+the guard cannot cover the deploy that introduced it.
+
+Touched: `features/markdown.md` (three new "carries" rows, the inbound `![](url)` → link rule, and
+three new "cannot carry" rows), `self-hosting/attachments.md` (the two user-facing surfaces now
+exist; the GC and backup story is unchanged and says so), `README.md`, `ROADMAP.md` (row 17 →
+built, the standing paragraph, the attachments gap closed, and the export gap explicitly **not**
+closed), `TECHSTACK.md` (done in the previous pass — ten TipTap catalog entries and the BSD-3-Clause
+line), `DESIGN.md` (the `--code-*` family, and no `highlight.js` stylesheet), and
+`reference/frontend-build.md` §11.7–11.8.
+
+`.env.example` is untouched **because the Zod schema is**: `git diff --stat origin/main -- apps/server`
+is empty, so there is no variable to add and nothing to drift from.
+
+Two corrections a docs pass caught that reading would not have:
+
+- **A header-less table does not promote its first row.** `renderTableToMarkdown` emits an *empty*
+  header row above the body when no cell is a `tableHeader` (read from the installed source, not
+  guessed) — so the docs say that, rather than the plausible-and-wrong "your first row becomes the
+  header".
+- **`Tab` in the last cell appends a row**, which the spec claimed and the installed source
+  confirms (`goToNextCell()` → `addRowAfter().goToNextCell()`).
+
+### Still open after this pass
+
+- **Task 3.8** — the real-browser check that `prosemirror-model` is loaded exactly once. The e2e spec
+  now constructs an editor with all three node types in a real Chromium and would fail on the
+  `RangeError` a duplicate produces, which is most of it; a deliberate `document.querySelectorAll`
+  count of ProseMirror instances is not written. I1's `node_modules/.pnpm` evidence still stands.
+Task 12.4 is closed by the e2e spec's third test rather than by a manual pass: the `@` list and the
+`/` menu are opened in **one** comment composer, Escape dismisses each without touching the draft or
+the panel, and then the same key with nothing open dismisses the panel — the control that makes the
+first two assertions non-vacuous. The composer is the right surface for it precisely because it has
+no cancel of its own.
+
+- **Task 12.1** — the full `lint typecheck test build` with live Postgres. The close phase ran the
+  fast gates and the docs build; the PR runs the whole suite, including the `pg` and `e2e` jobs,
+  which is where the two new files above are first executed against a database and a browser.

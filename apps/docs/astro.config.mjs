@@ -21,6 +21,7 @@ export default defineConfig({
             { label: 'Retrospectives', slug: 'features/retrospectives' },
             { label: 'Notifications', slug: 'features/notifications' },
             { label: 'Mentions', slug: 'features/mentions' },
+            { label: 'Images, tables & code', slug: 'features/rich-text' },
             { label: 'Markdown', slug: 'features/markdown' },
             { label: 'Search', slug: 'features/search' },
           ],

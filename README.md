@@ -81,7 +81,8 @@ reveals the board (never before it, so there is nothing to anchor on while peopl
 their own cards), the model drafts at most three wins, three losses and three improvements, each one
 *citing* a work-graph entity or one of yapm's own computed metrics — it points at a number, it never
 types one — reading no cards, no comments and nobody's name, and labelled "AI-drafted, not agreed"
-because nothing it writes is the team's conclusion · a keyboard-first **notification inbox** at `/inbox` with an unread badge, for
+because nothing it writes is the team's conclusion · a keyboard-first **notification inbox** at
+`/inbox` with an unread badge, for
 assignments (including triage routing) and comments on issues you're involved in — written only on
 the server so a rebased optimistic mutation can never duplicate or re-send one, readable **only by
 its recipient with no admin bypass**, and optionally emailed as one batched, debounced digest per

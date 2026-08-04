@@ -296,4 +296,63 @@ view is admin-scoped, exactly where I2 said that history belongs.
 
 ## Decisions made during implementation
 
-<!-- Appended during the build phase: what was ambiguous, what was chosen, and why. -->
+### I1 — The notice's copy is actor-free at the COPY layer, not only at the fan-out
+
+D5 says the fan-out writes `SYSTEM_ACTOR_ID`. Implementing it exposed a second place the publisher
+could have leaked: `notificationCopy` interpolates an actor into every title, falling back to
+`'Someone'` when the actor row is gone.
+
+**Chosen:** `titleFor`'s `pm_digest_published` branch takes no actor argument at all and returns a
+constant — "A cycle digest was shared with you". The `'Someone'` fallback is therefore unreachable
+for this kind rather than merely unlikely, and a future change that decided to write a real
+`actor_id` would still render no name here. Two independent refusals rather than one.
+
+### I2 — `subject_title` is `"<team> · <cycle>"`, and the sweep splits it back
+
+The mail template takes `{ teamName, cycleName }` (D6), but the notification row carries one
+`subject_title` column. Options were a second column (a migration this change refuses to take), a
+jsonb blob in `subject_key`, or a delimited label.
+
+**Chosen:** the fan-out bakes `"<team> · <cycle>"` and the sweep splits on the first `' · '`. A label
+without the separator still renders — the team half degrades to the whole string, the cycle half to
+empty — because a missing cycle name is not a reason to withhold a link somebody was told they would
+get. The delimiter is the same middot the inbox and the settings surfaces already use for
+compound labels, so the in-app row reads correctly with no special case.
+
+### I3 — The ready sweep is per-recipient-per-row, not batched like the notification sweep
+
+`runNotificationEmailSweep` groups every pending row for one recipient into a single digest message.
+The ready sweep sends one message per notice instead.
+
+**Chosen deliberately.** The two shapes answer different questions. A notification digest exists to
+collapse a burst about the same inbox; a ready notice is one discrete team releasing one discrete
+cycle, and collapsing two teams' releases into "you have 2 notifications" would either name both
+teams in one subject line — a cross-team disclosure neither release authorised on its own — or name
+neither, which is a message with nothing in it. Entitlement is also resolved per team, so a batch
+containing one entitled and one withheld notice would have to be partially rendered anyway. The
+resolve itself is memoised per recipient, so the extra cost is messages, not queries.
+
+### I4 — The audit view's error path is silent
+
+Every other settings section surfaces a load failure in a `role="alert"`. This one does not.
+
+**Chosen:** the section is absent on an instance that has never disclosed (D9), so an error banner
+would announce that a disclosure channel exists to an admin who has not opened one — the same
+"absence, never an empty state" rule change 20 set, applied to the failure path. The section sits
+below the two that matter and its absence costs an admin nothing they cannot get from the server
+log.
+
+### I5 — `pendingPmDigestReadyEmails` returns a narrower row than `PendingNotificationEmail`
+
+It carries no `actorName`, no `subjectKey`, no `subscriptionState` and no `createdAt`, because the
+template needs none of them and the copy is actor-free (I1). The type is the enforcement again: a
+future change that wanted to name the publisher in the mail would have to widen the row type first,
+which is a reviewable act rather than a one-line interpolation.
+
+### I6 — `notificationSubjectPath` gains a `pm_digest` case it can never reach
+
+`pendingNotificationEmails` now selects `subject_type = 'issue'` only, so the issue sweep can never
+see a `pm_digest` row — but the path function's switch is exhaustive over the union and stops
+compiling without the case. It returns `/digests` rather than throwing: an unreachable branch that
+throws is a landmine if the selection is ever widened, while one that answers with the reader's own
+surface is merely redundant.

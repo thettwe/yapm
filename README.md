@@ -145,8 +145,16 @@ the foundation (gateway, agent-as-actor tools, the AI-over-work-graph substrate)
 AI-facilitated retro is complete end to end and compounding: the model drafts, the team disposes, an
 agreed improvement lands as a tracked issue, and the next retro reports whether it shipped. The
 governed PM-facing digest — the first AI output in yapm to cross a permission boundary — is now in
-too. Next: **retention and an admin view of what was disclosed**, which are what make "governed" a
-promise rather than a word. Then DORA and review-health metrics
+too — and it is now **governed** rather than merely claimed to be: every policy change, generation,
+release and retraction is recorded in a server-only table no client can name, a workspace admin can
+read that record in an admin-only view that reports what was disclosed and *to how many readers* and
+has no shape in which a read could appear, and those records are **retention-bounded** by a nightly
+sweep on the job runner yapm already has — one year by default, configurable, and running whether or
+not AI is enabled. A named reader can optionally be emailed when a digest is released, and that
+message carries **a link and nothing else**: a mailed artifact sits outside the kill switch, outside
+retention and outside the audit log at the same time, so the one path that leaves the governed
+surface carries nothing that could survive them. Retraction still stops further reads without
+un-reading, and the product still says so in those words. Next: DORA and review-health metrics
 computed from the graph — team-level only, never individual scorecards. More connectors
 (GitLab, …) slot into the same framework with no feature-code change — inheriting the reality strip
 and the status automation above for free.

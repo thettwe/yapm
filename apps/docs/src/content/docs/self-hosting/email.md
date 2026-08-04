@@ -44,6 +44,7 @@ required, and boot fails naming whichever is missing.
 | `NOTIFICATION_EMAIL_CRON` | `*/2 * * * *` | How often the digest sweep runs |
 | `NOTIFICATION_RETENTION_DAYS` | `30` | How long a notification is kept before it is deleted |
 | `NOTIFICATION_RETENTION_CRON` | `7 3 * * *` | When the retention sweep runs (03:07 daily) |
+| `AI_PM_DIGEST_READY_EMAIL` | `false` | Email named readers a **link** when a [product digest](/features/pm-digest/) is released; requires `AI_PM_DIGEST=true` |
 
 Every cron variable is parsed at boot with the same parser the scheduler uses, and a value that
 cannot be parsed **fails boot naming the variable**. A typo used to boot a healthy-looking instance
@@ -133,12 +134,26 @@ Four independent brakes keep this from becoming a mail storm — the per-event n
 a repeated mutation write one row, the debounce, per-recipient batching, and (the most effective
 one) **never emailing something the recipient already read in the app**.
 
+**Product digest "ready" notices.** Off by default (`AI_PM_DIGEST_READY_EMAIL`). When a team
+releases a [product digest](/features/pm-digest/), each named reader gets one message on the same
+cron: the team's name, the cycle's name, and **a link**. Never the digest body — a mailed message
+sits outside the kill switch, outside retention and outside the audit record at the same time, so
+this one carries nothing that could survive them. Entitlement is re-resolved at send time, so a
+reader removed from the audience, a team switched off, or a kill switch set between the release and
+the send means no message goes out. See [the disclosure model](/self-hosting/ai-disclosure/).
+
+It is a second selection beside the notification sweep rather than a widening of it: a named reader
+is neither a member of the producing team nor necessarily a workspace admin, which is exactly what
+the notification sweep's access check requires. The two selections are disjoint, so somebody who is
+both a workspace admin and a named reader is mailed once per event, not twice.
+
 **Invite emails.** Creating an email invite sends the invite through the same seam. With no
 transport configured the invite still succeeds and its link is still shown for the admin to copy —
 the copyable link is built from the browser's own origin and never depends on email at all.
 
-**What is never in an email:** any excerpt of a comment or issue body. A message names the actor,
-the action and the issue title, and links to the app. An email leaves the app's permission model
+**What is never in an email:** any excerpt of a comment or issue body, and no product-digest content
+of any kind. A message names the actor, the action and the issue title, and links to the app; a
+product-digest notice names neither an actor nor any content at all. An email leaves the app's permission model
 behind, so nothing beyond "do I need to open this?" is put in one.
 
 ## Failure behaviour

@@ -502,6 +502,28 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     await expect(card).toContainText(team.name)
     await expect(card).toContainText(cycleName)
 
+    // THE INBOX HALF. The reader also learns a digest was released without opening the app on
+    // spec — and the notice is worded so that a person outside the producing team learns WHICH team
+    // and WHICH cycle, and nothing else. Not who released it (the actor is the system principal,
+    // because telling a PM which individual released a digest is accountability in the wrong
+    // direction) and not a syllable of the content: the mailed form of this notice carries a link
+    // only, and the in-app row it is derived from is held to the same line.
+    await readerPage.goto('/inbox')
+    const notice = readerPage.getByTestId('notification-row')
+    await expect(notice).toHaveCount(1, { timeout: 30_000 })
+    await expect(notice).toContainText('A cycle digest was shared with you')
+    await expect(notice).toContainText(team.name)
+    await expect(notice).toContainText(cycleName)
+    const noticeText = (await notice.innerText()).replace(/\s+/gu, ' ')
+    for (const secret of [HEADLINE, SUMMARY, EVIDENCE_LABEL]) {
+      expect(noticeText).not.toContain(secret)
+    }
+    expect(noticeText).not.toContain(ADMIN.name)
+    // And it is not a dead end: opening it lands on the reader's own surface, keyboard-only.
+    await press(notice)
+    await expect(readerPage).toHaveURL(/\/digests$/u)
+    await expect(readerPage.getByTestId('pm-digest-card')).toBeVisible({ timeout: 30_000 })
+
     // The reader holds the disclosed row and NOTHING ELSE of that team's: the audience axis carries
     // one table, and widening `teamScoped` would have shown up here as issues and cycles arriving.
     await expectPmDigestIds(readerPage, [digestId])

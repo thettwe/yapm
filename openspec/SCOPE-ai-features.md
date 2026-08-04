@@ -498,7 +498,7 @@ Consolidated from both scoping passes plus my own. Ordered by cost of getting it
    everything the change asserts is still true and tested — the reactions are private, the verdict
    matches a hand-count, no counter exists, the converted issue has no assignee — but the premise
    underneath all of it, that the proposals being ratified are worth ratifying, remains unverified
-   by any test in this repo. See `changes/retro-ratification/design.md` §G1.
+   by any test in this repo. See `changes/archive/2026-08-05-retro-ratification/design.md` §G1.
 2. **Reverse the patch-content decline (§5)?** I declined it: no in-stack secret scanner, it
    inverts a shipped spec guarantee, and areas already carry the product claim. Reversing it is
    legitimate and is where a self-hoster's counsel has to have an opinion.
@@ -528,18 +528,18 @@ Consolidated from both scoping passes plus my own. Ordered by cost of getting it
    → **ANSWERED: as recommended.** Any single disagree ⇒ contested; unanimous agree among responders
    ⇒ agreed; majority disagree ⇒ rejected; nobody responded ⇒ unrated. Knob-free — no config, no
    threshold, and the pure function takes no parameter that could become one.
-   `changes/retro-ratification/design.md` §D3.
+   `changes/archive/2026-08-05-retro-ratification/design.md` §D3.
 9. **Asymmetry.** Research §2.4 wants human cards ratified too, "so the AI's cards get no special
    authority". I recommend not doing that — it doubles the surface and dot voting already ranks
    human cards — but the argument cuts both ways.
    → **ANSWERED: no.** Ratification applies to AI proposals only; human cards keep dot voting as
    their only ranking signal. The argument genuinely cuts both ways, so the reasoning on both sides
-   is recorded rather than just the conclusion — `changes/retro-ratification/design.md` §D2.
+   is recorded rather than just the conclusion — `changes/archive/2026-08-05-retro-ratification/design.md` §D2.
 10. **The two stated residuals** (self-identifying tally in a tiny team; the "AI echoed my anonymous
     card" perception). I would document both the way retro-board documented its boundary. Whether
     either is blocking is a trust call.
     → **ANSWERED: document both, neither blocking.** Written up plainly as known limits rather than
-    solved problems, in `changes/retro-ratification/design.md` (Risks / Trade-offs) and in the
+    solved problems, in `changes/archive/2026-08-05-retro-ratification/design.md` (Risks / Trade-offs) and in the
     feature docs (`features/retro-ai-draft` § "Two residuals, stated rather than hidden").
 11. **Minimum-signal gate.** Should a cycles-only team's first retro get three thin proposals or
     silence? And at what threshold?

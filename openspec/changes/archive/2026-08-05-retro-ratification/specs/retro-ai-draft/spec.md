@@ -104,7 +104,7 @@ network, and neither SHALL recording a reaction.
 - **WHEN** the section is rendered in Warm, Focused and Editorial, in light and dark
 - **THEN** the category chips, evidence chips, reaction controls, verdict badges and body text resolve from tokens and meet AA contrast, with no hardcoded color
 
-#### Scenario: The draft is labelled as unratified until it is ratified
+#### Scenario: The draft is labelled as unratified
 
 - **WHEN** proposals are shown before the team's decision has been recorded
 - **THEN** the section states that they are AI-drafted and not agreed, so no reader mistakes them for a team conclusion; once the decision is recorded, each proposal shows what the team decided

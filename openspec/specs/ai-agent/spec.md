@@ -54,11 +54,15 @@ Work-graph placement: gates the agent's write path onto the shared mutators. Per
 
 ### Requirement: Grounded, cite-evidence-or-omit typed output substrate
 
-The system SHALL provide a shared AI-over-work-graph substrate that every AI feature reuses: a team-scoped narrowed query feeds a grounded structured-output call whose result is a Zod-typed object of sections and per-item `{ kind, summary, evidenceRefs[], confidence }`. A deterministic validator SHALL drop any item whose `evidenceRefs` is empty (cite-evidence-or-omit), so a claim the model cannot attach to a linked work-graph signal is never emitted. Every emitted item SHALL link its work-graph entity (issue, PR, check, or deploy) — never raw code — so the reader can open and verify it. Consequential numbers (counts, CI conclusions, medians) SHALL be computed by yapm, and the model SHALL only narrate them; each item SHALL carry a confidence flag. Every consumer SHALL provide a graceful AI-off fallback that renders the raw linked evidence when AI is disabled, keyless, in outage, or spend-capped.
+The system SHALL provide a shared AI-over-work-graph substrate that every AI feature reuses: a team-scoped narrowed query feeds a grounded structured-output call whose result is a Zod-typed object of sections and per-item `{ kind, summary, evidenceRefs[], confidence }`. A deterministic validator SHALL drop any item whose `evidenceRefs` is empty (cite-evidence-or-omit), so a claim the model cannot attach to a linked work-graph signal is never emitted. Every emitted item SHALL link its work-graph entity (issue, PR, check, or deploy) — never raw code — so the reader can open and verify it. Consequential numbers (counts, CI conclusions, medians) SHALL be computed by yapm, and the model SHALL only narrate them; each item SHALL carry a confidence flag.
+
+**Every consumer SHALL degrade gracefully when AI is disabled, keyless, in outage, or spend-capped, and there are exactly two ways to do so.** A consumer whose reader can already read the underlying work graph SHALL render the raw linked evidence — strictly more than before and blocking nothing. **A consumer whose output crosses a permission boundary — whose reader is not entitled to the underlying work graph — SHALL instead be cleanly absent: no navigation entry, no route, no empty state, and no query issued.** For such a consumer there is no raw evidence to fall back to, because every raw-evidence fallback in the product is assembled from reads its reader cannot perform; rendering an error or an empty state there would announce the existence of an artifact to someone who cannot act on it, and constructing a fallback would mean widening exactly the reads the boundary exists to withhold. **Which of the two applies SHALL be a property of the consumer's reader, stated in that consumer's spec, not a per-surface judgement call.**
+
+**Where a consumer's output crosses a permission boundary, evidence SHALL be rendered as a server-computed plain-text label rather than a link**, since a link to an entity the reader cannot open dead-ends, and making it work would require widening reads on the linked entities — a larger disclosure than the prose the link was meant to make verifiable. The cite-evidence-or-omit rule is unchanged for such a consumer: the item is still dropped unless it cites a yapm-computed evidence id; only the rendering of that citation differs.
 
 **The validators SHALL be shape-agnostic.** Each consumer's typed content shape differs, so the cite-evidence-or-omit and name-validator walkers SHALL operate over one normalized artifact view (a headline, groups, and per-group items carrying a summary and references) that every consumer's content maps onto, and each consumer SHALL adapt its own shape to that view rather than carry its own walker. A consumer's evidence vocabulary MAY include a **computed metric key** as well as a work-graph entity id, in which case the surface SHALL render yapm's own value for that key and never a number the model produced. **There SHALL be exactly one implementation of each of these in the schema package** — one cite-or-omit walker, one member-name walker, one roster-needle builder, one running-spend accessor — and a second copy SHALL be treated as a defect, mechanically checkable.
 
-Work-graph placement: a read-and-summarize pipeline over the linked work graph; it produces typed artifacts that reference existing synced entities. Permission story: the query is team-scoped and runs under the caller's context; output references only entities the reader can already open.
+Work-graph placement: a read-and-summarize pipeline over the linked work graph; it produces typed artifacts that reference existing synced entities. Permission story: the query is team-scoped and runs under the caller's context; a consumer whose output stays inside the producing team references only entities the reader can already open, and a consumer whose output crosses a boundary references them as baked labels and discloses only through its own separate, explicitly-specified read predicate.
 
 #### Scenario: Uncited item is dropped
 
@@ -72,8 +76,18 @@ Work-graph placement: a read-and-summarize pipeline over the linked work graph; 
 
 #### Scenario: AI-off renders raw evidence
 
-- **WHEN** AI is disabled or unavailable for a consumer
+- **WHEN** AI is disabled or unavailable for a consumer whose reader can already read the underlying work graph
 - **THEN** the surface renders the raw linked evidence it already has, strictly more than before and blocking nothing
+
+#### Scenario: AI-off is cleanly absent for a reader across a permission boundary
+
+- **WHEN** AI is disabled or unavailable, or nothing has been disclosed, for a consumer whose reader is not entitled to the underlying work graph
+- **THEN** the surface does not exist for that reader — no navigation entry, no route, no empty state and no query issued — and its absence is indistinguishable from the artifact never having existed
+
+#### Scenario: Evidence across a boundary is a label, not a link
+
+- **WHEN** a consumer whose output crosses a permission boundary renders a cited item
+- **THEN** the citation renders as a server-computed plain-text label, no link to an unreadable entity is offered, and the item was still dropped unless it cited a yapm-computed evidence id
 
 #### Scenario: A second consumer reuses the validators unchanged
 

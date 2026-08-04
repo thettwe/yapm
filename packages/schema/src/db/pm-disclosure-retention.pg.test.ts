@@ -201,4 +201,22 @@ describe.skipIf(DATABASE_URL === undefined)('the disclosure audit retention boun
     expect(serialized).not.toContain('read')
     expect(serialized).not.toContain('audience"')
   })
+
+  // `detail` is jsonb and `team.id` is a uuid column. One stored `teamsChanged` entry that is not
+  // uuid-shaped would otherwise be handed to `where team.id in (…)` and fail the WHOLE workspace's
+  // audit read forever. It degrades to an unnamed team instead — exactly what a deleted team's id
+  // already does — and the real id alongside it still resolves.
+  it('survives a stored teamsChanged id that is not a uuid', async () => {
+    await recordDisclosureAudit(database.db, {
+      id: newId(),
+      workspaceId,
+      actorId,
+      event: 'policy_changed',
+      detail: { enabled: true, killed: false, teamsChanged: ['not-a-uuid', teamId] },
+    })
+
+    const log = await disclosureAuditLogForWorkspace(database.db, workspaceId)
+    const policy = log.recent.find((event) => event.event === 'policy_changed')
+    expect(policy?.teamsChangedNames).toEqual(['Retention'])
+  })
 })

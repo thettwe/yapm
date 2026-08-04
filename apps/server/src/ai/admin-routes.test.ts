@@ -475,6 +475,26 @@ describe.skipIf(DATABASE_URL === undefined)('createAiAdminRoutes — admin surfa
     expect(anonymous.status).toBe(401)
   })
 
+  // A team key here becomes a `detail.teamsChanged` entry, and that entry is later read back into a
+  // `where team.id in (…)` against a uuid column. A non-uuid key accepted once would poison the
+  // workspace's audit read permanently, so it is refused at the door and nothing is written.
+  it('refuses a policy write whose team key is not a uuid, and stores nothing', async () => {
+    const { workspaceId, adminId } = await freshWorkspace()
+    const response = await routes().request('/api/v1/ai/pm-disclosure', {
+      method: 'POST',
+      headers: { 'x-test-user': adminId, 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: true, teams: { 'not-a-uuid': { pmVisible: true } } }),
+    })
+    expect(response.status).toBe(400)
+
+    const rows = await database.db
+      .selectFrom('ai_disclosure_audit')
+      .select('id')
+      .where('workspace_id', '=', workspaceId)
+      .execute()
+    expect(rows).toEqual([])
+  })
+
   it('refuses to store a key when the encryption codec is unavailable', async () => {
     const { adminId } = await freshWorkspace()
     const response = await routes(false).request('/api/v1/ai/keys/anthropic', {

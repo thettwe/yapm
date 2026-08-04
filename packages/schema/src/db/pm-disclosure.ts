@@ -299,6 +299,12 @@ const TEAM_SCOPED_EVENTS = ['generated', 'published', 'unpublished'] as const
 
 type TeamScopedEvent = (typeof TEAM_SCOPED_EVENTS)[number]
 
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function isUuid(value: string): boolean {
+  return UUID_SHAPE.test(value)
+}
+
 export async function disclosureAuditLogForWorkspace(
   db: Kysely<DB>,
   workspaceId: string,
@@ -365,8 +371,16 @@ export async function disclosureAuditLogForWorkspace(
   // workspace. Scoped to it deliberately: a `teamsChanged` id from another workspace could not be
   // written by this code, and if one ever were, it would resolve to nothing here rather than
   // disclosing a name across the boundary.
+  //
+  // Filtered to uuid shape first. `detail` is jsonb — whatever a past or future writer put there is
+  // what comes back — and `team.id` is a uuid column, so one non-uuid string in the `in` list is a
+  // Postgres cast error that fails the ENTIRE workspace's audit read, permanently, for one bad row.
+  // An unrecognizable id degrades to an unnamed team, which is what an id whose team was deleted
+  // already does.
   const changedIds = new Set(
-    recent.flatMap((row) => ((row.detail ?? {}) as DisclosureAuditDetail).teamsChanged ?? []),
+    recent
+      .flatMap((row) => ((row.detail ?? {}) as DisclosureAuditDetail).teamsChanged ?? [])
+      .filter(isUuid),
   )
   const namesById = new Map<string, string>()
   if (changedIds.size > 0) {

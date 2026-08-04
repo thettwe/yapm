@@ -68,12 +68,17 @@ const keyBody = z.object({ value: z.string().min(1) })
 // The PM-disclosure policy write. Every field is optional and every omission means "leave it as it
 // is", and `teams` MERGES per team — an admin editing one team's audience must not silently clear
 // every other team's.
+//
+// The team keys are `z.uuid()`, not free strings: they land in `detail.teamsChanged` and are later
+// read back into a `where team.id in (…)` against a uuid column. A non-uuid key stored once would
+// make that read fail for the whole workspace forever, so it is refused at the only door that
+// writes it.
 const pmDisclosureBody = z.object({
   enabled: z.boolean().optional(),
   killed: z.boolean().optional(),
   teams: z
     .record(
-      z.string().min(1),
+      z.uuid(),
       z.object({
         pmVisible: z.boolean().optional(),
         audience: z.array(z.string().min(1)).optional(),

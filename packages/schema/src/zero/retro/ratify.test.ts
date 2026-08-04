@@ -82,3 +82,55 @@ describe('contestedFirst', () => {
     expect(rows.map((entry) => entry.id)).toEqual(['a', 'b'])
   })
 })
+
+// Change 22 pointed this comparator at `retroProposalBucket`, so the flat contested-first list and
+// the grouped rendering cannot disagree about what a follow-up is. Every field but the verdict is
+// optional, and a row carrying none of them must sort exactly as it did before the bucket existed —
+// which the four cases above assert, and this one completes.
+describe('contestedFirst — bucket then rank', () => {
+  const row = (
+    id: string,
+    verdict: RetroProposalVerdict | null,
+    category: 'win' | 'loss' | 'improvement',
+    rank: number,
+    refs?: readonly { readonly kind: string }[],
+  ) => ({ id, verdict, category, rank, ...(refs === undefined ? {} : { refs }) })
+
+  const FOLLOW_UP = [{ kind: 'retro_action', id: 'action-1' }]
+
+  it('orders contested first, then by bucket, then by rank within the bucket', () => {
+    const sorted = sortContestedFirst([
+      row('i-1', 'agreed', 'improvement', 0),
+      row('f-1', 'agreed', 'improvement', 0, FOLLOW_UP),
+      row('w-2', 'agreed', 'win', 1),
+      // Stored as an improvement, but it points at a prior action — so it sorts as a follow-up,
+      // after every improvement, rather than among them.
+      row('f-0', 'contested', 'improvement', 1, FOLLOW_UP),
+      row('w-1', 'unrated', 'win', 0),
+      row('l-1', 'rejected', 'loss', 0),
+      row('f-2', 'agreed', 'win', 1, FOLLOW_UP),
+    ])
+
+    expect(sorted.map((entry) => entry.id)).toEqual([
+      'f-0',
+      'w-1',
+      'w-2',
+      'l-1',
+      'i-1',
+      'f-1',
+      'f-2',
+    ])
+  })
+
+  it('leaves a row carrying neither a category nor a rank exactly where it arrived', () => {
+    const bare = [
+      { id: 'a', verdict: 'agreed' as const },
+      { id: 'b', verdict: 'agreed' as const },
+      { id: 'c', verdict: 'agreed' as const },
+    ]
+    expect(sortContestedFirst(bare).map((entry) => entry.id)).toEqual(['a', 'b', 'c'])
+    expect(contestedFirst(bare[0] as never, bare[1] as never)).toBe(0)
+    // And a bucketed row beside a bare one ties too, rather than jumping over it.
+    expect(contestedFirst({ verdict: 'agreed' }, row('w', 'agreed', 'win', 0))).toBe(0)
+  })
+})

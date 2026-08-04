@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
+import { ISSUE_STATUSES, type IssueStatus } from '../context.js'
 import {
   buildRetroSeed,
+  RETRO_ACTION_OUTCOMES,
+  type RetroActionOutcome,
   type RetroSeed,
   type RetroSeedCycleInput,
   type RetroSeedMetric,
+  retroActionOutcome,
+  retroActionOutcomeKey,
+  retroActionOutcomeTotals,
+  retroSeedRefSchema,
 } from './seed.js'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -244,5 +251,94 @@ describe('buildRetroSeed — the blameless guarantees', () => {
 
   it('is deterministic: the same input always produces the same panel', () => {
     expect(buildRetroSeed({ cycle: cyclesOnly, priorCycles: [priorCycle] })).toEqual(seed)
+  })
+})
+
+// The loop-close vocabulary. Every one of these is a claim the panel and the prompt both restate, so
+// getting `shipped` wrong would put a false "we fixed it" in front of the team that did not.
+describe('retroActionOutcome', () => {
+  it.each<[IssueStatus | null, RetroActionOutcome]>([
+    // Agreed and never tracked. Kept apart from `in_flight` because "we never wrote it down" and "we
+    // wrote it down and it is still open" are different failures.
+    [null, 'not_converted'],
+    ['done', 'shipped'],
+    ['canceled', 'canceled'],
+    ['backlog', 'in_flight'],
+    ['todo', 'in_flight'],
+    ['in_progress', 'in_flight'],
+    ['in_review', 'in_flight'],
+  ])('%s -> %s', (status, expected) => {
+    expect(retroActionOutcome(status)).toBe(expected)
+  })
+
+  // SHIPPED IS `done` AND NOTHING ELSE. Folding `canceled` in — or letting `in_review` count as
+  // nearly-shipped — is the plausible wrong implementation, so it is asserted over the whole status
+  // enum rather than over the four cases above.
+  it('reports shipped for exactly one status out of every one the product has', () => {
+    const shipped = ISSUE_STATUSES.filter((status) => retroActionOutcome(status) === 'shipped')
+    expect(shipped).toEqual(['done'])
+  })
+
+  it('is total over every issue status, and never invents an outcome', () => {
+    for (const status of ISSUE_STATUSES) {
+      expect(RETRO_ACTION_OUTCOMES).toContain(retroActionOutcome(status))
+    }
+    expect(retroActionOutcome(undefined)).toBe('not_converted')
+  })
+})
+
+describe('retroActionOutcomeTotals', () => {
+  it('counts each outcome and reports zero for the ones that did not happen', () => {
+    expect(retroActionOutcomeTotals(['shipped', 'canceled', 'shipped', 'not_converted'])).toEqual({
+      shipped: 2,
+      canceled: 1,
+      in_flight: 0,
+      not_converted: 1,
+    })
+  })
+
+  // A prior retro with no actions never reaches this — `priorRetro` is null instead — but the
+  // reducer being total over the empty list is what makes that a data property rather than a guard.
+  it('reports four zeros for no actions at all', () => {
+    expect(retroActionOutcomeTotals([])).toEqual({
+      shipped: 0,
+      canceled: 0,
+      in_flight: 0,
+      not_converted: 0,
+    })
+  })
+
+  it('gives every outcome a distinct citable key, in the widget namespace', () => {
+    const keys = RETRO_ACTION_OUTCOMES.map(retroActionOutcomeKey)
+    expect(new Set(keys).size).toBe(RETRO_ACTION_OUTCOMES.length)
+    expect(keys).toContain('prior_retro_shipped')
+    for (const key of keys) expect(key.startsWith('prior_retro_')).toBe(true)
+  })
+})
+
+describe('retroSeedRefSchema — the loop-closing kind', () => {
+  it('accepts a retro_action reference carrying the two yapm-baked fields', () => {
+    const parsed = retroSeedRefSchema.parse({
+      kind: 'retro_action',
+      id: 'action-1',
+      label: 'Split the release check — shipped',
+      outcome: 'shipped',
+      origin: 'Cycle 6',
+    })
+
+    expect(parsed.outcome).toBe('shipped')
+    expect(parsed.origin).toBe('Cycle 6')
+  })
+
+  // The two baked fields are OPTIONAL, which is what keeps a proposal drafted before this change
+  // parseable — the panel falls back to the plain heading and the plain chip.
+  it('still accepts a reference carrying neither baked field', () => {
+    expect(retroSeedRefSchema.parse({ kind: 'issue', id: 'i1' }).outcome).toBeUndefined()
+  })
+
+  it('refuses an outcome yapm does not compute', () => {
+    expect(
+      retroSeedRefSchema.safeParse({ kind: 'retro_action', id: 'a1', outcome: 'nearly' }).success,
+    ).toBe(false)
   })
 })

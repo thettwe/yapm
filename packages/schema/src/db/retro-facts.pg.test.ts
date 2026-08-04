@@ -5,6 +5,7 @@ import { buildRetroSeed } from '../zero/retro/seed.js'
 import { createDatabase, type Database } from './client.js'
 import { migrateToLatest } from './migrate.js'
 import { retroFactsForCycle } from './retro-facts.js'
+import { retroVerdictLogForWorkspace } from './retro-verdict-log.js'
 import type { DB } from './types.js'
 
 const DATABASE_URL = process.env.DATABASE_URL
@@ -18,12 +19,18 @@ if (DATABASE_URL === undefined && process.env.CI) {
 // The D2 allowlist. The set of tables `retroFactsForCycle` reads must EQUAL this — not be a subset
 // of it — so a later change that reaches for a retro content table or a comment fails here rather
 // than in review.
+// It grew by EXACTLY TWO, `retro` and `retro_action`, and the equality is what makes that "exactly".
+// The argument for those two and against every other retro table is design §D1: an action is the
+// team's agreed public output, made in the open, carrying no author column, already readable by every
+// member through an ordinary team-scoped query — a card is one person's testimony.
 const ALLOWED_TABLES = [
   'ci_check',
   'cycle',
   'issue',
   'issue_link',
   'pull_request',
+  'retro',
+  'retro_action',
   'review',
   'team',
 ]
@@ -47,6 +54,23 @@ interface Recording {
   readonly columns: Set<string>
 }
 
+// `.select()` also takes a CALLBACK — the aggregate form the verdict log uses — and a callback
+// records no column strings at all, so an intercepted argument list is not enough on its own. Every
+// executed statement is therefore compiled and its projection read back out of the SQL: whatever the
+// query actually asked Postgres for, in whichever form it was written.
+function recordProjection(builder: unknown, recording: Recording): void {
+  const compile = (builder as { compile?: () => { sql: string } }).compile
+  if (typeof compile !== 'function') return
+  const projection = /^\s*select\s+(.*?)\s+from\s/is.exec(compile.call(builder).sql)?.[1]
+  if (projection === undefined) return
+  // `select *` and `select "t".*`, but never the `*` inside `count(*)`.
+  if (/(?:^|[\s,])(?:"[^"]+"\.)?\*/.test(projection)) recording.columns.add('*')
+  for (const match of projection.matchAll(/"([^"]+)"/g)) {
+    const token = match[1]
+    if (token !== undefined) recording.columns.add(token)
+  }
+}
+
 // A recording proxy over the Kysely instance. `selectFrom` is the only entry point this module uses,
 // so wrapping it records every table; the compiled SQL of each executed query records every column
 // token. Cheaper and stricter than a query log: it observes what the code actually did.
@@ -67,6 +91,7 @@ function recordingDb(db: Kysely<DB>, recording: Recording): Kysely<DB> {
             const table = args[0]
             if (typeof table === 'string') recording.tables.add(table.split(' ')[0] as string)
           }
+          if (prop === 'execute' || prop === 'executeTakeFirst') recordProjection(target, recording)
           const result = (value as (...a: unknown[]) => unknown).apply(target, args)
           if (prop === 'execute' || prop === 'executeTakeFirst') return result
           return typeof result === 'object' && result !== null ? wrapBuilder(result) : result
@@ -104,6 +129,17 @@ describe.skipIf(DATABASE_URL === undefined)('retroFactsForCycle against Postgres
   const carriedIssueId = newId()
   const prId = newId()
   const checkId = newId()
+
+  // The prior retro and the two actions it agreed. Every one of these four rows carries a REAL,
+  // NON-NULL assignee, and the action's assignee differs from its issue's — so "no assignee reaches
+  // the bundle" cannot pass because there was nothing to strip.
+  const priorRetroId = newId()
+  const shippedActionId = newId()
+  const canceledActionId = newId()
+  const shippedActionIssueId = newId()
+  const canceledActionIssueId = newId()
+  const ACTION_ASSIGNEE = `action-assignee-${newId()}`
+  const ISSUE_ASSIGNEE = `issue-assignee-${newId()}`
 
   beforeAll(async () => {
     await migrateToLatest(database.db)
@@ -172,6 +208,32 @@ describe.skipIf(DATABASE_URL === undefined)('retroFactsForCycle against Postgres
       insert into ci_check (id, team_id, pull_request_id, provider, external_id, conclusion)
       values (${checkId}, ${teamId}, ${prId}, 'github', 'check-1', 'success')
     `.execute(db)
+    // The PREVIOUS retro, on the newest prior cycle in the window, and the two improvements the team
+    // agreed there: one that shipped, one that was canceled. The two converted issues sit in NO cycle,
+    // so they contribute nothing to any seed metric and the loop-close read is the only thing that can
+    // see them.
+    await sql`
+      insert into issue (id, team_id, number, title, status, priority, creator_id, assignee_id)
+      values
+        (${shippedActionIssueId}, ${teamId}, 3, 'Split the release check', 'done', 'medium',
+         ${creatorId}, ${ISSUE_ASSIGNEE}),
+        (${canceledActionIssueId}, ${teamId}, 4, 'Rotate the on-call doc', 'canceled', 'medium',
+         ${creatorId}, ${ISSUE_ASSIGNEE})
+    `.execute(db)
+    await sql`
+      insert into retro (id, team_id, cycle_id, title, format, created_by)
+      values (${priorRetroId}, ${teamId}, ${priorCycleIds[3]}, 'Prior 4 retro', 'start_stop_continue',
+              ${creatorId})
+    `.execute(db)
+    await sql`
+      insert into retro_action (id, retro_id, team_id, body, assignee_id, issue_id)
+      values
+        (${shippedActionId}, ${priorRetroId}, ${teamId}, 'Split the release check in two',
+         ${ACTION_ASSIGNEE}, ${shippedActionIssueId}),
+        (${canceledActionId}, ${priorRetroId}, ${teamId}, 'Rotate the on-call doc weekly',
+         ${ACTION_ASSIGNEE}, ${canceledActionIssueId})
+    `.execute(db)
+
     // `review.author` is a provider handle. It is populated here precisely so the assertion that the
     // fact assembly never selects it is meaningful.
     await sql`
@@ -236,20 +298,28 @@ describe.skipIf(DATABASE_URL === undefined)('retroFactsForCycle against Postgres
     expect(shipped?.trend.length).toBeLessThanOrEqual(4)
   })
 
-  it('exposes citableIds as the evidence ids union every computed metric key', async () => {
+  // Citability is a (namespace, id) PAIR: an evidence id is citable under a work-graph kind and a
+  // computed key under `widget`, and neither is citable under the other's kind.
+  it('exposes the citable evidence ids and metric keys in their own namespaces', async () => {
     const facts = await retroFactsForCycle(database.db, teamId, closedCycleId)
     expect(facts).not.toBeNull()
 
     const metricKeys = (facts?.seed.sections ?? []).flatMap((section) =>
       section.metrics.map((metric) => metric.key),
     )
-    for (const id of [...(facts?.evidenceIds ?? []), ...metricKeys]) {
-      expect(facts?.citableIds).toContain(id)
-    }
-    expect(facts?.citableIds).toContain(shippedIssueId)
-    expect(facts?.citableIds).toContain(prId)
-    expect(facts?.citableIds).toContain(checkId)
-    expect(facts?.citableIds).toContain('shipped')
+    for (const id of facts?.evidenceIds ?? []) expect(facts?.citations.evidence).toContain(id)
+    for (const key of metricKeys) expect(facts?.citations.widget).toContain(key)
+    expect(facts?.citations.evidence).toContain(shippedIssueId)
+    expect(facts?.citations.evidence).toContain(prId)
+    expect(facts?.citations.evidence).toContain(checkId)
+    expect(facts?.citations.widget).toContain('shipped')
+    expect(facts?.citations.widget).not.toContain(shippedIssueId)
+    expect(facts?.citations.evidence).not.toContain('shipped')
+    // The fixture's prior retro carries two actions. They are citable as follow-ups and under
+    // neither of the other two namespaces.
+    expect(facts?.citations.retroAction).toHaveLength(2)
+    expect(facts?.citations.evidence).not.toContain(shippedActionId)
+    expect(facts?.citations.widget).not.toContain(shippedActionId)
   })
 
   it('returns null for a cycle belonging to another team', async () => {
@@ -267,16 +337,18 @@ describe.skipIf(DATABASE_URL === undefined)('retroFactsForCycle against Postgres
 
     expect([...recording.tables].sort()).toEqual(ALLOWED_TABLES)
 
-    // No retro content table and no comment, stated explicitly rather than left to the equality.
+    // Every table holding an individual's testimony or an individual's signal stays out, stated
+    // explicitly rather than left to the equality — including `retro_ai_proposal`, so no draft can be
+    // shaped by what an earlier one was judged to be.
     for (const forbidden of [
-      'retro',
+      'retro_ai_proposal',
+      'retro_ai_reaction',
       'retro_draft',
       'retro_card',
       'retro_card_author',
       'retro_vote',
       'retro_vote_tally',
       'retro_presence',
-      'retro_action',
       'comment',
       'workspace_member',
       'user',
@@ -284,10 +356,20 @@ describe.skipIf(DATABASE_URL === undefined)('retroFactsForCycle against Postgres
       expect(recording.tables, forbidden).not.toContain(forbidden)
     }
 
-    // Every select is an explicit column list, and none of them is an identity column.
+    // Every select is an explicit column list, and none of them is an identity column or the join
+    // back to the anonymous card an action came from.
     expect(recording.columns).not.toContain('*')
     for (const column of recording.columns) {
-      for (const forbidden of ['author', 'assignee_id', 'creator_id', 'uploader_id']) {
+      for (const forbidden of [
+        'author',
+        'assignee_id',
+        'creator_id',
+        'uploader_id',
+        'card_id',
+        'group_id',
+        'facilitator_id',
+        'created_by',
+      ]) {
         expect(column.includes(forbidden), `${column} names ${forbidden}`).toBe(false)
       }
     }
@@ -297,5 +379,437 @@ describe.skipIf(DATABASE_URL === undefined)('retroFactsForCycle against Postgres
     const facts = await retroFactsForCycle(database.db, teamId, closedCycleId)
 
     expect(identityKeys(facts)).toEqual([])
+  })
+
+  // THE FALSIFIABLE CHECK for change 22, asserted against the BUILT OBJECT rather than against the
+  // text of any request made from it. A downstream validator that happened to strip an assignee out
+  // of the prompt would not make a single line of this pass.
+  it('reports the prior retro’s actions with yapm-computed outcomes and neither assignee', async () => {
+    const recording: Recording = { tables: new Set(), columns: new Set() }
+    const facts = await retroFactsForCycle(
+      recordingDb(database.db, recording),
+      teamId,
+      closedCycleId,
+    )
+
+    const prior = facts?.priorRetro
+    expect(prior?.cycleName).toBe('Prior 4')
+    expect(prior?.actions.map((action) => action.outcome).sort()).toEqual(['canceled', 'shipped'])
+
+    // `shipped` is `done` AND NOTHING ELSE. Folding `canceled` into it is the easy, plausible, wrong
+    // implementation, which is why the canceled one is asserted by name as well as by total.
+    expect(prior?.totals.shipped).toBe(1)
+    expect(prior?.totals.canceled).toBe(1)
+    const canceled = prior?.actions.find((action) => action.id === canceledActionId)
+    expect(canceled?.outcome).toBe('canceled')
+    expect(canceled?.issue?.status).toBe('canceled')
+    expect(prior?.actions.find((action) => action.id === shippedActionId)?.outcome).toBe('shipped')
+
+    // Both action ids are citable UNDER `retro_action` and nowhere else, so a follow-up proposal can
+    // point at one; the outcome totals are citable under `widget`, so it can point at a count
+    // instead of typing one.
+    expect(facts?.citations.retroAction).toContain(shippedActionId)
+    expect(facts?.citations.retroAction).toContain(canceledActionId)
+    expect(facts?.citations.widget).toContain('prior_retro_shipped')
+    expect(facts?.citations.evidence).not.toContain(shippedActionId)
+    expect(facts?.citations.evidence).not.toContain('prior_retro_shipped')
+
+    // The strip, at both altitudes: the shape, and the values.
+    expect(identityKeys(facts)).toEqual([])
+    const serialized = JSON.stringify(facts)
+    expect(serialized).not.toContain(ACTION_ASSIGNEE)
+    expect(serialized).not.toContain(ISSUE_ASSIGNEE)
+
+    // And the read itself: neither assignee column, nor the card link, was ever selected.
+    expect(recording.columns).not.toContain('*')
+    for (const column of recording.columns) {
+      for (const forbidden of [
+        'assignee_id',
+        'card_id',
+        'group_id',
+        'facilitator_id',
+        'created_by',
+      ]) {
+        expect(column.includes(forbidden), `${column} names ${forbidden}`).toBe(false)
+      }
+    }
+  })
+
+  it('leaves the prior retro absent for a team that has never held one', async () => {
+    const soloTeamId = newId()
+    const soloCycleId = newId()
+    const db = database.db
+    await sql`
+      insert into team (id, workspace_id, name, key)
+      values (${soloTeamId}, ${workspaceId}, 'Solo', ${`S${Date.now() % 100_000}`})
+    `.execute(db)
+    await sql`
+      insert into cycle (id, team_id, number, name, status, start_date, end_date)
+      values (${soloCycleId}, ${soloTeamId}, 1, 'First', 'completed',
+              now() - interval '14 days', now())
+    `.execute(db)
+
+    const facts = await retroFactsForCycle(db, soloTeamId, soloCycleId)
+
+    // A well-formed bundle with the section ABSENT — not a throw, not an empty string, not a partial
+    // object. Nothing is citable from a retro that never happened, so the shipped cite-or-omit
+    // validator is what makes a first retro produce no follow-up proposal.
+    expect(facts).not.toBeNull()
+    expect(facts?.priorRetro).toBeNull()
+    expect(facts?.cycleName).toBe('First')
+    expect(facts?.citations.widget).not.toContain('prior_retro_shipped')
+    expect(identityKeys(facts)).toEqual([])
+  })
+
+  // A team of its own per case, so each fixture states exactly the history it is about and no
+  // assertion depends on another test's rows.
+  async function freshTeam(name: string): Promise<string> {
+    const id = newId()
+    await sql`
+      insert into team (id, workspace_id, name, key)
+      values (${id}, ${workspaceId}, ${name}, ${`K${id.replaceAll('-', '').slice(-8).toUpperCase()}`})
+    `.execute(database.db)
+    return id
+  }
+
+  async function completedCycle(
+    teamIdOfCycle: string,
+    number: number,
+    name: string,
+    daysAgo: number,
+  ): Promise<string> {
+    const id = newId()
+    await sql`
+      insert into cycle (id, team_id, number, name, status, start_date, end_date)
+      values (${id}, ${teamIdOfCycle}, ${number}, ${name}, 'completed',
+              now() - (${daysAgo} || ' days')::interval,
+              now() - (${daysAgo - 14} || ' days')::interval)
+    `.execute(database.db)
+    return id
+  }
+
+  async function retroOn(teamIdOfRetro: string, cycleIdOfRetro: string): Promise<string> {
+    const id = newId()
+    await sql`
+      insert into retro (id, team_id, cycle_id, title, format, created_by)
+      values (${id}, ${teamIdOfRetro}, ${cycleIdOfRetro}, 'Retro', 'start_stop_continue',
+              ${`creator-${newId()}`})
+    `.execute(database.db)
+    return id
+  }
+
+  // Every outcome the vocabulary has, on one prior retro, so the four are told apart by the read and
+  // not merely by the pure classifier that has its own unit test.
+  it('reports all four outcomes distinctly, and counts only the done one as shipped', async () => {
+    const outcomeTeamId = await freshTeam('Outcomes')
+    const priorCycle = await completedCycle(outcomeTeamId, 1, 'Outcomes 1', 28)
+    const targetCycle = await completedCycle(outcomeTeamId, 2, 'Outcomes 2', 14)
+    const retroId = await retroOn(outcomeTeamId, priorCycle)
+
+    const doneIssue = newId()
+    const canceledIssue = newId()
+    const openIssue = newId()
+    const creator = `creator-${newId()}`
+    await sql`
+      insert into issue (id, team_id, number, title, status, priority, creator_id, assignee_id)
+      values
+        (${doneIssue}, ${outcomeTeamId}, 1, 'Shipped one', 'done', 'medium', ${creator},
+         ${ISSUE_ASSIGNEE}),
+        (${canceledIssue}, ${outcomeTeamId}, 2, 'Dropped one', 'canceled', 'medium', ${creator},
+         ${ISSUE_ASSIGNEE}),
+        (${openIssue}, ${outcomeTeamId}, 3, 'Still going', 'in_review', 'medium', ${creator},
+         ${ISSUE_ASSIGNEE})
+    `.execute(database.db)
+
+    const [shippedId, canceledId, openId, untrackedId] = [newId(), newId(), newId(), newId()]
+    await sql`
+      insert into retro_action (id, retro_id, team_id, body, assignee_id, issue_id)
+      values
+        (${shippedId}, ${retroId}, ${outcomeTeamId}, 'Split the release check', ${ACTION_ASSIGNEE},
+         ${doneIssue}),
+        (${canceledId}, ${retroId}, ${outcomeTeamId}, 'Rotate the on-call doc', ${ACTION_ASSIGNEE},
+         ${canceledIssue}),
+        (${openId}, ${retroId}, ${outcomeTeamId}, 'Trim the CI matrix', ${ACTION_ASSIGNEE},
+         ${openIssue}),
+        (${untrackedId}, ${retroId}, ${outcomeTeamId}, 'Talk to design earlier', ${ACTION_ASSIGNEE},
+         null)
+    `.execute(database.db)
+
+    const facts = await retroFactsForCycle(database.db, outcomeTeamId, targetCycle)
+    const prior = facts?.priorRetro
+    const outcomeOf = (id: string) => prior?.actions.find((action) => action.id === id)?.outcome
+
+    expect(outcomeOf(shippedId)).toBe('shipped')
+    expect(outcomeOf(canceledId)).toBe('canceled')
+    expect(outcomeOf(openId)).toBe('in_flight')
+    expect(outcomeOf(untrackedId)).toBe('not_converted')
+
+    // ONE shipped out of four. A canceled action is reported accurately rather than counted as
+    // shipped, and an `in_review` one is still open rather than nearly done.
+    expect(prior?.totals).toEqual({ shipped: 1, canceled: 1, in_flight: 1, not_converted: 1 })
+
+    // The never-converted action carries no issue at all rather than a hollow one.
+    expect(prior?.actions.find((action) => action.id === untrackedId)?.issue).toBeNull()
+    expect(prior?.actions.find((action) => action.id === canceledId)?.issue?.status).toBe(
+      'canceled',
+    )
+
+    expect(identityKeys(facts)).toEqual([])
+    expect(JSON.stringify(facts)).not.toContain(ISSUE_ASSIGNEE)
+  })
+
+  // Design §D7: a team that skipped a retro — or held one and agreed nothing — should still be
+  // reminded of the actions it last actually agreed, and the bundle must NAME that cycle so a
+  // proposal cannot imply the actions were from last cycle.
+  it('takes the prior retro from two cycles back when the nearer one agreed nothing', async () => {
+    const skippedTeamId = await freshTeam('Skipped')
+    const older = await completedCycle(skippedTeamId, 1, 'Skipped 1', 42)
+    const nearer = await completedCycle(skippedTeamId, 2, 'Skipped 2', 28)
+    const targetCycle = await completedCycle(skippedTeamId, 3, 'Skipped 3', 14)
+
+    const olderRetro = await retroOn(skippedTeamId, older)
+    // A retro on the immediately-preceding cycle that produced NO action, which is why it is not the
+    // one reported on.
+    await retroOn(skippedTeamId, nearer)
+
+    const actionId = newId()
+    await sql`
+      insert into retro_action (id, retro_id, team_id, body, issue_id)
+      values (${actionId}, ${olderRetro}, ${skippedTeamId}, 'Pair on the migration', null)
+    `.execute(database.db)
+
+    const facts = await retroFactsForCycle(database.db, skippedTeamId, targetCycle)
+
+    expect(facts?.priorRetro?.cycleId).toBe(older)
+    expect(facts?.priorRetro?.cycleName).toBe('Skipped 1')
+    expect(facts?.priorRetro?.actions.map((action) => action.id)).toEqual([actionId])
+    expect(facts?.citations.retroAction).toContain(actionId)
+  })
+
+  it('leaves the prior retro absent when the only prior retro agreed nothing', async () => {
+    const emptyTeamId = await freshTeam('Empty retro')
+    const priorCycle = await completedCycle(emptyTeamId, 1, 'Empty 1', 28)
+    const targetCycle = await completedCycle(emptyTeamId, 2, 'Empty 2', 14)
+    await retroOn(emptyTeamId, priorCycle)
+
+    const facts = await retroFactsForCycle(database.db, emptyTeamId, targetCycle)
+
+    // A retro with no actions is the same absence as no retro at all: well-formed bundle, null
+    // section, nothing citable — not an empty action list a prompt would have to describe.
+    expect(facts).not.toBeNull()
+    expect(facts?.priorRetro).toBeNull()
+    expect(facts?.citations.widget).not.toContain('prior_retro_shipped')
+    expect(identityKeys(facts)).toEqual([])
+  })
+})
+
+// The other half of the loop: what teams DID with what the model drafted. It lives beside the fact
+// assembly because the two share the recording proxy above and because the property that matters
+// most about them is the same one stated twice — the fact assembly must never read a verdict, and
+// the verdict log must never read a reaction.
+describe.skipIf(DATABASE_URL === undefined)('retroVerdictLogForWorkspace against Postgres', () => {
+  const database: Database = createDatabase({ connectionString: DATABASE_URL ?? '' })
+
+  const workspaceId = newId()
+  const otherWorkspaceId = newId()
+  const teamId = newId()
+  const quietTeamId = newId()
+  const otherTeamId = newId()
+  const rejectedId = newId()
+  const contestedId = newId()
+  const REACTOR = `reactor-${newId()}`
+
+  beforeAll(async () => {
+    await migrateToLatest(database.db)
+    const db = database.db
+    const suffix = newId().replaceAll('-', '').slice(-6).toUpperCase()
+
+    await sql`
+      insert into workspace (id, name) values
+        (${workspaceId}, 'verdict-log'), (${otherWorkspaceId}, 'verdict-log-other')
+    `.execute(db)
+    await sql`
+      insert into team (id, workspace_id, name, key) values
+        (${teamId}, ${workspaceId}, 'Platform', ${`VA${suffix}`}),
+        (${quietTeamId}, ${workspaceId}, 'Apps', ${`VB${suffix}`}),
+        (${otherTeamId}, ${otherWorkspaceId}, 'Elsewhere', ${`VC${suffix}`})
+    `.execute(db)
+
+    const creator = `creator-${newId()}`
+    async function retroWithProposals(
+      ownerTeamId: string,
+      cycleName: string,
+      rows: readonly {
+        id: string
+        category: string
+        summary: string
+        verdict: string | null
+        agree: number | null
+        disagree: number | null
+      }[],
+    ) {
+      const cycleId = newId()
+      const retroId = newId()
+      const draftId = newId()
+      await sql`
+        insert into cycle (id, team_id, number, name, status, start_date, end_date)
+        values (${cycleId}, ${ownerTeamId}, 1, ${cycleName}, 'completed',
+                now() - interval '28 days', now() - interval '14 days')
+      `.execute(db)
+      await sql`
+        insert into retro (id, team_id, cycle_id, title, format, created_by)
+        values (${retroId}, ${ownerTeamId}, ${cycleId}, ${cycleName}, 'start_stop_continue',
+                ${creator})
+      `.execute(db)
+      await sql`
+        insert into retro_ai_draft (id, retro_id, team_id, status)
+        values (${draftId}, ${retroId}, ${ownerTeamId}, 'ready')
+      `.execute(db)
+      for (const [rank, row] of rows.entries()) {
+        await sql`
+          insert into retro_ai_proposal (id, draft_id, retro_id, team_id, category, summary,
+                                         confidence, rank, verdict, agree_count, disagree_count,
+                                         ratified_at)
+          values (${row.id}, ${draftId}, ${retroId}, ${ownerTeamId}, ${row.category}, ${row.summary},
+                  'medium', ${rank}, ${row.verdict}, ${row.agree}, ${row.disagree},
+                  ${row.verdict === null ? null : new Date()})
+        `.execute(db)
+      }
+      return { retroId }
+    }
+
+    const { retroId } = await retroWithProposals(teamId, 'Cycle 6', [
+      {
+        id: newId(),
+        category: 'win',
+        summary: 'Everything in scope shipped.',
+        verdict: 'agreed',
+        agree: 3,
+        disagree: 0,
+      },
+      {
+        id: rejectedId,
+        category: 'improvement',
+        summary: 'Add a second reviewer to every pull request.',
+        verdict: 'rejected',
+        agree: 0,
+        disagree: 2,
+      },
+      {
+        id: contestedId,
+        category: 'loss',
+        summary: 'Two issues carried a second time.',
+        verdict: 'contested',
+        agree: 2,
+        disagree: 1,
+      },
+      {
+        id: newId(),
+        category: 'win',
+        summary: 'CI stayed green.',
+        verdict: 'unrated',
+        agree: 0,
+        disagree: 0,
+      },
+      // Never ratified: the team never advanced past `vote`, so no verdict was ever stamped. That is
+      // `undecided`, not `unrated` — a team that has not finished is not a team that shrugged.
+      {
+        id: newId(),
+        category: 'improvement',
+        summary: 'Nobody has voted on this yet.',
+        verdict: null,
+        agree: null,
+        disagree: null,
+      },
+    ])
+
+    // A reaction really exists, so "the log never reads one" cannot pass because there was none.
+    await sql`
+      insert into retro_ai_reaction (proposal_id, user_id, retro_id, team_id, value)
+      values (${rejectedId}, ${REACTOR}, ${retroId}, ${teamId}, 'disagree')
+    `.execute(db)
+
+    await retroWithProposals(otherTeamId, 'Elsewhere 1', [
+      {
+        id: newId(),
+        category: 'loss',
+        summary: 'A proposal in another workspace entirely.',
+        verdict: 'rejected',
+        agree: 0,
+        disagree: 4,
+      },
+    ])
+  }, 60_000)
+
+  afterAll(async () => {
+    await database.close()
+  })
+
+  it('counts every verdict per team, keeping never-ratified apart from nobody-responded', async () => {
+    const log = await retroVerdictLogForWorkspace(database.db, workspaceId)
+
+    const platform = log.totals.find((team) => team.teamId === teamId)
+    expect(platform?.teamName).toBe('Platform')
+    expect(platform).toMatchObject({
+      agreed: 1,
+      rejected: 1,
+      contested: 1,
+      unrated: 1,
+      undecided: 1,
+    })
+    // A team that has drafted nothing has no row rather than a row of zeros.
+    expect(log.totals.map((team) => team.teamId)).not.toContain(quietTeamId)
+  })
+
+  it('reports only what a team threw away or split over, and only for this workspace', async () => {
+    const log = await retroVerdictLogForWorkspace(database.db, workspaceId)
+
+    expect(log.recent.map((row) => row.id).sort()).toEqual([rejectedId, contestedId].sort())
+    expect(log.recent.map((row) => row.verdict).sort()).toEqual(['contested', 'rejected'])
+    expect(log.recent.map((row) => row.summary)).not.toContain(
+      'A proposal in another workspace entirely.',
+    )
+    expect(log.recent.every((row) => row.cycleName === 'Cycle 6')).toBe(true)
+    expect(log.recent.find((row) => row.id === rejectedId)?.disagreeCount).toBe(2)
+  })
+
+  // THE TEAM-LEVEL GUARANTEE, asserted on the statements rather than on the response: a read that
+  // never names the reaction table cannot grow a per-person column later without failing here.
+  it('never issues a statement naming retro_ai_reaction, and returns no user identifier', async () => {
+    const recording: Recording = { tables: new Set(), columns: new Set() }
+    const log = await retroVerdictLogForWorkspace(recordingDb(database.db, recording), workspaceId)
+
+    expect([...recording.tables].sort()).toEqual(['cycle', 'retro', 'retro_ai_proposal', 'team'])
+    for (const forbidden of ['retro_ai_reaction', 'workspace_member', 'user', 'retro_card']) {
+      expect(recording.tables, forbidden).not.toContain(forbidden)
+    }
+    // The per-team totals are an AGGREGATE, written with the callback form of `.select` — a form that
+    // hands Kysely a builder rather than column names. These two prove the recorder read that query's
+    // projection back out of the compiled SQL, so the guard below is not passing on an empty set.
+    expect(recording.columns).toContain('verdict')
+    expect(recording.columns).toContain('teamKey')
+
+    expect(recording.columns).not.toContain('*')
+    for (const column of recording.columns) {
+      for (const forbidden of ['user_id', 'created_by', 'facilitator_id']) {
+        expect(column.includes(forbidden), `${column} names ${forbidden}`).toBe(false)
+      }
+    }
+
+    // And the object: no identity-shaped key at any depth, and the one real reactor's id nowhere.
+    expect(identityKeys(log)).toEqual([])
+    expect(JSON.stringify(log)).not.toContain(REACTOR)
+  })
+
+  it('returns an empty log for a workspace that has never drafted a retro', async () => {
+    const emptyWorkspaceId = newId()
+    await sql`insert into workspace (id, name) values (${emptyWorkspaceId}, 'no-drafts')`.execute(
+      database.db,
+    )
+
+    expect(await retroVerdictLogForWorkspace(database.db, emptyWorkspaceId)).toEqual({
+      totals: [],
+      recent: [],
+    })
   })
 })

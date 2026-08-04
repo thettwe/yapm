@@ -203,6 +203,18 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     expect(contrastRatio(hex(t, '--text-2'), card), 'unpressed').toBeGreaterThanOrEqual(AA_NORMAL)
   })
 
+  // The prior-action chip on a follow-up proposal (change 22). It is the ONE new token pair this
+  // change introduces: `text-2` on a 60% `--bg-hover` wash over the proposal card, rather than the
+  // soft-accent wash every other evidence chip uses — because it is not a control and must not read
+  // as one. 11px ink, so AA normal is the bar, and the outcome it carries is a word and an icon
+  // rather than a hue, which is why no status colour appears in this assertion.
+  it('the prior-action chip ink meets AA on its hover wash over a proposal card (>= 4.5)', () => {
+    const chip = wash(t['--bg-hover'] ?? '', hex(t, '--bg-elevated'), 0.6)
+    for (const ink of ['--text-1', '--text-2'] as const) {
+      expect(contrastRatio(hex(t, ink), chip), ink).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
   it('on-accent text on the accent fill meets AA (>= 4.5)', () => {
     expect(contrastRatio(hex(t, '--on-accent'), hex(t, '--accent'))).toBeGreaterThanOrEqual(
       AA_NORMAL,

@@ -177,6 +177,18 @@ Converting is idempotent. A second conversion is a no-op, not a duplicate issue.
 converted issue's live status inline, and an already-created action can still be converted from a
 `closed` retro.
 
+**And the next retro asks what became of them.** For a team with the
+[AI draft](/features/retro-ai-draft/) turned on, the following retro can open with a fourth group —
+*follow-ups* — where the draft reports on improvements agreed in the team's most recent previous
+retro (up to three, with yapm naming which cycle they came from), each against the live status of the
+issue it became: **shipped** (the issue is `Done`, and nothing else counts), **canceled**, **still
+open**, or **never tracked** if it never became an issue at all. That answer is computed by yapm, not
+written by the model, and the group appears only when there is something to report: on a team's first
+retro it is simply not there.
+
+Without the AI draft, the loop still closes the plain way — an unfinished action is an unfinished
+issue, and the cycle's rollover puts it in front of you again.
+
 ## Keyboard
 
 Every action below is also a command-palette entry, so nothing is keyboard-only or pointer-only.
@@ -218,7 +230,8 @@ converts the focused action into an issue. `Esc` always leaves the editor you ar
 
 Optionally, and **off for every team until an admin turns it on**, a model reads the same cycle facts
 the data panel is built from and drafts up to three wins, three losses and three improvements into the
-retro — each one citing a work-graph entity or one of the panel's own computed metrics. It appears
+retro — plus, from the team's second retro onward, up to three follow-ups on what the last one agreed
+— each one citing a work-graph entity or one of the panel's own computed metrics. It appears
 directly below the data panel, a few seconds after the facilitator reveals the board, and it is
 labelled *AI-drafted, not agreed* until the team ratifies it — nothing the model writes becomes the
 team's conclusion on its own.
@@ -226,7 +239,9 @@ team's conclusion on its own.
 It is drafted **at the `brainstorm` → `group` advance**, never before: while the retro is in
 `brainstorm` the rows do not exist, so there is nothing for the team to anchor on while they are still
 writing their own cards. It reads **no cards, no comments, no votes and nobody's name** — the anonymity
-boundary above is untouched, because the pipeline reads no retro content at all.
+boundary above is untouched. It does read the previous retro's **agreed actions**, which are the
+team's public output rather than anybody's testimony, and it reads neither the assignee on those
+actions nor the assignee on the issues they became.
 
 Each member then **agrees or disagrees** with each proposal, privately: the reaction syncs to nobody
 but its author — not to another member, and not to a workspace admin — exactly like the dots above.
@@ -251,8 +266,7 @@ verdict rule in full, and the two residuals stated plainly.
 
 ## What is next
 
-**Closing the loop**: asking, at the next retro, whether last cycle's agreed improvements actually
-shipped. The link from a proposal to the action it became to the issue that action became is already
-recorded in both directions, so the answer is a read over the work graph rather than another thing
-for the team to remember. It builds on the board and the draft; it replaces neither.
+Nothing on this surface. The board, the draft, the team's ratification of it and the loop back to
+last retro's actions are all in — see [Retro AI draft](/features/retro-ai-draft/) for the last of
+those.
 

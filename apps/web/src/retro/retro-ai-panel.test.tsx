@@ -753,3 +753,184 @@ test('an opted-in panel asks for the reaction query, and only its own three plus
     ].sort(),
   )
 })
+
+// A proposal reporting on an improvement the team agreed in its PREVIOUS retro. Its stored category
+// is still one of the three — the bucket is derived from the reference, which is what let this ship
+// without a migration — and every field on the reference below was written by yapm server-side.
+function followUp(overrides: Partial<RetroAiProposalRow> = {}): RetroAiProposalRow {
+  return proposal({
+    id: 'f-1',
+    category: 'win',
+    summary: 'The improvement agreed last cycle landed.',
+    refs: [
+      {
+        kind: 'retro_action',
+        id: 'action-1',
+        label: 'Split the release check in two — shipped',
+        outcome: 'shipped',
+        origin: 'Cycle 6',
+      },
+    ],
+    ...overrides,
+  })
+}
+
+// THE FIRST-RETRO GUARANTEE, at the DOM. A team with no prior retro to report on — which is every
+// team on its first retro — must get the panel exactly as change 18 shipped it: no fourth heading,
+// no placeholder, no reserved space, and nothing in the announcement about a bucket that is empty.
+test('a draft with no follow-ups renders the panel change 18 shipped, with nothing added', async () => {
+  mount(draftRow('ready'), [
+    proposal({ id: 'w-1', category: 'win', summary: 'Everything in scope shipped.' }),
+    proposal({ id: 'l-1', category: 'loss', summary: 'Two issues carried a second time.' }),
+    proposal({ id: 'i-1', category: 'improvement', summary: 'Start reviews earlier.' }),
+  ])
+
+  const groups = screen.getAllByTestId('retro-ai-category')
+  expect(groups.map((group) => group.dataset.category)).toEqual(['win', 'loss', 'improvement'])
+  expect(screen.queryByTestId('retro-ai-evidence-action')).toBeNull()
+
+  // Not "0 follow-ups", not a hidden node, not an empty section: the word does not occur anywhere in
+  // the rendered markup.
+  const panel = screen.getByTestId('retro-ai-panel')
+  expect(panel.innerHTML.toLowerCase()).not.toContain('follow')
+  expect(panel.querySelector('[data-bucket="follow_up"]')).toBeNull()
+
+  await waitFor(() =>
+    expect(screen.getByTestId('retro-ai-announcement').textContent).toBe(
+      'AI draft ready: 1 win, 1 loss, 1 improvement.',
+    ),
+  )
+})
+
+test('a follow-up gets its own group, headed with the cycle those actions were agreed in', () => {
+  mount(draftRow('ready'), [
+    proposal({ id: 'w-1', category: 'win', summary: 'Everything in scope shipped.' }),
+    followUp(),
+  ])
+
+  const groups = screen.getAllByTestId('retro-ai-category')
+  // Stored as a win, rendered apart from the wins: the bucket is the reference, not the column.
+  expect(groups.map((group) => group.dataset.category)).toEqual(['win', 'follow_up'])
+  expect(groups[1]?.querySelector('h3')?.textContent).toBe('Follow-ups from Cycle 6')
+  expect(groups[0]?.textContent).not.toContain('The improvement agreed last cycle landed.')
+})
+
+// THE SPOKEN UNIT NAMES THE CYCLE TOO. The prior retro is not necessarily last cycle's — yapm walks
+// back to the most recent one that agreed something — and the live region is the one surface with no
+// visible heading beside it to correct a reader who was told "last retro".
+test('the announcement names the cycle the follow-ups came from', async () => {
+  mount(draftRow('ready'), [proposal({ id: 'w-1', category: 'win' }), followUp()])
+
+  await waitFor(() =>
+    expect(screen.getByTestId('retro-ai-announcement').textContent).toBe(
+      'AI draft ready: 1 win, 1 follow-up from Cycle 6.',
+    ),
+  )
+})
+
+test('the announcement stays vague rather than wrong when no origin was baked', async () => {
+  mount(draftRow('ready'), [
+    followUp({ refs: [{ kind: 'retro_action', id: 'action-1', label: 'Split the check' }] }),
+  ])
+
+  await waitFor(() =>
+    expect(screen.getByTestId('retro-ai-announcement').textContent).toBe(
+      'AI draft ready: 1 follow-up on a previous retro.',
+    ),
+  )
+})
+
+// A cited outcome TOTAL shares the `widget` namespace with the seed's metric keys and has no seed
+// metric behind it, so it resolves against nothing the client holds. Its caption is yapm's, baked
+// beside the reference — without this branch the count a proposal was pointing at is never drawn.
+test('a cited prior-retro total renders yapm’s count as an inert chip', () => {
+  const onOpenMetric = vi.fn()
+  mount(
+    draftRow('ready'),
+    [
+      followUp({
+        refs: [
+          { kind: 'retro_action', id: 'action-1', label: 'Split the check', origin: 'Cycle 6' },
+          { kind: 'widget', id: 'prior_retro_shipped', label: '1 shipped', outcome: 'shipped' },
+        ],
+      }),
+    ],
+    { canWrite: false, onOpenMetric },
+  )
+
+  const chip = screen.getByTestId('retro-ai-evidence-prior-total')
+  expect(chip.textContent).toContain('1 shipped')
+  expect(chip.dataset.outcome).toBe('shipped')
+  expect(chip.tagName).toBe('SPAN')
+  expect(chip.closest('a, button')).toBeNull()
+
+  fireEvent.click(chip)
+  expect(onOpenMetric).not.toHaveBeenCalled()
+})
+
+// The one chip that is not a control. The prior retro's rows are not synced into this view and this
+// change added no query for them, so a chip that looked like a link and did nothing would be worse
+// than a chip that plainly is not one.
+test('a prior-action reference renders yapm’s baked label and does not navigate', () => {
+  const onOpenIssue = vi.fn()
+  mount(draftRow('ready'), [followUp()], { canWrite: false, onOpenIssue })
+
+  const chip = screen.getByTestId('retro-ai-evidence-action')
+  expect(chip.textContent).toContain('Split the release check in two — shipped')
+  expect(chip.dataset.outcome).toBe('shipped')
+  expect(chip.tagName).toBe('SPAN')
+  expect(chip.closest('a, button')).toBeNull()
+
+  fireEvent.click(chip)
+  expect(onOpenIssue).not.toHaveBeenCalled()
+
+  // The row is still labelled by its bucket, so a follow-up reads as one wherever it is drawn.
+  expect(screen.getByTestId('retro-ai-proposal').dataset.bucket).toBe('follow_up')
+})
+
+test('a prior-action reference with no baked label renders no chip at all', () => {
+  mount(draftRow('ready'), [followUp({ refs: [{ kind: 'retro_action', id: 'action-1' }] })], {
+    canWrite: false,
+  })
+
+  // An older proposal, drafted before yapm baked the caption: the group still exists, with nothing
+  // invented to fill the chip and the plain heading rather than a cycle name it does not have.
+  expect(screen.queryByTestId('retro-ai-evidence-action')).toBeNull()
+  expect(screen.getByTestId('retro-ai-category').querySelector('h3')?.textContent).toBe(
+    'Follow-ups',
+  )
+})
+
+// Change 19's flat contested-first list draws the bucket chip on every row; a follow-up must read as
+// a follow-up there too, not as the category it is stored under — AND it must still say which retro
+// it is reporting on. From `discuss` onward there are no group headings left to carry that, which is
+// exactly when the team is arguing about the row.
+test('the flat contested-first list labels a follow-up with the cycle it reports on', () => {
+  mount(draftRow('ready'), [
+    proposal({ id: 'w-1', category: 'win', verdict: 'agreed', agreeCount: 2, disagreeCount: 0 }),
+    followUp({ verdict: 'contested', agreeCount: 2, disagreeCount: 1 }),
+  ])
+
+  const rows = screen.getAllByTestId('retro-ai-proposal')
+  expect(rows[0]?.dataset.bucket).toBe('follow_up')
+  expect(rows[0]?.dataset.category).toBe('win')
+  expect(rows[0]?.querySelector('[data-testid="retro-ai-category-chip"]')?.textContent).toBe(
+    'Follow-ups from Cycle 6',
+  )
+})
+
+test('a follow-up row with no baked origin falls back to the plain bucket label', () => {
+  mount(draftRow('ready'), [
+    followUp({
+      refs: [{ kind: 'retro_action', id: 'action-1', label: 'Split the release check — shipped' }],
+      verdict: 'contested',
+      agreeCount: 1,
+      disagreeCount: 1,
+    }),
+  ])
+
+  expect(
+    screen.getByTestId('retro-ai-proposal').querySelector('[data-testid="retro-ai-category-chip"]')
+      ?.textContent,
+  ).toBe('Follow-ups')
+})

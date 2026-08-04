@@ -72,7 +72,10 @@ function factsFixture(over: Partial<RetroFacts> = {}): RetroFacts {
       },
     ],
     evidenceIds: ['i1'],
-    citableIds: ['i1', 'shipped'],
+    // The default fixture is a team's FIRST retro: no prior retro, so no action id is citable and the
+    // prompt carries no prior-retro block at all.
+    priorRetro: null,
+    citations: { evidence: ['i1'], widget: ['shipped'], retroAction: [] },
     ...over,
   }
 }
@@ -96,6 +99,89 @@ describe('buildRetroDraftInput', () => {
     expect(input.indexOf(INJECTION)).toBeGreaterThan(fenceStart)
     expect(RETRO_DRAFT_SYSTEM_PROMPT).not.toContain(INJECTION)
     expect(RETRO_DRAFT_SYSTEM_PROMPT).not.toContain('Guest checkout')
+  })
+
+  // ABSENT, NOT "NONE". A team's first retro gets a request with no prior-retro block at all — there
+  // is nothing to report on, and telling the model so would be an invitation to say it out loud.
+  it('carries no prior-retro block whatsoever when there is no prior retro', () => {
+    for (const marker of [
+      'previous retrospective',
+      'action id:',
+      'prior_retro_',
+      'priorActions',
+      'never tracked',
+    ]) {
+      expect(input, marker).not.toContain(marker)
+    }
+  })
+})
+
+// One action per outcome, and a body that carries BOTH hazards a human-written action can: an
+// injected instruction and a real roster name.
+const PRIOR_FACTS: RetroFacts['priorRetro'] = {
+  cycleId: 'c0',
+  cycleName: 'Cycle 6',
+  actions: [
+    {
+      id: 'action-1',
+      body: `Split the release check — ${INJECTION}, ask Casey Rivera`,
+      outcome: 'shipped',
+      issue: { id: 'i9', number: 9, title: 'Split the release check', status: 'done' },
+    },
+    {
+      id: 'action-2',
+      body: 'Rotate the on-call doc weekly',
+      outcome: 'canceled',
+      issue: { id: 'i10', number: 10, title: 'Rotate the on-call doc', status: 'canceled' },
+    },
+    { id: 'action-3', body: 'Talk to design earlier', outcome: 'not_converted', issue: null },
+  ],
+  totals: { shipped: 1, canceled: 1, in_flight: 0, not_converted: 1 },
+}
+
+describe('buildRetroDraftInput — the prior retro', () => {
+  const input = buildRetroDraftInput(factsFixture({ priorRetro: PRIOR_FACTS }))
+
+  it('names the cycle those actions were agreed in, so a proposal cannot imply they are newer', () => {
+    expect(input).toContain('Cycle 6')
+  })
+
+  it('gives each action its id, yapm’s outcome and the converted issue’s live status', () => {
+    expect(input).toContain('[action id: action-1] outcome: shipped')
+    expect(input).toContain('issue #9 (status: done)')
+    expect(input).toContain('[action id: action-2] outcome: canceled')
+    expect(input).toContain('issue #10 (status: canceled)')
+    // The one that was agreed and never tracked says so, rather than being reported as open.
+    expect(input).toContain('[action id: action-3] outcome: never tracked')
+    expect(input).toContain('never converted to an issue')
+  })
+
+  it('offers the totals as citable keys so a follow-up points at a count instead of typing one', () => {
+    expect(input).toContain('shipped 1 [key: prior_retro_shipped]')
+    expect(input).toContain('canceled 1 [key: prior_retro_canceled]')
+    expect(input).toContain('never tracked 1 [key: prior_retro_not_converted]')
+  })
+
+  // ONE FENCE, ONE CLASS. An action body is human-written free text exactly like an issue title, so
+  // it goes where issue titles already go — not into a second redactor written for it.
+  it('puts every action body inside the untrusted fence, injection and roster name included', () => {
+    const fenceStart = input.indexOf('<<<UNTRUSTED WORK-GRAPH DATA')
+    const fenceEnd = input.indexOf('<<<END UNTRUSTED DATA>>>')
+
+    for (const body of PRIOR_FACTS?.actions.map((action) => action.body) ?? []) {
+      const at = input.indexOf(body)
+      expect(at, body).toBeGreaterThan(fenceStart)
+      expect(at, body).toBeLessThan(fenceEnd)
+    }
+    // The instruction line above the fence names the ids and the outcomes, never the wording.
+    expect(input.slice(0, fenceStart)).not.toContain('Casey Rivera')
+    expect(input.slice(0, fenceStart)).not.toContain(INJECTION)
+    expect(RETRO_DRAFT_SYSTEM_PROMPT).not.toContain('Casey Rivera')
+  })
+
+  it('tells the model the rule that makes an invented action id pointless', () => {
+    expect(RETRO_DRAFT_SYSTEM_PROMPT).toContain('retro_action')
+    expect(RETRO_DRAFT_SYSTEM_PROMPT).toContain('When no prior actions are given')
   })
 })
 
@@ -354,6 +440,146 @@ describe.skipIf(DATABASE_URL === undefined)('runRetroAiDraft (live db, faked gat
 
       // (f) The workspace running total now includes the retro artifact.
       expect(await getWorkspaceAiSpendUsd(database.db, workspaceId)).toBeCloseTo(0.25)
+
+      await database.db.deleteFrom('workspace').where('id', '=', workspaceId).execute()
+    })
+  }, 30_000)
+
+  // THE LABEL A `retro_action` CHIP CARRIES IS YAPM'S, end to end and through storage. Asserted here
+  // rather than only against the pure baker, because the claim is about the composition inside
+  // `runRetroAiDraft` — sanitize, then bake, then write — and only a run that really writes rows can
+  // show that the model's caption never reached `refs`.
+  it('stores yapm’s own label on a prior-action reference, never the model’s', async () => {
+    await withDb(async (database) => {
+      const { workspaceId, teamId, cycleId, retroId, userName } = await seed(database)
+
+      // The retro the team held on the cycle before, and the improvement it agreed there.
+      const priorCycleId = newId()
+      const priorRetroId = newId()
+      const actionId = newId()
+      const actionIssueId = newId()
+      const creatorId = newId()
+      await database.db
+        .insertInto('cycle')
+        .values({
+          id: priorCycleId,
+          team_id: teamId,
+          name: 'Cycle 6',
+          status: 'completed',
+          start_date: new Date(Date.now() - 2_000_000),
+          end_date: new Date(Date.now() - 1_000_000),
+        })
+        .execute()
+      await database.db
+        .insertInto('issue')
+        .values({
+          id: actionIssueId,
+          team_id: teamId,
+          number: 9,
+          title: 'Split the release check',
+          status: 'done',
+          priority: 'medium',
+          creator_id: creatorId,
+          assignee_id: creatorId,
+        })
+        .execute()
+      await database.db
+        .insertInto('retro')
+        .values({
+          id: priorRetroId,
+          team_id: teamId,
+          cycle_id: priorCycleId,
+          title: 'Cycle 6 retro',
+          format: 'wentwell_didnt_action',
+          created_by: creatorId,
+        })
+        .execute()
+      await database.db
+        .insertInto('retro_action')
+        .values({
+          id: actionId,
+          retro_id: priorRetroId,
+          team_id: teamId,
+          body: 'Split the release check in two',
+          assignee_id: creatorId,
+          issue_id: actionIssueId,
+        })
+        .execute()
+
+      const facts = (await retroFactsForCycle(database.db, teamId, cycleId)) as RetroFacts
+      expect(facts.priorRetro?.cycleName).toBe('Cycle 6')
+
+      const log = { calls: [] as Call[], events: [] as string[] }
+      const gateway = fakeGateway(
+        {
+          kind: 'object',
+          object: {
+            proposals: [
+              {
+                category: 'win',
+                summary: 'The improvement agreed last cycle landed.',
+                refs: [
+                  {
+                    kind: 'retro_action',
+                    id: actionId,
+                    // Everything the model wrote about this reference is wrong, and none of it may
+                    // survive: not the caption, not the outcome, not the cycle it came from.
+                    label: `${userName} finished it, 100% shipped`,
+                    outcome: 'canceled',
+                    origin: 'Cycle 99',
+                  },
+                ],
+                confidence: 'high',
+              },
+              // An action id that does not exist: dropped by cite-or-omit, so nothing lands in the
+              // follow-up bucket for it.
+              {
+                category: 'improvement',
+                summary: 'Reports on an action nobody agreed.',
+                refs: [{ kind: 'retro_action', id: newId() }],
+                confidence: 'low',
+              },
+            ],
+          },
+        },
+        log,
+      )
+
+      await runRetroAiDraft(
+        { gateway, db: database.db, dbProvider: createZeroDatabase(database.db) },
+        { workspaceId, retroId, facts },
+      )
+
+      const stored = await proposals(database, retroId)
+      expect(stored.map((row) => row.summary)).toEqual([
+        'The improvement agreed last cycle landed.',
+      ])
+      // The name backstop only ever reads a SUMMARY, so a model-authored label is not dropped by it —
+      // for every other reference kind the client resolves the chip from its own synced row and never
+      // renders the label, and for this one kind the bake is what makes that true.
+      const refs: unknown = stored[0]?.refs
+      expect(refs).toEqual([
+        {
+          kind: 'retro_action',
+          id: actionId,
+          label: 'Split the release check in two — shipped',
+          outcome: 'shipped',
+          origin: 'Cycle 6',
+        },
+      ])
+      const serialized = JSON.stringify(stored)
+      expect(serialized).not.toContain('100%')
+      expect(serialized).not.toContain('Cycle 99')
+      expect(serialized).not.toContain(userName)
+      // The prior action's assignee is on the row in Postgres and nowhere in the pipeline.
+      expect(serialized).not.toContain(creatorId)
+
+      // And the request the model saw carried the action body inside the fence.
+      const input = String(log.calls[0]?.options?.input)
+      expect(input.indexOf('Split the release check in two')).toBeGreaterThan(
+        input.indexOf('<<<UNTRUSTED WORK-GRAPH DATA'),
+      )
+      expect(input).not.toContain(creatorId)
 
       await database.db.deleteFrom('workspace').where('id', '=', workspaceId).execute()
     })

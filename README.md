@@ -94,7 +94,12 @@ until **the team ratifies it**: each member privately agrees or disagrees (synce
 even a workspace admin, exactly like their dots), one verdict per proposal is computed once when the
 retro leaves voting, **a single disagreement makes a proposal contested** rather than agreed and sorts
 it to the top of the discussion, and an agreed improvement is one keystroke from a real numbered issue
-— **never with an owner filled in**, because the model has no identity data to invent one from ·
+— **never with an owner filled in**, because the model has no identity data to invent one from — and
+once a team has run two retros the draft *can* close the loop: a fourth group reporting on up to three
+of the improvements agreed in the team's **most recent previous retro** — with yapm naming which cycle
+they came from — each reported as **shipped, canceled, still open or never tracked**, computed by yapm
+from the live status of the issue it became and stripped of the assignee on both the action and that
+issue ·
 a keyboard-first **notification inbox** at
 `/inbox` with an unread badge, for
 assignments (including triage routing) and comments on issues you're involved in — written only on
@@ -137,11 +142,11 @@ understand quietly deleted.
 
 **BYO-key AI agents** that read and act through the same permissions as a human —
 the foundation (gateway, agent-as-actor tools, the AI-over-work-graph substrate) is in, and the
-AI-facilitated retro is complete end to end: the model drafts, the team disposes, and an agreed
-improvement lands as a tracked issue. The governed PM-facing digest — the first AI output in yapm to
-cross a permission boundary — is now in too; what it still owes is retention and an admin view of
-what was disclosed. Next: **closing that loop** at the following retro — did last cycle's agreed
-improvements actually ship? Then DORA and review-health metrics
+AI-facilitated retro is complete end to end and compounding: the model drafts, the team disposes, an
+agreed improvement lands as a tracked issue, and the next retro reports whether it shipped. The
+governed PM-facing digest — the first AI output in yapm to cross a permission boundary — is now in
+too. Next: **retention and an admin view of what was disclosed**, which are what make "governed" a
+promise rather than a word. Then DORA and review-health metrics
 computed from the graph — team-level only, never individual scorecards. More connectors
 (GitLab, …) slot into the same framework with no feature-code change — inheriting the reality strip
 and the status automation above for free.

@@ -1,4 +1,9 @@
-import type { AiProvider, AreaRule } from '@yapm/schema'
+import type {
+  AiProvider,
+  AreaRule,
+  RetroProposalCategory,
+  RetroProposalVerdict,
+} from '@yapm/schema'
 
 // Mirrors the server's `RedactedAiStatus` (the server-only AI surface, never synced through Zero):
 // the toggle, chosen models, spend cap, and which providers have a key — NO key material, only the
@@ -78,6 +83,44 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
 
 export function fetchAiConfig(): Promise<AiStatusResponse> {
   return request<AiStatusResponse>(BASE)
+}
+
+// Mirrors the server's `RetroVerdictLog`. TEAM-LEVEL BY CONSTRUCTION: there is no user field on
+// either shape, because the read behind it never touches the reaction table — an individual's
+// agree/disagree is not readable by anyone, including an admin, including here.
+export interface RetroVerdictTotals {
+  teamId: string
+  teamName: string
+  teamKey: string
+  agreed: number
+  contested: number
+  rejected: number
+  unrated: number
+  // Drafted but never ratified — the team never advanced the retro past voting.
+  undecided: number
+}
+
+export interface RetroVerdictProposal {
+  id: string
+  teamId: string
+  teamName: string
+  summary: string
+  category: RetroProposalCategory
+  verdict: RetroProposalVerdict
+  agreeCount: number
+  disagreeCount: number
+  cycleName: string | null
+}
+
+export interface RetroVerdictLog {
+  totals: RetroVerdictTotals[]
+  recent: RetroVerdictProposal[]
+}
+
+// A read, and the only one on this path: there is no companion write, so nothing an operator does
+// here can change what a model is asked for.
+export function fetchAiVerdictLog(): Promise<RetroVerdictLog> {
+  return request<RetroVerdictLog>(`${BASE}/verdicts`)
 }
 
 export function updateAiConfig(patch: AiConfigPatch): Promise<AiStatusResponse> {

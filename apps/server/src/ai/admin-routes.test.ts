@@ -236,6 +236,126 @@ describe.skipIf(DATABASE_URL === undefined)('createAiAdminRoutes — admin surfa
     expect(body.status ?? { areas: [] }).toMatchObject({ areas: [] })
   })
 
+  // The rejected-proposal log. It is one GET behind the same `requireAdmin` the rest of this surface
+  // uses, and the two properties worth a test are that it refuses a non-admin BEFORE reading anything
+  // and that what it hands an admin is team-level — no user id, in a workspace where a reaction
+  // really exists.
+  async function workspaceWithAVerdict() {
+    const { workspaceId, adminId, memberId, viewerId } = await freshWorkspace()
+    const teamId = newId()
+    const cycleId = newId()
+    const retroId = newId()
+    const draftId = newId()
+    const proposalId = newId()
+    const reactorId = `reactor-${newId()}`
+    await database.db
+      .insertInto('team')
+      .values({
+        id: teamId,
+        workspace_id: workspaceId,
+        name: 'Verdicts',
+        key: `V${teamId.replaceAll('-', '').slice(-8).toUpperCase()}`,
+      })
+      .execute()
+    await database.db
+      .insertInto('cycle')
+      .values({
+        id: cycleId,
+        team_id: teamId,
+        name: 'Cycle 6',
+        status: 'completed',
+        start_date: new Date(Date.now() - 100_000),
+        end_date: new Date(Date.now() - 10_000),
+      })
+      .execute()
+    await database.db
+      .insertInto('retro')
+      .values({
+        id: retroId,
+        team_id: teamId,
+        cycle_id: cycleId,
+        title: 'Cycle 6 retro',
+        format: 'wentwell_didnt_action',
+        created_by: adminId,
+      })
+      .execute()
+    await database.db
+      .insertInto('retro_ai_draft')
+      .values({ id: draftId, team_id: teamId, retro_id: retroId, status: 'ready' })
+      .execute()
+    await database.db
+      .insertInto('retro_ai_proposal')
+      .values({
+        id: proposalId,
+        draft_id: draftId,
+        retro_id: retroId,
+        team_id: teamId,
+        category: 'improvement',
+        summary: 'Add a second reviewer to every pull request.',
+        confidence: 'medium',
+        rank: 0,
+        verdict: 'rejected',
+        agree_count: 0,
+        disagree_count: 2,
+        ratified_at: new Date(),
+      })
+      .execute()
+    // A real reaction, so "the response carries no user id" cannot pass for want of one.
+    await database.db
+      .insertInto('retro_ai_reaction')
+      .values({
+        proposal_id: proposalId,
+        user_id: reactorId,
+        retro_id: retroId,
+        team_id: teamId,
+        value: 'disagree',
+      })
+      .execute()
+    return { workspaceId, adminId, memberId, viewerId, teamId, reactorId }
+  }
+
+  it('gives an admin the per-team verdict totals and the proposals a team threw out', async () => {
+    const { adminId, teamId, reactorId } = await workspaceWithAVerdict()
+
+    const response = await routes().request('/api/v1/ai/verdicts', {
+      headers: { 'x-test-user': adminId },
+    })
+    expect(response.status).toBe(200)
+    const text = await response.text()
+    const body = JSON.parse(text) as {
+      totals: { teamId: string; rejected: number; undecided: number }[]
+      recent: { summary: string; verdict: string; disagreeCount: number }[]
+    }
+
+    expect(body.totals.find((team) => team.teamId === teamId)?.rejected).toBe(1)
+    expect(body.recent.map((row) => row.summary)).toEqual([
+      'Add a second reviewer to every pull request.',
+    ])
+    expect(body.recent[0]?.verdict).toBe('rejected')
+    expect(body.recent[0]?.disagreeCount).toBe(2)
+
+    // TEAM-LEVEL, ALL THE WAY OUT: the member who disagreed is not in the response, and no key on it
+    // is identity-shaped.
+    expect(text).not.toContain(reactorId)
+    expect(text).not.toMatch(/"(userId|user_id|assigneeId|reactions?)"/)
+  })
+
+  it('refuses a member and a viewer the verdict log, before a proposal is read', async () => {
+    const { memberId, viewerId } = await workspaceWithAVerdict()
+
+    for (const user of [memberId, viewerId]) {
+      const response = await routes().request('/api/v1/ai/verdicts', {
+        headers: { 'x-test-user': user },
+      })
+      expect(response.status).toBe(403)
+      expect(await response.text()).not.toContain('Add a second reviewer')
+    }
+
+    // And anonymously, with no session at all.
+    const anonymous = await routes().request('/api/v1/ai/verdicts')
+    expect(anonymous.status).toBe(401)
+  })
+
   it('refuses to store a key when the encryption codec is unavailable', async () => {
     const { adminId } = await freshWorkspace()
     const response = await routes(false).request('/api/v1/ai/keys/anthropic', {

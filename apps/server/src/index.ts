@@ -230,6 +230,19 @@ async function main(): Promise<void> {
       ? { gateway: aiGateway, intervalSeconds: RETRO_AI_DRAFT_INTERVAL_SECONDS }
       : undefined
 
+  // A SIXTH independent block on the SAME pg-boss instance, and the retention half is passed
+  // UNCONDITIONALLY. `ai_disclosure_audit` exists whether or not AI is switched on, so its bound has
+  // to be enforced whether or not AI is switched on — a bound that lapses when the feature is
+  // disabled is not a bound. The ready-notice sweep is gated on all three of a transport, a public
+  // URL and the instance floor being open.
+  const disclosure = {
+    retentionDays: env.AI_DISCLOSURE_RETENTION_DAYS,
+    retentionCron: env.AI_DISCLOSURE_RETENTION_CRON,
+    ...(mailer && mail && env.AI_PM_DIGEST_READY_EMAIL === 'true'
+      ? { email: { mailer, publicUrl: mail.publicUrl, cron: env.NOTIFICATION_EMAIL_CRON } }
+      : {}),
+  }
+
   let scheduler: Scheduler | undefined
   try {
     scheduler = await startScheduler({
@@ -247,6 +260,7 @@ async function main(): Promise<void> {
       },
       // A fifth independent block on the SAME pg-boss instance.
       ...(retroDraft ? { retroDraft } : {}),
+      disclosure,
     })
   } catch (error) {
     logger.error({ err: error }, 'failed to start the background job scheduler')

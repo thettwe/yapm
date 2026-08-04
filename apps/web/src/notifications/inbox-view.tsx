@@ -106,12 +106,22 @@ export function InboxView() {
   const open = useCallback(
     (row: NotificationRowData) => {
       setRead(row, true)
-      if (row.subjectType !== 'issue') return
-      void navigate({
-        to: '/teams/$teamId/issues',
-        params: { teamId: row.teamId },
-        search: { open: row.subjectId },
-      })
+      // Exhaustive over the subject union so a later subject type is a compile error here rather
+      // than an inbox row that reads well and goes nowhere.
+      switch (row.subjectType) {
+        case 'issue':
+          void navigate({
+            to: '/teams/$teamId/issues',
+            params: { teamId: row.teamId },
+            search: { open: row.subjectId },
+          })
+          return
+        // The reader's own surface. Not the team's board or cycle — a named reader can open neither,
+        // and the notice deliberately tells them nothing beyond which team and which cycle.
+        case 'pm_digest':
+          void navigate({ to: '/digests' })
+          return
+      }
     },
     [navigate, setRead],
   )

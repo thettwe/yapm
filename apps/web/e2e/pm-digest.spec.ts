@@ -138,10 +138,18 @@ async function press(page: Page, testId: string, key = 'Enter'): Promise<void> {
   await page.keyboard.press(key)
 }
 
+// The client's own replica, with the non-vacuity guard this whole spec turns on: "no `pm_digest`
+// row is here" is worth nothing against an IndexedDB Zero has not written to yet, and a client that
+// has just signed in has not. So wait for the replica to hold SOMETHING first — and fail loudly, on
+// the timeout, if it never does, rather than reporting an emptiness that was never a fact.
 async function pmDigestRowsInReplica(page: Page): Promise<number> {
+  await expect
+    .poll(async () => (await readReplica(page)).rows.length, {
+      timeout: 45_000,
+      message: 'the client never persisted a replica row, so an emptiness claim proves nothing',
+    })
+    .toBeGreaterThan(0)
   const replica = await readReplica(page)
-  // Non-vacuity: an empty replica would satisfy every "does not hold" claim for the wrong reason.
-  expect(replica.rows.length, 'the replica was empty, so it proves nothing').toBeGreaterThan(0)
   return replica.rows.filter((row) => row.table === 'pm_digest').length
 }
 
@@ -288,6 +296,21 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
       timeout: 30_000,
     })
 
+    // The producing team is visible to them as a team they could join, which is the workspace-wide
+    // read every member has — and it is what makes the replica assertion below meaningful: this
+    // client holds rows, just none of this team's work.
+    await expect(readerPage.getByRole('listitem').filter({ hasText: team.name })).toBeVisible({
+      timeout: 20_000,
+    })
+
+    // One reload before the replica is read: a client that has only ever soft-navigated may not
+    // have flushed anything to IndexedDB yet, and the guard above would then fail on a client that
+    // is behaving perfectly.
+    await readerPage.reload()
+    await expect(readerPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+      timeout: 30_000,
+    })
+
     // Before the policy names them: no entry, no surface, nothing in the replica.
     await expect(readerPage.getByTestId('pm-digests-entry')).toHaveCount(0)
     expect(await pmDigestRowsInReplica(readerPage)).toBe(0)
@@ -313,6 +336,9 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     // THE ADMIN NAMES THEM, through the shipped surface and from the keyboard alone. Four switches,
     // every one of them off until this moment.
     await page.goto('/settings/ai')
+    // Settle on the loaded page before reading whether the block is there: an absent block and a
+    // page that has not finished loading look identical, and only one of them means "configure AI".
+    await expect(page.getByTestId('ai-toggle')).toBeVisible({ timeout: 20_000 })
     const block = page.getByTestId('pm-disclosure-settings')
     if ((await block.count()) === 0) {
       // The policy lives in the AI config blob, which does not exist until AI is configured at all.

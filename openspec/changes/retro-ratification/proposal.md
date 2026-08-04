@@ -105,5 +105,7 @@ rule is fixed and knob-free; there is no threshold to configure).
 - **Docs**: `apps/docs/src/content/docs/features/retro-ai-draft.md` (ratification section, the
   verdict rule, the two stated residuals, the no-assignee guarantee),
   `apps/docs/src/content/docs/features/retrospectives.md` (the AI section no longer records no
-  opinion), `README.md` (feature list), `ROADMAP.md` (row 19 status), `openspec/SCOPE-ai-features.md`
-  (§9 items 1/8/9/10 resolved). No `.env.example` change — this change adds no environment variable.
+  opinion), `apps/docs/src/content/docs/index.md` (the feature-list bullet that still claimed nothing
+  the AI drafts is agreed by the team), `README.md` (feature list), `ROADMAP.md` (row 19 status),
+  `openspec/SCOPE-ai-features.md` (§9 items 1/8/9/10 resolved). No `.env.example` change — this
+  change adds no environment variable.

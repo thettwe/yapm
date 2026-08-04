@@ -1,5 +1,11 @@
-import { expect, type Page, test } from '@playwright/test'
-import { findIssue, openDb, readRetroAiDraft, seedRetroAiDraft } from './db'
+import { expect, type Locator, type Page, test } from '@playwright/test'
+import {
+  findIssue,
+  openDb,
+  readRetroActionsForProposal,
+  readRetroAiDraft,
+  seedRetroAiDraft,
+} from './db'
 import { readReplica } from './replica'
 import { ADMIN, ensureAccount } from './support'
 
@@ -271,7 +277,7 @@ test('a drafted section is keyboard-operable end to end and holds in every theme
 }) => {
   test.slow()
   await enterApp(page)
-  const retroUrl = await draftedRetro(page)
+  const { url: retroUrl } = await draftedRetro(page)
   // The line that keeps the section from reading as a conclusion the team reached.
   await expect(page.getByTestId('retro-ai-unratified')).toBeVisible()
   await expect(page.getByTestId('retro-ai-category')).toHaveCount(2)
@@ -323,9 +329,13 @@ test('a drafted section is keyboard-operable end to end and holds in every theme
   }
 })
 
+// The improvement the ratification specs act on: agreed, it is the one proposal that grows the
+// action path, and the action it creates carries this text verbatim.
+const IMPROVEMENT = 'Hold scope where it was this cycle rather than growing it mid-flight.'
+
 // A drafted section, ready to be ratified: everything the two ratification specs below need, seeded
 // once each because the retro has to be a real one driven through the real phase machine.
-async function draftedRetro(page: Page): Promise<string> {
+async function draftedRetro(page: Page): Promise<{ url: string; retroId: string }> {
   await createTeam(page)
   const issueTitle = unique('Ratify fix')
   await createIssue(page, issueTitle)
@@ -348,7 +358,7 @@ async function draftedRetro(page: Page): Promise<string> {
         },
         {
           category: 'improvement',
-          summary: 'Hold scope where it was this cycle rather than growing it mid-flight.',
+          summary: IMPROVEMENT,
           refs: [{ kind: 'widget', id: METRIC_KEY }],
         },
       ],
@@ -359,7 +369,7 @@ async function draftedRetro(page: Page): Promise<string> {
 
   await page.goto(retroUrl)
   await expect(page.locator(PANEL)).toBeVisible({ timeout: 30_000 })
-  return retroUrl
+  return { url: retroUrl, retroId }
 }
 
 // The half of the ratification surface neither a unit nor an integration test can reach: the real
@@ -430,6 +440,112 @@ test('the whole ratification flow is operable with the keyboard alone', async ({
   await expect(page.getByTestId('retro-ai-unratified')).toHaveCount(0)
 })
 
+// Type a command and run the row it lands on, asserting WHICH row that is before pressing Enter.
+// "agree with this ai proposal" is a substring of the disagree row's value, so a palette that ranked
+// them the other way round would silently record the opposite opinion — the one failure mode where
+// running the command and asserting its effect would look like a product bug rather than a ranking
+// one.
+async function runCommand(
+  page: Page,
+  palette: Locator,
+  query: string,
+  expected: string,
+): Promise<void> {
+  await expect(palette).toBeHidden({ timeout: 20_000 })
+  await page.keyboard.press('ControlOrMeta+k')
+  await expect(palette).toBeVisible({ timeout: 20_000 })
+  await page.keyboard.type(query)
+  await expect(palette.locator('[cmdk-item=""][data-selected="true"]')).toHaveText(expected)
+  await page.keyboard.press('Enter')
+}
+
+// The palette half of the ratification surface, and the only path that turns an agreed improvement
+// into a real action item from the UI. Both are keyboard-only by construction; neither is exercised
+// anywhere else, and the palette's four entries act on a SNAPSHOT of the last-focused proposal —
+// which is exactly what makes "react with the toggle, then clear from the palette" the interesting
+// sequence: the toggle moves no focus, so the snapshot is stale by the time the palette opens.
+test('every ratification command is reachable from the palette, and an agreed improvement becomes a real action', async ({
+  page,
+}) => {
+  test.slow()
+  await enterApp(page)
+  const { retroId } = await draftedRetro(page)
+
+  const palette = page.getByRole('dialog', { name: 'Retro command palette' })
+  const improvement = page.locator('[data-testid="retro-ai-proposal"][data-category="improvement"]')
+  const agree = improvement.getByTestId('retro-ai-agree')
+  const disagree = improvement.getByTestId('retro-ai-disagree')
+
+  // Reacted with the INLINE TOGGLE, which moves no focus — so the palette is still holding a
+  // snapshot that says this member has no reaction. Clearing has to work anyway, or the command is
+  // missing for precisely the member who just reacted and wants it back.
+  await agree.focus()
+  await page.keyboard.press('Enter')
+  await expect(agree).toHaveAttribute('aria-pressed', 'true')
+
+  await runCommand(page, palette, 'clear my reaction', 'Clear my reaction')
+  await expect(agree).toHaveAttribute('aria-pressed', 'false', { timeout: 20_000 })
+
+  // Both directions are reachable from the palette too, on whichever proposal the keyboard last
+  // held.
+  await agree.focus()
+  await runCommand(
+    page,
+    palette,
+    'disagree with this ai proposal',
+    'Disagree with this AI proposal',
+  )
+  await expect(disagree).toHaveAttribute('aria-pressed', 'true', { timeout: 20_000 })
+
+  await agree.focus()
+  await runCommand(page, palette, 'agree with this ai proposal', 'Agree with this AI proposal')
+  await expect(agree).toHaveAttribute('aria-pressed', 'true', { timeout: 20_000 })
+  await expect(disagree).toHaveAttribute('aria-pressed', 'false')
+
+  // Out of `vote`, where the verdict is stamped: one agree and no disagree is `agreed`, which is the
+  // only state that grows the action path.
+  await expect(palette).toBeHidden({ timeout: 20_000 })
+  await page.keyboard.press(']')
+  await expect(phaseStep(page, 'vote')).toHaveAttribute('aria-current', 'step', { timeout: 20_000 })
+  await page.keyboard.press(']')
+  await expect(phaseStep(page, 'discuss')).toHaveAttribute('aria-current', 'step', {
+    timeout: 20_000,
+  })
+  await expect(improvement).toHaveAttribute('data-verdict', 'agreed', { timeout: 30_000 })
+
+  // The panel's own control, reached with Tab alone from the seed panel: the wiring from the
+  // proposal row through `createAction` to the action list, which nothing else runs.
+  await page.getByTestId('retro-seed-toggle').focus()
+  await tabTo(page, 'retro-ai-add-action', 20)
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('retro-action')).toHaveCount(1, { timeout: 20_000 })
+  await expect(page.getByTestId('retro-action').first()).toContainText(IMPROVEMENT)
+
+  // …and the same thing from the palette, which is the fourth AI command.
+  await runCommand(
+    page,
+    palette,
+    'add this improvement as an action',
+    'Add this improvement as an action',
+  )
+  await expect(page.getByTestId('retro-action')).toHaveCount(2, { timeout: 20_000 })
+
+  // Provenance and the hard line under it, read from Postgres because no surface renders either:
+  // both actions record the proposal they came from, and NEITHER has an owner. Nothing on this path
+  // offers one, by design — the model has no identity data to invent one from.
+  const db = openDb()
+  try {
+    const { actions } = await readRetroActionsForProposal(db, retroId, IMPROVEMENT)
+    expect(actions).toHaveLength(2)
+    for (const action of actions) {
+      expect(action.body).toBe(IMPROVEMENT)
+      expect(action.assigneeId).toBeNull()
+    }
+  } finally {
+    await db.close()
+  }
+})
+
 // Multi-client convergence, which is the other thing only a browser can settle: the verdict is
 // computed by somebody ELSE's phase advance, and it has to reach a client that is sitting still.
 //
@@ -446,7 +562,7 @@ test('a verdict stamped by another client arrives without a reload', async ({ br
     const reader = await first.newPage()
     const facilitator = await second.newPage()
     await enterApp(reader)
-    const retroUrl = await draftedRetro(reader)
+    const { url: retroUrl } = await draftedRetro(reader)
 
     // The reader records a reaction and then does nothing else for the rest of the test.
     await reader.getByTestId('retro-ai-agree').first().focus()

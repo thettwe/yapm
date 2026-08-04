@@ -356,18 +356,21 @@ export function RetroCommandProvider({
                     <ThumbsDownIcon />
                     Disagree with this AI proposal
                   </CommandItem>
-                  {focusedAi.mine === null ? null : (
-                    <CommandItem
-                      value="clear my reaction to this ai proposal"
-                      onSelect={() => {
-                        void api.clearAiReaction(focusedAi.id)
-                        close()
-                      }}
-                    >
-                      <XIcon />
-                      Clear my reaction
-                    </CommandItem>
-                  )}
+                  {/* UNCONDITIONAL, and deliberately not gated on `focusedAi.mine`. The snapshot is
+                      refreshed by a DOM focus event, and reacting with the inline toggle moves no
+                      focus — so a `mine`-gated entry would be missing for exactly the member who
+                      just reacted. `clearRetroAiReaction` reads then returns on a missing row, so a
+                      stale snapshot costs a no-op rather than an error. */}
+                  <CommandItem
+                    value="clear my reaction to this ai proposal"
+                    onSelect={() => {
+                      void api.clearAiReaction(focusedAi.id)
+                      close()
+                    }}
+                  >
+                    <XIcon />
+                    Clear my reaction
+                  </CommandItem>
                 </CommandGroup>
               ) : null}
 

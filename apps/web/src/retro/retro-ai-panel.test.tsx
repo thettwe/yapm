@@ -155,14 +155,29 @@ test('nothing renders when there is no draft row at all', () => {
   expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
 })
 
-test.each(['ai_off', 'failed'] as const)('nothing renders for a %s draft', (status) => {
-  mount(draftRow(status), [proposal()])
-  expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
-})
+// Nothing renders AND nothing is asked for. The reaction query lives one level below the draft
+// state, in the component the proposals are drawn by, so a draft that produced no surface issues no
+// reaction subscription either — the absence is of the query as well as of the DOM.
+test.each(['ai_off', 'failed'] as const)(
+  'nothing renders or subscribes for a %s draft',
+  (status) => {
+    mount(draftRow(status), [proposal()])
+    expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+    expect(subscribed()).not.toContain(RETRO_AI_REACTIONS_MINE_QUERY_NAME)
+  },
+)
 
-test('nothing renders for a ready draft whose proposals were all dropped', () => {
+test('nothing renders or subscribes for a ready draft whose proposals were all dropped', () => {
   mount(draftRow('ready'), [])
   expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+  expect(subscribed()).not.toContain(RETRO_AI_REACTIONS_MINE_QUERY_NAME)
+})
+
+// The same claim for the state a live retro passes through on its way to a draft: while the tail is
+// still running there is nothing to react to, so nothing asks who reacted.
+test('a pending draft subscribes to no reactions', () => {
+  mount(draftRow('pending'), [])
+  expect(subscribed()).not.toContain(RETRO_AI_REACTIONS_MINE_QUERY_NAME)
 })
 
 // The team's own consent, read off the synced `team` row: with it null the component that holds the
@@ -474,6 +489,57 @@ test('the toggles are real buttons in the tab order, told apart by aria-pressed'
   // rest of the retro surface holds, and the reason this is assertable at all.
   expect(screen.getByTestId('retro-ai-disagree')).toHaveAttribute('aria-pressed', 'true')
   expect(screen.getByTestId('retro-ai-agree')).toHaveAttribute('aria-pressed', 'false')
+})
+
+// Every per-item control in the retro names its item — the board's dots are `Vote for ${label}` —
+// and a section of nine proposals otherwise hands a screen-reader user eighteen controls called
+// "Agree" and "Disagree", told apart by visual adjacency alone.
+test('each reaction toggle is named by the proposal it acts on', () => {
+  mount(
+    draftRow('ready'),
+    [
+      proposal({ id: 'w-1', summary: 'Everything in scope shipped.' }),
+      proposal({ id: 'w-2', rank: 1, summary: 'Two issues carried a second time.' }),
+    ],
+    { phase: 'vote' },
+  )
+
+  expect(
+    screen.getAllByTestId('retro-ai-agree').map((node) => node.getAttribute('aria-label')),
+  ).toEqual([
+    'Agree with: Everything in scope shipped.',
+    'Agree with: Two issues carried a second time.',
+  ])
+  expect(
+    screen.getAllByTestId('retro-ai-disagree').map((node) => node.getAttribute('aria-label')),
+  ).toEqual([
+    'Disagree with: Everything in scope shipped.',
+    'Disagree with: Two issues carried a second time.',
+  ])
+  // Named, and reachable by that name — the accessible name is what a screen-reader user calls it.
+  expect(screen.getByRole('button', { name: 'Agree with: Everything in scope shipped.' })).toBe(
+    screen.getAllByTestId('retro-ai-agree')[0],
+  )
+})
+
+test('the action control is named by the improvement it would create', () => {
+  mount(
+    draftRow('ready'),
+    [
+      proposal({
+        id: 'i-1',
+        category: 'improvement',
+        summary: 'Hold scope where it was.',
+        verdict: 'agreed',
+      }),
+    ],
+    { phase: 'discuss' },
+  )
+
+  expect(screen.getByTestId('retro-ai-add-action')).toHaveAttribute(
+    'aria-label',
+    'Add as an action: Hold scope where it was.',
+  )
 })
 
 // A mis-click must not become a permanent opinion: pressing the pressed value withdraws it, which

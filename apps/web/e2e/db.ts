@@ -272,6 +272,36 @@ export async function seedRetroAiDraft(
   return id
 }
 
+// Every action born from one AI proposal, read straight from Postgres. The list on screen shows the
+// body and nothing else, and the two claims worth proving about this path are columns no surface
+// renders: that the proposal is recorded as the action's origin, and that NO owner was filled in —
+// not by the panel's control and not by the palette's.
+export async function readRetroActionsForProposal(
+  db: Database,
+  retroId: string,
+  summary: string,
+): Promise<{
+  proposalId: string
+  actions: { body: string; assigneeId: string | null }[]
+}> {
+  const proposal = await db.db
+    .selectFrom('retro_ai_proposal')
+    .select('id')
+    .where('retro_id', '=', retroId)
+    .where('summary', '=', summary)
+    .executeTakeFirstOrThrow()
+  const actions = await db.db
+    .selectFrom('retro_action')
+    .select(['body', 'assignee_id'])
+    .where('retro_id', '=', retroId)
+    .where('ai_proposal_id', '=', proposal.id)
+    .execute()
+  return {
+    proposalId: proposal.id,
+    actions: actions.map((row) => ({ body: row.body, assigneeId: row.assignee_id })),
+  }
+}
+
 // A TipTap document holding one paragraph, which is the shape both `issue.description` and
 // `comment.body` carry on the wire.
 function richTextDoc(text: string): string {

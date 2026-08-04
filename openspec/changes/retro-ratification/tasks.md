@@ -109,7 +109,15 @@
       keyboard events only.
 - [x] 5.11 Regression: with AI off, opening a retro and advancing `vote → discuss` fires no new
       query, renders no new element, logs no error and does no ratification work — the change-10
-      retro stays byte-identical.
+      retro stays byte-identical. The same claim one level down: a draft that ended `ai_off`,
+      `failed` or `ready` with no surviving proposal issues no reaction query either.
+- [x] 5.12 Component: `retro-command.test.tsx` — the four AI palette entries act on the proposal the
+      keyboard last held; "clear my reaction" is offered after a reaction taken with the INLINE
+      TOGGLE, which moves no focus and therefore leaves the palette's snapshot stale; the reaction
+      commands vanish once the window shuts; a retro with no AI panel carries no AI entry at all.
+- [x] 5.13 E2E: the palette's four AI commands and the panel's "add as an action" control, driven by
+      the keyboard alone, with the resulting actions' provenance and NULL assignee read back from
+      Postgres.
 
 ## 6. Documentation
 
@@ -125,8 +133,10 @@
 - [x] 6.3 `apps/docs/src/content/docs/features/retrospectives.md`: the AI section is no longer
       opinion-free; state the AI-proposals-only asymmetry and that human cards keep dot voting as
       their only ranking signal.
-- [x] 6.4 Update `README.md` (feature list) and `ROADMAP.md` (row 19 status). Confirm `.env.example`
-      needs no change — this change adds no environment variable — and say so in the PR body.
+- [x] 6.4 Update `apps/docs/src/content/docs/index.md` — its Retro AI draft bullet ends "nothing it
+      drafts is agreed by the team", which this change makes false — plus `README.md` (feature list)
+      and `ROADMAP.md` (row 19 status). Confirm `.env.example` needs no change — this change adds no
+      environment variable — and say so in the PR body.
 - [x] 6.5 Update `openspec/SCOPE-ai-features.md` §9 to record items 8, 9 and 10 as answered, and
       item 1 as **raised and consciously waived**, pointing at `design.md` §G1.
 - [x] 6.6 `pnpm --filter @yapm/docs build` passes.

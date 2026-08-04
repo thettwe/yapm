@@ -161,10 +161,6 @@ function OptedInRetroAiPanel({
 }: RetroAiPanelProps) {
   const [draftRow] = useQuery(queries.retroAiDrafts.byRetro({ retroId }))
   const [proposalRows] = useQuery(queries.retroAiProposals.byRetro({ retroId }))
-  // SELF-SCOPED WITH NO ADMIN BYPASS. It returns the caller's own rows and there is no other query
-  // over that table anywhere, which is why this surface renders no count before the stamp: not a
-  // choice, an absence of data.
-  const [reactionRows] = useQuery(queries.retroAiReactions.mine({ retroId }))
   // Already the issue list's query and the seed's substrate, so resolving an entity chip costs no
   // new sync surface and no round trip.
   const [issues] = useQuery(queries.issues.byTeam({ teamId }))
@@ -176,6 +172,112 @@ function OptedInRetroAiPanel({
     [proposalRows],
   )
 
+  const canReact = retroCan(phase, 'react', { canWrite })
+  const canAct = retroCan(phase, 'action', { canWrite })
+
+  const draft = (draftRow ?? null) as RetroAiDraftRow | null
+  const pendingSince = draft?.status === 'pending' ? draft.createdAt : null
+
+  // Nothing here polls. One timer, armed only while a `pending` row is still inside its window, so
+  // the line disappears on its own for a reader who was watching when it was stamped.
+  const [clock, setClock] = useState(() => Date.now())
+  useEffect(() => {
+    if (pendingSince === null) return
+    const remaining = pendingSince + RETRO_AI_PENDING_VISIBLE_MS - Date.now()
+    if (remaining <= 0) return
+    const handle = window.setTimeout(() => setClock(Date.now()), remaining)
+    return () => window.clearTimeout(handle)
+  }, [pendingSince])
+
+  const drafting = pendingSince !== null && clock - pendingSince < RETRO_AI_PENDING_VISIBLE_MS
+  const drafted = draft?.status === 'ready' && groups.length > 0
+
+  const announcement = drafting ? `${DRAFTING_LINE}.` : drafted ? readyAnnouncement(groups) : ''
+
+  // THE LIVE REGION IS RENDERED UNCONDITIONALLY, and its text arrives a tick later. Both halves are
+  // load-bearing. A `role="status"` element inserted into the DOM together with its own text announces
+  // NEITHER — and in the live path the first thing that appears is the `pending` state, so a region
+  // owned by the section would be exactly that non-announcing pattern and the drafting notice would be
+  // spoken by nothing. Rendering it outside the null/drafting/drafted branching makes it the same node
+  // for the whole life of the retro; deferring its text by one tick guarantees the region predates
+  // anything it has to say, including the first thing.
+  const [spoken, setSpoken] = useState('')
+  useEffect(() => {
+    const handle = window.setTimeout(() => setSpoken(announcement), 0)
+    return () => window.clearTimeout(handle)
+  }, [announcement])
+
+  return (
+    <>
+      <p className="sr-only" role="status" aria-live="polite" data-testid="retro-ai-announcement">
+        {spoken}
+      </p>
+      {drafting ? (
+        <AiSection>
+          <p className="mt-2 text-[11.5px] text-text-2" data-testid="retro-ai-pending">
+            {DRAFTING_LINE}…
+          </p>
+        </AiSection>
+      ) : null}
+      {drafted ? (
+        <DraftedProposals
+          retroId={retroId}
+          groups={groups}
+          index={index}
+          seed={seed}
+          canReact={canReact}
+          canAct={canAct}
+          onOpenIssue={onOpenIssue}
+          onOpenMetric={onOpenMetric}
+          onReact={onReact}
+          onClearReaction={onClearReaction}
+          onAddAction={onAddAction}
+          onFocusProposal={onFocusProposal}
+        />
+      ) : null}
+    </>
+  )
+}
+
+// THE REACTION QUERY LIVES HERE, one level below the opt-in gate, and for the same reason the gate
+// itself is a wrapper: hooks cannot be skipped, so the only way to not issue it is to not mount the
+// component that holds it. `ai_off`, `failed` and a `ready` draft whose proposals were all dropped
+// each draw nothing — and each must also ASK for nothing beyond the two artifact queries, because
+// "byte-identical to the retro that ships without this capability" is a claim about the sync surface
+// and not only about the DOM. The caller's own reactions are consumed by controls that render only
+// under `drafted`, so nothing above needs them.
+function DraftedProposals({
+  retroId,
+  groups,
+  index,
+  seed,
+  canReact,
+  canAct,
+  onOpenIssue,
+  onOpenMetric,
+  onReact,
+  onClearReaction,
+  onAddAction,
+  onFocusProposal,
+}: {
+  retroId: string
+  groups: readonly CategoryGroup[]
+  index: EvidenceIndex
+  seed: RetroSeed | null
+  canReact: boolean
+  canAct: boolean
+  onOpenIssue: (issueId: string) => void
+  onOpenMetric: (ref: RetroSeedRef) => void
+  onReact: (proposalId: string, value: RetroReactionValue) => void
+  onClearReaction: (proposalId: string) => void
+  onAddAction: (proposal: { id: string; summary: string }) => void
+  onFocusProposal: (focus: RetroAiFocus | null) => void
+}) {
+  // SELF-SCOPED WITH NO ADMIN BYPASS. It returns the caller's own rows and there is no other query
+  // over that table anywhere, which is why this surface renders no count before the stamp: not a
+  // choice, an absence of data.
+  const [reactionRows] = useQuery(queries.retroAiReactions.mine({ retroId }))
+
   const mine = useMemo(() => {
     const byProposal = new Map<string, RetroReactionValue>()
     for (const row of reactionRows as readonly RetroAiReactionRow[]) {
@@ -184,8 +286,6 @@ function OptedInRetroAiPanel({
     return byProposal
   }, [reactionRows])
 
-  const canReact = retroCan(phase, 'react', { canWrite })
-  const canAct = retroCan(phase, 'action', { canWrite })
   // The stamp, not the phase name: `discuss` onward is exactly when a verdict exists, and reading it
   // off the data means a step back that cleared it also clears the display in the same tick.
   const ratified = groups.some((group) =>
@@ -235,93 +335,47 @@ function OptedInRetroAiPanel({
     onFocusProposal(id === undefined ? null : focusFor(id))
   }
 
-  const draft = (draftRow ?? null) as RetroAiDraftRow | null
-  const pendingSince = draft?.status === 'pending' ? draft.createdAt : null
-
-  // Nothing here polls. One timer, armed only while a `pending` row is still inside its window, so
-  // the line disappears on its own for a reader who was watching when it was stamped.
-  const [clock, setClock] = useState(() => Date.now())
-  useEffect(() => {
-    if (pendingSince === null) return
-    const remaining = pendingSince + RETRO_AI_PENDING_VISIBLE_MS - Date.now()
-    if (remaining <= 0) return
-    const handle = window.setTimeout(() => setClock(Date.now()), remaining)
-    return () => window.clearTimeout(handle)
-  }, [pendingSince])
-
-  const drafting = pendingSince !== null && clock - pendingSince < RETRO_AI_PENDING_VISIBLE_MS
-  const drafted = draft?.status === 'ready' && groups.length > 0
-
-  const announcement = drafting ? `${DRAFTING_LINE}.` : drafted ? readyAnnouncement(groups) : ''
-
-  // THE LIVE REGION IS RENDERED UNCONDITIONALLY, and its text arrives a tick later. Both halves are
-  // load-bearing. A `role="status"` element inserted into the DOM together with its own text announces
-  // NEITHER — and in the live path the first thing that appears is the `pending` state, so a region
-  // owned by the section would be exactly that non-announcing pattern and the drafting notice would be
-  // spoken by nothing. Rendering it outside the null/drafting/drafted branching makes it the same node
-  // for the whole life of the retro; deferring its text by one tick guarantees the region predates
-  // anything it has to say, including the first thing.
-  const [spoken, setSpoken] = useState('')
-  useEffect(() => {
-    const handle = window.setTimeout(() => setSpoken(announcement), 0)
-    return () => window.clearTimeout(handle)
-  }, [announcement])
-
   return (
-    <>
-      <p className="sr-only" role="status" aria-live="polite" data-testid="retro-ai-announcement">
-        {spoken}
-      </p>
-      {drafting ? (
-        <AiSection>
-          <p className="mt-2 text-[11.5px] text-text-2" data-testid="retro-ai-pending">
-            {DRAFTING_LINE}…
-          </p>
-        </AiSection>
-      ) : null}
-      {drafted ? (
-        <AiSection unratified={!ratified}>
-          <div
-            className="mt-3 flex flex-col gap-3"
-            data-testid="retro-ai-groups"
-            onFocusCapture={onProposalFocus}
-          >
-            {/* Before the stamp the board keeps its category headings, which is how people read it.
-                After the stamp the ordering becomes global — contested first, across categories —
-                because the point of the ceremony is to spend scarce discussion time on disagreement,
-                and a per-category sort would bury a contested Improvement under agreed Wins. Each row
-                then carries its own category chip, so nothing is lost with the headings. */}
-            {ratified ? (
-              <ul className="flex flex-col gap-1.5" data-testid="retro-ai-ratified">
-                {ordered.map((proposal) => (
-                  <ProposalItem key={proposal.id} showCategory {...proposalProps(proposal)} />
+    <AiSection unratified={!ratified}>
+      <div
+        className="mt-3 flex flex-col gap-3"
+        data-testid="retro-ai-groups"
+        onFocusCapture={onProposalFocus}
+      >
+        {/* Before the stamp the board keeps its category headings, which is how people read it.
+            After the stamp the ordering becomes global — contested first, across categories —
+            because the point of the ceremony is to spend scarce discussion time on disagreement,
+            and a per-category sort would bury a contested Improvement under agreed Wins. Each row
+            then carries its own category chip, so nothing is lost with the headings. */}
+        {ratified ? (
+          <ul className="flex flex-col gap-1.5" data-testid="retro-ai-ratified">
+            {ordered.map((proposal) => (
+              <ProposalItem key={proposal.id} showCategory {...proposalProps(proposal)} />
+            ))}
+          </ul>
+        ) : (
+          groups.map((group) => (
+            <section
+              key={group.category}
+              aria-label={CATEGORY_LABEL[group.category]}
+              data-testid="retro-ai-category"
+              data-category={group.category}
+            >
+              <h3 className="mb-1.5">
+                <Badge variant="outline" data-testid="retro-ai-category-chip">
+                  {CATEGORY_LABEL[group.category]}
+                </Badge>
+              </h3>
+              <ul className="flex flex-col gap-1.5">
+                {group.proposals.map((proposal) => (
+                  <ProposalItem key={proposal.id} {...proposalProps(proposal)} />
                 ))}
               </ul>
-            ) : (
-              groups.map((group) => (
-                <section
-                  key={group.category}
-                  aria-label={CATEGORY_LABEL[group.category]}
-                  data-testid="retro-ai-category"
-                  data-category={group.category}
-                >
-                  <h3 className="mb-1.5">
-                    <Badge variant="outline" data-testid="retro-ai-category-chip">
-                      {CATEGORY_LABEL[group.category]}
-                    </Badge>
-                  </h3>
-                  <ul className="flex flex-col gap-1.5">
-                    {group.proposals.map((proposal) => (
-                      <ProposalItem key={proposal.id} {...proposalProps(proposal)} />
-                    ))}
-                  </ul>
-                </section>
-              ))
-            )}
-          </div>
-        </AiSection>
-      ) : null}
-    </>
+            </section>
+          ))
+        )}
+      </div>
+    </AiSection>
   )
 }
 
@@ -389,6 +443,7 @@ function ProposalItem({
       {canReact ? (
         <ReactionToggles
           proposalId={proposal.id}
+          summary={proposal.summary}
           mine={mine}
           onReact={onReact}
           onClearReaction={onClearReaction}
@@ -406,6 +461,7 @@ function ProposalItem({
           <button
             type="button"
             className={cn(TOGGLE, TOGGLE_OFF)}
+            aria-label={`Add as an action: ${proposal.summary}`}
             data-testid="retro-ai-add-action"
             // NO ASSIGNEE IS PASSED, and none is offered: the AI layer has no identity dimension, so
             // an owner here could only be invented. A human assigns it afterwards.
@@ -426,13 +482,20 @@ function ProposalItem({
 //
 // IT RENDERS ONLY THE CALLER'S OWN REACTION. No count, no avatar, no other member's state, in any
 // phase and for any role, because no query exists that could return one.
+//
+// Each toggle is NAMED BY THE PROPOSAL IT ACTS ON, the `Vote for ${label}` pattern the board's dot
+// buttons already hold: a section carrying nine proposals otherwise offers a screen-reader user
+// eighteen controls called "Agree" and "Disagree", and which one is which is carried by visual
+// adjacency alone.
 function ReactionToggles({
   proposalId,
+  summary,
   mine,
   onReact,
   onClearReaction,
 }: {
   proposalId: string
+  summary: string
   mine: RetroReactionValue | null
   onReact: (proposalId: string, value: RetroReactionValue) => void
   onClearReaction: (proposalId: string) => void
@@ -447,6 +510,7 @@ function ReactionToggles({
       <button
         type="button"
         aria-pressed={mine === 'agree'}
+        aria-label={`Agree with: ${summary}`}
         className={cn(TOGGLE, mine === 'agree' ? TOGGLE_ON : TOGGLE_OFF)}
         data-testid="retro-ai-agree"
         onClick={() => toggle('agree')}
@@ -457,6 +521,7 @@ function ReactionToggles({
       <button
         type="button"
         aria-pressed={mine === 'disagree'}
+        aria-label={`Disagree with: ${summary}`}
         className={cn(TOGGLE, mine === 'disagree' ? TOGGLE_ON : TOGGLE_OFF)}
         data-testid="retro-ai-disagree"
         onClick={() => toggle('disagree')}

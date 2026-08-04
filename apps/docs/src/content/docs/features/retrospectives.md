@@ -220,8 +220,8 @@ Optionally, and **off for every team until an admin turns it on**, a model reads
 the data panel is built from and drafts up to three wins, three losses and three improvements into the
 retro — each one citing a work-graph entity or one of the panel's own computed metrics. It appears
 directly below the data panel, a few seconds after the facilitator reveals the board, and it is
-labelled *AI-drafted, not agreed* because in this release nothing the model writes becomes the team's
-conclusion.
+labelled *AI-drafted, not agreed* until the team ratifies it — nothing the model writes becomes the
+team's conclusion on its own.
 
 It is drafted **at the `brainstorm` → `group` advance**, never before: while the retro is in
 `brainstorm` the rows do not exist, so there is nothing for the team to anchor on while they are still

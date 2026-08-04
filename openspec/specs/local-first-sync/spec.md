@@ -411,3 +411,285 @@ the hand-written Zero schema all agree with the live Postgres schema.
 - **THEN** the change applies optimistically through a shared `packages/schema` mutator imported by
   both client and server, within the sub-100ms budget
 
+### Requirement: Self-scoped, issue-scoped subscription sync with no admin bypass
+
+The `issue_subscription` entity SHALL replicate through Zero under a synced query that is **both**
+self-scoped on the verified `ctx.userID` and scoped to a single issue supplied as an argument, gated
+on workspace membership and denied by an empty query otherwise. It SHALL NOT use the team-scoped
+predicate and SHALL NOT carry that predicate's workspace-admin bypass.
+
+Because the query is scoped to one issue and one user, it SHALL return **at most one row**, so the
+synced set is bounded without a row limit and without a retention sweep.
+
+No synced query SHALL return another user's subscriptions. There SHALL be no watcher list, no
+follower count and no "who follows this issue" read available to any client, including a workspace
+admin's. The subscriber set exists only as a server-side read inside the notification fan-out.
+
+Work-graph placement: an edge from a `user` to a team-scoped `issue` recording a standing intent.
+Sync/permission story: exactly one person can read a given row — the person it belongs to — and only
+while they have that issue open. `team_id` is present for cleanup and indexing and is not a sync
+scope.
+
+#### Scenario: An admin syncs none of another user's subscriptions
+
+- **WHEN** a workspace admin's client is fully synced and viewing an issue
+- **THEN** its local store contains no other user's subscription rows for that issue or any other
+
+#### Scenario: A non-member is denied by empty query
+
+- **WHEN** an authenticated non-member subscribes to the subscription query
+- **THEN** the query resolves to an empty result rather than an error that reveals anything
+
+#### Scenario: The synced set is one row
+
+- **WHEN** a user with subscriptions to many issues opens one of them
+- **THEN** their client syncs at most their own single subscription row for that issue
+
+### Requirement: A second synced entity keyed by a compound natural key
+
+`issue_subscription` SHALL be the second synced entity whose primary key is a **compound natural
+key** rather than a client-minted UUIDv7. Because both key components are known at the call site —
+the issue being viewed and the verified caller — no identifier is minted at a call site or inside a
+mutator body, and the client-minted-UUIDv7 constraint is not engaged by this entity.
+
+Follow and unfollow SHALL be ordinary optimistic shared mutators defined in `packages/schema` and
+imported by both client and server, addressing a row by its natural key with the user component
+taken from the verified context and never from arguments — so a caller is structurally unable to
+address another person's subscription.
+
+Auto-subscription SHALL be written **only** in the server-authoritative mutator pass, so a
+client-location transaction creates none and a rebase cannot fabricate one.
+
+The CI schema-drift test SHALL cover the new table — its columns, its compound primary key and its
+constrained state column — asserting the migration, the hand-written Kysely `DB` interface and the
+hand-written Zero schema all agree with the live Postgres schema.
+
+#### Scenario: A caller cannot address another user's subscription
+
+- **WHEN** a follow or unfollow mutation is invoked with arguments naming a different user
+- **THEN** the user component is taken from the verified context regardless, so only the caller's
+  own subscription can be affected
+
+#### Scenario: Rebase cannot fabricate a subscription
+
+- **WHEN** a mutator that triggers auto-subscription is re-run on the client during rebase
+- **THEN** no subscription row is created, because only the server-authoritative pass writes them
+
+#### Scenario: Drift test covers the compound key and the state constraint
+
+- **WHEN** the schema-drift test runs against live Postgres
+- **THEN** it asserts the subscription table's compound primary key and its state check constraint
+  match the Zero schema and the hand-written `DB` interface, and fails if any of the three drifts
+
+#### Scenario: Following applies within the interaction budget
+
+- **WHEN** a member toggles the follow control
+- **THEN** the change applies optimistically through the shared mutator and the surface updates
+  without waiting on the network
+
+### Requirement: A derived server-only table that the replica must not notice
+
+The search index SHALL be a **server-only** table: present in Postgres and in the hand-written Kysely
+`DB` interface, and **absent from the Zero schema**, joining the existing server-only set
+(`issue_sequence`, `cycle_sequence`, the connector tables, and the retrospective card→author binding)
+in the drift test's assertion. Because it is absent from the sync schema, no synced query can name it
+and no relationship can reach it.
+
+Its text columns SHALL be plain `text`. The full-text vector SHALL exist **only inside a GIN
+expression index**, never as a stored column on this table or on any synced table, so no exotic column
+type enters the logical-replication path toward the sync replica. Adding the table SHALL NOT require
+changing the publication configuration, because a publication change forces a full replica resync on
+every self-hosted upgrade.
+
+Work-graph placement: a derived projection of issues and comments that owns no truth and can be
+dropped and rebuilt. Sync/permission story: never synced; every read carries the team-scoped
+predicate; its denormalised team reference is sound only because an issue can never change team.
+
+#### Scenario: Drift test covers the new table on both sides
+
+- **WHEN** the schema-drift test runs against live Postgres
+- **THEN** it finds the search index table in Postgres and in the hand-written `DB` interface, finds
+  its compound primary key and its constraints unchanged, and asserts it is **not** present in the
+  Zero schema
+
+#### Scenario: The replica is undisturbed by the new table and its index
+
+- **WHEN** the three-container stack is brought up from empty volumes with the migration applied
+- **THEN** the sync service starts, replicates, and serves synced queries normally, with no
+  publication change and no replica resync
+
+#### Scenario: No synced query can name the index
+
+- **WHEN** the synced query registry is inspected
+- **THEN** no query's abstract syntax tree names the search index table
+
+### Requirement: The server pass degrades against the existing connection state
+
+The search surfaces SHALL read the **existing** sync connection state to decide whether the server
+pass is available, rather than introducing a second notion of "online". When the connection is not
+established the server group SHALL be replaced by an explicit on-device-only state and the on-device
+group SHALL be unaffected.
+
+#### Scenario: Connection loss degrades search rather than breaking it
+
+- **WHEN** the sync connection drops while a member is searching
+- **THEN** the on-device group keeps answering on the keystroke and the server group states that only
+  on-device results are shown
+
+#### Scenario: Recovery restores the server group without a reload
+
+- **WHEN** the connection recovers
+- **THEN** the next query populates the server group again, with no page reload
+
+### Requirement: A server-only system principal writes through the shared mutators
+
+The system SHALL define exactly one system principal — an `AuthContext` whose user identifier is the
+reserved value `system` and whose workspace role is `admin` — in `packages/schema`, and SHALL use it
+for every write the instance performs on its own behalf with no human behind it: today the cycle
+maintenance pass and the connector-driven status transition. The principal SHALL be used only by
+passing it as the `ctx` of a **shared mutator**, so every such write runs the same authorization the
+same mutator runs for a person. It SHALL NOT be constructible from, or selectable by, any client
+input, SHALL never be minted from a request, and SHALL never appear in a client mutator map. Its
+admin role exists so one instance-wide actor can write across every team without a `team_membership`
+row; it SHALL NOT be used to bypass any check other than team membership.
+
+Work-graph placement: an authorization context, not an entity; it names no row and appears in no
+table. Permission story: writes under the principal are indistinguishable from an admin's writes at
+the mutator boundary and are therefore subject to every check an admin's write is; what bounds it is
+that it is reachable only from server-side call sites whose input the instance produced.
+
+#### Scenario: One definition, shared by every non-human write
+
+- **WHEN** the codebase is inspected for non-human write paths
+- **THEN** each one imports the single exported system principal from `packages/schema` rather than
+  defining its own
+
+#### Scenario: A client cannot present the system principal
+
+- **WHEN** a client attempts to invoke a mutator with the reserved system identity
+- **THEN** the `AuthContext` used by the sync endpoints is derived from the verified session and can
+  never be the system principal, so the attempt has no effect
+
+#### Scenario: The principal still passes through the mutator's checks
+
+- **WHEN** a mutator runs under the system principal
+- **THEN** its role capability check and its team-access check execute exactly as they do for a human
+  admin, rather than being skipped
+
+### Requirement: Automation state replicates under the scopes its tables already have
+
+The `team.auto_status_since` and `issue.last_human_status_at` columns SHALL replicate under the
+scopes their existing rows already use — the team row workspace-wide to members, the issue row
+team-scoped — introducing no new synced entity, no new named query, and no new permission predicate.
+Both SHALL be present in Postgres, in the hand-written Kysely `DB` interface, and in the Zero schema,
+and SHALL be covered by the schema-drift test. Neither SHALL be writable by a client except through
+the shared mutators that already govern its row.
+
+Work-graph placement: scalar columns on two existing synced entities. Sync/permission story: a
+non-member reads neither, denied by the same empty queries as before; a viewer reads both and writes
+neither.
+
+#### Scenario: No new query or predicate is introduced
+
+- **WHEN** the synced query set is inspected after this change
+- **THEN** it contains the same queries with the same predicates, the two new columns arriving on
+  rows those queries already return
+
+#### Scenario: The drift test covers both columns
+
+- **WHEN** the schema-drift test runs against live Postgres
+- **THEN** both columns are present in the database and in the Zero schema with matching shape
+
+#### Scenario: A viewer reads but cannot write
+
+- **WHEN** a viewer on a team syncs its teams and issues and then attempts to write either column
+- **THEN** the reads succeed and every write is rejected by the mutator that owns the row
+
+### Requirement: A synced entity with no client mutator, written only over the authenticated REST path
+
+The system SHALL replicate `attachment` rows under the existing team scope so an issue's file list
+renders from the local replica with no network round trip, and SHALL define **no** mutator for that
+table in the shared mutator map — neither client-callable nor server-only. Every insert, update and
+delete SHALL occur on the authenticated REST path, where the row and its bytes are written together.
+The replicated row SHALL carry no URL, no signature and no storage key, so no part of the synced set
+is itself a capability.
+
+#### Scenario: Attachment rows reach members of the owning team
+
+- **WHEN** a member of the owning team is signed in and an attachment is created for one of that
+  team's issues
+- **THEN** the row appears in that member's local replica
+- **AND** the issue's file list renders without issuing a request
+
+#### Scenario: A non-member receives an empty result, not an error
+
+- **WHEN** a signed-in user who is not a member of the owning team runs the attachments query
+- **THEN** the query returns empty via an empty predicate
+- **AND** authentication is checked before existence, so nothing distinguishes "no rows" from "not
+  permitted"
+
+#### Scenario: The shared mutator map contains no attachment mutator
+
+- **WHEN** the shared mutator map and the mutator tool registry are enumerated
+- **THEN** neither contains any entry that writes the `attachment` table
+- **AND** the registry's exhaustiveness check still passes, because there is nothing to classify
+
+#### Scenario: A client cannot forge an attachment row
+
+- **WHEN** a client attempts to write the `attachment` table through the sync engine
+- **THEN** there is no mutator to call and generic CRUD mutations are disabled, so the write cannot
+  be expressed
+
+#### Scenario: The synced row is not a capability
+
+- **WHEN** a replicated attachment row is inspected on the client
+- **THEN** it contains an opaque id, a filename, a sniffed content type, a size and its team, issue
+  and comment references
+- **AND** it contains nothing that grants access to bytes without the caller's own session
+
+### Requirement: Team-scoped, client-read-only retro AI artifact sync
+
+The AI retro draft and its proposals SHALL replicate to clients under the same team-scoped read
+predicate as the rest of a team's work data, and SHALL be **client-read-only**: no client mutator
+SHALL exist for either table, and every write SHALL go through a server-only helper over the shared
+sync transaction that is never registered in the client mutator map. This is the same class as the
+cycle-digest artifact and SHALL follow the same shape rather than inventing a second one.
+
+Both tables SHALL carry the owning `team_id` as the permission anchor and SHALL cascade from the
+retro they belong to. Scheduling state used only by the background completion pass SHALL NOT be part
+of the Zero schema — it SHALL exist in Postgres only, and the schema-drift check SHALL account for
+that deliberate asymmetry.
+
+Because the artifact is created lazily at the phase advance rather than in advance, a client synced
+to a retro that has not been advanced SHALL receive **no rows at all** for these tables — the rows do
+not exist — rather than rows filtered out by a predicate.
+
+Work-graph placement: leaf artifacts off `retro`, which hangs off `team`. Permission story: a member
+of the owning team reads them; an authenticated non-member gets an empty result through the existing
+team-scoped predicate; nobody writes them from a client.
+
+#### Scenario: A member of the team reads the artifact
+
+- **WHEN** a member of the owning team syncs a retro that has been advanced past `brainstorm`
+- **THEN** the draft row and its proposal rows arrive in that member's local replica
+
+#### Scenario: A non-member receives nothing
+
+- **WHEN** an authenticated workspace member who is not on the owning team evaluates both queries for that team's retro
+- **THEN** both return zero rows
+
+#### Scenario: No client mutator exists
+
+- **WHEN** the client mutator map is enumerated
+- **THEN** it contains no mutator that writes either artifact table, so a client cannot create or alter one even optimistically
+
+#### Scenario: Before the advance there is nothing to sync
+
+- **WHEN** a member syncs a retro still in `brainstorm` on a team that has opted in
+- **THEN** their replica holds zero rows for both tables because none have been created
+
+#### Scenario: Scheduling state does not sync
+
+- **WHEN** the Zero schema is compared against the live Postgres schema
+- **THEN** the completion pass's claim column is present in Postgres, deliberately absent from the Zero schema, and the drift check passes on that basis
+

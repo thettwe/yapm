@@ -41,7 +41,7 @@ already syncs under the existing `teamScoped` predicate.
 > expire silently. `mentions` therefore ships a durable `issue_subscription` table, a forward-only
 > migration, a Zero schema change and a sticky unfollow. The "cheapest big feature in the backlog"
 > conclusion no longer holds; the *ordering* argument does, and is unaffected. Re-derived from
-> scratch in `openspec/changes/mentions/design.md`.
+> scratch in `openspec/changes/archive/2026-08-04-mentions/design.md`.
 
 **`search` last**, for two reasons that are not "it is the biggest".
 
@@ -506,7 +506,7 @@ reaches the inbox.
   Escape inside an open mention popup destroys the comment draft and closes the detail Sheet.
   **Verified against the current file; this is a real collision, not a hypothetical.**
   > **The prescribed fix was wrong — corrected during the build, see
-  > `openspec/changes/mentions/design.md` I26/I27.** This said "skip both branches when
+  > `openspec/changes/archive/2026-08-04-mentions/design.md` I26/I27.** This said "skip both branches when
   > `event.defaultPrevented` is set". `prosemirror-view@1.42`'s `captureKeyDown` returns true for
   > keyCode 13 and 27 **unconditionally**, so that flag is set on every Enter and every Escape
   > inside any editor and the guard is *always* taken — silently disabling `onCancel` and
@@ -735,7 +735,7 @@ degradation reads), `mentions` (the plaintext walker — §1.2).
   > `updated_at` behind the watermark. **One exception, deliberate:** `comment_id` and `issue_id`
   > carry `on delete cascade`, so deleting a comment removes its document inside the deleting
   > transaction; deleted text must never stay findable for five minutes. Derived in full in
-  > `openspec/changes/search/design.md` D4 and D5. Built in change 13.
+  > `openspec/changes/archive/2026-08-04-search/design.md` D4 and D5. Built in change 13.
 - A **`search-index` queue on the existing scheduler** (§1.4): an idempotent, bounded, resumable
   backfill (run once when documents are missing, so an upgrade's boot stays fast) that doubles as the
   reconcile/repair path, plus a bounded reconcile sweep folded into the existing cycle-maintenance
@@ -763,7 +763,7 @@ degradation reads), `mentions` (the plaintext walker — §1.2).
   > results are appended last, so a row below them would slide out from under the cursor as the
   > answer lands — the same reflow the two-group seam exists to prevent, at the other end of the
   > list. The invariant that buys is the strong one: every append is strictly at the end, and no
-  > rendered row ever changes index. See `openspec/changes/search/design.md` D7, D8 and I23.
+  > rendered row ever changes index. See `openspec/changes/archive/2026-08-04-search/design.md` D7, D8 and I23.
 - A **`/search?q=`** TanStack route: all results grouped by entity with snippets, fully
   keyboard-operable, tokenized, AA in all three presets light and dark, and an explicit "offline —
   showing local results only" state driven by the existing sync-recovery connection state.
@@ -776,7 +776,7 @@ degradation reads), `mentions` (the plaintext walker — §1.2).
   > `retro_card_author`" from a judgement about which retro column is safe into a one-line grep, and
   > a retro is a handful of rows per team all one click from the cycle view. `saved_view` is a
   > filter, not content; the list's own view picker is its surface. See
-  > `openspec/changes/search/design.md` D6.
+  > `openspec/changes/archive/2026-08-04-search/design.md` D6.
 - Tests in all three tiers, and docs: an `apps/docs` features/search page, a self-hoster note on
   index maintenance and how to force a reindex, `/api/v1/search` in the API reference, plus
   ROADMAP/README updates.

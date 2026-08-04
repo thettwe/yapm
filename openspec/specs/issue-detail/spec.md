@@ -87,3 +87,148 @@ Work-graph placement: `comment` rows hanging off the open `issue`. Permission st
 - **WHEN** a `viewer` opens the issue
 - **THEN** the comment composer is unavailable and any post attempt is rejected as not authorized
 
+### Requirement: Mentioning teammates from the description and the comment thread
+
+The detail surface SHALL support `@`-mentions in the description editor, the comment composer and
+the comment editor, supplying candidates from the team member list the surface already builds for
+the assignee control — no additional query and no network request on the keystroke.
+
+Mentions SHALL be inserted, navigated and dismissed by keyboard alone. Dismissing the mention popup
+SHALL NOT discard the draft being written or close the detail surface.
+
+Rendered mentions in a saved description or comment SHALL display the mentioned person's current
+name, resolved from synced data, and SHALL be non-interactive text rather than a link or a tab stop
+— there is no person route in this version, and a link would inject focus stops into the middle of
+prose.
+
+Work-graph placement: mentions live inside the existing team-scoped `issue.description` and
+`comment.body` documents; no new entity is introduced on this surface. Permission story: mention
+candidates and mention notifications are constrained to people who can already read the issue, and
+the constraint is enforced server-side rather than by the control.
+
+#### Scenario: Mention a teammate in a comment by keyboard
+
+- **WHEN** a member types `@`, types part of a teammate's name, and presses Enter
+- **THEN** a mention is inserted into the draft with no pointer interaction, and posting the comment
+  notifies that teammate once
+
+#### Scenario: Dismissing the popup preserves the draft
+
+- **WHEN** a member has typed a comment, opens the mention popup, and presses Escape
+- **THEN** the popup closes while the drafted comment text and the detail surface both remain
+
+#### Scenario: A mention chip is not a tab stop
+
+- **WHEN** a member tabs through a rendered description containing mentions
+- **THEN** focus does not stop on the mentions
+
+#### Scenario: A viewer sees mentions but cannot write them
+
+- **WHEN** a `viewer` opens an issue
+- **THEN** rendered mentions display normally and no editor is available in which to create one —
+  while the follow control remains available to them, because a viewer can be mentioned and must be
+  able to stop following
+
+### Requirement: Following an issue is visible and reversible from the issue itself
+
+The detail surface SHALL show whether the viewer currently follows the issue and SHALL let them
+toggle it, fully keyboard-operable, with its state exposed to assistive technology.
+
+When the viewer follows the issue, the surface SHALL make clear that they will receive updates and
+how to stop, so that a subscription created automatically by a mention is discoverable and
+reversible from the thing it subscribes them to.
+
+The control SHALL reflect only the viewer's own subscription. No follower count and no list of who
+follows the issue SHALL be shown to anyone, including a workspace admin.
+
+#### Scenario: A mentioned person finds and uses the unfollow control
+
+- **WHEN** a person who was auto-subscribed by a mention opens the issue and reaches the control by
+  keyboard
+- **THEN** the control shows that they are following, and activating it stops further updates for
+  them
+
+#### Scenario: Following state updates within the interaction budget
+
+- **WHEN** the control is activated
+- **THEN** its state changes optimistically without waiting on the network
+
+#### Scenario: No follower list is exposed
+
+- **WHEN** any user, including a workspace admin, opens the issue
+- **THEN** no follower count and no subscriber list is rendered
+
+### Requirement: Issue Files section
+
+The issue detail surface SHALL show a Files section listing the attachments belonging to that issue,
+read from the existing team-scoped synced attachment query. Each row SHALL show the filename, its
+size, who uploaded it and when, a download affordance, and — for a member with write access — a
+remove affordance. Removal SHALL go over the existing authenticated file route; there is no
+attachment mutator and this change adds none.
+
+Files uploaded from inside the description or a comment SHALL appear in this list, because they are
+rows in the same table anchored to the same issue.
+
+Work-graph placement: `attachment` rows anchored to a team and to this issue. Sync/permission story:
+unchanged — rows reach a client only through the team-scoped synced query, so a non-member's list is
+empty rather than forbidden, and byte access is decided by the file route, not by the list.
+
+#### Scenario: A member sees the issue's files
+
+- **WHEN** a member opens an issue that has attachments
+- **THEN** the Files section lists each one with its filename, size, uploader and upload time
+
+#### Scenario: An image inserted in the description appears in Files
+
+- **WHEN** a member pastes an image into the description and it uploads successfully
+- **THEN** that file appears in the Files section for the same issue
+
+#### Scenario: A viewer can download but not remove
+
+- **WHEN** a `viewer` opens an issue with attachments
+- **THEN** each file is downloadable and no remove affordance accepts a write
+
+#### Scenario: The empty state is quiet and actionable
+
+- **WHEN** an issue has no attachments
+- **THEN** the Files section shows a single quiet line and an upload control, rather than an empty
+  box or nothing at all
+
+#### Scenario: The section is fully keyboard-operable
+
+- **WHEN** a user with no pointer tabs into the Files section
+- **THEN** every row's download and remove controls are reachable and activatable by keyboard, each
+  with an accessible name identifying its file, and remove asks for confirmation before deleting
+
+#### Scenario: A non-member's direct navigation reveals nothing
+
+- **WHEN** a non-member navigates directly to an issue in a team they do not belong to
+- **THEN** the attachment query returns empty and the Files section reveals no filename, count or
+  existence
+
+### Requirement: A description the local bundle cannot hold is read-only and says so
+
+The detail surface's description editor SHALL refuse to autosave when the loaded description
+contains content the running bundle cannot represent, and SHALL show a reload affordance in place of
+the editor. Because the description autosaves on a debounce, this refusal is what stops a stale tab
+from overwriting the stored description with a pruned copy.
+
+#### Scenario: A stale tab cannot overwrite a newer description
+
+- **WHEN** a tab running an older bundle has an issue open whose description has since gained content
+  that bundle does not know, and the user types in that tab
+- **THEN** no debounced autosave runs, no update mutator is called, and the stored description is
+  unchanged
+
+#### Scenario: The reason and the remedy are on screen
+
+- **WHEN** the description is in that refused state
+- **THEN** the surface explains that the description was edited in a newer version and offers a
+  reload control, reachable and activatable by keyboard
+
+#### Scenario: Every other field still saves
+
+- **WHEN** the description is refused but the issue's status, priority, assignee or labels are edited
+- **THEN** those edits apply and persist as normal — the refusal is scoped to the description
+  document, not to the issue
+

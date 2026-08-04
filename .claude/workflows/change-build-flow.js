@@ -101,7 +101,7 @@ const PREAMBLE =
   `Read the "## Decisions made during implementation" sections of the two or three most recent changes under ` +
   `${REPO}/openspec/changes/ and openspec/changes/archive/. Those are settled precedent — follow them unless this ` +
   `change has a specific reason not to, and say why. Ignoring that log is how the same argument gets had twice.\n` +
-  `${REPO}/openspec/specs/ is the living behaviour and was made accurate on 2026-07-26 — 28 capabilities. Trust it.\n\n` +
+  `${REPO}/openspec/specs/ is the living behaviour and was made accurate on 2026-08-04 — 37 capabilities. Trust it.\n\n` +
   `## Working agreement\n` +
   `Ambiguity or a misbehaving library: choose what best fits VISION/DESIGN, log it in ` +
   `openspec/changes/${CHANGE}/design.md under "## Decisions made during implementation", and continue — never ` +

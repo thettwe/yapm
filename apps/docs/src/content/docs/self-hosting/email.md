@@ -153,8 +153,8 @@ the copyable link is built from the browser's own origin and never depends on em
 
 **What is never in an email:** any excerpt of a comment or issue body, and no product-digest content
 of any kind. A message names the actor, the action and the issue title, and links to the app; a
-product-digest notice names neither an actor nor any content at all. An email leaves the app's permission model
-behind, so nothing beyond "do I need to open this?" is put in one.
+product-digest notice names neither an actor nor any content at all. An email leaves the app's
+permission model behind, so nothing beyond "do I need to open this?" is put in one.
 
 ## Failure behaviour
 

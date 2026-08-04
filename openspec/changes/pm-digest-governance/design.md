@@ -356,3 +356,17 @@ see a `pm_digest` row — but the path function's switch is exhaustive over the 
 compiling without the case. It returns `/digests` rather than throwing: an unreachable branch that
 throws is a landmine if the selection is ever widened, while one that answers with the reader's own
 surface is merely redundant.
+
+### I7 — Change 20's word blocklist is retired rather than left passing
+
+`apps/web/src/settings/pm-disclosure.test.tsx` carried a test asserting the disclosure switch copy
+contained neither "auditable" nor "retention-bounded" — change 20 enforcing ROADMAP row 23's
+reservation of those words against itself. It still passes, because the new audit section is a
+different component.
+
+**Retired, and replaced rather than deleted.** Row 23 reserved the words *until the surfaces that
+earn them exist*; they exist now, a few centimetres below that block, and a passing test whose
+comment cites a lifted prohibition fails the next honest copy edit for the wrong reason. What
+replaces it is the claim that stays false however governed this feature becomes: the switch copy
+offers no reading data — no "who read it", no "who opened", no read log. That property is the one
+VISION #8 actually cares about, and a blocklist of two words would never have caught its violation.

@@ -128,6 +128,8 @@
 
 ## 8. Verification
 
-- [x] 8.1 `pnpm turbo lint typecheck test build` clean.
+- [x] 8.1 `pnpm turbo lint typecheck test` and `pnpm --filter @yapm/docs build` clean locally.
 - [x] 8.2 `node scripts/check-boundaries.mjs` clean (packages never import apps).
-- [x] 8.3 The pg suites run against a live Postgres, and the compose smoke test passes.
+- [ ] 8.3 The pg suites run against a live Postgres, and the compose smoke test passes. **Owned by
+      CI on this branch's PR** — the pg and Playwright suites skip without a `DATABASE_URL`/stack and
+      were not run locally, so this box is CI's to tick, not a local pass's.

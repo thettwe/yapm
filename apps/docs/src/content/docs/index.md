@@ -40,7 +40,8 @@ runs as three containers you own.
   work-graph entity or one of yapm's own computed metrics. It reads no cards, no comments and
   nobody's name, and nothing it drafts becomes the team's conclusion until the team ratifies it —
   members privately agree or disagree, and one verdict per proposal is computed when the retro
-  leaves voting.
+  leaves voting. From a team's second retro it also reports whether the improvements the last one
+  agreed actually shipped.
 - [Notifications](/features/notifications/) — a keyboard-first per-user inbox at `/inbox` for
   assignments and comments on issues you are involved in, with an unread badge and optional batched
   email. No admin, of any role, can read your inbox. Turn mail on with

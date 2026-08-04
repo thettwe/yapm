@@ -341,3 +341,32 @@ signal that the section is genuinely independent of the card above it.
   bucket beside three improvements, dense ranks within each bucket, the model's label being replaced
   by yapm's text, an invented action id being dropped by cite-or-omit, and the first-retro path baking
   nothing.
+
+### L6 — The verdict log's pg tests live in `retro-facts.pg.test.ts`, beside the read they are the mirror of
+
+The log is a `db/` read of its own and would naturally take its own `*.pg.test.ts`. It does not,
+because the only reusable asset either read needs is the **recording Kysely proxy** — the thing that
+makes "which tables did this statement name" assertable — and copying forty lines of proxy into a
+second file to prove a second negative is the shape this change spent its whole design refusing.
+
+The file now carries two sibling `describe`s, and the reason they belong together is stated in it:
+**the fact assembly must never read a verdict, and the verdict log must never read a reaction.** Those
+are the same claim pointed in opposite directions, they are both asserted by table-set equality
+against the same proxy, and a reader who breaks one should find the other on the way past.
+
+### L7 — What this pass ran, and the one thing it could not
+
+- **Ran and green:** `pnpm lint` (biome ci, 542 files), `turbo typecheck --filter=...[origin/main]`,
+  the four package suites (schema, server, web, ui), `node scripts/check-boundaries.mjs`, and
+  `pnpm --filter @yapm/docs build` (23 pages).
+- **NOT run: the pg suites and Playwright.** No Postgres was reachable — port 5445 was closed, the
+  only listener on 5432 belongs to an unrelated project, and this pass was instructed not to run
+  `docker compose`. So **CI is where every pg case in this pass first executes**, exactly as it was
+  for 6.1/6.2 in the previous one. Both pg files throw rather than skip when `DATABASE_URL` is unset
+  under CI, so a silent skip is not a failure mode available to them; but "the test is written" and
+  "the test passes" are different claims and this pass can only make the first about:
+  `retro-facts.pg.test.ts` (four new cases: all four outcomes distinctly, the two-cycles-back
+  selection, the prior-retro-with-no-actions absence, and the four verdict-log cases),
+  `retro-draft.test.ts`'s end-to-end bake case, and `admin-routes.test.ts`'s two verdict-log cases.
+- **The full `build` task and the compose smoke test were also not run**, by the same instruction;
+  task 8.1 and 8.2 are left unticked rather than reported as done.

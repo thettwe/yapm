@@ -65,7 +65,7 @@ to fall back to. That is a spec delta owned by change 20 alone, not shared work.
 | 19 | `retro-ratification` | `0020_retro_ratification` | ~17 | Only worth building once 18's drafts are known to be worth ratifying. |
 | 20 | `pm-digest-boundary` | `0021_pm_digest` | ~22 | The first change in the repo whose output crosses a permission boundary. Ships the boundary while the content is provably harmless. |
 | 21 | `pm-digest-areas` | none | ~14 | The actual PM differentiator. Needs 20's boundary to exist first. |
-| 22 | `retro-ai-loop-close` | none | ~8 | Small; only compounds after two retros have run. Foldable into 18 only if 18 comes in light — it will not. |
+| 22 | `retro-ai-loop-close` | none — **and none was taken** | ~8 est., ~10 built (+ the log) | Small; only compounds after two retros have run. Foldable into 18 only if 18 comes in light — it will not. ✅ built |
 | 23 | `pm-digest-governance` | none | ~12 | Makes "governed" true rather than rhetorical. Must merge before any doc or marketing copy says "auditable" or "retention-bounded". |
 
 **Family order: retro first, PM second.** Three reasons, in order of weight:
@@ -174,6 +174,19 @@ Extends `retroFactsForCycle` with the prior retro's actions and their converted 
 only place the fact assembly touches an identity-bearing column, so it gets its own stripping test
 — plus a proposal category that reports on them. Optionally the rejected-proposal log as an
 operator-visible tuning signal. No migration.
+
+> **BUILT** (`retro-ai-loop-close`), and the optional half was **built too**: it was marked optional
+> only because it needed change 19's verdicts, which did not exist when this was written and do now.
+> Two things resolved differently from the wording above, both recorded in that change's `design.md`:
+> the reporting **category** is a *derived bucket* (`follow_up`) over a new `retro_action` reference
+> kind rather than a fourth stored `category` value, because `refs` is jsonb with no CHECK and
+> `retro_ai_proposal.category` is a text column under one — a fourth stored value would have cost the
+> DDL this change promised not to spend, and the alternative is specified in that design so a
+> maintainer can still choose it. And the assembly's table allowlist grows by exactly `retro` and
+> `retro_action`, which is a line this document's §1 drew in the other place; the argument for
+> crossing it for those two and nothing else — an action is the team's agreed public output with no
+> author column, a card is one person's testimony — is in that design as §D1, and the equality
+> assertion in `retro-facts.pg.test.ts` is what keeps "exactly two" true.
 
 ---
 
@@ -458,7 +471,12 @@ every generation and every policy change.
 the disclosure validator. Assert nothing from `listFiles` is persisted.
 
 **22 · retro-ai-loop-close.** The prior-retro fact bundle contains no `assignee_id` from either
-`retro_action` or `issue`.
+`retro_action` or `issue`. → **Asserted, twice and at two altitudes**, in
+`packages/schema/src/db/retro-facts.pg.test.ts`: on the recorded column tokens (no statement names
+either column, and `selectAll` is never called) and on the returned object (no identity-shaped key at
+any depth, and neither seeded assignee **value** in its serialization), against fixture rows whose
+action and whose converted issue carry two *different* non-null assignees so nothing passes for want
+of something to strip. Neither assertion reads the prompt string.
 
 **23 · pm-digest-governance.** The ready-email body contains a link and no digest content. The
 retention sweep deletes a disclosure past its window and leaves the team's own `cycle_digest`

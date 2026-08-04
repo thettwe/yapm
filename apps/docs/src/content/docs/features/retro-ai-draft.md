@@ -1,6 +1,6 @@
 ---
 title: Retro AI draft
-description: Opt in, per team, to have the AI draft up to three wins, three losses and three improvements into your retro — each one citing a work-graph entity or one of yapm's own computed metrics, and none of it true until your team says so.
+description: Opt in, per team, to have the AI draft up to three wins, three losses, three improvements and three follow-ups on last retro into your retro — each one citing a work-graph entity or one of yapm's own computed metrics, and none of it true until your team says so.
 ---
 
 A retro's hardest minute is the first one. The board is empty, everyone is remembering a different
@@ -9,6 +9,10 @@ fortnight, and the person who speaks first sets the agenda. yapm already answers
 computed before anyone arrives. The **retro AI draft** goes one step further: it asks a model to
 read those same facts and write down at most **three wins, three losses and three improvements**,
 each one pointing at the issue, pull request, check or metric it came from.
+
+From a team's **second** retro onward there is a fourth group: **follow-ups** on the improvements the
+team agreed last time, with yapm's own answer to whether each one shipped — see
+[Did last cycle's improvements ship?](#did-last-cycles-improvements-ship).
 
 It is a starting point, deliberately, and the surface says so in as many words: *AI-drafted, not
 agreed — the team has not decided any of this.* Nothing the model writes becomes the team's
@@ -171,30 +175,122 @@ underlying difference: a card is somebody's testimony and does not need the team
 true, whereas an AI proposal is a machine's inference over the work graph and is worth precisely what
 the team says it is worth.
 
+## Did last cycle's improvements ship?
+
+A retro that does not remember is a retro that agrees the same improvement three cycles running. So
+from a team's second retro onward, the draft carries a fourth group — **follow-ups** — reporting on
+the improvements the team agreed *last* time and what became of them.
+
+**Be clear about the payoff curve: this does nothing at all until you have run two retros.** There is
+no prior retro to report on before then, and the first-retro surface is a **clean absence** — no
+fourth heading, no "nothing to follow up on yet" line, no reserved space. The panel is byte-identical
+to the one described above until there is something real to say. That is not politeness; it is how
+the feature is built, and the section below on citations explains why it could not render an empty
+state even if someone wanted it to.
+
+### The outcome is yapm's word, never the model's
+
+Every retro action either became a tracked issue or did not. yapm looks at that issue's **live
+status** — as of the moment this retro is drafted, not as of last retro — and computes one of exactly
+four outcomes:
+
+| Outcome | What it means |
+|---|---|
+| **shipped** | The issue the action became is `Done` |
+| **canceled** | The issue was `Canceled` — the team decided against it, which is an outcome and not a failure to report |
+| **still open** | The issue exists and is in any other status |
+| **never tracked** | The action was agreed and never converted into an issue at all |
+
+**`shipped` means `Done` and nothing else.** A canceled improvement is reported as canceled, never
+folded into "not shipped" and never counted among the shipped. "Never tracked" is kept apart from
+"still open" on purpose: *we forgot to write it down* and *we wrote it down and it is still open* are
+different failures, and a retro should be able to tell them apart.
+
+The model is handed those four words already computed, together with the totals, and it is told to
+restate them and never revise them. It cannot type a number here any more than it can anywhere else:
+the per-outcome totals are citable **keys**, so a proposal that wants to say "two of the three
+shipped" points at yapm's count instead of writing one.
+
+### What a follow-up looks like
+
+A follow-up is an ordinary proposal — a sentence, a confidence, evidence chips — that happens to cite
+a **prior retro action**. It carries its own heading naming the cycle those actions were agreed in
+("Follow-ups from Cycle 6"), because the prior retro is not necessarily *last* cycle's: if a team
+skipped a retro, yapm walks back to the most recent one that actually agreed something, and says so
+rather than implying it was last cycle.
+
+The prior action's chip is **the one chip in the section that is not a control.** It does not
+navigate. The prior retro's rows are not synced into this retro's view and yapm did not add a query
+for them, so a chip that looked like a link and did nothing would be worse than one that plainly is
+not. Its text is written by yapm — the action's own wording, truncated, plus yapm's outcome word —
+and an icon repeats the outcome so nothing depends on colour.
+
+Follow-ups are **capped at three like everything else**, counted separately from the other three
+groups. A cycle full of follow-ups cannot crowd out the improvements the team should make next, and a
+team with nothing to follow up on loses no room to a group that is not there.
+
+### Why a first retro cannot produce one
+
+The same rule that stops a hallucinated issue number stops an invented action: a proposal may only
+cite evidence yapm itself computed. On a team's first retro **there is no prior action id in that
+set**, so a model that invents one has the citation stripped and the proposal dropped with it. The
+absence is a property of the data, not a branch somebody has to remember to write — which is why
+there is no code path that could render an apologetic empty state.
+
+### The identity stripping, and why it gets its own test
+
+This is the only place in the whole pipeline where the fact assembly reads a table carrying an
+identity column, and it reads **two** of them: `retro_action` has an `assignee_id`, and so does the
+`issue` that action became. Neither reaches the model, and the reason is structural rather than a
+filter: **the columns are never selected.** The action read names four columns — its id, its retro,
+its wording and its issue link — and the issue read names four — id, number, title, status. A value
+that is never read cannot be forgotten about further down.
+
+Two assertions, at two altitudes, run on every build: one on the SQL, that no statement ever names an
+assignee (or the join back to the anonymous card an action came from); and one on the assembled
+object, with fixture rows that carry two *different* real assignees, that neither value appears
+anywhere in it at any depth. Both are checked against the object rather than against the text of the
+request, so a downstream cleanup that happened to scrub the prompt would make neither pass.
+
 ## What the model is given — and what it is never given
 
 This is the part worth reading closely, because a retro is the most sensitive surface in yapm. It
 holds [anonymous cards](/features/retrospectives/#anonymity), and anonymity there is a property of
 where the data is stored rather than of what the interface chooses to draw.
 
-**The pipeline reads no retro content at all.** Not the cards, not the drafts, not the votes, not the
-actions, not the server-only card→author table, and not a single comment anywhere in the product. The
-fact assembly that feeds the model names exactly seven tables:
+**The pipeline reads no card and no comment anywhere in the product.** Not the cards, not the private
+drafts, not the votes, not the server-only card→author table, and not one comment. The fact assembly
+that feeds the model names exactly nine tables:
 
 ```
-cycle · team · issue · issue_link · pull_request · ci_check · review
+cycle · team · issue · issue_link · pull_request · ci_check · review · retro · retro_action
 ```
 
 and no others. That set is asserted by a test that records every table and column the assembly
 touches and fails if the set is not *equal* to that list — so the boundary cannot widen by accident.
 
+The last two arrived with [follow-ups](#did-last-cycles-improvements-ship), and the argument for
+crossing that line for them and for nothing else is worth stating so you can disagree with it. A
+**card** is one person's testimony: written privately during `brainstorm`, published anonymously,
+with its author binding deliberately held in a table that does not exist in the sync layer at all. A
+**retro action** is the opposite artifact in every respect — created in `discuss` in front of
+everyone, as the team's agreed output, carrying no author column of any kind, and already readable by
+every member and every admin through an ordinary team-scoped query. Reading it discloses nothing that
+reading the retro board does not. From `retro` itself, only two columns are read — its id and its
+cycle — never its facilitator and never who created it; and `retro_action`'s link back to the
+anonymous card it came from is **never selected**, so the pipeline holds no edge into the
+anonymity-critical data even in principle.
+
 **There is no person dimension in the input.** No assignee, no author, no reviewer, no creator, no
 login, no email, at any depth of the object handed to the provider. This is the same team-level,
 non-surveillance stance as the [cycle digest](/features/cycle-digest/) and the seed panel, and it is
-structural rather than prompted: the data simply has no such field to name. One column deserves
-naming explicitly — a pull-request **review** row carries the reviewer's provider handle, and the
-assembly reads that table for the time-to-first-review metric. It selects the timestamp and the
-linking column and nothing else, by an explicit column list with the reason written at that line.
+structural rather than prompted: the data simply has no such field to name. Three columns deserve
+naming explicitly. A pull-request **review** row carries the reviewer's provider handle, and the
+assembly reads that table for the time-to-first-review metric — it selects the timestamp and the
+linking column and nothing else. A **retro action** and the **issue** it became each carry an
+assignee, and neither column is ever selected; that is
+[the stripping test](#the-identity-stripping-and-why-it-gets-its-own-test) above, and it is asserted
+against the assembled object as well as against the SQL.
 
 **The roster of member names is loaded only *after* the model answers**, and only to check its
 output. It is never part of the input.
@@ -211,11 +307,12 @@ this, and yapm would rather write them down than let you find them in a retro.
 mid-cycle"* on the AI's list, having written almost that sentence on an anonymous card an hour
 earlier, and concludes the pipeline read it.
 
-It did not, and the reason is structural rather than a promise. The fact assembly names seven tables
-and no others — cycles, teams, issues, issue links, pull requests, CI checks, reviews — under a
-merge-blocking test that fails if that set is not *equal* to the list, and every retro content table
-(cards, drafts, votes, actions, the card→author binding) is outside it. There is no code path that
-could read a card, so there is nothing to switch off. What actually happened is that a person and a
+It did not, and the reason is structural rather than a promise. The fact assembly names nine tables
+and no others — under a merge-blocking test that fails if that set is not *equal* to the list — and
+every table holding one person's testimony (cards, private drafts, votes, presence, the card→author
+binding) is outside it, along with every comment. The two retro tables that *are* inside it hold the
+team's agreed public actions and nothing else. There is no code path that could read a card, so there
+is nothing to switch off. What actually happened is that a person and a
 model looked at the same fortnight of work and reached the same conclusion — which is arguably the
 feature working. But **the perception is real even though the leak is impossible**, and knowing why
 it is impossible is the only thing that dissolves it.
@@ -235,21 +332,26 @@ in.
 
 A proposal never types a figure. It **points** at one.
 
-Each proposal carries evidence references, and a reference is either a work-graph entity — an issue,
-a pull request, a CI check — or the **key of a metric the seed panel already computed**. For a metric
-reference, the chip beside the sentence renders **yapm's own value and trend**, read from the same
-computed seed the panel above is rendering. Nothing the model emitted is ever displayed as a metric.
+Each proposal carries evidence references, and a reference is a work-graph entity — an issue, a pull
+request, a CI check — or the **key of a metric the seed panel already computed**, or one of the
+[prior retro's agreed actions](#did-last-cycles-improvements-ship). For a metric reference, the chip
+beside the sentence renders **yapm's own value and trend**, read from the same computed seed the
+panel above is rendering. Nothing the model emitted is ever displayed as a metric.
 
 Activating a chip does the obvious thing, from the keyboard alone:
 
 - an **issue** reference opens the issue, right where you are;
 - a **pull request** or **CI check** reference is a real link out to the entity on GitHub;
 - a **metric** reference reveals the seeded data panel and moves focus onto that metric's tile — the
-  same two-way link a card captured from a figure already has.
+  same two-way link a card captured from a figure already has;
+- a **prior retro action** is the one exception: it is a plain chip and not a control, because the
+  action lives on another retro whose rows this view does not hold.
 
 A reference yapm cannot resolve from rows the browser already holds is **dropped**, not rendered as
 an inert word. And a chip's label always comes from yapm's own naming (`#12`, `acme/app#7`), never
-from text the model wrote.
+from text the model wrote. A prior-action chip is the same rule reached by a different route: because
+the client cannot name that row from anything it has, the **server** overwrites the label with yapm's
+own text after validation and before the row is stored, so no caption a model wrote is ever kept.
 
 ### Cite evidence or be omitted
 
@@ -261,11 +363,16 @@ Three deterministic checks run over the model's output before a single row is st
    become a sentence.
 2. **No person, ever.** Any proposal whose text contains a workspace member's display name or email
    handle is dropped whole. Its siblings are unaffected.
-3. **At most three per category**, keeping the model's own order.
+3. **At most three per group**, keeping the model's own order — three wins, three losses, three
+   improvements and, from a team's second retro, three follow-ups, counted independently.
 
 The cap is **last** on purpose: a proposal dropped by check 1 or 2 is replaced by the next surviving
 one rather than leaving a hole. And the cap is enforced by code, not by asking the model nicely — the
 prompt requests three, the validator guarantees it.
+
+Check 1 is also what makes the follow-up group's absence structural. A prior retro's action ids are
+in the citable set only when there **is** a prior retro; on a team's first one there are none, so a
+proposal claiming to report on last cycle has nothing legal to point at and is dropped.
 
 What yapm deliberately does **not** attempt is checking numerals in prose against the computed facts.
 That check rejects dates and ordinals and produces confident nonsense; the structural answer is the
@@ -305,23 +412,29 @@ is still there — it is the raw-evidence fallback, and it was there before the 
 | Every proposal was dropped by a validator | Nothing. Silence is a correct answer for a thin cycle |
 | The background pass has not finished yet | One quiet "drafting…" line, replaced by the proposals when they land |
 | The background pass is switched off instance-wide | The drafting line for a minute or two, then nothing — the row is never completed, so the section stands down |
+| The team has never held a retro before this one | The three usual groups and **no follow-up group** — no heading, no placeholder, no reserved space |
+| The team's last retro agreed no actions | The same. yapm walks back up to three cycles for the most recent retro that agreed something, and reports nothing if none did |
 
-A category with no surviving proposal renders no heading — you will not see an empty "Losses".
+A group with no surviving proposal renders no heading — you will not see an empty "Losses", and you
+will not see an empty "Follow-ups".
 
 ## Keyboard and theming
 
-The section sits directly below the seeded data panel and is reachable by Tab from it. Every chip is
-a real focusable control in the order the proposal cites them: an in-app reference is a button, and an
-external pull request or check is a link, so middle-click, copy-link and the screen-reader "link" role
-all work the way they should. The reaction toggles and the *Add as an action* control are the same:
-real buttons, next in the tab order after the evidence, activated with Enter or Space, and reporting
-their pressed state as `aria-pressed` rather than by colour. All four are also in the retro command
-palette. Nothing here is a drag target and nothing requires a pointer.
+The section sits directly below the seeded data panel and is reachable by Tab from it. Every chip
+that *can* be activated is a real focusable control, in the order the proposal cites them: an in-app
+reference is a button, and an external pull request or check is a link, so middle-click, copy-link and
+the screen-reader "link" role all work the way they should. The
+[prior-action chip](#what-a-follow-up-looks-like) is the deliberate exception — it is not a control,
+so it is not in the tab order and does not pretend to be reachable. The reaction toggles and the *Add
+as an action* control are real buttons, next in the tab order after the evidence, activated with Enter
+or Space, and reporting their pressed state as `aria-pressed` rather than by colour. All four are also
+in the retro command palette. Nothing here is a drag target and nothing requires a pointer.
 
 Every colour and font resolves from a semantic token, so the section is correct in Warm, Focused and
 Editorial in both light and dark, and its text meets AA contrast in all six — asserted by a test
 rather than eyeballed. Only *contested* takes the accent, because it is the routing signal; the other
-three verdicts are told apart by their words, so no meaning anywhere depends on hue.
+three verdicts are told apart by their words, so no meaning anywhere depends on hue. An action's
+outcome is likewise a word and an icon, never a colour.
 
 Reading the section waits on nothing: it renders from rows the browser already holds and computes no
 figure the seed panel has not already computed. Reacting waits on nothing either — the toggle flips
@@ -339,9 +452,32 @@ of another team sees nothing, by the same team-scoped rule as the rest of the re
 Deleting a retro deletes its draft, every proposal and every reaction with it. Action items created
 from a proposal survive, losing only their link back to it.
 
+## For operators: what teams decided about the draft
+
+Every other quality claim about this feature is an assertion made at build time. The **verdicts your
+teams stamp are the only evidence a running instance produces** about whether the drafts are worth
+reading at all — so *Settings → AI* carries a read-only section, admin-only, showing them.
+
+Per team it reports how many proposals were agreed, contested, rejected, drew no response, or were
+never ratified because the retro never left voting; then the most recent **rejected and contested**
+proposals with their wording, the counts, and which cycle's retro they came from. Consistent
+rejections mean the drafts are not worth your teams' attention, and the two things to do about that —
+change the model, or turn the feature off — are both already on that page.
+
+Three things it deliberately is not:
+
+- **It is a signal about the model's output, not about the team.** There is no target, no threshold
+  and no trend line, because every one of those invites the number to be managed and the thing being
+  measured is the model.
+- **It is team-level, with no per-person column to omit.** The read never touches the reaction table.
+  The agree and disagree counts are the aggregates yapm stamps once when a retro leaves voting; who
+  reacted which way is not readable by anyone, including an admin, including here.
+- **It is a read.** No regenerate button, no per-team quality knob, no prompt editor. And none of it
+  is ever sent back to the model: a draft that steered away from previously-rejected phrasing would
+  be a model optimising for approval, which is the opposite of the signal your team is being asked
+  for.
+
 ## What is next
 
-**Closing the loop.** A later change asks the obvious follow-up question at the *next* retro: did
-last cycle's improvements actually ship? The prior retro's agreed improvements and the issues they
-became are already linked, in both directions, by the provenance this change records — so the answer
-is a read over the work graph rather than a second thing to remember.
+The loop is closed. What remains on this surface is the operator's side of it — reading the verdict
+log after a few real retros and deciding whether the model you configured is earning its place.

@@ -102,45 +102,45 @@
       **equality** assertion. Add an explicit assertion that `retro_ai_proposal`, `retro_card`,
       `retro_card_author`, `retro_draft`, `retro_vote`, `retro_vote_tally`, `retro_presence` and
       `comment` are absent.
-- [ ] 6.3 pg test: the canceled action is reported `canceled`, is not in the shipped total, and the
+- [x] 6.3 pg test: the canceled action is reported `canceled`, is not in the shipped total, and the
       shipped total counts only the `done` one. A `not_converted` action and an `in_flight` one are
       reported under distinct outcomes.
-- [ ] 6.4 pg test: a cycle whose prior cycles hold no retro, and one whose prior retro holds no
+- [x] 6.4 pg test: a cycle whose prior cycles hold no retro, and one whose prior retro holds no
       actions, both return a well-formed bundle with `priorRetro === null` — no throw, no empty
       string, no partial object.
-- [ ] 6.5 pg test: the prior retro is taken from two cycles back when the immediately-preceding
+- [x] 6.5 pg test: the prior retro is taken from two cycles back when the immediately-preceding
       cycle's retro has no actions, and the bundle names that cycle (design §D7).
-- [ ] 6.6 Unit (`ai-draft.test.ts`): `retroProposalBucket` returns `follow_up` iff a `retro_action`
+- [x] 6.6 Unit (`ai-draft.test.ts`): `retroProposalBucket` returns `follow_up` iff a `retro_action`
       reference is present; the cap gives three follow-ups **and** three improvements; rank is dense
       within each bucket.
-- [ ] 6.7 Unit: a proposal citing an invented `retro_action` id, with no prior actions in
+- [x] 6.7 Unit: a proposal citing an invented `retro_action` id, with no prior actions in
       `citableIds`, is dropped by the existing cite-or-omit validator and nothing lands in the
       follow-up bucket — the first-retro guarantee, proven through the shipped validator.
-- [ ] 6.8 Unit (`apps/server/src/ai/retro-draft.test.ts`): with `priorRetro === null` the prompt
+- [x] 6.8 Unit (`apps/server/src/ai/retro-draft.test.ts`): with `priorRetro === null` the prompt
       contains no prior-retro block at all; with a prior retro, an action body containing an injected
       instruction and a roster name lands inside the untrusted fence and no stored proposal names a
       person; a `retro_action` reference's model-supplied label is replaced by yapm's text.
-- [ ] 6.9 Unit (`retro-ai-panel.test.tsx`): with no follow-ups the panel renders byte-identically to
+- [x] 6.9 Unit (`retro-ai-panel.test.tsx`): with no follow-ups the panel renders byte-identically to
       today — no extra heading, no placeholder node; with follow-ups it renders one extra group whose
       heading names the prior cycle, with the chip and the non-navigating reference.
-- [ ] 6.10 Unit/integration for the log: an admin gets per-team totals; a member and a viewer are
+- [x] 6.10 Unit/integration for the log: an admin gets per-team totals; a member and a viewer are
       refused **before** any read; the response contains no user identifier and the read issues no
       statement naming `retro_ai_reaction`.
-- [ ] 6.11 `packages/ui/src/styles/contrast.test.ts`: pin any new token pair the follow-up group or
+- [x] 6.11 `packages/ui/src/styles/contrast.test.ts`: pin any new token pair the follow-up group or
       the log section introduces. If it introduces none, say so rather than adding a vacuous case.
 
 ## 7. Documentation
 
-- [ ] 7.1 `apps/docs/src/content/docs/features/retro-ai-draft.md`: the follow-up group, the outcome
+- [x] 7.1 `apps/docs/src/content/docs/features/retro-ai-draft.md`: the follow-up group, the outcome
       vocabulary, **the two-retro payoff curve stated plainly** (it reports nothing until a team has
       run two retros, and the first-retro surface is a clean absence), the stripping guarantee on both
       assignee columns, and the rejected-proposal log with its team-level-only promise.
-- [ ] 7.2 `apps/docs/src/content/docs/features/retrospectives.md`: action items are now reported back
+- [x] 7.2 `apps/docs/src/content/docs/features/retrospectives.md`: action items are now reported back
       on in the next retro, and what "shipped" means.
-- [ ] 7.3 `ROADMAP.md` row 22 → built; `openspec/SCOPE-ai-features.md` §3's "optionally the rejected
+- [x] 7.3 `ROADMAP.md` row 22 → built; `openspec/SCOPE-ai-features.md` §3's "optionally the rejected
       proposal log" resolved to built. Check `README.md` and `apps/docs/src/content/docs/index.md`
       for any claim this makes stale. No `.env.example` change — this change adds no variable.
-- [ ] 7.4 Record every implementation decision in `design.md` under
+- [x] 7.4 Record every implementation decision in `design.md` under
       `## Decisions made during implementation`, including anything §D3's derived bucket forced that
       the design did not anticipate.
 
@@ -148,5 +148,5 @@
 
 - [ ] 8.1 `pnpm turbo lint typecheck test build`.
 - [ ] 8.2 The pg suite against a live Postgres on the assigned ports, from `down -v`.
-- [ ] 8.3 `pnpm --filter @yapm/docs build`.
-- [ ] 8.4 Confirm no migration was added and `packages/schema/src/migrations/` is unchanged.
+- [x] 8.3 `pnpm --filter @yapm/docs build`.
+- [x] 8.4 Confirm no migration was added and `packages/schema/src/migrations/` is unchanged.

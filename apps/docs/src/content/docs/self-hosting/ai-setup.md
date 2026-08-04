@@ -73,6 +73,11 @@ its own. None of them runs on an instance that has not configured AI.
 | [Retro AI draft](/features/retro-ai-draft/) | **per team, off by default**, in *Settings → AI* | a facilitator advances a retro out of `brainstorm` |
 | [Product digest](/features/pm-digest/) | **per workspace and per team, both off by default**, in *Settings → AI* | a cycle closes, immediately after the team's own digest and over the same facts |
 
+From the second retro a team runs, the draft also reports on the improvements the previous one agreed
+— see [Did last cycle's improvements ship?](/features/retro-ai-draft/#did-last-cycles-improvements-ship).
+It costs a little more context per run and nothing at all on a team's first retro, where there is
+nothing to report.
+
 The retro draft's generation is **lazy** on purpose, and that is the spend model as much as it is the
 safety model: a cycle that closes into a retro nobody ever runs costs **nothing**, because nothing is
 generated until somebody reveals the board. There is no sweep over old retros and no backfill when you
@@ -170,10 +175,13 @@ changed-file metadata to derive product-area labels and never reads a diff, and 
 paths — are what the model is given.
 
 That holds even where the surface itself is sensitive. The [retro AI draft](/features/retro-ai-draft/)
-runs beside a board of anonymous cards and reads **none of them**: its fact assembly names seven
-work-graph tables and no retro content table, no comment table and no identity-bearing column, with a
-test asserting the set is exactly those seven. The roster of member names is loaded only *after* the
-model answers, and only to drop any output that names somebody.
+runs beside a board of anonymous cards and reads **none of them**: its fact assembly names nine
+tables and no card table, no private draft, no vote, no comment and **no identity-bearing column**,
+with a test asserting the set is exactly those nine. Two of the nine are the retro and its agreed
+actions — the team's public output, read so the next retro can report on what shipped — and the
+assignee columns on those actions and on the issues they became are never selected, asserted both on
+the SQL and on the assembled object. The roster of member names is loaded only *after* the model
+answers, and only to drop any output that names somebody.
 
 ## What "AI off" looks like
 

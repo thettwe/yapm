@@ -397,6 +397,7 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     assignee_id: { nullable: true, hasDefault: false },
     target_cycle_id: { nullable: true, hasDefault: false },
     issue_id: { nullable: true, hasDefault: false },
+    ai_proposal_id: { nullable: true, hasDefault: false },
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },
@@ -435,7 +436,26 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     confidence: { nullable: false, hasDefault: false },
     refs: { nullable: false, hasDefault: true },
     rank: { nullable: false, hasDefault: false },
+    // The four written-once ratification columns (change 19). All nullable, none with a default:
+    // a proposal is unratified until the `vote -> discuss` advance says otherwise, and the step
+    // back puts every one of them back to null.
+    verdict: { nullable: true, hasDefault: false },
+    agree_count: { nullable: true, hasDefault: false },
+    disagree_count: { nullable: true, hasDefault: false },
+    ratified_at: { nullable: true, hasDefault: false },
     created_at: { nullable: false, hasDefault: true },
+  },
+  // One member's decision on one proposal (change 19). The compound `(proposal_id, user_id)` key is
+  // the primary key, so nothing is minted on the reaction path — and NOTHING HERE IS A COUNTER,
+  // which is the property the whole design turns on.
+  retro_ai_reaction: {
+    proposal_id: { nullable: false, hasDefault: false },
+    user_id: { nullable: false, hasDefault: false },
+    retro_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    value: { nullable: false, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
   },
   // THE ANONYMITY BOUNDARY. Server-only: in the Kysely DB interface and the migrations, and
   // deliberately absent from the Zero schema (asserted below), so an anonymous card's author is
@@ -812,7 +832,7 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
   // The two new AI artifact tables, in BOTH directions and by name, because the whole change rests
   // on them syncing: a table in Postgres but not the Zero schema renders nothing, and a table in the
   // Zero schema but not Postgres fails the replica's initial copy at boot.
-  it.each(['retro_ai_draft', 'retro_ai_proposal'])(
+  it.each(['retro_ai_draft', 'retro_ai_proposal', 'retro_ai_reaction'])(
     'carries %s in Postgres and in the Zero schema',
     (name) => {
       expect(
@@ -968,6 +988,46 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
   // or replacing the sticky `unsubscribed` row with a DELETE.
   it('keeps the issue_subscription natural key as a two-column primary key, in order', () => {
     expect(pkByTable.get('issue_subscription')).toEqual(['issue_id', 'user_id'])
+  })
+
+  // The same reasoning again, and it is why CLAUDE.md constraint 4 is not engaged on the reaction
+  // path: `(proposal_id, user_id)` IS the primary key, so there is no id to mint inside a mutator
+  // and a rebased re-run upserts the same row. It also makes "one member, one reaction, one
+  // proposal" a storage fact rather than a validation rule.
+  it('keeps the retro_ai_reaction natural key as a two-column primary key, in order', () => {
+    expect(pkByTable.get('retro_ai_reaction')).toEqual(['proposal_id', 'user_id'])
+  })
+
+  // THE CENTRAL CLAIM OF CHANGE 19, ASSERTED AGAINST POSTGRES RATHER THAN ARGUED IN A COMMENT:
+  // neither table carries a counter, so there is no shared row for concurrent reactions to contend
+  // on. `retro_ai_proposal.agree_count` / `disagree_count` are written ONCE by the phase advance and
+  // are nullable with no default — a running tally would need a `default 0` and a NOT NULL to be
+  // incrementable, and `retro_vote_tally.count` (which has both) is the shape being avoided.
+  it('gives the reaction path no counter to contend on', () => {
+    const reaction = tables.find((candidate) => candidate.name === 'retro_ai_reaction')
+    expect(reaction?.columns.map((column) => column.name)).toEqual([
+      'proposal_id',
+      'user_id',
+      'retro_id',
+      'team_id',
+      'value',
+      'created_at',
+      'updated_at',
+    ])
+
+    const proposal = tables.find((candidate) => candidate.name === 'retro_ai_proposal')
+    for (const name of ['agree_count', 'disagree_count']) {
+      const column = proposal?.columns.find((candidate) => candidate.name === name)
+      expect(column, `retro_ai_proposal.${name} is missing from Postgres`).toBeDefined()
+      expect(
+        column?.isNullable,
+        `${name} must be nullable — it is written once, not accumulated`,
+      ).toBe(true)
+      expect(
+        column?.hasDefaultValue,
+        `${name} must have no default — a default is a counter's tell`,
+      ).toBe(false)
+    }
   })
 
   it('constrains issue_subscription.state in Postgres, unlike notification.kind', async () => {

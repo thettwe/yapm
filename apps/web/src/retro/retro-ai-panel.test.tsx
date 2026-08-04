@@ -2,10 +2,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME,
   RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME,
+  RETRO_AI_REACTIONS_MINE_QUERY_NAME,
+  type RetroPhase,
+  type RetroReactionValue,
   type RetroSeed,
 } from '@yapm/schema'
 import { beforeEach, expect, test, vi } from 'vitest'
-import type { RetroAiDraftRow, RetroAiProposalRow } from '@/retro/retro-ai-panel'
+import type {
+  RetroAiDraftRow,
+  RetroAiProposalRow,
+  RetroAiReactionRow,
+} from '@/retro/retro-ai-panel'
 
 // The two artifact queries plus the issue query the panel resolves entity chips against, keyed by
 // wire name — a `.one()` query hands back a row, the others an array, exactly as zero-cache does.
@@ -102,11 +109,19 @@ function mount(
     onOpenIssue?: (id: string) => void
     onOpenMetric?: (ref: unknown) => void
     aiRetroDraftSince?: number | null
+    phase?: RetroPhase
+    canWrite?: boolean
+    reactions?: readonly RetroAiReactionRow[]
+    onReact?: (proposalId: string, value: RetroReactionValue) => void
+    onClearReaction?: (proposalId: string) => void
+    onAddAction?: (proposal: { id: string; summary: string }) => void
+    onFocusProposal?: (focus: unknown) => void
   } = {},
 ) {
   harness.rows = {
     [RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME]: draft,
     [RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME]: proposals,
+    [RETRO_AI_REACTIONS_MINE_QUERY_NAME]: handlers.reactions ?? [],
     [ISSUES_QUERY]: [ISSUE],
   }
   return render(
@@ -115,8 +130,14 @@ function mount(
       teamId="team-1"
       aiRetroDraftSince={handlers.aiRetroDraftSince === undefined ? 1 : handlers.aiRetroDraftSince}
       seed={SEED}
+      phase={handlers.phase ?? 'vote'}
+      canWrite={handlers.canWrite ?? true}
       onOpenIssue={handlers.onOpenIssue ?? (() => {})}
       onOpenMetric={handlers.onOpenMetric ?? (() => {})}
+      onReact={handlers.onReact ?? (() => {})}
+      onClearReaction={handlers.onClearReaction ?? (() => {})}
+      onAddAction={handlers.onAddAction ?? (() => {})}
+      onFocusProposal={handlers.onFocusProposal ?? (() => {})}
     />,
   )
 }
@@ -134,14 +155,29 @@ test('nothing renders when there is no draft row at all', () => {
   expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
 })
 
-test.each(['ai_off', 'failed'] as const)('nothing renders for a %s draft', (status) => {
-  mount(draftRow(status), [proposal()])
-  expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
-})
+// Nothing renders AND nothing is asked for. The reaction query lives one level below the draft
+// state, in the component the proposals are drawn by, so a draft that produced no surface issues no
+// reaction subscription either — the absence is of the query as well as of the DOM.
+test.each(['ai_off', 'failed'] as const)(
+  'nothing renders or subscribes for a %s draft',
+  (status) => {
+    mount(draftRow(status), [proposal()])
+    expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+    expect(subscribed()).not.toContain(RETRO_AI_REACTIONS_MINE_QUERY_NAME)
+  },
+)
 
-test('nothing renders for a ready draft whose proposals were all dropped', () => {
+test('nothing renders or subscribes for a ready draft whose proposals were all dropped', () => {
   mount(draftRow('ready'), [])
   expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+  expect(subscribed()).not.toContain(RETRO_AI_REACTIONS_MINE_QUERY_NAME)
+})
+
+// The same claim for the state a live retro passes through on its way to a draft: while the tail is
+// still running there is nothing to react to, so nothing asks who reacted.
+test('a pending draft subscribes to no reactions', () => {
+  mount(draftRow('pending'), [])
+  expect(subscribed()).not.toContain(RETRO_AI_REACTIONS_MINE_QUERY_NAME)
 })
 
 // The team's own consent, read off the synced `team` row: with it null the component that holds the
@@ -212,8 +248,14 @@ test('the drafting state and its resolution are both announced', async () => {
       teamId="team-1"
       aiRetroDraftSince={1}
       seed={SEED}
+      phase="vote"
+      canWrite
       onOpenIssue={() => {}}
       onOpenMetric={() => {}}
+      onReact={() => {}}
+      onClearReaction={() => {}}
+      onAddAction={() => {}}
+      onFocusProposal={() => {}}
     />,
   )
 
@@ -283,16 +325,22 @@ test('a metric chip renders the seed value and delta, never the number on the ro
   expect(screen.getByTestId('retro-ai-evidence-issue').textContent).toBe('#12')
 })
 
+// As a VIEWER, so the row's only controls are the evidence chips: a member in `group`/`vote` also
+// gets the two reaction toggles, and this test is about citation order rather than about ratification.
 test('every evidence chip is a focusable control, in the order the proposal cites them', () => {
-  mount(draftRow('ready'), [
-    proposal({
-      refs: [
-        { kind: 'issue', id: 'issue-1' },
-        { kind: 'widget', id: 'time_to_first_review' },
-        { kind: 'pull_request', id: 'pr-1' },
-      ],
-    }),
-  ])
+  mount(
+    draftRow('ready'),
+    [
+      proposal({
+        refs: [
+          { kind: 'issue', id: 'issue-1' },
+          { kind: 'widget', id: 'time_to_first_review' },
+          { kind: 'pull_request', id: 'pr-1' },
+        ],
+      }),
+    ],
+    { canWrite: false },
+  )
 
   const row = screen.getByTestId('retro-ai-proposal')
   const chips = [...row.querySelectorAll('button, a')]
@@ -309,15 +357,19 @@ test('every evidence chip is a focusable control, in the order the proposal cite
 })
 
 test('a reference the client cannot name from its own rows renders no chip', () => {
-  mount(draftRow('ready'), [
-    proposal({
-      refs: [
-        { kind: 'issue', id: 'issue-not-synced', label: 'trust me' },
-        { kind: 'widget', id: 'metric-that-does-not-exist' },
-        { kind: 'issue', id: 'issue-1' },
-      ],
-    }),
-  ])
+  mount(
+    draftRow('ready'),
+    [
+      proposal({
+        refs: [
+          { kind: 'issue', id: 'issue-not-synced', label: 'trust me' },
+          { kind: 'widget', id: 'metric-that-does-not-exist' },
+          { kind: 'issue', id: 'issue-1' },
+        ],
+      }),
+    ],
+    { canWrite: false },
+  )
 
   const row = screen.getByTestId('retro-ai-proposal')
   expect([...row.querySelectorAll('button, a')]).toHaveLength(1)
@@ -359,4 +411,345 @@ test('no avatar, no image and no per-person attribution anywhere in the section'
   const panel = screen.getByTestId('retro-ai-panel')
   expect(panel.querySelector('img')).toBeNull()
   expect(panel.textContent).not.toMatch(/\bby\s+\w+@/i)
+})
+
+// ---------------------------------------------------------------------------------------------
+// Ratification: the team disposes.
+// ---------------------------------------------------------------------------------------------
+
+// The affordance is driven by the SAME predicate the mutator enforces, so the window the server
+// keeps and the window the surface offers cannot drift. `discuss` is the interesting negative: the
+// verdict is stamped on entry to it, so a control there would offer a write that is already too
+// late to count.
+test.each(['group', 'vote'] as const)('the reaction toggles render during %s', (phase) => {
+  mount(draftRow('ready'), [proposal()], { phase })
+
+  expect(screen.getByTestId('retro-ai-agree')).toBeInTheDocument()
+  expect(screen.getByTestId('retro-ai-disagree')).toBeInTheDocument()
+})
+
+test.each(['brainstorm', 'discuss', 'actions', 'closed'] as const)(
+  'the reaction toggles are absent during %s',
+  (phase) => {
+    mount(draftRow('ready'), [proposal()], { phase })
+    expect(screen.queryByTestId('retro-ai-reactions')).toBeNull()
+  },
+)
+
+test('a viewer gets no reaction control at all', () => {
+  mount(draftRow('ready'), [proposal()], { phase: 'vote', canWrite: false })
+  expect(screen.queryByTestId('retro-ai-reactions')).toBeNull()
+})
+
+// The direct consequence of the query's shape: no query exists that could return another member's
+// reaction, so there is nothing else to render. Not a UI simplification — an absence of data.
+test('only the caller’s own reaction is shown, with no count and no total before the stamp', () => {
+  mount(
+    draftRow('ready'),
+    [proposal({ id: 'p-1' }), proposal({ id: 'p-2', rank: 1, summary: 'Untouched.' })],
+    { phase: 'vote', reactions: [{ proposalId: 'p-1', value: 'agree' }] },
+  )
+
+  const rows = screen.getAllByTestId('retro-ai-proposal')
+  const [mine, theirs] = rows as [HTMLElement, HTMLElement]
+  expect(mine.querySelector('[data-testid="retro-ai-agree"]')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  expect(mine.querySelector('[data-testid="retro-ai-disagree"]')).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
+  // The second proposal carries no reaction of the caller's, and nothing about anyone else's.
+  expect(theirs.querySelector('[data-testid="retro-ai-agree"]')).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
+  // No verdict, no counts, and no digit anywhere that could read as a running total.
+  expect(screen.queryByTestId('retro-ai-verdict')).toBeNull()
+  expect(screen.queryByTestId('retro-ai-verdict-counts')).toBeNull()
+  expect(screen.getByTestId('retro-ai-unratified')).toBeInTheDocument()
+})
+
+test('the toggles are real buttons in the tab order, told apart by aria-pressed', () => {
+  mount(draftRow('ready'), [proposal()], {
+    phase: 'vote',
+    reactions: [{ proposalId: 'proposal-1', value: 'disagree' }],
+  })
+
+  for (const testId of ['retro-ai-agree', 'retro-ai-disagree']) {
+    const button = screen.getByTestId(testId)
+    expect(button.tagName).toBe('BUTTON')
+    expect(button).not.toBeDisabled()
+    expect(button).not.toHaveAttribute('tabindex', '-1')
+    button.focus()
+    expect(button).toHaveFocus()
+  }
+  // The pressed state is carried by `aria-pressed` and not by hue alone — the same discipline the
+  // rest of the retro surface holds, and the reason this is assertable at all.
+  expect(screen.getByTestId('retro-ai-disagree')).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByTestId('retro-ai-agree')).toHaveAttribute('aria-pressed', 'false')
+})
+
+// Every per-item control in the retro names its item — the board's dots are `Vote for ${label}` —
+// and a section of nine proposals otherwise hands a screen-reader user eighteen controls called
+// "Agree" and "Disagree", told apart by visual adjacency alone.
+test('each reaction toggle is named by the proposal it acts on', () => {
+  mount(
+    draftRow('ready'),
+    [
+      proposal({ id: 'w-1', summary: 'Everything in scope shipped.' }),
+      proposal({ id: 'w-2', rank: 1, summary: 'Two issues carried a second time.' }),
+    ],
+    { phase: 'vote' },
+  )
+
+  expect(
+    screen.getAllByTestId('retro-ai-agree').map((node) => node.getAttribute('aria-label')),
+  ).toEqual([
+    'Agree with: Everything in scope shipped.',
+    'Agree with: Two issues carried a second time.',
+  ])
+  expect(
+    screen.getAllByTestId('retro-ai-disagree').map((node) => node.getAttribute('aria-label')),
+  ).toEqual([
+    'Disagree with: Everything in scope shipped.',
+    'Disagree with: Two issues carried a second time.',
+  ])
+  // Named, and reachable by that name — the accessible name is what a screen-reader user calls it.
+  expect(screen.getByRole('button', { name: 'Agree with: Everything in scope shipped.' })).toBe(
+    screen.getAllByTestId('retro-ai-agree')[0],
+  )
+})
+
+test('the action control is named by the improvement it would create', () => {
+  mount(
+    draftRow('ready'),
+    [
+      proposal({
+        id: 'i-1',
+        category: 'improvement',
+        summary: 'Hold scope where it was.',
+        verdict: 'agreed',
+      }),
+    ],
+    { phase: 'discuss' },
+  )
+
+  expect(screen.getByTestId('retro-ai-add-action')).toHaveAttribute(
+    'aria-label',
+    'Add as an action: Hold scope where it was.',
+  )
+})
+
+// A mis-click must not become a permanent opinion: pressing the pressed value withdraws it, which
+// is a different mutator from disagreeing.
+test('pressing the pressed value clears it, and the other value replaces it', () => {
+  const onReact = vi.fn()
+  const onClearReaction = vi.fn()
+  mount(draftRow('ready'), [proposal()], {
+    phase: 'vote',
+    reactions: [{ proposalId: 'proposal-1', value: 'agree' }],
+    onReact,
+    onClearReaction,
+  })
+
+  fireEvent.click(screen.getByTestId('retro-ai-agree'))
+  expect(onClearReaction).toHaveBeenCalledWith('proposal-1')
+  expect(onReact).not.toHaveBeenCalled()
+
+  fireEvent.click(screen.getByTestId('retro-ai-disagree'))
+  expect(onReact).toHaveBeenCalledWith('proposal-1', 'disagree')
+})
+
+// D9, and the rendering consequence recorded as §G2: once there is a verdict the section becomes one
+// flat contested-first list, because a per-category sort would bury a contested Improvement under a
+// column of agreed Wins — which is exactly the routing failure the ordering exists to prevent.
+test('contested proposals lead, across categories, once the verdict is stamped', () => {
+  mount(
+    draftRow('ready'),
+    [
+      proposal({ id: 'w-1', category: 'win', summary: 'Agreed win.', verdict: 'agreed' }),
+      proposal({ id: 'w-2', category: 'win', rank: 1, summary: 'Second win.', verdict: 'agreed' }),
+      proposal({
+        id: 'i-1',
+        category: 'improvement',
+        summary: 'Contested improvement.',
+        verdict: 'contested',
+      }),
+      proposal({ id: 'l-1', category: 'loss', summary: 'Unrated loss.', verdict: 'unrated' }),
+    ],
+    { phase: 'discuss' },
+  )
+
+  expect(screen.getAllByTestId('retro-ai-proposal').map((row) => row.dataset.verdict)).toEqual([
+    'contested',
+    'agreed',
+    'agreed',
+    'unrated',
+  ])
+  // The non-contested tail keeps the (category, rank) order it already had — the comparator is
+  // stable, so nothing reshuffles under a reader.
+  expect(
+    screen
+      .getAllByTestId('retro-ai-proposal')
+      .slice(1)
+      .map((row) => row.textContent),
+  ).toEqual([
+    expect.stringContaining('Agreed win.'),
+    expect.stringContaining('Second win.'),
+    expect.stringContaining('Unrated loss.'),
+  ])
+  // The headings gave way to per-row category chips, so nothing was lost with them.
+  expect(screen.queryAllByTestId('retro-ai-category')).toHaveLength(0)
+  expect(screen.getAllByTestId('retro-ai-category-chip')).toHaveLength(4)
+  // And the section stops disclaiming what the team has now decided.
+  expect(screen.queryByTestId('retro-ai-unratified')).toBeNull()
+})
+
+// A TEAM-LEVEL AGGREGATE, ASSERTED AS ONE. The counts are two numbers and two words; there is no
+// name, no avatar and no per-person dimension available to render even if somebody wanted to.
+test('the verdict counts name nobody', () => {
+  mount(draftRow('ready'), [proposal({ verdict: 'contested', agreeCount: 3, disagreeCount: 1 })], {
+    phase: 'discuss',
+  })
+
+  expect(screen.getByTestId('retro-ai-verdict-counts').textContent).toBe('3 agreed, 1 disagreed')
+  expect(screen.getByTestId('retro-ai-verdict').textContent).toContain('Contested')
+  const panel = screen.getByTestId('retro-ai-panel')
+  expect(panel.querySelector('img')).toBeNull()
+  expect(panel.textContent).not.toMatch(/@/)
+})
+
+// Silence is not consent. `unrated` says so in words and shows no count, because "0 agreed, 0
+// disagreed" reads as a result rather than as nobody having spoken.
+test('a proposal nobody reacted to reads as unrated, with no counts', () => {
+  mount(draftRow('ready'), [proposal({ verdict: 'unrated', agreeCount: 0, disagreeCount: 0 })], {
+    phase: 'discuss',
+  })
+
+  expect(screen.getByTestId('retro-ai-verdict').textContent).toContain('Nobody responded')
+  expect(screen.queryByTestId('retro-ai-verdict-counts')).toBeNull()
+  expect(screen.getByTestId('retro-ai-verdict').textContent).not.toContain('Agreed')
+})
+
+// The one-keystroke path, and the hard line under it: the callback carries an id and a body and
+// there is no assignee to pass, here or anywhere downstream.
+test('an agreed improvement offers the action path, carrying no owner', () => {
+  const onAddAction = vi.fn()
+  mount(
+    draftRow('ready'),
+    [
+      proposal({
+        id: 'i-1',
+        category: 'improvement',
+        summary: 'Hold scope where it was.',
+        verdict: 'agreed',
+      }),
+    ],
+    { phase: 'discuss', onAddAction },
+  )
+
+  const control = screen.getByTestId('retro-ai-add-action')
+  expect(control.tagName).toBe('BUTTON')
+  control.focus()
+  expect(control).toHaveFocus()
+
+  fireEvent.click(control)
+  expect(onAddAction).toHaveBeenCalledTimes(1)
+  const [payload] = onAddAction.mock.calls[0] as [Record<string, unknown>]
+  expect(payload).toEqual({ id: 'i-1', summary: 'Hold scope where it was.' })
+  expect(Object.keys(payload)).not.toContain('assigneeId')
+})
+
+test.each([
+  ['contested', 'improvement'],
+  ['rejected', 'improvement'],
+  ['unrated', 'improvement'],
+  ['agreed', 'win'],
+  ['agreed', 'loss'],
+] as const)('no action path on a %s %s', (verdict, category) => {
+  mount(draftRow('ready'), [proposal({ id: 'x-1', category, verdict })], { phase: 'discuss' })
+  expect(screen.queryByTestId('retro-ai-add-action')).toBeNull()
+})
+
+test('the action path is absent in a phase where actions cannot be written', () => {
+  mount(draftRow('ready'), [proposal({ id: 'i-1', category: 'improvement', verdict: 'agreed' })], {
+    phase: 'vote',
+  })
+  expect(screen.queryByTestId('retro-ai-add-action')).toBeNull()
+})
+
+// The palette acts on whatever the keyboard last held, and it must never query the AI tables itself
+// (§G5) — so the panel hands it a snapshot built from rows it already has.
+test('focusing a proposal hands the palette a snapshot of that row', () => {
+  const onFocusProposal = vi.fn()
+  mount(
+    draftRow('ready'),
+    [
+      proposal({
+        id: 'i-1',
+        category: 'improvement',
+        summary: 'Hold scope.',
+        verdict: 'contested',
+      }),
+    ],
+    {
+      phase: 'vote',
+      reactions: [{ proposalId: 'i-1', value: 'disagree' }],
+      onFocusProposal,
+    },
+  )
+
+  // Body, category and verdict, and NOTHING ELSE — the caller's own reaction is seeded above and is
+  // deliberately absent from the snapshot: it is refreshed only by a focus event, so it would be
+  // stale for the member who just reacted with the inline toggle, and the palette entry that would
+  // have read it is unconditional instead (§G5).
+  fireEvent.focus(screen.getByTestId('retro-ai-agree'))
+  expect(onFocusProposal).toHaveBeenCalledWith({
+    id: 'i-1',
+    body: 'Hold scope.',
+    category: 'improvement',
+    verdict: 'contested',
+  })
+})
+
+// THE REGRESSION GUARD. AI off is not "the section is hidden" — it is the retro that ships without
+// this capability, in every phase including the one that ratifies. No query, no element, no error.
+test.each(['vote', 'discuss'] as const)(
+  'with AI off the ratification surface is absent in %s, and nothing is asked or logged',
+  (phase) => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      mount(
+        draftRow('ready'),
+        [proposal({ verdict: 'contested', agreeCount: 2, disagreeCount: 1 })],
+        { aiRetroDraftSince: null, phase },
+      )
+
+      expect(subscribed()).toEqual([])
+      expect(subscribed()).not.toContain(RETRO_AI_REACTIONS_MINE_QUERY_NAME)
+      expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+      expect(screen.queryByTestId('retro-ai-reactions')).toBeNull()
+      expect(screen.queryByTestId('retro-ai-verdict')).toBeNull()
+      expect(screen.queryByTestId('retro-ai-add-action')).toBeNull()
+      expect(errors).not.toHaveBeenCalled()
+    } finally {
+      errors.mockRestore()
+    }
+  },
+)
+
+// And the opted-in mirror of the same claim: the reaction query is one of exactly three the panel
+// asks for, so it cannot have been added to a surface that is supposed to be silent.
+test('an opted-in panel asks for the reaction query, and only its own three plus the issues it cites', () => {
+  mount(draftRow('ready'), [proposal()], { phase: 'vote' })
+  expect(subscribed().sort()).toEqual(
+    [
+      RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME,
+      RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME,
+      RETRO_AI_REACTIONS_MINE_QUERY_NAME,
+      ISSUES_QUERY,
+    ].sort(),
+  )
 })

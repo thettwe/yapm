@@ -205,7 +205,9 @@ On the board:
 
 Only the arrow keys are pure navigation; every other row above is an action the palette also
 offers, alongside the ones with no key at all — claiming or handing off facilitation, changing the
-format, setting the dot budget, and turning anonymity on.
+format, setting the dot budget, turning anonymity on, and, on a focused
+[AI proposal](/features/retro-ai-draft/#agreeing-and-disagreeing), agreeing with it, disagreeing,
+clearing your reaction, or adding an agreed improvement as an action.
 
 `Space` and `Enter` on a card are reserved for drag-and-drop: they pick a card up and drop it,
 which is how you cluster cards without a pointer. On your own draft during `brainstorm`, `Enter`
@@ -218,22 +220,39 @@ Optionally, and **off for every team until an admin turns it on**, a model reads
 the data panel is built from and drafts up to three wins, three losses and three improvements into the
 retro — each one citing a work-graph entity or one of the panel's own computed metrics. It appears
 directly below the data panel, a few seconds after the facilitator reveals the board, and it is
-labelled *AI-drafted, not agreed* because in this release nothing the model writes becomes the team's
-conclusion.
+labelled *AI-drafted, not agreed* until the team ratifies it — nothing the model writes becomes the
+team's conclusion on its own.
 
 It is drafted **at the `brainstorm` → `group` advance**, never before: while the retro is in
 `brainstorm` the rows do not exist, so there is nothing for the team to anchor on while they are still
 writing their own cards. It reads **no cards, no comments, no votes and nobody's name** — the anonymity
 boundary above is untouched, because the pipeline reads no retro content at all.
 
+Each member then **agrees or disagrees** with each proposal, privately: the reaction syncs to nobody
+but its author — not to another member, and not to a workspace admin — exactly like the dots above.
+When the facilitator advances out of `vote`, yapm counts the reactions once and stamps each proposal
+with a verdict. One disagreement is enough to make a proposal *contested* rather than agreed, and
+contested proposals sort to the top of the discussion. An **agreed improvement** is one keystroke
+from a real action item, which converts into a numbered issue through the same path as any
+hand-written one — never with an owner filled in.
+
+**Ratification applies to the AI's proposals and not to your own cards, on purpose.** Your cards
+already have a ranking signal on this board: the dots. A second, differently-shaped one on the same
+surface in the same session would be two scoreboards rather than symmetry, with a card able to be
+top-voted and rejected at once. It also matches the underlying difference: a card is somebody's
+testimony and does not need the team's endorsement to be true, whereas an AI proposal is a machine's
+inference and is worth precisely what the team says it is worth. **Dot voting remains the only
+ranking signal on human cards.**
+
 With no team opted in, or with no AI provider configured, the retro is exactly the retro described
-above and nothing renders. See [Retro AI draft](/features/retro-ai-draft/) for what the model is given,
-what it is never given, and the two residuals stated plainly.
+above and nothing renders — no draft, no reaction control, no verdict. See
+[Retro AI draft](/features/retro-ai-draft/) for what the model is given, what it is never given, the
+verdict rule in full, and the two residuals stated plainly.
 
 ## What is next
 
-**Agreeing and disagreeing with a proposal** — a self-scoped reaction, a verdict computed once when
-the retro leaves `vote`, a minority veto that marks a proposal contested, and one keystroke from an
-agreed improvement to a real numbered issue — is the next change on this surface. It builds on the
-board and the draft; it replaces neither.
+**Closing the loop**: asking, at the next retro, whether last cycle's agreed improvements actually
+shipped. The link from a proposal to the action it became to the issue that action became is already
+recorded in both directions, so the answer is a read over the work graph rather than another thing
+for the team to remember. It builds on the board and the draft; it replaces neither.
 

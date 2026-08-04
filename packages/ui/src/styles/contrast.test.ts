@@ -190,9 +190,36 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     }
   })
 
+  // The retro AI panel's reaction toggles, both states, on a proposal card. The PRESSED one is the
+  // interesting half: it is filled with the soft accent, and its ink is `text-1` rather than
+  // `--accent-strong` for the same reason the mention typeahead's active row is — accent-strong over
+  // that wash measures 3.94–4.38 in Focused light, Focused dark and Editorial light, which is under
+  // AA for 11px text. Pinned here because the failure is invisible in three of six presets and the
+  // obvious edit ("make the pressed state look accented") is exactly the one that reintroduces it.
+  it('both reaction toggle states meet AA on a proposal card (>= 4.5)', () => {
+    const card = hex(t, '--bg-elevated')
+    const pressed = over(t['--accent-soft'] ?? '', card)
+    expect(contrastRatio(hex(t, '--text-1'), pressed), 'pressed').toBeGreaterThanOrEqual(AA_NORMAL)
+    expect(contrastRatio(hex(t, '--text-2'), card), 'unpressed').toBeGreaterThanOrEqual(AA_NORMAL)
+  })
+
   it('on-accent text on the accent fill meets AA (>= 4.5)', () => {
     expect(contrastRatio(hex(t, '--on-accent'), hex(t, '--accent'))).toBeGreaterThanOrEqual(
       AA_NORMAL,
     )
+  })
+
+  // The `accent` badge variant is `bg-accent-soft text-accent-strong` and it is used NOWHERE in the
+  // product — only in the showcase. This records why, so a later change reaching for it on a real
+  // surface finds the reason here instead of shipping a chip that three presets cannot read: on the
+  // elevated surface it misses AA, and `solid` (`bg-accent text-on-accent`, asserted above) is the
+  // accented chip that does not. Kept as a bound rather than an equality so a token edit that FIXES
+  // the pair does not fail this file.
+  it('records that the soft-accent badge pair is not AA everywhere, which is why solid is used', () => {
+    const ratio = contrastRatio(
+      hex(t, '--accent-strong'),
+      over(t['--accent-soft'] ?? '', hex(t, '--bg-elevated')),
+    )
+    expect(ratio).toBeGreaterThanOrEqual(AA_LARGE)
   })
 })

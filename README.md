@@ -89,7 +89,12 @@ reveals the board (never before it, so there is nothing to anchor on while peopl
 their own cards), the model drafts at most three wins, three losses and three improvements, each one
 *citing* a work-graph entity or one of yapm's own computed metrics — it points at a number, it never
 types one — reading no cards, no comments and nobody's name, and labelled "AI-drafted, not agreed"
-because nothing it writes is the team's conclusion · a keyboard-first **notification inbox** at
+until **the team ratifies it**: each member privately agrees or disagrees (synced to nobody else, not
+even a workspace admin, exactly like their dots), one verdict per proposal is computed once when the
+retro leaves voting, **a single disagreement makes a proposal contested** rather than agreed and sorts
+it to the top of the discussion, and an agreed improvement is one keystroke from a real numbered issue
+— **never with an owner filled in**, because the model has no identity data to invent one from ·
+a keyboard-first **notification inbox** at
 `/inbox` with an unread badge, for
 assignments (including triage routing) and comments on issues you're involved in — written only on
 the server so a rebased optimistic mutation can never duplicate or re-send one, readable **only by
@@ -131,12 +136,11 @@ understand quietly deleted.
 
 **BYO-key AI agents** that read and act through the same permissions as a human —
 the foundation (gateway, agent-as-actor tools, the AI-over-work-graph substrate) is in, and the
-AI-facilitated retro's first half now drafts into a real retro. Next: **agreeing and disagreeing**
-with a drafted proposal — a reaction synced only to the person who cast it, a verdict computed once
-when the retro leaves voting, a single disagreement marking a proposal contested, and one keystroke
-from an agreed improvement to a real numbered issue. The governed PM-facing digest that crosses a
-permission boundary is now in; what it still owes is retention and an admin view of what was
-disclosed. Then DORA and review-health metrics
+AI-facilitated retro is complete end to end: the model drafts, the team disposes, and an agreed
+improvement lands as a tracked issue. The governed PM-facing digest — the first AI output in yapm to
+cross a permission boundary — is now in too; what it still owes is retention and an admin view of
+what was disclosed. Next: **closing that loop** at the following retro — did last cycle's agreed
+improvements actually ship? Then DORA and review-health metrics
 computed from the graph — team-level only, never individual scorecards. More connectors
 (GitLab, …) slot into the same framework with no feature-code change — inheriting the reality strip
 and the status automation above for free.

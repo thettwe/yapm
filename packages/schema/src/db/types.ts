@@ -20,6 +20,8 @@ import type {
   RetroColumnAccent,
   RetroFormat,
   RetroPhase,
+  RetroProposalVerdict,
+  RetroReactionValue,
   RetroVoteTarget,
   ReviewState,
   RichTextDoc,
@@ -561,6 +563,8 @@ export interface RetroActionTable {
   assignee_id: Nullable<string>
   target_cycle_id: Nullable<string>
   issue_id: Nullable<string>
+  // Provenance only, `on delete set null`: discarding the AI draft must not delete a human's action.
+  ai_proposal_id: Nullable<string>
   created_at: Generated<Timestamp>
   updated_at: Generated<Timestamp>
 }
@@ -609,7 +613,30 @@ export interface RetroAiProposalTable {
   confidence: DigestConfidence
   refs: JsonWithDefault<readonly RetroSeedRef[]>
   rank: number
+  // The four written-once ratification columns (change 19). NONE of them is a counter: they are
+  // computed in one pass at the `vote -> discuss` advance and set back to null by the step back, so
+  // nothing on the reaction path ever writes here.
+  verdict: Nullable<RetroProposalVerdict>
+  agree_count: Nullable<number>
+  disagree_count: Nullable<number>
+  ratified_at: TimestampOrNull
   created_at: Generated<Timestamp>
+}
+
+// One member's decision on one proposal. THE COMPOUND NATURAL KEY IS THE PRIMARY KEY — nothing is
+// minted anywhere on the reaction path, so a mutator re-run during rebase upserts the same row, and
+// "one member, one reaction, one proposal" is enforced by the PK index rather than by validation.
+// `user_id` carries no foreign key (the `retro_presence` precedent — better-auth owns `user`).
+// `retro_id` and `team_id` exist for the server's one-shot count and for membership cleanup; they
+// are NOT sync scopes, because exactly one person ever reads a given row: its author.
+export interface RetroAiReactionTable {
+  proposal_id: string
+  user_id: string
+  retro_id: string
+  team_id: string
+  value: RetroReactionValue
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
 }
 
 // One row per person per event. The FOUR-COLUMN NATURAL KEY IS THE PRIMARY KEY — nothing is
@@ -754,6 +781,7 @@ export interface DB {
   retro_presence: RetroPresenceTable
   retro_ai_draft: RetroAiDraftTable
   retro_ai_proposal: RetroAiProposalTable
+  retro_ai_reaction: RetroAiReactionTable
   notification: NotificationTable
   issue_subscription: IssueSubscriptionTable
   search_document: SearchDocumentTable
@@ -894,6 +922,10 @@ export type RetroAiDraftUpdate = Updateable<RetroAiDraftTable>
 
 export type RetroAiProposal = Selectable<RetroAiProposalTable>
 export type NewRetroAiProposal = Insertable<RetroAiProposalTable>
+export type RetroAiProposalUpdate = Updateable<RetroAiProposalTable>
+
+export type RetroAiReaction = Selectable<RetroAiReactionTable>
+export type NewRetroAiReaction = Insertable<RetroAiReactionTable>
 
 export type Notification = Selectable<NotificationTable>
 export type NewNotification = Insertable<NotificationTable>

@@ -9,6 +9,7 @@ import {
   castRetroVoteArgs,
   changeMemberRoleArgs,
   claimRetroFacilitatorArgs,
+  clearRetroAiReactionArgs,
   completeCycleArgs,
   configureRetroArgs,
   convertRetroActionToIssueArgs,
@@ -59,6 +60,7 @@ import {
   setIssueProjectArgs,
   setIssueStatusArgs,
   setPreferenceArgs,
+  setRetroAiReactionArgs,
   setRetroFacilitatorArgs,
   setRetroPhaseArgs,
   setTeamAiRetroDraftArgs,
@@ -182,6 +184,14 @@ const MUTATOR_TOOL_KINDS: Record<string, ToolKind> = {
   'retroAction.update': 'write',
   'retroAction.delete': 'destructive',
   'retroPresence.heartbeat': 'write',
+  // Self-scoped in the same structural way as `notification.markRead`: the user half of the primary
+  // key comes from the verified ctx, so an agent acting on behalf of a member can only ever write
+  // that member's own reaction. Both are plain writes — `clear` deletes nothing but a state `set`
+  // puts back. NOTE THE HAZARD THIS DOES NOT REMOVE: every mutator tool requires human approval
+  // (`needsApproval` is unconditionally true), and that approval is the ONLY thing standing between
+  // an agent and agreeing with a proposal an AI wrote. The ratification signal is a human's to give.
+  'retroAiReaction.set': 'write',
+  'retroAiReaction.clear': 'write',
   // BOTH DESTRUCTIVE, and `publish` is the strongest case for that classification in the whole map:
   // it is the one write in the product that moves content across a permission boundary, and it
   // cannot be undone — retraction stops further reads and un-reads nothing. `unpublish` is
@@ -264,6 +274,8 @@ const MUTATOR_TOOL_ARGS: Record<string, z.ZodType> = {
   'retroAction.update': updateRetroActionArgs,
   'retroAction.delete': deleteRetroActionArgs,
   'retroPresence.heartbeat': retroPresenceHeartbeatArgs,
+  'retroAiReaction.set': setRetroAiReactionArgs,
+  'retroAiReaction.clear': clearRetroAiReactionArgs,
   'pmDigest.publish': publishPmDigestArgs,
   'pmDigest.unpublish': publishPmDigestArgs,
 }

@@ -52,6 +52,7 @@ import {
   NOTIFICATION_RECIPIENT_CAP,
 } from './notifications/recipients.js'
 import { upsertRetroAiDraft } from './retro/ai-draft-writes.js'
+import { clearRetroAiVerdicts, ratifyRetroAiProposals } from './retro/ratify-writes.js'
 import {
   bumpRetroVoteTally,
   isRetroCardAuthor,
@@ -82,6 +83,7 @@ export type {
   UpsertRetroAiDraftResult,
 } from './retro/ai-draft-writes.js'
 export { replaceRetroAiProposals, upsertRetroAiDraft } from './retro/ai-draft-writes.js'
+export { clearRetroAiVerdicts, ratifyRetroAiProposals } from './retro/ratify-writes.js'
 
 // Atomically claim the next per-team issue number. The row lock on `issue_sequence`
 // serializes concurrent creates within a team; different teams take different rows and never
@@ -811,6 +813,21 @@ export function createServerMutators() {
         if (before === undefined) return
         if (before.phase === 'group' && args.to === 'brainstorm') {
           await discardRetroAiDraft(tx, args.id)
+          return
+        }
+        // THE RATIFICATION MOMENT (design §D4). Leaving `vote` closes the reaction window, so this
+        // is the one instant at which the team's decision is final and countable — the verdict is
+        // computed here, once, from one read, and nothing incremental exists anywhere else. Both
+        // branches no-op when the retro has no proposals, so an opted-out team's advance is
+        // byte-identical to what it was before this change.
+        if (before.phase === 'vote' && args.to === 'discuss') {
+          await ratifyRetroAiProposals(tx, args.id, args.updatedAt)
+          return
+        }
+        // The step back reopens the window and clears only the DERIVED stamp; every reaction row
+        // survives and the next advance recounts them.
+        if (before.phase === 'discuss' && args.to === 'vote') {
+          await clearRetroAiVerdicts(tx, args.id)
           return
         }
         if (before.phase !== 'brainstorm' || args.to !== 'group') return

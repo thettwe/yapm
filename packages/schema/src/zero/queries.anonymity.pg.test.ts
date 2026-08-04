@@ -539,6 +539,10 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
       'retros.detail': { id: anonymousRetroId },
       'retroDrafts.mine': { retroId: anonymousRetroId },
       'retroVotes.mine': { retroId: anonymousRetroId },
+      // Self-scoped with no admin bypass, like the two above, and swept by the same walk because a
+      // reaction row binds a person to a direction. The dedicated no-admin-bypass assertion lives in
+      // `queries.retro-ratification.pg.test.ts`; this entry is what makes covered == registry hold.
+      'retroAiReactions.mine': { retroId: anonymousRetroId },
       // Self-scoped like the two above and swept by the same walk: a notification carries both a
       // recipient and an actor, so if it ever synced past its recipient it would put one person's
       // id in front of another with no `IDENTITY_BY_DESIGN` entry to excuse it.
@@ -599,6 +603,7 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
     'retro_vote_tally',
     'retro_action',
     'retro_presence',
+    'retro_ai_reaction',
   ]
 
   async function visitEverything(ctx: AuthContext | undefined): Promise<VisitedValue[]> {

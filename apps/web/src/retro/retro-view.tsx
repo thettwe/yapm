@@ -655,8 +655,17 @@ function RetroSurface({
         teamId={teamId}
         aiRetroDraftSince={aiRetroDraftSince}
         seed={seed}
+        phase={retro.phase}
+        canWrite={canWrite}
         onOpenIssue={openIssue}
         onOpenMetric={onOpenEvidence}
+        onReact={(proposalId, value) => void api.setAiReaction(proposalId, value)}
+        onClearReaction={(proposalId) => void api.clearAiReaction(proposalId)}
+        onAddAction={(proposal) => {
+          if (!canAct) return
+          void api.createAction(proposal.summary, { aiProposalId: proposal.id })
+        }}
+        onFocusProposal={command.setFocusedAiProposal}
       />
 
       <div className="flex min-h-0 flex-1">

@@ -4,14 +4,25 @@ import {
   type DigestConfidence,
   queries,
   RETRO_PROPOSAL_CATEGORIES,
+  type RetroPhase,
   type RetroProposalCategory,
+  type RetroProposalVerdict,
+  type RetroReactionValue,
   type RetroSeed,
   type RetroSeedMetric,
   type RetroSeedRef,
+  sortContestedFirst,
 } from '@yapm/schema'
 import { Badge } from '@yapm/ui/components/badge'
 import { cn } from '@yapm/ui/lib/utils'
-import { ChartNoAxesColumnIcon, ExternalLinkIcon, SparklesIcon } from 'lucide-react'
+import {
+  ChartNoAxesColumnIcon,
+  ExternalLinkIcon,
+  ListChecksIcon,
+  SparklesIcon,
+  ThumbsDownIcon,
+  ThumbsUpIcon,
+} from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import {
   buildEvidenceIndex,
@@ -19,6 +30,8 @@ import {
   type EvidenceIndex,
   resolveEvidence,
 } from '@/cycles/digest'
+import { retroCan } from '@/retro/model'
+import type { RetroAiFocus } from '@/retro/retro-command'
 import { findSeedMetric, formatSeedDelta, formatSeedValue } from '@/retro/seed-model'
 
 // The AI's draft, BESIDE the seed panel and never inside the board's columns: `mad_sad_glad` and
@@ -37,8 +50,10 @@ import { findSeedMetric, formatSeedDelta, formatSeedValue } from '@/retro/seed-m
 //     model-authored text and is deliberately DISCARDED (see `evidenceTargetFor`) — the name
 //     validator scrubs summaries and headings, not ref labels, so a label is the one place injected
 //     text could still reach a reader.
-//  3. **Nothing here is ratified.** There is no agree/disagree in this release, so the section says
-//     so in words. That line is the whole reason the surface cannot be mistaken for a conclusion.
+//  3. **Nothing here is ratified until the team says so.** Until the verdict is stamped the section
+//     says so in words, and each proposal shows the CALLER'S OWN reaction and nothing else — not a
+//     count, not an avatar, not "3 people agreed". That is not a UI simplification: no query exists
+//     that could return another member's reaction, so there is nothing to render.
 const CATEGORY_LABEL: Record<RetroProposalCategory, string> = {
   win: 'Wins',
   loss: 'Losses',
@@ -48,6 +63,13 @@ const CATEGORY_LABEL: Record<RetroProposalCategory, string> = {
 const CHIP =
   'inline-flex shrink-0 items-center gap-1 rounded-pill border border-accent-line bg-accent-soft/50 px-2 py-0.5 text-[11px] text-text-2 outline-none hover:text-text-1 focus-visible:ring-2 focus-visible:ring-accent'
 
+// Every colour is a semantic token and the pressed state is carried by a border, a soft fill AND the
+// `aria-pressed` value — never by hue alone, so it survives every preset in both light and dark.
+const TOGGLE =
+  'inline-flex shrink-0 items-center gap-1 rounded-pill border px-2 py-0.5 text-[11px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent'
+const TOGGLE_OFF = 'border-border text-text-2 hover:text-text-1'
+const TOGGLE_ON = 'border-accent-line bg-accent-soft text-accent-strong'
+
 export interface RetroAiProposalRow {
   readonly id: string
   readonly category: RetroProposalCategory
@@ -55,6 +77,16 @@ export interface RetroAiProposalRow {
   readonly confidence: DigestConfidence
   readonly refs?: readonly RetroSeedRef[] | null
   readonly rank: number
+  // Written ONCE at the `vote -> discuss` advance and nulled again by the step back. Absent means
+  // the team has not decided yet, which is why the "not agreed" line keys off it.
+  readonly verdict?: RetroProposalVerdict | null
+  readonly agreeCount?: number | null
+  readonly disagreeCount?: number | null
+}
+
+export interface RetroAiReactionRow {
+  readonly proposalId: string
+  readonly value: RetroReactionValue
 }
 
 export interface RetroAiDraftRow {
@@ -72,9 +104,20 @@ export interface RetroAiPanelProps {
   aiRetroDraftSince: number | null
   // The same seed the panel above renders, so a cited metric key resolves to the identical number.
   seed: RetroSeed | null
+  // Both come from the retro row and the membership, and both drive `retroCan` — the SAME predicate
+  // the server enforces, so an affordance the authority would refuse cannot be drawn.
+  phase: RetroPhase
+  canWrite: boolean
   onOpenIssue: (issueId: string) => void
   // Reveals the seed panel and focuses the metric's tile — the shipped `seedWidgetSelector` join.
   onOpenMetric: (ref: RetroSeedRef) => void
+  onReact: (proposalId: string, value: RetroReactionValue) => void
+  onClearReaction: (proposalId: string) => void
+  // Provenance only — no assignee is passed, here or anywhere on this path.
+  onAddAction: (proposal: { id: string; summary: string }) => void
+  // The palette's four AI entries act on whatever the keyboard last held, recorded here because
+  // opening the dialog moves focus off it — the rule the board and the action list already use.
+  onFocusProposal: (focus: RetroAiFocus | null) => void
 }
 
 // How long a `pending` row is allowed to say "drafting…". The tail re-arms every few seconds, so a
@@ -100,11 +143,21 @@ function OptedInRetroAiPanel({
   retroId,
   teamId,
   seed,
+  phase,
+  canWrite,
   onOpenIssue,
   onOpenMetric,
+  onReact,
+  onClearReaction,
+  onAddAction,
+  onFocusProposal,
 }: RetroAiPanelProps) {
   const [draftRow] = useQuery(queries.retroAiDrafts.byRetro({ retroId }))
   const [proposalRows] = useQuery(queries.retroAiProposals.byRetro({ retroId }))
+  // SELF-SCOPED WITH NO ADMIN BYPASS. It returns the caller's own rows and there is no other query
+  // over that table anywhere, which is why this surface renders no count before the stamp: not a
+  // choice, an absence of data.
+  const [reactionRows] = useQuery(queries.retroAiReactions.mine({ retroId }))
   // Already the issue list's query and the seed's substrate, so resolving an entity chip costs no
   // new sync surface and no round trip.
   const [issues] = useQuery(queries.issues.byTeam({ teamId }))
@@ -115,6 +168,65 @@ function OptedInRetroAiPanel({
     () => groupByCategory(proposalRows as readonly RetroAiProposalRow[]),
     [proposalRows],
   )
+
+  const mine = useMemo(() => {
+    const byProposal = new Map<string, RetroReactionValue>()
+    for (const row of reactionRows as readonly RetroAiReactionRow[]) {
+      byProposal.set(row.proposalId, row.value)
+    }
+    return byProposal
+  }, [reactionRows])
+
+  const canReact = retroCan(phase, 'react', { canWrite })
+  const canAct = retroCan(phase, 'action', { canWrite })
+  // The stamp, not the phase name: `discuss` onward is exactly when a verdict exists, and reading it
+  // off the data means a step back that cleared it also clears the display in the same tick.
+  const ratified = groups.some((group) =>
+    group.proposals.some((proposal) => proposal.verdict != null),
+  )
+  // Contested first, then the (category, rank) order the grouping already imposes. Sorted client-side
+  // over already-synced rows rather than as an `orderBy`, because the ordering is phase-dependent and
+  // a phase-varying synced query would be a second read shape for the same rows.
+  const ordered = useMemo(
+    () => (ratified ? sortContestedFirst(groups.flatMap((group) => group.proposals)) : []),
+    [groups, ratified],
+  )
+
+  const focusFor = (proposalId: string): RetroAiFocus | null => {
+    const proposal = groups
+      .flatMap((group) => group.proposals)
+      .find((candidate) => candidate.id === proposalId)
+    if (proposal === undefined) return null
+    return {
+      id: proposal.id,
+      body: proposal.summary,
+      category: proposal.category,
+      verdict: proposal.verdict ?? null,
+      mine: mine.get(proposal.id) ?? null,
+    }
+  }
+
+  const proposalProps = (proposal: RetroAiProposalRow) => ({
+    proposal,
+    index,
+    seed,
+    mine: mine.get(proposal.id) ?? null,
+    canReact,
+    canAct,
+    onOpenIssue,
+    onOpenMetric,
+    onReact,
+    onClearReaction,
+    onAddAction,
+  })
+
+  const onProposalFocus = (event: { target: EventTarget | null }) => {
+    const row = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+      '[data-retro-ai-proposal]',
+    )
+    const id = row?.dataset.retroAiProposal
+    onFocusProposal(id === undefined ? null : focusFor(id))
+  }
 
   const draft = (draftRow ?? null) as RetroAiDraftRow | null
   const pendingSince = draft?.status === 'pending' ? draft.createdAt : null
@@ -161,50 +273,226 @@ function OptedInRetroAiPanel({
         </AiSection>
       ) : null}
       {drafted ? (
-        <AiSection unratified>
-          <div className="mt-3 flex flex-col gap-3" data-testid="retro-ai-groups">
-            {groups.map((group) => (
-              <section
-                key={group.category}
-                aria-label={CATEGORY_LABEL[group.category]}
-                data-testid="retro-ai-category"
-                data-category={group.category}
-              >
-                <h3 className="mb-1.5">
-                  <Badge variant="outline" data-testid="retro-ai-category-chip">
-                    {CATEGORY_LABEL[group.category]}
-                  </Badge>
-                </h3>
-                <ul className="flex flex-col gap-1.5">
-                  {group.proposals.map((proposal) => (
-                    <li
-                      key={proposal.id}
-                      className="flex flex-col gap-1.5 rounded-card border border-border bg-bg-elevated px-3 py-2"
-                      data-testid="retro-ai-proposal"
-                      data-category={proposal.category}
-                    >
-                      <div className="flex items-start gap-2">
-                        <span className="min-w-0 flex-1 text-[13px] leading-relaxed text-text-1">
-                          {proposal.summary}
-                        </span>
-                        <ConfidenceNote confidence={proposal.confidence} />
-                      </div>
-                      <EvidenceChips
-                        refs={proposal.refs ?? []}
-                        index={index}
-                        seed={seed}
-                        onOpenIssue={onOpenIssue}
-                        onOpenMetric={onOpenMetric}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
+        <AiSection unratified={!ratified}>
+          <div
+            className="mt-3 flex flex-col gap-3"
+            data-testid="retro-ai-groups"
+            onFocusCapture={onProposalFocus}
+          >
+            {/* Before the stamp the board keeps its category headings, which is how people read it.
+                After the stamp the ordering becomes global — contested first, across categories —
+                because the point of the ceremony is to spend scarce discussion time on disagreement,
+                and a per-category sort would bury a contested Improvement under agreed Wins. Each row
+                then carries its own category chip, so nothing is lost with the headings. */}
+            {ratified ? (
+              <ul className="flex flex-col gap-1.5" data-testid="retro-ai-ratified">
+                {ordered.map((proposal) => (
+                  <ProposalItem key={proposal.id} showCategory {...proposalProps(proposal)} />
+                ))}
+              </ul>
+            ) : (
+              groups.map((group) => (
+                <section
+                  key={group.category}
+                  aria-label={CATEGORY_LABEL[group.category]}
+                  data-testid="retro-ai-category"
+                  data-category={group.category}
+                >
+                  <h3 className="mb-1.5">
+                    <Badge variant="outline" data-testid="retro-ai-category-chip">
+                      {CATEGORY_LABEL[group.category]}
+                    </Badge>
+                  </h3>
+                  <ul className="flex flex-col gap-1.5">
+                    {group.proposals.map((proposal) => (
+                      <ProposalItem key={proposal.id} {...proposalProps(proposal)} />
+                    ))}
+                  </ul>
+                </section>
+              ))
+            )}
           </div>
         </AiSection>
       ) : null}
     </>
+  )
+}
+
+interface ProposalItemProps {
+  proposal: RetroAiProposalRow
+  index: EvidenceIndex
+  seed: RetroSeed | null
+  mine: RetroReactionValue | null
+  canReact: boolean
+  canAct: boolean
+  showCategory?: boolean
+  onOpenIssue: (issueId: string) => void
+  onOpenMetric: (ref: RetroSeedRef) => void
+  onReact: (proposalId: string, value: RetroReactionValue) => void
+  onClearReaction: (proposalId: string) => void
+  onAddAction: (proposal: { id: string; summary: string }) => void
+}
+
+function ProposalItem({
+  proposal,
+  index,
+  seed,
+  mine,
+  canReact,
+  canAct,
+  showCategory = false,
+  onOpenIssue,
+  onOpenMetric,
+  onReact,
+  onClearReaction,
+  onAddAction,
+}: ProposalItemProps) {
+  const verdict = proposal.verdict ?? null
+  // The one-keystroke path exists on an AGREED IMPROVEMENT only: a win needs no follow-up and a loss
+  // is not itself a thing to do. The mutator is deliberately laxer (design D8) — this is the
+  // affordance, not the authority.
+  const actionable = canAct && verdict === 'agreed' && proposal.category === 'improvement'
+
+  return (
+    <li
+      className="flex flex-col gap-1.5 rounded-card border border-border bg-bg-elevated px-3 py-2"
+      data-testid="retro-ai-proposal"
+      data-category={proposal.category}
+      data-verdict={verdict ?? undefined}
+      data-retro-ai-proposal={proposal.id}
+    >
+      <div className="flex items-start gap-2">
+        <span className="min-w-0 flex-1 text-[13px] leading-relaxed text-text-1">
+          {proposal.summary}
+        </span>
+        {showCategory ? (
+          <Badge variant="outline" data-testid="retro-ai-category-chip">
+            {CATEGORY_LABEL[proposal.category]}
+          </Badge>
+        ) : null}
+        <ConfidenceNote confidence={proposal.confidence} />
+      </div>
+      <EvidenceChips
+        refs={proposal.refs ?? []}
+        index={index}
+        seed={seed}
+        onOpenIssue={onOpenIssue}
+        onOpenMetric={onOpenMetric}
+      />
+      {canReact ? (
+        <ReactionToggles
+          proposalId={proposal.id}
+          mine={mine}
+          onReact={onReact}
+          onClearReaction={onClearReaction}
+        />
+      ) : null}
+      {verdict === null ? null : (
+        <VerdictNote
+          verdict={verdict}
+          agree={proposal.agreeCount ?? 0}
+          disagree={proposal.disagreeCount ?? 0}
+        />
+      )}
+      {actionable ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            className={cn(TOGGLE, TOGGLE_OFF)}
+            data-testid="retro-ai-add-action"
+            // NO ASSIGNEE IS PASSED, and none is offered: the AI layer has no identity dimension, so
+            // an owner here could only be invented. A human assigns it afterwards.
+            onClick={() => onAddAction({ id: proposal.id, summary: proposal.summary })}
+          >
+            <ListChecksIcon className="size-3" aria-hidden="true" />
+            Add as an action
+          </button>
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
+// Two real buttons in DOM order after the summary, so the whole control is reachable by Tab alone,
+// and `aria-pressed` rather than a checked role because this is a toggle, not a form field. Pressing
+// the already-pressed value clears it — a mis-click must not become a permanent opinion.
+//
+// IT RENDERS ONLY THE CALLER'S OWN REACTION. No count, no avatar, no other member's state, in any
+// phase and for any role, because no query exists that could return one.
+function ReactionToggles({
+  proposalId,
+  mine,
+  onReact,
+  onClearReaction,
+}: {
+  proposalId: string
+  mine: RetroReactionValue | null
+  onReact: (proposalId: string, value: RetroReactionValue) => void
+  onClearReaction: (proposalId: string) => void
+}) {
+  function toggle(value: RetroReactionValue) {
+    if (mine === value) onClearReaction(proposalId)
+    else onReact(proposalId, value)
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" data-testid="retro-ai-reactions">
+      <button
+        type="button"
+        aria-pressed={mine === 'agree'}
+        className={cn(TOGGLE, mine === 'agree' ? TOGGLE_ON : TOGGLE_OFF)}
+        data-testid="retro-ai-agree"
+        onClick={() => toggle('agree')}
+      >
+        <ThumbsUpIcon className="size-3" aria-hidden="true" />
+        Agree
+      </button>
+      <button
+        type="button"
+        aria-pressed={mine === 'disagree'}
+        className={cn(TOGGLE, mine === 'disagree' ? TOGGLE_ON : TOGGLE_OFF)}
+        data-testid="retro-ai-disagree"
+        onClick={() => toggle('disagree')}
+      >
+        <ThumbsDownIcon className="size-3" aria-hidden="true" />
+        Disagree
+      </button>
+    </div>
+  )
+}
+
+// `contested` is the routing signal — the reason the ceremony exists — so it is the one verdict that
+// gets the accent. The other three are carried by their words alone, the same discipline
+// `ConfidenceNote` holds: no meaning depends on hue, and nothing is dimmed below AA to make a point.
+const VERDICT_LABEL: Record<RetroProposalVerdict, string> = {
+  agreed: 'Agreed',
+  contested: 'Contested',
+  rejected: 'Rejected',
+  unrated: 'Nobody responded',
+}
+
+// A TEAM-LEVEL AGGREGATE WITH NO PER-PERSON DIMENSION. There is no name here and no surface anywhere
+// that could pair one with a direction — the counts are the whole of what the team's decision says.
+function VerdictNote({
+  verdict,
+  agree,
+  disagree,
+}: {
+  verdict: RetroProposalVerdict
+  agree: number
+  disagree: number
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" data-testid="retro-ai-verdict">
+      <Badge variant={verdict === 'contested' ? 'accent' : 'outline'}>
+        {VERDICT_LABEL[verdict]}
+      </Badge>
+      {verdict === 'unrated' ? null : (
+        <span className="text-[11px] text-text-2" data-testid="retro-ai-verdict-counts">
+          {agree} agreed, {disagree} disagreed
+        </span>
+      )}
+    </div>
   )
 }
 

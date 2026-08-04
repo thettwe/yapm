@@ -329,4 +329,92 @@ The maintainer's answers to the other three open items, taken as settled and not
 - **§9 item 10 (the two residuals)**: document both, neither is blocking. → Risks / Trade-offs, and
   the feature docs.
 
+### G2 — Contested-first reorders the whole section, so the category headings give way to per-row chips
+
+D9 says "contested first, then the rest in the existing `(category, rank)` order", and the spec
+scenario says *every* contested proposal renders before *every* non-contested one. Those two
+together are a **global** order, which the shipped rendering — three category `<section>`s with
+headings — cannot express: sorting inside each section would bury a contested Improvement under a
+column of agreed Wins, which is exactly the routing failure the ordering exists to prevent.
+
+**Chosen:** before the stamp the section is byte-identical to what change 18 shipped — three
+headed category groups. From the stamp onward it becomes one flat list in contested-first order,
+and each row grows its own category chip so nothing is lost with the headings. The switch keys off
+the presence of a verdict rather than the phase name, so a step back that clears the verdicts (D5)
+puts the headings back in the same tick.
+
+### G3 — The verdict badge distinguishes contested by accent and everything else by words alone
+
+Four verdicts, three of them (`agreed`, `rejected`, `unrated`) with no shipped semantic token that
+is AA in Warm, Focused and Editorial in both light and dark on `bg-bg-elevated`. Hand-rolling three
+new colour pairs to make them distinguishable by hue would have been three new AA obligations for a
+distinction the words already carry — and it would put meaning in hue, which the retro surface
+refuses everywhere else (`RetroAccentBar`: "colour is reinforcement only").
+
+**Chosen:** `contested` takes `Badge variant="accent"` because it is the routing signal; the other
+three take `variant="outline"` and are told apart by their text. This is the same discipline
+`ConfidenceNote` already states in a comment: "the distinction is carried by the words, not by
+dimming one of them below AA". The reaction toggles follow suit — pressed is a border **and** a soft
+fill **and** `aria-pressed`, never hue alone.
+
+### G4 — `clearRetroAiReaction` reads its own row before deleting
+
+The palette offers "Clear my reaction" from a focus snapshot, and a delete of a row that is not
+there would be an error for a no-op. **Chosen:** the mutator reads the caller's own
+`(proposalId, userID)` row and returns early when there is none, making the clear idempotent. The
+read is self-addressed and runs *after* the authorization prologue, so it discloses nothing and does
+not weaken the no-existence-oracle property: on a client the only reaction row that exists at all is
+the caller's own.
+
+### G5 — The command palette holds a focus SNAPSHOT, not a proposal id
+
+The four palette entries need the focused proposal's body, category, verdict and the caller's own
+reaction. Resolving an id inside the palette would mean querying the AI tables from
+`RetroCommandProvider`, which is mounted for **every** retro — including a team that never opted in,
+whose whole guarantee is that it issues no AI query at all.
+
+**Chosen:** `setFocusedAiProposal` takes a snapshot object, built by the panel from its own already-
+synced rows at the moment focus lands (the `onFocusCapture` pattern the board and action list use).
+A team with no AI panel never calls it, so the palette's AI group is structurally absent rather than
+conditionally hidden. The snapshot can go stale between a focus event and the palette opening; the
+only field where that matters is `mine`, and acting on a stale `mine` is idempotent either way.
+
+### G6 — The two reaction mutators are entered in the AI tool registry, as plain writes
+
+`buildMutatorToolSpecs` is exhaustive over `defineMutators` by construction and throws on a mutator
+it has no classification for, so registering the reaction mutators in the client map forces two
+entries. **Chosen:** both are `write`, classified with the `notification.markRead` reasoning — the
+user half of the key comes from the verified ctx, so an agent acting for a member can only ever
+write that member's own row.
+
+**The hazard this does not remove, recorded rather than buried:** an agent with write tools could
+agree with a proposal an AI wrote. `needsApproval` is unconditionally true for every mutator tool,
+so a human is in the loop — but that approval is the *only* thing standing between the model and
+ratifying its own output, and the registry has no exclusion mechanism to express "never this one".
+If a later change wants ratification to be un-delegable, it needs a real opt-out list in
+`ai-tools.ts`, not a comment.
+
+### G7 — The replica evidence for task 1.5 was NOT collected in this pass
+
+Task 1.5 asks for `0020` to be applied against a running `zero-cache` from `down -v` on the
+`yapm-rr` project, with the change-streamer log confirming that `retro_ai_reaction` and the altered
+columns reach the replica. **The build instruction for this pass explicitly forbade running
+`docker compose`**, on the grounds that the open PR already runs the full suite (including the
+compose smoke test) in CI.
+
+Recorded as an open gap rather than ticked: the migration is written and registered, the Kysely `DB`
+interface and the Zero schema were updated together, and `db/schema-drift.test.ts` now pins the new
+table, its compound primary key, both altered tables' columns and the no-counter property — but that
+test needs a database, so **nothing in this pass observed the new table reaching a replica.** CI's
+pg jobs and the compose smoke test are where that is actually established.
+
+### G8 — Groups 5 and 6 are not in this pass
+
+By the same instruction, this pass covers tasks groups 1–4; the pg integration tests (5.2–5.9), the
+component tests (5.10–5.11) and the documentation (group 6) belong to the Close phase and are
+unticked. What *was* done, because leaving it undone would have left the tree red: `ratify.test.ts`
+(5.1, pure, no database), the `phase.test.ts` matrix row for `react`, the `schema-drift.test.ts`
+shapes and assertions, the `queries.anonymity.pg.test.ts` registry entry that keeps
+covered == registry true, and the existing `retro-ai-panel.test.tsx` mounts.
+
 <!-- Further entries appended during the build phase: what was ambiguous, what was chosen, and why. -->

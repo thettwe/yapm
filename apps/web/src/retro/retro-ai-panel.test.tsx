@@ -2,10 +2,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME,
   RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME,
+  RETRO_AI_REACTIONS_MINE_QUERY_NAME,
+  type RetroPhase,
+  type RetroReactionValue,
   type RetroSeed,
 } from '@yapm/schema'
 import { beforeEach, expect, test, vi } from 'vitest'
-import type { RetroAiDraftRow, RetroAiProposalRow } from '@/retro/retro-ai-panel'
+import type {
+  RetroAiDraftRow,
+  RetroAiProposalRow,
+  RetroAiReactionRow,
+} from '@/retro/retro-ai-panel'
 
 // The two artifact queries plus the issue query the panel resolves entity chips against, keyed by
 // wire name — a `.one()` query hands back a row, the others an array, exactly as zero-cache does.
@@ -102,11 +109,19 @@ function mount(
     onOpenIssue?: (id: string) => void
     onOpenMetric?: (ref: unknown) => void
     aiRetroDraftSince?: number | null
+    phase?: RetroPhase
+    canWrite?: boolean
+    reactions?: readonly RetroAiReactionRow[]
+    onReact?: (proposalId: string, value: RetroReactionValue) => void
+    onClearReaction?: (proposalId: string) => void
+    onAddAction?: (proposal: { id: string; summary: string }) => void
+    onFocusProposal?: (focus: unknown) => void
   } = {},
 ) {
   harness.rows = {
     [RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME]: draft,
     [RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME]: proposals,
+    [RETRO_AI_REACTIONS_MINE_QUERY_NAME]: handlers.reactions ?? [],
     [ISSUES_QUERY]: [ISSUE],
   }
   return render(
@@ -115,8 +130,14 @@ function mount(
       teamId="team-1"
       aiRetroDraftSince={handlers.aiRetroDraftSince === undefined ? 1 : handlers.aiRetroDraftSince}
       seed={SEED}
+      phase={handlers.phase ?? 'vote'}
+      canWrite={handlers.canWrite ?? true}
       onOpenIssue={handlers.onOpenIssue ?? (() => {})}
       onOpenMetric={handlers.onOpenMetric ?? (() => {})}
+      onReact={handlers.onReact ?? (() => {})}
+      onClearReaction={handlers.onClearReaction ?? (() => {})}
+      onAddAction={handlers.onAddAction ?? (() => {})}
+      onFocusProposal={handlers.onFocusProposal ?? (() => {})}
     />,
   )
 }
@@ -212,8 +233,14 @@ test('the drafting state and its resolution are both announced', async () => {
       teamId="team-1"
       aiRetroDraftSince={1}
       seed={SEED}
+      phase="vote"
+      canWrite
       onOpenIssue={() => {}}
       onOpenMetric={() => {}}
+      onReact={() => {}}
+      onClearReaction={() => {}}
+      onAddAction={() => {}}
+      onFocusProposal={() => {}}
     />,
   )
 
@@ -283,16 +310,22 @@ test('a metric chip renders the seed value and delta, never the number on the ro
   expect(screen.getByTestId('retro-ai-evidence-issue').textContent).toBe('#12')
 })
 
+// As a VIEWER, so the row's only controls are the evidence chips: a member in `group`/`vote` also
+// gets the two reaction toggles, and this test is about citation order rather than about ratification.
 test('every evidence chip is a focusable control, in the order the proposal cites them', () => {
-  mount(draftRow('ready'), [
-    proposal({
-      refs: [
-        { kind: 'issue', id: 'issue-1' },
-        { kind: 'widget', id: 'time_to_first_review' },
-        { kind: 'pull_request', id: 'pr-1' },
-      ],
-    }),
-  ])
+  mount(
+    draftRow('ready'),
+    [
+      proposal({
+        refs: [
+          { kind: 'issue', id: 'issue-1' },
+          { kind: 'widget', id: 'time_to_first_review' },
+          { kind: 'pull_request', id: 'pr-1' },
+        ],
+      }),
+    ],
+    { canWrite: false },
+  )
 
   const row = screen.getByTestId('retro-ai-proposal')
   const chips = [...row.querySelectorAll('button, a')]
@@ -309,15 +342,19 @@ test('every evidence chip is a focusable control, in the order the proposal cite
 })
 
 test('a reference the client cannot name from its own rows renders no chip', () => {
-  mount(draftRow('ready'), [
-    proposal({
-      refs: [
-        { kind: 'issue', id: 'issue-not-synced', label: 'trust me' },
-        { kind: 'widget', id: 'metric-that-does-not-exist' },
-        { kind: 'issue', id: 'issue-1' },
-      ],
-    }),
-  ])
+  mount(
+    draftRow('ready'),
+    [
+      proposal({
+        refs: [
+          { kind: 'issue', id: 'issue-not-synced', label: 'trust me' },
+          { kind: 'widget', id: 'metric-that-does-not-exist' },
+          { kind: 'issue', id: 'issue-1' },
+        ],
+      }),
+    ],
+    { canWrite: false },
+  )
 
   const row = screen.getByTestId('retro-ai-proposal')
   expect([...row.querySelectorAll('button, a')]).toHaveLength(1)

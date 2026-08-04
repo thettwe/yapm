@@ -27,6 +27,8 @@ import { runMutation } from '@/lib/mutation'
 import {
   type AiStatusResponse,
   fetchAiConfig,
+  fetchAiVerdictLog,
+  type RetroVerdictLog,
   removeAiProviderKey,
   setAiProviderKey,
   updateAiConfig,
@@ -103,6 +105,118 @@ function AiSettingsAdmin() {
       ) : null}
 
       <RetroDraftSection />
+
+      <VerdictLogSection />
+    </section>
+  )
+}
+
+// What teams did with what the model drafted. The ONLY feedback signal the AI layer has about its own
+// output quality — and deliberately a signal about the OUTPUT, not about the team, which is why it
+// carries no target, no threshold and no trend line that would invite it to be managed.
+//
+// It is a read: no regenerate, no per-team quality knob, no prompt editor. And it is team-level by
+// construction rather than by omission — the server read never queries the reaction table, so there
+// is no user column for this component to decline to render.
+function VerdictLogSection() {
+  const headingId = useId()
+  const [log, setLog] = useState<RetroVerdictLog | null>(null)
+  const [error, setError] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    let live = true
+    fetchAiVerdictLog()
+      .then((next) => {
+        if (live) setLog(next)
+      })
+      .catch(() => {
+        if (live) setError('Could not load the retro AI verdict log.')
+      })
+    return () => {
+      live = false
+    }
+  }, [])
+
+  // Read through a fallback rather than off the response directly: this section sits below the two
+  // that matter and an instance whose response shape surprises it must not take the AI settings page
+  // down with it.
+  const totals = log?.totals ?? []
+  const recent = log?.recent ?? []
+  const empty = log !== null && totals.length === 0
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="flex flex-col gap-3 rounded-card border border-border p-4"
+      data-testid="ai-verdict-log"
+    >
+      <header className="flex flex-col gap-1">
+        <h2 id={headingId} className="font-heading text-base font-semibold text-text-1">
+          What teams decided about the AI draft
+        </h2>
+        <p className="text-sm text-text-2">
+          A signal about the model's output, not about the team. When a team finishes voting on a
+          retro's AI draft, yapm records how many members agreed and disagreed with each proposal
+          and stamps a verdict. Consistent rejections mean the drafts are not worth the team's
+          attention — change the model, or turn the feature off. No individual's reaction is
+          recorded here, or readable by anyone; and none of this is ever sent back to the model.
+        </p>
+      </header>
+
+      {error !== undefined ? (
+        <p className="text-sm text-status-urgent" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {empty ? (
+        <p className="text-[12.5px] text-text-2" data-testid="ai-verdict-log-empty">
+          Nothing yet. A verdict is stamped when a team advances a retro out of voting.
+        </p>
+      ) : null}
+
+      {totals.length > 0 ? (
+        <ul className="flex flex-col gap-2" data-testid="ai-verdict-totals">
+          {totals.map((team) => (
+            <li
+              key={team.teamId}
+              className="flex flex-wrap items-center gap-3 rounded-control border border-border p-3"
+              data-team-key={team.teamKey}
+            >
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-1">
+                {team.teamName}
+              </span>
+              <span className="text-xs text-text-2">
+                {team.agreed} agreed · {team.contested} contested · {team.rejected} rejected ·{' '}
+                {team.unrated} nobody responded · {team.undecided} not yet decided
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {recent.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold text-text-1">Most recently thrown out</h3>
+          <ul className="flex flex-col gap-2" data-testid="ai-verdict-recent">
+            {recent.map((proposal) => (
+              <li
+                key={proposal.id}
+                className="flex flex-col gap-1 rounded-control border border-border p-3"
+                data-verdict={proposal.verdict}
+              >
+                <span className="text-[13px] leading-relaxed text-text-1">{proposal.summary}</span>
+                <span className="text-xs text-text-2">
+                  {proposal.teamName}
+                  {proposal.cycleName === null ? '' : ` · ${proposal.cycleName}`} ·{' '}
+                  {proposal.category} · {proposal.verdict} · {proposal.agreeCount} agreed,{' '}
+                  {proposal.disagreeCount} disagreed
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   )
 }

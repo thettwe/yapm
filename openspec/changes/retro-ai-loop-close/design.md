@@ -255,4 +255,79 @@ treatment and the same token-only styling as the three shipped groups.
 
 ## Decisions made during implementation
 
-<!-- Appended during the build phase: what was ambiguous, what was chosen, and why. -->
+### L1 — §D8's heading needs the prior cycle's NAME on the client, and nothing synced carries it
+
+§D8 says the follow-up group's heading "states the cycle the actions came from", and §D4 says a
+`retro_action` reference's label is "the action body (truncated) and the yapm-computed outcome". Those
+two are not satisfiable together by the shipped ref shape: `AiArtifactRef` is `{kind, id, label?}`, the
+prior retro's rows are **not** synced into this retro's view, and adding a cross-retro query for a
+caption is exactly the new permission surface §D4 refuses. Parsing a cycle name back out of a
+composite label would make a user-typed cycle name load-bearing in a string split.
+
+**Chosen:** `retroSeedRefSchema` gains **two optional, yapm-baked fields** — `outcome`
+(`RetroActionOutcome`) and `origin` (the cycle name) — beside the existing `label`. `refs` is a jsonb
+column with no CHECK, so this costs **no migration**, which is the same property §D3 relies on for the
+reference kind itself. `bakeRetroActionRefs` writes all three for a `retro_action` reference and
+**strips `outcome` and `origin` from every other kind**, so a model-authored value for either can
+never reach storage, exactly as §D4 requires of `label`.
+
+The panel then reads the heading from the first follow-up reference carrying an `origin` and the chip
+from `label`, with the outcome carried as a non-colour icon beside yapm's word for it. A proposal
+drafted before this change has neither field and falls back to the plain "Follow-ups" heading.
+
+**The cost, stated:** the ref shape is shared with the retro board's card seed refs
+(`mutators.ts`'s `seedRefArg`), so those rows can now legally carry two fields nothing writes. That is
+one schema surface widened for one rendering, and the alternative — a fourth stored category with its
+migration (§D3) — remains the cleaner answer if a maintainer would rather pay DDL than shape.
+
+### L2 — `contestedFirst` breaks ties by bucket then rank, with every new field optional
+
+Task 2.3 asks change 19's comparator to be pointed at `retroProposalBucket`, but `contestedFirst`
+compared verdicts alone and relied on the caller's incoming `(category, rank)` order surviving a
+stable sort. Requiring a category and a rank on `RatifiableProposal` would have broken change 19's own
+test rows, which are `{id, verdict}` and nothing else.
+
+**Chosen:** `RatifiableProposal extends Partial<BucketableProposal>` with an optional `rank`. The
+comparator is contested → bucket → rank, and each leg is **skipped when either side lacks the field**,
+so a `{id, verdict}` row ties on both and keeps precisely the pre-change behaviour. The flat ratified
+list is now deterministic on its own rather than by inheritance from how the caller happened to build
+its array. Verified by hand against a seven-row list: contested first, then `win`, `improvement`,
+`follow_up` in canonical bucket order with dense ranks inside each.
+
+### L3 — The verdict log distinguishes "never ratified" from "nobody responded"
+
+`retro_ai_proposal.verdict` is null until the `vote → discuss` advance stamps it, and `unrated` is the
+stamped verdict for "ratified, and nobody reacted". §D6 named four verdict totals and did not say
+which bucket a null belongs in.
+
+**Chosen:** a fifth count, `undecided`, for the null. Folding it into `unrated` would report a team
+that never finished voting as a team that shrugged, which is the one misreading this log — a signal
+about the model's output — must not invite.
+
+### L4 — The settings section reads through a fallback rather than off the response
+
+`VerdictLogSection` reads `log?.totals ?? []`. It sits below the two sections that matter on the AI
+settings page, and a response whose shape surprises it must not take the provider card and the
+retro-draft opt-in down with it. This also keeps the shipped `area-map.test.tsx` fetch stub — which
+answers every URL with an `AiStatusResponse` — passing without being edited, which is the honest
+signal that the section is genuinely independent of the card above it.
+
+### L5 — What this pass did NOT run
+
+- **The pg suite was not executed.** `packages/schema/src/db/retro-facts.pg.test.ts` grew the
+  falsifiable check (the prior retro with two actions, two different non-null assignees, the
+  outcome/total assertions, the object-and-columns strip) and the first-retro case, and both
+  **typecheck and lint clean** — but no Postgres was reachable: port 5445 was closed and this pass was
+  instructed not to run `docker compose`. **CI is where those two cases first execute.** "The test is
+  written" and "the test passes" are different claims and this is the first one.
+- **Groups 6.3–6.11 and group 7 (docs) are the Close phase's**, by the build instruction, and are
+  unticked. 6.1 and 6.2 were done here because the allowlist EQUALITY assertion goes red the moment
+  the two new tables are read — leaving it that way would have handed the next pass a broken tree
+  rather than a finished stage.
+- What *was* run: `turbo typecheck`, `biome ci`, `turbo test` (699 schema / 294 server / 365 web / 246
+  ui passing, pg and e2e suites skipped for want of a database), and `scripts/check-boundaries.mjs`.
+  The pure bucket/cap/rank/bake/comparator behaviour was additionally exercised by hand through a
+  throwaway vitest file that was deleted afterwards; it confirmed the follow-up bucket, the ≤3 cap per
+  bucket beside three improvements, dense ranks within each bucket, the model's label being replaced
+  by yapm's text, an invented action id being dropped by cite-or-omit, and the first-retro path baking
+  nothing.

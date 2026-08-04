@@ -72,6 +72,9 @@ function factsFixture(over: Partial<RetroFacts> = {}): RetroFacts {
       },
     ],
     evidenceIds: ['i1'],
+    // The default fixture is a team's FIRST retro: no prior retro, so no action id is citable and the
+    // prompt carries no prior-retro block at all.
+    priorRetro: null,
     citableIds: ['i1', 'shipped'],
     ...over,
   }

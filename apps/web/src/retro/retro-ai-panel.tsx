@@ -1,27 +1,36 @@
 import { useQuery } from '@rocicorp/zero/react'
 import {
   type AiArtifactStatus,
+  DIGEST_EVIDENCE_KINDS,
   type DigestConfidence,
+  isRetroActionRef,
   queries,
-  RETRO_PROPOSAL_CATEGORIES,
+  type RETRO_ACTION_OUTCOME_LABEL,
+  RETRO_PROPOSAL_BUCKETS,
   type RetroPhase,
+  type RetroProposalBucket,
   type RetroProposalCategory,
   type RetroProposalVerdict,
   type RetroReactionValue,
   type RetroSeed,
   type RetroSeedMetric,
   type RetroSeedRef,
+  retroProposalBucket,
   sortContestedFirst,
 } from '@yapm/schema'
 import { Badge } from '@yapm/ui/components/badge'
 import { cn } from '@yapm/ui/lib/utils'
 import {
   ChartNoAxesColumnIcon,
+  CheckIcon,
+  CircleDashedIcon,
+  CircleDotIcon,
   ExternalLinkIcon,
   ListChecksIcon,
   SparklesIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
+  XIcon,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import {
@@ -54,10 +63,17 @@ import { findSeedMetric, formatSeedDelta, formatSeedValue } from '@/retro/seed-m
 //     says so in words, and each proposal shows the CALLER'S OWN reaction and nothing else — not a
 //     count, not an avatar, not "3 people agreed". That is not a UI simplification: no query exists
 //     that could return another member's reaction, so there is nothing to render.
-const CATEGORY_LABEL: Record<RetroProposalCategory, string> = {
+//  4. **The fourth group is absent, not empty.** A team with no prior retro to report on — which is
+//     every team on its first retro — renders no heading, no placeholder and no reserved space, and
+//     that is a property of the data rather than a branch: no prior action is citable, so no proposal
+//     lands in the bucket. The prior retro's rows are NOT synced into this view and this file adds no
+//     query for them, which is why a `retro_action` reference renders as a plain chip carrying the
+//     label yapm baked server-side rather than a link.
+const BUCKET_LABEL: Record<RetroProposalBucket, string> = {
   win: 'Wins',
   loss: 'Losses',
   improvement: 'Improvements',
+  follow_up: 'Follow-ups',
 }
 
 const CHIP =
@@ -168,7 +184,7 @@ function OptedInRetroAiPanel({
   const index = useMemo(() => buildEvidenceIndex(issues as readonly DigestIssueRow[], []), [issues])
 
   const groups = useMemo(
-    () => groupByCategory(proposalRows as readonly RetroAiProposalRow[]),
+    () => groupByBucket(proposalRows as readonly RetroAiProposalRow[]),
     [proposalRows],
   )
 
@@ -261,7 +277,7 @@ function DraftedProposals({
   onFocusProposal,
 }: {
   retroId: string
-  groups: readonly CategoryGroup[]
+  groups: readonly BucketGroup[]
   index: EvidenceIndex
   seed: RetroSeed | null
   canReact: boolean
@@ -355,14 +371,14 @@ function DraftedProposals({
         ) : (
           groups.map((group) => (
             <section
-              key={group.category}
-              aria-label={CATEGORY_LABEL[group.category]}
+              key={group.bucket}
+              aria-label={group.heading}
               data-testid="retro-ai-category"
-              data-category={group.category}
+              data-category={group.bucket}
             >
               <h3 className="mb-1.5">
                 <Badge variant="outline" data-testid="retro-ai-category-chip">
-                  {CATEGORY_LABEL[group.category]}
+                  {group.heading}
                 </Badge>
               </h3>
               <ul className="flex flex-col gap-1.5">
@@ -412,12 +428,17 @@ function ProposalItem({
   // is not itself a thing to do. The mutator is deliberately laxer (design D8) — this is the
   // affordance, not the authority.
   const actionable = canAct && verdict === 'agreed' && proposal.category === 'improvement'
+  // The chip says which BUCKET the row is in — a follow-up is labelled a follow-up in the flat
+  // ratified list exactly as it is under its own heading — while `data-category` keeps reporting the
+  // STORED value, so nothing that keys off storage moves.
+  const bucket = retroProposalBucket(proposal)
 
   return (
     <li
       className="flex flex-col gap-1.5 rounded-card border border-border bg-bg-elevated px-3 py-2"
       data-testid="retro-ai-proposal"
       data-category={proposal.category}
+      data-bucket={bucket}
       data-verdict={verdict ?? undefined}
       data-retro-ai-proposal={proposal.id}
     >
@@ -427,7 +448,7 @@ function ProposalItem({
         </span>
         {showCategory ? (
           <Badge variant="outline" data-testid="retro-ai-category-chip">
-            {CATEGORY_LABEL[proposal.category]}
+            {BUCKET_LABEL[bucket]}
           </Badge>
         ) : null}
         <ConfidenceNote confidence={proposal.confidence} />
@@ -608,34 +629,55 @@ function AiSection({
 // What the reader is told when the background pass finishes: the counts, in the order they are drawn.
 // Nothing model-authored is spoken — a summary read aloud out of context would be exactly the
 // unratified claim the section spends a line of copy disclaiming.
-const CATEGORY_UNIT: Record<RetroProposalCategory, readonly [string, string]> = {
+const BUCKET_UNIT: Record<RetroProposalBucket, readonly [string, string]> = {
   win: ['win', 'wins'],
   loss: ['loss', 'losses'],
   improvement: ['improvement', 'improvements'],
+  follow_up: ['follow-up on last retro', 'follow-ups on last retro'],
 }
 
-function readyAnnouncement(groups: readonly CategoryGroup[]): string {
+function readyAnnouncement(groups: readonly BucketGroup[]): string {
   const counted = groups.map((group) => {
-    const [one, many] = CATEGORY_UNIT[group.category]
+    const [one, many] = BUCKET_UNIT[group.bucket]
     const count = group.proposals.length
     return `${count} ${count === 1 ? one : many}`
   })
   return `AI draft ready: ${counted.join(', ')}.`
 }
 
-interface CategoryGroup {
-  readonly category: RetroProposalCategory
+interface BucketGroup {
+  readonly bucket: RetroProposalBucket
+  readonly heading: string
   readonly proposals: readonly RetroAiProposalRow[]
 }
 
+// The cycle the reported actions were agreed in, taken from the `origin` yapm baked onto the
+// reference server-side. It is read here rather than queried because the prior retro is not in this
+// retro's sync scope and a cross-retro query for a caption would be a new permission surface for a
+// string. Absent (an older row, drafted before this capability) ⇒ the plain heading.
+function followUpHeading(proposals: readonly RetroAiProposalRow[]): string {
+  const origin = proposals
+    .flatMap((proposal) => proposal.refs ?? [])
+    .find((ref) => isRetroActionRef(ref) && ref.origin !== undefined)?.origin
+  return origin === undefined ? BUCKET_LABEL.follow_up : `Follow-ups from ${origin}`
+}
+
 // The query orders by `category` then `rank`, which is alphabetical across categories; the reader
-// wants Wins, Losses, Improvements. So the grouping imposes the canonical order and keeps `rank`
-// within it. An empty category renders no heading at all rather than a hollow one.
-function groupByCategory(rows: readonly RetroAiProposalRow[]): CategoryGroup[] {
-  return RETRO_PROPOSAL_CATEGORIES.map((category) => ({
-    category,
-    proposals: rows.filter((row) => row.category === category).sort((a, b) => a.rank - b.rank),
-  })).filter((group) => group.proposals.length > 0)
+// wants Wins, Losses, Improvements, Follow-ups. So the grouping imposes the canonical BUCKET order —
+// `retroProposalBucket`, the same function the cap, the rank and the ratified list use — and keeps
+// `rank` within it. An empty bucket renders no heading at all rather than a hollow one, which is what
+// makes a team's first retro identical to what it was before this capability existed.
+function groupByBucket(rows: readonly RetroAiProposalRow[]): BucketGroup[] {
+  return RETRO_PROPOSAL_BUCKETS.map((bucket) => {
+    const proposals = rows
+      .filter((row) => retroProposalBucket(row) === bucket)
+      .sort((a, b) => a.rank - b.rank)
+    return {
+      bucket,
+      heading: bucket === 'follow_up' ? followUpHeading(proposals) : BUCKET_LABEL[bucket],
+      proposals,
+    }
+  }).filter((group) => group.proposals.length > 0)
 }
 
 // High confidence says nothing, because a note on every line is a note on none. Both remaining
@@ -665,6 +707,11 @@ function EvidenceChips({
   // In `refs` order: the stored order is the model's citation order, and a reader following the
   // sentence reads them in the order the sentence implies.
   const chips = refs.map((ref) => {
+    if (isRetroActionRef(ref)) {
+      return ref.label === undefined ? null : (
+        <PriorActionChip key={`retro_action-${ref.id}`} label={ref.label} outcome={ref.outcome} />
+      )
+    }
     if (ref.kind === 'widget') {
       const metric = findSeedMetric(seed, ref.id)
       return metric === null ? null : (
@@ -718,10 +765,43 @@ function evidenceTargetFor(
   | { kind: 'issue'; issueId: string; label: string }
   | { kind: 'external'; href: string; label: string }
   | null {
-  if (ref.kind === 'widget') return null
-  const target = resolveEvidence({ kind: ref.kind, id: ref.id }, index)
+  // ONLY a work-graph entity resolves here, stated as a positive list rather than as a growing list
+  // of exceptions: a `widget` is a computed metric key and a `retro_action` is a row on another retro
+  // this view does not sync, and both have their own chip above.
+  const resolvable = DIGEST_EVIDENCE_KINDS.find((kind) => kind === ref.kind)
+  if (resolvable === undefined) return null
+  const target = resolveEvidence({ kind: resolvable, id: ref.id }, index)
   return target.kind === 'plain' ? null : target
 }
+
+// A prior retro's agreed action: THE ONE CHIP THAT IS NOT A CONTROL. It does not navigate, because
+// the action lives on another retro whose rows are not synced here and this change adds no query for
+// them; a chip that looked like a link and did nothing would be worse than a chip that plainly is
+// not one. Its text is `ref.label` — which for this kind alone is yapm's own writing, overwritten
+// server-side after validation (`bakeRetroActionRefs`), never the model's — and the outcome is
+// carried by yapm's word for it, not by hue.
+function PriorActionChip({ label, outcome }: { label: string; outcome: RetroSeedRef['outcome'] }) {
+  const Icon = outcome === undefined ? ListChecksIcon : OUTCOME_ICON[outcome]
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 rounded-pill border border-border bg-bg-hover/60 px-2 py-0.5 text-[11px] text-text-2"
+      data-testid="retro-ai-evidence-action"
+      data-outcome={outcome}
+    >
+      <Icon className="size-3" aria-hidden="true" />
+      {label}
+    </span>
+  )
+}
+
+// Reinforcement only: the outcome word is already in the baked label, so the icon adds a second
+// non-colour signal and carries no meaning of its own.
+const OUTCOME_ICON = {
+  shipped: CheckIcon,
+  canceled: XIcon,
+  in_flight: CircleDotIcon,
+  not_converted: CircleDashedIcon,
+} satisfies Record<keyof typeof RETRO_ACTION_OUTCOME_LABEL, typeof ListChecksIcon>
 
 // The join the substrate requires: the model points at a metric KEY and yapm renders its own value
 // and delta for it. No number on the proposal row is ever displayed.

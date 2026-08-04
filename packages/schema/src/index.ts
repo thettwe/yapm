@@ -594,13 +594,19 @@ export {
 } from './zero/queries.js'
 export { initialRanks, rankBetween } from './zero/rank.js'
 export type {
+  BakeableRetroAction,
+  BucketableProposal,
   RankedRetroProposal,
   RetroDraftContent,
   RetroDraftProposal,
+  RetroProposalBucket,
   RetroProposalCategory,
 } from './zero/retro/ai-draft.js'
 export {
+  bakeRetroActionRefs,
   capRetroProposals,
+  isRetroActionRef,
+  RETRO_PROPOSAL_BUCKETS,
   RETRO_PROPOSAL_CATEGORIES,
   RETRO_PROPOSALS_PER_CATEGORY,
   rankRetroProposals,
@@ -608,6 +614,7 @@ export {
   retroDraftFromArtifact,
   retroDraftProposalSchema,
   retroDraftToArtifact,
+  retroProposalBucket,
   sanitizeRetroDraft,
 } from './zero/retro/ai-draft.js'
 export type { RetroColumnTemplate, RetroWriteOp } from './zero/retro/phase.js'
@@ -626,6 +633,8 @@ export {
   sortContestedFirst,
 } from './zero/retro/ratify.js'
 export type {
+  RetroActionOutcome,
+  RetroActionOutcomeTotals,
   RetroSeed,
   RetroSeedCycleInput,
   RetroSeedEmptyState,
@@ -638,7 +647,16 @@ export type {
   RetroSeedSection,
   RetroSeedUnit,
 } from './zero/retro/seed.js'
-export { buildRetroSeed, RETRO_SEED_REF_KINDS, retroSeedRefSchema } from './zero/retro/seed.js'
+export {
+  buildRetroSeed,
+  RETRO_ACTION_OUTCOME_LABEL,
+  RETRO_ACTION_OUTCOMES,
+  RETRO_SEED_REF_KINDS,
+  retroActionOutcome,
+  retroActionOutcomeKey,
+  retroActionOutcomeTotals,
+  retroSeedRefSchema,
+} from './zero/retro/seed.js'
 export type { Schema } from './zero/schema.js'
 export { schema, zql } from './zero/schema.js'
 export type { IssueRef, WorkGraphContext, WorkGraphMutation } from './zero/work-graph.js'

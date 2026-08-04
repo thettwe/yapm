@@ -13,6 +13,7 @@ import {
   getAiConfig,
   getConnectorConfig,
   getRedactedAiStatus,
+  retroVerdictLogForWorkspace,
   type SecretCodec,
   setAiProviderKey,
   setPmDisclosurePolicy,
@@ -166,6 +167,16 @@ export function createAiAdminRoutes(options: AiAdminRoutesOptions): Hono {
     })
     logger.info({ enabled: body.enabled }, 'ai config updated')
     return c.json(await statusPayload(ctx, workspaceId))
+  })
+
+  // The rejected-proposal log. ADMIN-GATED BEFORE ANY READ — `requireAdmin` runs first and refuses a
+  // member or a viewer without touching a proposal, a retro or a team — and a READ: there is no POST
+  // beside it, no regenerate, no per-team quality knob and no prompt editor. What it returns is
+  // team-level by construction (`retro_ai_reaction` is never queried), so no role, including this
+  // one, can reach an individual's reaction through it.
+  ai.get('/verdicts', requireAdmin, async (c) => {
+    const { workspaceId } = c.get('aiAdmin')
+    return c.json(await retroVerdictLogForWorkspace(db, workspaceId))
   })
 
   // Write-only masked key entry: accepts a plaintext key, stores it encrypted, never returns it.

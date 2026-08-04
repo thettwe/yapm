@@ -141,8 +141,20 @@ export {
   describeReplicationStatus,
   readReplicationStatus,
 } from './replication.js'
-export type { RetroFacts } from './retro-facts.js'
+export type {
+  PriorRetroAction,
+  PriorRetroActionIssue,
+  PriorRetroFacts,
+  RetroFacts,
+} from './retro-facts.js'
 export { retroFactsForCycle } from './retro-facts.js'
+export type {
+  RetroVerdictLog,
+  RetroVerdictLogOptions,
+  RetroVerdictProposal,
+  RetroVerdictTotals,
+} from './retro-verdict-log.js'
+export { retroVerdictLogForWorkspace } from './retro-verdict-log.js'
 export type {
   EnsureSearchIndexResult,
   EnsureSearchIndexStatus,

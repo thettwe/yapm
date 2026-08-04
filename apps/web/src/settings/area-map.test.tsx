@@ -49,6 +49,7 @@ function statusWith(areas: AreaRule[]): AiStatusResponse {
       spendSoFarUsd: 0,
       configuredProviders: [],
       areas,
+      pmDisclosure: { enabled: false, killed: false, teams: {} },
     },
   }
 }

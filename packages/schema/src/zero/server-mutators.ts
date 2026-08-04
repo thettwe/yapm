@@ -20,6 +20,7 @@ import {
   type NotificationEvent,
   recordNotifications,
 } from '../db/notification.js'
+import { audienceSize, pmTeamPolicy, recordDisclosureAudit } from '../db/pm-disclosure.js'
 import type { DB } from '../db/types.js'
 import { newId } from '../id.js'
 import type { AuthContext, NotificationKind, NotificationSubjectType } from './context.js'
@@ -38,6 +39,7 @@ import {
   isRetroFacilitator,
   markAllNotificationsReadArgs,
   mutators,
+  publishPmDigestArgs,
   removeMemberArgs,
   removeTeamMemberArgs,
   retractRetroVoteArgs,
@@ -74,6 +76,23 @@ export {
 } from '../db/issue-subscription.js'
 export type { NotificationEvent } from '../db/notification.js'
 export { recordNotifications } from '../db/notification.js'
+// The PM disclosure artifact's server-only write path and its policy accessors, reachable only from
+// `@yapm/schema/server` for the same reason: they are authoritative, they write columns that are not
+// in the Zero schema at all, and none of them is ever registered in the client `mutators` map.
+export type {
+  DisclosureAuditDetail,
+  DisclosureAuditEntry,
+  SetPmDisclosurePolicyOptions,
+} from '../db/pm-disclosure.js'
+export {
+  audienceSize,
+  pmTeamPolicy,
+  recordDisclosureAudit,
+  resolvePmAudienceTeamIds,
+  setPmDisclosurePolicy,
+} from '../db/pm-disclosure.js'
+export type { PmDigestWrite, UpsertPmDigestResult } from './pm-digest-writes.js'
+export { upsertPmDigest } from './pm-digest-writes.js'
 // The retro AI artifact's server-only write path, reachable only from `@yapm/schema/server` for the
 // same reason the two above are: it is authoritative, it uses the shared Zero `Transaction`, and it
 // is never registered in the client `mutators` map.
@@ -249,6 +268,93 @@ async function discardRetroAiDraft(tx: Transaction, retroId: string): Promise<vo
     await recordRetiredAiSpend(serverDb(tx), draft.teamId, draft.estimatedCostUsd)
   }
   await tx.mutate.retro_ai_draft.delete({ id: draft.id })
+}
+
+// THE POLICY GATE ON PUBLICATION, checked BEFORE the shared mutator runs.
+//
+// Without it, publishing while the workspace switch is off or the kill switch is set releases the
+// row with `audience_size_at_publish = 0` — and then, the moment an admin lifts the hold, the digest
+// becomes readable by N people while the producing team's own marker permanently states it was
+// shared with 0. The team would have been told something false about their own disclosure, by a
+// surface whose entire job is to tell them the truth about it.
+//
+// It lives HERE and not in the shared mutator because the policy is admin-gated, server-only
+// configuration that is deliberately never synced: a client cannot read it, so a client cannot check
+// it, and a shared check would either leak the policy or diverge from the server. The refusal is the
+// ordinary generic `notAuthorized`, byte-identical to the one a viewer or a foreign row gets, so it
+// tells the caller nothing about the configuration either.
+//
+// RETRACTION IS NOT GATED. Stopping further reads must work whatever the switches say.
+async function assertPmSharingEnabled(tx: Transaction, id: string): Promise<void> {
+  const digest = (await tx.run(zql.pm_digest.where('id', id).one())) as
+    | { id: string; teamId: string }
+    | undefined
+  // No row, or no team: the shared mutator rejects both with the same generic error, so nothing is
+  // decided here that could distinguish them.
+  if (digest === undefined) return
+  const db = serverDb(tx)
+  const team = await db
+    .selectFrom('team')
+    .select('workspace_id')
+    .where('id', '=', digest.teamId)
+    .executeTakeFirst()
+  if (team === undefined) return
+  const policy = await pmTeamPolicy(db, team.workspace_id, digest.teamId)
+  if (policy.pmVisible) return
+  throw new MutationError(
+    'Not authorized to perform this action',
+    MutationErrorCode.notAuthorized,
+    id,
+  )
+}
+
+// The publish/retract stamp and its audit row, in the transaction that did the write.
+//
+// The audience size is resolved at THIS moment and stamped, so the producing team's "shared with N
+// readers outside this team" marker reports what they released rather than a live count that changes
+// under them. On retraction it is cleared: the row is no longer shared with anybody.
+//
+// The audit `detail` carries the resulting audience size and nothing else. Never the content, never
+// a summary, never a reader's id — a record of WHO may read a team's work would be a per-person
+// roster in a table nobody can turn off, and a record of who DID read it would be worse.
+async function stampPmDisclosure(
+  tx: Transaction,
+  id: string,
+  ctx: AuthContext,
+  event: 'published' | 'unpublished',
+): Promise<void> {
+  const digest = (await tx.run(zql.pm_digest.where('id', id).one())) as
+    | { id: string; teamId: string }
+    | undefined
+  if (digest === undefined) return
+  const db = serverDb(tx)
+  const team = await db
+    .selectFrom('team')
+    .select('workspace_id')
+    .where('id', '=', digest.teamId)
+    .executeTakeFirst()
+  if (team === undefined) return
+
+  const size = event === 'published' ? await audienceSize(db, team.workspace_id, digest.teamId) : 0
+  await db
+    .updateTable('pm_digest')
+    .set(
+      event === 'published'
+        ? { published_by: ctx.userID, audience_size_at_publish: size }
+        : { published_by: null, audience_size_at_publish: null },
+    )
+    .where('id', '=', id)
+    .execute()
+
+  await recordDisclosureAudit(db, {
+    id: newId(),
+    workspaceId: team.workspace_id,
+    teamId: digest.teamId,
+    actorId: ctx.userID,
+    event,
+    pmDigestId: id,
+    detail: { audienceSize: size },
+  })
 }
 
 // Every case this leaves to the shared mutator (no caller, no card, no retro) is one the shared
@@ -945,6 +1051,31 @@ export function createServerMutators() {
           targetType: before.targetType,
           delta: -1,
         })
+      }),
+    },
+    pmDigest: {
+      // The two things a client cannot do correctly, both in the SAME transaction as the publish
+      // itself: stamp the audience size the moment it was released (a snapshot, so an admin editing
+      // the list later does not silently rewrite what the team was told), and write the audit row.
+      //
+      // Both stamped columns are server-only or write-once: `published_by` is not in the Zero schema
+      // at all, and `audience_size_at_publish` syncs but has no client mutator. The authorization
+      // and status checks stay in the shared mutator, so client and server agree on who may publish.
+      publish: defineMutator(publishPmDigestArgs, async ({ tx, args, ctx }) => {
+        // Checked ahead of the shared mutator, on `retroCard.delete`'s precedent: a release that the
+        // policy forbids must never be applied and then rolled back, because the optimistic pass has
+        // already shown the team a "shared" card by then.
+        if (tx.location === 'server' && ctx !== undefined) {
+          await assertPmSharingEnabled(tx, args.id)
+        }
+        await mutators.pmDigest.publish.fn({ tx, args, ctx })
+        if (tx.location !== 'server' || ctx === undefined) return
+        await stampPmDisclosure(tx, args.id, ctx, 'published')
+      }),
+      unpublish: defineMutator(publishPmDigestArgs, async ({ tx, args, ctx }) => {
+        await mutators.pmDigest.unpublish.fn({ tx, args, ctx })
+        if (tx.location !== 'server' || ctx === undefined) return
+        await stampPmDisclosure(tx, args.id, ctx, 'unpublished')
       }),
     },
   })

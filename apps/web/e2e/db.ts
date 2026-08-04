@@ -1,4 +1,9 @@
-import { type DigestContent, newId, type RetroSeedRef } from '@yapm/schema'
+import {
+  type DigestContent,
+  newId,
+  type RetroSeedRef,
+  type StoredPmDigestContent,
+} from '@yapm/schema'
 import {
   createDatabase,
   type Database,
@@ -270,6 +275,90 @@ export async function seedRetroAiDraft(
       .execute()
   }
   return id
+}
+
+export interface SeedPmDigestOptions {
+  teamId: string
+  cycleId: string
+  status?: 'ready' | 'ai_off' | 'failed' | 'pending'
+  content?: StoredPmDigestContent | null
+  model?: string | null
+}
+
+// The PM disclosure artifact, seeded UNPUBLISHED — which is the only state generation can produce.
+// The row is written the way `runPmDigest` writes it (`ready`, `published_at` null, the subject line
+// and every evidence label already baked in by yapm), because the model call needs a provider key no
+// e2e has and everything the browser has to prove happens downstream of the row: the gate that keeps
+// it inside the team, the human release, and the reader who then reads it.
+//
+// `published_at` is deliberately not settable here. Publication is the permission event this change
+// exists to gate, so the spec has to go through the shipped mutator to cause one.
+export async function seedPmDigest(db: Database, options: SeedPmDigestOptions): Promise<string> {
+  const id = newId()
+  const now = new Date()
+  const status = options.status ?? 'ready'
+  await db.db
+    .insertInto('pm_digest')
+    .values({
+      id,
+      team_id: options.teamId,
+      cycle_id: options.cycleId,
+      status,
+      content: (options.content == null ? null : JSON.stringify(options.content)) as never,
+      provider: status === 'ready' ? 'anthropic' : null,
+      model: status === 'ready' ? (options.model ?? 'mock-model-1') : null,
+      input_token: null,
+      output_token: null,
+      estimated_cost_usd: status === 'ready' ? 0.02 : null,
+      generated_at: status === 'ready' ? now : null,
+      published_at: null,
+      published_by: null,
+      audience_size_at_publish: null,
+      created_at: now,
+      updated_at: now,
+    })
+    .execute()
+  return id
+}
+
+export async function findPmDigest(
+  db: Database,
+  id: string,
+): Promise<{ publishedAt: Date | null; publishedBy: string | null; audienceSize: number | null }> {
+  const row = await db.db
+    .selectFrom('pm_digest')
+    .select(['published_at', 'published_by', 'audience_size_at_publish'])
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow()
+  return {
+    publishedAt: row.published_at,
+    publishedBy: row.published_by,
+    audienceSize: row.audience_size_at_publish,
+  }
+}
+
+// The disclosure record, read from Postgres because it is readable from nowhere else: the table is
+// excluded from the Zero schema, so no query in the product can name it and no client holds a row.
+export async function readDisclosureAudit(
+  db: Database,
+  pmDigestId: string,
+): Promise<{ event: string; actorId: string | null; detail: unknown }[]> {
+  const rows = await db.db
+    .selectFrom('ai_disclosure_audit')
+    .select(['event', 'actor_id', 'detail'])
+    .where('pm_digest_id', '=', pmDigestId)
+    .orderBy('created_at', 'asc')
+    .execute()
+  return rows.map((row) => ({ event: row.event, actorId: row.actor_id, detail: row.detail }))
+}
+
+export async function countPolicyAudit(db: Database): Promise<number> {
+  const row = await db.db
+    .selectFrom('ai_disclosure_audit')
+    .select(({ fn }) => fn.countAll<string>().as('count'))
+    .where('event', '=', 'policy_changed')
+    .executeTakeFirstOrThrow()
+  return Number(row.count)
 }
 
 // Every action born from one AI proposal, read straight from Postgres. The list on screen shows the

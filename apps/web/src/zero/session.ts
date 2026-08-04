@@ -21,6 +21,11 @@ export interface SyncCredential {
   userID: string
   token: string
   role: WorkspaceRole | null
+  // The teams whose PM-disclosure audience names this user, resolved server-side. ADVISORY, exactly
+  // as `role` is: the server re-resolves it on every query, so this copy only decides what the local
+  // replica renders and which surfaces exist at all. Empty for every caller until an administrator
+  // turns disclosure on and names somebody.
+  pmAudienceTeamIds: readonly string[]
   expiresAt: number | null
 }
 
@@ -36,11 +41,20 @@ interface SyncTokenResponse {
   token?: unknown
   userID?: unknown
   role?: unknown
+  pmAudienceTeamIds?: unknown
   expiresAt?: unknown
 }
 
 function asRole(value: unknown): WorkspaceRole | null {
   return value === 'admin' || value === 'member' || value === 'viewer' ? value : null
+}
+
+// Parsed defensively, on the `asRole` precedent: an older server that does not send the field, or a
+// malformed one, yields an empty audience — which denies. There is no shape of this response that
+// can widen what the caller reads.
+function asAudience(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
 }
 
 function asExpiresAt(value: unknown): number | null {
@@ -87,6 +101,7 @@ export async function fetchSyncCredential(): Promise<SyncCredentialResult> {
     userID: data.userID,
     token: data.token,
     role: asRole(data.role),
+    pmAudienceTeamIds: asAudience(data.pmAudienceTeamIds),
     expiresAt: asExpiresAt(data.expiresAt),
   }
 }

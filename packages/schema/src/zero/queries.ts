@@ -6,6 +6,7 @@ import {
   isAuthenticated,
   isMember,
   NOTIFICATION_SYNC_LIMIT,
+  PM_DIGEST_SYNC_LIMIT,
 } from './context.js'
 import { zql } from './schema.js'
 
@@ -28,6 +29,48 @@ export function teamScoped<TTable extends keyof Schema['tables'] & string, TRetu
   const scoped = (q as Query<'team_membership', Schema>).whereExists('team', (team) =>
     team.whereExists('members', (m) => m.where('userId', ctx.userID)),
   )
+  return scoped as unknown as Query<TTable, Schema, TReturn>
+}
+
+// THE SECOND AUTHORIZATION AXIS. Written BESIDE `teamScoped` and never inside it, and the reason is
+// worth spelling out because the cheap version of this change is a one-line widening of the function
+// above.
+//
+// `teamScoped` has 17 call sites across ~15 named queries — issues, cycles, labels, deployments,
+// saved views, attachments, retros, triage, projects and the team-internal digest. Teaching it about
+// a disclosure audience would silently re-scope every one of them, in a diff that reads like a
+// generalization. This predicate is therefore additive: `git diff` over this file shows `teamScoped`
+// and all 17 of its call sites byte-unchanged, and the falsifiable pg check re-asserts that the same
+// principal who reads a published PM digest still gets zero rows from every one of those queries.
+//
+// Three properties, each deliberate:
+//
+//   1. NO WORKSPACE-ADMIN BYPASS. `teamScoped` returns `q` unfiltered for `role === 'admin'`; this
+//      does not. Membership of a team's audience list IS the entitlement — the answer to "who is the
+//      PM" is nobody new — so an admin who is not on the list reads nothing HERE. That is not a
+//      security gain (an admin already reads every team's internal digest through `teamScoped`); it
+//      is a definition that stays true when someone later asks why the two predicates differ. The
+//      falsifiable check asserts the surprising case, exactly as `notifications.mine` does.
+//   2. THE PUBLISHED FILTER LIVES IN THE PREDICATE, NOT IN THE QUERY. A second query over
+//      `pm_digest` that forgot `publishedAt` would be an unreviewable disclosure of unreleased
+//      content. Putting it here makes forgetting impossible.
+//   3. DENY BY EMPTY QUERY, ENTITLEMENT BEFORE EXISTENCE — so a caller cannot tell "not allowed"
+//      from "does not exist", and there is no permission oracle to probe.
+//
+// The audience itself arrives on `ctx`, resolved server-side per `/query` request from admin-gated
+// configuration that is not in the Zero schema (a predicate runs synchronously and cannot read
+// Postgres). Absent ⇒ empty ⇒ denied, so a credential minted before this change denies rather than
+// throwing.
+export function pmAudienceScoped<TTable extends keyof Schema['tables'] & string, TReturn>(
+  q: Query<TTable, Schema, TReturn>,
+  ctx: AuthContext | undefined,
+): Query<TTable, Schema, TReturn> {
+  if (!isMember(ctx)) return denyAll(q)
+  const teamIds = ctx.pmAudienceTeamIds
+  if (teamIds === undefined || teamIds.length === 0) return denyAll(q)
+  const scoped = (q as Query<'pm_digest', Schema>)
+    .where('teamId', 'IN', teamIds as string[])
+    .where('publishedAt', 'IS NOT', null)
   return scoped as unknown as Query<TTable, Schema, TReturn>
 }
 
@@ -214,6 +257,36 @@ export const queries = defineQueries({
       teamScoped(zql.cycle_digest.where('teamId', args.teamId).orderBy('generatedAt', 'desc'), ctx),
     ),
   },
+  pmDigests: {
+    // THE AUDIENCE AXIS — the only queries in this registry that do not scope by team membership.
+    // Both go through `pmAudienceScoped`, so both are limited to PUBLISHED rows of teams whose
+    // audience names the caller, with no admin bypass.
+    //
+    // NEITHER RELATES TO ANYTHING, and that is a requirement rather than an economy: the reader has
+    // no membership of the producing team, so a `.related('cycle')` would sync a row their
+    // entitlement never covered. Everything they need is baked into `content` server-side.
+    byCycle: defineQuery(z.object({ cycleId: z.string() }), ({ args, ctx }) =>
+      pmAudienceScoped(zql.pm_digest.where('cycleId', args.cycleId), ctx).one(),
+    ),
+    inbox: defineQuery(({ ctx }) =>
+      pmAudienceScoped(zql.pm_digest, ctx)
+        .orderBy('publishedAt', 'desc')
+        .limit(PM_DIGEST_SYNC_LIMIT),
+    ),
+  },
+  pmDigestReview: {
+    // THE PRODUCING TEAM'S OWN VIEW OF THE SAME TABLE, and the reason one table carries two
+    // predicates: the team must be able to read the exact text BEFORE anyone outside can, which is
+    // both the safety gate and the transparency mechanism. So this one is ordinary `teamScoped` and
+    // carries NO `publishedAt` filter — any status, published or not.
+    //
+    // The pairing is the thing to keep straight in review: `pmDigests.*` is the disclosure axis and
+    // is published-only; `pmDigestReview.*` is the team axis and is unfiltered. Neither relates to
+    // anything, so the two cannot diverge in what they traverse either.
+    byCycle: defineQuery(z.object({ cycleId: z.string() }), ({ args, ctx }) =>
+      teamScoped(zql.pm_digest.where('cycleId', args.cycleId), ctx).one(),
+    ),
+  },
   retroAiDrafts: {
     // The AI-drafted retro artifact: team-scoped and client-read-only, written server-side only.
     // No phase filter, and none is needed — the row is created LAZILY at the `brainstorm → group`
@@ -378,6 +451,9 @@ export const DEPLOYMENTS_BY_TEAM_QUERY_NAME = 'deployments.byTeam'
 export const SAVED_VIEWS_BY_TEAM_QUERY_NAME = 'savedViews.byTeam'
 export const DIGESTS_BY_CYCLE_QUERY_NAME = 'digests.byCycle'
 export const DIGESTS_BY_TEAM_QUERY_NAME = 'digests.byTeam'
+export const PM_DIGESTS_BY_CYCLE_QUERY_NAME = 'pmDigests.byCycle'
+export const PM_DIGESTS_INBOX_QUERY_NAME = 'pmDigests.inbox'
+export const PM_DIGEST_REVIEW_BY_CYCLE_QUERY_NAME = 'pmDigestReview.byCycle'
 export const RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME = 'retroAiDrafts.byRetro'
 export const RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME = 'retroAiProposals.byRetro'
 export const RETROS_BY_TEAM_QUERY_NAME = 'retros.byTeam'

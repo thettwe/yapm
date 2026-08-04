@@ -41,8 +41,43 @@ test('a valid response yields a session with the server-resolved role', async ()
     userID: 'user-1',
     token: 'jwt-1',
     role: 'member',
+    // Absent from this response, and an older server that never sends it is the same case: an empty
+    // audience, which denies. There is no shape of this response that widens what the caller reads.
+    pmAudienceTeamIds: [],
     expiresAt: 1_800,
   })
+})
+
+test('parses the disclosure audience defensively, dropping anything that is not a string', async () => {
+  stubFetch(() =>
+    Promise.resolve(
+      respond(200, {
+        token: 'jwt-1',
+        userID: 'user-1',
+        role: 'viewer',
+        pmAudienceTeamIds: ['team-a', 42, '', null, 'team-b'],
+      }),
+    ),
+  )
+
+  await expect(fetchSyncCredential()).resolves.toMatchObject({
+    pmAudienceTeamIds: ['team-a', 'team-b'],
+  })
+})
+
+test('treats a non-array audience as empty rather than trusting it', async () => {
+  stubFetch(() =>
+    Promise.resolve(
+      respond(200, {
+        token: 'jwt-1',
+        userID: 'user-1',
+        role: 'viewer',
+        pmAudienceTeamIds: 'team-a',
+      }),
+    ),
+  )
+
+  await expect(fetchSyncCredential()).resolves.toMatchObject({ pmAudienceTeamIds: [] })
 })
 
 test('an authenticated non-member is a session with a null role, not a rejection', async () => {

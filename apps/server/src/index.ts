@@ -8,6 +8,7 @@ import {
   migrateToLatest,
   pingDatabase,
   readReplicationStatus,
+  resolvePmAudienceTeamIds,
   type SecretCodec,
   seedWorkspace,
 } from '@yapm/schema/db'
@@ -181,7 +182,16 @@ async function main(): Promise<void> {
           // un-enriched, exactly as before.
           ...(env.AI_DIGEST_ON_CYCLE_CLOSE === 'true'
             ? {
-                digest: { gateway: aiGateway, changedFilesReader: github.changedFilesReader },
+                digest: {
+                  gateway: aiGateway,
+                  changedFilesReader: github.changedFilesReader,
+                  // The PM disclosure pass, on the SAME job and over the SAME already-built facts —
+                  // no second fact read, no second queue, no new container. Default OFF, and off is
+                  // not a degraded state: the whole surface simply does not exist. `env.ts` fails at
+                  // boot if this is on while the digest job itself is off, because that combination
+                  // describes a pass that would never run.
+                  pmDisclosure: env.AI_PM_DIGEST === 'true',
+                },
               }
             : {}),
         }
@@ -296,6 +306,11 @@ async function main(): Promise<void> {
       resolveContext: createSessionContextResolver({
         verifyToken: auth.verifySyncToken,
         lookupRole: (userID) => lookupWorkspaceRole(database.db, userID),
+        // Resolved per `/query` request, like the role, so flipping the kill switch or removing
+        // somebody from an audience stops new rows within one query refresh rather than at the next
+        // sign-in. What it cannot do is un-read a digest somebody already read — which is the whole
+        // argument for the human publish gate.
+        lookupPmAudience: (userID) => resolvePmAudienceTeamIds(database.db, userID),
       }),
       logger,
       queryApiKey: env.ZERO_QUERY_API_KEY,

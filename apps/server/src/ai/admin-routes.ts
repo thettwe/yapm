@@ -9,11 +9,13 @@ import {
   ConnectorAuthorizationError,
   type DB,
   deleteConnectorSecret,
+  emptyAiConfigData,
   getAiConfig,
   getConnectorConfig,
   getRedactedAiStatus,
   type SecretCodec,
   setAiProviderKey,
+  setPmDisclosurePolicy,
   upsertAiConfig,
 } from '@yapm/schema/db'
 import { Hono } from 'hono'
@@ -60,6 +62,23 @@ const configBody = z.object({
 })
 
 const keyBody = z.object({ value: z.string().min(1) })
+
+// The PM-disclosure policy write. Every field is optional and every omission means "leave it as it
+// is", and `teams` MERGES per team — an admin editing one team's audience must not silently clear
+// every other team's.
+const pmDisclosureBody = z.object({
+  enabled: z.boolean().optional(),
+  killed: z.boolean().optional(),
+  teams: z
+    .record(
+      z.string().min(1),
+      z.object({
+        pmVisible: z.boolean().optional(),
+        audience: z.array(z.string().min(1)).optional(),
+      }),
+    )
+    .optional(),
+})
 
 // The admin AI settings UI reads and mutates the server-only surface here — the AI config and
 // keys reuse the connector encrypted-secrets surface, so they never sync through Zero. Every route
@@ -115,7 +134,7 @@ export function createAiAdminRoutes(options: AiAdminRoutesOptions): Hono {
     const body = parsed.data
 
     const existing = await getAiConfig(db, workspaceId)
-    const current = existing?.data ?? { models: {}, areas: [] }
+    const current = existing?.data ?? emptyAiConfigData()
     const nextConfig = {
       models: { ...current.models, ...(body.models ?? {}) },
       // Omitted ⇒ the stored map is left untouched, so changing the spend cap never clobbers it.
@@ -134,6 +153,9 @@ export function createAiAdminRoutes(options: AiAdminRoutesOptions): Hono {
         : body.spendCapUsd === null
           ? {}
           : { spendCapUsd: body.spendCapUsd }),
+      // Carried through untouched. The disclosure policy has its own route below, because a write
+      // that can turn disclosure on must produce an audit record and this one does not.
+      pmDisclosure: current.pmDisclosure,
     }
 
     await upsertAiConfig(db, ctx, {
@@ -163,6 +185,36 @@ export function createAiAdminRoutes(options: AiAdminRoutesOptions): Hono {
       value: parsed.data.value,
     })
     logger.info({ provider: provider.data }, 'ai provider key set')
+    return c.json(await statusPayload(ctx, workspaceId))
+  })
+
+  // The four switches. Admin-gated by the middleware and again by `setPmDisclosurePolicy`'s own
+  // `canManage` assertion, so a direct call can never write the policy either. Every call writes
+  // exactly one `policy_changed` record describing WHAT changed — never who is on an audience.
+  //
+  // The response is the ordinary status payload, so the caller re-reads the policy it just wrote and
+  // can then re-mint its own sync credential: an admin who adds themselves to an audience needs a
+  // fresh credential before the reader surface exists for them.
+  ai.post('/pm-disclosure', requireAdmin, async (c) => {
+    const { ctx, workspaceId } = c.get('aiAdmin')
+    const parsed = pmDisclosureBody.safeParse(await c.req.json().catch(() => null))
+    if (!parsed.success) return c.json({ error: 'invalid_body' }, 400)
+    const body = parsed.data
+
+    await setPmDisclosurePolicy(db, ctx, {
+      configId: newId(),
+      auditId: newId(),
+      workspaceId,
+      ...(body.enabled === undefined ? {} : { enabled: body.enabled }),
+      ...(body.killed === undefined ? {} : { killed: body.killed }),
+      ...(body.teams === undefined ? {} : { teams: body.teams }),
+    })
+    // Never the audience, never a team name: an operational log is not a place to accumulate who may
+    // read whose work.
+    logger.info(
+      { enabled: body.enabled, killed: body.killed, teams: Object.keys(body.teams ?? {}).length },
+      'pm disclosure policy updated',
+    )
     return c.json(await statusPayload(ctx, workspaceId))
   })
 

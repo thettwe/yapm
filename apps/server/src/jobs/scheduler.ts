@@ -1,11 +1,12 @@
 import { type CycleFacts, newId, upsertCycleDigest } from '@yapm/schema'
-import { cycleFactsForTeam, cyclesNeedingDigest, type DB } from '@yapm/schema/db'
+import { cycleFactsForTeam, cyclesNeedingDigest, type DB, pmTeamPolicy } from '@yapm/schema/db'
 import { createServerMutators } from '@yapm/schema/server'
 import type { Kysely } from 'kysely'
 import { fromKysely, PgBoss, type QueuePolicy } from 'pg-boss'
 import { enrichCycleFactsWithAreas } from '../ai/areas.js'
 import { runCycleDigest } from '../ai/digest.js'
 import type { AiGateway } from '../ai/gateway.js'
+import { runPmDigest } from '../ai/pm-digest.js'
 import type { ChangedFilesReader } from '../connectors/github/files.js'
 import type { Logger } from '../logger.js'
 import type { Mailer } from '../mail/index.js'
@@ -63,6 +64,10 @@ export interface DigestSchedulerOptions {
   // Present ⇒ the worker may enrich the facts with product-area labels before generating. Absent or
   // null (no GitHub App env) ⇒ the digest runs exactly as it did before, un-enriched.
   changedFilesReader?: ChangedFilesReader | null
+  // True ⇒ the SAME worker also runs the PM disclosure pass, over the SAME already-built facts. No
+  // second fact read, no second queue, no new container. False (the default, `AI_PM_DIGEST=false`)
+  // ⇒ not a single line of the pass runs and the artifact never exists.
+  pmDisclosure?: boolean
 }
 
 export interface CycleSchedulerOptions {
@@ -255,6 +260,13 @@ async function registerCycleJobs(options: RegisterCycleJobsOptions): Promise<voi
           { cycleId: job.data.facts.cycleId, status: result.status },
           'cycle digest computed',
         )
+        if (digest.pmDisclosure === true) {
+          await runPmDisclosurePass(
+            { db, dbProvider, logger, gateway: digest.gateway },
+            job.data,
+            facts,
+          )
+        }
       }
     })
   }
@@ -304,6 +316,72 @@ async function registerCycleJobs(options: RegisterCycleJobsOptions): Promise<voi
 
   await boss.schedule(CYCLE_MAINTENANCE_QUEUE, cron)
   logger.info({ cron }, 'cycle maintenance scheduled')
+}
+
+interface PmDisclosurePassOptions {
+  db: Kysely<DB>
+  dbProvider: ZeroDatabase
+  logger: Logger
+  gateway: AiGateway
+}
+
+// THE DISCLOSURE PASS SHORT-CIRCUITS BEFORE ANY MODEL CALL. The workspace switch, the kill switch and
+// the team's own `pmVisible` all collapse into `pmTeamPolicy`, and a `false` there returns having
+// spent nothing: no tokens on somebody's BYO key, no row, no audit record. A disclosure nobody asked
+// for costs exactly nothing, which is what makes "default-off" a real default rather than a filter
+// applied after the fact.
+//
+// It also never throws into the digest worker. The internal digest already succeeded by the time this
+// runs, and a PM pass that fails must not make the team lose their own artifact.
+async function runPmDisclosurePass(
+  options: PmDisclosurePassOptions,
+  job: CycleDigestJobData,
+  facts: CycleFacts,
+): Promise<void> {
+  const { db, dbProvider, logger, gateway } = options
+  try {
+    const policy = await pmTeamPolicy(db, job.workspaceId, facts.teamId)
+    if (!policy.pmVisible) return
+
+    // The subject line, baked so the reader's query can traverse nothing to learn whose cycle this
+    // was — the team and cycle rows are not readable by them.
+    const subject = await db
+      .selectFrom('cycle')
+      .innerJoin('team', 'team.id', 'cycle.team_id')
+      .select([
+        'team.name as teamName',
+        'cycle.name as cycleName',
+        'cycle.start_date as startDate',
+        'cycle.end_date as endDate',
+      ])
+      .where('cycle.id', '=', facts.cycleId)
+      .executeTakeFirst()
+
+    const result = await runPmDigest(
+      {
+        gateway,
+        db,
+        dbProvider,
+        onError: (error) => logger.error({ err: error }, 'pm digest run failed'),
+      },
+      {
+        workspaceId: job.workspaceId,
+        facts,
+        subject: {
+          teamName: subject?.teamName ?? '',
+          cycleName: subject?.cycleName ?? facts.cycleName,
+          startDate: subject === undefined ? null : new Date(subject.startDate).getTime(),
+          endDate: subject === undefined ? null : new Date(subject.endDate).getTime(),
+        },
+      },
+    )
+    logger.info(
+      { cycleId: facts.cycleId, status: result.status },
+      'pm digest computed, unpublished',
+    )
+  } catch (error) {
+    logger.error({ err: error }, 'pm disclosure pass failed; the team digest is unaffected')
+  }
 }
 
 interface RegisterNotificationJobsOptions {

@@ -126,6 +126,25 @@ export type AiArtifactStatus = (typeof AI_ARTIFACT_STATUSES)[number]
 // free of a kysely import because the client bundle imports it.
 export const AI_ARTIFACT_STATUS_CHECK = `status in (${AI_ARTIFACT_STATUSES.map((status) => `'${status}'`).join(', ')})`
 
+// What the server-only disclosure record can say happened. `policy_changed` is an admin turning a
+// switch or editing an audience; `generated` is a PM digest reaching any terminal status; `published`
+// and `unpublished` are the two human acts that move content across the permission boundary and back.
+// The set is closed because the record is the boundary's evidence: an unenumerated event is an
+// unaccounted disclosure.
+export const AI_DISCLOSURE_EVENTS = [
+  'policy_changed',
+  'generated',
+  'published',
+  'unpublished',
+] as const
+
+export type AiDisclosureEvent = (typeof AI_DISCLOSURE_EVENTS)[number]
+
+// Spelled ONCE, as a plain string, for the same reason `AI_ARTIFACT_STATUS_CHECK` is: the migration
+// wraps it in `sql.raw`, and this module reaches the client bundle so it must never acquire a kysely
+// import.
+export const AI_DISCLOSURE_EVENT_CHECK = `event in (${AI_DISCLOSURE_EVENTS.map((event) => `'${event}'`).join(', ')})`
+
 export const CYCLE_DIGEST_STATUSES = AI_ARTIFACT_STATUSES
 
 export type CycleDigestStatus = AiArtifactStatus
@@ -221,6 +240,12 @@ export function isActionableNotification(kind: NotificationKind): boolean {
 // the other half of that bound.
 export const NOTIFICATION_SYNC_LIMIT = 100
 
+// The disclosure inbox's synced ceiling. Bounded for the same reason the notification inbox is — a
+// reader on several teams' audiences accumulates a row per cycle forever, and every one of them
+// hydrates on their client — and bounded lower, because a PM digest is a cycle-sized artifact rather
+// than a one-line event.
+export const PM_DIGEST_SYNC_LIMIT = 50
+
 // A standing intent to be told about one issue, and the reason it is a state rather than a row that
 // exists or does not: unfollow must be STICKY. Deleting the row would let the next `@` re-subscribe
 // somebody who deliberately left, which is a worse failure than never having offered an unfollow.
@@ -256,6 +281,15 @@ export interface RichTextDoc {
 export interface AuthContext {
   readonly userID: string
   readonly role: WorkspaceRole | null
+  // THE SECOND AUTHORIZATION AXIS, and the only thing that carries it. The teams whose PM-disclosure
+  // audience names this user, resolved server-side from admin-gated configuration that is not in the
+  // Zero schema — a query predicate runs synchronously and cannot read Postgres, so the entitlement
+  // has to arrive as data. It grants exactly one thing: published PM digests for the teams listed.
+  //
+  // OPTIONAL ON PURPOSE. Every existing construction site — `SYSTEM_AUTH_CONTEXT` included — compiles
+  // unchanged, and a credential minted before this field existed resolves to `undefined`, which
+  // `pmAudienceScoped` treats as an empty audience and denies.
+  readonly pmAudienceTeamIds?: readonly string[]
 }
 
 // The instance acting as itself: cycle rollover, and the connector union's status automation.

@@ -3,6 +3,20 @@ import type { AiProvider, AreaRule } from '@yapm/schema'
 // Mirrors the server's `RedactedAiStatus` (the server-only AI surface, never synced through Zero):
 // the toggle, chosen models, spend cap, and which providers have a key — NO key material, only the
 // NAMES of configured providers.
+// Mirrors the server's `PmDisclosureConfig`. Admin-only for the obvious reason and one less obvious
+// one: an audience list is a list of people, and who may read a team's work is not something the
+// product shows anybody else.
+export interface PmDisclosureTeamPolicy {
+  pmVisible: boolean
+  audience: string[]
+}
+
+export interface PmDisclosurePolicy {
+  enabled: boolean
+  killed: boolean
+  teams: Record<string, PmDisclosureTeamPolicy>
+}
+
 export interface RedactedAiStatus {
   enabled: boolean
   defaultProvider: AiProvider | null
@@ -13,6 +27,8 @@ export interface RedactedAiStatus {
   configuredProviders: AiProvider[]
   // The ordered path→product-area map. Order is semantic: the first matching prefix wins.
   areas: AreaRule[]
+  // The four product-disclosure switches, all off until an admin turns them on.
+  pmDisclosure: PmDisclosurePolicy
 }
 
 export interface AiStatusResponse {
@@ -66,6 +82,23 @@ export function fetchAiConfig(): Promise<AiStatusResponse> {
 
 export function updateAiConfig(patch: AiConfigPatch): Promise<AiStatusResponse> {
   return request<AiStatusResponse>(BASE, { method: 'POST', body: JSON.stringify(patch) })
+}
+
+// Every field is optional and every omission means "leave it as it is"; `teams` MERGES per team, so
+// editing one team's audience never silently clears another's. Its own route rather than a field on
+// `updateAiConfig`, because a write that can turn disclosure on records what changed and that one
+// does not.
+export interface PmDisclosurePatch {
+  enabled?: boolean
+  killed?: boolean
+  teams?: Record<string, { pmVisible?: boolean; audience?: string[] }>
+}
+
+export function updatePmDisclosure(patch: PmDisclosurePatch): Promise<AiStatusResponse> {
+  return request<AiStatusResponse>(`${BASE}/pm-disclosure`, {
+    method: 'POST',
+    body: JSON.stringify(patch),
+  })
 }
 
 // Write-only: the plaintext key is sent once and never read back.

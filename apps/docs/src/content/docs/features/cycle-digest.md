@@ -9,8 +9,10 @@ notable risks). It appears on the [Cycles](/features/cycles/) view for the team 
 cycle. Every claim links to the exact work-graph entity it came from — the issue, PR, CI check, or
 deploy — so you verify it with one click rather than taking it on faith.
 
-The digest is a read-only summary for the **team**. It is not a stakeholder- or PM-facing report,
-and it never leaves the team boundary.
+The digest is a read-only summary for the **team**, and it never leaves the team boundary. The
+separate, off-by-default [product digest](/features/pm-digest/) is the artifact a team can choose to
+share with named readers outside it — a different summary of the same cycle, reviewed and released by
+the team before anybody else reads it.
 
 ## How it is produced
 

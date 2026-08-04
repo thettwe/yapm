@@ -60,8 +60,10 @@ const ALLOWED_TABLES = [
   'pull_request',
   'review',
   'team',
-  // The spend accessor's union across both AI artifact tables.
+  // The spend accessor's union across every AI artifact table. `pm_digest` joined that union when
+  // the PM disclosure artifact shipped: a cap that cannot see an artifact table under-fires.
   'cycle_digest',
+  'pm_digest',
   'retro_ai_draft',
   // The tail's own pending-row select joins `retro` to find the cycle. NEVER a card, draft or vote.
   'retro',

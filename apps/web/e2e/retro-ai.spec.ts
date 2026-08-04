@@ -246,8 +246,17 @@ test('opted in with nothing configured, the advance succeeds and the section is 
 
   // The client HOLDS the resolved artifact and still renders nothing — the absence is the surface's
   // decision, read from a populated replica rather than from missing data.
+  //
+  // Polled rather than sampled: a row arriving through zero-cache and the client flushing it to
+  // IndexedDB are two different moments, and a single read lands between them often enough to make
+  // this the suite's one recurring flake. Diagnosed while writing `pm-digest.spec.ts`, whose replica
+  // assertions poll for the same reason.
+  await expect
+    .poll(async () => (await readReplica(page)).rows.some((r) => r.table === 'retro_ai_draft'), {
+      timeout: 45_000,
+    })
+    .toBe(true)
   const replica = await readReplica(page)
-  expect(replica.rows.some((r) => r.table === 'retro_ai_draft')).toBe(true)
   expect(replica.rows.some((r) => r.table === 'retro_ai_proposal')).toBe(false)
   await expect(page.locator(PANEL)).toHaveCount(0)
   await expect(page.getByTestId('retro-ai-pending')).toHaveCount(0)

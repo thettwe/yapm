@@ -233,6 +233,21 @@ export const envSchema = z
         z.enum(['true', 'false']),
       )
       .default('true'),
+    // The PM disclosure pass, and it is its OWN toggle rather than a reuse of
+    // AI_DIGEST_ON_CYCLE_CLOSE for two reasons. One variable governing a team-internal artifact AND a
+    // cross-boundary disclosure is exactly the coupling AI_RETRO_DRAFT was created to avoid, and the
+    // argument is strictly stronger here because one of the two crosses a permission boundary. And
+    // the DEFAULT differs: AI_DIGEST_ON_CYCLE_CLOSE defaults to true, so inheriting it would have
+    // switched disclosure generation on for every existing instance at upgrade.
+    //
+    // Nothing is disclosed for a workspace that has not turned the policy on, whatever this is set
+    // to; this is the instance floor, not the workspace ceiling.
+    AI_PM_DIGEST: z
+      .preprocess(
+        (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+        z.enum(['true', 'false']),
+      )
+      .default('false'),
     // Server-side search index maintenance, on the EXISTING pg-boss instance. Off means the
     // `/api/v1/search` route keeps answering — with whatever the index already holds — rather than
     // failing; the on-device pass is unaffected either way.
@@ -331,6 +346,22 @@ export const envSchema = z
     }
   })
   .check((ctx) => {
+    // The PM pass runs INSIDE the cycle-digest worker, over the facts that worker already built, so
+    // `AI_PM_DIGEST=true` with `AI_DIGEST_ON_CYCLE_CLOSE=false` describes a job that is never
+    // registered. Rather than booting healthy and silently doing nothing, this fails at boot naming
+    // BOTH variables. An operator who wants only the PM digest is asking for something this
+    // architecture does not offer, and saying so at boot is cheaper than a support thread.
+    const value = ctx.value
+    if (value.AI_PM_DIGEST !== 'true' || value.AI_DIGEST_ON_CYCLE_CLOSE === 'true') return
+    ctx.issues.push({
+      code: 'custom',
+      input: value.AI_PM_DIGEST,
+      path: ['AI_PM_DIGEST'],
+      message:
+        'cannot be true while AI_DIGEST_ON_CYCLE_CLOSE is false: the PM digest runs inside the cycle-digest job, so it would never run',
+    })
+  })
+  .check((ctx) => {
     const value = ctx.value
     if (value.STORAGE_PROVIDER !== 's3') return
     for (const name of S3_REQUIRED_VARS) {
@@ -408,6 +439,8 @@ export const EXPECTED_FORMAT: Record<string, string> = {
     "'true' to pre-compute a cycle digest when a cycle closes (default), or 'false' to disable it",
   AI_RETRO_DRAFT:
     "'true' to run the lazy retro AI draft tail (default), or 'false' to disable it — per-team opt-in still applies",
+  AI_PM_DIGEST:
+    "'true' to generate PM-facing cycle digests for teams whose admin has turned disclosure on, or 'false' (the default); requires AI_DIGEST_ON_CYCLE_CLOSE=true",
   SEARCH_INDEX:
     "'true' to maintain the server-side search index in the background (default), or 'false' to disable it",
   SEARCH_INDEX_INTERVAL_SECONDS:

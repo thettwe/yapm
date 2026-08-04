@@ -310,6 +310,45 @@ const cycleDigest = table('cycle_digest')
   })
   .primaryKey('id')
 
+// THE DISCLOSURE ARTIFACT. IT IS SELF-SUFFICIENT: no query over it may traverse a relationship, and
+// the team name, the cycle name and dates and every evidence label are baked into `content` by the
+// server at generation time.
+//
+// Everywhere else team-scoping is INHERITED — a related row is only ever reached through an already
+// team-scoped parent, so the subtree cannot widen past the boundary. That reasoning does not transfer
+// here: this row is read by someone with NO membership of the producing team, so a `.related('cycle')`
+// would sync a row their entitlement never covered while reviewing as perfectly ordinary Zero.
+//
+// It therefore declares EXACTLY ONE relationship, `team`, and it exists for one reason: `teamScoped`
+// scopes by a CORRELATED `whereExists('team', …)`, which a table with no relationships cannot express
+// at all — so without it the producing team could not read their own unpublished digest, and the
+// review-and-publish gate would have nothing to review. `whereExists` filters; it syncs no row. The
+// rule that replaces "no relationships" is narrower and enforceable: NO QUERY OVER THIS TABLE MAY
+// CALL `.related(...)`, asserted in `queries.test.ts` over every PM query's AST.
+//
+// Four Postgres columns are deliberately absent: `input_token`, `output_token` and `estimated_cost_usd`
+// are run internals the spend cap reads in SQL, and `published_by` is the one identity column on the
+// row. The rule for anyone extending this table: a new column must be safe for a reader OUTSIDE the
+// team, or it is server-only. `schema-drift.test.ts` asserts all four from both sides.
+const pmDigest = table('pm_digest')
+  .columns({
+    id: string(),
+    teamId: string().from('team_id'),
+    cycleId: string().from('cycle_id'),
+    status: enumeration<AiArtifactStatus>(),
+    content: json().optional(),
+    provider: string().optional(),
+    model: string().optional(),
+    generatedAt: number().from('generated_at').optional(),
+    // Null until a human releases it. This is a permission fact, not a display flag: the audience
+    // predicate filters on it so no future query over this table can forget to.
+    publishedAt: number().from('published_at').optional(),
+    audienceSizeAtPublish: number().from('audience_size_at_publish').optional(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('id')
+
 // The retrospective's NINE synced tables. `retro_card_author` — the card -> author binding — is
 // DELIBERATELY ABSENT from this schema: Zero syncs whole rows and has no column-level read
 // permission, so the author of an anonymous card lives in a server-only table a client cannot name
@@ -827,6 +866,16 @@ const cycleRelationships = relationships(cycle, ({ one, many }) => ({
   }),
 }))
 
+// The correlation target for `teamScoped`, and DELIBERATELY the only one: there is no `cycle`
+// relationship here, so no query can reach a cycle row from a PM digest even by accident.
+const pmDigestRelationships = relationships(pmDigest, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+}))
+
 const cycleDigestRelationships = relationships(cycleDigest, ({ one }) => ({
   team: one({
     sourceField: ['teamId'],
@@ -1254,6 +1303,7 @@ export const schema = createSchema({
     deployment,
     issueLink,
     cycleDigest,
+    pmDigest,
     retro,
     retroColumn,
     retroDraft,
@@ -1291,6 +1341,7 @@ export const schema = createSchema({
     deploymentRelationships,
     issueLinkRelationships,
     cycleDigestRelationships,
+    pmDigestRelationships,
     retroRelationships,
     retroColumnRelationships,
     retroDraftRelationships,

@@ -19,6 +19,7 @@ import * as m0017 from './0017_attachments.js'
 import * as m0018 from './0018_retro_ai.js'
 import * as m0019 from './0019_ai_retired_spend.js'
 import * as m0020 from './0020_retro_ratification.js'
+import * as m0021 from './0021_pm_digest.js'
 
 export const migrations: Record<string, Migration> = {
   '0001_workspace': m0001,
@@ -41,6 +42,7 @@ export const migrations: Record<string, Migration> = {
   '0018_retro_ai': m0018,
   '0019_ai_retired_spend': m0019,
   '0020_retro_ratification': m0020,
+  '0021_pm_digest': m0021,
 }
 
 export const migrationProvider: MigrationProvider = {

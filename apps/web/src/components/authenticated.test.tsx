@@ -36,27 +36,51 @@ function show() {
 }
 
 beforeEach(() => {
-  mocks.session = { status: 'pending', userID: null, role: null, unavailable: false }
+  mocks.session = {
+    status: 'pending',
+    userID: null,
+    role: null,
+    pmAudienceTeamIds: [],
+    unavailable: false,
+  }
   mocks.refresh.mockReset()
   mocks.retry.mockReset()
 })
 
 test('a member reaches the app', () => {
-  mocks.session = { status: 'ready', userID: 'user-1', role: 'member', unavailable: false }
+  mocks.session = {
+    status: 'ready',
+    userID: 'user-1',
+    role: 'member',
+    pmAudienceTeamIds: [],
+    unavailable: false,
+  }
   show()
 
   expect(screen.getByTestId('app')).toBeInTheDocument()
 })
 
 test('a real rejection still redirects to login', () => {
-  mocks.session = { status: 'logged-out', userID: null, role: null, unavailable: false }
+  mocks.session = {
+    status: 'logged-out',
+    userID: null,
+    role: null,
+    pmAudienceTeamIds: [],
+    unavailable: false,
+  }
   show()
 
   expect(screen.getByTestId('navigate')).toHaveTextContent('/login')
 })
 
 test('an authenticated non-member still sees the access gate', () => {
-  mocks.session = { status: 'ready', userID: 'user-1', role: null, unavailable: false }
+  mocks.session = {
+    status: 'ready',
+    userID: 'user-1',
+    role: null,
+    pmAudienceTeamIds: [],
+    unavailable: false,
+  }
   show()
 
   expect(screen.getByTestId('access-gate')).toBeInTheDocument()
@@ -70,7 +94,13 @@ test('the first credential request in flight shows the plain loading state', () 
 })
 
 test('an unreachable server is a retry surface, never a redirect to login', () => {
-  mocks.session = { status: 'pending', userID: null, role: null, unavailable: true }
+  mocks.session = {
+    status: 'pending',
+    userID: null,
+    role: null,
+    pmAudienceTeamIds: [],
+    unavailable: true,
+  }
   show()
 
   expect(screen.queryByTestId('navigate')).not.toBeInTheDocument()
@@ -79,7 +109,13 @@ test('an unreachable server is a retry surface, never a redirect to login', () =
 })
 
 test('the retry surface never blames the user for an outage it can fix itself', () => {
-  mocks.session = { status: 'pending', userID: null, role: null, unavailable: true }
+  mocks.session = {
+    status: 'pending',
+    userID: null,
+    role: null,
+    pmAudienceTeamIds: [],
+    unavailable: true,
+  }
   show()
 
   expect(screen.getByRole('status')).toHaveTextContent(/retrying/i)
@@ -89,7 +125,13 @@ test('the retry surface never blames the user for an outage it can fix itself', 
 // Coalescing, not forcing: an outage retry that discarded the answer already in flight and
 // queued a fresh request behind it would make pressing the button slower than waiting.
 test('the retry button is keyboard-operable and joins the open credential request', () => {
-  mocks.session = { status: 'pending', userID: null, role: null, unavailable: true }
+  mocks.session = {
+    status: 'pending',
+    userID: null,
+    role: null,
+    pmAudienceTeamIds: [],
+    unavailable: true,
+  }
   show()
 
   const retry = screen.getByTestId('sync-unavailable-retry')

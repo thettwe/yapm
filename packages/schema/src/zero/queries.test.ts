@@ -1,6 +1,6 @@
 import { mustGetQuery } from '@rocicorp/zero'
 import { describe, expect, it } from 'vitest'
-import { type AuthContext, NOTIFICATION_SYNC_LIMIT } from './context.js'
+import { type AuthContext, NOTIFICATION_SYNC_LIMIT, PM_DIGEST_SYNC_LIMIT } from './context.js'
 import { tableShapes } from './introspect.js'
 import {
   CYCLES_BY_TEAM_QUERY_NAME,
@@ -14,9 +14,13 @@ import {
   LABELS_BY_TEAM_QUERY_NAME,
   MEMBERS_ALL_QUERY_NAME,
   NOTIFICATIONS_MINE_QUERY_NAME,
+  PM_DIGEST_REVIEW_BY_CYCLE_QUERY_NAME,
+  PM_DIGESTS_BY_CYCLE_QUERY_NAME,
+  PM_DIGESTS_INBOX_QUERY_NAME,
   PREFERENCES_MINE_QUERY_NAME,
   PROJECT_GET_QUERY_NAME,
   PROJECTS_ALL_QUERY_NAME,
+  pmAudienceScoped,
   queries,
   RETRO_AI_REACTIONS_MINE_QUERY_NAME,
   RETRO_DETAIL_QUERY_NAME,
@@ -85,6 +89,9 @@ describe('the synced query registry', () => {
       [SAVED_VIEWS_BY_TEAM_QUERY_NAME, queries.savedViews.byTeam],
       [DIGESTS_BY_CYCLE_QUERY_NAME, queries.digests.byCycle],
       [DIGESTS_BY_TEAM_QUERY_NAME, queries.digests.byTeam],
+      [PM_DIGESTS_BY_CYCLE_QUERY_NAME, queries.pmDigests.byCycle],
+      [PM_DIGESTS_INBOX_QUERY_NAME, queries.pmDigests.inbox],
+      [PM_DIGEST_REVIEW_BY_CYCLE_QUERY_NAME, queries.pmDigestReview.byCycle],
       [RETROS_BY_TEAM_QUERY_NAME, queries.retros.byTeam],
       [RETRO_DETAIL_QUERY_NAME, queries.retros.detail],
       [RETRO_DRAFTS_MINE_QUERY_NAME, queries.retroDrafts.mine],
@@ -568,6 +575,101 @@ describe('teamScoped helper', () => {
       .where
     expect(adminWhere).not.toEqual(DENY_ALL_WHERE)
     expect(JSON.stringify(adminWhere ?? null)).not.toContain(ADMIN.userID)
+  })
+})
+
+// THE SECOND AXIS. Every one of these asserts something that would still look correct if the
+// predicate had been written as a widening of `teamScoped`, which is exactly why they are here.
+describe('pmAudienceScoped helper', () => {
+  const NAMED: AuthContext = { ...MEMBER, pmAudienceTeamIds: [TEAM_ID] }
+  const CYCLE_ID = '019f8f00-0000-7000-8000-0000000000c1'
+
+  it('admits only the named teams, and only published rows', () => {
+    const where = (pmAudienceScoped(zql.pm_digest, NAMED) as unknown as { ast: QueryAst }).ast.where
+    expect(where).not.toEqual(DENY_ALL_WHERE)
+    const json = JSON.stringify(where)
+    expect(json).toContain(TEAM_ID)
+    expect(json).toContain('publishedAt')
+    expect(json).toContain('IS NOT')
+  })
+
+  it('denies an absent audience, so a credential minted before this change reads nothing', () => {
+    expect(
+      (pmAudienceScoped(zql.pm_digest, MEMBER) as unknown as { ast: QueryAst }).ast.where,
+    ).toEqual(DENY_ALL_WHERE)
+  })
+
+  it('denies an empty audience, a non-member and an unauthenticated caller', () => {
+    for (const ctx of [
+      { ...MEMBER, pmAudienceTeamIds: [] },
+      { ...NON_MEMBER, pmAudienceTeamIds: [TEAM_ID] },
+      undefined,
+    ]) {
+      expect(
+        (pmAudienceScoped(zql.pm_digest, ctx) as unknown as { ast: QueryAst }).ast.where,
+      ).toEqual(DENY_ALL_WHERE)
+    }
+  })
+
+  // THE SURPRISING CASE, asserted deliberately (the `notifications.mine` precedent): `teamScoped`
+  // hands an admin the whole workspace and this does not, because membership of the audience list is
+  // the entitlement. An admin who is not named reads nothing HERE — they still read the team's
+  // internal digest through `teamScoped`, which is the existing model and not a new grant.
+  it('gives a workspace ADMIN nothing when the admin is not on the list', () => {
+    expect(
+      (pmAudienceScoped(zql.pm_digest, ADMIN) as unknown as { ast: QueryAst }).ast.where,
+    ).toEqual(DENY_ALL_WHERE)
+  })
+
+  it('never takes the scope from an argument: pmDigests.byCycle carries the ctx audience', () => {
+    const where = astOfArgs(queries.pmDigests.byCycle, { cycleId: CYCLE_ID }, NAMED).where
+    expect(JSON.stringify(where)).toContain(TEAM_ID)
+    expect(astOfArgs(queries.pmDigests.byCycle, { cycleId: CYCLE_ID }, ADMIN).where).toEqual(
+      DENY_ALL_WHERE,
+    )
+  })
+
+  // The producing team's own view of the same table, on the OTHER axis: any status, published or
+  // not, so the team reads the exact text before anyone outside can.
+  it('reviews on the team axis with no published filter', () => {
+    const where = astOfArgs(queries.pmDigestReview.byCycle, { cycleId: CYCLE_ID }, MEMBER).where
+    expect(where).not.toEqual(DENY_ALL_WHERE)
+    expect(JSON.stringify(where)).toContain(MEMBER.userID)
+    expect(JSON.stringify(where)).not.toContain('publishedAt')
+  })
+
+  // THE AUDIENCE PLAYS NO PART IN THE TEAM AXIS, and this is the assertion that fails the day
+  // somebody "generalizes" `teamScoped` to know about `pmAudienceTeamIds`. The principal is a real
+  // workspace member with a viewer role, NO membership of the producing team, and that team on their
+  // audience list — so the review query still builds the ordinary correlated membership predicate
+  // over their own id, and the team id they are entitled to READ published digests for appears
+  // nowhere in it.
+  it('never lets a reader’s audience widen the team axis', () => {
+    const reader: AuthContext = { ...NON_MEMBER, role: 'viewer', pmAudienceTeamIds: [TEAM_ID] }
+    const where = JSON.stringify(
+      astOfArgs(queries.pmDigestReview.byCycle, { cycleId: CYCLE_ID }, reader).where,
+    )
+    expect(where).toContain(reader.userID)
+    expect(where).not.toContain(TEAM_ID)
+  })
+
+  // A relationship here would sync a cycle or team row to somebody with no membership of the
+  // producing team, and it would review as ordinary Zero. The absence is the guarantee.
+  it('traverses nothing from either PM query', () => {
+    for (const built of [
+      queries.pmDigests.byCycle.fn({ args: { cycleId: CYCLE_ID }, ctx: NAMED }),
+      queries.pmDigests.inbox.fn({ args: undefined, ctx: NAMED }),
+      queries.pmDigestReview.byCycle.fn({ args: { cycleId: CYCLE_ID }, ctx: MEMBER }),
+    ] as unknown as { ast: { related?: unknown[] } }[]) {
+      expect(built.ast.related ?? []).toEqual([])
+    }
+  })
+
+  it('bounds the disclosure inbox', () => {
+    const ast = queries.pmDigests.inbox.fn({ args: undefined, ctx: NAMED }) as unknown as {
+      ast: { limit?: number }
+    }
+    expect(ast.ast.limit).toBe(PM_DIGEST_SYNC_LIMIT)
   })
 })
 

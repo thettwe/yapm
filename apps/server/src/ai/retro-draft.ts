@@ -215,12 +215,7 @@ export async function runRetroAiDraft(
     // validator like the other two — it drops references and re-buckets proposals — so it runs inside
     // `sanitizeRetroDraft`, between the name backstop and the cap, and the cap stays genuinely last
     // (design §D4, §D6).
-    const content = sanitizeRetroDraft(
-      result.object,
-      new Set(facts.citableIds),
-      roster,
-      facts.priorRetro,
-    )
+    const content = sanitizeRetroDraft(result.object, facts.citations, roster, facts.priorRetro)
 
     const proposals = await write('ready', {
       content,

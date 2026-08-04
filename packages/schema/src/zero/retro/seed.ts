@@ -93,10 +93,12 @@ export function retroActionOutcomeTotals(
   return totals
 }
 
-// `outcome` and `origin` are YAPM-BAKED and exist for the one reference kind the client cannot
-// resolve from its own synced rows: the prior retro's actions are not in this retro's sync scope, and
-// adding a cross-retro query for a caption would be a new permission surface for a string. The server
-// overwrites both (and `label`) after validation and strips them from every other kind, so a model
+// `outcome` and `origin` are YAPM-BAKED and exist for the TWO references the client cannot resolve
+// from its own synced rows: a `retro_action` id (the prior retro's actions are not in this retro's
+// sync scope, and adding a cross-retro query for a caption would be a new permission surface for a
+// string) and a `widget` reference carrying a `prior_retro_*` outcome key (no seed metric carries
+// one). The server overwrites `label` on both after validation, writes `outcome` on both and `origin`
+// on the `retro_action` alone, and strips `outcome`/`origin` from every other reference — so a model
 // never writes any of the three. See `bakeRetroActionRefs`.
 export const retroSeedRefSchema = z.object({
   kind: z.enum(RETRO_SEED_REF_KINDS),

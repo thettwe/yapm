@@ -298,20 +298,25 @@ describe.skipIf(DATABASE_URL === undefined)('retroFactsForCycle against Postgres
     expect(shipped?.trend.length).toBeLessThanOrEqual(4)
   })
 
-  it('exposes citableIds as the evidence ids union every computed metric key', async () => {
+  // Citability is a (namespace, id) PAIR: an evidence id is citable under a work-graph kind and a
+  // computed key under `widget`, and neither is citable under the other's kind.
+  it('exposes the citable evidence ids and metric keys in their own namespaces', async () => {
     const facts = await retroFactsForCycle(database.db, teamId, closedCycleId)
     expect(facts).not.toBeNull()
 
     const metricKeys = (facts?.seed.sections ?? []).flatMap((section) =>
       section.metrics.map((metric) => metric.key),
     )
-    for (const id of [...(facts?.evidenceIds ?? []), ...metricKeys]) {
-      expect(facts?.citableIds).toContain(id)
-    }
-    expect(facts?.citableIds).toContain(shippedIssueId)
-    expect(facts?.citableIds).toContain(prId)
-    expect(facts?.citableIds).toContain(checkId)
-    expect(facts?.citableIds).toContain('shipped')
+    for (const id of facts?.evidenceIds ?? []) expect(facts?.citations.evidence).toContain(id)
+    for (const key of metricKeys) expect(facts?.citations.widget).toContain(key)
+    expect(facts?.citations.evidence).toContain(shippedIssueId)
+    expect(facts?.citations.evidence).toContain(prId)
+    expect(facts?.citations.evidence).toContain(checkId)
+    expect(facts?.citations.widget).toContain('shipped')
+    expect(facts?.citations.widget).not.toContain(shippedIssueId)
+    expect(facts?.citations.evidence).not.toContain('shipped')
+    // No prior retro on this fixture, so nothing is citable as a follow-up.
+    expect(facts?.citations.retroAction).toEqual([])
   })
 
   it('returns null for a cycle belonging to another team', async () => {
@@ -397,11 +402,14 @@ describe.skipIf(DATABASE_URL === undefined)('retroFactsForCycle against Postgres
     expect(canceled?.issue?.status).toBe('canceled')
     expect(prior?.actions.find((action) => action.id === shippedActionId)?.outcome).toBe('shipped')
 
-    // Both action ids are citable, so a follow-up proposal can point at one; the outcome totals are
-    // citable too, so it can point at a count instead of typing one.
-    expect(facts?.citableIds).toContain(shippedActionId)
-    expect(facts?.citableIds).toContain(canceledActionId)
-    expect(facts?.citableIds).toContain('prior_retro_shipped')
+    // Both action ids are citable UNDER `retro_action` and nowhere else, so a follow-up proposal can
+    // point at one; the outcome totals are citable under `widget`, so it can point at a count
+    // instead of typing one.
+    expect(facts?.citations.retroAction).toContain(shippedActionId)
+    expect(facts?.citations.retroAction).toContain(canceledActionId)
+    expect(facts?.citations.widget).toContain('prior_retro_shipped')
+    expect(facts?.citations.evidence).not.toContain(shippedActionId)
+    expect(facts?.citations.evidence).not.toContain('prior_retro_shipped')
 
     // The strip, at both altitudes: the shape, and the values.
     expect(identityKeys(facts)).toEqual([])
@@ -446,7 +454,7 @@ describe.skipIf(DATABASE_URL === undefined)('retroFactsForCycle against Postgres
     expect(facts).not.toBeNull()
     expect(facts?.priorRetro).toBeNull()
     expect(facts?.cycleName).toBe('First')
-    expect(facts?.citableIds).not.toContain('prior_retro_shipped')
+    expect(facts?.citations.widget).not.toContain('prior_retro_shipped')
     expect(identityKeys(facts)).toEqual([])
   })
 
@@ -572,7 +580,7 @@ describe.skipIf(DATABASE_URL === undefined)('retroFactsForCycle against Postgres
     expect(facts?.priorRetro?.cycleId).toBe(older)
     expect(facts?.priorRetro?.cycleName).toBe('Skipped 1')
     expect(facts?.priorRetro?.actions.map((action) => action.id)).toEqual([actionId])
-    expect(facts?.citableIds).toContain(actionId)
+    expect(facts?.citations.retroAction).toContain(actionId)
   })
 
   it('leaves the prior retro absent when the only prior retro agreed nothing', async () => {
@@ -587,7 +595,7 @@ describe.skipIf(DATABASE_URL === undefined)('retroFactsForCycle against Postgres
     // section, nothing citable — not an empty action list a prompt would have to describe.
     expect(facts).not.toBeNull()
     expect(facts?.priorRetro).toBeNull()
-    expect(facts?.citableIds).not.toContain('prior_retro_shipped')
+    expect(facts?.citations.widget).not.toContain('prior_retro_shipped')
     expect(identityKeys(facts)).toEqual([])
   })
 })

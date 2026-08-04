@@ -125,7 +125,8 @@ definition of what a follow-up is and no place for a second to grow.
 Three properties fall out for free rather than being coded:
 
 - **"No prior actions ⇒ no follow-up proposal" is enforced by change 18's cite-or-omit validator.**
-  With no prior retro, no action id enters `citableIds`; a model that invents one has the reference
+  With no prior retro, the `retro_action` namespace of `citations` is empty; a model that invents an
+  action id has the reference
   narrowed away and the proposal dropped as uncited. There is no new branch, no empty-string
   category, and no first-retro special case to get wrong.
 - The `≤3 per bucket` cap applies to follow-ups on the same line of code as everything else, so a
@@ -176,9 +177,18 @@ proposal left with no reference, and therefore **re-buckets** a proposal whose o
 reference it removed. Run after the cap, it could leave a bucket holding four proposals, or leave the
 follow-up group empty after three bogus follow-ups had consumed its whole cap while three real ones
 were discarded. The spec's "the cap is applied last" only holds if nothing downstream of it drops or
-moves a row. For the same reason a `retro_action` reference is narrowed by **kind and id** before
-cite-or-omit runs: every id yapm computed lives in one flat set, so without that step a model could
-stamp the loop-closing kind on a real issue id and buy a place in the follow-up bucket.
+moves a row.
+
+For the same reason citability is carried as a **(kind-namespace, id) pair** rather than as one flat
+set of ids, and every reference is narrowed within its own namespace before cite-or-omit runs:
+evidence ids under a work-graph kind, metric keys and outcome totals under `widget`, prior action ids
+under `retro_action`. A flat set crosses in both directions and both are defects. Stamping the
+loop-closing kind on a real issue id buys a place in the follow-up bucket; stamping an ordinary kind
+on a prior action id or an outcome-total key keeps a reference the client resolves against its synced
+work-graph rows, which hold neither — so cite-or-omit passes it and the proposal renders with no
+evidence chip at all, which is exactly the outcome cite-or-omit exists to prevent. Each namespace is
+resolved by exactly one surface, so the narrowing is what makes "every stored reference is
+renderable" true rather than probable.
 
 ### D5 — Outcome vocabulary: `shipped`, `canceled`, `in_flight`, `not_converted`
 

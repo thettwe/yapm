@@ -12,6 +12,7 @@ import {
   type RetroActionOutcome,
   type RetroActionOutcomeTotals,
   type RetroSeedRef,
+  type RetroSeedRefKind,
   retroActionOutcomeFromKey,
   retroSeedRefSchema,
 } from './seed.js'
@@ -232,27 +233,63 @@ export function bakeRetroActionRefs(
   return { proposals }
 }
 
-// Cite-or-omit narrows a reference by ID, and every id yapm computed lives in ONE flat set — so a
-// model that stamps the loop-closing kind on a real issue id would otherwise buy itself a place in
-// the follow-up bucket. A `retro_action` reference is therefore narrowed by KIND AND id, before the
-// id narrowing runs, so the two namespaces cannot be crossed at any point in the chain.
-function narrowRetroActionRefs(
+// WHAT YAPM COMPUTED, PARTITIONED BY THE KIND IT MAY BE CITED UNDER — never one flat id set. Each
+// namespace is resolved by exactly one surface: an evidence id by the client's synced work-graph
+// rows, a `widget` key by `findSeedMetric` or by yapm's baked outcome caption, a prior action id by
+// yapm's baked action caption. An id cited under a kind from another namespace resolves nowhere, so
+// it is refused rather than stored — whichever direction it is crossed in.
+export interface RetroCitations {
+  // Work-graph entity ids, citable under `issue`, `pull_request`, `ci_check` and `deployment`.
+  readonly evidence: readonly string[]
+  // Computed seed metric keys plus the four prior-retro outcome-total keys.
+  readonly widget: readonly string[]
+  // The prior retro's agreed action ids. Empty for a team's first retro, which is what makes "no
+  // prior actions ⇒ no follow-up proposal" a property of this narrowing rather than of a branch.
+  readonly retroAction: readonly string[]
+}
+
+const RETRO_REF_NAMESPACE: Readonly<Record<RetroSeedRefKind, keyof RetroCitations>> = {
+  issue: 'evidence',
+  pull_request: 'evidence',
+  ci_check: 'evidence',
+  deployment: 'evidence',
+  widget: 'widget',
+  retro_action: 'retroAction',
+}
+
+// The flat union, for the shared cite-or-omit walker: it drops an ITEM left with no reference, which
+// the namespace narrowing above deliberately does not do.
+export function retroCitableIds(citations: RetroCitations): ReadonlySet<string> {
+  return new Set([...citations.evidence, ...citations.widget, ...citations.retroAction])
+}
+
+// Narrowing by (namespace, id) rather than by id alone, BEFORE cite-or-omit runs. A model that
+// stamps the loop-closing kind on a real issue id would otherwise buy itself a place in the
+// follow-up bucket; a model that stamps an ordinary kind on a prior action id or an outcome-total
+// key would otherwise keep a reference no surface can draw, leaving a proposal on screen with no
+// evidence at all. Both are the same defect — a crossed namespace — and one filter refuses both.
+function narrowRetroRefNamespaces(
   content: RetroDraftContent,
-  prior: BakeablePriorRetro | null,
+  citations: RetroCitations,
 ): RetroDraftContent {
-  const ids = new Set((prior?.actions ?? []).map((action) => action.id))
+  const ids: Readonly<Record<keyof RetroCitations, ReadonlySet<string>>> = {
+    evidence: new Set(citations.evidence),
+    widget: new Set(citations.widget),
+    retroAction: new Set(citations.retroAction),
+  }
   return {
     proposals: content.proposals.map((proposal) => ({
       ...proposal,
-      refs: proposal.refs.filter((ref) => !isRetroActionRef(ref) || ids.has(ref.id)),
+      refs: proposal.refs.filter((ref) => ids[RETRO_REF_NAMESPACE[ref.kind]].has(ref.id)),
     })),
   }
 }
 
 // The validators, in the order design §D6 fixes and for the reason it gives:
-//   1. narrow a `retro_action` reference to the prior retro's real action ids,
-//   2. cite-or-omit against the ids yapm computed (evidence ids ∪ seed metric keys ∪ prior action
-//      ids ∪ prior-retro outcome-total keys),
+//   1. narrow every reference to the ids citable under ITS OWN kind's namespace (evidence ids under
+//      a work-graph kind, metric and outcome-total keys under `widget`, prior action ids under
+//      `retro_action`), so no namespace can be crossed in either direction,
+//   2. cite-or-omit, which drops a proposal left with no surviving reference,
 //   3. drop anything naming a workspace member (the roster is loaded AFTER the model call),
 //   4. bake yapm's own caption onto the two references the client cannot resolve,
 //   5. cap at three per BUCKET, follow-ups included.
@@ -267,12 +304,12 @@ function narrowRetroActionRefs(
 // Pure and synchronous — nothing here reads a database or a clock.
 export function sanitizeRetroDraft(
   content: RetroDraftContent,
-  knownIds: ReadonlySet<string>,
+  citations: RetroCitations,
   roster: readonly RosterMember[],
   prior: BakeablePriorRetro | null,
 ): RetroDraftContent {
-  const kinded = narrowRetroActionRefs(content, prior)
-  const cited = dropUncitedAiItems(retroDraftToArtifact(kinded), knownIds)
+  const kinded = narrowRetroRefNamespaces(content, citations)
+  const cited = dropUncitedAiItems(retroDraftToArtifact(kinded), retroCitableIds(citations))
   const named = dropAiItemsNamingMembers(cited, roster)
   return capRetroProposals(
     bakeRetroActionRefs(retroDraftFromArtifact(named), prior),

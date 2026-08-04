@@ -1,6 +1,7 @@
 import type { Kysely } from 'kysely'
 import type { IssueStatus } from '../zero/context.js'
 import { buildCycleFacts, type CycleFacts, type CycleFactsIssueInput } from '../zero/cycle-facts.js'
+import type { RetroCitations } from '../zero/retro/ai-draft.js'
 import {
   buildRetroSeed,
   RETRO_ACTION_OUTCOMES,
@@ -86,12 +87,13 @@ export interface RetroFacts {
   // action. A team's first retro takes this path, and the prompt then omits the block entirely rather
   // than telling the model there is "none" — so no follow-up proposal can survive cite-or-omit.
   readonly priorRetro: PriorRetroFacts | null
-  // The model's ENTIRE vocabulary of things it may point at: every evidence id yapm computed for the
-  // cycle, plus every computed seed metric key across both seed sections, plus every prior action id
-  // and the four prior-retro outcome-total keys. The cite-or-omit validator narrows each ref to this
-  // set, so a hallucinated issue id, an invented metric key and a fabricated action id die the same
-  // death.
-  readonly citableIds: readonly string[]
+  // The model's ENTIRE vocabulary of things it may point at, PARTITIONED BY THE KIND each may be
+  // cited under: evidence ids for the cycle under a work-graph kind, computed seed metric keys and
+  // the four prior-retro outcome-total keys under `widget`, prior action ids under `retro_action`.
+  // The validator narrows each reference within its own namespace, so a hallucinated issue id, an
+  // invented metric key, a fabricated action id and a real id worn under the wrong kind all die the
+  // same death.
+  readonly citations: RetroCitations
 }
 
 interface CycleRow {
@@ -386,13 +388,16 @@ export async function retroFactsForCycle(
   // branch: a model that invents an action id has the reference narrowed away and the proposal
   // dropped. The prior actions' converted-issue ids are deliberately NOT added — a proposal may point
   // at an action, and at the cycle's own evidence, and at nothing else.
-  const priorIds =
-    priorRetro === null
-      ? []
-      : [
-          ...priorRetro.actions.map((action) => action.id),
-          ...RETRO_ACTION_OUTCOMES.map(retroActionOutcomeKey),
-        ]
+  const citations: RetroCitations = {
+    evidence: [...new Set(facts.evidenceIds)],
+    widget: [
+      ...new Set([
+        ...metricKeys,
+        ...(priorRetro === null ? [] : RETRO_ACTION_OUTCOMES.map(retroActionOutcomeKey)),
+      ]),
+    ],
+    retroAction: priorRetro === null ? [] : priorRetro.actions.map((action) => action.id),
+  }
 
   return {
     teamId: cycle.team_id,
@@ -402,6 +407,6 @@ export async function retroFactsForCycle(
     issues: facts.issues,
     evidenceIds: facts.evidenceIds,
     priorRetro,
-    citableIds: [...new Set([...facts.evidenceIds, ...metricKeys, ...priorIds])],
+    citations,
   }
 }

@@ -10,9 +10,9 @@ computed before anyone arrives. The **retro AI draft** goes one step further: it
 read those same facts and write down at most **three wins, three losses and three improvements**,
 each one pointing at the issue, pull request, check or metric it came from.
 
-From a team's **second** retro onward there is a fourth group: **follow-ups** on the improvements the
-team agreed last time, with yapm's own answer to whether each one shipped — see
-[Did last cycle's improvements ship?](#did-last-cycles-improvements-ship).
+Once a team has run two retros the draft can carry a fourth group: **follow-ups** on up to three of
+the improvements agreed in the team's most recent previous retro, with yapm's own answer to whether
+each one shipped — see [Did last cycle's improvements ship?](#did-last-cycles-improvements-ship).
 
 It is a starting point, deliberately, and the surface says so in as many words: *AI-drafted, not
 agreed — the team has not decided any of this.* Nothing the model writes becomes the team's
@@ -178,8 +178,9 @@ the team says it is worth.
 ## Did last cycle's improvements ship?
 
 A retro that does not remember is a retro that agrees the same improvement three cycles running. So
-from a team's second retro onward, the draft carries a fourth group — **follow-ups** — reporting on
-the improvements the team agreed *last* time and what became of them.
+once a team has run two retros, the draft can carry a fourth group — **follow-ups** — reporting on up
+to three of the improvements agreed in the team's most recent previous retro, which cycle they came
+from, and what became of them.
 
 **Be clear about the payoff curve: this does nothing at all until you have run two retros.** There is
 no prior retro to report on before then, and the first-retro surface is a **clean absence** — no

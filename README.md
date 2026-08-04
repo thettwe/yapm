@@ -95,10 +95,11 @@ even a workspace admin, exactly like their dots), one verdict per proposal is co
 retro leaves voting, **a single disagreement makes a proposal contested** rather than agreed and sorts
 it to the top of the discussion, and an agreed improvement is one keystroke from a real numbered issue
 — **never with an owner filled in**, because the model has no identity data to invent one from — and
-from the team's *second* retro the draft closes the loop: a fourth group reporting whether each
-improvement the last retro agreed **shipped, was canceled, is still open or was never tracked**,
-computed by yapm from the live status of the issue it became and stripped of the assignee on both the
-action and that issue ·
+once a team has run two retros the draft *can* close the loop: a fourth group reporting on up to three
+of the improvements agreed in the team's **most recent previous retro** — with yapm naming which cycle
+they came from — each reported as **shipped, canceled, still open or never tracked**, computed by yapm
+from the live status of the issue it became and stripped of the assignee on both the action and that
+issue ·
 a keyboard-first **notification inbox** at
 `/inbox` with an unread badge, for
 assignments (including triage routing) and comments on issues you're involved in — written only on

@@ -4,6 +4,7 @@ import {
   type BakeableRetroAction,
   bakeRetroActionRefs,
   capRetroProposals,
+  type RetroCitations,
   type RetroDraftContent,
   rankRetroProposals,
   retroDraftContentSchema,
@@ -11,14 +12,13 @@ import {
   sanitizeRetroDraft,
 } from './ai-draft.js'
 
-const KNOWN = new Set([
-  'issue-1',
-  'issue-2',
-  'pr-1',
+const KNOWN: RetroCitations = {
+  evidence: ['issue-1', 'issue-2', 'pr-1'],
   // A computed seed metric key: `widget` is a legal ref kind, so a proposal may cite the number
   // itself and the UI renders yapm's value beside the sentence.
-  'time_to_first_review',
-])
+  widget: ['time_to_first_review'],
+  retroAction: [],
+}
 
 const NO_ROSTER: { name?: string | null; email?: string | null }[] = []
 
@@ -206,9 +206,13 @@ const PRIOR: BakeablePriorRetro = {
   totals: { shipped: 1, canceled: 1, in_flight: 0, not_converted: 0 },
 }
 
-// The citable set a cycle with a prior retro produces: this cycle's evidence, plus the prior actions
-// and the four outcome-total keys.
-const KNOWN_WITH_PRIOR = new Set([...KNOWN, 'action-1', 'action-2', 'prior_retro_shipped'])
+// The citable namespaces a cycle with a prior retro produces: this cycle's evidence, the metric keys
+// and the outcome-total keys under `widget`, and the prior actions under `retro_action`.
+const KNOWN_WITH_PRIOR: RetroCitations = {
+  evidence: KNOWN.evidence,
+  widget: [...KNOWN.widget, 'prior_retro_shipped'],
+  retroAction: ['action-1', 'action-2'],
+}
 
 function followUp(
   summary: string,
@@ -305,7 +309,7 @@ describe('the cap and the rank count by bucket', () => {
 // drops references and therefore RE-BUCKETS proposals, so a bake that ran after the cap would move
 // rows between buckets that had already been counted. Each proposal here stamps the loop-closing kind
 // on a real ISSUE id — citable, so cite-or-omit alone lets it through — which is exactly the crossing
-// `narrowRetroActionRefs` exists to refuse.
+// `narrowRetroRefNamespaces` exists to refuse.
 describe('nothing re-buckets a proposal after the cap has counted it', () => {
   const crossed = (summary: string): RetroDraftContent['proposals'][number] => ({
     category: 'win',
@@ -357,6 +361,62 @@ describe('nothing re-buckets a proposal after the cap has counted it', () => {
       'follow_up',
       'follow_up',
     ])
+  })
+})
+
+// THE OTHER DIRECTION, and the reason citability is a (namespace, id) pair rather than one flat set.
+// Every id below is one yapm computed, so cite-or-omit alone keeps all of them — and each would then
+// sit on a proposal whose chip no surface can draw: the client resolves an ordinary kind against its
+// synced work-graph rows, which hold neither a prior retro's action nor an outcome total, and it
+// resolves a `widget` key against the seed, which holds no action id.
+describe('a namespace cannot be crossed in either direction', () => {
+  const stray = (
+    summary: string,
+    kind: 'issue' | 'widget' | 'retro_action',
+    id: string,
+  ): RetroDraftContent['proposals'][number] => ({
+    category: 'win',
+    summary,
+    refs: [{ kind, id }],
+    confidence: 'medium',
+  })
+
+  it('refuses a prior action id, an outcome total and a metric key worn under an ordinary kind', () => {
+    const content: RetroDraftContent = {
+      proposals: [
+        stray('A prior action dressed as this cycle’s issue.', 'issue', 'action-1'),
+        stray('An outcome total dressed as an issue.', 'issue', 'prior_retro_shipped'),
+        stray('A metric key dressed as an issue.', 'issue', 'time_to_first_review'),
+        stray('An issue dressed as a computed number.', 'widget', 'issue-1'),
+        stray('A prior action dressed as a computed number.', 'widget', 'action-1'),
+        stray('Cites a prior action as itself.', 'retro_action', 'action-1'),
+      ],
+    }
+
+    const result = sanitizeRetroDraft(content, KNOWN_WITH_PRIOR, NO_ROSTER, PRIOR)
+
+    expect(result.proposals.map((p) => p.summary)).toEqual(['Cites a prior action as itself.'])
+    expect(result.proposals.map(retroProposalBucket)).toEqual(['follow_up'])
+  })
+
+  it('keeps a proposal whose surviving reference is the one on the right side of the line', () => {
+    const content: RetroDraftContent = {
+      proposals: [
+        {
+          category: 'loss',
+          summary: 'One real citation beside a crossed one.',
+          refs: [
+            { kind: 'issue', id: 'prior_retro_shipped' },
+            { kind: 'issue', id: 'issue-1' },
+          ],
+          confidence: 'low',
+        },
+      ],
+    }
+
+    const result = sanitizeRetroDraft(content, KNOWN_WITH_PRIOR, NO_ROSTER, PRIOR)
+
+    expect(result.proposals[0]?.refs).toEqual([{ kind: 'issue', id: 'issue-1' }])
   })
 })
 

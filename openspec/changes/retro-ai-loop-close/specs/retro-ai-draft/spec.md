@@ -81,10 +81,12 @@ admin can already read through an ordinary team-scoped query.
 The model SHALL be asked for a closed, typed object of proposals, each carrying a category, a
 one-sentence summary, a confidence flag and evidence references. There SHALL be no free-form field
 beyond the summary and no markdown passthrough. Before anything is stored, four deterministic
-validators SHALL run in order: every reference SHALL be narrowed to the set of evidence ids, metric
-keys and prior-action ids yapm itself computed for this cycle — a reference claiming the prior-action
-kind SHALL be narrowed by that kind as well as by id, so the two id namespaces cannot be crossed —
-and a proposal left with no real reference SHALL be dropped; any proposal whose summary names a
+validators SHALL run in order: every reference SHALL be narrowed to the ids yapm itself computed for
+this cycle **that are citable under that reference's own kind** — work-graph evidence ids under a
+work-graph kind, computed metric keys and prior-retro outcome totals under the metric kind, and
+prior-action ids under the prior-action kind — so that no id namespace can be crossed in either
+direction and no reference survives that no surface can resolve; and a proposal left with no real
+reference SHALL be dropped; any proposal whose summary names a
 workspace member SHALL be dropped; yapm SHALL then write its own caption onto every reference the
 client cannot resolve, dropping any that names an action the prior retro does not have; and the
 result SHALL be capped at **three proposals per bucket**, keeping model order. The cap SHALL be
@@ -140,6 +142,11 @@ from it.
 
 - **WHEN** the model emits three clean wins plus a fourth proposal that stamps the prior-action kind on an ordinary issue id
 - **THEN** the stray reference is refused before the cap counts it, the wins bucket holds exactly three proposals rather than four, and nothing lands in the follow-up bucket
+
+#### Scenario: A crossed namespace is refused in the other direction too
+
+- **WHEN** the model emits a proposal whose only reference carries an ordinary work-graph kind but a prior-action id or a prior-retro outcome-total key as its id
+- **THEN** that reference is refused before cite-or-omit and the proposal is dropped with it, rather than being stored with a reference no surface can draw
 
 #### Scenario: Bogus follow-ups cannot consume the follow-up cap and then vanish
 

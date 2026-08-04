@@ -16,9 +16,9 @@ import { ADMIN, ensureAccount, signIn, uniqueEmail } from './support'
 // ASSEMBLED stack rather than of any one module, which is why they are e2e at all:
 //
 //   1. WITH THE DEFAULT CONFIG THE SURFACE DOES NOT EXIST. Not "renders empty" — the route draws
-//      nothing, the shell offers no way in, and the client's own replica never receives the row.
-//      A unit test can assert a component returned null; only this can assert that a running client
-//      holding a live sync connection never got the data.
+//      nothing, the shell offers no way in, and for a reader outside the producing team the client's
+//      own replica never receives the row. A unit test can assert a component returned null; only
+//      this can assert that a running client holding a live sync connection never got the data.
 //   2. NOTHING REACHES A READER UNTIL A HUMAN RELEASES IT. Generation, policy and publication are
 //      three different subsystems (a job, an admin HTTP surface, a Zero mutator with a server
 //      override), and the gate is only real if it holds across all three at once.
@@ -138,22 +138,42 @@ async function press(page: Page, testId: string, key = 'Enter'): Promise<void> {
   await page.keyboard.press(key)
 }
 
-// The client's own replica, with the non-vacuity guard this whole spec turns on: "no `pm_digest`
-// row is here" is worth nothing against an IndexedDB Zero has not written to yet, and a client that
-// has just signed in has not. So wait for the replica to hold SOMETHING first — and fail loudly, on
-// the timeout, if it never does, rather than reporting an emptiness that was never a fact.
-async function pmDigestRowsInReplica(page: Page): Promise<number> {
+// The DISTINCT `pm_digest` ids the client has actually persisted, with the two corrections a first
+// CI run taught this spec:
+//
+//   1. Wait for the replica to hold something. "No `pm_digest` row is here" is worth nothing against
+//      an IndexedDB Zero has not written to yet, and a client that has only soft-navigated since
+//      sign-in has not written to one. The poll fails loudly on timeout rather than reporting an
+//      emptiness that was never a fact.
+//   2. Deduplicate by id. Zero persists its replica as B-tree chunks and the SAME row is lifted out
+//      of more than one of them, so counting entries counts chunk copies, not entities.
+async function pmDigestIdsInReplica(page: Page): Promise<string[]> {
+  const replica = await readReplica(page)
+  const ids = new Set<string>()
+  for (const row of replica.rows) {
+    if (row.table !== 'pm_digest') continue
+    const id = (JSON.parse(row.json) as { id?: unknown }).id
+    if (typeof id === 'string') ids.add(id)
+  }
+  return [...ids].sort()
+}
+
+// Polled, not sampled: a row arriving through zero-cache and a row being flushed to IndexedDB are
+// two different moments, so a single read can be early. The emptiness cases settle on the first
+// poll, which is what they should do.
+async function expectPmDigestIds(page: Page, expected: readonly string[]): Promise<void> {
   await expect
     .poll(async () => (await readReplica(page)).rows.length, {
       timeout: 45_000,
       message: 'the client never persisted a replica row, so an emptiness claim proves nothing',
     })
     .toBeGreaterThan(0)
-  const replica = await readReplica(page)
-  return replica.rows.filter((row) => row.table === 'pm_digest').length
+  await expect
+    .poll(async () => await pmDigestIdsInReplica(page), { timeout: 45_000 })
+    .toEqual([...expected])
 }
 
-test('with the default policy the reader surface does not exist and the row never reaches the client', async ({
+test('with the default policy the PM reader surface does not exist, and only the team can read the row', async ({
   page,
 }) => {
   test.slow()
@@ -193,23 +213,21 @@ test('with the default policy the reader surface does not exist and the row neve
   await expect(page.getByRole('heading', { name: 'Product digests' })).toHaveCount(0)
   await expect(page.getByTestId('pm-digests-empty')).toHaveCount(0)
 
-  // THE ASSERTION A DOM CHECK CANNOT MAKE: with a live sync connection and a populated replica, the
-  // client never received the row. "Not rendered" and "not received" are different disclosures.
-  await page.goto('/')
-  await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
-    timeout: 30_000,
-  })
-  expect(await pmDigestRowsInReplica(page)).toBe(0)
-
   // The row is really there, and really readable — through the OTHER axis, by the team that
-  // produced it. Without this the emptiness above would be satisfied by a missing row.
+  // produced it. Without this the absence above would be satisfied by a missing row.
+  //
+  // NOTE WHOSE CLIENT THIS IS. This caller reaches the row legitimately: they are on the producing
+  // team (by the workspace-admin bypass `teamScoped` has and `pmAudienceScoped` deliberately does
+  // not), so their replica holds it through the team axis. "The row never reaches the client" is a
+  // claim about a reader OUTSIDE the team, and the second test makes it there, for a viewer with no
+  // membership at all — asserting it here would have asserted it of the wrong principal.
   await openCyclePanel(page, team.name, cycleName)
   const share = page.getByTestId('pm-digest-share')
   await expect(share).toBeVisible({ timeout: 30_000 })
   await expect(share).toHaveAttribute('data-published', 'false')
   await expect(share.getByTestId('pm-digest-headline')).toHaveText(HEADLINE)
   await expect(share.getByTestId('pm-digest-evidence')).toHaveText(EVIDENCE_LABEL)
-  expect(await pmDigestRowsInReplica(page)).toBeGreaterThan(0)
+  await expectPmDigestIds(page, [digestId])
 
   // Still unpublished in Postgres: reviewing is not releasing.
   const check = openDb()
@@ -313,7 +331,7 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
 
     // Before the policy names them: no entry, no surface, nothing in the replica.
     await expect(readerPage.getByTestId('pm-digests-entry')).toHaveCount(0)
-    expect(await pmDigestRowsInReplica(readerPage)).toBe(0)
+    await expectPmDigestIds(readerPage, [])
 
     const readerId = await (async () => {
       const lookup = openDb()
@@ -394,7 +412,7 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     await expect(readerPage.getByRole('heading', { name: 'Product digests' })).toBeVisible()
     await expect(readerPage.getByTestId('pm-digests-empty')).toBeVisible({ timeout: 30_000 })
     await expect(readerPage.getByTestId('pm-digest-card')).toHaveCount(0)
-    expect(await pmDigestRowsInReplica(readerPage)).toBe(0)
+    await expectPmDigestIds(readerPage, [])
 
     // A HUMAN ON THE PRODUCING TEAM RELEASES IT, from the keyboard.
     await openCyclePanel(page, team.name, cycleName)
@@ -445,8 +463,8 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
 
     // The reader holds the disclosed row and NOTHING ELSE of that team's: the audience axis carries
     // one table, and widening `teamScoped` would have shown up here as issues and cycles arriving.
+    await expectPmDigestIds(readerPage, [digestId])
     const replica = await readReplica(readerPage)
-    expect(replica.rows.filter((row) => row.table === 'pm_digest')).toHaveLength(1)
     // The disclosure record replicates to nobody. `pm_digest` reached this client through
     // zero-cache, which is what makes this the running-stack half of the omission assertion the
     // drift test makes statically: one new table is in the Zero schema and arrived, the other is in
@@ -493,7 +511,7 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
       await afterPage.goto('/digests')
       await expect(afterPage.getByTestId('pm-digests-empty')).toBeVisible({ timeout: 30_000 })
       await expect(afterPage.getByTestId('pm-digest-card')).toHaveCount(0)
-      expect(await pmDigestRowsInReplica(afterPage)).toBe(0)
+      await expectPmDigestIds(afterPage, [])
     } finally {
       await afterContext.close()
     }

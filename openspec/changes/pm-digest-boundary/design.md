@@ -554,3 +554,26 @@ implies" and nothing is arbitrated away. Migration numbering survives untouched:
 
 This is not `gh pr merge` and does not land anything: it is the feature branch catching up to its
 base so that the review flow that owns the merge decision has a PR it can actually see CI for.
+
+### I15 — what two CI runs taught the e2e spec, and the assertion that was about the wrong principal
+
+Recorded because both corrections are about `readReplica`'s model rather than about the feature, and
+the next person to write a replica assertion will otherwise learn them the same expensive way.
+
+1. **A client that has only soft-navigated has not flushed to IndexedDB.** The first run failed on
+   the spec's own non-vacuity guard, for a reader who had just signed up and never left the SPA. One
+   hard reload plus a bounded poll fixes it; the guard stays, because an emptiness claim against an
+   IndexedDB Zero has not written to is not a fact.
+2. **Zero persists its replica as B-tree chunks, and the same row is lifted out of more than one of
+   them.** Counting `rows` counts chunk copies. Every assertion here is on the DISTINCT set of
+   `pm_digest` ids — `retro-ai.spec.ts` only ever asks `.some(...)`, which is why it never met this.
+3. **"The row never reaches the client" was asserted of the wrong principal.** The first test's
+   caller is a workspace ADMIN, who is on the producing team through `teamScoped`'s admin bypass —
+   so their replica holds the row legitimately, through the team axis, the moment they open the
+   cycle panel. The claim belongs to a reader outside the team, and the second test makes it there
+   for a viewer with no membership at all. What the first test proves is the pair that is actually
+   true for an admin with an empty audience: the PM surface does not exist for them, and the same
+   row is fully readable on their own team surface.
+
+None of the three was a defect in the change. The e2e is nonetheless the only place any of them
+could have surfaced, which is I13's argument restated by events.

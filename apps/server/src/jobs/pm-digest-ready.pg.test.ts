@@ -26,7 +26,13 @@ if (DATABASE_URL === undefined && process.env.CI) {
 }
 
 const PUBLIC_URL = 'https://yapm.example.com'
-const NOW = Date.UTC(2026, 5, 1, 12, 0, 0)
+// A MONTH AFTER `notifications.pg.test.ts`'s clock, deliberately. `runNotificationEmailSweep` has no
+// workspace filter — it sweeps every eligible row in its database — and both suites run it against
+// the one server-tier database, in parallel. Sharing that suite's `NOW` put both sets of seeded rows
+// inside the other's `[now - MAX_AGE, now - DEBOUNCE]` window, so each sweep mailed and stamped rows
+// the other was mid-assertion on. Separating the clocks by a month makes the two windows disjoint,
+// which is what keeps each suite counting only its own rows.
+const NOW = Date.UTC(2026, 6, 1, 12, 0, 0)
 const SETTLED = NOW - NOTIFICATION_EMAIL_DEBOUNCE_MS - 60_000
 
 function silentLogger() {

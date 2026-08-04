@@ -66,10 +66,10 @@ const PROPOSAL = {
 } as const
 
 // The panel's real sequence, reduced to the two events that matter: focus pushes a snapshot of the
-// row AS IT STOOD, and reacting with the inline toggle changes the row without moving focus. The
-// `onFocus` handler closes over `mine` at render time exactly as the panel's does, so after a
-// reaction the provider is still holding `mine: null` — which is the state the palette has to cope
-// with rather than the state it can assume away.
+// row AS IT STOOD, and reacting with the inline toggle changes the row WITHOUT moving focus — so the
+// snapshot the provider still holds predates the reaction. That is why it carries body, category and
+// verdict only: a "my reaction" field would be stale in exactly this sequence, and the entry that
+// would have read it is offered unconditionally instead.
 function ProposalRow({ verdict = null }: { verdict?: RetroAiFocus['verdict'] }) {
   const command = useRetroCommand()
   const [mine, setMine] = useState<RetroReactionValue | null>(null)
@@ -85,7 +85,6 @@ function ProposalRow({ verdict = null }: { verdict?: RetroAiFocus['verdict'] }) 
           body: PROPOSAL.body,
           category: PROPOSAL.category,
           verdict,
-          mine,
         })
       }
       onClick={() => setMine('agree')}
@@ -149,10 +148,10 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-// THE REGRESSION THIS FILE IS FOR. Reacting with the inline toggle moves no focus, so the snapshot
-// still says `mine: null` — and a "Clear my reaction" entry gated on that field would be missing for
-// exactly the member who just reacted and wants it back. The mutator reads-then-returns on a missing
-// row, so offering it unconditionally costs a no-op and gating it costs the command.
+// THE REGRESSION THIS FILE IS FOR. Reacting with the inline toggle moves no focus, so a "Clear my
+// reaction" entry gated on the caller's own reaction would be missing for exactly the member who
+// just reacted and wants it back. The mutator reads-then-returns on a missing row, so offering it
+// unconditionally costs a no-op and gating it costs the command.
 test('clear my reaction is offered after a reaction taken with the inline toggle', () => {
   const retroApi = mount()
 

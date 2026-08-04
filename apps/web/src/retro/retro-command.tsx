@@ -6,7 +6,6 @@ import {
   type RetroFormat,
   type RetroProposalCategory,
   type RetroProposalVerdict,
-  type RetroReactionValue,
   type RetroSeed,
   type RetroSeedRef,
 } from '@yapm/schema'
@@ -83,8 +82,6 @@ export interface RetroAiFocus {
   body: string
   category: RetroProposalCategory
   verdict: RetroProposalVerdict | null
-  // The caller's OWN reaction, and the only reaction value that exists anywhere on a client.
-  mine: RetroReactionValue | null
 }
 
 interface RetroCommandApi {
@@ -356,11 +353,11 @@ export function RetroCommandProvider({
                     <ThumbsDownIcon />
                     Disagree with this AI proposal
                   </CommandItem>
-                  {/* UNCONDITIONAL, and deliberately not gated on `focusedAi.mine`. The snapshot is
-                      refreshed by a DOM focus event, and reacting with the inline toggle moves no
-                      focus — so a `mine`-gated entry would be missing for exactly the member who
-                      just reacted. `clearRetroAiReaction` reads then returns on a missing row, so a
-                      stale snapshot costs a no-op rather than an error. */}
+                  {/* UNCONDITIONAL, and the reason the snapshot carries no "my reaction" field to
+                      gate on: it is refreshed by a DOM focus event, and reacting with the inline
+                      toggle moves no focus — so any such gate would be stale for exactly the member
+                      who just reacted and wants it back. `clearRetroAiReaction` reads then returns
+                      on a missing row, so offering it always costs a no-op rather than an error. */}
                   <CommandItem
                     value="clear my reaction to this ai proposal"
                     onSelect={() => {

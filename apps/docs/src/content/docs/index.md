@@ -34,8 +34,9 @@ runs as three containers you own.
 - [Retro AI draft](/features/retro-ai-draft/) — opt in, per team, to have the AI draft up to three
   wins, losses and improvements into a retro at the moment the board is revealed, each citing a
   work-graph entity or one of yapm's own computed metrics. It reads no cards, no comments and
-  nobody's name, and nothing it drafts becomes the team's conclusion until each member privately
-  agrees or disagrees and the retro leaves voting.
+  nobody's name, and nothing it drafts becomes the team's conclusion until the team ratifies it —
+  members privately agree or disagree, and one verdict per proposal is computed when the retro
+  leaves voting.
 - [Notifications](/features/notifications/) — a keyboard-first per-user inbox at `/inbox` for
   assignments and comments on issues you are involved in, with an unread badge and optional batched
   email. No admin, of any role, can read your inbox. Turn mail on with

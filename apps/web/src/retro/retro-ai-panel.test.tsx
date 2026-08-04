@@ -701,13 +701,16 @@ test('focusing a proposal hands the palette a snapshot of that row', () => {
     },
   )
 
+  // Body, category and verdict, and NOTHING ELSE — the caller's own reaction is seeded above and is
+  // deliberately absent from the snapshot: it is refreshed only by a focus event, so it would be
+  // stale for the member who just reacted with the inline toggle, and the palette entry that would
+  // have read it is unconditional instead (§G5).
   fireEvent.focus(screen.getByTestId('retro-ai-agree'))
   expect(onFocusProposal).toHaveBeenCalledWith({
     id: 'i-1',
     body: 'Hold scope.',
     category: 'improvement',
     verdict: 'contested',
-    mine: 'disagree',
   })
 })
 

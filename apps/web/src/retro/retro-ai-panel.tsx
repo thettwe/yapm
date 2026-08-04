@@ -309,7 +309,6 @@ function DraftedProposals({
       body: proposal.summary,
       category: proposal.category,
       verdict: proposal.verdict ?? null,
-      mine: mine.get(proposal.id) ?? null,
     }
   }
 

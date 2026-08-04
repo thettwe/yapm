@@ -368,16 +368,22 @@ the caller's own.
 
 ### G5 — The command palette holds a focus SNAPSHOT, not a proposal id
 
-The four palette entries need the focused proposal's body, category, verdict and the caller's own
-reaction. Resolving an id inside the palette would mean querying the AI tables from
-`RetroCommandProvider`, which is mounted for **every** retro — including a team that never opted in,
-whose whole guarantee is that it issues no AI query at all.
+The four palette entries need the focused proposal's body, category and verdict — and nothing else.
+Resolving an id inside the palette would mean querying the AI tables from `RetroCommandProvider`,
+which is mounted for **every** retro — including a team that never opted in, whose whole guarantee is
+that it issues no AI query at all.
 
-**Chosen:** `setFocusedAiProposal` takes a snapshot object, built by the panel from its own already-
-synced rows at the moment focus lands (the `onFocusCapture` pattern the board and action list use).
-A team with no AI panel never calls it, so the palette's AI group is structurally absent rather than
-conditionally hidden. The snapshot can go stale between a focus event and the palette opening; the
-only field where that matters is `mine`, and acting on a stale `mine` is idempotent either way.
+**Chosen:** `setFocusedAiProposal` takes a snapshot object of those three fields, built by the panel
+from its own already-synced rows at the moment focus lands (the `onFocusCapture` pattern the board
+and action list use). A team with no AI panel never calls it, so the palette's AI group is
+structurally absent rather than conditionally hidden.
+
+The snapshot deliberately does **not** carry the caller's own reaction. It is refreshed by a DOM
+focus event and by nothing else, and reacting with the inline toggle moves no focus — so such a field
+would be stale for exactly the member who just reacted, and a "Clear my reaction" entry gated on it
+would vanish for the one person who wants it. The entry is therefore unconditional, and the
+stale-reaction hazard is closed by `clearRetroAiReaction`'s idempotence (§G4: it reads then returns
+on a missing row) rather than by a snapshot field.
 
 ### G6 — The two reaction mutators are entered in the AI tool registry, as plain writes
 

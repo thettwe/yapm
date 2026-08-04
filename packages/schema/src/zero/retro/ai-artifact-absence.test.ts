@@ -35,6 +35,12 @@ describe('the AI artifact tables sync but have no client mutator', () => {
     expect(names).toContain('retro.setPhase')
     expect(names).toContain('team.setAiRetroDraft')
     expect(names.filter((name) => /^retroAi(Draft|Proposal)\./.test(name))).toEqual([])
+    // Change 19's line, in the same file for the same reason: the REACTION is an ordinary client
+    // mutator, and the VERDICT it feeds is not. A `retroAiProposal.*` mutator appearing here would
+    // mean a client could stamp its own verdict — which is the whole authority this design keeps on
+    // the server.
+    expect(names).toContain('retroAiReaction.set')
+    expect(names).toContain('retroAiReaction.clear')
   })
 
   it('exposes no artifact-writing tool to an agent', () => {
@@ -53,11 +59,22 @@ describe('the AI artifact tables sync but have no client mutator', () => {
       expect(source).not.toContain(`mutate.${table}`)
     }
     expect(source).not.toMatch(/ai-draft-writes/)
+    // The verdict's writer is server-only by the same construction. Matched on the IMPORT rather
+    // than on the name, because the reaction mutator names the module in a comment on purpose —
+    // pointing a reader at where the counting actually happens is the opposite of hiding it.
+    // Non-vacuity is the line above: the client module DOES write `retro_ai_reaction`, so finding no
+    // import of the ratify module is a real absence rather than a grep that matches nothing.
+    expect(source).toContain('mutate.retro_ai_reaction')
+    expect(source).not.toMatch(/^import .*ratify-writes/mu)
+    expect(source).not.toContain('mutate.retro_ai_proposal')
   })
 
-  it('reaches the server-only writer from the server override, and only from there', () => {
+  it('reaches the server-only writers from the server override, and only from there', () => {
     const source = readFileSync(SERVER_MUTATORS, 'utf8')
     expect(source).toMatch(/from '\.\/retro\/ai-draft-writes\.js'/)
     expect(source).toMatch(/\bupsertRetroAiDraft\(/)
+    expect(source).toMatch(/from '\.\/retro\/ratify-writes\.js'/)
+    expect(source).toMatch(/\bratifyRetroAiProposals\(/)
+    expect(source).toMatch(/\bclearRetroAiVerdicts\(/)
   })
 })

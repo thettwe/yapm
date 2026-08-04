@@ -4,6 +4,8 @@ import {
   RETRO_FORMATS,
   RETRO_PHASES,
   type RetroFormat,
+  type RetroProposalCategory,
+  type RetroProposalVerdict,
   type RetroSeed,
   type RetroSeedRef,
 } from '@yapm/schema'
@@ -28,6 +30,8 @@ import {
   GroupIcon,
   ListChecksIcon,
   PlusIcon,
+  ThumbsDownIcon,
+  ThumbsUpIcon,
   TimerIcon,
   TimerOffIcon,
   UserIcon,
@@ -70,6 +74,16 @@ export interface RetroFocus {
   columnId: string
 }
 
+// The AI proposal the keyboard last held. A SNAPSHOT rather than an id, because the palette must not
+// query the AI tables — a team that never opted in mounts no AI panel and therefore issues no AI
+// query, and resolving an id here would put one in the always-mounted palette instead.
+export interface RetroAiFocus {
+  id: string
+  body: string
+  category: RetroProposalCategory
+  verdict: RetroProposalVerdict | null
+}
+
 interface RetroCommandApi {
   open: () => void
   openGroupWith: (cardId: string) => void
@@ -77,6 +91,7 @@ interface RetroCommandApi {
   openTimer: () => void
   setFocused: (focus: RetroFocus | null) => void
   setFocusedAction: (actionId: string | null) => void
+  setFocusedAiProposal: (focus: RetroAiFocus | null) => void
 }
 
 const RetroCommandContext = createContext<RetroCommandApi | null>(null)
@@ -133,6 +148,7 @@ export function RetroCommandProvider({
   const [groupCardId, setGroupCardId] = useState<string | null>(null)
   const focusRef = useRef<RetroFocus | null>(null)
   const focusedActionRef = useRef<string | null>(null)
+  const focusedAiRef = useRef<RetroAiFocus | null>(null)
 
   const start = useCallback((next: Page) => {
     setPage(next)
@@ -154,6 +170,9 @@ export function RetroCommandProvider({
       },
       setFocusedAction: (actionId) => {
         focusedActionRef.current = actionId
+      },
+      setFocusedAiProposal: (focus) => {
+        focusedAiRef.current = focus
       },
     }),
     [start],
@@ -187,6 +206,7 @@ export function RetroCommandProvider({
       ? null
       : resolveVoteTarget(cards, focused.id, focused.type === 'group' ? 'group' : 'card')
   const myDots = target === null ? [] : myVotesFor(votes, target.targetId)
+  const focusedAi = focusedAiRef.current
   const focusedAction =
     focusedActionRef.current === null
       ? null
@@ -304,6 +324,70 @@ export function RetroCommandProvider({
                       <CommandShortcut>⇧V</CommandShortcut>
                     </CommandItem>
                   ) : null}
+                </CommandGroup>
+              ) : null}
+
+              {/* The keyboard half of the ratification surface. Gated by the SAME `react` predicate
+                  the mutator enforces, so the palette can never offer a write the server refuses —
+                  and absent entirely for a team with no AI panel, because nothing ever sets the
+                  focus. */}
+              {focusedAi && retroCan(retro.phase, 'react', { canWrite }) ? (
+                <CommandGroup heading="AI proposal">
+                  <CommandItem
+                    value="agree with this ai proposal"
+                    onSelect={() => {
+                      void api.setAiReaction(focusedAi.id, 'agree')
+                      close()
+                    }}
+                  >
+                    <ThumbsUpIcon />
+                    Agree with this AI proposal
+                  </CommandItem>
+                  <CommandItem
+                    value="disagree with this ai proposal"
+                    onSelect={() => {
+                      void api.setAiReaction(focusedAi.id, 'disagree')
+                      close()
+                    }}
+                  >
+                    <ThumbsDownIcon />
+                    Disagree with this AI proposal
+                  </CommandItem>
+                  {/* UNCONDITIONAL, and the reason the snapshot carries no "my reaction" field to
+                      gate on: it is refreshed by a DOM focus event, and reacting with the inline
+                      toggle moves no focus — so any such gate would be stale for exactly the member
+                      who just reacted and wants it back. `clearRetroAiReaction` reads then returns
+                      on a missing row, so offering it always costs a no-op rather than an error. */}
+                  <CommandItem
+                    value="clear my reaction to this ai proposal"
+                    onSelect={() => {
+                      void api.clearAiReaction(focusedAi.id)
+                      close()
+                    }}
+                  >
+                    <XIcon />
+                    Clear my reaction
+                  </CommandItem>
+                </CommandGroup>
+              ) : null}
+
+              {/* An agreed improvement, and NO OWNER: `createAction` is called with provenance only.
+                  The absence of an assignee here is the same hard line the mutator holds. */}
+              {focusedAi &&
+              focusedAi.category === 'improvement' &&
+              focusedAi.verdict === 'agreed' &&
+              retroCan(retro.phase, 'action', { canWrite }) ? (
+                <CommandGroup heading="AI proposal">
+                  <CommandItem
+                    value="add this improvement as an action item"
+                    onSelect={() => {
+                      void api.createAction(focusedAi.body, { aiProposalId: focusedAi.id })
+                      close()
+                    }}
+                  >
+                    <ListChecksIcon />
+                    Add this improvement as an action
+                  </CommandItem>
                 </CommandGroup>
               ) : null}
 

@@ -28,6 +28,7 @@ import {
   RETRO_COLUMN_ACCENTS,
   RETRO_FORMATS,
   RETRO_PHASES,
+  RETRO_REACTION_VALUES,
   RETRO_VOTE_TARGETS,
   type RetroColumnAccent,
   type RetroFormat,
@@ -2563,10 +2564,114 @@ export const retractRetroVote = defineMutator(retractRetroVoteArgs, async ({ tx,
   )
 })
 
+const retroReactionValueSchema = z.enum(RETRO_REACTION_VALUES)
+
+interface RetroAiProposalRow {
+  id: string
+  retroId: string
+  teamId: string
+  category: string
+}
+
+// The proposal load every reaction and the provenance link share. It runs ONLY AFTER the caller has
+// already been authorized to write, so it is never an existence oracle; a missing proposal throws
+// the same generic not-authorized a wrong-team one does.
+async function loadRetroAiProposal(
+  tx: Transaction,
+  proposalId: string,
+): Promise<RetroAiProposalRow> {
+  const proposal = (await tx.run(zql.retro_ai_proposal.where('id', proposalId).one())) as
+    | RetroAiProposalRow
+    | undefined
+  if (!proposal) throw notAuthorized(proposalId)
+  return proposal
+}
+
+export const setRetroAiReactionArgs = z.object({
+  proposalId: z.string().min(1),
+  value: retroReactionValueSchema,
+  createdAt: timestamp,
+  updatedAt: timestamp,
+})
+
+export type SetRetroAiReactionArgs = z.infer<typeof setRetroAiReactionArgs>
+
+// One member's decision on one AI proposal.
+//
+// THE PROLOGUE ORDER IS THE GUARANTEE, not a style: `canWrite` runs FIRST, before any read at all,
+// so a viewer or a non-member cannot use this mutator as an oracle for whether a proposal id exists
+// — their rejection is identical for a real id and an invented one. Only then is the proposal read,
+// and only then does `loadRetroForWrite` check team access and the phase through the ONE shared
+// predicate that also drives the UI's affordance.
+//
+// NOTHING IS MINTED HERE. `(proposalId, userID)` is the primary key, so CLAUDE.md constraint 4 is
+// not engaged — there is no id to generate inside a mutator body and a rebase re-runs the same
+// upsert onto the same key (the `notification` / `issue_subscription` precedent). The user component
+// comes from the VERIFIED `ctx.userID` and never from an argument, which makes naming somebody
+// else's row structurally impossible rather than a `where` clause away.
+//
+// NO COUNTER IS TOUCHED, HERE OR ANYWHERE ON THIS PATH, and there is no server override for the same
+// reason: an override is where a counter would eventually be added. The verdict is computed once at
+// the phase advance (`zero/retro/ratify-writes.ts`).
+export const setRetroAiReaction = defineMutator(
+  setRetroAiReactionArgs,
+  async ({ tx, args, ctx }) => {
+    if (!canWrite(ctx)) throw notAuthorized(args.proposalId)
+    const proposal = await loadRetroAiProposal(tx, args.proposalId)
+    const retro = await loadRetroForWrite(tx, ctx, proposal.retroId, 'react', args.proposalId)
+
+    await tx.mutate.retro_ai_reaction.upsert({
+      proposalId: proposal.id,
+      userId: ctx.userID,
+      retroId: proposal.retroId,
+      teamId: retro.teamId,
+      value: args.value,
+      createdAt: args.createdAt,
+      updatedAt: args.updatedAt,
+    })
+  },
+)
+
+export const clearRetroAiReactionArgs = z.object({
+  proposalId: z.string().min(1),
+})
+
+export type ClearRetroAiReactionArgs = z.infer<typeof clearRetroAiReactionArgs>
+
+// Withdrawing is not the same as disagreeing and has to be expressible, or a mis-click is a
+// permanent opinion. Same prologue, same order, same reasoning.
+export const clearRetroAiReaction = defineMutator(
+  clearRetroAiReactionArgs,
+  async ({ tx, args, ctx }) => {
+    if (!canWrite(ctx)) throw notAuthorized(args.proposalId)
+    const proposal = await loadRetroAiProposal(tx, args.proposalId)
+    await loadRetroForWrite(tx, ctx, proposal.retroId, 'react', args.proposalId)
+
+    // Read-then-delete on the caller's OWN key, so clearing twice is a no-op rather than a
+    // missing-row error. The read is self-addressed and runs after authorization, so it discloses
+    // nothing: on a client the only reaction row that exists is this one.
+    const existing = await tx.run(
+      zql.retro_ai_reaction.where('proposalId', proposal.id).where('userId', ctx.userID).one(),
+    )
+    if (existing === undefined) return
+
+    await tx.mutate.retro_ai_reaction.delete({
+      proposalId: proposal.id,
+      userId: ctx.userID,
+    })
+  },
+)
+
 export const createRetroActionArgs = z.object({
   id: z.string().min(1),
   retroId: z.string().min(1),
   body: z.string(),
+  // Provenance for an action born from an AI proposal. Validated to name a proposal in THIS retro
+  // and nothing more: NOT gated on `verdict === 'agreed'`, because a facilitator who decides during
+  // `discuss` that a contested proposal is worth acting on should not be blocked by a
+  // machine-computed label, and because a step back that clears the verdict would otherwise revoke
+  // an action the team had already agreed to create.
+  aiProposalId: z.string().min(1).nullable().optional(),
   assigneeId: z.string().min(1).nullable().optional(),
   targetCycleId: z.string().min(1).nullable().optional(),
   cardId: z.string().min(1).nullable().optional(),
@@ -2610,6 +2715,18 @@ export const createRetroAction = defineMutator(createRetroActionArgs, async ({ t
       )
     }
   }
+  if (args.aiProposalId != null) {
+    const proposal = (await tx.run(zql.retro_ai_proposal.where('id', args.aiProposalId).one())) as
+      | RetroAiProposalRow
+      | undefined
+    if (!proposal || proposal.retroId !== args.retroId) {
+      throw new MutationError(
+        'That proposal is not in this retro',
+        MutationErrorCode.invalidTarget,
+        args.id,
+      )
+    }
+  }
 
   await tx.mutate.retro_action.insert({
     id: args.id,
@@ -2617,7 +2734,12 @@ export const createRetroAction = defineMutator(createRetroActionArgs, async ({ t
     teamId: retro.teamId,
     groupId: args.groupId ?? null,
     cardId: args.cardId ?? null,
+    aiProposalId: args.aiProposalId ?? null,
     body,
+    // NEVER pre-filled from the AI path, and this is a hard line rather than a default. The model
+    // has no identity dimension at any depth, so a suggested owner could only be invented, and it
+    // would be the first per-person output anywhere in the AI layer. A human assigns it afterwards
+    // through the ordinary control.
     assigneeId: args.assigneeId ?? null,
     targetCycleId: args.targetCycleId ?? retro.nextCycleId,
     issueId: null,
@@ -2895,6 +3017,13 @@ export const mutators = defineMutators({
   retroPresence: {
     heartbeat: retroPresenceHeartbeat,
   },
+  // Ordinary optimistic shared mutators, and THERE IS DELIBERATELY NO SERVER OVERRIDE for either:
+  // nothing about a reaction needs authority beyond what the shared function already enforces, and
+  // that absence is the design — an override is where a counter would eventually be added.
+  retroAiReaction: {
+    set: setRetroAiReaction,
+    clear: clearRetroAiReaction,
+  },
 })
 
 export const RENAME_WORKSPACE_MUTATOR_NAME = 'workspace.rename'
@@ -2950,3 +3079,5 @@ export const CREATE_RETRO_ACTION_MUTATOR_NAME = 'retroAction.create'
 export const UPDATE_RETRO_ACTION_MUTATOR_NAME = 'retroAction.update'
 export const DELETE_RETRO_ACTION_MUTATOR_NAME = 'retroAction.delete'
 export const RETRO_PRESENCE_HEARTBEAT_MUTATOR_NAME = 'retroPresence.heartbeat'
+export const SET_RETRO_AI_REACTION_MUTATOR_NAME = 'retroAiReaction.set'
+export const CLEAR_RETRO_AI_REACTION_MUTATOR_NAME = 'retroAiReaction.clear'

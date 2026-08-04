@@ -340,6 +340,24 @@ export const queries = defineQueries({
       return zql.retro_vote.where('retroId', args.retroId).where('voterId', ctx.userID)
     }),
   },
+  retroAiReactions: {
+    // SELF-SCOPED WITH NO WORKSPACE-ADMIN BYPASS — the `retroDrafts.mine` / `retroVotes.mine` shape
+    // again, NOT `teamScoped`. `teamScoped` hands workspace admins every team's work data, which is
+    // right for issues and wrong here for exactly the reason a retro exists: it is the one surface
+    // where a member is invited to say something unwelcome, and a signal an admin can read is not a
+    // signal a quiet dissenter will send. Written as `teamScoped` this looks completely normal in
+    // review, which is why the falsifiable check asserts an ADMIN gets zero rows rather than merely
+    // a non-recipient member.
+    //
+    // THE ABSENCE OF ANY OTHER QUERY OVER THIS TABLE IS THE POINT. There is no "n of m responded"
+    // count and no aggregate for anybody, so "no client can read another member's reaction" is
+    // expressed as missing code rather than as a policy — and the verdict a client does read is
+    // written once by the server at the phase advance, with no per-person dimension in it.
+    mine: defineQuery(z.object({ retroId: z.string() }), ({ args, ctx }) => {
+      if (!isMember(ctx)) return denyAll(zql.retro_ai_reaction)
+      return zql.retro_ai_reaction.where('retroId', args.retroId).where('userId', ctx.userID)
+    }),
+  },
 })
 
 export const WORKSPACE_CURRENT_QUERY_NAME = 'workspace.current'
@@ -366,6 +384,7 @@ export const RETROS_BY_TEAM_QUERY_NAME = 'retros.byTeam'
 export const RETRO_DETAIL_QUERY_NAME = 'retros.detail'
 export const RETRO_DRAFTS_MINE_QUERY_NAME = 'retroDrafts.mine'
 export const RETRO_VOTES_MINE_QUERY_NAME = 'retroVotes.mine'
+export const RETRO_AI_REACTIONS_MINE_QUERY_NAME = 'retroAiReactions.mine'
 export const NOTIFICATIONS_MINE_QUERY_NAME = 'notifications.mine'
 export const SUBSCRIPTIONS_MINE_QUERY_NAME = 'subscriptions.mine'
 export const ATTACHMENTS_BY_ISSUE_QUERY_NAME = 'attachments.byIssue'

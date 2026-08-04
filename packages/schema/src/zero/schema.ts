@@ -27,6 +27,8 @@ import type {
   RetroColumnAccent,
   RetroFormat,
   RetroPhase,
+  RetroProposalVerdict,
+  RetroReactionValue,
   RetroVoteTarget,
   ReviewState,
   SubscriptionState,
@@ -460,9 +462,33 @@ const retroAiProposal = table('retro_ai_proposal')
     confidence: enumeration<DigestConfidence>(),
     refs: json<readonly RetroSeedRef[]>(),
     rank: number(),
+    // The team's decision, WRITTEN ONCE at the `vote -> discuss` advance and nulled again by the
+    // step back. None of these is a counter: nothing on the reaction path ever writes them, which is
+    // why reacting contends on no shared row (design D4).
+    verdict: enumeration<RetroProposalVerdict>().optional(),
+    agreeCount: number().from('agree_count').optional(),
+    disagreeCount: number().from('disagree_count').optional(),
+    ratifiedAt: number().from('ratified_at').optional(),
     createdAt: number().from('created_at'),
   })
   .primaryKey('id')
+
+// One member's decision on one proposal, and the ONLY synced table in the retro whose rows reach
+// exactly one person. The compound natural key is the primary key, so nothing is minted on the
+// reaction path and a rebased mutator re-upserts the same row. There is deliberately no query over
+// this table but `retroAiReactions.mine`: no aggregate exists a client could read, which is what
+// makes "n of m responded" a non-goal rather than a missing feature.
+const retroAiReaction = table('retro_ai_reaction')
+  .columns({
+    proposalId: string().from('proposal_id'),
+    userId: string().from('user_id'),
+    retroId: string().from('retro_id'),
+    teamId: string().from('team_id'),
+    value: enumeration<RetroReactionValue>(),
+    createdAt: number().from('created_at'),
+    updatedAt: number().from('updated_at'),
+  })
+  .primaryKey('proposalId', 'userId')
 
 const retroAction = table('retro_action')
   .columns({
@@ -475,6 +501,9 @@ const retroAction = table('retro_action')
     assigneeId: string().from('assignee_id').optional(),
     targetCycleId: string().from('target_cycle_id').optional(),
     issueId: string().from('issue_id').optional(),
+    // Provenance only. `on delete set null` in Postgres: discarding the draft loses the link, never
+    // the action.
+    aiProposalId: string().from('ai_proposal_id').optional(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })
@@ -1117,6 +1146,24 @@ const retroAiProposalRelationships = relationships(retroAiProposal, ({ one }) =>
   }),
 }))
 
+// WHAT IS NOT HERE IS THE POINT. `retroAiProposal` has no `reactions` many-edge, because a
+// `teamScoped` query over the proposal could then pull every member's reaction into every replica
+// through `.related('reactions')` — the self-scoped query would still be correct and the guarantee
+// would still be gone. And there is no `user` one-edge for the same reason `retroVote` needs none:
+// the only reader is the row's own author, who does not need to be told their own name.
+const retroAiReactionRelationships = relationships(retroAiReaction, ({ one }) => ({
+  team: one({
+    sourceField: ['teamId'],
+    destField: ['id'],
+    destSchema: team,
+  }),
+  retro: one({
+    sourceField: ['retroId'],
+    destField: ['id'],
+    destSchema: retro,
+  }),
+}))
+
 const retroPresenceRelationships = relationships(retroPresence, ({ one }) => ({
   team: one({
     sourceField: ['teamId'],
@@ -1218,6 +1265,7 @@ export const schema = createSchema({
     retroPresence,
     retroAiDraft,
     retroAiProposal,
+    retroAiReaction,
     notification,
     issueSubscription,
     attachment,
@@ -1254,6 +1302,7 @@ export const schema = createSchema({
     retroPresenceRelationships,
     retroAiDraftRelationships,
     retroAiProposalRelationships,
+    retroAiReactionRelationships,
     notificationRelationships,
     issueSubscriptionRelationships,
     attachmentRelationships,

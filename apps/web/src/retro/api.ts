@@ -4,6 +4,7 @@ import {
   newId,
   type RetroFormat,
   type RetroPhase,
+  type RetroReactionValue,
   type RetroSeedRef,
   type RetroVoteTarget,
 } from '@yapm/schema'
@@ -46,8 +47,12 @@ export interface RetroApi {
   heartbeat: (columnId: string | null) => Promise<void>
   createAction: (
     body: string,
-    provenance?: { cardId?: string | null; groupId?: string | null },
+    provenance?: { cardId?: string | null; groupId?: string | null; aiProposalId?: string | null },
   ) => Promise<void>
+  // Nothing is minted for either: `(proposalId, userID)` is the reaction's primary key and the user
+  // half comes from the verified ctx inside the mutator, never from here.
+  setAiReaction: (proposalId: string, value: RetroReactionValue) => Promise<void>
+  clearAiReaction: (proposalId: string) => Promise<void>
   updateAction: (
     id: string,
     patch: { body?: string; assigneeId?: string | null; targetCycleId?: string | null },
@@ -219,6 +224,10 @@ export function useRetroApi(retroId: string): RetroApiHandle {
               body,
               cardId: provenance?.cardId ?? null,
               groupId: provenance?.groupId ?? null,
+              aiProposalId: provenance?.aiProposalId ?? null,
+              // NO `assigneeId`, EVER, ON THIS PATH. Not omitted for brevity — the AI layer has no
+              // identity dimension, so any owner it appeared to suggest would be invented. A human
+              // assigns it afterwards through the ordinary control.
               createdAt: now,
               updatedAt: now,
             }),
@@ -228,6 +237,16 @@ export function useRetroApi(retroId: string): RetroApiHandle {
       updateAction: (id, patch) =>
         run(zero.mutate(mutators.retroAction.update({ id, ...patch, updatedAt: Date.now() }))),
       deleteAction: (id) => run(zero.mutate(mutators.retroAction.delete({ id }))),
+      setAiReaction: (proposalId, value) => {
+        const now = Date.now()
+        return run(
+          zero.mutate(
+            mutators.retroAiReaction.set({ proposalId, value, createdAt: now, updatedAt: now }),
+          ),
+        )
+      },
+      clearAiReaction: (proposalId) =>
+        run(zero.mutate(mutators.retroAiReaction.clear({ proposalId }))),
       convertAction: (id) => {
         const now = Date.now()
         return run(

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { newId } from '../id.js'
 import type { AuthContext } from './context.js'
 import { MutationErrorCode, mutationErrorCode } from './errors.js'
-import { mutators } from './mutators.js'
+import { mutators, setRetroAiReactionArgs } from './mutators.js'
 import { retroColumnTemplate } from './retro/phase.js'
 import { publishedCardFromDraft } from './server-mutators.js'
 
@@ -884,6 +884,325 @@ describe('retro.convertActionToIssue — the loop back into the tracker', () => 
   })
 })
 
+// One member's decision on one AI proposal. Three properties are asserted here rather than argued in
+// a comment: the prologue order (so the mutator is not an existence oracle), the user component
+// coming from the verified ctx and nowhere else, and the complete absence of anything minted or
+// counted on this path.
+describe('retroAiReaction — one member, one proposal, and no oracle', () => {
+  const PROPOSAL_ID = '019f8f00-0000-7000-8000-0000000000e1'
+
+  const proposalRow = (over: Record<string, unknown> = {}) => ({
+    id: PROPOSAL_ID,
+    retroId: RETRO_ID,
+    teamId: TEAM_ID,
+    category: 'improvement',
+    ...over,
+  })
+
+  const setArgs = (over: Record<string, unknown> = {}) => ({
+    proposalId: PROPOSAL_ID,
+    value: 'agree' as const,
+    createdAt: 5,
+    updatedAt: 5,
+    ...over,
+  })
+
+  // THE FALSIFIABLE CHECK (SCOPE §8, change 19). A viewer's call is refused before ANY read, so the
+  // mutator cannot be used to learn whether a proposal id exists. Both halves matter: the two
+  // rejections must be indistinguishable, AND the stub must still be holding every row it was given,
+  // because an identical error reached after a read would still have leaked the answer through
+  // timing. Reordering `canWrite` after the proposal load fails this and nothing else.
+  it('rejects a viewer before any existence check, identically for a real and an invented id', async () => {
+    const real = fakeTx([proposalRow(), retroRow({ phase: 'vote' })])
+    const invented = fakeTx([proposalRow(), retroRow({ phase: 'vote' })])
+
+    const onReal = await capture(
+      mutators.retroAiReaction.set.fn({ tx: real.tx, args: setArgs(), ctx: VIEWER }),
+    )
+    const onInvented = await capture(
+      mutators.retroAiReaction.set.fn({
+        tx: invented.tx,
+        args: setArgs({ proposalId: 'no-such-proposal' }),
+        ctx: VIEWER,
+      }),
+    )
+
+    expect(mutationErrorCode(onReal)).toBe(MutationErrorCode.notAuthorized)
+    expect(mutationErrorCode(onInvented)).toBe(MutationErrorCode.notAuthorized)
+    expect((onInvented as Error).message).toBe((onReal as Error).message)
+    // Nothing was read in either case: the stub answers in order and both queues are untouched.
+    expect(real.runQueue).toHaveLength(2)
+    expect(invented.runQueue).toHaveLength(2)
+    expect(real.calls).toEqual([])
+    expect(invented.calls).toEqual([])
+    // The only id either error carries is the one the caller itself supplied.
+    expect((onInvented as { details: { id: string } }).details.id).toBe('no-such-proposal')
+  })
+
+  it('clears under the same prologue, and refuses a viewer before reading anything', async () => {
+    const { tx, calls, runQueue } = fakeTx([proposalRow(), retroRow({ phase: 'vote' })])
+    const error = await capture(
+      mutators.retroAiReaction.clear.fn({ tx, args: { proposalId: PROPOSAL_ID }, ctx: VIEWER }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+    expect(runQueue).toHaveLength(2)
+  })
+
+  // A proposal that really is missing is refused with the SAME generic error a wrong-team one gets,
+  // so the read that happens after authorization discloses nothing either.
+  it('refuses a missing proposal with the same generic rejection', async () => {
+    const { tx, calls } = fakeTx([undefined])
+    const error = await capture(
+      mutators.retroAiReaction.set.fn({ tx, args: setArgs(), ctx: MEMBER }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it('refuses a member of another team', async () => {
+    // proposal, retro, then the membership lookup that comes back empty
+    const { tx, calls } = fakeTx([proposalRow(), retroRow({ phase: 'vote' }), undefined])
+    const error = await capture(
+      mutators.retroAiReaction.set.fn({ tx, args: setArgs(), ctx: OTHER }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toEqual([])
+  })
+
+  it.each(['group', 'vote'] as const)('accepts a reaction during %s', async (phase) => {
+    const { tx, calls } = fakeTx([proposalRow(), retroRow({ phase }), { id: 'membership' }])
+    await mutators.retroAiReaction.set.fn({ tx, args: setArgs(), ctx: MEMBER })
+
+    expect(calls).toEqual([
+      {
+        table: 'retro_ai_reaction',
+        verb: 'upsert',
+        value: {
+          proposalId: PROPOSAL_ID,
+          userId: MEMBER.userID,
+          retroId: RETRO_ID,
+          teamId: TEAM_ID,
+          value: 'agree',
+          createdAt: 5,
+          updatedAt: 5,
+        },
+      },
+    ])
+    // NOTHING IS MINTED. `(proposalId, userId)` is the whole key, so there is no id generated inside
+    // a mutator body for a rebase to change under an optimistic result (CLAUDE.md constraint 4).
+    expect(calls[0]?.value).not.toHaveProperty('id')
+  })
+
+  // `discuss` is where the verdict is stamped, so the window has to be shut by then: a reaction
+  // accepted after the count would be silently uncounted.
+  it.each(['brainstorm', 'discuss', 'actions', 'closed'] as const)(
+    'refuses a reaction during %s',
+    async (phase) => {
+      const { tx, calls } = fakeTx([proposalRow(), retroRow({ phase })])
+      const error = await capture(
+        mutators.retroAiReaction.set.fn({ tx, args: setArgs(), ctx: ADMIN }),
+      )
+      expect(mutationErrorCode(error)).toBe(MutationErrorCode.invalidPhase)
+      expect(calls).toEqual([])
+    },
+  )
+
+  // The user half of the key is not merely taken from the ctx by convention — there is no argument
+  // that could carry a user at all, so naming somebody else's row is impossible rather than a
+  // `where` clause away. Both halves are asserted: the schema drops it, and the write uses the ctx.
+  it('takes the user from the verified ctx, and the args cannot name one', () => {
+    const parsed = setRetroAiReactionArgs.parse({
+      ...setArgs(),
+      userId: OTHER.userID,
+      voterId: OTHER.userID,
+    })
+    expect(parsed).not.toHaveProperty('userId')
+    expect(parsed).not.toHaveProperty('voterId')
+    expect(Object.keys(parsed).sort()).toEqual(['createdAt', 'proposalId', 'updatedAt', 'value'])
+  })
+
+  it('rejects a value outside agree | disagree', () => {
+    expect(() => setRetroAiReactionArgs.parse(setArgs({ value: 'abstain' }))).toThrow()
+  })
+
+  it('replaces rather than accumulates: the second reaction is an upsert on the same key', async () => {
+    const first = fakeTx([proposalRow(), retroRow({ phase: 'vote' }), { id: 'membership' }])
+    await mutators.retroAiReaction.set.fn({ tx: first.tx, args: setArgs(), ctx: MEMBER })
+    const second = fakeTx([proposalRow(), retroRow({ phase: 'vote' }), { id: 'membership' }])
+    await mutators.retroAiReaction.set.fn({
+      tx: second.tx,
+      args: setArgs({ value: 'disagree', updatedAt: 9 }),
+      ctx: MEMBER,
+    })
+
+    expect(second.calls[0]?.verb).toBe('upsert')
+    expect(second.calls[0]?.value).toMatchObject({
+      proposalId: PROPOSAL_ID,
+      userId: MEMBER.userID,
+      value: 'disagree',
+    })
+    // Same key both times — one member holds at most one reaction per proposal as a storage fact.
+    expect(second.calls[0]?.value.proposalId).toBe(first.calls[0]?.value.proposalId)
+    expect(second.calls[0]?.value.userId).toBe(first.calls[0]?.value.userId)
+  })
+
+  it('deletes only the caller’s own key when clearing', async () => {
+    const { tx, calls } = fakeTx([
+      proposalRow(),
+      retroRow({ phase: 'vote' }),
+      { id: 'membership' },
+      { proposalId: PROPOSAL_ID, userId: MEMBER.userID, value: 'agree' },
+    ])
+    await mutators.retroAiReaction.clear.fn({ tx, args: { proposalId: PROPOSAL_ID }, ctx: MEMBER })
+
+    expect(calls).toEqual([
+      {
+        table: 'retro_ai_reaction',
+        verb: 'delete',
+        value: { proposalId: PROPOSAL_ID, userId: MEMBER.userID },
+      },
+    ])
+  })
+
+  // The palette offers "Clear my reaction" off a focus snapshot that can go stale, so a clear with
+  // nothing to clear has to be a no-op rather than an error (design §G4).
+  it('is a no-op when there is nothing to clear', async () => {
+    const { tx, calls } = fakeTx([
+      proposalRow(),
+      retroRow({ phase: 'vote' }),
+      { id: 'membership' },
+      undefined,
+    ])
+    await mutators.retroAiReaction.clear.fn({ tx, args: { proposalId: PROPOSAL_ID }, ctx: MEMBER })
+    expect(calls).toEqual([])
+  })
+
+  // THE OTHER HALF OF THE CENTRAL CLAIM, at the unit level: across every accepted call on this path,
+  // the only table written is the reaction itself. A counter bump anywhere — on the proposal, on the
+  // retro, on a tally table — fails here, which is what makes "no incremental tally" a test rather
+  // than a comment.
+  it('writes nothing but the reaction row — no tally, no counter, no proposal update', async () => {
+    const set = fakeTx([proposalRow(), retroRow({ phase: 'vote' }), { id: 'membership' }])
+    await mutators.retroAiReaction.set.fn({ tx: set.tx, args: setArgs(), ctx: MEMBER })
+    const clear = fakeTx([
+      proposalRow(),
+      retroRow({ phase: 'vote' }),
+      { id: 'membership' },
+      { proposalId: PROPOSAL_ID, userId: MEMBER.userID, value: 'agree' },
+    ])
+    await mutators.retroAiReaction.clear.fn({
+      tx: clear.tx,
+      args: { proposalId: PROPOSAL_ID },
+      ctx: MEMBER,
+    })
+
+    for (const call of [...set.calls, ...clear.calls]) {
+      expect(call.table).toBe('retro_ai_reaction')
+    }
+    expect([...set.calls, ...clear.calls].map((call) => call.verb)).toEqual(['upsert', 'delete'])
+  })
+})
+
+describe('retroAction.create carrying an AI proposal', () => {
+  const PROPOSAL_ID = '019f8f00-0000-7000-8000-0000000000e1'
+
+  const actionArgs = (over: Record<string, unknown> = {}) => ({
+    id: 'action-ai-1',
+    retroId: RETRO_ID,
+    body: 'Hold scope where it was this cycle',
+    createdAt: 30,
+    updatedAt: 30,
+    ...over,
+  })
+
+  // The falsifiable check the whole improvement→issue path turns on. The AI layer has no identity
+  // dimension, so an owner here could only be invented — pinned rather than left to a default.
+  it('creates the action with a null assignee and the proposal as provenance', async () => {
+    const { tx, calls } = fakeTx([
+      retroRow({ phase: 'discuss' }),
+      { id: PROPOSAL_ID, retroId: RETRO_ID, teamId: TEAM_ID, category: 'improvement' },
+    ])
+    await mutators.retroAction.create.fn({
+      tx,
+      args: actionArgs({ aiProposalId: PROPOSAL_ID }),
+      ctx: ADMIN,
+    })
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.table).toBe('retro_action')
+    expect(calls[0]?.value).toMatchObject({
+      id: 'action-ai-1',
+      retroId: RETRO_ID,
+      aiProposalId: PROPOSAL_ID,
+      assigneeId: null,
+    })
+  })
+
+  it('leaves the provenance null when the action was written by a person', async () => {
+    const { tx, calls } = fakeTx([retroRow({ phase: 'discuss' })])
+    await mutators.retroAction.create.fn({ tx, args: actionArgs(), ctx: ADMIN })
+    expect(calls[0]?.value).toMatchObject({ aiProposalId: null, assigneeId: null })
+  })
+
+  it('refuses a proposal that belongs to another retro', async () => {
+    const { tx, calls } = fakeTx([
+      retroRow({ phase: 'discuss' }),
+      {
+        id: PROPOSAL_ID,
+        retroId: 'some-other-retro',
+        teamId: TEAM_ID,
+        category: 'improvement',
+      },
+    ])
+    const error = await capture(
+      mutators.retroAction.create.fn({
+        tx,
+        args: actionArgs({ aiProposalId: PROPOSAL_ID }),
+        ctx: ADMIN,
+      }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.invalidTarget)
+    expect(calls).toEqual([])
+  })
+
+  it('refuses a proposal id that names nothing', async () => {
+    const { tx, calls } = fakeTx([retroRow({ phase: 'discuss' }), undefined])
+    const error = await capture(
+      mutators.retroAction.create.fn({
+        tx,
+        args: actionArgs({ aiProposalId: PROPOSAL_ID }),
+        ctx: ADMIN,
+      }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.invalidTarget)
+    expect(calls).toEqual([])
+  })
+
+  // Deliberately NOT gated on `verdict === 'agreed'` (design §D8): the UI offers the affordance on an
+  // agreed improvement, but a facilitator acting on a contested one during `discuss` should not be
+  // blocked by a machine-computed label, and a step back that cleared the verdict would otherwise
+  // revoke an action the team had already agreed to create.
+  it('does not read the proposal’s verdict, so a contested one can still become an action', async () => {
+    const { tx, calls } = fakeTx([
+      retroRow({ phase: 'discuss' }),
+      {
+        id: PROPOSAL_ID,
+        retroId: RETRO_ID,
+        teamId: TEAM_ID,
+        category: 'improvement',
+        verdict: 'contested',
+      },
+    ])
+    await mutators.retroAction.create.fn({
+      tx,
+      args: actionArgs({ aiProposalId: PROPOSAL_ID }),
+      ctx: ADMIN,
+    })
+    expect(calls[0]?.value).toMatchObject({ aiProposalId: PROPOSAL_ID })
+  })
+})
+
 describe('timer and presence', () => {
   it('writes a durable end time, facilitator only', async () => {
     const { tx, calls } = fakeTx([retroRow({ facilitatorId: ADMIN.userID })])
@@ -957,6 +1276,8 @@ describe('the retro mutator registry', () => {
       'retroAction.update',
       'retroAction.delete',
       'retroPresence.heartbeat',
+      'retroAiReaction.set',
+      'retroAiReaction.clear',
     ]) {
       expect(mustGetMutator(mutators, name).mutatorName).toBe(name)
     }

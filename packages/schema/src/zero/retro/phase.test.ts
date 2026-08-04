@@ -51,6 +51,7 @@ const EXPECTED_ALLOWED: Record<string, readonly RetroPhase[]> = {
   timer: ['brainstorm', 'group', 'vote', 'discuss', 'actions'],
   facilitate: [...RETRO_PHASES],
   presence: [...RETRO_PHASES],
+  react: ['group', 'vote'],
 }
 
 describe('isRetroWriteAllowed over the whole phase x operation matrix', () => {

@@ -56,6 +56,26 @@ export const RETRO_VOTE_TARGETS = ['card', 'group'] as const
 
 export type RetroVoteTarget = (typeof RETRO_VOTE_TARGETS)[number]
 
+// The team's decision signal over one AI proposal. Bidirectional and unbudgeted, which is why it is
+// not a dot vote: a disagree must cost nothing and must not compete with a ranking budget.
+export const RETRO_REACTION_VALUES = ['agree', 'disagree'] as const
+
+export type RetroReactionValue = (typeof RETRO_REACTION_VALUES)[number]
+
+// `unrated` is the honest fourth value: nobody responded, so the team decided nothing, and rendering
+// silence as agreement would manufacture consent. The rule that picks between the other three is
+// fixed and knob-free — see `retro/ratify.ts`.
+export const RETRO_PROPOSAL_VERDICTS = ['agreed', 'contested', 'rejected', 'unrated'] as const
+
+export type RetroProposalVerdict = (typeof RETRO_PROPOSAL_VERDICTS)[number]
+
+// The CHECK-constraint text for both, spelled ONCE beside the union so the migration and the
+// TypeScript type cannot drift. The `AI_ARTIFACT_STATUS_CHECK` precedent: migrations wrap these in
+// `sql.raw`, and this module stays free of a kysely import because the client bundle imports it.
+export const RETRO_REACTION_VALUE_CHECK = `value in (${RETRO_REACTION_VALUES.map((value) => `'${value}'`).join(', ')})`
+
+export const RETRO_PROPOSAL_VERDICT_CHECK = `verdict in (${RETRO_PROPOSAL_VERDICTS.map((verdict) => `'${verdict}'`).join(', ')})`
+
 // A column's accent is stored as a retro-SEMANTIC key, never a color literal and never a CSS
 // variable name: `packages/ui` maps each key to a theme token so the accent stays correct in
 // Warm/Focused/Editorial, light and dark, at AA.

@@ -43,6 +43,8 @@ export const RETRO_WRITE_OPS = [
   'facilitate',
   // the throttled presence heartbeat
   'presence',
+  // agree/disagree with one AI proposal, or clear that reaction
+  'react',
 ] as const
 
 export type RetroWriteOp = (typeof RETRO_WRITE_OPS)[number]
@@ -62,6 +64,11 @@ const ALLOWED_PHASES: Record<RetroWriteOp, readonly RetroPhase[]> = {
   timer: ['brainstorm', 'group', 'vote', 'discuss', 'actions'],
   facilitate: RETRO_PHASES,
   presence: RETRO_PHASES,
+  // `group` because the AI section appears at that advance and that is when people read it; `vote`
+  // because the window has to stay open until the moment it closes. NOT `discuss`: the verdict is
+  // stamped on entry to it, and a reaction accepted after the count would be silently uncounted,
+  // which is worse than being told the window is shut.
+  react: ['group', 'vote'],
 }
 
 export function isRetroWriteAllowed(phase: RetroPhase, op: RetroWriteOp): boolean {

@@ -1,6 +1,6 @@
 ---
 title: Retro AI draft
-description: Opt in, per team, to have the AI draft up to three wins, three losses and three improvements into your retro — each one citing a work-graph entity or one of yapm's own computed metrics, and none of it agreed by anyone.
+description: Opt in, per team, to have the AI draft up to three wins, three losses and three improvements into your retro — each one citing a work-graph entity or one of yapm's own computed metrics, and none of it true until your team says so.
 ---
 
 A retro's hardest minute is the first one. The board is empty, everyone is remembering a different
@@ -11,9 +11,9 @@ read those same facts and write down at most **three wins, three losses and thre
 each one pointing at the issue, pull request, check or metric it came from.
 
 It is a starting point, deliberately, and the surface says so in as many words: *AI-drafted, not
-agreed — the team has not decided any of this.* Nothing in this release lets the AI's proposals
-become the team's conclusions. Agreeing or disagreeing with one is a later change, and it ships only
-after real teams have read real drafts.
+agreed — the team has not decided any of this.* Nothing the model writes becomes the team's
+conclusion on its own. **The team ratifies it**, privately, one member at a time, and the line above
+stays on screen until they have — see [Agreeing and disagreeing](#agreeing-and-disagreeing).
 
 The draft is **off for every team until an admin turns it on**, and it needs a
 [configured AI provider key](/self-hosting/ai-setup/). With either missing, the retro is exactly the
@@ -73,6 +73,104 @@ Operators can also switch the whole capability off instance-wide with `AI_RETRO_
 independently of the [cycle digest](/features/cycle-digest/) — see
 [Enable AI](/self-hosting/ai-setup/).
 
+## Agreeing and disagreeing
+
+The AI proposes. **The team disposes**, and until they have, every proposal carries the same
+disclaimer it was drafted with.
+
+Beside each proposal are two controls, **Agree** and **Disagree**. Press one. Press it again to take
+it back — withdrawing is a different thing from disagreeing, and a mis-click must not become a
+permanent opinion. You hold at most one reaction per proposal; picking the other one replaces it.
+
+Everything here is keyboard-first: the toggles are ordinary buttons in the tab order, activated with
+Enter or Space, reporting their pressed state to assistive technology. The retro command palette
+carries the same four commands — *Agree with this AI proposal*, *Disagree*, *Clear my reaction*, and
+*Add this improvement as an action* — acting on whichever proposal the keyboard last held.
+
+### Your reaction is yours
+
+**A reaction replicates to exactly one person: you.** Not to the rest of your team, and — this is the
+part worth saying out loud — **not to a workspace admin**, who reads every issue in the workspace and
+reads none of these. It is the same rule your [dot votes](/features/retrospectives/#dots) and your
+unpublished retro drafts already follow, and it is enforced the same way: there is no query anywhere
+in yapm that returns somebody else's reaction, so there is nothing for a surface to display and
+nothing for an admin screen to widen.
+
+One consequence is deliberate and visible: while people are reacting, **nobody sees a running count**
+— not "3 of 5 have responded", not a progress bar, not a live tally. That is not a missing feature.
+It is the absence of the data, which is what makes a private signal actually private, and it removes
+the anchoring that a visible running score creates.
+
+### The window: while grouping and while voting
+
+You can react from the moment the draft appears — the `group` phase — through the whole of `vote`.
+The window closes when the facilitator advances the retro out of `vote`, because that is the moment
+the verdict is counted; a reaction accepted after the count would be silently uncounted, which is
+worse than being told the window has shut.
+
+If the facilitator steps the retro **back** from `discuss` to `vote`, the window reopens, the stale
+verdict is cleared, and **every reaction is still there** — they are what people said. The next
+advance recounts them, including any added in between.
+
+### The verdict rule, in full
+
+At the `vote → discuss` advance, yapm counts each proposal's reactions **once**, on the server, and
+stores the result. The rule is fixed:
+
+| Reactions | Verdict |
+|---|---|
+| Nobody reacted | **Nobody responded** (`unrated`) |
+| At least one reaction, and none of them a disagree | **Agreed** |
+| More disagrees than agrees | **Rejected** |
+| At least one disagree, but not a majority | **Contested** |
+
+**One disagreement is enough to stop a proposal being agreed.** Four people agree, one disagrees: the
+proposal is *contested*, and no setting anywhere in yapm can change that outcome — there is no
+threshold, no quorum knob, no per-team override, and none is coming. A minority veto is how a quiet
+dissenter gets heard, and *contested* is a **routing label** — "spend five minutes here" — rather
+than a rejection. A threshold setting would be, precisely, a dial for how much dissent a team is
+willing to hear.
+
+*Nobody responded* is the honest fourth answer. Silence is not consent, and rendering it as agreement
+would manufacture one.
+
+From `discuss` onward each proposal shows its verdict and the two counts. **Contested proposals sort
+to the top**, ahead of everything else, because the point of the ceremony is to spend scarce
+discussion time where the team disagrees. The counts are a team-level aggregate with no per-person
+dimension — how many, never who.
+
+### An agreed improvement, in one keystroke
+
+An **agreed improvement** grows an *Add as an action* control. It creates an ordinary retro action
+item, recording which proposal produced it, and from there the
+[existing conversion path](/features/retrospectives/#actions-become-issues) takes over completely unchanged: the
+same shared issue-creation mutator, the same permissions, the same server-assigned per-team number,
+placed in the next cycle. An issue born from an AI proposal is indistinguishable from any other
+issue, which is the point.
+
+**It never fills in an owner, and it never will.** Not as a default, not as a suggestion, not
+greyed-out for you to confirm. The model is given no identity dimension at any depth — no assignee,
+no author, no reviewer, no login, at any point in the pipeline — so a suggested owner could only be
+invented, and it would be the first per-person output anywhere in yapm's AI layer. A human assigns
+it afterwards, through the ordinary control, exactly as for any other issue.
+
+If the facilitator later steps the retro all the way back to `brainstorm`, the draft and its
+proposals are discarded — and the action **survives**, losing only its link back to the proposal. The
+human wrote it; it is not the AI's to delete.
+
+### Only AI proposals are ratified
+
+Reactions apply to the model's proposals and **not** to the cards your team wrote. That asymmetry is
+deliberate.
+
+Human cards already have a ranking signal on that board: [dot voting](/features/retrospectives/#dots),
+with a budget, a tally and a whole phase named after it. A second, differently-shaped ranking signal
+on the same surface in the same session is not symmetry — it is two scoreboards, and a card could end
+up top-voted and rejected at once with nothing to resolve it. It is also the correct shape of the
+underlying difference: a card is somebody's testimony and does not need the team's endorsement to be
+true, whereas an AI proposal is a machine's inference over the work graph and is worth precisely what
+the team says it is worth.
+
 ## What the model is given — and what it is never given
 
 This is the part worth reading closely, because a retro is the most sensitive surface in yapm. It
@@ -106,16 +204,32 @@ it was shown neither an identity nor a single card body.
 
 ### Two residuals, stated rather than hidden
 
-Neither is created by this feature, and neither is made worse by it — which is what makes them
-residuals rather than defects. Both are worth knowing before you enable it:
+Neither is solved. Both are limits rather than defects, they are worth knowing before you enable
+this, and yapm would rather write them down than let you find them in a retro.
 
-- **A proposal can echo the substance of somebody's anonymous card.** The model never saw the card;
-  the sentence came from the work graph, and a person and a model looked at the same cycle. But a
-  participant may *believe* their card was read, and that perception is real even though the leak is
-  not.
-- **A very small team's retro is partly self-identifying regardless of what any tool does.** In a
-  two-person retro, a team-level statement is nearly a per-person one. That is inherent to the
-  ceremony — dot voting already has it — not something the AI introduced.
+**A proposal can echo the substance of somebody's anonymous card.** Someone reads *"scope grew
+mid-cycle"* on the AI's list, having written almost that sentence on an anonymous card an hour
+earlier, and concludes the pipeline read it.
+
+It did not, and the reason is structural rather than a promise. The fact assembly names seven tables
+and no others — cycles, teams, issues, issue links, pull requests, CI checks, reviews — under a
+merge-blocking test that fails if that set is not *equal* to the list, and every retro content table
+(cards, drafts, votes, actions, the card→author binding) is outside it. There is no code path that
+could read a card, so there is nothing to switch off. What actually happened is that a person and a
+model looked at the same fortnight of work and reached the same conclusion — which is arguably the
+feature working. But **the perception is real even though the leak is impossible**, and knowing why
+it is impossible is the only thing that dissolves it.
+
+**A tally in a very small team is partly self-identifying.** "1 agreed, 1 disagreed" on a
+three-person team tells each responder what the other one said. In a two-person retro, any
+team-level statement is nearly a per-person one.
+
+This is inherent to counting anything at that size — [dot voting](/features/retrospectives/#dots)
+already has it, and yapm documented the same boundary there — and no design removes it. What yapm
+does do is refuse to make it worse: no reaction is readable by anybody before the stamp, the stamp is
+one moment rather than a live feed, and no surface anywhere pairs a name with a direction. On a small
+team, a tally is a conversation starter and not a secret ballot, and it is better to know that going
+in.
 
 ## Every number is yapm's
 
@@ -199,32 +313,35 @@ A category with no surviving proposal renders no heading — you will not see an
 The section sits directly below the seeded data panel and is reachable by Tab from it. Every chip is
 a real focusable control in the order the proposal cites them: an in-app reference is a button, and an
 external pull request or check is a link, so middle-click, copy-link and the screen-reader "link" role
-all work the way they should. Nothing here is a drag target and nothing requires a pointer.
+all work the way they should. The reaction toggles and the *Add as an action* control are the same:
+real buttons, next in the tab order after the evidence, activated with Enter or Space, and reporting
+their pressed state as `aria-pressed` rather than by colour. All four are also in the retro command
+palette. Nothing here is a drag target and nothing requires a pointer.
 
 Every colour and font resolves from a semantic token, so the section is correct in Warm, Focused and
 Editorial in both light and dark, and its text meets AA contrast in all six — asserted by a test
-rather than eyeballed.
+rather than eyeballed. Only *contested* takes the accent, because it is the routing signal; the other
+three verdicts are told apart by their words, so no meaning anywhere depends on hue.
 
 Reading the section waits on nothing: it renders from rows the browser already holds and computes no
-figure the seed panel has not already computed.
+figure the seed panel has not already computed. Reacting waits on nothing either — the toggle flips
+from the local write and reconciles in the background.
 
 ## Who sees it
 
-Any member of the retro's team, viewers included. It is read-only for everyone — there is no mutator
-anywhere in the product that can create or change a proposal, which is what makes "yapm computed
-these numbers" a fact about the code rather than a promise. A member of another team sees nothing, by
-the same team-scoped rule as the rest of the retro.
+Any member of the retro's team, viewers included. **Nobody can write a proposal** — there is no
+mutator anywhere in the product that can create or change one, which is what makes "yapm computed
+these numbers" a fact about the code rather than a promise. The only writes on this surface are the
+team's own: your private reaction, and the action item an agreed improvement can become. A viewer
+reads the proposals and their verdicts and cannot react, like every other write in a retro. A member
+of another team sees nothing, by the same team-scoped rule as the rest of the retro.
 
-Deleting a retro deletes its draft and every proposal with it.
+Deleting a retro deletes its draft, every proposal and every reaction with it. Action items created
+from a proposal survive, losing only their link back to it.
 
 ## What is next
 
-**Agreeing and disagreeing.** The next change adds a per-person reaction to each proposal — synced
-only to the person who cast it, with no admin bypass, exactly like your dots — and computes one
-verdict per proposal when the retro leaves `vote`. A single disagreement makes a proposal
-*contested* and sorts it to the top of the discussion, because a minority veto is how a quiet
-dissenter gets heard. An **agreed** improvement then becomes a real, numbered issue through the same
-conversion path a hand-written action already uses — and it never pre-fills an assignee.
-
-Until then, the honest description of this feature is the one on the section itself: it drafted this,
-and the team has not decided any of it.
+**Closing the loop.** A later change asks the obvious follow-up question at the *next* retro: did
+last cycle's improvements actually ship? The prior retro's agreed improvements and the issues they
+became are already linked, in both directions, by the provenance this change records — so the answer
+is a read over the work graph rather than a second thing to remember.

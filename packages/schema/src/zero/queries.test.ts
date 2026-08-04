@@ -18,6 +18,7 @@ import {
   PROJECT_GET_QUERY_NAME,
   PROJECTS_ALL_QUERY_NAME,
   queries,
+  RETRO_AI_REACTIONS_MINE_QUERY_NAME,
   RETRO_DETAIL_QUERY_NAME,
   RETRO_DRAFTS_MINE_QUERY_NAME,
   RETRO_VOTES_MINE_QUERY_NAME,
@@ -90,6 +91,7 @@ describe('the synced query registry', () => {
       [NOTIFICATIONS_MINE_QUERY_NAME, queries.notifications.mine],
       [SUBSCRIPTIONS_MINE_QUERY_NAME, queries.subscriptions.mine],
       [RETRO_VOTES_MINE_QUERY_NAME, queries.retroVotes.mine],
+      [RETRO_AI_REACTIONS_MINE_QUERY_NAME, queries.retroAiReactions.mine],
     ] as const) {
       expect(query.queryName).toBe(name)
       expect(mustGetQuery(queries, name)).toBe(query)
@@ -369,12 +371,13 @@ describe('retro queries', () => {
   })
 })
 
-describe('retro drafts and votes are self-scoped with no admin bypass', () => {
+describe('retro drafts, votes and AI reactions are self-scoped with no admin bypass', () => {
   const RETRO_ID = '019f8f00-0000-7000-8000-0000000000c1'
 
   it.each([
     ['retroDrafts.mine', queries.retroDrafts.mine, 'authorId'],
     ['retroVotes.mine', queries.retroVotes.mine, 'voterId'],
+    ['retroAiReactions.mine', queries.retroAiReactions.mine, 'userId'],
   ] as const)('%s filters on the verified ctx.userID alone', (_name, query, field) => {
     for (const ctx of [ADMIN, MEMBER, VIEWER]) {
       const where = JSON.stringify(astOfArgs(query, { retroId: RETRO_ID }, ctx).where)
@@ -393,6 +396,7 @@ describe('retro drafts and votes are self-scoped with no admin bypass', () => {
   it.each([
     ['retroDrafts.mine', queries.retroDrafts.mine],
     ['retroVotes.mine', queries.retroVotes.mine],
+    ['retroAiReactions.mine', queries.retroAiReactions.mine],
   ] as const)('%s denies a non-member and an unauthenticated caller', (_name, query) => {
     for (const ctx of [NON_MEMBER, undefined]) {
       expect(astOfArgs(query, { retroId: RETRO_ID }, ctx).where).toEqual(DENY_ALL_WHERE)

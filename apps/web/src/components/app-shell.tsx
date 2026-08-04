@@ -11,6 +11,7 @@ import { Switcher } from '@/components/switcher'
 import { ThemeControls } from '@/components/theme-controls'
 import { UserMenu } from '@/components/user-menu'
 import { InboxBadge } from '@/notifications/inbox-badge'
+import { PmDigestsEntry } from '@/pm-digest/digests-entry'
 import { useConnectionSummary } from '@/zero/connection'
 
 export function AppShell({ current, children }: { current: string; children: ReactNode }) {
@@ -25,6 +26,7 @@ export function AppShell({ current, children }: { current: string; children: Rea
         <div className="flex-1" />
         <ConnectionStatus connection={connection} />
         <SearchEntry />
+        <PmDigestsEntry />
         <InboxBadge />
         <ThemeControls />
         <UserMenu

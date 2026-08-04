@@ -18,6 +18,7 @@ export default defineConfig({
             { label: 'Delivery signals', slug: 'features/delivery-signals' },
             { label: 'Status automation', slug: 'features/auto-status' },
             { label: 'Cycle digest', slug: 'features/cycle-digest' },
+            { label: 'Product digest', slug: 'features/pm-digest' },
             { label: 'Retrospectives', slug: 'features/retrospectives' },
             { label: 'Retro AI draft', slug: 'features/retro-ai-draft' },
             { label: 'Notifications', slug: 'features/notifications' },

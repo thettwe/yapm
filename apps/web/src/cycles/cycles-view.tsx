@@ -28,6 +28,7 @@ import {
   formatCycleRange,
   partitionCycles,
 } from '@/cycles/model'
+import { PmDigestShareCard } from '@/cycles/pm-digest-card'
 import { type IssueRowData, issueKey, PRIORITY_TO_KIND, STATUS_TO_KIND } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
 import { openRetroArgs } from '@/retro/model'
@@ -275,6 +276,8 @@ function CyclePanel({
         issues={rawIssues}
         onOpenIssue={onOpenIssueId}
       />
+
+      <PmDigestShareCard cycleId={cycle.id} />
 
       <div className="flex-1">
         {issues.length === 0 ? (

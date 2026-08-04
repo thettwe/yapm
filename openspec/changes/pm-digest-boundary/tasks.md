@@ -138,27 +138,27 @@
 - [x] 8.1 Extend `apps/server/src/ai/admin-routes.ts` with the PM-disclosure policy read and write
       over `setPmDisclosurePolicy`, admin-gated by the existing middleware plus the accessor's own
       `canManage` belt-and-braces.
-- [ ] 8.2 Add the PM-disclosure block to the admin AI settings page in `apps/web/src/settings`:
+- [x] 8.2 Add the PM-disclosure block to the admin AI settings page in `apps/web/src/settings`:
       workspace switch, kill switch, and a per-team row with `pmVisible` and an audience picker over
       workspace members. Keyboard-first, theme tokens only, correct in all three presets light and
       dark at AA. Copy states plainly that the kill switch stops further reads and does not un-read.
-- [ ] 8.3 After a successful policy write, call the provider's `refresh({fresh: true})` so the
+- [x] 8.3 After a successful policy write, call the provider's `refresh({fresh: true})` so the
       caller's own credential picks up an audience change without a reload.
 
 ## 9. Reader and producing-team surfaces
 
-- [ ] 9.1 Add `apps/web/src/routes/digests.tsx` and the view under `apps/web/src/pm-digest/`. The
+- [x] 9.1 Add `apps/web/src/routes/digests.tsx` and the view under `apps/web/src/pm-digest/`. The
       route and its navigation entry MUST NOT render when the sync-session audience is empty, and no
       `useQuery` may be called in that case. Render the subject line, headline, sections, items and
       baked plain-text evidence labels, plus the "AI-generated · <model>" framing. No links from
       summarized content and no remote media.
-- [ ] 9.2 Add the "Shared with product" card to the cycle view beside the existing digest panel
+- [x] 9.2 Add the "Shared with product" card to the cycle view beside the existing digest panel
       (`apps/web/src/cycles/`): the full PM-facing text from `pmDigestReview.byCycle`, a **Publish**
       control when `ready` and unpublished, and after publish the "Shared with N readers outside this
       team" marker plus a **Retract** control whose copy states retraction does not un-read.
-- [ ] 9.3 Offer no publish control for a `pending`, `failed` or `ai_off` row; say what happened
+- [x] 9.3 Offer no publish control for a `pending`, `failed` or `ai_off` row; say what happened
       instead.
-- [ ] 9.4 Keyboard-first and token-only across both surfaces; verify in all three presets, light and
+- [x] 9.4 Keyboard-first and token-only across both surfaces; verify in all three presets, light and
       dark, at AA contrast.
 
 ## 10. Tests
@@ -202,15 +202,15 @@
 
 ## 11. Documentation
 
-- [ ] 11.1 New `apps/docs/src/content/docs/features/pm-digest.md`: what it is, the four switches, the
+- [x] 11.1 New `apps/docs/src/content/docs/features/pm-digest.md`: what it is, the four switches, the
       review-and-publish gate, why evidence is a label and not a link, what the producing team sees,
       and the honest statement that retraction does not un-read. **Do not use the words "auditable"
       or "retention-bounded"** — ROADMAP row 23 reserves them.
-- [ ] 11.2 Add it to the docs sidebar and cross-link from `features/cycle-digest.md`.
+- [x] 11.2 Add it to the docs sidebar and cross-link from `features/cycle-digest.md`.
 - [x] 11.3 Extend `self-hosting/ai-setup.md` with `AI_PM_DIGEST`, its default, its dependency on
       `AI_DIGEST_ON_CYCLE_CLOSE`, and the fact that a PM run is a second model call on the same
       BYO key.
 - [x] 11.4 Add `AI_PM_DIGEST` to `.env.example` (commented, showing the default).
-- [ ] 11.5 Update `ROADMAP.md` row 20 to built, and `README.md` where it lists the AI features.
+- [x] 11.5 Update `ROADMAP.md` row 20 to built, and `README.md` where it lists the AI features.
 - [x] 11.6 Append every implementation decision to `design.md` under
       "## Decisions made during implementation".

@@ -418,3 +418,87 @@ ordered by how much of the trust problem each solves:
 What is deliberately *not* built: a notification to the team when their digest is published (they
 published it), and a per-team disclosure history (change 23's audit view is the right home, and it
 is admin-scoped).
+
+### I8 — the route is registered for everybody; the audience gate lives inside it
+
+**Ambiguous:** task 9.1 says the route "MUST NOT render when the sync-session audience is empty".
+The literal reading is a route that only exists for named readers — but TanStack Router's route tree
+is a static, generated module that every client downloads, so a conditionally-registered route would
+put a permission fact into a table shipped to everyone, and its absence from that table would be
+readable without ever calling the server. That is the permission oracle this change exists to avoid,
+relocated into the bundle.
+
+**Chosen:** `/digests` is registered unconditionally like every other route, behind `Authenticated`
+like every other route, and the audience decides what the route COMPONENT renders. When the audience
+is empty the component returns nothing: no shell, no heading, no empty state — and, the part that
+matters, **no `useQuery` is constructed at all**, because the gate (`PmDigestsGate`) sits above the
+view (`PmDigestView`) rather than inside it. The unit test asserts the query count is zero rather
+than asserting the DOM is empty, since an empty DOM is compatible with a query that fired and
+returned nothing, and those two are not the same disclosure.
+
+The navigation entry reads the same `pmAudienceTeamIds` from the same sync-session state, so the
+entry and the surface cannot disagree about whether the reader has anything to read.
+
+### I9 — one narrative renderer, drawn by both audiences
+
+**Ambiguous:** the reader surface and the producing team's review card render the same content, and
+nothing in the plan says whether they share a component.
+
+**Chosen:** they share `PmDigestNarrative`, and that is a correctness property rather than an economy.
+"The team is the first reader" is only true if the team is shown the same text — a second render
+could drift and nobody would notice, because the two surfaces are never on screen together and no
+single person is likely to hold both entitlements. One component means there is no second render to
+drift.
+
+It is deliberately NOT the team-internal `digest-panel.tsx` renderer, which resolves evidence into
+clickable issues and external links. That resolution is the thing a PM must not get.
+
+### I10 — the review card renders nothing when there is no row, and no publish control off `ready`
+
+**Ambiguous:** what the producing team's cycle view shows when the workspace or the team has
+disclosure off.
+
+**Chosen:** nothing at all. With the switches off no `pm_digest` row is ever written, so the query
+returns nothing and the card is absent — the same absence a team gets before a cycle closes. A
+placeholder saying "product sharing is off for this team" would be a per-cycle advertisement for a
+setting that lives in one admin page, on a surface a team reads every cycle.
+
+For a row that exists but has nothing to release (`pending`, `failed`, `ai_off`) the card says what
+happened, and every one of those sentences ends "Nothing has left this team" — the only fact the
+team needs to be certain of. No publish control is rendered; the mutator would reject it anyway, and
+a control that exists to fail is worse than no control.
+
+A `ready` published row also renders no publish control, only Retract, so the audience-size snapshot
+the team is shown can never be silently overwritten by a second release.
+
+### I11 — the admin block writes one team at a time, and re-mints the caller's own credential
+
+**Ambiguous:** the audience picker edits a map; the plan does not say whether a write sends the whole
+map or one team.
+
+**Chosen:** one team per write — `{ teams: { [teamId]: { audience: [...] } } }` — matching the
+server's merge semantics exactly. Sending the whole map would make editing one team's readers a
+rewrite of every other team's, and two admins editing two different teams would silently clobber each
+other. The unit test asserts the request body carries the edited team alone.
+
+Two smaller calls fall out of that:
+
+- **An optimistic draft over the fetched policy.** The block is REST-backed, so without it every
+  click waits a round trip — which for a checkbox reads as a broken control. The draft is re-seeded
+  from the server's answer on every reload, so a rejected write reverts to what is actually stored
+  rather than to what was clicked.
+- **`refresh()` after every successful write**, which is the provider's `remint({ fresh: true })`
+  path. The audience is baked into the sync credential, so an admin who names themselves would
+  otherwise see nothing change until a reload — and would reasonably conclude the setting did not
+  work. This is the case the provider's own comment says that path exists for.
+
+### I12 — the docs page ships, the Playwright spec does not
+
+**Ambiguous only in sequencing.** Task 10.9's E2E is the one deliverable of this change that could
+not be verified in this pass: it needs `docker compose` and a Playwright run, and this pass was
+explicitly scoped to the fast gates because the open PR runs the full suite in CI.
+
+**Chosen:** write the feature page and leave 10.9 unchecked and honestly reported rather than pushing
+a spec that has never been executed. A blind E2E against a surface whose whole point is conditional
+absence is more likely to redden CI than to prove anything, and a red suite costs the next reader
+more than a missing test they were told about.

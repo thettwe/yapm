@@ -31,6 +31,7 @@ import {
   setAiProviderKey,
   updateAiConfig,
 } from '@/settings/ai'
+import { PmDisclosureSection } from '@/settings/pm-disclosure'
 
 const PROVIDER_LABELS: Record<AiProvider, string> = {
   anthropic: 'Anthropic (Claude)',
@@ -95,6 +96,10 @@ function AiSettingsAdmin() {
         <p className="text-sm text-status-urgent" role="alert">
           {error}
         </p>
+      ) : null}
+
+      {data?.status ? (
+        <PmDisclosureSection policy={data.status.pmDisclosure} onChanged={reload} />
       ) : null}
 
       <RetroDraftSection />

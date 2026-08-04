@@ -71,7 +71,15 @@ told in terms of **your product areas**: map path prefixes to area labels once a
 the cycle by area, bands each change by size, flags the sensitive areas it touched, and collapses
 tooling churn into one "N internal improvements" line, because yapm converts paths into labels
 *before* the model runs and **never reads a diff** — the file list is fetched under the GitHub
-permission you already granted, used, and thrown away ·
+permission you already granted, used, and thrown away · an off-by-default **product digest** — the
+one thing in yapm whose output crosses a permission boundary, and so the most refusing feature in it:
+four independent switches (an env toggle, a workspace switch, a per-team switch, and an explicit
+reader list) all have to agree, there is **no new role** — being named on a team's reader list *is*
+the entitlement, and it grants that team's product digest and nothing else — the producing team reads
+the exact text and releases it themselves before anybody outside can, evidence is baked as plain-text
+labels rather than links (a reader outside the team can open none of the targets), and the surface is
+cleanly *absent* rather than empty for anyone unnamed. Retraction stops further reads; it does not
+un-read, and the product says so in those words ·
 a **data-seeded retrospective**, opened automatically when a cycle closes, whose gather-data phase
 is already filled in from the team's own cycles (and from PR/CI data when a connector is
 configured), with **anonymity guaranteed at the storage layer** — the card→author binding lives in
@@ -126,8 +134,9 @@ the foundation (gateway, agent-as-actor tools, the AI-over-work-graph substrate)
 AI-facilitated retro's first half now drafts into a real retro. Next: **agreeing and disagreeing**
 with a drafted proposal — a reaction synced only to the person who cast it, a verdict computed once
 when the retro leaves voting, a single disagreement marking a proposal contested, and one keystroke
-from an agreed improvement to a real numbered issue — and a governed PM-facing digest that is the
-first AI output in yapm to cross a permission boundary. Then DORA and review-health metrics
+from an agreed improvement to a real numbered issue. The governed PM-facing digest that crosses a
+permission boundary is now in; what it still owes is retention and an admin view of what was
+disclosed. Then DORA and review-health metrics
 computed from the graph — team-level only, never individual scorecards. More connectors
 (GitLab, …) slot into the same framework with no feature-code change — inheriting the reality strip
 and the status automation above for free.

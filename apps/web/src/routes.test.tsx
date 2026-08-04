@@ -16,8 +16,14 @@ vi.mock('@/auth/use-auth-methods', () => ({
 }))
 
 vi.mock('@/zero/provider', () => ({
-  useSyncSession: () => ({ status: 'logged-out', userID: null, role: null, unavailable: false }),
-  useSyncControl: () => ({ retry: vi.fn() }),
+  useSyncSession: () => ({
+    status: 'logged-out',
+    userID: null,
+    role: null,
+    pmAudienceTeamIds: [],
+    unavailable: false,
+  }),
+  useSyncControl: () => ({ retry: vi.fn(), refresh: vi.fn() }),
 }))
 
 test('the login route presents the sign-in surface to unauthenticated users', async () => {
@@ -49,4 +55,20 @@ test('the search route is registered, parses its query and is gated behind authe
   const match = router.matchRoutes('/search', { q: 'qzt-alpha' })
   expect(match.at(-1)?.routeId).toBe('/search')
   expect(match.at(-1)?.search).toEqual({ q: 'qzt-alpha' })
+})
+
+// `/digests` is registered like any other route and is behind `Authenticated` first — whether the
+// caller has an audience is decided AFTER that, inside the route, and never by the router. A route
+// that existed only for named readers would be a permission fact encoded in the URL table, which
+// every client downloads. `pm-digest.test.tsx` owns the audience gate itself.
+test('the digests route is registered and gated behind authentication', async () => {
+  const router = createRouter({
+    routeTree,
+    history: createMemoryHistory({ initialEntries: ['/digests'] }),
+  })
+
+  render(<RouterProvider router={router} />)
+
+  expect(await screen.findByRole('heading', { name: /sign in to yapm/i })).toBeInTheDocument()
+  expect(router.matchRoutes('/digests', {}).at(-1)?.routeId).toBe('/digests')
 })

@@ -2784,6 +2784,70 @@ export const retroPresenceHeartbeat = defineMutator(
   },
 )
 
+export const publishPmDigestArgs = z.object({
+  id: z.string().min(1),
+  updatedAt: timestamp,
+})
+
+export type PublishPmDigestArgs = z.infer<typeof publishPmDigestArgs>
+
+interface PmDigestRow {
+  id: string
+  teamId: string
+  status: string
+  publishedAt: number | null
+}
+
+// THE ONLY TWO CLIENT-REACHABLE WRITES ON `pm_digest`, and the only thing in the product that moves
+// content across a permission boundary. Everything else about the row — its content, status,
+// provider, model, tokens and cost — is written server-side and has no mutator at all.
+//
+// NEITHER MINTS AN ID. Both address a row that already exists, so the mutator-rebase hazard the
+// UUIDv7-at-the-call-site rule exists for does not arise here at all.
+async function loadPmDigestForWrite(
+  tx: Transaction,
+  ctx: AuthContext,
+  id: string,
+): Promise<PmDigestRow> {
+  const row = (await tx.run(zql.pm_digest.where('id', id).one())) as PmDigestRow | undefined
+  if (!row) throw notAuthorized(id)
+  await assertTeamAccess(tx, ctx, row.teamId, id)
+  return row
+}
+
+// Publish authority is the PRODUCING TEAM, not the admin who configured the audience: the team owns
+// the work, the admin owns the policy. (A workspace admin can still publish because
+// `assertTeamAccess` already grants them every team — the existing write model, not a new grant.)
+//
+// `canWrite` runs BEFORE any existence check, so a viewer is rejected without learning whether the
+// row exists; the failure for a nonexistent id and for an unauthorized one is the same error.
+export const publishPmDigest = defineMutator(publishPmDigestArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  const digest = await loadPmDigestForWrite(tx, ctx, args.id)
+  // Only a completed run can be released, and only once: a `pending`, `failed` or `ai_off` row has
+  // nothing to disclose, and re-publishing would overwrite the audience-size snapshot the producing
+  // team's "shared with N readers" marker reports.
+  if (digest.status !== 'ready' || digest.publishedAt !== null) throw notAuthorized(args.id)
+  await tx.mutate.pm_digest.update({
+    id: args.id,
+    publishedAt: args.updatedAt,
+    updatedAt: args.updatedAt,
+  })
+})
+
+// Retraction stops FURTHER reads. It does not un-read, and the surface says so in words rather than
+// implying otherwise with a button label — which is the entire argument for the publish gate being
+// default-on in the first place.
+export const unpublishPmDigest = defineMutator(publishPmDigestArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadPmDigestForWrite(tx, ctx, args.id)
+  await tx.mutate.pm_digest.update({
+    id: args.id,
+    publishedAt: null,
+    updatedAt: args.updatedAt,
+  })
+})
+
 export const mutators = defineMutators({
   workspace: {
     rename: renameWorkspace,
@@ -2895,6 +2959,10 @@ export const mutators = defineMutators({
   retroPresence: {
     heartbeat: retroPresenceHeartbeat,
   },
+  pmDigest: {
+    publish: publishPmDigest,
+    unpublish: unpublishPmDigest,
+  },
 })
 
 export const RENAME_WORKSPACE_MUTATOR_NAME = 'workspace.rename'
@@ -2950,3 +3018,5 @@ export const CREATE_RETRO_ACTION_MUTATOR_NAME = 'retroAction.create'
 export const UPDATE_RETRO_ACTION_MUTATOR_NAME = 'retroAction.update'
 export const DELETE_RETRO_ACTION_MUTATOR_NAME = 'retroAction.delete'
 export const RETRO_PRESENCE_HEARTBEAT_MUTATOR_NAME = 'retroPresence.heartbeat'
+export const PUBLISH_PM_DIGEST_MUTATOR_NAME = 'pmDigest.publish'
+export const UNPUBLISH_PM_DIGEST_MUTATOR_NAME = 'pmDigest.unpublish'

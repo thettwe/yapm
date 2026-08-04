@@ -530,6 +530,13 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
       'savedViews.byTeam': { teamId },
       'digests.byCycle': { cycleId: cycle1 },
       'digests.byTeam': { teamId },
+      // The disclosure axis, inside the proof by construction for the same reason: covered ==
+      // registry, so a query added by a later change cannot escape the walk. All three carry NO
+      // identity dimension — a PM digest row has no author, no reader and no publisher column that
+      // syncs — so none of them needs an `IDENTITY_BY_DESIGN` entry.
+      'pmDigests.byCycle': { cycleId: cycle1 },
+      'pmDigests.inbox': undefined,
+      'pmDigestReview.byCycle': { cycleId: cycle1 },
       // The two AI-draft queries, inside the proof by construction: the walk asserts covered ==
       // registry, so a query this change added cannot escape it. Their rows carry NO identity
       // dimension at all, which is why no `IDENTITY_BY_DESIGN` entry is needed for either.

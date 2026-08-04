@@ -324,6 +324,76 @@ Note the layering: the env toggle is the *instance floor*, the workspace switch 
 `pmVisible` are the *workspace ceiling*, and the falsifiable "both switches off ⇒ nothing" check is
 enforced by configuration alone, so it holds regardless of how the instance is configured.
 
+### I3 — `pm_digest` declares ONE relationship after all, and the rule became narrower and enforceable
+
+**Ambiguous:** D1 and task 2.1 say the row has *no relationships of any kind*. That turned out to be
+incompatible with task 4.4, which requires the producing team to read the same row through
+`teamScoped` — because `teamScoped` scopes by a **correlated `whereExists('team', …)`**, and ZQL
+cannot correlate across a relationship the schema does not declare. Written with no relationships,
+`pmDigestReview.byCycle` throws at query-build time (`Cannot read properties of undefined (reading
+'team')`). The two halves of the design could not both be true.
+
+**Chosen:** declare exactly one relationship, `team`, and replace the blanket rule with a narrower
+one that is actually enforceable: **no query over `pm_digest` may call `.related(...)`**, asserted in
+`queries.test.ts` over every PM query's AST, and `schema-drift.test.ts` asserts the relationship set
+is exactly `['team']`.
+
+**Why.** `whereExists` is a filter — it syncs no row — so the disclosure risk D1 named (a
+`.related('cycle')` handing a reader a row their entitlement never covered) is untouched by its
+existence. There is deliberately **no `cycle` relationship**, so the row a PM would most plausibly be
+given by accident is not reachable at all. The alternatives were worse: a second axis on
+`AuthContext` carrying the caller's team memberships duplicates the membership model in the
+credential, and routing the review query through `cycle.related('pmDigest')` makes `pm_digest`
+reachable *from* a cycle query, which is strictly more surface. Losing the review query was not an
+option — it is the review half of the review-and-publish gate, which is maintainer decision 4.
+
+### I4 — `published_by` and `actor_id` are `text` with no foreign key
+
+**Ambiguous:** the build plan specifies `published_by → user(id) on delete set null` and
+`actor_id → user(id) on delete set null`. Every other user-shaped column in this repo
+(`issue.creator_id`, `attachment.uploader_id`, `retro.facilitator_id`, `notification.recipient_id`)
+is `text` with **no** FK, and `0017_attachments` records why: `user` is better-auth's table, created
+by ITS migrator at boot **after** the Kysely migrator runs, so a reference to it fails outright on a
+fresh instance.
+
+**Chosen:** `text`, no FK, matching the shipped convention. For `ai_disclosure_audit.actor_id` this
+is better than the specified behaviour rather than merely equivalent: an audit record whose actor
+silently became null when the account was deleted is a worse audit record.
+
+### I5 — the run's token counts and cost are written through the raw seam, in the same transaction
+
+**Ambiguous:** `input_token`, `output_token` and `estimated_cost_usd` are excluded from the Zero
+schema (D8), so `tx.mutate.pm_digest` cannot write them — but `getWorkspaceAiSpendUsd` needs the cost
+or the cap under-fires. The retro and cycle digests never hit this, because their equivalents *do*
+sync.
+
+**Chosen:** `upsertPmDigest` writes the synced columns through `tx.mutate` and then the three
+server-only columns through `(tx as ServerTransaction).dbTransaction.wrappedTransaction`, **in the
+same transaction**. A second, separate transaction was rejected: a crash between the two would drop
+a cost that was really spent, which is precisely the silent cap under-fire `cycle-digest.ts` calls
+out by name.
+
+### I6 — `pmDigest.publish` and `.unpublish` are `destructive` in the agent tool registry
+
+**Ambiguous:** `buildMutatorToolSpecs` throws for any mutator missing a classification, so the two
+new mutators had to be classified. Nothing in the plan said which.
+
+**Chosen:** both `destructive`. `publish` is the strongest case for that classification in the whole
+map — it is the one write in the product that moves content across a permission boundary, and it
+cannot be undone. `unpublish` is destructive too: it takes away an artifact people may be relying on
+and clears the audience-size snapshot the producing team was shown. Neither is a step a
+least-privilege agent run may take on its own.
+
+### I7 — a CI-check evidence id inherits its pull request's label
+
+**Ambiguous:** `buildPmEvidenceLabels` must produce a label per evidence id, and `CycleFacts` carries
+`ci_check` refs with no label of their own. Left unlabelled they would render as nothing.
+
+**Chosen:** a CI check inherits the label of the pull request it ran on (`ENG-142 · PR #331`), since
+"the check on that PR" is the only thing about it a reader outside the team could act on. An issue
+with no number still yields no label at all rather than a bare uuid — inventing one would be a
+number the model did not get from yapm.
+
 ### I2 — SCOPE §9 item 14: the producing team reviews first, and then sees a count
 
 **Decided at proposal time, because it is a schema field and a surface.**

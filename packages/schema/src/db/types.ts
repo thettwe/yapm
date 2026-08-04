@@ -1,6 +1,7 @@
 import type { ColumnType, Generated, Insertable, Selectable, Updateable } from 'kysely'
 import type {
   AiArtifactStatus,
+  AiDisclosureEvent,
   CiConclusion,
   ConnectorConfigData,
   ConnectorLinkSource,
@@ -28,6 +29,7 @@ import type {
 } from '../zero/context.js'
 import type { DigestConfidence, DigestContent } from '../zero/digest.js'
 import type { IssueFilter, IssueSort } from '../zero/filter.js'
+import type { StoredPmDigestContent } from '../zero/pm-digest.js'
 import type { RetroProposalCategory } from '../zero/retro/ai-draft.js'
 import type { RetroSeedRef } from '../zero/retro/seed.js'
 
@@ -387,6 +389,46 @@ export interface CycleDigestTable {
   updated_at: Generated<Timestamp>
 }
 
+// The PM-facing disclosure artifact (change 20). One row per cycle, written server-side only, and
+// UNPUBLISHED until a human releases it — `published_at` is the permission boundary, not a display
+// flag. Four columns here are deliberately ABSENT from the Zero schema: the token counts and
+// `estimated_cost_usd` are run internals the spend cap reads in SQL, and `published_by` is the one
+// identity column on the row, which a reader outside the team has no business receiving. The drift
+// test asserts all four asymmetries from both sides.
+export interface PmDigestTable {
+  id: string
+  cycle_id: string
+  team_id: string
+  status: Generated<AiArtifactStatus>
+  content: JsonOrNull<StoredPmDigestContent>
+  provider: Nullable<string>
+  model: Nullable<string>
+  input_token: Nullable<number>
+  output_token: Nullable<number>
+  estimated_cost_usd: Nullable<number>
+  generated_at: TimestampOrNull
+  published_at: TimestampOrNull
+  published_by: Nullable<string>
+  audience_size_at_publish: Nullable<number>
+  created_at: Generated<Timestamp>
+  updated_at: Generated<Timestamp>
+}
+
+// SERVER-ONLY, in the strongest sense this codebase has: present here and in the migrations, absent
+// from the Zero schema entirely (asserted alongside `retro_card_author`), so no client can name it
+// in any query. `detail` carries yapm-computed metadata ONLY — an audit record that quoted the
+// disclosure would be a second copy of it, sitting outside the kill switch.
+export interface AiDisclosureAuditTable {
+  id: string
+  workspace_id: string
+  team_id: Nullable<string>
+  actor_id: Nullable<string>
+  event: AiDisclosureEvent
+  pm_digest_id: Nullable<string>
+  detail: JsonWithDefault<Record<string, unknown>>
+  created_at: Generated<Timestamp>
+}
+
 // The retrospective. Nine Zero-synced tables plus ONE server-only table (`retro_card_author`),
 // which is in this interface and in the migrations but deliberately ABSENT from the Zero schema —
 // the drift test asserts that absence, exactly as it does for the sequence counters.
@@ -698,6 +740,8 @@ export interface DB {
   deployment: DeploymentTable
   issue_link: IssueLinkTable
   cycle_digest: CycleDigestTable
+  pm_digest: PmDigestTable
+  ai_disclosure_audit: AiDisclosureAuditTable
   retro: RetroTable
   retro_column: RetroColumnTable
   retro_draft: RetroDraftTable
@@ -805,6 +849,13 @@ export type NewIssueLink = Insertable<IssueLinkTable>
 export type CycleDigest = Selectable<CycleDigestTable>
 export type NewCycleDigest = Insertable<CycleDigestTable>
 export type CycleDigestUpdate = Updateable<CycleDigestTable>
+
+export type PmDigest = Selectable<PmDigestTable>
+export type NewPmDigest = Insertable<PmDigestTable>
+export type PmDigestUpdate = Updateable<PmDigestTable>
+
+export type AiDisclosureAudit = Selectable<AiDisclosureAuditTable>
+export type NewAiDisclosureAudit = Insertable<AiDisclosureAuditTable>
 
 export type Retro = Selectable<RetroTable>
 export type NewRetro = Insertable<RetroTable>

@@ -41,11 +41,21 @@ absent means AI stays off.
 | `AI_DEFAULT_PROVIDER` | `anthropic` \| `google` \| `openai` | which of the above is the instance default; enables AI without a DB config row |
 | `AI_DIGEST_ON_CYCLE_CLOSE` | `true` (default) \| `false` | gates the cycle-digest pre-compute job |
 | `AI_RETRO_DRAFT` | `true` (default) \| `false` | gates the [retro AI draft](/features/retro-ai-draft/) background pass |
+| `AI_PM_DIGEST` | `true` \| `false` (default) | gates the PM-facing cycle summary; requires `AI_DIGEST_ON_CYCLE_CLOSE=true` |
 
 A per-workspace UI key wins over the instance-default env key for the same provider.
 
-The two feature gates are deliberately **independent**: a team may want one artifact and not the
-other, and both spend on the same key, so turning one off must never silently turn the other off.
+The feature gates are deliberately **independent**: a team may want one artifact and not the
+other, and all of them spend on the same key, so turning one off must never silently turn another off.
+
+`AI_PM_DIGEST` defaults to **false** while the other two default to true, and the difference is not
+an oversight. It is the only one of the three whose output is read by somebody outside the team that
+produced it, so upgrading into it must never switch it on for you. It also runs *inside* the
+cycle-digest job rather than on a job of its own, so `AI_PM_DIGEST=true` with
+`AI_DIGEST_ON_CYCLE_CLOSE=false` describes a pass that would never run: yapm **refuses to boot** and
+names both variables, rather than starting healthy and quietly doing nothing. Turning it on generates
+nothing until a workspace admin turns disclosure on, turns it on for a specific team, and names the
+people who may read it.
 Setting `AI_RETRO_DRAFT=false` stops the background pass entirely. An opted-in team's reveal still
 stamps a pending row, and with nothing to complete it the retro shows its drafting line for a minute
 or two and then falls back to the team's own data panel — no error, and nothing stuck on screen. The
@@ -61,11 +71,16 @@ own. Neither runs on an instance that has not configured AI.
 |---|---|---|
 | [Cycle digest](/features/cycle-digest/) | none — on for every team once AI is on | a cycle closes, pre-computed off the hot path |
 | [Retro AI draft](/features/retro-ai-draft/) | **per team, off by default**, in *Settings → AI* | a facilitator advances a retro out of `brainstorm` |
+| PM cycle summary | **per workspace and per team, both off by default**, in *Settings → AI* | a cycle closes, immediately after the team's own digest and over the same facts |
 
 The retro draft's generation is **lazy** on purpose, and that is the spend model as much as it is the
 safety model: a cycle that closes into a retro nobody ever runs costs **nothing**, because nothing is
 generated until somebody reveals the board. There is no sweep over old retros and no backfill when you
 enable a team.
+
+The PM summary is a **second model call on the same key** for every completed cycle of a team you
+have turned it on for, so it roughly doubles that team's digest spend. It is skipped before any model
+call for a team whose switch is off, so a team you never enable costs nothing at all.
 
 ## Choosing a model
 

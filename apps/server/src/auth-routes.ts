@@ -5,6 +5,7 @@ import {
   bootstrapFirstAdmin,
   inviteEmailTarget,
   lookupWorkspaceRole,
+  resolvePmAudienceTeamIds,
   seedDemoContent,
 } from '@yapm/schema/db'
 import { Hono } from 'hono'
@@ -109,11 +110,20 @@ export function createAuthRoutes(options: AuthRoutesOptions): Hono {
     // context. The server still verifies the token and re-resolves the role per request,
     // so this value never grants authority on its own.
     const role = await lookupWorkspaceRole(db, user.id)
+    // The disclosure audience, beside the role and advisory for exactly the same reason: the server
+    // re-resolves it per `/query` request, so this copy only decides what the client's local replica
+    // renders — and the replica only ever holds rows the SERVER's evaluation returned. A client that
+    // forges this array sees the same nothing a client that forges `role: 'admin'` sees today.
+    //
+    // It is also what lets a surface ask "is my audience empty" without issuing a query, which is how
+    // the reader surface stays CLEANLY ABSENT rather than rendering an empty state that announces the
+    // existence of an artifact to someone who cannot act on it.
+    const pmAudienceTeamIds = await resolvePmAudienceTeamIds(db, user.id)
     // `expiresAt` (epoch seconds) lets the client re-mint before the credential dies instead
     // of after the socket breaks. Additive and optional: a client that ignores it falls back
     // to a fixed timer.
     const { token, expiresAt } = await auth.issueSyncToken(c.req.raw.headers)
-    return c.json({ token, userID: user.id, role, expiresAt })
+    return c.json({ token, userID: user.id, role, pmAudienceTeamIds, expiresAt })
   })
 
   // Delivery only. The invite ROW is created by the shared `invite.create` mutator, which the

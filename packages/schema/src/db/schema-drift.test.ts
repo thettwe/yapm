@@ -1,6 +1,8 @@
 import { type Kysely, sql } from 'kysely'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { AI_ARTIFACT_STATUS_CHECK, AI_DISCLOSURE_EVENT_CHECK } from '../zero/context.js'
 import { tableShapes } from '../zero/introspect.js'
+import { schema } from '../zero/schema.js'
 import { createDatabase } from './client.js'
 import { migrateToLatest } from './migrate.js'
 import type { DB } from './types.js'
@@ -264,6 +266,41 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     created_at: { nullable: false, hasDefault: true },
     updated_at: { nullable: false, hasDefault: true },
   },
+  // The PM disclosure artifact (change 20). Present in the Kysely DB interface and in the Zero
+  // schema, but FOUR of its columns are deliberately absent from the latter (`ZERO_OMITTED_COLUMNS`,
+  // asserted below): the token counts and `estimated_cost_usd` are run internals, and `published_by`
+  // is the one identity column on a row that is read outside the producing team.
+  pm_digest: {
+    id: { nullable: false, hasDefault: false },
+    cycle_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: false, hasDefault: false },
+    status: { nullable: false, hasDefault: true },
+    content: { nullable: true, hasDefault: false },
+    provider: { nullable: true, hasDefault: false },
+    model: { nullable: true, hasDefault: false },
+    input_token: { nullable: true, hasDefault: false },
+    output_token: { nullable: true, hasDefault: false },
+    estimated_cost_usd: { nullable: true, hasDefault: false },
+    generated_at: { nullable: true, hasDefault: false },
+    published_at: { nullable: true, hasDefault: false },
+    published_by: { nullable: true, hasDefault: false },
+    audience_size_at_publish: { nullable: true, hasDefault: false },
+    created_at: { nullable: false, hasDefault: true },
+    updated_at: { nullable: false, hasDefault: true },
+  },
+  // THE DISCLOSURE BOUNDARY'S EVIDENCE. Server-only: in the Kysely DB interface and the migrations,
+  // and deliberately absent from the Zero schema (asserted below, exactly as `retro_card_author` is),
+  // so no client can name it in any query.
+  ai_disclosure_audit: {
+    id: { nullable: false, hasDefault: false },
+    workspace_id: { nullable: false, hasDefault: false },
+    team_id: { nullable: true, hasDefault: false },
+    actor_id: { nullable: true, hasDefault: false },
+    event: { nullable: false, hasDefault: false },
+    pm_digest_id: { nullable: true, hasDefault: false },
+    detail: { nullable: false, hasDefault: true },
+    created_at: { nullable: false, hasDefault: true },
+  },
   // The retro's nine team-scoped, Zero-synced tables: present in BOTH the Kysely DB interface and the
   // Zero schema, so they must match Postgres on both axes.
   retro: {
@@ -502,7 +539,20 @@ async function createAuthUserTable(db: Kysely<DB>): Promise<void> {
 // artifact state, and syncing it would put job internals on every client; `team.ai_retired_spend_usd`
 // is billing accounting the spend cap reads server-side, and syncing it would push a team-row update
 // to every client every time a facilitator rewinds a retro.
-const ZERO_OMITTED_COLUMNS = new Set(['retro_ai_draft.claimed_at', 'team.ai_retired_spend_usd'])
+// `pm_digest`'s four entries are the strongest statement in this set, because they are the only ones
+// whose reader is OUTSIDE the producing team: the two token counts and `estimated_cost_usd` are run
+// internals the spend cap reads in SQL, and `published_by` is the one identity column on the row —
+// syncing it would tell a PM which individual released a digest, which is accountability pointed the
+// wrong way. The rule for a future column on this table: safe for a reader outside the team, or
+// server-only.
+const ZERO_OMITTED_COLUMNS = new Set([
+  'retro_ai_draft.claimed_at',
+  'team.ai_retired_spend_usd',
+  'pm_digest.input_token',
+  'pm_digest.output_token',
+  'pm_digest.estimated_cost_usd',
+  'pm_digest.published_by',
+])
 
 const DATABASE_URL = process.env.DATABASE_URL
 
@@ -563,6 +613,10 @@ describe('server-only tables are excluded from the Zero schema', () => {
       // schema, every client replicates the full text of every team it can read — and the
       // team-scoped predicate that guards the search route stops being the only way in.
       'search_document',
+      // The disclosure record. If it ever appears in the Zero schema, the evidence that a disclosure
+      // happened becomes a synced artifact — readable, and therefore arguable about, by the people it
+      // is evidence against. It is written server-side and read by nobody in this change.
+      'ai_disclosure_audit',
     ]) {
       expect(Object.keys(KYSELY_DB)).toContain(name)
       expect(zeroTables).not.toContain(name)
@@ -792,6 +846,78 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
   it('still keeps retro_card_author out of the Zero schema', () => {
     expect(tableShapes().map((candidate) => candidate.serverName)).not.toContain(
       'retro_card_author',
+    )
+  })
+
+  // The disclosure record, asserted the same way and for the same kind of reason: it exists in
+  // Postgres and has no Zero table, so no query can name it.
+  it('keeps ai_disclosure_audit in Postgres and out of the Zero schema', () => {
+    expect(tables.map((candidate) => candidate.name)).toContain('ai_disclosure_audit')
+    expect(tableShapes().map((candidate) => candidate.serverName)).not.toContain(
+      'ai_disclosure_audit',
+    )
+  })
+
+  // The four columns that exist for the spend cap and the audit record and must never reach a reader
+  // outside the producing team. Asserted from BOTH sides so neither half can drift silently.
+  it.each([
+    ['input_token', 'int4'],
+    ['output_token', 'int4'],
+    ['estimated_cost_usd', 'float8'],
+    ['published_by', 'text'],
+  ])('keeps pm_digest.%s in Postgres and out of the Zero schema', (column, dataType) => {
+    const actual = tables.find((candidate) => candidate.name === 'pm_digest')
+    const found = actual?.columns.find((candidate) => candidate.name === column)
+    expect(found, `pm_digest.${column} is missing from Postgres`).toBeDefined()
+    expect(found?.dataType).toBe(dataType)
+    expect(found?.isNullable).toBe(true)
+
+    const shape = tableShapes().find((candidate) => candidate.serverName === 'pm_digest')
+    expect(shape?.columns.map((candidate) => candidate.serverName)).not.toContain(column)
+    expect(ZERO_OMITTED_COLUMNS.has(`pm_digest.${column}`)).toBe(true)
+  })
+
+  // `published_at` is a PERMISSION fact, not a display flag: the audience predicate filters on it, so
+  // it must sync (the producing team's own review surface reads it too) and it must be nullable.
+  it('syncs pm_digest.published_at as an optional number', () => {
+    const shape = tableShapes().find((candidate) => candidate.serverName === 'pm_digest')
+    const found = shape?.columns.find((candidate) => candidate.serverName === 'published_at')
+    expect(found, 'pm_digest.published_at is missing from the Zero schema').toBeDefined()
+    expect(found?.type).toBe('number')
+    expect(found?.optional).toBe(true)
+  })
+
+  // THE PM DIGEST ROW REACHES EXACTLY ONE TABLE, and only as a correlation target: `teamScoped`
+  // scopes by `whereExists('team', …)`, which a relationship-free table cannot express, so without
+  // this the producing team could not read their own unpublished digest. There is NO `cycle`
+  // relationship — a reader outside the team must not be able to reach a cycle row even by accident
+  // — and `queries.test.ts` asserts that no PM query traverses anything at all.
+  it('gives pm_digest exactly one relationship, and it is not the cycle', () => {
+    const relationships = (schema as unknown as { relationships: Record<string, unknown> })
+      .relationships
+    expect(Object.keys((relationships.pm_digest ?? {}) as Record<string, unknown>)).toEqual([
+      'team',
+    ])
+  })
+
+  // Both CHECKs, spelled from the SAME exported constants the migration wrapped in `sql.raw`, so a
+  // later migration cannot drift from this one.
+  it('constrains pm_digest.status and ai_disclosure_audit.event in Postgres', async () => {
+    const digestChecks = (await checkConstraints(database.db, 'pm_digest')).map((definition) =>
+      definition.replace(/\s+/gu, ' '),
+    )
+    expect(digestChecks.join(' ')).toContain("'pending'")
+    expect(digestChecks.join(' ')).toContain("'ai_off'")
+    expect(AI_ARTIFACT_STATUS_CHECK).toBe("status in ('pending', 'ready', 'failed', 'ai_off')")
+
+    const auditChecks = (await checkConstraints(database.db, 'ai_disclosure_audit')).map(
+      (definition) => definition.replace(/\s+/gu, ' '),
+    )
+    for (const event of ['policy_changed', 'generated', 'published', 'unpublished']) {
+      expect(auditChecks.join(' ')).toContain(`'${event}'`)
+    }
+    expect(AI_DISCLOSURE_EVENT_CHECK).toBe(
+      "event in ('policy_changed', 'generated', 'published', 'unpublished')",
     )
   })
 

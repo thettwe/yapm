@@ -45,6 +45,11 @@ interface SyncSessionRecord {
   userID: string | null
   token: string | null
   role: WorkspaceRole | null
+  // Stored as a JOINED STRING rather than an array, and that is not a micro-optimization: every
+  // re-mint returns a fresh array, and an array in the `context` memo's dependency list would give
+  // the Zero client a new options identity on every refresh — reopening IndexedDB and rehydrating
+  // every query. A string compares by value, so a re-mint that changes nothing changes nothing.
+  pmAudienceKey: string
   expiresAt: number | null
   fetchedAt: number
   unavailable: boolean
@@ -58,6 +63,7 @@ const PENDING: SyncSessionRecord = {
   userID: null,
   token: null,
   role: null,
+  pmAudienceKey: '',
   expiresAt: null,
   fetchedAt: 0,
   unavailable: false,
@@ -79,6 +85,7 @@ export function applyCredential(
         userID: result.userID,
         token: result.token,
         role: result.role,
+        pmAudienceKey: [...result.pmAudienceTeamIds].sort().join(','),
         expiresAt: result.expiresAt,
         fetchedAt: nowMs,
         unavailable: false,
@@ -113,13 +120,20 @@ export interface SyncSessionState {
   status: SyncStatus
   userID: string | null
   role: WorkspaceRole | null
+  // Empty for everyone until an administrator turns disclosure on and names somebody. A surface
+  // reads this to decide whether it EXISTS — which is how the disclosure reader stays cleanly absent
+  // without issuing a query whose emptiness would have said the same thing more loudly.
+  pmAudienceTeamIds: readonly string[]
   unavailable: boolean
 }
+
+const EMPTY_AUDIENCE: readonly string[] = []
 
 const SyncSessionContext = createContext<SyncSessionState>({
   status: 'pending',
   userID: null,
   role: null,
+  pmAudienceTeamIds: EMPTY_AUDIENCE,
   unavailable: false,
 })
 
@@ -414,15 +428,22 @@ export function ZeroRoot({ children }: { children: ReactNode }) {
   useProactiveRefresh(session, remint)
   useUnavailableRetry(session, retry)
 
-  const { userID, token, role } = session
+  const { userID, token, role, pmAudienceKey } = session
+
+  // Rebuilt from the joined key so both memos below depend on a VALUE. Advisory: the server
+  // re-evaluates the audience on every query, so this only decides what the local replica renders.
+  const pmAudienceTeamIds = useMemo<readonly string[]>(
+    () => (pmAudienceKey === '' ? EMPTY_AUDIENCE : pmAudienceKey.split(',')),
+    [pmAudienceKey],
+  )
 
   // `ZeroProvider` recreates the whole Zero instance when any non-`auth` option changes
   // identity — reopening IndexedDB and rehydrating every query. `context` is the only object
   // among them, so it is memoized on its values: a re-mint that keeps the same identity and
   // role must refresh `auth` in place, not tear the client down.
   const context = useMemo<AuthContext | undefined>(
-    () => (userID === null ? undefined : { userID, role }),
-    [userID, role],
+    () => (userID === null ? undefined : { userID, role, pmAudienceTeamIds }),
+    [userID, role, pmAudienceTeamIds],
   )
 
   const options = useMemo(
@@ -442,8 +463,14 @@ export function ZeroRoot({ children }: { children: ReactNode }) {
 
   const control = useMemo<SyncControl>(() => ({ refresh, retry }), [refresh, retry])
   const sessionState = useMemo<SyncSessionState>(
-    () => ({ status: session.status, userID, role, unavailable: session.unavailable }),
-    [session.status, userID, role, session.unavailable],
+    () => ({
+      status: session.status,
+      userID,
+      role,
+      pmAudienceTeamIds,
+      unavailable: session.unavailable,
+    }),
+    [session.status, userID, role, pmAudienceTeamIds, session.unavailable],
   )
 
   return (

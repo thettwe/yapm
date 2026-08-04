@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { newId } from '../id.js'
 import type { AreaMap } from '../zero/areas.js'
 import type { AuthContext } from '../zero/context.js'
-import { getAiConfig, getRedactedAiStatus, upsertAiConfig } from './ai-config.js'
+import { emptyAiConfigData, getAiConfig, getRedactedAiStatus, upsertAiConfig } from './ai-config.js'
 import { createDatabase, type Database } from './client.js'
 import { ConnectorAuthorizationError } from './connector.js'
 import { migrateToLatest } from './migrate.js'
@@ -64,7 +64,7 @@ describe.skipIf(DATABASE_URL === undefined)('AI area map persistence', () => {
       id: newId(),
       workspaceId,
       enabled: true,
-      config: { models: {}, areas, spendCapUsd: 20 },
+      config: { ...emptyAiConfigData(), areas, spendCapUsd: 20 },
     })
 
     const stored = await getAiConfig(database.db, workspaceId)
@@ -94,7 +94,7 @@ describe.skipIf(DATABASE_URL === undefined)('AI area map persistence', () => {
       id: newId(),
       workspaceId,
       enabled: true,
-      config: { models: {}, areas },
+      config: { ...emptyAiConfigData(), areas },
     })
     // Toggling `enabled` with no `config` must leave the stored blob — and the map — untouched.
     await upsertAiConfig(database.db, admin, { id: newId(), workspaceId, enabled: false })
@@ -122,14 +122,14 @@ describe.skipIf(DATABASE_URL === undefined)('AI area map persistence', () => {
       id: newId(),
       workspaceId,
       enabled: true,
-      config: { models: {}, areas },
+      config: { ...emptyAiConfigData(), areas },
     })
     for (const ctx of [member, viewer, undefined]) {
       await expect(
         upsertAiConfig(database.db, ctx, {
           id: newId(),
           workspaceId,
-          config: { models: {}, areas: [] },
+          config: { ...emptyAiConfigData(), areas: [] },
         }),
       ).rejects.toBeInstanceOf(ConnectorAuthorizationError)
       await expect(getRedactedAiStatus(database.db, ctx, workspaceId)).rejects.toBeInstanceOf(
@@ -145,7 +145,7 @@ describe.skipIf(DATABASE_URL === undefined)('AI area map persistence', () => {
       id: newId(),
       workspaceId,
       enabled: true,
-      config: { models: {}, areas },
+      config: { ...emptyAiConfigData(), areas },
     })
     const status = await getRedactedAiStatus(database.db, admin, workspaceId)
     expect(status?.areas).toEqual(areas)

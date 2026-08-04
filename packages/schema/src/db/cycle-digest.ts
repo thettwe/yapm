@@ -32,13 +32,23 @@ export async function getWorkspaceAiSpendUsd(db: Kysely<DB>, workspaceId: string
     .where('team.workspace_id', '=', workspaceId)
     .where('retro_ai_draft.status', '=', 'ready')
 
+  // The PM disclosure artifact (change 20). A second model call on the SAME BYO key for every
+  // completed cycle of a disclosure-enabled team, so leaving it out of this union would let a capped
+  // workspace spend roughly twice its cap without the cap ever firing.
+  const pmDigests = db
+    .selectFrom('pm_digest')
+    .innerJoin('team', 'team.id', 'pm_digest.team_id')
+    .select('pm_digest.estimated_cost_usd as cost')
+    .where('team.workspace_id', '=', workspaceId)
+    .where('pm_digest.status', '=', 'ready')
+
   const retired = db
     .selectFrom('team')
     .select(sql<number | null>`team.ai_retired_spend_usd`.as('cost'))
     .where('team.workspace_id', '=', workspaceId)
 
   const row = await db
-    .selectFrom(digests.unionAll(retroDrafts).unionAll(retired).as('artifact'))
+    .selectFrom(digests.unionAll(retroDrafts).unionAll(pmDigests).unionAll(retired).as('artifact'))
     .select((eb) => eb.fn.coalesce(eb.fn.sum('artifact.cost'), sql<number>`0`).as('total'))
     .executeTakeFirst()
   return Number(row?.total ?? 0)

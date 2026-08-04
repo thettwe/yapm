@@ -59,6 +59,7 @@ const SESSION: SyncCredentialResult = {
   userID: 'user-1',
   token: 'jwt-1',
   role: 'member',
+  pmAudienceTeamIds: [],
   expiresAt: null,
 }
 

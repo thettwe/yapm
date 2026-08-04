@@ -43,6 +43,7 @@ import {
   moveRetroCardArgs,
   mutators,
   openRetroForCycleArgs,
+  publishPmDigestArgs,
   removeIssueLabelArgs,
   removeMemberArgs,
   removeTeamMemberArgs,
@@ -181,6 +182,14 @@ const MUTATOR_TOOL_KINDS: Record<string, ToolKind> = {
   'retroAction.update': 'write',
   'retroAction.delete': 'destructive',
   'retroPresence.heartbeat': 'write',
+  // BOTH DESTRUCTIVE, and `publish` is the strongest case for that classification in the whole map:
+  // it is the one write in the product that moves content across a permission boundary, and it
+  // cannot be undone — retraction stops further reads and un-reads nothing. `unpublish` is
+  // destructive too, because it takes away an artifact people may be relying on and clears the
+  // audience-size snapshot the producing team was shown. Neither is a step a least-privilege agent
+  // run may take on its own.
+  'pmDigest.publish': 'destructive',
+  'pmDigest.unpublish': 'destructive',
 }
 
 // Each mutator name -> its exported Zod args schema (the tool `inputSchema`).
@@ -255,6 +264,8 @@ const MUTATOR_TOOL_ARGS: Record<string, z.ZodType> = {
   'retroAction.update': updateRetroActionArgs,
   'retroAction.delete': deleteRetroActionArgs,
   'retroPresence.heartbeat': retroPresenceHeartbeatArgs,
+  'pmDigest.publish': publishPmDigestArgs,
+  'pmDigest.unpublish': publishPmDigestArgs,
 }
 
 // Every mutator name in the `defineMutators` registry, e.g. `issue.setStatus`. The registry also

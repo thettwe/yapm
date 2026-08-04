@@ -189,6 +189,34 @@ describe('loadEnv', () => {
     expect(aiEnv(env)).toEqual({ keys: {}, defaultProvider: null })
   })
 
+  // The PM disclosure pass is default-OFF, and the default differs from the internal digest's on
+  // purpose: inheriting `true` would have switched disclosure generation on for every instance at
+  // upgrade.
+  it('leaves the PM disclosure pass off by default', () => {
+    expect(loadEnv({ ...VALID }).AI_PM_DIGEST).toBe('false')
+    expect(loadEnv({ ...VALID, AI_PM_DIGEST: 'TRUE ' }).AI_PM_DIGEST).toBe('true')
+  })
+
+  // The PM pass runs inside the cycle-digest worker, so this combination describes a job that would
+  // never run. Booting healthy and silently doing nothing is the failure this refuses.
+  it('fast-fails AI_PM_DIGEST=true while the digest job is off, naming both variables', () => {
+    try {
+      loadEnv({ ...VALID, AI_PM_DIGEST: 'true', AI_DIGEST_ON_CYCLE_CLOSE: 'false' })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      expect(error).toBeInstanceOf(EnvValidationError)
+      const issue = (error as EnvValidationError).issues[0]
+      expect(issue?.variable).toBe('AI_PM_DIGEST')
+      expect(issue?.message).toContain('AI_DIGEST_ON_CYCLE_CLOSE')
+    }
+  })
+
+  it('accepts AI_PM_DIGEST=true alongside the digest job', () => {
+    expect(
+      loadEnv({ ...VALID, AI_PM_DIGEST: 'true', AI_DIGEST_ON_CYCLE_CLOSE: 'true' }).AI_PM_DIGEST,
+    ).toBe('true')
+  })
+
   it('exposes instance-default AI provider keys and the default provider via aiEnv', () => {
     const env = loadEnv({
       ...VALID,

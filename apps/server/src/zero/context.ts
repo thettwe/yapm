@@ -24,6 +24,13 @@ export function resolvedContext(resolution: AuthResolution): AuthContext | undef
 export interface SessionContextResolverOptions {
   verifyToken: (token: string) => Promise<VerifiedToken | undefined>
   lookupRole: (userID: string) => Promise<WorkspaceRole | null>
+  // The second authorization axis, resolved per request from admin-gated server-only configuration.
+  // THIS IS THE AUTHORITATIVE COPY: it is what `/query` evaluates `pmAudienceScoped` against, and the
+  // array the sync-credential endpoint hands the client is advisory, exactly as `role` already is.
+  //
+  // Optional so an instance (or a test) that does not wire it resolves every caller to no audience —
+  // the safe direction, and the same thing a credential minted before this change does.
+  lookupPmAudience?: (userID: string) => Promise<readonly string[]>
 }
 
 function bearerToken(request: Request): string | undefined {
@@ -51,6 +58,10 @@ export function createSessionContextResolver(
     if (verified === undefined) return CREDENTIAL_REJECTED
 
     const role = await options.lookupRole(verified.sub)
-    return { kind: 'authenticated', ctx: { userID: verified.sub, role } }
+    const pmAudienceTeamIds = (await options.lookupPmAudience?.(verified.sub)) ?? []
+    return {
+      kind: 'authenticated',
+      ctx: { userID: verified.sub, role, pmAudienceTeamIds },
+    }
   }
 }

@@ -10,10 +10,14 @@ function request(headers: Record<string, string> = {}): Request {
 function resolver(overrides: {
   verifyToken?: (token: string) => Promise<VerifiedToken | undefined>
   lookupRole?: (userID: string) => Promise<WorkspaceRole | null>
+  lookupPmAudience?: (userID: string) => Promise<readonly string[]>
 }) {
   return createSessionContextResolver({
     verifyToken: overrides.verifyToken ?? (async () => undefined),
     lookupRole: overrides.lookupRole ?? (async () => null),
+    ...(overrides.lookupPmAudience === undefined
+      ? {}
+      : { lookupPmAudience: overrides.lookupPmAudience }),
   })
 }
 
@@ -56,9 +60,12 @@ describe('createSessionContextResolver', () => {
       lookupRole: async (userID) => (userID === 'user-1' ? 'member' : null),
     })
 
+    // The audience resolves EMPTY when no `lookupPmAudience` is wired — the safe direction, and the
+    // same thing a credential minted before that resolver existed produces.
     expect(resolvedContext(await resolve(request({ authorization: 'Bearer good' })))).toEqual({
       userID: 'user-1',
       role: 'member',
+      pmAudienceTeamIds: [],
     })
   })
 
@@ -71,6 +78,23 @@ describe('createSessionContextResolver', () => {
     expect(resolvedContext(await resolve(request({ authorization: 'Bearer good' })))).toEqual({
       userID: 'user-2',
       role: null,
+      pmAudienceTeamIds: [],
+    })
+  })
+
+  // The authoritative copy of the second authorization axis: this is what `/query` evaluates
+  // `pmAudienceScoped` against, and the client's copy is advisory in exactly the way `role` is.
+  it('resolves the PM disclosure audience alongside the role', async () => {
+    const resolve = resolver({
+      verifyToken: async () => ({ sub: 'user-3', expiresAt: null }),
+      lookupRole: async () => 'viewer',
+      lookupPmAudience: async (userID) => (userID === 'user-3' ? ['team-a'] : []),
+    })
+
+    expect(resolvedContext(await resolve(request({ authorization: 'Bearer good' })))).toEqual({
+      userID: 'user-3',
+      role: 'viewer',
+      pmAudienceTeamIds: ['team-a'],
     })
   })
 

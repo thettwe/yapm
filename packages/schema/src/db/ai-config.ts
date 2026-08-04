@@ -21,9 +21,41 @@ export const AI_CONNECTOR_PROVIDER = 'ai'
 
 const aiProviderSchema = z.enum(AI_PROVIDERS)
 
+// The per-team half of the disclosure policy: whether this team's cycles produce a PM digest at all,
+// and exactly which workspace members may read one once a human publishes it. A RECORD keyed by team
+// id rather than an ordered array (the `areas` decision does not transfer — order is not semantic
+// here), so editing one team is a merge instead of a wholesale replace.
+export const pmDisclosureTeamSchema = z.object({
+  pmVisible: z.boolean().default(false),
+  audience: z.array(z.string()).default([]),
+})
+
+export type PmDisclosureTeamPolicy = z.infer<typeof pmDisclosureTeamSchema>
+
+// THE FOUR SWITCHES, ALL DEFAULT-OFF, and all of them here rather than in a new table: this blob is
+// already admin-gated, already server-only, and already never syncs. `.default()` on every field is
+// what makes a config blob written before this change parse to all-off instead of failing — an
+// instance that upgrades into this capability discloses nothing until an administrator acts.
+//
+// NOT `connector_installation.repo_mapping`, which is typed `Record<string, string>` and read with
+// `repo_mapping ->> ${repoFullName}`: growing its value shape breaks a live SQL read.
+export const pmDisclosureSchema = z
+  .object({
+    // The workspace switch.
+    enabled: z.boolean().default(false),
+    // The admin kill switch. While set, every audience resolves empty regardless of everything else.
+    // It stops further reads; it does not un-read, and the surface says so.
+    killed: z.boolean().default(false),
+    teams: z.record(z.string(), pmDisclosureTeamSchema).default({}),
+  })
+  .default({ enabled: false, killed: false, teams: {} })
+
+export type PmDisclosureConfig = z.infer<typeof pmDisclosureSchema>
+
 // The non-secret AI settings blob (the `config` jsonb of the `ai` connector_config row): which
 // provider is the workspace default, the chosen model per configured provider (volatile IDs, so
-// stored as free strings), and an optional per-workspace estimated-spend cap in USD.
+// stored as free strings), an optional per-workspace estimated-spend cap in USD, the path→area map,
+// and the PM-disclosure policy.
 export const aiConfigDataSchema = z.object({
   defaultProvider: aiProviderSchema.optional(),
   models: z.partialRecord(aiProviderSchema, z.string().min(1)).default({}),
@@ -31,16 +63,21 @@ export const aiConfigDataSchema = z.object({
   // The ordered path→product-area map. Server-only like the rest of this blob, and an EMPTY map is
   // the off switch for area enrichment: no provider call is made at all.
   areas: areaMapSchema,
+  pmDisclosure: pmDisclosureSchema,
 })
 
 export type AiConfigData = z.infer<typeof aiConfigDataSchema>
 
-const EMPTY_CONFIG: AiConfigData = { models: {}, areas: [] }
+// The all-off shape, spelled once so every "there is no config yet" branch agrees with what a legacy
+// blob parses to.
+export function emptyAiConfigData(): AiConfigData {
+  return { models: {}, areas: [], pmDisclosure: { enabled: false, killed: false, teams: {} } }
+}
 
 // Parse a stored `config` jsonb into the typed AI settings, tolerating a legacy/empty blob.
 function parseConfig(config: unknown): AiConfigData {
   const parsed = aiConfigDataSchema.safeParse(config)
-  return parsed.success ? parsed.data : { ...EMPTY_CONFIG }
+  return parsed.success ? parsed.data : emptyAiConfigData()
 }
 
 export interface AiConfig {
@@ -164,6 +201,10 @@ export interface RedactedAiStatus {
   configuredProviders: AiProvider[]
   // The ordered path→area map. Admin-only, like everything else here.
   areas: AreaMap
+  // The disclosure policy. Admin-only for the obvious reason and one less obvious one: an audience
+  // list is a list of people, and who is allowed to read a team's work is not something the product
+  // shows anybody else.
+  pmDisclosure: PmDisclosureConfig
 }
 
 // Admin-gated. Everything the AI settings UI renders — the toggle, default provider, chosen
@@ -192,5 +233,6 @@ export async function getRedactedAiStatus(
     spendSoFarUsd,
     configuredProviders,
     areas: data.areas,
+    pmDisclosure: data.pmDisclosure,
   }
 }

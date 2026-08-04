@@ -3,6 +3,8 @@ export { createSecretCodec, decodeEncryptionKey, SecretCodecError } from '../sec
 export type {
   AiConfig,
   AiConfigData,
+  PmDisclosureConfig,
+  PmDisclosureTeamPolicy,
   RedactedAiStatus,
   SetAiProviderKeyOptions,
   UpsertAiConfigOptions,
@@ -10,10 +12,13 @@ export type {
 export {
   AI_CONNECTOR_PROVIDER,
   aiConfigDataSchema,
+  emptyAiConfigData,
   getAiConfig,
   getAiProviderKey,
   getRedactedAiStatus,
   listConfiguredAiProviders,
+  pmDisclosureSchema,
+  pmDisclosureTeamSchema,
   setAiProviderKey,
   upsertAiConfig,
 } from './ai-config.js'
@@ -118,6 +123,18 @@ export {
   recordNotifications,
   stampNotificationsEmailed,
 } from './notification.js'
+export type {
+  DisclosureAuditDetail,
+  DisclosureAuditEntry,
+  SetPmDisclosurePolicyOptions,
+} from './pm-disclosure.js'
+export {
+  audienceSize,
+  pmTeamPolicy,
+  recordDisclosureAudit,
+  resolvePmAudienceTeamIds,
+  setPmDisclosurePolicy,
+} from './pm-disclosure.js'
 export type { ReplicationSlot, ReplicationStatus } from './replication.js'
 export {
   assertReplicationHealthy,
@@ -176,6 +193,8 @@ export {
   seedWorkspace,
 } from './seed.js'
 export type {
+  AiDisclosureAudit,
+  AiDisclosureAuditTable,
   Attachment,
   AttachmentTable,
   AttachmentUpdate,
@@ -224,6 +243,7 @@ export type {
   Label,
   LabelTable,
   LabelUpdate,
+  NewAiDisclosureAudit,
   NewAttachment,
   NewCiCheck,
   NewComment,
@@ -240,6 +260,7 @@ export type {
   NewIssueSubscription,
   NewLabel,
   NewNotification,
+  NewPmDigest,
   NewPullRequest,
   NewRetroAiDraft,
   NewRetroAiProposal,
@@ -253,6 +274,9 @@ export type {
   Notification,
   NotificationTable,
   NotificationUpdate,
+  PmDigest,
+  PmDigestTable,
+  PmDigestUpdate,
   PullRequest,
   PullRequestTable,
   PullRequestUpdate,

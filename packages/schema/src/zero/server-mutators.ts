@@ -20,7 +20,7 @@ import {
   type NotificationEvent,
   recordNotifications,
 } from '../db/notification.js'
-import { audienceSize, recordDisclosureAudit } from '../db/pm-disclosure.js'
+import { audienceSize, pmTeamPolicy, recordDisclosureAudit } from '../db/pm-disclosure.js'
 import type { DB } from '../db/types.js'
 import { newId } from '../id.js'
 import type { AuthContext, NotificationKind, NotificationSubjectType } from './context.js'
@@ -268,6 +268,44 @@ async function discardRetroAiDraft(tx: Transaction, retroId: string): Promise<vo
     await recordRetiredAiSpend(serverDb(tx), draft.teamId, draft.estimatedCostUsd)
   }
   await tx.mutate.retro_ai_draft.delete({ id: draft.id })
+}
+
+// THE POLICY GATE ON PUBLICATION, checked BEFORE the shared mutator runs.
+//
+// Without it, publishing while the workspace switch is off or the kill switch is set releases the
+// row with `audience_size_at_publish = 0` — and then, the moment an admin lifts the hold, the digest
+// becomes readable by N people while the producing team's own marker permanently states it was
+// shared with 0. The team would have been told something false about their own disclosure, by a
+// surface whose entire job is to tell them the truth about it.
+//
+// It lives HERE and not in the shared mutator because the policy is admin-gated, server-only
+// configuration that is deliberately never synced: a client cannot read it, so a client cannot check
+// it, and a shared check would either leak the policy or diverge from the server. The refusal is the
+// ordinary generic `notAuthorized`, byte-identical to the one a viewer or a foreign row gets, so it
+// tells the caller nothing about the configuration either.
+//
+// RETRACTION IS NOT GATED. Stopping further reads must work whatever the switches say.
+async function assertPmSharingEnabled(tx: Transaction, id: string): Promise<void> {
+  const digest = (await tx.run(zql.pm_digest.where('id', id).one())) as
+    | { id: string; teamId: string }
+    | undefined
+  // No row, or no team: the shared mutator rejects both with the same generic error, so nothing is
+  // decided here that could distinguish them.
+  if (digest === undefined) return
+  const db = serverDb(tx)
+  const team = await db
+    .selectFrom('team')
+    .select('workspace_id')
+    .where('id', '=', digest.teamId)
+    .executeTakeFirst()
+  if (team === undefined) return
+  const policy = await pmTeamPolicy(db, team.workspace_id, digest.teamId)
+  if (policy.pmVisible) return
+  throw new MutationError(
+    'Not authorized to perform this action',
+    MutationErrorCode.notAuthorized,
+    id,
+  )
 }
 
 // The publish/retract stamp and its audit row, in the transaction that did the write.
@@ -1024,6 +1062,12 @@ export function createServerMutators() {
       // at all, and `audience_size_at_publish` syncs but has no client mutator. The authorization
       // and status checks stay in the shared mutator, so client and server agree on who may publish.
       publish: defineMutator(publishPmDigestArgs, async ({ tx, args, ctx }) => {
+        // Checked ahead of the shared mutator, on `retroCard.delete`'s precedent: a release that the
+        // policy forbids must never be applied and then rolled back, because the optimistic pass has
+        // already shown the team a "shared" card by then.
+        if (tx.location === 'server' && ctx !== undefined) {
+          await assertPmSharingEnabled(tx, args.id)
+        }
         await mutators.pmDigest.publish.fn({ tx, args, ctx })
         if (tx.location !== 'server' || ctx === undefined) return
         await stampPmDisclosure(tx, args.id, ctx, 'published')

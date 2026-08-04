@@ -36,6 +36,22 @@ export function pmDigestContent(row: { readonly content?: unknown }): StoredPmDi
   return parsed.success ? parsed.data : null
 }
 
+// The rows that actually have something to say to this reader, and the ONE definition of that — the
+// navigation entry and the surface both ask this, so they can never disagree about whether the
+// reader has anything to read. A published row whose blob cannot be walked is not readable: the
+// render would draw nothing for it, and an entry pointing at nothing is an announcement that
+// something exists and is being withheld.
+export function readablePmDigests(
+  rows: readonly PmDigestRowData[],
+): readonly { row: PmDigestRowData; content: StoredPmDigestContent }[] {
+  const out: { row: PmDigestRowData; content: StoredPmDigestContent }[] = []
+  for (const row of rows) {
+    const content = pmDigestContent(row)
+    if (content !== null) out.push({ row, content })
+  }
+  return out
+}
+
 function formatDay(ts: number): string {
   return new Date(ts).toLocaleDateString(undefined, {
     month: 'short',

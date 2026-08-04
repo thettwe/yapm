@@ -92,9 +92,13 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* Warm — default + light. Fonts, density, and radius are theme-level (mode-independent). */
+/* Warm — default + light. Fonts, density, and radius are theme-level (mode-independent).
+   `color-scheme: light` is stated rather than left to the user agent: the mode is yapm's own
+   preference, so a light theme must stay light even for somebody whose OS is set to dark. Each dark
+   preset overrides it below. */
 :root,
 [data-theme="warm"] {
+  color-scheme: light;
   --bg: #faf7f1;
   --bg-sidebar: #f0eae0;
   --bg-elevated: #ffffff;
@@ -251,9 +255,13 @@
   --rad-card: 6px;
 }
 
-/* Warm — dark (also the default dark, via bare .dark). Colors only. */
+/* Warm — dark (also the default dark, via bare .dark). Colors only.
+   `color-scheme` is declared in every dark preset so anything the USER AGENT paints — scrollbars,
+   form controls, the canvas behind a slow first paint — follows the theme instead of staying light
+   underneath it. Tokens cannot reach those surfaces; this is the only thing that can. */
 .dark,
 [data-theme="warm"].dark {
+  color-scheme: dark;
   --bg: #1b1613;
   --bg-sidebar: #141010;
   --bg-elevated: #241e19;
@@ -290,6 +298,7 @@
 
 /* Focused — dark. Colors only. */
 [data-theme="focused"].dark {
+  color-scheme: dark;
   --bg: #0b0c0e;
   --bg-sidebar: #0a0b0d;
   --bg-elevated: #17181c;
@@ -326,6 +335,7 @@
 
 /* Editorial — dark. Colors only. */
 [data-theme="editorial"].dark {
+  color-scheme: dark;
   --bg: #0b0b0c;
   --bg-sidebar: #0d0d0f;
   --bg-elevated: #161618;

@@ -297,6 +297,28 @@ describe.skipIf(DATABASE_URL === undefined)('the PM disclosure boundary', () => 
       killed: true,
     })
     expect(await resolvePmAudienceTeamIds(database.db, PM.userID)).toEqual([])
+
+    // AND PUBLISHING IS REFUSED WHILE THE HOLD IS ON. Allowing it would stamp
+    // `audience_size_at_publish = 0` onto a released row, and the moment an admin lifted the hold the
+    // digest would be readable by N people while the producing team's own marker said 0 forever.
+    await expect(
+      database.db.transaction().execute(async (trx) =>
+        mutators.pmDigest.publish.fn({
+          tx: createPgServerTransaction(trx, meta),
+          args: { id: digestId, updatedAt: Date.now() },
+          ctx: MEMBER,
+        }),
+      ),
+    ).rejects.toThrow()
+    const held = await database.db
+      .selectFrom('pm_digest')
+      .select(['published_at', 'published_by', 'audience_size_at_publish'])
+      .where('id', '=', digestId)
+      .executeTakeFirst()
+    expect(held?.published_at).toBeNull()
+    expect(held?.published_by).toBeNull()
+    expect(held?.audience_size_at_publish).toBeNull()
+
     await setPmDisclosurePolicy(database.db, ADMIN, {
       configId: newId(),
       auditId: newId(),

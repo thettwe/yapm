@@ -135,8 +135,9 @@ export async function runPmDigest(
   const now = deps.now?.() ?? Date.now()
   const { facts, workspaceId } = input
 
-  // `published_at` is not writable through this path AT ALL — `upsertPmDigest` has no such field.
-  // Generation discloses to nobody; a human publishing is the only thing that does.
+  // `published_at` is only ever CLEARED through this path — `upsertPmDigest` can unpublish a row it
+  // rewrites but can never publish one. Generation discloses to nobody; a human publishing is the
+  // only thing that does.
   const write = (
     status: AiArtifactStatus,
     fields: Partial<{
@@ -152,6 +153,8 @@ export async function runPmDigest(
     deps.dbProvider.transaction((tx) =>
       upsertPmDigest(tx, {
         id: newId(),
+        auditId: newId(),
+        workspaceId,
         teamId: facts.teamId,
         cycleId: facts.cycleId,
         status,
@@ -206,14 +209,26 @@ export async function runPmDigest(
     const roster = await loadRoster(deps.db, workspaceId)
     // The three SHIPPED validators, in the shipped order, over the SHIPPED content shape. No second
     // walker exists anywhere for any of them.
-    const content: StoredPmDigestContent = {
-      ...dropItemsDisclosingPaths(
-        dropItemsNamingMembers(dropUncitedItems(result.object, known), roster),
+    const validated = dropItemsDisclosingPaths(
+      dropItemsNamingMembers(dropUncitedItems(result.object, known), roster),
+    )
+    // THE LABEL MAP IS BUILT OVER THE SURVIVORS, NOT OVER THE CYCLE. Baking a label for every
+    // evidence id in the cycle would ship the producing team's whole issue-key and PR-number index
+    // for that cycle to a reader outside the team — a disclosure nothing in the prose asked for, and
+    // one that survives every validator because it is yapm's own text rather than the model's. The
+    // ids an item cites AFTER the three validators have run are exactly the ids the render can
+    // resolve, so anything else in the map is dead weight that only leaks.
+    const cited = new Set(
+      validated.sections.flatMap((section) =>
+        section.items.flatMap((item) => item.evidenceRefs.map((ref) => ref.id)),
       ),
+    )
+    const content: StoredPmDigestContent = {
+      ...validated,
       subject: input.subject,
       // Computed by yapm after generation, from the same facts the model summarized. Labels rather
       // than links, because a PM outside the team can open none of the targets.
-      evidenceLabels: buildPmEvidenceLabels(facts),
+      evidenceLabels: buildPmEvidenceLabels(facts, cited),
     }
 
     return await settle('ready', {

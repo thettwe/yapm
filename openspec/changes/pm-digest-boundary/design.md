@@ -589,3 +589,78 @@ the Playwright job at 86/86 with no flakes and the compose smoke test. Every tas
 ticked. The pg integration tests skip locally without a `DATABASE_URL` but are hard-failed in CI by
 design (`queries.pm-digest.pg.test.ts` throws rather than skipping when `CI` is set), so the
 falsifiable check ran.
+
+### I16 — the reader's absence covers "nothing released", and the query it costs
+
+**Ambiguous:** the spec's absence requirement lists four reasons a reader's surface must not exist —
+"the switches are off, the kill switch is set, they were never named, **or nothing has been
+published**" — but its scenario is written about a reader "whose resolved audience is empty", and
+those are not the same person. A named reader with nothing released has a non-empty audience and an
+empty inbox. The first build read the scenario and gave them a heading and an empty state.
+
+**Chosen:** the requirement, not the scenario. For a named reader with nothing released there is no
+navigation entry, no shell, no heading and no empty state — the same absence an unnamed reader gets.
+"Nothing has been shared with you yet" tells that reader the channel exists AND that the team on the
+other side of it has chosen not to use it, which is a fact about another team's decision that nobody
+published. Absence does not stop being the graceful degradation once somebody has been named.
+
+**What this costs, stated plainly:** the disclosure query IS issued for a named reader, because
+whether anything was ever released lives in a row rather than in the credential. The alternative — a
+`hasPublishedDigests` boolean baked into the sync session beside `pmAudienceTeamIds` — was rejected:
+it makes a per-reader disclosure fact part of a credential that is re-minted on every refresh, it
+goes stale the instant a team publishes, and it buys nothing the query does not already give. The
+unit test asserts the query count is non-zero for a named reader and zero for an unnamed one, so the
+two absences are told apart rather than conflated.
+
+`PmDigestsEntry` splits for the same reason the route does: the audience check is a separate
+component ABOVE the one that queries, so an unnamed reader constructs no query from the shell either.
+Entry and surface read the same query through one `readablePmDigests` definition, so they cannot
+disagree about whether the reader has anything to read.
+
+### I17 — publishing is refused while the policy is held, and the refusal is server-only
+
+**Not anticipated by the specs.** `pmDigest.publish` checked the artifact's status and the caller's
+team authority, but nothing about the four switches: a digest generated while a team's sharing was on
+could be released after an admin turned it off or set the kill switch. The row went out with
+`audience_size_at_publish = 0` — and when the hold was lifted it became readable by N people while the
+producing team's own marker permanently said it had been shared with 0. The team would have been told
+something false about their own disclosure by the surface whose entire job is to tell them the truth
+about it.
+
+**Chosen:** the server mutator reads `pmTeamPolicy` before the shared mutator runs and throws the
+ordinary generic `notAuthorized` when the team's sharing is not currently on. Checked BEFORE the
+shared mutator, on `retroCard.delete`'s precedent, so a forbidden release is never applied and then
+rolled back — the optimistic pass would otherwise have shown the team a "shared" card first.
+Retraction is deliberately NOT gated: stopping further reads must work whatever the switches say.
+
+**Why there is no UI half.** The obvious companion — hide "Share with product" and explain why — is
+not implementable without breaking a different guarantee: the policy is admin-gated, server-only
+configuration that never syncs, so a client cannot read it and a client-side check would either leak
+it or diverge from the server. The team therefore meets this case as a rejected mutation with the
+generic message, which is the same message a viewer gets, so the refusal discloses nothing about the
+configuration either. The alternative considered and rejected was to let the publish through and
+re-stamp `audience_size_at_publish` when the hold is lifted: that turns a snapshot into a value the
+system rewrites behind the team's back, which is the exact property I2 chose the snapshot to avoid.
+
+### I18 — a re-generation retracts, and the evidence map is built over the survivors
+
+Two properties of the generation write that the specs assert about the *first* run and say nothing
+about the *second*.
+
+**A re-generation cannot leave new text published.** `upsertPmDigest` rewrites `content` wholesale,
+so landing on a row a human had already released would have swapped reviewed prose for never-reviewed
+model output while the row kept syncing to the audience — the review-and-publish gate bypassed by a
+scheduler rather than by a person. The upsert now clears the release in the same transaction
+(`published_at`, `audience_size_at_publish` and the server-only `published_by`) and records the
+forced retraction as an `unpublished` audit row under the system principal. Returning the existing row
+untouched was the alternative: rejected because it would freeze a team on a digest they may have
+published before the facts changed, and silently discard a run they paid for. Fresh content requires a
+fresh human publish — always, and as a property of the row rather than of which subsystem ran last.
+
+**The baked evidence map covers only cited ids.** `buildPmEvidenceLabels` took the whole cycle, so a
+published digest carried a label for every issue and pull request of that cycle — the producing team's
+complete key-and-number index for the period, syncing verbatim to a reader outside the team, past
+every validator because it is yapm's own text rather than the model's. It now takes the ids the
+validated content actually cites, as a REQUIRED second argument: a default would hand the whole index
+back to the next caller that forgets. The pg assertion is that an uncited issue's key appears nowhere
+in the stored blob at any depth.

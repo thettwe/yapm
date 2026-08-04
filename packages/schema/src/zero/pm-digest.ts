@@ -44,31 +44,44 @@ export const storedPmDigestContentSchema = pmDigestContentSchema.extend({
 
 export type StoredPmDigestContent = z.infer<typeof storedPmDigestContentSchema>
 
-// One label per evidence id yapm computed, built from the same `CycleFacts` the model summarized.
+// One label per CITED evidence id, built from the same `CycleFacts` the model summarized.
 // Pure, so the "labels come from yapm, never the model" claim is unit-testable on its own.
+//
+// `cited` IS A REQUIRED ARGUMENT, and that is the disclosure control rather than an optimization:
+// the map is stored on the row and syncs verbatim to a reader outside the producing team, so a map
+// built over the whole cycle would hand that reader every issue key and pull-request number of the
+// cycle — including the work no surviving item mentions. Passing the ids the validated content
+// actually cites keeps the stored map to exactly what the render can resolve. There is deliberately
+// no default: a caller that does not know its citations must not get the whole index by omission.
 //
 // An issue contributes its key (`ENG-142` when the team key is known, `#142` when it is not); a
 // linked pull request appends ` · PR #331`; a CI check inherits the label of the pull request it
 // ran on, because "the check on ENG-142 · PR #331" is the only thing about it a PM can act on.
 // An evidence id with no computed label renders as nothing rather than as a bare uuid — and an id
 // the model invented was already dropped by `dropUncitedItems` before this map is consulted.
-export function buildPmEvidenceLabels(facts: CycleFacts): Record<string, string> {
+export function buildPmEvidenceLabels(
+  facts: CycleFacts,
+  cited: ReadonlySet<string>,
+): Record<string, string> {
   const labels: Record<string, string> = {}
   for (const issue of facts.issues) {
     const issueRef = issue.evidenceRefs.find((ref) => ref.kind === 'issue')
     const issueLabel = issueRef?.label
     if (issueLabel === undefined) continue
+    // `current` still advances over every ref, cited or not: a CI check's label is inherited from
+    // the pull request BEFORE it in the list, so skipping an uncited PR outright would mislabel a
+    // cited check that ran on it.
     let current = issueLabel
     for (const ref of issue.evidenceRefs) {
       if (ref.kind === 'issue') {
-        labels[ref.id] = issueLabel
+        if (cited.has(ref.id)) labels[ref.id] = issueLabel
         continue
       }
       if (ref.kind === 'pull_request') {
         // `label` on a PR ref is the provider's own `#331`; absent, the issue label alone is honest.
         current = ref.label === undefined ? issueLabel : `${issueLabel} · PR ${ref.label}`
       }
-      labels[ref.id] = current
+      if (cited.has(ref.id)) labels[ref.id] = current
     }
   }
   return labels

@@ -269,37 +269,47 @@ function PmDisclosureTeamRow({
         </Button>
       </div>
 
-      {open ? (
-        <fieldset id={readersId} className="flex flex-col gap-1 border-none p-0">
-          <legend className="pb-1 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-            Who reads {name}'s product digests
-          </legend>
-          {members.length === 0 ? (
-            <p className="text-xs text-text-2">No workspace members to choose from.</p>
-          ) : (
-            members.map((member) => {
-              const reads = audience.includes(member.userId)
-              return (
-                <label
-                  key={member.id}
-                  className="flex items-center gap-2 rounded-control px-2 py-1 text-sm text-text-2 hover:bg-bg-hover"
-                >
-                  <input
-                    type="checkbox"
-                    checked={reads}
-                    disabled={busy}
-                    className="size-4 accent-accent outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    data-testid="pm-disclosure-reader"
-                    data-user-id={member.userId}
-                    onChange={(event) => toggleReader(member.userId, event.target.checked)}
-                  />
-                  <span className="min-w-0 truncate">{displayName(member)}</span>
-                </label>
-              )
-            })
-          )}
-        </fieldset>
-      ) : null}
+      {/*
+        RENDERED UNCONDITIONALLY AND HIDDEN, so the `aria-controls` above always names an element
+        that exists — a reference to a missing id is a broken promise to a screen reader in exactly
+        the default state everybody starts in.
+
+        EVERY READER IS A TOKENIZED TOGGLE, not a native checkbox. A native checkbox is painted by
+        the user agent from its own color scheme rather than from the theme, which made this the one
+        control in the product that stayed light in all three dark presets. `aria-pressed` carries
+        the state that `checked` used to.
+      */}
+      <fieldset id={readersId} hidden={!open} className="flex flex-col gap-1 border-none p-0">
+        <legend className="pb-1 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+          Who reads {name}'s product digests
+        </legend>
+        {members.length === 0 ? (
+          <p className="text-xs text-text-2">No workspace members to choose from.</p>
+        ) : (
+          members.map((member) => {
+            const reads = audience.includes(member.userId)
+            return (
+              <Button
+                key={member.id}
+                size="sm"
+                variant={reads ? 'outline' : 'ghost'}
+                disabled={busy}
+                aria-pressed={reads}
+                className="w-full justify-between font-normal"
+                data-testid="pm-disclosure-reader"
+                data-user-id={member.userId}
+                data-reads={reads ? 'true' : 'false'}
+                onClick={() => toggleReader(member.userId, !reads)}
+              >
+                <span className="min-w-0 truncate text-text-1">{displayName(member)}</span>
+                <span className="text-[11px] text-text-3">
+                  {reads ? 'Reads these' : 'Does not read'}
+                </span>
+              </Button>
+            )
+          })
+        )}
+      </fieldset>
     </li>
   )
 }

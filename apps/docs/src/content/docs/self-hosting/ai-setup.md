@@ -41,7 +41,7 @@ absent means AI stays off.
 | `AI_DEFAULT_PROVIDER` | `anthropic` \| `google` \| `openai` | which of the above is the instance default; enables AI without a DB config row |
 | `AI_DIGEST_ON_CYCLE_CLOSE` | `true` (default) \| `false` | gates the cycle-digest pre-compute job |
 | `AI_RETRO_DRAFT` | `true` (default) \| `false` | gates the [retro AI draft](/features/retro-ai-draft/) background pass |
-| `AI_PM_DIGEST` | `true` \| `false` (default) | gates the PM-facing cycle summary; requires `AI_DIGEST_ON_CYCLE_CLOSE=true` |
+| `AI_PM_DIGEST` | `true` \| `false` (default) | gates the [product digest](/features/pm-digest/); requires `AI_DIGEST_ON_CYCLE_CLOSE=true` |
 
 A per-workspace UI key wins over the instance-default env key for the same provider.
 
@@ -64,21 +64,21 @@ a team, turn that team off in *Settings → AI* instead.
 
 ## What each AI feature costs you, and when
 
-Both features are per-workspace opt-in through a provider key, and each has a second switch of its
-own. Neither runs on an instance that has not configured AI.
+All three features are per-workspace opt-in through a provider key, and each has a second switch of
+its own. None of them runs on an instance that has not configured AI.
 
 | Feature | Second switch | Runs when |
 |---|---|---|
 | [Cycle digest](/features/cycle-digest/) | none — on for every team once AI is on | a cycle closes, pre-computed off the hot path |
 | [Retro AI draft](/features/retro-ai-draft/) | **per team, off by default**, in *Settings → AI* | a facilitator advances a retro out of `brainstorm` |
-| PM cycle summary | **per workspace and per team, both off by default**, in *Settings → AI* | a cycle closes, immediately after the team's own digest and over the same facts |
+| [Product digest](/features/pm-digest/) | **per workspace and per team, both off by default**, in *Settings → AI* | a cycle closes, immediately after the team's own digest and over the same facts |
 
 The retro draft's generation is **lazy** on purpose, and that is the spend model as much as it is the
 safety model: a cycle that closes into a retro nobody ever runs costs **nothing**, because nothing is
 generated until somebody reveals the board. There is no sweep over old retros and no backfill when you
 enable a team.
 
-The PM summary is a **second model call on the same key** for every completed cycle of a team you
+The product digest is a **second model call on the same key** for every completed cycle of a team you
 have turned it on for, so it roughly doubles that team's digest spend. It is skipped before any model
 call for a team whose switch is off, so a team you never enable costs nothing at all.
 

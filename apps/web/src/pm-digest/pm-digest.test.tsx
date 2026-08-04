@@ -36,6 +36,15 @@ vi.mock('@/components/app-shell', () => ({
   AppShell: ({ children }: { children: ReactNode }) => <div data-testid="shell">{children}</div>,
 }))
 
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ to, children, ...rest }: { to: string; children: ReactNode }) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
+  ),
+}))
+
+import { PmDigestsEntry } from './digests-entry'
 import { PmDigestsGate } from './digests-gate'
 import { pmEvidenceLabels, pmSubjectLine, sharedReadersLabel } from './model'
 
@@ -129,17 +138,44 @@ test('evidence renders as baked plain text, and nothing on the surface links or 
 test('a row whose content cannot be walked renders as absent, not as an empty card', () => {
   sync.audience = ['team-platform']
   zero.rows = [{ ...ROW, content: { headline: 'no sections' } }]
-  render(<PmDigestsGate />)
+  const { container } = render(<PmDigestsGate />)
 
   expect(screen.queryByTestId('pm-digest-card')).toBeNull()
+  expect(container.innerHTML).toBe('')
 })
 
-test('a named reader with nothing shared yet is told exactly that', () => {
+// BEING NAMED IS NOT THE SAME AS BEING TOLD SOMETHING, and the absence covers both. "Nothing has
+// been shared with you yet" would tell this reader that the channel exists and that the team on the
+// other side has chosen not to use it — a fact about another team's decision that nobody published.
+test('a named reader with nothing released yet gets no surface either', () => {
   sync.audience = ['team-platform']
   zero.rows = []
-  render(<PmDigestsGate />)
+  const { container } = render(<PmDigestsGate />)
 
-  expect(screen.getByTestId('pm-digests-empty')).toBeInTheDocument()
+  expect(container.innerHTML).toBe('')
+  expect(screen.queryByTestId('shell')).toBeNull()
+  expect(screen.queryByTestId('pm-digests-empty')).toBeNull()
+  expect(screen.queryByRole('heading', { name: 'Product digests' })).toBeNull()
+  // The query still runs: whether anything was ever released lives in a row, not in the credential,
+  // so a named reader has to ask. What must not happen is a surface built on the answer "nothing".
+  expect(zero.calls).toBeGreaterThan(0)
+})
+
+// The way in has to answer the same question the surface does, or the shell offers a door onto an
+// empty room — which is itself a disclosure that a channel exists.
+test('the shell entry appears only for a named reader with something released', () => {
+  const { rerender } = render(<PmDigestsEntry />)
+  expect(screen.queryByTestId('pm-digests-entry')).toBeNull()
+  expect(zero.calls).toBe(0)
+
+  sync.audience = ['team-platform']
+  zero.rows = []
+  rerender(<PmDigestsEntry />)
+  expect(screen.queryByTestId('pm-digests-entry')).toBeNull()
+
+  zero.rows = [ROW]
+  rerender(<PmDigestsEntry />)
+  expect(screen.getByTestId('pm-digests-entry')).toBeInTheDocument()
 })
 
 test('the subject line and the evidence labels come only from what yapm baked into the row', () => {

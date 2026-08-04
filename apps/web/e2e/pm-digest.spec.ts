@@ -138,6 +138,42 @@ async function press(page: Page, testId: string, key = 'Enter'): Promise<void> {
   await page.keyboard.press(key)
 }
 
+// The theme cache rather than the appearance popover, on `auto-status.spec.ts`'s precedent: the
+// popover writes a synced `user_preference` row that zero-cache then pushes back over the cache in
+// every later spec.
+async function setPreset(page: Page, preset: string, mode: 'light' | 'dark'): Promise<void> {
+  await page.evaluate(
+    ([p, m]) => {
+      window.localStorage.setItem('yapm:pref', JSON.stringify({ theme: p, mode: m, accent: null }))
+    },
+    [preset, mode] as const,
+  )
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', preset)
+}
+
+// What a preset actually painted. A token that failed to resolve paints nothing — transparent text
+// on an unset surface — and collecting the values across presets is what makes a hardcoded literal
+// FAIL rather than merely render: a literal is the same string in all six dressings.
+async function painted(page: Page, testId: string): Promise<string> {
+  const values = await page
+    .getByTestId(testId)
+    .first()
+    .evaluate((node) => {
+      const style = window.getComputedStyle(node)
+      return {
+        color: style.color,
+        surface: window.getComputedStyle(document.body).backgroundColor,
+        border: style.borderTopColor,
+        font: style.fontFamily,
+      }
+    })
+  expect(values.color).not.toBe('rgba(0, 0, 0, 0)')
+  expect(values.surface).not.toBe('rgba(0, 0, 0, 0)')
+  expect(values.font).not.toBe('')
+  return `${values.surface}|${values.color}|${values.border}`
+}
+
 // The DISTINCT `pm_digest` ids the client has actually persisted, with the two corrections a first
 // CI run taught this spec:
 //
@@ -238,23 +274,18 @@ test('with the default policy the PM reader surface does not exist, and only the
   }
 
   // The producing team's card holds in every preset, light and dark.
+  const dressings = new Set<string>()
   for (const preset of PRESETS) {
     for (const mode of MODES) {
-      await page.evaluate(
-        ([p, m]) => {
-          window.localStorage.setItem(
-            'yapm:pref',
-            JSON.stringify({ theme: p, mode: m, accent: null }),
-          )
-        },
-        [preset, mode] as const,
-      )
-      await page.reload()
-      await expect(page.locator('html')).toHaveAttribute('data-theme', preset)
+      await setPreset(page, preset, mode)
       await page.getByRole('button', { name: new RegExp(cycleName) }).click()
       await expect(page.getByTestId('pm-digest-share')).toBeVisible({ timeout: 30_000 })
+      dressings.add(await painted(page, 'pm-digest-share'))
     }
   }
+  // Six distinct dressings: three presets times light and dark. A hardcoded color anywhere on the
+  // card would collapse them, and this is where that shows up.
+  expect(dressings.size).toBe(6)
 
   expect(crashes).toEqual([])
 })
@@ -383,13 +414,16 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     const readersToggle = teamRow.getByTestId('pm-disclosure-readers-toggle')
     await readersToggle.focus()
     await page.keyboard.press('Enter')
+    // A tokenized toggle rather than a native checkbox — the user agent paints a checkbox from its
+    // own color scheme, which made it the one control in the product that stayed light in every dark
+    // preset. `aria-pressed` carries the state.
     const readerBox = teamRow.locator(
       `[data-testid="pm-disclosure-reader"][data-user-id="${readerId}"]`,
     )
     await expect(readerBox).toBeVisible({ timeout: 20_000 })
     await readerBox.focus()
-    await page.keyboard.press('Space')
-    await expect(readerBox).toBeChecked({ timeout: 20_000 })
+    await page.keyboard.press('Enter')
+    await expect(readerBox).toHaveAttribute('aria-pressed', 'true', { timeout: 20_000 })
 
     // Every policy write left a record.
     const policyAfter = await (async () => {
@@ -402,17 +436,21 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     })()
     expect(policyAfter).toBeGreaterThan(policyBefore)
 
-    // THE GATE. Named, entitled, switched on — and still nothing, because no human has released it.
-    // The surface now exists (the reader has an audience) and says so honestly.
+    // THE GATE. Named, entitled, switched on — and STILL NO SURFACE, because no human has released
+    // anything. Being named is not being told something: an empty state here would announce that a
+    // channel exists and that the team on the other side has chosen not to use it.
     await readerPage.goto('/')
     await readerPage.reload()
-    await expect(readerPage.getByTestId('pm-digests-entry')).toBeVisible({ timeout: 30_000 })
-    await press(readerPage, 'pm-digests-entry')
-    await expect(readerPage).toHaveURL(/\/digests$/u)
-    await expect(readerPage.getByRole('heading', { name: 'Product digests' })).toBeVisible()
-    await expect(readerPage.getByTestId('pm-digests-empty')).toBeVisible({ timeout: 30_000 })
-    await expect(readerPage.getByTestId('pm-digest-card')).toHaveCount(0)
+    await expect(readerPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+      timeout: 30_000,
+    })
+    await expect(readerPage.getByTestId('pm-digests-entry')).toHaveCount(0)
     await expectPmDigestIds(readerPage, [])
+
+    await readerPage.goto('/digests')
+    await expect(readerPage.getByRole('heading', { name: 'Product digests' })).toHaveCount(0)
+    await expect(readerPage.getByTestId('pm-digests-empty')).toHaveCount(0)
+    await expect(readerPage.getByTestId('pm-digest-card')).toHaveCount(0)
 
     // A HUMAN ON THE PRODUCING TEAM RELEASES IT, from the keyboard.
     await openCyclePanel(page, team.name, cycleName)
@@ -445,8 +483,15 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     expect(published.row.publishedBy).not.toBeNull()
     expect(published.audit.map((entry) => entry.event)).toContain('published')
 
-    // AND NOW, AND ONLY NOW, THE READER READS IT.
+    // AND NOW, AND ONLY NOW, THE READER READS IT — and only now does the shell offer a way in.
+    await readerPage.goto('/')
     await readerPage.reload()
+    await expect(readerPage.getByTestId('pm-digests-entry')).toBeVisible({ timeout: 30_000 })
+    await press(readerPage, 'pm-digests-entry')
+    await expect(readerPage).toHaveURL(/\/digests$/u)
+    await expect(readerPage.getByRole('heading', { name: 'Product digests' })).toBeVisible({
+      timeout: 30_000,
+    })
     const card = readerPage.getByTestId('pm-digest-card')
     await expect(card).toBeVisible({ timeout: 30_000 })
     await expect(card.getByTestId('pm-digest-headline')).toHaveText(HEADLINE)
@@ -478,6 +523,46 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
       ).toEqual([])
     }
 
+    // THE OTHER TWO SURFACES THIS CHANGE ADDS, in every preset, light and dark. The producing
+    // team's card is swept by the first test; these two are only reachable here — the reader's view
+    // needs a published row and a named principal, and the admin block needs the policy configured.
+    const readerDressings = new Set<string>()
+    for (const preset of PRESETS) {
+      for (const mode of MODES) {
+        await setPreset(readerPage, preset, mode)
+        await expect(readerPage.getByTestId('pm-digest-card')).toBeVisible({ timeout: 30_000 })
+        await expect(readerPage.getByTestId('pm-digest-evidence')).toHaveText(EVIDENCE_LABEL)
+        readerDressings.add(await painted(readerPage, 'pm-digest-card'))
+      }
+    }
+    expect(readerDressings.size).toBe(6)
+
+    await page.goto('/settings/ai')
+    const policyDressings = new Set<string>()
+    for (const preset of PRESETS) {
+      for (const mode of MODES) {
+        await setPreset(page, preset, mode)
+        const settings = page.getByTestId('pm-disclosure-settings')
+        await expect(settings).toBeVisible({ timeout: 30_000 })
+        for (const control of [
+          'pm-disclosure-enabled',
+          'pm-disclosure-killed',
+          'pm-disclosure-team-toggle',
+          'pm-disclosure-readers-toggle',
+        ]) {
+          await expect(page.getByTestId(control).first()).toBeVisible({ timeout: 20_000 })
+        }
+        // The audience picker included: it is the control that was painted by the user agent rather
+        // than by the theme, so a sweep that skipped it would have missed exactly that.
+        await press(page, 'pm-disclosure-readers-toggle')
+        await expect(page.getByTestId('pm-disclosure-reader').first()).toBeVisible({
+          timeout: 20_000,
+        })
+        policyDressings.add(await painted(page, 'pm-disclosure-reader'))
+      }
+    }
+    expect(policyDressings.size).toBe(6)
+
     // RETRACTION STOPS FURTHER READS.
     await openCyclePanel(page, team.name, cycleName)
     await expect(page.getByTestId('pm-digest-share')).toBeVisible({ timeout: 30_000 })
@@ -508,10 +593,14 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
       await expect(afterPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
         timeout: 30_000,
       })
-      await afterPage.goto('/digests')
-      await expect(afterPage.getByTestId('pm-digests-empty')).toBeVisible({ timeout: 30_000 })
-      await expect(afterPage.getByTestId('pm-digest-card')).toHaveCount(0)
+      // No way in, and no surface behind it: a retracted digest returns this reader to the state
+      // they were in before anything was ever released.
+      await expect(afterPage.getByTestId('pm-digests-entry')).toHaveCount(0)
       await expectPmDigestIds(afterPage, [])
+      await afterPage.goto('/digests')
+      await expect(afterPage.getByRole('heading', { name: 'Product digests' })).toHaveCount(0)
+      await expect(afterPage.getByTestId('pm-digests-empty')).toHaveCount(0)
+      await expect(afterPage.getByTestId('pm-digest-card')).toHaveCount(0)
     } finally {
       await afterContext.close()
     }

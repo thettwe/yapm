@@ -47,6 +47,13 @@ when the team released it, not a running count — so it does not quietly change
 the list afterwards. It is never a list of names: yapm shows the producing team a count, and no
 reader roster exists on any surface in the product.
 
+Two consequences of that snapshot being honest. **Sharing is refused while sharing is stopped** — if
+an admin has turned the workspace off, turned the team off, or set the kill switch, the release does
+not go through, because a digest released under a hold would claim it went to nobody and then quietly
+become readable when the hold lifted. And **if yapm ever rewrites a digest, it un-shares it first**:
+new text is never left standing on a release the team gave to the old text, so anything rewritten
+goes back through the same human gate.
+
 ## Evidence is a label, not a link
 
 Every item in a product digest carries the same evidence yapm demanded of it — an issue, a pull
@@ -57,6 +64,10 @@ targets, so a link would dead-end; and making the links work means granting that
 the issues and pull requests behind them, which is a far larger disclosure than the sentence the
 link was meant to make verifiable. The label is what the summary is accountable to, and it is enough
 to ask the team about.
+
+Only the work the summary actually cites gets a label. The cycle's other issues and pull requests
+contribute nothing to the stored digest — a complete key-and-number index of the cycle would be a
+disclosure of its own, and one nothing in the prose asked for.
 
 Nothing remote is loaded from a product digest, and nothing in it links out.
 
@@ -95,8 +106,14 @@ the producing team **has no raw evidence to fall back to**, because every entity
 belongs to a team they are not on.
 
 So for this one feature, degrading means the surface is **cleanly absent**: no navigation entry, no
-route, no empty state, and no query issued. A reader nobody has named sees nothing at all, which is
-also exactly what they see under the default configuration.
+route, no empty state, and — for a reader nobody has named — no query issued. That is exactly what
+they see under the default configuration.
+
+The absence covers being named, too. A reader who is on a team's list but has never been sent
+anything gets no entry and no surface either, rather than an empty state: "nothing has been shared
+with you yet" would tell them that a channel exists and that the team on the other side of it has
+chosen not to use it, which is not yapm's to say. The entry appears the moment a team shares
+something, and disappears again if they retract it.
 
 ## Turning it on
 

@@ -1,4 +1,3 @@
-import { AppShell } from '@/components/app-shell'
 import { PmDigestView } from '@/pm-digest/pm-digest-view'
 import { useSyncSession } from '@/zero/provider'
 
@@ -11,13 +10,13 @@ import { useSyncSession } from '@/zero/provider'
 // NO `useQuery` RUNS ON THIS PATH — not one that returns nothing, not one at all. The audience is
 // read from the sync-session state the provider already resolved from the credential, so deciding
 // whether the surface exists costs no round trip and issues no disclosure query.
+//
+// For a reader the policy HAS named, the disclosure query is the only way to learn whether anything
+// was ever released — that fact lives in a row, not in the credential — so the second half of the
+// absence (nothing published ⇒ nothing rendered) is decided one layer down, in `PmDigestView`.
 export function PmDigestsGate() {
   const { pmAudienceTeamIds } = useSyncSession()
   if (pmAudienceTeamIds.length === 0) return null
 
-  return (
-    <AppShell current="Product digests">
-      <PmDigestView />
-    </AppShell>
-  )
+  return <PmDigestView />
 }

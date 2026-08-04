@@ -77,8 +77,9 @@ four independent switches (an env toggle, a workspace switch, a per-team switch,
 reader list) all have to agree, there is **no new role** — being named on a team's reader list *is*
 the entitlement, and it grants that team's product digest and nothing else — the producing team reads
 the exact text and releases it themselves before anybody outside can, evidence is baked as plain-text
-labels rather than links (a reader outside the team can open none of the targets), and the surface is
-cleanly *absent* rather than empty for anyone unnamed. Retraction stops further reads; it does not
+labels rather than links (a reader outside the team can open none of the targets, and only the work
+the summary cites gets a label at all), and the surface is cleanly *absent* rather than empty for
+anyone who has not been sent something — named or not. Retraction stops further reads; it does not
 un-read, and the product says so in those words ·
 a **data-seeded retrospective**, opened automatically when a cycle closes, whose gather-data phase
 is already filled in from the team's own cycles (and from PR/CI data when a connector is

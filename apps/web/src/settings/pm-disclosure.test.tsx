@@ -88,6 +88,42 @@ test('everything is off by default and rendering asks the server for nothing', (
   expect(requests).toHaveLength(0)
 })
 
+// A control that names an element which does not exist is a broken promise to a screen reader, and
+// the collapsed state is the one everybody starts in.
+test('the readers disclosure always points at an element that exists', () => {
+  renderSection({ ...ALL_OFF, enabled: true })
+
+  const toggle = screen.getByTestId('pm-disclosure-readers-toggle')
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  const controlled = toggle.getAttribute('aria-controls') ?? ''
+  const fieldset = document.getElementById(controlled)
+  expect(fieldset).not.toBeNull()
+  expect(fieldset).toHaveAttribute('hidden')
+
+  fireEvent.click(toggle)
+  expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  expect(document.getElementById(controlled)).not.toHaveAttribute('hidden')
+})
+
+// The one control in the product that used to be painted by the user agent rather than by the
+// theme: a native checkbox stays light in all three dark presets whatever the tokens say.
+test('every reader is a tokenized toggle, never a native checkbox', () => {
+  renderSection({
+    enabled: true,
+    killed: false,
+    teams: { 'team-platform': { pmVisible: true, audience: ['user-pm'] } },
+  })
+
+  fireEvent.click(screen.getByTestId('pm-disclosure-readers-toggle'))
+  const controls = screen.getAllByTestId('pm-disclosure-reader')
+  for (const control of controls) expect(control.tagName).toBe('BUTTON')
+  expect(controls[0]).toHaveAttribute('aria-pressed', 'true')
+  expect(controls[1]).toHaveAttribute('aria-pressed', 'false')
+  expect(
+    screen.getByTestId('pm-disclosure-settings').querySelectorAll('input[type="checkbox"]'),
+  ).toHaveLength(0)
+})
+
 // An admin who names themselves needs a fresh credential before the reader surface exists for them:
 // the audience is baked into the sync token, so without the re-mint the change appears not to work.
 test('the workspace switch posts one field and re-mints the caller’s own credential', async () => {
@@ -152,8 +188,8 @@ test('naming and unnaming a reader writes the whole audience for that team only'
       onChanged={() => Promise.resolve()}
     />,
   )
-  // The picker stays open across the re-render, so the box below is the same control, now checked.
-  expect(screen.getAllByTestId('pm-disclosure-reader')[0]).toBeChecked()
+  // The picker stays open across the re-render, so the control below is the same one, now pressed.
+  expect(screen.getAllByTestId('pm-disclosure-reader')[0]).toHaveAttribute('aria-pressed', 'true')
   fireEvent.click(screen.getAllByTestId('pm-disclosure-reader')[0] as HTMLElement)
   await waitFor(() => expect(writes()).toHaveLength(2))
   expect(writes()[1]?.body).toEqual({ teams: { 'team-platform': { audience: [] } } })

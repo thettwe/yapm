@@ -636,10 +636,21 @@ describe('pmAudienceScoped helper', () => {
     expect(where).not.toEqual(DENY_ALL_WHERE)
     expect(JSON.stringify(where)).toContain(MEMBER.userID)
     expect(JSON.stringify(where)).not.toContain('publishedAt')
-    // And the named reader, who is not on the team, gets nothing from the review query.
-    expect(
-      astOfArgs(queries.pmDigestReview.byCycle, { cycleId: CYCLE_ID }, NAMED).where,
-    ).not.toEqual(DENY_ALL_WHERE)
+  })
+
+  // THE AUDIENCE PLAYS NO PART IN THE TEAM AXIS, and this is the assertion that fails the day
+  // somebody "generalizes" `teamScoped` to know about `pmAudienceTeamIds`. The principal is a real
+  // workspace member with a viewer role, NO membership of the producing team, and that team on their
+  // audience list — so the review query still builds the ordinary correlated membership predicate
+  // over their own id, and the team id they are entitled to READ published digests for appears
+  // nowhere in it.
+  it('never lets a reader’s audience widen the team axis', () => {
+    const reader: AuthContext = { ...NON_MEMBER, role: 'viewer', pmAudienceTeamIds: [TEAM_ID] }
+    const where = JSON.stringify(
+      astOfArgs(queries.pmDigestReview.byCycle, { cycleId: CYCLE_ID }, reader).where,
+    )
+    expect(where).toContain(reader.userID)
+    expect(where).not.toContain(TEAM_ID)
   })
 
   // A relationship here would sync a cycle or team row to somebody with no membership of the

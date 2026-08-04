@@ -80,8 +80,10 @@ describe('buildPmDigestInput', () => {
 })
 
 describe('buildPmEvidenceLabels — server-rendered plain text, never a link', () => {
+  const ALL = new Set(['i1', 'pr1', 'ck1'])
+
   it('renders the issue key and the pull-request number', () => {
-    const labels = buildPmEvidenceLabels(FACTS)
+    const labels = buildPmEvidenceLabels(FACTS, ALL)
     expect(labels.i1).toBe('ENG-142')
     expect(labels.pr1).toBe('ENG-142 · PR #331')
     // A CI check inherits its pull request's label: "the check on ENG-142 · PR #331" is the only
@@ -90,7 +92,20 @@ describe('buildPmEvidenceLabels — server-rendered plain text, never a link', (
   })
 
   it('yields nothing for an id it never computed', () => {
-    expect(buildPmEvidenceLabels(FACTS)['not-a-real-id']).toBeUndefined()
+    expect(buildPmEvidenceLabels(FACTS, ALL)['not-a-real-id']).toBeUndefined()
+  })
+
+  // THE MAP IS THE DISCLOSURE, not just the prose it decorates: it is stored on the row and syncs
+  // verbatim to a reader outside the team, so an id nothing cites must not acquire a label.
+  it('labels only the cited ids, so an uncited issue key is never baked in', () => {
+    expect(buildPmEvidenceLabels(FACTS, new Set(['i1']))).toEqual({ i1: 'ENG-142' })
+    expect(buildPmEvidenceLabels(FACTS, new Set())).toEqual({})
+  })
+
+  // A check inherits the label of the pull request BEFORE it, so an uncited PR still has to advance
+  // the running label even though it contributes no entry of its own.
+  it('still inherits a pull request label onto a cited check when the PR itself is uncited', () => {
+    expect(buildPmEvidenceLabels(FACTS, new Set(['ck1']))).toEqual({ ck1: 'ENG-142 · PR #331' })
   })
 
   it('omits an issue with no number rather than inventing a label', () => {
@@ -99,6 +114,7 @@ describe('buildPmEvidenceLabels — server-rendered plain text, never a link', (
         cycle: { id: 'c1', teamId: 't1', name: 'Cycle 7' },
         issues: [{ id: 'i9', number: null, title: 'x', status: 'done', pullRequests: [] }],
       }),
+      new Set(['i9']),
     )
     expect(labels).toEqual({})
   })
@@ -170,12 +186,24 @@ describe.skipIf(DATABASE_URL === undefined)(
       return { workspaceId, teamId, cycleId, issueId, adminId }
     }
 
+    // The second issue is REAL work in the same cycle that no surviving item ever cites. It is here
+    // to be absent from the stored blob: the evidence-label map is baked by yapm and syncs verbatim
+    // to a reader outside the team, so an uncited issue's key must never ride along in it.
+    const UNCITED_KEY = 'PMD-2'
+
     function factsFor(teamId: string, cycleId: string, issueId: string): CycleFacts {
       return buildCycleFacts({
         cycle: { id: cycleId, teamId, name: 'Cycle 7' },
         teamKey: 'PMD',
         issues: [
           { id: issueId, number: 1, title: 'Guest checkout', status: 'done', pullRequests: [] },
+          {
+            id: `${issueId}-uncited`,
+            number: 2,
+            title: 'Nobody summarized this',
+            status: 'done',
+            pullRequests: [],
+          },
         ],
       })
     }
@@ -250,6 +278,11 @@ describe.skipIf(DATABASE_URL === undefined)(
         }
         expect(content.subject).toEqual(SUBJECT)
         expect(content.evidenceLabels?.[issueId]).toBe('PMD-1')
+        // The uncited issue of the same cycle contributes NOTHING to the row — not a label, not a
+        // key, not anywhere at any depth. Asserted over the serialized blob rather than over the map
+        // alone, because the map is only one of the places it could have leaked into.
+        expect(content.evidenceLabels?.[`${issueId}-uncited`]).toBeUndefined()
+        expect(JSON.stringify(row?.content)).not.toContain(UNCITED_KEY)
 
         // The cost is written even though the column does not sync, so the spend cap sees it.
         expect(row?.estimated_cost_usd).not.toBeNull()

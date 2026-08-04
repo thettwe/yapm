@@ -2,7 +2,7 @@ import { useQuery, useZero } from '@rocicorp/zero/react'
 import { mutators, queries } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { MegaphoneIcon } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { type ReactNode, type RefObject, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import { runMutation } from '@/lib/mutation'
 import {
@@ -25,6 +25,10 @@ export function PmDigestShareCard({ cycleId }: { cycleId: string }) {
   const [row] = useQuery(queries.pmDigestReview.byCycle({ cycleId }))
   const digest = row as PmDigestRowData | undefined
   const content = useMemo(() => (digest ? pmDigestContent(digest) : null), [digest])
+  // The one element on this card that outlives both controls. Publishing removes the button that was
+  // just pressed and mounts a different one, so without an anchor to hand focus to, the act of
+  // releasing drops focus to `<body>` and the next Tab restarts at the top of the document.
+  const headingRef = useRef<HTMLHeadingElement>(null)
 
   // No row means the workspace or this team has product sharing off, and there is nothing to review.
   if (!digest) return null
@@ -42,7 +46,9 @@ export function PmDigestShareCard({ cycleId }: { cycleId: string }) {
         <MegaphoneIcon className="size-4 text-text-3" aria-hidden="true" />
         <h3
           id="pm-digest-share-heading"
-          className="text-sm font-semibold tracking-tight text-text-1"
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-sm font-semibold tracking-tight text-text-1 outline-none"
         >
           Shared with product
         </h3>
@@ -63,14 +69,50 @@ export function PmDigestShareCard({ cycleId }: { cycleId: string }) {
           <p className="text-[11px] text-text-3" data-testid="pm-digest-share-framing">
             {pmDigestFraming(digest)}
           </p>
-          <PmShareControls digest={digest} published={published} />
+          <PmShareControls digest={digest} published={published} focusAnchor={headingRef} />
         </>
       )}
     </section>
   )
 }
 
-function PmShareControls({ digest, published }: { digest: PmDigestRowData; published: boolean }) {
+// THE FOCUS HANDOFF, and it is a *deletion* of this fiber that performs it: React runs a layout
+// effect's cleanup before it removes the subtree's DOM nodes, which is the only moment the control
+// both still exists and is known to be going away. `RetryButton` exists for exactly this reason and
+// solves exactly this problem; publish and retract replace each other rather than disappearing, so
+// the same failure applies with the same cure — a stable anchor that outlives both.
+function ControlRow({
+  focusAnchor,
+  children,
+}: {
+  focusAnchor: RefObject<HTMLElement | null>
+  children: ReactNode
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    const row = ref.current
+    return () => {
+      if (row?.contains(document.activeElement)) focusAnchor.current?.focus()
+    }
+  }, [focusAnchor])
+
+  return (
+    <div ref={ref} className="flex flex-wrap items-center gap-2">
+      {children}
+    </div>
+  )
+}
+
+function PmShareControls({
+  digest,
+  published,
+  focusAnchor,
+}: {
+  digest: PmDigestRowData
+  published: boolean
+  focusAnchor: RefObject<HTMLElement | null>
+}) {
   const zero = useZero()
   const { canWrite } = useMembership()
   const [error, setError] = useState<string | undefined>(undefined)
@@ -132,7 +174,7 @@ function PmShareControls({ digest, published }: { digest: PmDigestRowData; publi
             named when you shared it, not a running count.
           </p>
           {canWrite ? (
-            <div className="flex flex-wrap items-center gap-2">
+            <ControlRow focusAnchor={focusAnchor}>
               <Button
                 size="sm"
                 variant="outline"
@@ -144,18 +186,18 @@ function PmShareControls({ digest, published }: { digest: PmDigestRowData; publi
               <span className="text-[11px] text-text-3">
                 Retracting stops further reads. It does not un-read what has already been read.
               </span>
-            </div>
+            </ControlRow>
           ) : null}
         </>
       ) : canWrite && releasable ? (
-        <div className="flex flex-wrap items-center gap-2">
+        <ControlRow focusAnchor={focusAnchor}>
           <Button size="sm" onClick={() => void share()} data-testid="pm-digest-publish">
             Share with product
           </Button>
           <span className="text-[11px] text-text-3">
             Sharing cannot be taken back once it has been read.
           </span>
-        </div>
+        </ControlRow>
       ) : null}
     </div>
   )

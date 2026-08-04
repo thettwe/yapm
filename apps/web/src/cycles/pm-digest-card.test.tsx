@@ -134,6 +134,28 @@ test('after sharing the team is told how many people, never which people', () =>
   expect(screen.queryByTestId('pm-digest-publish')).toBeNull()
 })
 
+// Publishing removes the button that was just pressed and mounts a different one. Without a handoff
+// that is a dropped focus and a Tab order restarting at the top of the document — the exact failure
+// `RetryButton` exists to prevent, on a control that is pressed from the keyboard by design.
+test('releasing and retracting hand focus to the card heading rather than to the body', () => {
+  const { rerender } = render(<PmDigestShareCard cycleId="cycle-12" />)
+  const heading = screen.getByRole('heading', { name: 'Shared with product' })
+
+  screen.getByTestId('pm-digest-publish').focus()
+  zero.row = row({ publishedAt: NOW, audienceSizeAtPublish: 2 })
+  rerender(<PmDigestShareCard cycleId="cycle-12" />)
+
+  expect(screen.getByTestId('pm-digest-retract')).toBeInTheDocument()
+  expect(heading).toHaveFocus()
+
+  screen.getByTestId('pm-digest-retract').focus()
+  zero.row = row()
+  rerender(<PmDigestShareCard cycleId="cycle-12" />)
+
+  expect(screen.getByTestId('pm-digest-publish')).toBeInTheDocument()
+  expect(heading).toHaveFocus()
+})
+
 // The honest limit, in words rather than implied by a button label. It is the entire argument for the
 // gate being default-on.
 test('retraction says what it cannot do, and writes the unpublish mutator', async () => {

@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type Locator, type Page, test } from '@playwright/test'
 import type { StoredPmDigestContent } from '@yapm/schema'
 import {
   countPolicyAudit,
@@ -130,12 +130,16 @@ async function openCyclePanel(page: Page, teamName: string, cycleName: string): 
 
 // Focus and Enter, never a click: every control this change adds is a permission action, and a
 // permission action nobody can reach without a pointer is not keyboard-first.
-async function press(page: Page, testId: string, key = 'Enter'): Promise<void> {
-  const control = page.getByTestId(testId)
+//
+// Takes a LOCATOR rather than a test id, because half of these controls are repeated once per team
+// and the caller is the only one who knows which team it means. A helper that resolved a test id
+// itself would either explode on strict mode or, worse, quietly settle for `.first()` — a control
+// in some other team's row, in the fixture workspace every spec shares.
+async function press(control: Locator, key = 'Enter'): Promise<void> {
   await expect(control).toBeVisible({ timeout: 20_000 })
   await control.focus()
   await expect(control).toBeFocused()
-  await page.keyboard.press(key)
+  await control.page().keyboard.press(key)
 }
 
 // The theme cache rather than the appearance popover, on `auto-status.spec.ts`'s precedent: the
@@ -155,19 +159,16 @@ async function setPreset(page: Page, preset: string, mode: 'light' | 'dark'): Pr
 // What a preset actually painted. A token that failed to resolve paints nothing — transparent text
 // on an unset surface — and collecting the values across presets is what makes a hardcoded literal
 // FAIL rather than merely render: a literal is the same string in all six dressings.
-async function painted(page: Page, testId: string): Promise<string> {
-  const values = await page
-    .getByTestId(testId)
-    .first()
-    .evaluate((node) => {
-      const style = window.getComputedStyle(node)
-      return {
-        color: style.color,
-        surface: window.getComputedStyle(document.body).backgroundColor,
-        border: style.borderTopColor,
-        font: style.fontFamily,
-      }
-    })
+async function painted(target: Locator): Promise<string> {
+  const values = await target.evaluate((node) => {
+    const style = window.getComputedStyle(node)
+    return {
+      color: style.color,
+      surface: window.getComputedStyle(document.body).backgroundColor,
+      border: style.borderTopColor,
+      font: style.fontFamily,
+    }
+  })
   expect(values.color).not.toBe('rgba(0, 0, 0, 0)')
   expect(values.surface).not.toBe('rgba(0, 0, 0, 0)')
   expect(values.font).not.toBe('')
@@ -280,7 +281,7 @@ test('with the default policy the PM reader surface does not exist, and only the
       await setPreset(page, preset, mode)
       await page.getByRole('button', { name: new RegExp(cycleName) }).click()
       await expect(page.getByTestId('pm-digest-share')).toBeVisible({ timeout: 30_000 })
-      dressings.add(await painted(page, 'pm-digest-share'))
+      dressings.add(await painted(page.getByTestId('pm-digest-share')))
     }
   }
   // Six distinct dressings: three presets times light and dark. A hardcoded color anywhere on the
@@ -396,7 +397,7 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     await expect(block).toBeVisible({ timeout: 20_000 })
 
     if ((await block.getAttribute('data-enabled')) !== 'true') {
-      await press(page, 'pm-disclosure-enabled')
+      await press(page.getByTestId('pm-disclosure-enabled'))
     }
     await expect(block).toHaveAttribute('data-enabled', 'true', { timeout: 20_000 })
     await expect(block).toHaveAttribute('data-killed', 'false')
@@ -406,23 +407,18 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     )
     await expect(teamRow).toBeVisible({ timeout: 20_000 })
     await expect(teamRow).toHaveAttribute('data-visible', 'false')
-    const teamToggle = teamRow.getByTestId('pm-disclosure-team-toggle')
-    await teamToggle.focus()
-    await page.keyboard.press('Enter')
+    await press(teamRow.getByTestId('pm-disclosure-team-toggle'))
     await expect(teamRow).toHaveAttribute('data-visible', 'true', { timeout: 20_000 })
 
     const readersToggle = teamRow.getByTestId('pm-disclosure-readers-toggle')
-    await readersToggle.focus()
-    await page.keyboard.press('Enter')
+    await press(readersToggle)
     // A tokenized toggle rather than a native checkbox — the user agent paints a checkbox from its
     // own color scheme, which made it the one control in the product that stayed light in every dark
     // preset. `aria-pressed` carries the state.
     const readerBox = teamRow.locator(
       `[data-testid="pm-disclosure-reader"][data-user-id="${readerId}"]`,
     )
-    await expect(readerBox).toBeVisible({ timeout: 20_000 })
-    await readerBox.focus()
-    await page.keyboard.press('Enter')
+    await press(readerBox)
     await expect(readerBox).toHaveAttribute('aria-pressed', 'true', { timeout: 20_000 })
 
     // Every policy write left a record.
@@ -455,7 +451,7 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     // A HUMAN ON THE PRODUCING TEAM RELEASES IT, from the keyboard.
     await openCyclePanel(page, team.name, cycleName)
     await expect(page.getByTestId('pm-digest-share')).toBeVisible({ timeout: 30_000 })
-    await press(page, 'pm-digest-publish')
+    await press(page.getByTestId('pm-digest-publish'))
 
     // What the producing team is told afterwards: a count, snapshotted at release, and never a name.
     // The count is stamped by the server override, so seeing it here proves that ran.
@@ -487,7 +483,7 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     await readerPage.goto('/')
     await readerPage.reload()
     await expect(readerPage.getByTestId('pm-digests-entry')).toBeVisible({ timeout: 30_000 })
-    await press(readerPage, 'pm-digests-entry')
+    await press(readerPage.getByTestId('pm-digests-entry'))
     await expect(readerPage).toHaveURL(/\/digests$/u)
     await expect(readerPage.getByRole('heading', { name: 'Product digests' })).toBeVisible({
       timeout: 30_000,
@@ -532,7 +528,7 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
         await setPreset(readerPage, preset, mode)
         await expect(readerPage.getByTestId('pm-digest-card')).toBeVisible({ timeout: 30_000 })
         await expect(readerPage.getByTestId('pm-digest-evidence')).toHaveText(EVIDENCE_LABEL)
-        readerDressings.add(await painted(readerPage, 'pm-digest-card'))
+        readerDressings.add(await painted(readerPage.getByTestId('pm-digest-card')))
       }
     }
     expect(readerDressings.size).toBe(6)
@@ -544,21 +540,25 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
         await setPreset(page, preset, mode)
         const settings = page.getByTestId('pm-disclosure-settings')
         await expect(settings).toBeVisible({ timeout: 30_000 })
+        // Scoped to THIS team's row, never document-wide: the two per-team controls exist once per
+        // team in the workspace, so an unscoped locator is a strict-mode violation, and `.first()`
+        // would sample another team's row — whose readers fieldset is still collapsed, and whose
+        // paint therefore says nothing about the control this sweep exists to check.
+        await expect(teamRow).toBeVisible({ timeout: 20_000 })
         for (const control of [
-          'pm-disclosure-enabled',
-          'pm-disclosure-killed',
-          'pm-disclosure-team-toggle',
-          'pm-disclosure-readers-toggle',
+          settings.getByTestId('pm-disclosure-enabled'),
+          settings.getByTestId('pm-disclosure-killed'),
+          teamRow.getByTestId('pm-disclosure-team-toggle'),
+          teamRow.getByTestId('pm-disclosure-readers-toggle'),
         ]) {
-          await expect(page.getByTestId(control).first()).toBeVisible({ timeout: 20_000 })
+          await expect(control).toBeVisible({ timeout: 20_000 })
         }
         // The audience picker included: it is the control that was painted by the user agent rather
-        // than by the theme, so a sweep that skipped it would have missed exactly that.
-        await press(page, 'pm-disclosure-readers-toggle')
-        await expect(page.getByTestId('pm-disclosure-reader').first()).toBeVisible({
-          timeout: 20_000,
-        })
-        policyDressings.add(await painted(page, 'pm-disclosure-reader'))
+        // than by the theme, so a sweep that skipped it would have missed exactly that. The reload
+        // `setPreset` does resets the row's open state, so the fieldset needs reopening every pass.
+        await press(readersToggle)
+        await expect(readerBox).toBeVisible({ timeout: 20_000 })
+        policyDressings.add(await painted(readerBox))
       }
     }
     expect(policyDressings.size).toBe(6)
@@ -566,7 +566,7 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     // RETRACTION STOPS FURTHER READS.
     await openCyclePanel(page, team.name, cycleName)
     await expect(page.getByTestId('pm-digest-share')).toBeVisible({ timeout: 30_000 })
-    await press(page, 'pm-digest-retract')
+    await press(page.getByTestId('pm-digest-retract'))
     await expect(page.getByTestId('pm-digest-share')).toHaveAttribute('data-published', 'false', {
       timeout: 30_000,
     })

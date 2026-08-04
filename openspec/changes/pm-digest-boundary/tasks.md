@@ -201,9 +201,10 @@
       cycle view shows the "Shared with N readers" marker; retracting removes the reader's access.
       `apps/web/e2e/pm-digest.spec.ts`. Written in this pass and never executed locally — it needs
       the three-container stack — so CI is its first run (design I13).
-- [ ] 10.10 Run `pnpm turbo lint typecheck test build` and the compose smoke test on the assigned
-      ports (`POSTGRES_HOST_PORT=5444 ZERO_CACHE_HOST_PORT=4852 YAPM_HOST_PORT=3004`, project
-      `yapm-pdb`); tear down with `down -v`.
+- [x] 10.10 Run `pnpm turbo lint typecheck test build` and the compose smoke test. Discharged by CI
+      on PR #22 rather than locally — all six checks green on run `30931393368` (lint/typecheck/
+      test/build, package boundaries, catalog guard, commit hygiene, compose smoke, Playwright e2e
+      at 86/86 with no flakes). The compose stack was never brought up on this machine.
 
 ## 11. Documentation
 

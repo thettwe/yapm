@@ -577,3 +577,15 @@ the next person to write a replica assertion will otherwise learn them the same 
 
 None of the three was a defect in the change. The e2e is nonetheless the only place any of them
 could have surfaced, which is I13's argument restated by events.
+
+**One repair outside this change fell out of the same diagnosis.** `retro-ai.spec.ts` asserted the
+drafted row's presence with a single `readReplica` sample and was the suite's one recurring flake —
+it flaked on the run that first went green here. It now polls, which is strictly more tolerant and
+leaves the claim unchanged. Fixing a neighbouring change's test is normally out of scope; the
+diagnosis was in hand and a known-flaky assertion is how a suite stops being believed.
+
+**Where this change actually stands.** All six checks green on PR #22 (run `30931393368`), including
+the Playwright job at 86/86 with no flakes and the compose smoke test. Every task in `tasks.md` is
+ticked. The pg integration tests skip locally without a `DATABASE_URL` but are hard-failed in CI by
+design (`queries.pm-digest.pg.test.ts` throws rather than skipping when `CI` is set), so the
+falsifiable check ran.

@@ -27,7 +27,10 @@ import { runMutation } from '@/lib/mutation'
 import { RETRO_CATEGORY_LABEL, RETRO_VERDICT_LABEL } from '@/retro/ai-labels'
 import {
   type AiStatusResponse,
+  type DisclosureAuditEvent,
+  type DisclosureAuditLog,
   fetchAiConfig,
+  fetchAiDisclosureLog,
   fetchAiVerdictLog,
   type RetroVerdictLog,
   removeAiProviderKey,
@@ -104,6 +107,8 @@ function AiSettingsAdmin() {
       {data?.status ? (
         <PmDisclosureSection policy={data.status.pmDisclosure} onChanged={reload} />
       ) : null}
+
+      <DisclosureAuditSection />
 
       <RetroDraftSection />
 
@@ -220,6 +225,153 @@ function VerdictLogSection() {
                 </span>
               </li>
             ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+// What the four disclosure events say happened, in the product's own words. `generated` is the model
+// run reaching a terminal status; the two human acts are named as acts.
+const DISCLOSURE_EVENT_LABEL: Record<DisclosureAuditEvent['event'], string> = {
+  policy_changed: 'Policy changed',
+  generated: 'Digest generated',
+  published: 'Shared',
+  unpublished: 'Retracted',
+}
+
+// yapm-computed metadata only — the shape it reads has no field capable of carrying a summary, a
+// highlight or an evidence label, so there is nothing here to decline to render.
+function disclosureDetail(event: DisclosureAuditEvent): string | null {
+  const parts: string[] = []
+  const { detail } = event
+  if (detail.audienceSize !== undefined) {
+    parts.push(detail.audienceSize === 1 ? '1 reader' : `${detail.audienceSize} readers`)
+  }
+  if (detail.status !== undefined) parts.push(detail.status)
+  if (detail.enabled !== undefined) parts.push(detail.enabled ? 'disclosure on' : 'disclosure off')
+  if (detail.killed !== undefined)
+    parts.push(detail.killed ? 'kill switch set' : 'kill switch clear')
+  if (detail.teamsChanged !== undefined && detail.teamsChanged.length > 0) {
+    parts.push(
+      detail.teamsChanged.length === 1
+        ? '1 team edited'
+        : `${detail.teamsChanged.length} teams edited`,
+    )
+  }
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
+function disclosureTime(ts: number): string {
+  return new Date(ts).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+// The disclosure audit view — the reader half of the promise the boundary made. Without it
+// `ai_disclosure_audit` is a table nobody can read, which is decoration rather than an audit log.
+//
+// WHAT IT REPORTS: what was disclosed, when, by whom, and to how many readers. WHAT IT CANNOT
+// REPORT, structurally rather than editorially: who read anything. There is no read event in the
+// recorded set, so nothing in the schema knows, and this change adds nothing that would.
+//
+// The totals are grouped by TEAM and there is no actor-keyed aggregate on either shape — VISION #8
+// again, fenced by the shape rather than by this component choosing not to render a field.
+//
+// ABSENCE IS DRIVEN BY THE LOG BEING EMPTY, not by the disclosure switch. Hiding it when disclosure
+// is off would hide the history from an admin at the exact moment they turned disclosure off, which
+// is a governance regression dressed as consistency. An instance that never enabled disclosure has
+// an empty log and therefore no section — the same absence, arrived at from the fact.
+function DisclosureAuditSection() {
+  const headingId = useId()
+  const [log, setLog] = useState<DisclosureAuditLog | null>(null)
+
+  useEffect(() => {
+    let live = true
+    fetchAiDisclosureLog()
+      .then((next) => {
+        if (live) setLog(next)
+      })
+      .catch(() => {
+        // Deliberately silent. This section sits below the ones that matter and does not exist at all
+        // on an instance that has never disclosed, so an error banner here would announce a channel
+        // to an admin who has not opened one.
+      })
+    return () => {
+      live = false
+    }
+  }, [])
+
+  const totals = log?.totals ?? []
+  const recent = log?.recent ?? []
+  if (totals.length === 0 && recent.length === 0) return null
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="flex flex-col gap-3 rounded-card border border-border p-4"
+      data-testid="ai-disclosure-log"
+    >
+      <header className="flex flex-col gap-1">
+        <h2 id={headingId} className="font-heading text-base font-semibold text-text-1">
+          What has been disclosed
+        </h2>
+        <p className="text-sm text-text-2">
+          Every policy change, generation, publication and retraction is recorded here. It reports
+          what was disclosed and to how many readers — never who read it, because yapm does not
+          record that anywhere. Retracting a digest stops further reads; it does not un-read.
+          Records are deleted after the retention window your instance is configured with
+          (AI_DISCLOSURE_RETENTION_DAYS, one year by default).
+        </p>
+      </header>
+
+      {totals.length > 0 ? (
+        <ul className="flex flex-col gap-2" data-testid="ai-disclosure-totals">
+          {totals.map((team) => (
+            <li
+              key={team.teamId ?? 'workspace'}
+              className="flex flex-wrap items-center gap-3 rounded-control border border-border p-3"
+            >
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-1">
+                {team.teamName ?? 'Workspace-wide'}
+              </span>
+              <span className="text-xs text-text-2">
+                {team.policyChanged} policy changes · {team.generated} generated · {team.published}{' '}
+                shared · {team.unpublished} retracted
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {recent.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold text-text-1">Most recent events</h3>
+          <ul className="flex flex-col gap-2" data-testid="ai-disclosure-recent">
+            {recent.map((event) => {
+              const detail = disclosureDetail(event)
+              return (
+                <li
+                  key={event.id}
+                  className="flex flex-col gap-1 rounded-control border border-border p-3"
+                  data-event={event.event}
+                >
+                  <span className="text-[13px] leading-relaxed text-text-1">
+                    {DISCLOSURE_EVENT_LABEL[event.event]}
+                    {event.teamName === null ? '' : ` · ${event.teamName}`}
+                  </span>
+                  <span className="text-xs text-text-2">
+                    {disclosureTime(event.createdAt)}
+                    {event.actorName === null ? ' · yapm' : ` · ${event.actorName}`}
+                    {detail === null ? '' : ` · ${detail}`}
+                  </span>
+                </li>
+              )
+            })}
           </ul>
         </div>
       ) : null}

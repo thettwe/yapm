@@ -41,6 +41,7 @@ vi.mock('@/auth/use-membership', () => ({
 vi.mock('@/settings/ai', () => ({
   fetchAiConfig: () =>
     Promise.resolve({ canStoreKeys: false, missingEnv: [], envProviders: [], status: null }),
+  fetchAiDisclosureLog: () => Promise.resolve({ totals: [], recent: [] }),
   fetchAiVerdictLog: () => Promise.resolve({ totals: [], recent: [] }),
   removeAiProviderKey: () => Promise.resolve(),
   setAiProviderKey: () => Promise.resolve(),

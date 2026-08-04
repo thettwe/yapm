@@ -9,6 +9,7 @@ import {
   ConnectorAuthorizationError,
   type DB,
   deleteConnectorSecret,
+  disclosureAuditLogForWorkspace,
   emptyAiConfigData,
   getAiConfig,
   getConnectorConfig,
@@ -177,6 +178,22 @@ export function createAiAdminRoutes(options: AiAdminRoutesOptions): Hono {
   ai.get('/verdicts', requireAdmin, async (c) => {
     const { workspaceId } = c.get('aiAdmin')
     return c.json(await retroVerdictLogForWorkspace(db, workspaceId))
+  })
+
+  // The disclosure audit view. ADMIN-GATED BEFORE ANY READ, like `/verdicts` and for the same
+  // reason: `requireAdmin` refuses a member or a viewer without touching a disclosure, a team or a
+  // digest, and the refusal is byte-identical in a workspace that has used disclosure and one that
+  // never has. That is the `search`/`attachments` non-oracle discipline — nothing in the refusal
+  // distinguishes "not allowed" from "nothing there".
+  //
+  // A READ, with no companion write: there is no export, no per-team retention override and no
+  // legal-hold flag. What it reports is WHAT was disclosed and to HOW MANY readers. It cannot report
+  // who read anything, because no read is recorded anywhere in the schema, and it cannot be turned
+  // into a per-person surface by a later tile, because the totals are grouped by team and the shape
+  // has no actor-keyed field for a count to be added to.
+  ai.get('/disclosures', requireAdmin, async (c) => {
+    const { workspaceId } = c.get('aiAdmin')
+    return c.json(await disclosureAuditLogForWorkspace(db, workspaceId))
   })
 
   // Write-only masked key entry: accepts a plaintext key, stores it encrypted, never returns it.

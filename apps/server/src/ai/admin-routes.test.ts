@@ -356,6 +356,110 @@ describe.skipIf(DATABASE_URL === undefined)('createAiAdminRoutes — admin surfa
     expect(anonymous.status).toBe(401)
   })
 
+  // The disclosure audit view. Three properties, each asserted rather than described.
+  async function workspaceWithADisclosure() {
+    const { workspaceId, adminId, memberId, viewerId } = await freshWorkspace()
+    const teamId = newId()
+    const readerId = newId()
+    await database.db
+      .insertInto('team')
+      .values({
+        id: teamId,
+        workspace_id: workspaceId,
+        name: 'Platform',
+        key: `AD${newId().slice(-6)}`,
+      })
+      .execute()
+    await database.db
+      .insertInto('ai_disclosure_audit')
+      .values([
+        {
+          id: newId(),
+          workspace_id: workspaceId,
+          team_id: teamId,
+          actor_id: adminId,
+          event: 'policy_changed',
+          detail: { enabled: true, killed: false, teamsChanged: [teamId] },
+        },
+        {
+          id: newId(),
+          workspace_id: workspaceId,
+          team_id: teamId,
+          actor_id: memberId,
+          event: 'published',
+          detail: { audienceSize: 2 },
+        },
+      ])
+      .execute()
+    return { workspaceId, adminId, memberId, viewerId, teamId, readerId }
+  }
+
+  it('gives an admin the per-team disclosure totals and the recent events', async () => {
+    const { adminId, teamId } = await workspaceWithADisclosure()
+
+    const response = await routes().request('/api/v1/ai/disclosures', {
+      headers: { 'x-test-user': adminId },
+    })
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      totals: { teamId: string | null; policyChanged: number; published: number }[]
+      recent: { event: string; teamName: string | null; detail: Record<string, unknown> }[]
+    }
+
+    const team = body.totals.find((entry) => entry.teamId === teamId)
+    expect(team?.policyChanged).toBe(1)
+    expect(team?.published).toBe(1)
+    expect(body.recent.map((event) => event.event).sort()).toEqual(['policy_changed', 'published'])
+    expect(body.recent.find((event) => event.event === 'published')?.detail).toEqual({
+      audienceSize: 2,
+    })
+  })
+
+  // VISION #8, asserted structurally: the response carries no reader identity, no read event and no
+  // audience list — because nothing in the schema records a read and the policy record stores only
+  // WHICH team ids a write touched.
+  it('surfaces no per-person reading data of any kind', async () => {
+    const { adminId, teamId, readerId } = await workspaceWithADisclosure()
+
+    const response = await routes().request('/api/v1/ai/disclosures', {
+      headers: { 'x-test-user': adminId },
+    })
+    const text = await response.text()
+
+    expect(text).not.toContain(readerId)
+    expect(text).not.toMatch(/"(audience|readers|readBy|readAt|viewedBy|recipients)"/)
+    expect(text).not.toContain('"read"')
+    // `teamsChanged` carries team IDS, which is the one id-shaped field, and it is a team.
+    expect(text).toContain(teamId)
+  })
+
+  // The `search`/`attachments` non-oracle discipline: refused BEFORE any read, and the refusal is
+  // byte-identical in a workspace that has used disclosure and one that never has.
+  it('refuses a member and a viewer before any read, with no permission oracle', async () => {
+    const { memberId, viewerId } = await workspaceWithADisclosure()
+    const bare = await freshWorkspace()
+
+    const bodies: string[] = []
+    for (const user of [memberId, viewerId]) {
+      const response = await routes().request('/api/v1/ai/disclosures', {
+        headers: { 'x-test-user': user },
+      })
+      expect(response.status).toBe(403)
+      bodies.push(await response.text())
+    }
+
+    const never = await routes().request('/api/v1/ai/disclosures', {
+      headers: { 'x-test-user': bare.memberId },
+    })
+    expect(never.status).toBe(403)
+    const neverBody = await never.text()
+    // Identical bytes: nothing in the refusal distinguishes "not allowed" from "nothing there".
+    for (const body of bodies) expect(body).toBe(neverBody)
+
+    const anonymous = await routes().request('/api/v1/ai/disclosures')
+    expect(anonymous.status).toBe(401)
+  })
+
   it('refuses to store a key when the encryption codec is unavailable', async () => {
     const { adminId } = await freshWorkspace()
     const response = await routes(false).request('/api/v1/ai/keys/anthropic', {

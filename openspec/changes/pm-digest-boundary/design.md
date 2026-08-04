@@ -502,3 +502,55 @@ explicitly scoped to the fast gates because the open PR runs the full suite in C
 a spec that has never been executed. A blind E2E against a surface whose whole point is conditional
 absence is more likely to redden CI than to prove anything, and a red suite costs the next reader
 more than a missing test they were told about.
+
+### I13 — the Playwright spec ships after all, and I12 is superseded
+
+**I12 deferred task 10.9 on the grounds that a spec which has never run is worse than a missing
+one. That reasoning was about a pass with no owner for it; this pass has one, so the trade is
+different.** PROCESS.md §3's big-feature rule is met on four counts here rather than the two that
+trigger it (a new synced entity, new mutators, a new permission surface, signature UI), and the two
+properties that matter most are properties of the ASSEMBLED stack rather than of any module:
+
+- **Default-off absence.** A unit test can assert a component returned `null`. Only a running client
+  with a live sync connection can assert that the row never arrived — and "not rendered" and "not
+  received" are different disclosures. `pm-digest.spec.ts` reads the client's own IndexedDB replica
+  for that, on `retro-ai.spec.ts`'s precedent, and asserts the replica is non-empty first so the
+  claim cannot pass by being vacuous.
+- **The publish gate.** Generation, policy and release are three subsystems — a pg-boss job, an
+  admin HTTP surface, and a Zero mutator with a server override. The gate is only real if it holds
+  across all three at once, and nothing below e2e assembles all three.
+
+**Chosen:** ship it, and say plainly that CI is its first execution. It is written to fail loudly
+rather than flakily — every wait is on a state assertion with a timeout, never a sleep — and the
+alternative (a shipped permission boundary whose default-off absence was never observed in a
+browser) is the worse of the two risks now that the surfaces exist to point it at.
+
+Two things it deliberately does not do: it does not generate (the model call needs a provider key no
+e2e has, and `apps/server/src/ai/pm-digest.test.ts` covers what the model receives headless), and it
+does not seed `published_at` — publication is the permission event this change exists to gate, so
+causing one has to go through the shipped mutator.
+
+Task **10.8**'s zero-cache half lives here too rather than in a fourth pg test: "both tables
+replicate" is only observable from a client, and the spec asserts the asymmetry directly — the
+reader's replica holds exactly one `pm_digest` row that reached it through zero-cache, and no
+`ai_disclosure_audit` row anywhere in its bytes. The static half (the migration applies, the four
+omitted columns exist in Postgres and not in the Zero schema, both CHECK texts) is already asserted
+in `schema-drift.test.ts`.
+
+### I14 — `main` moved under the branch, and the merge is resolved here rather than left for review
+
+**Not anticipated by the specs.** While this change was being built, the sibling change 19
+(`retro-ratification`) landed on `main` as `e467947`, and PR #22 went `CONFLICTING`: README, ROADMAP,
+`migrations/index.ts`, `zero/ai-tools.ts` and `zero/mutators.ts` all grew additively on both sides.
+A conflicted PR is one whose CI cannot run at all, so "the open PR runs the full suite" — the premise
+every pass of this build has relied on — silently stops being true.
+
+**Chosen:** merge `origin/main` into the feature branch and resolve the five conflicts here. Every
+one of them is two additive edits to the same list (a migration registration, a mutator map entry, a
+tool-registry entry, a feature row), so the resolution is "keep both, in the order the file already
+implies" and nothing is arbitrated away. Migration numbering survives untouched: change 19 owns
+`0020`, this change owns `0021`, and the registration order in `migrations/index.ts` is `0020` then
+`0021`.
+
+This is not `gh pr merge` and does not land anything: it is the feature branch catching up to its
+base so that the review flow that owns the merge decision has a PR it can actually see CI for.

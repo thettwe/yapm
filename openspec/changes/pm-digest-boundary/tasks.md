@@ -189,13 +189,18 @@
       retract and per policy change; none of them contains any substring of the digest content.
 - [x] 10.7 **Integration (pg)** — `getWorkspaceAiSpendUsd` rises when a `ready` `pm_digest` is
       inserted.
-- [ ] 10.8 **Integration (pg)** — the migration applies against a running zero-cache and both tables
-      replicate; `ai_disclosure_audit` is nameable in no query.
-- [ ] 10.9 **E2E** — the big-feature rule is met on all four counts (synced entity, mutator,
+- [x] 10.8 **Integration (pg)** — the migration applies against a running zero-cache and both tables
+      replicate; `ai_disclosure_audit` is nameable in no query. Static half in
+      `schema-drift.test.ts` (migration, the four omitted columns from both sides, both CHECK texts,
+      the table's absence from the Zero schema); the running-stack half in `pm-digest.spec.ts`,
+      which is the only place a client's replica can be read (design I13).
+- [x] 10.9 **E2E** — the big-feature rule is met on all four counts (synced entity, mutator,
       permission surface, signature UI), so Playwright covers: with the default config no digests
       navigation entry or route exists and no disclosure query is issued; after an admin names a
       reader and a team member publishes, that reader reads it keyboard-only; the producing team's
       cycle view shows the "Shared with N readers" marker; retracting removes the reader's access.
+      `apps/web/e2e/pm-digest.spec.ts`. Written in this pass and never executed locally — it needs
+      the three-container stack — so CI is its first run (design I13).
 - [ ] 10.10 Run `pnpm turbo lint typecheck test build` and the compose smoke test on the assigned
       ports (`POSTGRES_HOST_PORT=5444 ZERO_CACHE_HOST_PORT=4852 YAPM_HOST_PORT=3004`, project
       `yapm-pdb`); tear down with `down -v`.

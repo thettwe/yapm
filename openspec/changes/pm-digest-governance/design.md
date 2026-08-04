@@ -370,3 +370,67 @@ comment cites a lifted prohibition fails the next honest copy edit for the wrong
 replaces it is the claim that stays false however governed this feature becomes: the switch copy
 offers no reading data — no "who read it", no "who opened", no read log. That property is the one
 VISION #8 actually cares about, and a blocklist of two words would never have caught its violation.
+
+### I8 — The ready sweep carries the whole read predicate, not half of it
+
+D4 says entitlement is re-resolved at send time through `resolvePmAudienceTeamIds`. That resolver
+answers the *audience* half of `pmAudienceScoped`; the other half is `published_at is not null`, and
+the sweep was not asking it. A digest retracted between the release and the sweep was still mailed
+"ready" — a link into a surface the reader can no longer open, and the one thing a notice cannot take
+back.
+
+**Chosen:** `pendingPmDigestReadyEmails` joins `pm_digest` and selects only while it is still
+published. The retracted notice is skipped and left UNSTAMPED, exactly like a withheld one, so a
+re-publication inside the recency window still reaches its readers. The join is INNER, so a digest
+deleted outright takes its notice with it.
+
+### I9 — The fan-out intersects the audience with current workspace membership
+
+The stored audience is a policy an admin wrote, not a membership: nothing prunes it when somebody
+leaves the workspace, and `resolvePmAudienceTeamIds` returns `[]` for a non-member precisely because
+membership is the outer gate. Fanning out over the raw list wrote inbox rows for ids that gate would
+have refused.
+
+**Chosen:** `fanOutPmDigestNotice` resolves recipients through `workspace_member` before writing
+anything, the same intersection `fanOutMentions` makes against `team_membership`. The reader half of
+the entitlement is then decided in one place at write time and re-decided by the one resolver at send
+time, with no third answer anywhere.
+
+### I10 — The audit totals cover the three team-scoped events; policy changes are named, not counted
+
+`setPmDisclosurePolicy` writes ONE workspace-scoped `policy_changed` record per call with a null
+`team_id` (D8 relies on that: the record says which switches moved and which team ids the write
+touched, never who is on a list). Totalling that event per team therefore reported "0 policy changes"
+against every team forever and filed every real edit under a workspace-level row.
+
+**Chosen:** the per-team totals are `generated`, `published` and `unpublished` — the three events that
+happen *to* a team — and policy changes are reported in the recent list instead, with the teams they
+touched resolved from ids to names, so a row reads "Policy changed · Payments, Platform". The
+alternative (writing one record per touched team) would have changed change 20's single-record shape
+and minted audit ids away from the call site for no gain the recent list does not already give.
+`DisclosureAuditTeamTotals` keeps having no actor-keyed field, which is the VISION #8 guardrail.
+
+### I11 — The compose service enumerates every documented server variable, and a check binds it
+
+`docker/docker-compose.yml` passes through only what it lists, and it listed neither this change's
+three variables nor any pre-existing `AI_*`, `SEARCH_*`, `GITHUB_APP_*`, `SECRETS_ENCRYPTION_KEY`,
+`CYCLE_MAINTENANCE*` or `SEED_DEMO_CONTENT`. Every operator instruction naming one of those was
+inert in the three-container deployment this project actually ships.
+
+**Chosen:** the `yapm` service enumerates all of them — empty-string defaults where empty means
+"cleanly off", literal defaults where an empty value would fail `min(1)` or coerce to 0 — and
+D10's `.env.example` check gains a third leg asserting that every documented, schema-declared
+variable outside the two exception lists appears in that block. The gap was wider than this change,
+and fixing only its own three variables would have left the same trap for the next one.
+
+### I12 — Nothing in the audit view renders a database token or a zero that means nothing
+
+Two copy defects with one cause — the view rendered stored values rather than saying what they mean.
+A run status printed as "· ai_off", and a retraction printed "· 0 readers" because the record stores
+the audience size *after* the retraction, which is zero by definition.
+
+**Chosen:** a `DISCLOSURE_STATUS_LABEL` map beside the event labels ("AI was off", "the run failed",
+"completed", "still running") whose fallback for an unrecognised value is nothing rather than the raw
+token, and no reader count on a retraction row at all — a retraction is the event, the team, the time
+and the actor. The docs table now states what the retraction record actually carries rather than
+"nothing beyond the event".

@@ -5,7 +5,9 @@ import {
   type Database,
   getAiProviderKey,
   migrateToLatest,
+  recordDisclosureAudit,
   type SecretCodec,
+  setPmDisclosurePolicy,
 } from '@yapm/schema/db'
 import { pino } from 'pino'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -357,6 +359,11 @@ describe.skipIf(DATABASE_URL === undefined)('createAiAdminRoutes — admin surfa
   })
 
   // The disclosure audit view. Three properties, each asserted rather than described.
+  //
+  // SEEDED THROUGH THE REAL WRITERS, not through a hand-written insert: `setPmDisclosurePolicy` is
+  // the only thing that writes a `policy_changed` record and `recordDisclosureAudit` is the only
+  // thing that writes any other, so a fixture that shaped the rows itself could assert a shape no
+  // code path can produce — which is exactly how a per-team policy count came to be reported.
   async function workspaceWithADisclosure() {
     const { workspaceId, adminId, memberId, viewerId } = await freshWorkspace()
     const teamId = newId()
@@ -370,27 +377,25 @@ describe.skipIf(DATABASE_URL === undefined)('createAiAdminRoutes — admin surfa
         key: `AD${newId().slice(-6)}`,
       })
       .execute()
-    await database.db
-      .insertInto('ai_disclosure_audit')
-      .values([
-        {
-          id: newId(),
-          workspace_id: workspaceId,
-          team_id: teamId,
-          actor_id: adminId,
-          event: 'policy_changed',
-          detail: { enabled: true, killed: false, teamsChanged: [teamId] },
-        },
-        {
-          id: newId(),
-          workspace_id: workspaceId,
-          team_id: teamId,
-          actor_id: memberId,
-          event: 'published',
-          detail: { audienceSize: 2 },
-        },
-      ])
-      .execute()
+    await setPmDisclosurePolicy(
+      database.db,
+      { userID: adminId, role: 'admin' },
+      {
+        configId: newId(),
+        auditId: newId(),
+        workspaceId,
+        enabled: true,
+        teams: { [teamId]: { pmVisible: true, audience: [readerId] } },
+      },
+    )
+    await recordDisclosureAudit(database.db, {
+      id: newId(),
+      workspaceId,
+      teamId,
+      actorId: memberId,
+      event: 'published',
+      detail: { audienceSize: 2 },
+    })
     return { workspaceId, adminId, memberId, viewerId, teamId, readerId }
   }
 
@@ -402,17 +407,27 @@ describe.skipIf(DATABASE_URL === undefined)('createAiAdminRoutes — admin surfa
     })
     expect(response.status).toBe(200)
     const body = (await response.json()) as {
-      totals: { teamId: string | null; policyChanged: number; published: number }[]
-      recent: { event: string; teamName: string | null; detail: Record<string, unknown> }[]
+      totals: { teamId: string | null; published: number }[]
+      recent: {
+        event: string
+        teamName: string | null
+        teamsChangedNames: string[]
+        detail: Record<string, unknown>
+      }[]
     }
 
     const team = body.totals.find((entry) => entry.teamId === teamId)
-    expect(team?.policyChanged).toBe(1)
     expect(team?.published).toBe(1)
+    // A policy write belongs to no single team, so it is reported in the recent list — naming the
+    // teams it touched — rather than totalled under one.
+    expect(body.totals.every((entry) => !('policyChanged' in entry))).toBe(true)
     expect(body.recent.map((event) => event.event).sort()).toEqual(['policy_changed', 'published'])
     expect(body.recent.find((event) => event.event === 'published')?.detail).toEqual({
       audienceSize: 2,
     })
+    const policy = body.recent.find((event) => event.event === 'policy_changed')
+    expect(policy?.teamName).toBeNull()
+    expect(policy?.teamsChangedNames).toEqual(['Platform'])
   })
 
   // VISION #8, asserted structurally: the response carries no reader identity, no read event and no

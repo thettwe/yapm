@@ -1,11 +1,12 @@
 ---
 title: Notifications
-description: A per-user inbox for assignments and comments on issues you are involved in, keyboard-first, with optional email — and no way for anyone, admin included, to read your inbox.
+description: A per-user inbox for assignments, comments on issues you are involved in and product digests released to you, keyboard-first, with optional email — and no way for anyone, admin included, to read your inbox.
 ---
 
 Before this, yapm could assign you an issue and never tell you. **Notifications** close that: a
 per-user inbox at `/inbox`, an unread badge, and — when your instance has an email transport
-configured — a batched email for the things actually addressed at you.
+configured — a batched email for the things actually addressed at you. Two kinds of subject reach
+that inbox: an **issue**, and a [product digest](/features/pm-digest/) a team released to you.
 
 Two properties are worth stating before the mechanics, because they are what the rest is built on:
 
@@ -26,6 +27,7 @@ Two properties are worth stating before the mechanics, because they are what the
 | A [retrospective](/features/retrospectives/) action with an owner is converted to an issue | The owner |
 | You are [`@`-mentioned](/features/mentions/) in a description or a comment | The person mentioned |
 | Someone comments on an issue | Its assignee, its creator, everyone who commented before, and everyone [following](/features/mentions/#following-an-issue) it |
+| A team releases a [product digest](/features/pm-digest/) | The readers an admin named for that team |
 
 Three rules apply to every row in that table:
 
@@ -47,6 +49,15 @@ Three rules apply to every row in that table:
   reach current members of the issue's team only. Involvement outlives membership — you can have
   created an issue, or been its assignee, in a team you have since left — so the check is made when
   the notification is written, and the same check is made again when it is emailed.
+
+The last row is the one exception to the shape of all the others, and deliberately so. It **names no
+actor** — it reads "A cycle digest was shared with you", never who released it, because telling a
+reader outside the producing team which individual pressed publish is accountability in the wrong
+direction. It carries the team's name and the cycle's name and **nothing of the digest**, and opening
+it goes to your `/digests` page rather than to any of that team's work. Its recipients are not an
+involvement rule at all: they are the named audience an admin configured, intersected with current
+workspace membership, resolved at the moment of release. See [Product
+digests](/features/pm-digest/) and [the disclosure model](/self-hosting/ai-disclosure/).
 
 Notifications are written **only on the server**, inside the same database transaction as the
 change that caused them, and they are keyed by what happened rather than by a generated id. So the
@@ -82,7 +93,9 @@ second inbox and no second preference. Two things about them are worth reading h
 
 `/inbox` lists every notification addressed to you, across every team you belong to, newest first,
 grouped into **Today / Yesterday / Earlier**. Each row shows who did what, and which issue —
-`Ada assigned you ENG-42`, with the issue's title underneath.
+`Ada assigned you ENG-42`, with the issue's title underneath. A released [product
+digest](/features/pm-digest/) reads differently by design: `A cycle digest was shared with you`, with
+the team and cycle underneath and no actor at all.
 
 **A row shows the issue title as it was when the event happened.** It is a snapshot taken at write
 time, not a live join. If someone renames `ENG-42` an hour later, your notification still reads the
@@ -94,8 +107,9 @@ current issue.
 line of the comment that caused it — not in the inbox, and not in the email. Nothing about a
 comment's contents leaves the app's permission model.
 
-Opening a notification takes you to its issue and marks it read. Marking read is optimistic: the
-row and the badge change in the same frame, with nothing waiting on the network.
+Opening a notification takes you to its subject — the issue, or your `/digests` page for a released
+product digest — and marks it read. Marking read is optimistic: the row and the badge change in the
+same frame, with nothing waiting on the network.
 
 **Mark all read** means all of them — including notifications your browser has not synced. The
 inbox syncs your 100 most recent; the action reaches the rest on the server.
@@ -105,7 +119,7 @@ inbox syncs your 100 most recent; the action reaches the rest on the server.
 | Key | Action |
 |---|---|
 | `j` `k` (or `↓` `↑`) | Move the cursor |
-| `Enter` / `Space` / `→` | Open the issue and mark the notification read |
+| `Enter` / `Space` / `→` | Open the subject and mark the notification read |
 | `e` | Toggle the focused notification between read and unread |
 
 And from the command palette (`⌘K` / `Ctrl+K`), under **Notifications**:
@@ -148,10 +162,19 @@ recipient** covering everything that has accumulated. Four things bound it, and 
   stops the mail.
 - Access is re-checked at delivery time as well as at write time, by the same rule — on the issue's
   team, or a workspace admin. Leave a team and you stop being emailed about it, even about
-  notifications written while you were still a member.
+  notifications written while you were still a member. A released [product
+  digest](/features/pm-digest/) is checked at delivery time too, against the rule that governs *it*
+  rather than that one: the audience resolver that grants the read. A reader dropped from the
+  audience, a team whose sharing was switched off, a workspace kill switch, or a digest retracted
+  between the release and the send all mean no message — and the notice waits rather than being
+  spent, so a re-published digest still reaches them. See [the disclosure
+  model](/self-hosting/ai-disclosure/).
 
 Email carries the same words as the inbox row and the same absence of body content, and links back
-to the issue on your instance's own public URL.
+to the issue — or, for a product digest, to your digests page — on your instance's own public URL.
+The product-digest notice is additionally **off unless your operator turns it on**
+(`AI_PM_DIGEST_READY_EMAIL`), and it carries a link only: never a summary, a highlight, a risk flag,
+an evidence label or a publisher's name.
 
 ### Your preference
 
@@ -159,7 +182,7 @@ Open **Appearance settings** (the palette icon in the header) and set **Email no
 
 | Setting | What is emailed |
 |---|---|
-| **Email what needs me** *(default)* | Things addressed at you — assignments and [mentions](/features/mentions/) |
+| **Email what needs me** *(default)* | Things addressed at you — assignments, [mentions](/features/mentions/), and a [product digest](/features/pm-digest/) released to you |
 | **Email everything** | The above plus ambient activity, such as comments on issues you are involved in or following |
 | **No email** | Nothing |
 

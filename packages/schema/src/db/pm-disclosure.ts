@@ -243,12 +243,16 @@ export async function deleteDisclosureAuditOlderThan(
 // carries no FK by design (change 20's I4) and a departed admin's record must survive them.
 const DISCLOSURE_AUDIT_RECENT_LIMIT = 50
 
+// The three events that HAPPEN TO A TEAM, and the reason `policy_changed` is not among them: a policy
+// write is workspace-scoped — one record per call describing which switches moved and which team ids
+// the write touched — so it has no single team to be totalled under. Counting it per team would have
+// meant a "0 policy changes" on every team forever and every real edit filed under a workspace row.
+// Policy changes are reported in the recent list instead, naming the teams they touched.
 export interface DisclosureAuditTeamTotals {
-  // Null for a workspace-level event — a policy write naming no team, which is how the two switches
-  // above the per-team map are recorded.
+  // Null when the team is gone: `team_id` is `on delete set null`, so a swept team's history survives
+  // it rather than vanishing from the record.
   readonly teamId: string | null
   readonly teamName: string | null
-  readonly policyChanged: number
   readonly generated: number
   readonly published: number
   readonly unpublished: number
@@ -263,6 +267,11 @@ export interface DisclosureAuditEvent {
   // The display name of whoever acted, or null for a system generation and for an account that has
   // since been deleted. The two are indistinguishable here and that costs nothing an admin needs.
   readonly actorName: string | null
+  // The names of the teams a policy write touched, resolved from the ids in `detail.teamsChanged` so
+  // an admin reads "Policy changed · Platform, Payments" rather than a pair of UUIDs. Empty for every
+  // other event, and for an id whose team has since been deleted. NAMES, never audiences: the record
+  // has no source for who is on a list, and this read adds none.
+  readonly teamsChangedNames: readonly string[]
   // yapm-computed metadata only. `DisclosureAuditDetail` has no field capable of carrying content.
   readonly detail: DisclosureAuditDetail
 }
@@ -277,15 +286,18 @@ export interface DisclosureAuditLogOptions {
 }
 
 interface DisclosureEventCounts {
-  policy_changed: number
   generated: number
   published: number
   unpublished: number
 }
 
 function emptyCounts(): DisclosureEventCounts {
-  return { policy_changed: 0, generated: 0, published: 0, unpublished: 0 }
+  return { generated: 0, published: 0, unpublished: 0 }
 }
+
+const TEAM_SCOPED_EVENTS = ['generated', 'published', 'unpublished'] as const
+
+type TeamScopedEvent = (typeof TEAM_SCOPED_EVENTS)[number]
 
 export async function disclosureAuditLogForWorkspace(
   db: Kysely<DB>,
@@ -302,6 +314,7 @@ export async function disclosureAuditLogForWorkspace(
       eb.fn.countAll().as('count'),
     ])
     .where('ai_disclosure_audit.workspace_id', '=', workspaceId)
+    .where('ai_disclosure_audit.event', 'in', TEAM_SCOPED_EVENTS)
     .groupBy(['ai_disclosure_audit.team_id', 'team.name', 'ai_disclosure_audit.event'])
     .execute()
 
@@ -312,7 +325,7 @@ export async function disclosureAuditLogForWorkspace(
   for (const row of counted) {
     const key = row.teamId ?? ''
     const team = teams.get(key) ?? { teamId: row.teamId, name: row.teamName, counts: emptyCounts() }
-    team.counts[row.event] += Number(row.count)
+    team.counts[row.event as TeamScopedEvent] += Number(row.count)
     teams.set(key, team)
   }
 
@@ -320,12 +333,11 @@ export async function disclosureAuditLogForWorkspace(
     .map((team) => ({
       teamId: team.teamId,
       teamName: team.name,
-      policyChanged: team.counts.policy_changed,
       generated: team.counts.generated,
       published: team.counts.published,
       unpublished: team.counts.unpublished,
     }))
-    // Workspace-level rows (no team) sort last, so the per-team picture reads first.
+    // A deleted team's rows (no team) sort last, so the named teams read first.
     .sort((a, b) => (a.teamName ?? '￿').localeCompare(b.teamName ?? '￿'))
 
   const recent = await db
@@ -349,16 +361,41 @@ export async function disclosureAuditLogForWorkspace(
     .limit(options.limit ?? DISCLOSURE_AUDIT_RECENT_LIMIT)
     .execute()
 
+  // The team ids a policy write touched, resolved to names in ONE query over the caller's own
+  // workspace. Scoped to it deliberately: a `teamsChanged` id from another workspace could not be
+  // written by this code, and if one ever were, it would resolve to nothing here rather than
+  // disclosing a name across the boundary.
+  const changedIds = new Set(
+    recent.flatMap((row) => ((row.detail ?? {}) as DisclosureAuditDetail).teamsChanged ?? []),
+  )
+  const namesById = new Map<string, string>()
+  if (changedIds.size > 0) {
+    const named = await db
+      .selectFrom('team')
+      .select(['team.id as id', 'team.name as name'])
+      .where('team.workspace_id', '=', workspaceId)
+      .where('team.id', 'in', [...changedIds])
+      .execute()
+    for (const team of named) namesById.set(team.id, team.name)
+  }
+
   return {
     totals,
-    recent: recent.map((row) => ({
-      id: row.id,
-      createdAt: row.createdAt.getTime(),
-      event: row.event,
-      teamId: row.teamId,
-      teamName: row.teamName,
-      actorName: row.actorName,
-      detail: (row.detail ?? {}) as DisclosureAuditDetail,
-    })),
+    recent: recent.map((row) => {
+      const detail = (row.detail ?? {}) as DisclosureAuditDetail
+      return {
+        id: row.id,
+        createdAt: row.createdAt.getTime(),
+        event: row.event,
+        teamId: row.teamId,
+        teamName: row.teamName,
+        actorName: row.actorName,
+        teamsChangedNames: (detail.teamsChanged ?? [])
+          .map((teamId) => namesById.get(teamId))
+          .filter((name): name is string => name !== undefined)
+          .sort((a, b) => a.localeCompare(b)),
+        detail,
+      }
+    }),
   }
 }

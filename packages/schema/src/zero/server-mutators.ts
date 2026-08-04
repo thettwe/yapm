@@ -400,6 +400,21 @@ async function fanOutPmDigestNotice(db: Kysely<DB>, options: PmDigestNoticeOptio
   const policy = await pmTeamPolicy(db, options.workspaceId, options.teamId)
   if (!policy.pmVisible || policy.audience.length === 0) return
 
+  // THE STORED LIST IS A POLICY, NOT A MEMBERSHIP. An admin's audience outlives the account it names:
+  // nothing prunes the list when somebody leaves the workspace, and `resolvePmAudienceTeamIds` — the
+  // one resolver — answers `[]` for a non-member precisely because membership is the outer gate. So
+  // the fan-out intersects the list with CURRENT workspace membership, the same intersection
+  // `fanOutMentions` makes against `team_membership` before it writes a row, rather than trusting a
+  // list to have been maintained.
+  const members = await db
+    .selectFrom('workspace_member')
+    .select('user_id')
+    .where('workspace_id', '=', options.workspaceId)
+    .where('user_id', 'in', [...new Set(policy.audience)])
+    .execute()
+  const recipients = members.map((member) => member.user_id)
+  if (recipients.length === 0) return
+
   const subject = await db
     .selectFrom('pm_digest')
     .innerJoin('team', 'team.id', 'pm_digest.team_id')
@@ -412,7 +427,7 @@ async function fanOutPmDigestNotice(db: Kysely<DB>, options: PmDigestNoticeOptio
   const eventKey = String(options.publishedAt)
   await recordNotifications(
     db,
-    [...new Set(policy.audience)].map((recipientId) => ({
+    recipients.map((recipientId) => ({
       recipientId,
       actorId: SYSTEM_ACTOR_ID,
       kind: 'pm_digest_published' as const,

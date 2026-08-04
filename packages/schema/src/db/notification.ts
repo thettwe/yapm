@@ -332,6 +332,13 @@ export interface PendingPmDigestReadyEmail extends NotificationKey {
 // `pmVisible` was turned off, or a workspace whose kill switch was set between publish and sweep gets
 // nothing.
 //
+// What it DOES carry of the read predicate is the publication itself: the row is selected only while
+// its digest is still published. `pmAudienceScoped` grants a read on `published_at is not null`, so a
+// digest retracted between the release and the sweep is no longer readable — and mailing "your digest
+// is ready" for a link that leads to an absent surface would be the one thing the notice cannot take
+// back. A retracted digest is therefore skipped and left UNSTAMPED, exactly like a withheld one, so a
+// re-publication inside the recency window still reaches its readers.
+//
 // Everything else is the shipped sweep's shape: unread, unstamped, inside the debounce and the
 // recency window, and the same `email_notifications` preference applied in the SAME SQL position, so
 // a `none`-mode recipient's backlog can never consume the batch budget.
@@ -347,6 +354,9 @@ export async function pendingPmDigestReadyEmails(
     .selectFrom('notification')
     .innerJoin('user', 'user.id', 'notification.recipient_id')
     .leftJoin('user_preference', 'user_preference.user_id', 'notification.recipient_id')
+    // The other half of the read predicate, carried into the selection rather than re-derived: the
+    // digest must still be published. INNER, so a digest deleted outright takes its notice with it.
+    .innerJoin('pm_digest', 'pm_digest.id', 'notification.subject_id')
     .select([
       'notification.recipient_id as recipientId',
       'notification.kind as kind',
@@ -358,6 +368,7 @@ export async function pendingPmDigestReadyEmails(
       mode.as('mode'),
     ])
     .where('notification.subject_type', '=', 'pm_digest')
+    .where('pm_digest.published_at', 'is not', null)
     .where('notification.read_at', 'is', null)
     .where('notification.email_sent_at', 'is', null)
     // `pm_digest_published` is actionable, so `assigned_only` (the default) covers it and only an

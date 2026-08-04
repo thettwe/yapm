@@ -197,7 +197,7 @@ export function InboxView() {
         {rows.length === 0 ? (
           <p className="p-8 text-center text-sm text-text-3" role="status">
             {loaded
-              ? "You're all caught up. Assignments and comments on issues you're involved in land here."
+              ? "You're all caught up. Assignments, comments on issues you're involved in, and digests shared with you land here."
               : 'Loading notifications…'}
           </p>
         ) : (

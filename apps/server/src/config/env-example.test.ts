@@ -41,6 +41,37 @@ function envExampleKeys(): Set<string> {
   return keys
 }
 
+// The `yapm` service's own `environment:` block, read as text rather than through a YAML parser —
+// compose is the artifact an operator runs, and this file has no yaml dependency to add for a check
+// that is four lines of scanning. The block is the run of keys indented under `environment:` inside
+// the `yapm:` service, and it ends at the first line that dedents out of it.
+function composeYapmEnvKeys(): Set<string> {
+  const source = readFileSync(
+    new URL('../../../../docker/docker-compose.yml', import.meta.url),
+    'utf8',
+  )
+  const keys = new Set<string>()
+  let inService = false
+  let inEnvironment = false
+  for (const line of source.split('\n')) {
+    if (/^ {2}[a-z-]+:\s*$/.test(line)) {
+      inService = line.trim() === 'yapm:'
+      inEnvironment = false
+      continue
+    }
+    if (!inService) continue
+    if (/^ {4}environment:\s*$/.test(line)) {
+      inEnvironment = true
+      continue
+    }
+    if (inEnvironment && /^ {0,4}\S/.test(line)) inEnvironment = false
+    if (!inEnvironment) continue
+    const match = /^ {6}([A-Z][A-Z0-9_]*):/.exec(line)
+    if (match?.[1] !== undefined) keys.add(match[1])
+  }
+  return keys
+}
+
 function sorted(values: Iterable<string>): string[] {
   return [...values].sort()
 }
@@ -73,10 +104,25 @@ describe('.env.example and the Zod env schema', () => {
     expect(sorted(COMPOSE_ONLY).filter((key) => !documented.has(key))).toEqual([])
   })
 
-  // This change's three variables, named explicitly. The set check above would catch a missing one,
+  // THE THIRD LEG, and the one that makes the other two mean something for a self-hoster. A compose
+  // service passes through only the variables it enumerates: a variable documented in `.env.example`
+  // and validated by the schema, but absent from the `yapm` service's `environment:`, is an
+  // instruction that has no effect in the three-container deployment this project ships. The
+  // container-set variables are supplied by compose under different names or values, and the
+  // compose-only ones are read by another service, so both lists are excused here too.
+  it('passes every documented server variable through to the yapm container', () => {
+    const passed = composeYapmEnvKeys()
+    const missing = sorted(documented).filter(
+      (key) => !passed.has(key) && !COMPOSE_ONLY.has(key) && !CONTAINER_SET.has(key),
+    )
+    expect(missing).toEqual([])
+  })
+
+  // This change's three variables, named explicitly. The set checks above would catch a missing one,
   // but naming them is what makes a future deletion of one a failing test rather than a silent
   // shrinking of the documented surface.
-  it('documents and declares the three variables this change adds', () => {
+  it('documents, declares and ships the three variables this change adds', () => {
+    const passed = composeYapmEnvKeys()
     for (const key of [
       'AI_PM_DIGEST_READY_EMAIL',
       'AI_DISCLOSURE_RETENTION_DAYS',
@@ -84,6 +130,7 @@ describe('.env.example and the Zod env schema', () => {
     ]) {
       expect(documented.has(key)).toBe(true)
       expect(declared.has(key)).toBe(true)
+      expect(passed.has(key)).toBe(true)
     }
   })
 })

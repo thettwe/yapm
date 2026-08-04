@@ -102,7 +102,8 @@ from the live status of the issue it became and stripped of the assignee on both
 issue ·
 a keyboard-first **notification inbox** at
 `/inbox` with an unread badge, for
-assignments (including triage routing) and comments on issues you're involved in — written only on
+assignments (including triage routing), comments on issues you're involved in, and product digests
+shared with you (that one naming no actor and carrying no content) — written only on
 the server so a rebased optimistic mutation can never duplicate or re-send one, readable **only by
 its recipient with no admin bypass**, and optionally emailed as one batched, debounced digest per
 person through a provider-neutral mailer (SMTP **or** Resend over HTTPS, for hosts that block

@@ -1,6 +1,7 @@
 import { useQuery, useZero } from '@rocicorp/zero/react'
 import {
   AI_PROVIDERS,
+  type AiArtifactStatus,
   type AiProvider,
   type AreaRule,
   mutators,
@@ -241,25 +242,47 @@ const DISCLOSURE_EVENT_LABEL: Record<DisclosureAuditEvent['event'], string> = {
   unpublished: 'Retracted',
 }
 
+// The stored run status, in words. The column holds `AiArtifactStatus`, and rendering it verbatim put
+// a snake_case database token — "· ai_off" — into an admin's reading. An unknown value falls back to
+// NOTHING rather than to the raw token: a status this build does not know how to say is a status it
+// has no business spelling at a reader.
+const DISCLOSURE_STATUS_LABEL: Record<AiArtifactStatus, string> = {
+  ready: 'completed',
+  failed: 'the run failed',
+  ai_off: 'AI was off',
+  pending: 'still running',
+}
+
+function disclosureStatusLabel(status: string): string | null {
+  return DISCLOSURE_STATUS_LABEL[status as AiArtifactStatus] ?? null
+}
+
+// The teams a policy write touched, by name — resolved server-side, so this reads
+// "Policy changed · Platform, Payments" rather than a pair of UUIDs or a bare count.
+function disclosureScope(event: DisclosureAuditEvent): string | null {
+  if (event.teamName !== null) return event.teamName
+  return event.teamsChangedNames.length > 0 ? event.teamsChangedNames.join(', ') : null
+}
+
 // yapm-computed metadata only — the shape it reads has no field capable of carrying a summary, a
 // highlight or an evidence label, so there is nothing here to decline to render.
 function disclosureDetail(event: DisclosureAuditEvent): string | null {
   const parts: string[] = []
   const { detail } = event
-  if (detail.audienceSize !== undefined) {
+  // A retraction records the audience size AFTER it, which is always zero. "0 readers" on a Retracted
+  // row reads as a fact about the release rather than about the retraction, so it is not shown: the
+  // row carries the event, the team, the time and the actor, which is all a retraction is.
+  if (detail.audienceSize !== undefined && event.event !== 'unpublished') {
     parts.push(detail.audienceSize === 1 ? '1 reader' : `${detail.audienceSize} readers`)
   }
-  if (detail.status !== undefined) parts.push(detail.status)
+  if (detail.status !== undefined) {
+    const status = disclosureStatusLabel(detail.status)
+    if (status !== null) parts.push(status)
+  }
   if (detail.enabled !== undefined) parts.push(detail.enabled ? 'disclosure on' : 'disclosure off')
   if (detail.killed !== undefined)
     parts.push(detail.killed ? 'kill switch set' : 'kill switch clear')
-  if (detail.teamsChanged !== undefined && detail.teamsChanged.length > 0) {
-    parts.push(
-      detail.teamsChanged.length === 1
-        ? '1 team edited'
-        : `${detail.teamsChanged.length} teams edited`,
-    )
-  }
+  // The teams a policy write touched are named beside the event above, not counted here.
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
@@ -337,11 +360,10 @@ function DisclosureAuditSection() {
               className="flex flex-wrap items-center gap-3 rounded-control border border-border p-3"
             >
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-1">
-                {team.teamName ?? 'Workspace-wide'}
+                {team.teamName ?? 'A deleted team'}
               </span>
               <span className="text-xs text-text-2">
-                {team.policyChanged} policy changes · {team.generated} generated · {team.published}{' '}
-                shared · {team.unpublished} retracted
+                {team.generated} generated · {team.published} shared · {team.unpublished} retracted
               </span>
             </li>
           ))}
@@ -354,6 +376,7 @@ function DisclosureAuditSection() {
           <ul className="flex flex-col gap-2" data-testid="ai-disclosure-recent">
             {recent.map((event) => {
               const detail = disclosureDetail(event)
+              const scope = disclosureScope(event)
               return (
                 <li
                   key={event.id}
@@ -362,7 +385,7 @@ function DisclosureAuditSection() {
                 >
                   <span className="text-[13px] leading-relaxed text-text-1">
                     {DISCLOSURE_EVENT_LABEL[event.event]}
-                    {event.teamName === null ? '' : ` · ${event.teamName}`}
+                    {scope === null ? '' : ` · ${scope}`}
                   </span>
                   <span className="text-xs text-text-2">
                     {disclosureTime(event.createdAt)}

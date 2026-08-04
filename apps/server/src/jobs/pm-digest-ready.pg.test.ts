@@ -140,9 +140,17 @@ describe.skipIf(DATABASE_URL === undefined)(
           status: 'completed',
         })
         .execute()
+      // PUBLISHED, because the selection carries the read predicate: a notice is mailed only while
+      // its digest is still released.
       await database.db
         .insertInto('pm_digest')
-        .values({ id: digestId, cycle_id: cycleId, team_id: teamId, status: 'ready' })
+        .values({
+          id: digestId,
+          cycle_id: cycleId,
+          team_id: teamId,
+          status: 'ready',
+          published_at: new Date(SETTLED),
+        })
         .execute()
 
       // All three switches on, and the both-hats user named as a reader.
@@ -282,6 +290,42 @@ describe.skipIf(DATABASE_URL === undefined)(
           killed: false,
         },
       )
+    })
+
+    // RETRACTION BETWEEN PUBLICATION AND DELIVERY. The reader's entitlement is untouched — they are
+    // still named, the team is still on, the kill switch is still clear — and the notice must still
+    // not go out, because the link would land them in an absent surface. The row is left unstamped,
+    // so re-publishing inside the recency window still reaches them.
+    it('sends nothing for a digest retracted before the sweep runs', async () => {
+      await seedBoth()
+      await database.db
+        .updateTable('pm_digest')
+        .set({ published_at: null })
+        .where('id', '=', digestId)
+        .execute()
+
+      const { ready, readyMail } = await sweeps()
+      expect(ready.sent).toBe(0)
+      expect(readyMail.sent).toEqual([])
+
+      const unstamped = await database.db
+        .selectFrom('notification')
+        .select('subject_id')
+        .where('recipient_id', '=', bothHatsId)
+        .where('subject_type', '=', 'pm_digest')
+        .where('email_sent_at', 'is', null)
+        .execute()
+      expect(unstamped).toHaveLength(1)
+
+      // Re-published, and the same unstamped row is delivered — the retraction withheld it, it did
+      // not consume it.
+      await database.db
+        .updateTable('pm_digest')
+        .set({ published_at: new Date(SETTLED) })
+        .where('id', '=', digestId)
+        .execute()
+      const again = await sweeps()
+      expect(again.ready.sent).toBe(1)
     })
   },
 )

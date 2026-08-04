@@ -92,8 +92,8 @@ and the summary will read like it. The area map is what gives a product digest s
 ## The reader is told, with a link and nothing else
 
 A named reader does not have to keep checking. When a team releases a product digest, every named
-reader gets an **inbox row** in yapm: *"A cycle digest was shared with you"*, with the team's name
-and the cycle's name. It names no publisher — telling somebody outside the team which individual
+reader who is still in the workspace gets an [**inbox row**](/features/notifications/) in yapm: *"A
+cycle digest was shared with you"*, with the team's name and the cycle's name. It names no publisher — telling somebody outside the team which individual
 released a digest is accountability pointed the wrong way — and it carries no content.
 
 Optionally, and **off by default**, they also get one email. That message carries the team's name,
@@ -104,7 +104,9 @@ reach an inbox. So the notice carries a link, and a reader who is no longer enti
 an absent surface.
 
 Entitlement is re-checked when the message is sent, not just when it was written: a reader removed
-from the list, a team switched off, or the kill switch set in between means nothing goes out. See
+from the list, a team switched off, the kill switch set, or the digest retracted in between means
+nothing goes out — and the notice waits rather than being spent, so re-releasing still reaches
+them. See
 [the disclosure model](/self-hosting/ai-disclosure/) for the operator's side of this.
 
 ## Auditable, and retention-bounded

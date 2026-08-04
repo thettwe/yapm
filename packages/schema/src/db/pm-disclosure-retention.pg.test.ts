@@ -182,12 +182,12 @@ describe.skipIf(DATABASE_URL === undefined)('the disclosure audit retention boun
       published: 1,
       unpublished: 1,
       generated: 0,
-      policyChanged: 0,
     })
-    // Keyed by team, and there is no actor-keyed field for a count to be added to later.
+    // Keyed by team, and there is no actor-keyed field for a count to be added to later. Nor a
+    // `policyChanged` one: a policy write names no single team, so totalling it under one would have
+    // reported a zero no policy write could ever move.
     expect(Object.keys(log.totals[0] ?? {}).sort()).toEqual([
       'generated',
-      'policyChanged',
       'published',
       'teamId',
       'teamName',

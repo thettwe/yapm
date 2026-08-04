@@ -557,11 +557,19 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
 
     await page.goto('/settings/ai')
     const policyDressings = new Set<string>()
+    // The audit section is the THIRD surface this feature family adds to this page, and it is swept
+    // in the same pass. By now the log cannot be empty — a policy write and a publication have both
+    // happened — so its absence here would be a failure rather than the clean absence D9 describes.
+    const auditDressings = new Set<string>()
     for (const preset of PRESETS) {
       for (const mode of MODES) {
         await setPreset(page, preset, mode)
         const settings = page.getByTestId('pm-disclosure-settings')
         await expect(settings).toBeVisible({ timeout: 30_000 })
+        const auditLog = page.getByTestId('ai-disclosure-log')
+        await expect(auditLog).toBeVisible({ timeout: 30_000 })
+        await expect(page.getByTestId('ai-disclosure-recent')).toBeVisible({ timeout: 20_000 })
+        auditDressings.add(await painted(auditLog))
         // Scoped to THIS team's row, never document-wide: the two per-team controls exist once per
         // team in the workspace, so an unscoped locator is a strict-mode violation, and `.first()`
         // would sample another team's row — whose readers fieldset is still collapsed, and whose
@@ -584,6 +592,7 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
       }
     }
     expect(policyDressings.size).toBe(6)
+    expect(auditDressings.size).toBe(6)
 
     // RETRACTION STOPS FURTHER READS.
     await openCyclePanel(page, team.name, cycleName)

@@ -39,7 +39,7 @@ row of it.
 | `policy_changed` | an admin turns a switch or edits an audience | which switches, and **which team ids** the write touched |
 | `generated` | a product digest run reaches a terminal status | the run's status |
 | `published` | somebody on the producing team releases it | the audience size at that moment |
-| `unpublished` | somebody on the producing team retracts it | nothing beyond the event |
+| `unpublished` | somebody on the producing team retracts it | the audience size after retraction, which is always 0 |
 
 Each record also carries when it happened, which team, and **who did it**, where there is a person to
 name. A generation has no person: it is a scheduled job, and the record says so.
@@ -63,10 +63,16 @@ viewer asking for it is refused before anything is read, and the refusal is iden
 the workspace has ever enabled product digests — nothing in it distinguishes "not allowed" from
 "nothing there".
 
-It shows per-team totals of the four events, and the most recent events with their times, teams,
-actors and yapm-computed detail. The totals are grouped by **team**. There is no per-person
-aggregate, no ranking and no trend line, here or anywhere in yapm ([team-level
-metrics](/features/cycle-digest/) is a product-wide rule, not a decision about this screen).
+It shows per-team totals of the three events that happen *to* a team — generated, shared, retracted —
+and the most recent events with their times, teams, actors and yapm-computed detail. A policy change
+belongs to no single team (one record describes which switches moved and which teams the write
+touched), so it appears in the recent list, naming those teams, rather than being totalled under one.
+A retraction is shown as the event, the team, the time and who did it; the audience size it records is
+zero by definition and is not reported as a count of readers.
+
+The totals are grouped by **team**. There is no per-person aggregate, no ranking and no trend line,
+here or anywhere in yapm ([team-level metrics](/features/cycle-digest/) is a product-wide rule, not a
+decision about this screen).
 
 The section appears once something has actually been disclosed. On an instance that has never
 enabled product digests there is nothing to show, so there is nothing there — and turning product
@@ -103,7 +109,9 @@ Optional, **off by default**, and it carries **a link and nothing else**.
 AI_PM_DIGEST_READY_EMAIL=false   # requires AI_PM_DIGEST=true
 ```
 
-When a team releases a product digest, each named reader gets an inbox row in yapm. If this is on and
+When a team releases a product digest, each named reader who is still a member of the workspace gets
+an [inbox row](/features/notifications/) in yapm — an id left on an audience by a departure gets
+nothing, because the list is a policy and membership is the outer gate. If this is on and
 [email delivery](/self-hosting/email/) is configured, they also get one message: the team's name, the
 cycle's name, and a link to their digests page. No summary, no highlight, no risk flag, no evidence
 label, and no publisher's name.
@@ -117,8 +125,11 @@ follows it into an absent surface — because entitlement is evaluated when they
 message was sent.
 
 Entitlement is re-checked again at **send** time, through the same resolver the app uses: a reader
-removed from an audience, a team switched off, or a kill switch set between the release and the
-nightly send means no message goes out at all.
+removed from an audience, a team switched off, or a kill switch set between the release and the next
+email sweep (`NOTIFICATION_EMAIL_CRON`, every two minutes by default) means no message goes out at
+all. Nor does one for a digest **retracted** in that window — the message would link to a surface the
+reader can no longer open. In each case the notice is left unsent rather than consumed, so a
+re-published digest still reaches its readers.
 
 It is off at three layers, independently: the instance variable above, the presence of a mail
 transport, and each recipient's own email preference. With no transport configured the path is

@@ -82,7 +82,8 @@ function labelOf(row: PendingPmDigestReadyEmail): { teamName: string; cycleName:
 // resolver — because the selecting query deliberately carries no access predicate of its own. A
 // reader dropped from the audience, a team whose `pmVisible` was turned off, or a workspace whose
 // kill switch was set between publish and sweep is withheld and left unstamped: if entitlement comes
-// back, so does the notice.
+// back, so does the notice. The fourth way a read can stop — the digest being retracted — is carried
+// by the selection itself, and is left unstamped for the same reason.
 //
 // Every failure is contained: a transport error fails exactly one recipient, leaves their rows
 // unstamped for the next window, and the sweep carries on. Nothing thrown escapes to pg-boss.

@@ -315,8 +315,11 @@ describe.skipIf(DATABASE_URL === undefined)('retroFactsForCycle against Postgres
     expect(facts?.citations.widget).toContain('shipped')
     expect(facts?.citations.widget).not.toContain(shippedIssueId)
     expect(facts?.citations.evidence).not.toContain('shipped')
-    // No prior retro on this fixture, so nothing is citable as a follow-up.
-    expect(facts?.citations.retroAction).toEqual([])
+    // The fixture's prior retro carries two actions. They are citable as follow-ups and under
+    // neither of the other two namespaces.
+    expect(facts?.citations.retroAction).toHaveLength(2)
+    expect(facts?.citations.evidence).not.toContain(shippedActionId)
+    expect(facts?.citations.widget).not.toContain(shippedActionId)
   })
 
   it('returns null for a cycle belonging to another team', async () => {

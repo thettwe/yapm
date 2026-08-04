@@ -42,6 +42,9 @@ absent means AI stays off.
 | `AI_DIGEST_ON_CYCLE_CLOSE` | `true` (default) \| `false` | gates the cycle-digest pre-compute job |
 | `AI_RETRO_DRAFT` | `true` (default) \| `false` | gates the [retro AI draft](/features/retro-ai-draft/) background pass |
 | `AI_PM_DIGEST` | `true` \| `false` (default) | gates the [product digest](/features/pm-digest/); requires `AI_DIGEST_ON_CYCLE_CLOSE=true` |
+| `AI_PM_DIGEST_READY_EMAIL` | `true` \| `false` (default) | emails named readers **a link** when a product digest is released; requires `AI_PM_DIGEST=true` |
+| `AI_DISCLOSURE_RETENTION_DAYS` | `365` | how long a disclosure audit record is kept before it is deleted |
+| `AI_DISCLOSURE_RETENTION_CRON` | `23 3 * * *` | when the disclosure retention sweep runs (03:23 daily) |
 
 A per-workspace UI key wins over the instance-default env key for the same provider.
 
@@ -56,6 +59,13 @@ cycle-digest job rather than on a job of its own, so `AI_PM_DIGEST=true` with
 names both variables, rather than starting healthy and quietly doing nothing. Turning it on generates
 nothing until a workspace admin turns disclosure on, turns it on for a specific team, and names the
 people who may read it.
+The last three variables are the governance half, and they are documented end to end in [the
+disclosure model](/self-hosting/ai-disclosure/): what gets recorded when a product digest crosses the
+boundary, how long it is kept, who can read the record, and why the "ready" email carries a link and
+nothing else. The retention sweep runs on the pg-boss instance yapm already has — **no new
+container** — and it runs whether or not AI is enabled, because a bound that lapses when the feature
+is switched off is not a bound.
+
 Setting `AI_RETRO_DRAFT=false` stops the background pass entirely. An opted-in team's reveal still
 stamps a pending row, and with nothing to complete it the retro shows its drafting line for a minute
 or two and then falls back to the team's own data panel — no error, and nothing stuck on screen. The

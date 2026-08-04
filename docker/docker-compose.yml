@@ -41,6 +41,11 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-yapm}:${POSTGRES_PASSWORD:-yapm}@postgres:5432/${POSTGRES_DB:-yapm}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
       SEED_WORKSPACE_NAME: ${SEED_WORKSPACE_NAME:-yapm}
+      SEED_DEMO_CONTENT: "${SEED_DEMO_CONTENT:-false}"
+      # Cycle auto-rollover. On by default; the cron is a literal default for the reason the
+      # notification block below states.
+      CYCLE_MAINTENANCE: "${CYCLE_MAINTENANCE:-true}"
+      CYCLE_MAINTENANCE_CRON: "${CYCLE_MAINTENANCE_CRON:-* * * * *}"
       ZERO_QUERY_API_KEY: ${ZERO_QUERY_API_KEY:-yapm-zero-query-key-change-me}
       ZERO_MUTATE_API_KEY: ${ZERO_MUTATE_API_KEY:-yapm-zero-mutate-key-change-me}
       # better-auth runs in-process (no extra container). CHANGE the secret in production.
@@ -65,6 +70,38 @@ services:
       NOTIFICATION_EMAIL_CRON: "${NOTIFICATION_EMAIL_CRON:-*/2 * * * *}"
       NOTIFICATION_RETENTION_DAYS: "${NOTIFICATION_RETENTION_DAYS:-30}"
       NOTIFICATION_RETENTION_CRON: "${NOTIFICATION_RETENTION_CRON:-7 3 * * *}"
+      # Connectors (GitHub App). Empty means the connector is cleanly off; the three GITHUB_APP_*
+      # values are all-or-nothing and boot fails by name on a partial triplet.
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      GITHUB_APP_WEBHOOK_SECRET: ${GITHUB_APP_WEBHOOK_SECRET:-}
+      GITHUB_RECONCILE_CRON: "${GITHUB_RECONCILE_CRON:-*/15 * * * *}"
+      # AI (BYO-key). Empty keys mean AI is cleanly off. The switches and the retention pair carry
+      # LITERAL defaults for the reason the notification block above states: an empty cron fails
+      # `min(1)` and an empty number coerces to 0, so "unset" must mean "the documented default".
+      #
+      # AI_PM_DIGEST governs the one feature whose output crosses a permission boundary, and
+      # AI_PM_DIGEST_READY_EMAIL the one path that leaves the app entirely — both off here, both
+      # opted into explicitly. AI_DISCLOSURE_RETENTION_* bound the disclosure audit log and apply
+      # whether or not AI is on. See the disclosure-model self-hosting page.
+      AI_ANTHROPIC_API_KEY: ${AI_ANTHROPIC_API_KEY:-}
+      AI_GOOGLE_API_KEY: ${AI_GOOGLE_API_KEY:-}
+      AI_OPENAI_API_KEY: ${AI_OPENAI_API_KEY:-}
+      AI_DEFAULT_PROVIDER: ${AI_DEFAULT_PROVIDER:-}
+      AI_DIGEST_ON_CYCLE_CLOSE: "${AI_DIGEST_ON_CYCLE_CLOSE:-true}"
+      AI_RETRO_DRAFT: "${AI_RETRO_DRAFT:-true}"
+      AI_PM_DIGEST: "${AI_PM_DIGEST:-false}"
+      AI_PM_DIGEST_READY_EMAIL: "${AI_PM_DIGEST_READY_EMAIL:-false}"
+      AI_DISCLOSURE_RETENTION_DAYS: "${AI_DISCLOSURE_RETENTION_DAYS:-365}"
+      AI_DISCLOSURE_RETENTION_CRON: "${AI_DISCLOSURE_RETENTION_CRON:-23 3 * * *}"
+      # Server-side search index maintenance. Off keeps `/api/v1/search` answering from whatever the
+      # index already holds rather than failing.
+      SEARCH_INDEX: "${SEARCH_INDEX:-true}"
+      SEARCH_INDEX_INTERVAL_SECONDS: "${SEARCH_INDEX_INTERVAL_SECONDS:-10}"
+      SEARCH_RECONCILE_CRON: "${SEARCH_RECONCILE_CRON:-*/5 * * * *}"
+      SEARCH_TEXT_CONFIG: "${SEARCH_TEXT_CONFIG:-simple}"
+      SEARCH_STATEMENT_TIMEOUT_MS: "${SEARCH_STATEMENT_TIMEOUT_MS:-2000}"
       # Attachment byte storage. `local` is the DEFAULT and is COMPLETE — the `files` volume below
       # is all a self-hoster needs, and there is no fourth container. Set STORAGE_PROVIDER=s3 with
       # the whole quartet to use an object store instead; a partial quartet fails boot by name.

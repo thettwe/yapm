@@ -248,6 +248,33 @@ export const envSchema = z
         z.enum(['true', 'false']),
       )
       .default('false'),
+    // The optional "your cycle digest is ready" notice to the named readers. Off at the instance
+    // floor, and that default is the decision rather than an oversight: it is the one path in this
+    // feature that leaves the governed surface, so an operator opts into it explicitly. On top of it
+    // sit the per-recipient `email_notifications` preference and the presence of a transport.
+    //
+    // The message carries A LINK ONLY, never the digest body — a mailed artifact sits outside the
+    // kill switch, outside retention and outside the audit log simultaneously.
+    AI_PM_DIGEST_READY_EMAIL: z
+      .preprocess(
+        (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+        z.enum(['true', 'false']),
+      )
+      .default('false'),
+    // The disclosure audit log's retention bound, on the EXISTING pg-boss instance and registered
+    // UNCONDITIONALLY — like notification retention and unlike every AI block. An instance that once
+    // had disclosure enabled and then turned AI_PM_DIGEST off must still have its audit log swept: a
+    // bound that stops being enforced when the feature is disabled is not a bound.
+    //
+    // 365 rather than notification retention's 30. The question an audit log is asked — what did we
+    // share with product, and when did the policy change — is asked at annual-review cadence, and a
+    // shorter window loses the record of a policy change made two quarters ago that is STILL in
+    // effect. The table is server-only and syncs to nobody, so the only pressure on it is unbounded
+    // growth, which a year bounds at a cost of kilobytes.
+    AI_DISCLOSURE_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
+    // Offset from notification retention's `7 3 * * *`: both are nightly, and there is no reason for
+    // two bulk deletes to start in the same minute on one Postgres.
+    AI_DISCLOSURE_RETENTION_CRON: cronExpression.default('23 3 * * *'),
     // Server-side search index maintenance, on the EXISTING pg-boss instance. Off means the
     // `/api/v1/search` route keeps answering — with whatever the index already holds — rather than
     // failing; the on-device pass is unaffected either way.
@@ -362,6 +389,22 @@ export const envSchema = z
     })
   })
   .check((ctx) => {
+    // The same shape, for the same reason, one layer out: a ready notice for an artifact that is
+    // never generated is a config an operator wrote deliberately and got nothing from. Fails at boot
+    // naming BOTH variables rather than booting healthy and silently mailing nobody. No refinement
+    // is added against the mailer — no transport is a clean disablement everywhere else in this
+    // product, and this follows it rather than inventing a second posture.
+    const value = ctx.value
+    if (value.AI_PM_DIGEST_READY_EMAIL !== 'true' || value.AI_PM_DIGEST === 'true') return
+    ctx.issues.push({
+      code: 'custom',
+      input: value.AI_PM_DIGEST_READY_EMAIL,
+      path: ['AI_PM_DIGEST_READY_EMAIL'],
+      message:
+        'cannot be true while AI_PM_DIGEST is false: no PM digest is ever generated, so no notice would ever be sent',
+    })
+  })
+  .check((ctx) => {
     const value = ctx.value
     if (value.STORAGE_PROVIDER !== 's3') return
     for (const name of S3_REQUIRED_VARS) {
@@ -441,6 +484,12 @@ export const EXPECTED_FORMAT: Record<string, string> = {
     "'true' to run the lazy retro AI draft tail (default), or 'false' to disable it — per-team opt-in still applies",
   AI_PM_DIGEST:
     "'true' to generate PM-facing cycle digests for teams whose admin has turned disclosure on, or 'false' (the default); requires AI_DIGEST_ON_CYCLE_CLOSE=true",
+  AI_PM_DIGEST_READY_EMAIL:
+    "'true' to email named readers a link when a cycle digest is published — a link only, never the digest body — or 'false' (the default); requires AI_PM_DIGEST=true and a mail transport",
+  AI_DISCLOSURE_RETENTION_DAYS:
+    'an integer number of days to keep disclosure audit records before deleting them, e.g. 365 (the default — an audit log is read at annual-review cadence)',
+  AI_DISCLOSURE_RETENTION_CRON:
+    "a five-field cron expression for the disclosure audit retention sweep, e.g. '23 3 * * *' for 03:23 daily",
   SEARCH_INDEX:
     "'true' to maintain the server-side search index in the background (default), or 'false' to disable it",
   SEARCH_INDEX_INTERVAL_SECONDS:

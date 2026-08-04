@@ -37,8 +37,16 @@ function titleFor(kind: NotificationKind, actor: string, subject: string): strin
       return `${actor} commented on ${subject}`
     case 'mention':
       return `${actor} mentioned you in ${subject}`
+    case 'pm_digest_published':
+      return PM_DIGEST_PUBLISHED_TITLE
   }
 }
+
+// ACTOR-FREE, and that is the point rather than an omission. A PM outside the team learning WHICH
+// individual released a digest is accountability in the wrong direction — the same refusal that kept
+// `published_by` out of the Zero schema. The fan-out writes the system principal, and because the
+// title never interpolates an actor the `'Someone'` fallback can never render here either.
+const PM_DIGEST_PUBLISHED_TITLE = 'A cycle digest was shared with you'
 
 export function notificationCopy(input: NotificationCopyInput): NotificationCopy {
   const actor = actorLabel(input.actorName)

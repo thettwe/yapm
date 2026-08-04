@@ -89,6 +89,41 @@ a file path, a filename extension, a code fence or a code identifier is dropped.
 the ceiling:** without a product-area map, the model is working from issue and pull-request titles,
 and the summary will read like it. The area map is what gives a product digest something to say.
 
+## The reader is told, with a link and nothing else
+
+A named reader does not have to keep checking. When a team releases a product digest, every named
+reader who is still in the workspace gets an [**inbox row**](/features/notifications/) in yapm: *"A
+cycle digest was shared with you"*, with the team's name and the cycle's name. It names no publisher — telling somebody outside the team which individual
+released a digest is accountability pointed the wrong way — and it carries no content.
+
+Optionally, and **off by default**, they also get one email. That message carries the team's name,
+the cycle's name and **a link**. Never the digest itself, and that is a decision rather than an
+oversight: a mailed message sits outside the kill switch, outside retention and outside the audit
+record at the same time. An admin who stops all sharing stops every further read in yapm and cannot
+reach an inbox. So the notice carries a link, and a reader who is no longer entitled follows it into
+an absent surface.
+
+Entitlement is re-checked when the message is sent, not just when it was written: a reader removed
+from the list, a team switched off, the kill switch set, or the digest retracted in between means
+nothing goes out — and the notice waits rather than being spent, so re-releasing still reaches
+them. See
+[the disclosure model](/self-hosting/ai-disclosure/) for the operator's side of this.
+
+## Auditable, and retention-bounded
+
+Both words, used narrowly.
+
+**Auditable** means every policy change, generation, release and retraction is recorded, and a
+workspace admin can read that record in *Settings → AI → What has been disclosed*. It reports what
+was disclosed and **to how many readers**. It does **not** mean reads are recorded — nothing records
+those, and the section says so in the same breath.
+
+**Retention-bounded** means those records are deleted after a configured window, one year by default.
+It does not mean digests expire; only the audit records do.
+
+The audit view is admin-only and team-level: totals are grouped by team, and there is no per-person
+aggregate anywhere in it.
+
 ## Team-level, and no read log
 
 The product digest is about the work, never a person — the data behind it carries no assignee,
@@ -127,6 +162,11 @@ something, and disappears again if they retract it.
 
 **Stop all sharing** is beside the workspace switch. It blocks every read immediately, whatever else
 is set. It does not un-read.
+
+Optionally, an operator also sets `AI_PM_DIGEST_READY_EMAIL=true` to email each named reader a link
+when a digest is released. It requires `AI_PM_DIGEST`, it needs an
+[email transport](/self-hosting/email/), and it carries a link only. See
+[the disclosure model](/self-hosting/ai-disclosure/).
 
 Generating a product digest is a second model call on your own key, on the same cycle's facts, and
 it counts toward the workspace [spend cap](/self-hosting/ai-setup/). A team with product digests off

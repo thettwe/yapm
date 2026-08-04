@@ -203,13 +203,22 @@ export type ConnectorLinkSource = (typeof CONNECTOR_LINK_SOURCES)[number]
 // What a person can be told about. Deliberately NOT constrained in Postgres (see
 // `0013_notifications`): adding `'mention'` must cost a union member and a copy string, not a
 // migration in a different change. This union and the Zod arg schemas are the validation.
-export const NOTIFICATION_KINDS = ['issue_assigned', 'issue_commented', 'mention'] as const
+export const NOTIFICATION_KINDS = [
+  'issue_assigned',
+  'issue_commented',
+  'mention',
+  // A cycle digest a human on the producing team released to the readers an admin named. Its copy
+  // is actor-free (`notificationCopy`): telling a PM outside the team WHICH individual released it
+  // is accountability in the wrong direction, so the fan-out writes the system principal and the
+  // real actor lives in the admin-only audit record.
+  'pm_digest_published',
+] as const
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]
 
 // The thing a notification points at. Polymorphic by design — `subject_id` carries no FK — so a
 // later subject type costs no schema change.
-export const NOTIFICATION_SUBJECT_TYPES = ['issue'] as const
+export const NOTIFICATION_SUBJECT_TYPES = ['issue', 'pm_digest'] as const
 
 export type NotificationSubjectType = (typeof NOTIFICATION_SUBJECT_TYPES)[number]
 
@@ -227,8 +236,13 @@ export const DEFAULT_EMAIL_NOTIFICATION_MODE: EmailNotificationMode = 'assigned_
 // `'mention'` IS IN AND `'issue_commented'` IS OUT, and that pair of memberships is the whole
 // "being mentioned emails you once, the thread it subscribed you to never does" rule — derived from
 // the existing classification rather than asserted by a special case anywhere in the delivery sweep.
+//
+// `'pm_digest_published'` IS IN. It is addressed at a named person — an admin put them on an
+// audience and a human then chose to release to them — which is exactly the actionable test, and a
+// reader who never opens yapm is the whole reason the notice exists. `assigned_only`, the default
+// preference, therefore covers it; `none` still suppresses it, and so does the instance floor.
 export const ACTIONABLE_NOTIFICATION_KINDS: ReadonlySet<NotificationKind> =
-  new Set<NotificationKind>(['issue_assigned', 'mention'])
+  new Set<NotificationKind>(['issue_assigned', 'mention', 'pm_digest_published'])
 
 export function isActionableNotification(kind: NotificationKind): boolean {
   return ACTIONABLE_NOTIFICATION_KINDS.has(kind)

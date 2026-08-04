@@ -23,7 +23,12 @@ import {
 import { audienceSize, pmTeamPolicy, recordDisclosureAudit } from '../db/pm-disclosure.js'
 import type { DB } from '../db/types.js'
 import { newId } from '../id.js'
-import type { AuthContext, NotificationKind, NotificationSubjectType } from './context.js'
+import {
+  type AuthContext,
+  type NotificationKind,
+  type NotificationSubjectType,
+  SYSTEM_ACTOR_ID,
+} from './context.js'
 import { MutationError, MutationErrorCode } from './errors.js'
 import { addedMentionIds } from './mentions/diff.js'
 import { eligibleMentionees } from './mentions/eligibility.js'
@@ -322,6 +327,7 @@ async function stampPmDisclosure(
   id: string,
   ctx: AuthContext,
   event: 'published' | 'unpublished',
+  publishedAt: number,
 ): Promise<void> {
   const digest = (await tx.run(zql.pm_digest.where('id', id).one())) as
     | { id: string; teamId: string }
@@ -355,6 +361,85 @@ async function stampPmDisclosure(
     pmDigestId: id,
     detail: { audienceSize: size },
   })
+
+  if (event === 'published') {
+    await fanOutPmDigestNotice(db, {
+      workspaceId: team.workspace_id,
+      teamId: digest.teamId,
+      digestId: id,
+      publishedAt,
+    })
+  }
+}
+
+interface PmDigestNoticeOptions {
+  readonly workspaceId: string
+  readonly teamId: string
+  readonly digestId: string
+  readonly publishedAt: number
+}
+
+// "Your cycle digest is ready", to the readers an admin named, in the SAME transaction as the
+// release. One `notification` row each, and a `notification` row rather than a bespoke table for
+// three reasons: its primary key is the natural key, so a mutator re-run during rebase inserts
+// nothing; `email_sent_at` is an at-most-once delivery ledger that costs no migration; and the
+// reader gets an in-app inbox row, which is strictly better than an email-only channel because it
+// sits inside the permission model, inside retention, and disappears with their membership.
+//
+// THE ACTOR IS THE SYSTEM PRINCIPAL, never the person who released it. Writing the publisher's id
+// into a row that syncs to a PM outside the team would hand them the identity of the individual who
+// released the digest — exactly what change 20 refused when it left `published_by` out of the Zero
+// schema. The accountability record for the release is the `ai_disclosure_audit` row, which carries
+// the real actor and which only an admin reads.
+//
+// `subject_title` is yapm-computed metadata — the team and cycle names, baked because the reader's
+// query can traverse to neither row — and NEVER content. `event_key` is the publication instant from
+// the mutator's own args, so a rebase re-run writes the identical key and a re-publish after a
+// retraction correctly produces a fresh notice.
+async function fanOutPmDigestNotice(db: Kysely<DB>, options: PmDigestNoticeOptions): Promise<void> {
+  const policy = await pmTeamPolicy(db, options.workspaceId, options.teamId)
+  if (!policy.pmVisible || policy.audience.length === 0) return
+
+  // THE STORED LIST IS A POLICY, NOT A MEMBERSHIP. An admin's audience outlives the account it names:
+  // nothing prunes the list when somebody leaves the workspace, and `resolvePmAudienceTeamIds` — the
+  // one resolver — answers `[]` for a non-member precisely because membership is the outer gate. So
+  // the fan-out intersects the list with CURRENT workspace membership, the same intersection
+  // `fanOutMentions` makes against `team_membership` before it writes a row, rather than trusting a
+  // list to have been maintained.
+  const members = await db
+    .selectFrom('workspace_member')
+    .select('user_id')
+    .where('workspace_id', '=', options.workspaceId)
+    .where('user_id', 'in', [...new Set(policy.audience)])
+    .execute()
+  const recipients = members.map((member) => member.user_id)
+  if (recipients.length === 0) return
+
+  const subject = await db
+    .selectFrom('pm_digest')
+    .innerJoin('team', 'team.id', 'pm_digest.team_id')
+    .innerJoin('cycle', 'cycle.id', 'pm_digest.cycle_id')
+    .select(['team.name as teamName', 'cycle.name as cycleName'])
+    .where('pm_digest.id', '=', options.digestId)
+    .executeTakeFirst()
+  if (subject === undefined) return
+
+  const eventKey = String(options.publishedAt)
+  await recordNotifications(
+    db,
+    recipients.map((recipientId) => ({
+      recipientId,
+      actorId: SYSTEM_ACTOR_ID,
+      kind: 'pm_digest_published' as const,
+      teamId: options.teamId,
+      subjectType: 'pm_digest' as const,
+      subjectId: options.digestId,
+      subjectKey: null,
+      subjectTitle: `${subject.teamName} · ${subject.cycleName}`,
+      eventKey,
+      createdAt: options.publishedAt,
+    })),
+  )
 }
 
 // Every case this leaves to the shared mutator (no caller, no card, no retro) is one the shared
@@ -1070,12 +1155,12 @@ export function createServerMutators() {
         }
         await mutators.pmDigest.publish.fn({ tx, args, ctx })
         if (tx.location !== 'server' || ctx === undefined) return
-        await stampPmDisclosure(tx, args.id, ctx, 'published')
+        await stampPmDisclosure(tx, args.id, ctx, 'published', args.updatedAt)
       }),
       unpublish: defineMutator(publishPmDigestArgs, async ({ tx, args, ctx }) => {
         await mutators.pmDigest.unpublish.fn({ tx, args, ctx })
         if (tx.location !== 'server' || ctx === undefined) return
-        await stampPmDisclosure(tx, args.id, ctx, 'unpublished')
+        await stampPmDisclosure(tx, args.id, ctx, 'unpublished', args.updatedAt)
       }),
     },
   })

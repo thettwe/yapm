@@ -229,6 +229,11 @@ export async function pendingNotificationEmails(
     ])
     .where('notification.read_at', 'is', null)
     .where('notification.email_sent_at', 'is', null)
+    // The clause that makes this selection and `pendingPmDigestReadyEmails`' PROVABLY DISJOINT, so a
+    // workspace admin who is also a named PM reader is mailed once rather than by both sweeps. It
+    // removes no row today — `'issue'` was the only subject type before the PM digest notice — and
+    // it is the narrowing, not a widening: the access predicate below stays exactly as strict.
+    .where('notification.subject_type', '=', 'issue')
     // The write-time predicate, mirrored: on the team, or an admin of the workspace.
     .where((eb) =>
       eb.or([
@@ -293,4 +298,87 @@ export async function deleteNotificationsOlderThan(db: Kysely<DB>, before: Date)
     .where(sql<SqlBool>`${sql.ref('notification.created_at')} < ${before}`)
     .executeTakeFirst()
   return Number(result?.numDeletedRows ?? 0)
+}
+
+export interface PendingPmDigestReadyEmailsOptions {
+  readonly createdBefore: Date
+  readonly createdAfter: Date
+  readonly limit: number
+}
+
+export interface PendingPmDigestReadyEmail extends NotificationKey {
+  readonly teamId: string
+  // The baked team/cycle label the fan-out stamped. yapm-computed metadata, never content.
+  readonly subjectTitle: string
+  readonly email: string
+  readonly mode: EmailNotificationMode
+}
+
+// The PM-digest notice's delivery selection, written BESIDE `pendingNotificationEmails` rather than
+// inside it — the one real duplication in this change, and a chosen one.
+//
+// `pendingNotificationEmails` carries a CURRENT-ACCESS predicate: a member of the notification's team
+// OR a workspace admin. A named PM reader is neither, so a `pm_digest_published` row selected through
+// it would be written, never mailed, and never explained. Teaching that SQL about the disclosure axis
+// means a jsonb read of `connector_config.config` inside the notification query — a second place
+// deciding "is this person allowed", which `db/pm-disclosure.ts` opens by naming as how two answers
+// drift — and widening it for one kind would weaken it for every kind, because the predicate is
+// shared.
+//
+// So this query applies NO ACCESS PREDICATE AT ALL. Entitlement is re-resolved in TypeScript, per
+// recipient, through `resolvePmAudienceTeamIds` — the ONE resolver — before anything is sent. That
+// is the same "current access at delivery time" property the shipped sweep has, obtained through the
+// single resolver rather than through a copy of it: a reader removed from an audience, a team whose
+// `pmVisible` was turned off, or a workspace whose kill switch was set between publish and sweep gets
+// nothing.
+//
+// What it DOES carry of the read predicate is the publication itself: the row is selected only while
+// its digest is still published. `pmAudienceScoped` grants a read on `published_at is not null`, so a
+// digest retracted between the release and the sweep is no longer readable — and mailing "your digest
+// is ready" for a link that leads to an absent surface would be the one thing the notice cannot take
+// back. A retracted digest is therefore skipped and left UNSTAMPED, exactly like a withheld one, so a
+// re-publication inside the recency window still reaches its readers.
+//
+// Everything else is the shipped sweep's shape: unread, unstamped, inside the debounce and the
+// recency window, and the same `email_notifications` preference applied in the SAME SQL position, so
+// a `none`-mode recipient's backlog can never consume the batch budget.
+export async function pendingPmDigestReadyEmails(
+  db: Kysely<DB>,
+  options: PendingPmDigestReadyEmailsOptions,
+): Promise<PendingPmDigestReadyEmail[]> {
+  const mode = sql<EmailNotificationMode>`coalesce(${sql.ref(
+    'user_preference.email_notifications',
+  )}, 'assigned_only')`
+
+  return await db
+    .selectFrom('notification')
+    .innerJoin('user', 'user.id', 'notification.recipient_id')
+    .leftJoin('user_preference', 'user_preference.user_id', 'notification.recipient_id')
+    // The other half of the read predicate, carried into the selection rather than re-derived: the
+    // digest must still be published. INNER, so a digest deleted outright takes its notice with it.
+    .innerJoin('pm_digest', 'pm_digest.id', 'notification.subject_id')
+    .select([
+      'notification.recipient_id as recipientId',
+      'notification.kind as kind',
+      'notification.team_id as teamId',
+      'notification.subject_id as subjectId',
+      'notification.subject_title as subjectTitle',
+      'notification.event_key as eventKey',
+      'user.email as email',
+      mode.as('mode'),
+    ])
+    .where('notification.subject_type', '=', 'pm_digest')
+    .where('pm_digest.published_at', 'is not', null)
+    .where('notification.read_at', 'is', null)
+    .where('notification.email_sent_at', 'is', null)
+    // `pm_digest_published` is actionable, so `assigned_only` (the default) covers it and only an
+    // explicit `none` suppresses it. Spelled as the two modes rather than through the kind list,
+    // because this selection has exactly one kind in it.
+    .where(sql<SqlBool>`${mode} <> 'none'`)
+    .where(sql<SqlBool>`${sql.ref('notification.created_at')} < ${options.createdBefore}`)
+    .where(sql<SqlBool>`${sql.ref('notification.created_at')} > ${options.createdAfter}`)
+    .orderBy('notification.recipient_id', 'asc')
+    .orderBy('notification.created_at', 'asc')
+    .limit(options.limit)
+    .execute()
 }

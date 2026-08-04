@@ -46,6 +46,8 @@ Everyone else — cloud-first startups, Jira escapees, OSS maintainers — comes
 
 4. **Metrics for teams, never surveillance.** Team-level only. No individual leaderboards, no stack ranking, speed always displayed alongside stability. Misused metrics are how this category earns hatred; yapm's opinion is built in.
 
+   The one deliberate exception is not a metric: where a *governance action* crosses a permission boundary — an admin editing who may read a team's work, a person releasing that team's summary outside it — yapm records who did it, in an admin-only log with a bounded retention window and no per-person aggregate of any kind. It records that the act happened, never that anybody read anything: yapm has no read log, and adding one would be the wrong side of this line.
+
 5. **Free means free.** No seat caps. No SSO tax. No feature flags waiting for a license key. No upgrade nags inside the self-hosted UI. One-command export of everything. The self-hosted product *is* the product.
 
 6. **Deployable in minutes.** One `docker compose up` on a small VPS. Operational simplicity is a moat — the leading free alternative's own README calls itself resource-heavy.

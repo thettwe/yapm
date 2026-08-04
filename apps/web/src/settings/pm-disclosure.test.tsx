@@ -223,14 +223,22 @@ test('every control is a real focusable element and the change is announced poli
   await waitFor(() => expect(live.textContent).toBe('Product digests turned off for Platform.'))
 })
 
-// ROADMAP row 23 owns those two words and the surfaces that earn them; using either here would
-// promise something this change does not ship.
-test('the copy claims nothing change 23 owns', () => {
+// This was a blocklist on the words "auditable" and "retention-bounded", which ROADMAP row 23
+// reserved until the surfaces that earn them existed. They do now — the audit view a few
+// centimetres below this block states both, accurately — so the blocklist is retired rather than
+// left to fail a future copy edit in the name of a prohibition that has been lifted.
+//
+// What replaces it is the claim that stays false however governed this feature gets: these switches
+// decide who MAY read, and yapm records no read anywhere. Copy offering an admin who opened a digest
+// would be a surveillance surface wearing a governance surface's clothes — and it would have sailed
+// through the word blocklist untouched, which is the argument for asserting the meaning instead.
+test('the switch copy claims a governance surface, never a reading one', () => {
   renderSection({ ...ALL_OFF, enabled: true })
 
   const copy = screen.getByTestId('pm-disclosure-settings').textContent ?? ''
-  expect(copy.toLowerCase()).not.toContain('auditable')
-  expect(copy.toLowerCase()).not.toContain('retention-bounded')
+  for (const claim of [/who read it/i, /who opened/i, /read log/i, /reading log/i, /viewed by/i]) {
+    expect(copy).not.toMatch(claim)
+  }
 })
 
 test('a failed write surfaces a reason and re-reads what is actually stored', async () => {

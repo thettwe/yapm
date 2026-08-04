@@ -15,6 +15,12 @@ import type { ZeroDatabase } from '../zero/db-provider.js'
 import { ATTACHMENT_GC_QUEUE, runAttachmentGc } from './attachments.js'
 import { type CycleMaintenanceOptions, runCycleMaintenance } from './cycles.js'
 import {
+  AI_DISCLOSURE_RETENTION_QUEUE,
+  AI_PM_DIGEST_READY_QUEUE,
+  runDisclosureRetention,
+  runPmDigestReadyEmailSweep,
+} from './disclosure.js'
+import {
   NOTIFICATION_EMAIL_QUEUE,
   NOTIFICATION_RETENTION_QUEUE,
   runNotificationEmailSweep,
@@ -31,6 +37,7 @@ import {
 export const CYCLE_MAINTENANCE_QUEUE = 'cycle-maintenance'
 export const CYCLE_DIGEST_QUEUE = 'cycle-digest'
 export { ATTACHMENT_GC_QUEUE } from './attachments.js'
+export { AI_DISCLOSURE_RETENTION_QUEUE, AI_PM_DIGEST_READY_QUEUE } from './disclosure.js'
 export { NOTIFICATION_EMAIL_QUEUE, NOTIFICATION_RETENTION_QUEUE } from './notifications.js'
 export { RETRO_AI_DRAFT_QUEUE } from './retro-draft.js'
 export { SEARCH_INDEX_QUEUE, SEARCH_RECONCILE_QUEUE } from './search.js'
@@ -115,6 +122,24 @@ export interface AttachmentSchedulerOptions {
   cron: string
 }
 
+// Present ⇒ the ready notice's delivery sweep is registered. Absent ⇒ it is not, and retention still
+// is: the two are gated separately for the reason notification retention is gated separately from
+// notification email — retention bounds a table, it is not an email feature.
+export interface PmDigestReadyEmailSchedulerOptions {
+  mailer: Mailer
+  publicUrl: string
+  cron: string
+}
+
+// The disclosure block. `retention` is ALWAYS present — the caller passes it unconditionally, because
+// the audit log exists whether or not AI is switched on — and `email` only when a transport, a public
+// URL and `AI_PM_DIGEST_READY_EMAIL=true` are all there.
+export interface DisclosureSchedulerOptions {
+  retentionDays: number
+  retentionCron: string
+  email?: PmDigestReadyEmailSchedulerOptions
+}
+
 // Every block is independently optional, extending the shape `digest?:` already used. Turning off
 // cycle maintenance therefore no longer silently turns off notification retention.
 export interface StartSchedulerOptions {
@@ -126,6 +151,7 @@ export interface StartSchedulerOptions {
   search?: SearchSchedulerOptions
   attachments?: AttachmentSchedulerOptions
   retroDraft?: RetroDraftSchedulerOptions
+  disclosure?: DisclosureSchedulerOptions
   // Injected by tests so the queue topology — which queues exist, and on what cron — is assertable
   // without a database or real polling. Mirrors the GitHub connector's `boss?:`.
   boss?: PgBoss
@@ -148,6 +174,7 @@ interface CycleDigestJobData {
 // self-hoster's first `docker compose up`.
 export async function startScheduler(options: StartSchedulerOptions): Promise<Scheduler> {
   const { db, dbProvider, logger, cycles, notifications, search, attachments, retroDraft } = options
+  const { disclosure } = options
 
   const boss = options.boss ?? new PgBoss({ db: fromKysely(db), schema: 'pgboss' })
   if (options.boss === undefined) {
@@ -205,11 +232,67 @@ export async function startScheduler(options: StartSchedulerOptions): Promise<Sc
     }
   }
 
+  if (disclosure) {
+    try {
+      await registerDisclosureJobs({ boss, db, logger, disclosure })
+    } catch (error) {
+      logger.error(
+        { err: error },
+        'ai disclosure job registration failed; other scheduled jobs continue',
+      )
+    }
+  }
+
   return {
     stop: async () => {
       await boss.stop({ graceful: true })
     },
   }
+}
+
+interface RegisterDisclosureJobsOptions {
+  boss: PgBoss
+  db: Kysely<DB>
+  logger: Logger
+  disclosure: DisclosureSchedulerOptions
+}
+
+// A SIXTH independent block on the SHARED `boss` — no second `PgBoss`, no second `boss.start()`.
+// This is `registerNotificationJobs`' shape line for line, and deliberately so: the two halves have
+// the same gating story, retention unconditional and delivery only when a transport exists.
+//
+// Retention is registered whenever the block is present, and `index.ts` passes the block always. An
+// instance with AI off, disclosure off and no mailer still sweeps its audit log.
+async function registerDisclosureJobs(options: RegisterDisclosureJobsOptions): Promise<void> {
+  const { boss, db, logger } = options
+  const { retentionDays, retentionCron, email } = options.disclosure
+
+  await boss.createQueue(AI_DISCLOSURE_RETENTION_QUEUE)
+  await boss.work(AI_DISCLOSURE_RETENTION_QUEUE, async () => {
+    await runDisclosureRetention({ db, retentionDays, logger, now: Date.now() })
+  })
+  await boss.schedule(AI_DISCLOSURE_RETENTION_QUEUE, retentionCron)
+  logger.info({ cron: retentionCron, retentionDays }, 'ai disclosure retention scheduled')
+
+  if (!email) return
+
+  await boss.createQueue(AI_PM_DIGEST_READY_QUEUE)
+  await boss.work(AI_PM_DIGEST_READY_QUEUE, async () => {
+    // The sweep contains its own transport failures and never rejects, so this worker cannot disturb
+    // the five blocks sharing the process.
+    await runPmDigestReadyEmailSweep({
+      db,
+      mailer: email.mailer,
+      publicUrl: email.publicUrl,
+      logger,
+      now: Date.now(),
+    })
+  })
+  await boss.schedule(AI_PM_DIGEST_READY_QUEUE, email.cron)
+  logger.info(
+    { cron: email.cron, transport: email.mailer.transport },
+    'pm digest ready notice delivery scheduled',
+  )
 }
 
 interface RegisterCycleJobsOptions {

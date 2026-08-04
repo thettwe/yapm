@@ -47,6 +47,12 @@ export function notificationSubjectPath(row: {
   switch (row.subjectType) {
     case 'issue':
       return `/teams/${row.teamId}/issues?open=${encodeURIComponent(row.subjectId)}`
+    // Unreachable from THIS sweep — `pendingNotificationEmails` selects `subject_type = 'issue'`
+    // only, which is what makes the two delivery selections disjoint. The case exists because the
+    // switch is exhaustive over the union, and it answers with the reader's own surface rather than
+    // an issue link to something that is not an issue.
+    case 'pm_digest':
+      return '/digests'
   }
 }
 

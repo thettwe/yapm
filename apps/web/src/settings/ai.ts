@@ -123,6 +123,55 @@ export function fetchAiVerdictLog(): Promise<RetroVerdictLog> {
   return request<RetroVerdictLog>(`${BASE}/verdicts`)
 }
 
+// Mirrors the server's `DisclosureAuditLog`. What was disclosed and to how many readers — and there
+// is no reader field on either shape, because nothing in the schema records that anybody read a
+// digest. The totals are keyed by TEAM; there is no actor-keyed aggregate for a later tile to hang
+// off, which is what keeps an admin-only governance log from drifting into a per-person scorecard.
+// The three events that happen TO a team. A policy write is workspace-scoped — it moves switches and
+// names the teams it touched — so it is reported in the recent list rather than totalled under a team
+// it does not belong to.
+export interface DisclosureAuditTeamTotals {
+  // Null when the team has since been deleted; its history outlives it.
+  teamId: string | null
+  teamName: string | null
+  generated: number
+  published: number
+  unpublished: number
+}
+
+export interface DisclosureAuditDetail {
+  audienceSize?: number
+  status?: string
+  enabled?: boolean
+  killed?: boolean
+  pmVisible?: boolean
+  teamsChanged?: string[]
+}
+
+export interface DisclosureAuditEvent {
+  id: string
+  createdAt: number
+  event: 'policy_changed' | 'generated' | 'published' | 'unpublished'
+  teamId: string | null
+  teamName: string | null
+  // Null for a system generation, and for an account since deleted. The two are indistinguishable
+  // here, which costs an admin nothing they need.
+  actorName: string | null
+  // The teams a policy write touched, by name, resolved server-side from the ids in the record.
+  teamsChangedNames: string[]
+  detail: DisclosureAuditDetail
+}
+
+export interface DisclosureAuditLog {
+  totals: DisclosureAuditTeamTotals[]
+  recent: DisclosureAuditEvent[]
+}
+
+// A read, and the only one on this path: no export, no retention override, no companion write.
+export function fetchAiDisclosureLog(): Promise<DisclosureAuditLog> {
+  return request<DisclosureAuditLog>(`${BASE}/disclosures`)
+}
+
 export function updateAiConfig(patch: AiConfigPatch): Promise<AiStatusResponse> {
   return request<AiStatusResponse>(BASE, { method: 'POST', body: JSON.stringify(patch) })
 }

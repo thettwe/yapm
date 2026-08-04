@@ -217,6 +217,57 @@ describe('loadEnv', () => {
     ).toBe('true')
   })
 
+  // The ready notice is off at the instance floor, and that default is the decision: it is the one
+  // path in this feature that leaves the governed surface.
+  it('leaves the PM digest ready notice off by default', () => {
+    expect(loadEnv({ ...VALID }).AI_PM_DIGEST_READY_EMAIL).toBe('false')
+  })
+
+  it('fast-fails AI_PM_DIGEST_READY_EMAIL=true while the PM digest is off, naming both', () => {
+    try {
+      loadEnv({ ...VALID, AI_PM_DIGEST_READY_EMAIL: 'true' })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      expect(error).toBeInstanceOf(EnvValidationError)
+      const issue = (error as EnvValidationError).issues[0]
+      expect(issue?.variable).toBe('AI_PM_DIGEST_READY_EMAIL')
+      expect(issue?.message).toContain('AI_PM_DIGEST')
+    }
+  })
+
+  // No refinement against the mailer: no transport is a CLEAN DISABLEMENT everywhere else in this
+  // product, and this follows it rather than inventing a second posture.
+  it('accepts the ready notice with no mail transport configured at all', () => {
+    const env = loadEnv({
+      ...VALID,
+      AI_PM_DIGEST_READY_EMAIL: 'true',
+      AI_PM_DIGEST: 'true',
+      AI_DIGEST_ON_CYCLE_CLOSE: 'true',
+    })
+    expect(env.AI_PM_DIGEST_READY_EMAIL).toBe('true')
+    expect(mailEnv(env)).toBeNull()
+  })
+
+  // The bound is a year, and it is configurable. Stated rather than inferred, because
+  // "retention-bounded" is a phrase this change earns and an unstated window is not a bound.
+  it('defaults the disclosure retention window to 365 days, staggered off notification retention', () => {
+    const env = loadEnv({ ...VALID })
+    expect(env.AI_DISCLOSURE_RETENTION_DAYS).toBe(365)
+    expect(env.AI_DISCLOSURE_RETENTION_CRON).toBe('23 3 * * *')
+    expect(env.NOTIFICATION_RETENTION_CRON).toBe('7 3 * * *')
+    expect(env.AI_DISCLOSURE_RETENTION_CRON).not.toBe(env.NOTIFICATION_RETENTION_CRON)
+  })
+
+  it('rejects a malformed disclosure retention cron by name', () => {
+    try {
+      loadEnv({ ...VALID, AI_DISCLOSURE_RETENTION_CRON: 'nightly please' })
+      expect.unreachable('loadEnv should have thrown')
+    } catch (error) {
+      expect(error).toBeInstanceOf(EnvValidationError)
+      expect((error as EnvValidationError).issues[0]?.variable).toBe('AI_DISCLOSURE_RETENTION_CRON')
+    }
+  })
+
   it('exposes instance-default AI provider keys and the default provider via aiEnv', () => {
     const env = loadEnv({
       ...VALID,

@@ -113,6 +113,8 @@ export type {
   NotificationKey,
   PendingNotificationEmail,
   PendingNotificationEmailsOptions,
+  PendingPmDigestReadyEmail,
+  PendingPmDigestReadyEmailsOptions,
 } from './notification.js'
 export {
   deleteNotificationsForMember,
@@ -120,16 +122,23 @@ export {
   deleteNotificationsOlderThan,
   markAllNotificationsRead,
   pendingNotificationEmails,
+  pendingPmDigestReadyEmails,
   recordNotifications,
   stampNotificationsEmailed,
 } from './notification.js'
 export type {
   DisclosureAuditDetail,
   DisclosureAuditEntry,
+  DisclosureAuditEvent,
+  DisclosureAuditLog,
+  DisclosureAuditLogOptions,
+  DisclosureAuditTeamTotals,
   SetPmDisclosurePolicyOptions,
 } from './pm-disclosure.js'
 export {
   audienceSize,
+  deleteDisclosureAuditOlderThan,
+  disclosureAuditLogForWorkspace,
   pmTeamPolicy,
   recordDisclosureAudit,
   resolvePmAudienceTeamIds,

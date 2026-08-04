@@ -33,6 +33,7 @@ export default defineConfig({
           items: [
             { label: 'Connect GitHub', slug: 'self-hosting/github-connector' },
             { label: 'Enable AI', slug: 'self-hosting/ai-setup' },
+            { label: 'The disclosure model', slug: 'self-hosting/ai-disclosure' },
             { label: 'Email delivery', slug: 'self-hosting/email' },
             { label: 'Sync connection & recovery', slug: 'self-hosting/sync-recovery' },
             { label: 'Search index', slug: 'self-hosting/search-index' },

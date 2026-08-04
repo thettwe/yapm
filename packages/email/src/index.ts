@@ -10,4 +10,6 @@ export {
   notificationDigestSubject,
   renderNotificationDigest,
 } from './notification-digest.js'
+export type { PmDigestReadyInput } from './pm-digest-ready.js'
+export { pmDigestReadySubject, renderPmDigestReady } from './pm-digest-ready.js'
 export { absoluteUrl } from './url.js'

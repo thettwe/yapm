@@ -594,6 +594,7 @@ export {
 } from './zero/queries.js'
 export { initialRanks, rankBetween } from './zero/rank.js'
 export type {
+  BakeablePriorRetro,
   BakeableRetroAction,
   BucketableProposal,
   RankedRetroProposal,
@@ -653,6 +654,7 @@ export {
   RETRO_ACTION_OUTCOMES,
   RETRO_SEED_REF_KINDS,
   retroActionOutcome,
+  retroActionOutcomeFromKey,
   retroActionOutcomeKey,
   retroActionOutcomeTotals,
   retroSeedRefSchema,

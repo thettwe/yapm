@@ -66,6 +66,18 @@ export function retroActionOutcomeKey(outcome: RetroActionOutcome): string {
   return `prior_retro_${outcome}`
 }
 
+const OUTCOME_BY_KEY: ReadonlyMap<string, RetroActionOutcome> = new Map(
+  RETRO_ACTION_OUTCOMES.map((outcome) => [retroActionOutcomeKey(outcome), outcome]),
+)
+
+// The inverse, and the reason it exists: these four keys live in the `widget` namespace beside the
+// seed's metric keys, but NO seed metric carries them — they are computed from a retro this view
+// does not sync. Anything resolving a `widget` reference has to be able to tell the two apart, or a
+// cited total resolves to nothing and the count the proposal points at is never drawn.
+export function retroActionOutcomeFromKey(key: string): RetroActionOutcome | null {
+  return OUTCOME_BY_KEY.get(key) ?? null
+}
+
 export type RetroActionOutcomeTotals = Readonly<Record<RetroActionOutcome, number>>
 
 export function retroActionOutcomeTotals(

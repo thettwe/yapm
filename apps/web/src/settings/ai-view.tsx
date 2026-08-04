@@ -24,6 +24,7 @@ import {
 import { type FormEvent, useCallback, useEffect, useId, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import { runMutation } from '@/lib/mutation'
+import { RETRO_CATEGORY_LABEL, RETRO_VERDICT_LABEL } from '@/retro/ai-labels'
 import {
   type AiStatusResponse,
   fetchAiConfig,
@@ -197,7 +198,11 @@ function VerdictLogSection() {
 
       {recent.length > 0 ? (
         <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold text-text-1">Most recently thrown out</h3>
+          {/* REJECTED **OR CONTESTED**: the server returns both, because a team splitting down the
+              middle over a proposal is as much a signal about the draft as a team throwing it out.
+              Every enum below is rendered through the product's own words rather than the stored
+              token — the panel a team reads and the log an operator reads use the same maps. */}
+          <h3 className="text-sm font-semibold text-text-1">Most recently rejected or contested</h3>
           <ul className="flex flex-col gap-2" data-testid="ai-verdict-recent">
             {recent.map((proposal) => (
               <li
@@ -209,7 +214,8 @@ function VerdictLogSection() {
                 <span className="text-xs text-text-2">
                   {proposal.teamName}
                   {proposal.cycleName === null ? '' : ` · ${proposal.cycleName}`} ·{' '}
-                  {proposal.category} · {proposal.verdict} · {proposal.agreeCount} agreed,{' '}
+                  {RETRO_CATEGORY_LABEL[proposal.category]} ·{' '}
+                  {RETRO_VERDICT_LABEL[proposal.verdict]} · {proposal.agreeCount} agreed,{' '}
                   {proposal.disagreeCount} disagreed
                 </span>
               </li>

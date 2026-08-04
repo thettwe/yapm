@@ -10,7 +10,9 @@ import { DIGEST_CONFIDENCE_LEVELS } from '../digest.js'
 import {
   RETRO_ACTION_OUTCOME_LABEL,
   type RetroActionOutcome,
+  type RetroActionOutcomeTotals,
   type RetroSeedRef,
+  retroActionOutcomeFromKey,
   retroSeedRefSchema,
 } from './seed.js'
 
@@ -147,6 +149,15 @@ export interface BakeableRetroAction {
   readonly outcome: RetroActionOutcome
 }
 
+// The prior retro as every step of the chain needs it — the actions to bake against, the totals the
+// four citable outcome keys resolve to, and the cycle those actions were agreed in. `PriorRetroFacts`
+// from the fact assembly satisfies it structurally, so nothing in `zero/` imports anything from `db/`.
+export interface BakeablePriorRetro {
+  readonly cycleName: string
+  readonly actions: readonly BakeableRetroAction[]
+  readonly totals: RetroActionOutcomeTotals
+}
+
 // How much of an action body a chip carries. Long enough to recognize the action, short enough that
 // a prior retro's wording cannot take over the row.
 const RETRO_ACTION_LABEL_MAX = 80
@@ -156,19 +167,21 @@ function truncate(text: string, max: number): string {
   return clean.length <= max ? clean : `${clean.slice(0, max - 1).trimEnd()}…`
 }
 
-// YAPM SAYS WHAT THE MODEL IS POINTING AT (design §D4). Run after `sanitizeRetroDraft` and before the
-// write: every surviving `retro_action` reference has its `label`, `outcome` and `origin` OVERWRITTEN
-// with yapm's own text, and every other kind has `outcome`/`origin` stripped — so none of the three
-// can ever carry a string a model wrote. This exists because a `retro_action` reference is the one
-// kind the client cannot resolve from its own synced rows (the prior retro is not in this retro's
-// sync scope), so unlike an issue chip it has nothing to fall back to.
+// YAPM SAYS WHAT THE MODEL IS POINTING AT (design §D4). Run INSIDE `sanitizeRetroDraft`, after the
+// two validators and before the cap: every surviving `retro_action` reference has its `label`,
+// `outcome` and `origin` OVERWRITTEN with yapm's own text, every prior-retro outcome TOTAL gets
+// yapm's own count as its caption, and every other kind has `outcome`/`origin` stripped — so none of
+// the three can ever carry a string a model wrote. This exists because those are the two references
+// the client cannot resolve from its own synced rows (the prior retro is not in this retro's sync
+// scope, and no seed metric carries an outcome key), so unlike an issue chip they have nothing to
+// fall back to.
 //
 // A reference whose action is unknown is DROPPED rather than labelled: after cite-or-omit only real
 // action ids survive, so this is a belt on a brace, and a proposal left with no reference at all goes
 // with it — the same rule the citation validator applies.
 export function bakeRetroActionRefs(
   content: RetroDraftContent,
-  prior: { readonly cycleName: string; readonly actions: readonly BakeableRetroAction[] } | null,
+  prior: BakeablePriorRetro | null,
 ): RetroDraftContent {
   const actions = new Map((prior?.actions ?? []).map((action) => [action.id, action]))
   const proposals = content.proposals
@@ -176,6 +189,22 @@ export function bakeRetroActionRefs(
       ...proposal,
       refs: proposal.refs.flatMap((ref): RetroSeedRef[] => {
         if (!isRetroActionRef(ref)) {
+          // The four outcome TOTALS are citable keys in the `widget` namespace with no seed metric
+          // behind them, so yapm writes their caption here for the same reason it writes an action's:
+          // there is nothing on the client to resolve them against. Without a prior retro the key was
+          // never citable, so a reference carrying one is dropped exactly like an invented action id.
+          const total = ref.kind === 'widget' ? retroActionOutcomeFromKey(ref.id) : null
+          if (total !== null) {
+            if (prior === null) return []
+            return [
+              {
+                kind: ref.kind,
+                id: ref.id,
+                label: `${prior.totals[total]} ${RETRO_ACTION_OUTCOME_LABEL[total]}`,
+                outcome: total,
+              },
+            ]
+          }
           return [
             {
               kind: ref.kind,
@@ -203,20 +232,52 @@ export function bakeRetroActionRefs(
   return { proposals }
 }
 
-// The three validators, in the order design §D6 fixes and for the reason it gives:
-//   1. cite-or-omit against the ids yapm computed (evidence ids ∪ seed metric keys ∪ prior action
+// Cite-or-omit narrows a reference by ID, and every id yapm computed lives in ONE flat set — so a
+// model that stamps the loop-closing kind on a real issue id would otherwise buy itself a place in
+// the follow-up bucket. A `retro_action` reference is therefore narrowed by KIND AND id, before the
+// id narrowing runs, so the two namespaces cannot be crossed at any point in the chain.
+function narrowRetroActionRefs(
+  content: RetroDraftContent,
+  prior: BakeablePriorRetro | null,
+): RetroDraftContent {
+  const ids = new Set((prior?.actions ?? []).map((action) => action.id))
+  return {
+    proposals: content.proposals.map((proposal) => ({
+      ...proposal,
+      refs: proposal.refs.filter((ref) => !isRetroActionRef(ref) || ids.has(ref.id)),
+    })),
+  }
+}
+
+// The validators, in the order design §D6 fixes and for the reason it gives:
+//   1. narrow a `retro_action` reference to the prior retro's real action ids,
+//   2. cite-or-omit against the ids yapm computed (evidence ids ∪ seed metric keys ∪ prior action
 //      ids ∪ prior-retro outcome-total keys),
-//   2. drop anything naming a workspace member (the roster is loaded AFTER the model call),
-//   3. cap at three per BUCKET, follow-ups included.
+//   3. drop anything naming a workspace member (the roster is loaded AFTER the model call),
+//   4. bake yapm's own caption onto the two references the client cannot resolve,
+//   5. cap at three per BUCKET, follow-ups included.
+//
+// THE BAKE IS INSIDE THE CHAIN, and that is a correctness fact rather than tidiness. Baking DROPS a
+// reference whose action is unknown and the proposal left with none, and dropping a `retro_action`
+// reference also RE-BUCKETS its proposal — so a bake that ran after the cap could leave a bucket
+// holding four proposals, and could leave the follow-up group empty after three bogus follow-ups had
+// consumed its entire cap. The cap is last so that a dropped proposal is replaced by the next real
+// one, which only holds if nothing downstream of it drops or moves anything.
+//
 // Pure and synchronous — nothing here reads a database or a clock.
 export function sanitizeRetroDraft(
   content: RetroDraftContent,
   knownIds: ReadonlySet<string>,
   roster: readonly RosterMember[],
+  prior: BakeablePriorRetro | null,
 ): RetroDraftContent {
-  const cited = dropUncitedAiItems(retroDraftToArtifact(content), knownIds)
+  const kinded = narrowRetroActionRefs(content, prior)
+  const cited = dropUncitedAiItems(retroDraftToArtifact(kinded), knownIds)
   const named = dropAiItemsNamingMembers(cited, roster)
-  return capRetroProposals(retroDraftFromArtifact(named), RETRO_PROPOSALS_PER_CATEGORY)
+  return capRetroProposals(
+    bakeRetroActionRefs(retroDraftFromArtifact(named), prior),
+    RETRO_PROPOSALS_PER_CATEGORY,
+  )
 }
 
 // `rank` is the 0-based index WITHIN the bucket, assigned after the chain so it is dense. Two

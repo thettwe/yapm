@@ -178,12 +178,13 @@ converted issue's live status inline, and an already-created action can still be
 `closed` retro.
 
 **And the next retro asks what became of them.** For a team with the
-[AI draft](/features/retro-ai-draft/) turned on, the following retro opens with a fourth group —
-*follow-ups* — reporting each of last retro's agreed actions against the live status of the issue it
-became: **shipped** (the issue is `Done`, and nothing else counts), **canceled**, **still open**, or
-**never tracked** if it never became an issue at all. That answer is computed by yapm, not written by
-the model, and it does nothing until a team has run two retros: on your first, the group is simply
-not there.
+[AI draft](/features/retro-ai-draft/) turned on, the following retro can open with a fourth group —
+*follow-ups* — where the draft reports on improvements agreed in the team's most recent previous
+retro (up to three, with yapm naming which cycle they came from), each against the live status of the
+issue it became: **shipped** (the issue is `Done`, and nothing else counts), **canceled**, **still
+open**, or **never tracked** if it never became an issue at all. That answer is computed by yapm, not
+written by the model, and the group appears only when there is something to report: on a team's first
+retro it is simply not there.
 
 Without the AI draft, the loop still closes the plain way — an unfinished action is an unfinished
 issue, and the cycle's rollover puts it in front of you again.

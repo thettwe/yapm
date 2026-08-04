@@ -1,6 +1,6 @@
 ---
 title: Retro AI draft
-description: Opt in, per team, to have the AI draft up to three wins, three losses, three improvements and three follow-ups on last retro into your retro — each one citing a work-graph entity or one of yapm's own computed metrics, and none of it true until your team says so.
+description: Opt in, per team, to have the AI draft up to three wins, three losses, three improvements and three follow-ups on the team's previous retro into your retro — each one citing a work-graph entity or one of yapm's own computed metrics, and none of it true until your team says so.
 ---
 
 A retro's hardest minute is the first one. The board is empty, everyone is remembering a different
@@ -209,7 +209,9 @@ different failures, and a retro should be able to tell them apart.
 The model is handed those four words already computed, together with the totals, and it is told to
 restate them and never revise them. It cannot type a number here any more than it can anywhere else:
 the per-outcome totals are citable **keys**, so a proposal that wants to say "two of the three
-shipped" points at yapm's count instead of writing one.
+shipped" points at yapm's count instead of writing one. A cited total draws its own small chip —
+`2 shipped` — written by yapm from the same count, and inert for the same reason the action chip
+below is: it is about a retro this view does not sync, so there is nothing to navigate to.
 
 ### What a follow-up looks like
 
@@ -217,7 +219,9 @@ A follow-up is an ordinary proposal — a sentence, a confidence, evidence chips
 a **prior retro action**. It carries its own heading naming the cycle those actions were agreed in
 ("Follow-ups from Cycle 6"), because the prior retro is not necessarily *last* cycle's: if a team
 skipped a retro, yapm walks back to the most recent one that actually agreed something, and says so
-rather than implying it was last cycle.
+rather than implying it was last cycle. Once the team has voted the headings go away — the list
+re-sorts contested-first across all four groups — so each follow-up row then carries the cycle name
+on its own chip, and the announcement a screen reader gets says it too.
 
 The prior action's chip is **the one chip in the section that is not a control.** It does not
 navigate. The prior retro's rows are not synced into this retro's view and yapm did not add a query
@@ -355,20 +359,27 @@ own text after validation and before the row is stored, so no caption a model wr
 
 ### Cite evidence or be omitted
 
-Three deterministic checks run over the model's output before a single row is stored, in this order:
+Four deterministic checks run over the model's output before a single row is stored, in this order:
 
 1. **Cite or omit.** Every reference is narrowed to the set of evidence ids and metric keys yapm
-   itself computed for this cycle. A proposal left with no real reference is dropped — so a
-   hallucinated issue number does not become a chip, and a proposal grounded in nothing does not
-   become a sentence.
+   itself computed for this cycle. A reference claiming to be a prior retro action is narrowed by
+   its *kind* as well as its id, so pointing the loop-closing kind at an ordinary issue buys nothing.
+   A proposal left with no real reference is dropped — so a hallucinated issue number does not become
+   a chip, and a proposal grounded in nothing does not become a sentence.
 2. **No person, ever.** Any proposal whose text contains a workspace member's display name or email
    handle is dropped whole. Its siblings are unaffected.
-3. **At most three per group**, keeping the model's own order — three wins, three losses, three
+3. **yapm writes the captions.** Every surviving prior-action reference and every cited outcome total
+   gets yapm's own text, and a reference to an action the prior retro does not have is dropped along
+   with any proposal left holding nothing.
+4. **At most three per group**, keeping the model's own order — three wins, three losses, three
    improvements and, from a team's second retro, three follow-ups, counted independently.
 
-The cap is **last** on purpose: a proposal dropped by check 1 or 2 is replaced by the next surviving
-one rather than leaving a hole. And the cap is enforced by code, not by asking the model nicely — the
-prompt requests three, the validator guarantees it.
+The cap is **last** on purpose: a proposal dropped by an earlier check is replaced by the next
+surviving one rather than leaving a hole. That is also why check 3 sits *before* it rather than after
+the chain: dropping a prior-action reference moves its proposal out of the follow-up group, and a
+group cannot be counted before the last thing that can change its membership has run. The cap is
+enforced by code, not by asking the model nicely — the prompt requests three, the validator
+guarantees it.
 
 Check 1 is also what makes the follow-up group's absence structural. A prior retro's action ids are
 in the citable set only when there **is** a prior retro; on a team's first one there are none, so a

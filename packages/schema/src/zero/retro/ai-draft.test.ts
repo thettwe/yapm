@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  type BakeablePriorRetro,
   type BakeableRetroAction,
   bakeRetroActionRefs,
   capRetroProposals,
@@ -53,7 +54,7 @@ describe('retroDraftContentSchema', () => {
   it('parses an empty result without throwing', () => {
     const empty = retroDraftContentSchema.parse({ proposals: [] })
 
-    expect(sanitizeRetroDraft(empty, KNOWN, NO_ROSTER).proposals).toEqual([])
+    expect(sanitizeRetroDraft(empty, KNOWN, NO_ROSTER, null).proposals).toEqual([])
     expect(rankRetroProposals(empty)).toEqual([])
   })
 })
@@ -80,7 +81,7 @@ describe('sanitizeRetroDraft — cite-or-omit', () => {
       ],
     }
 
-    const result = sanitizeRetroDraft(content, KNOWN, NO_ROSTER)
+    const result = sanitizeRetroDraft(content, KNOWN, NO_ROSTER, null)
 
     expect(result.proposals).toHaveLength(1)
     expect(result.proposals[0]?.summary).toBe('Guest checkout shipped.')
@@ -99,7 +100,7 @@ describe('sanitizeRetroDraft — cite-or-omit', () => {
       ],
     }
 
-    expect(sanitizeRetroDraft(content, KNOWN, NO_ROSTER).proposals).toHaveLength(1)
+    expect(sanitizeRetroDraft(content, KNOWN, NO_ROSTER, null).proposals).toHaveLength(1)
   })
 })
 
@@ -115,7 +116,7 @@ describe('sanitizeRetroDraft — the name backstop', () => {
       ],
     }
 
-    const result = sanitizeRetroDraft(content, KNOWN, roster)
+    const result = sanitizeRetroDraft(content, KNOWN, roster, null)
 
     expect(result.proposals.map((p) => p.summary)).toEqual([
       'The release landed.',
@@ -130,7 +131,7 @@ describe('sanitizeRetroDraft — the cap, applied last', () => {
       proposals: [1, 2, 3, 4, 5, 6].map((n) => proposal('win', `Win ${n}`, ['issue-1'])),
     }
 
-    const result = sanitizeRetroDraft(content, KNOWN, NO_ROSTER)
+    const result = sanitizeRetroDraft(content, KNOWN, NO_ROSTER, null)
 
     expect(result.proposals.map((p) => p.summary)).toEqual(['Win 1', 'Win 2', 'Win 3'])
   })
@@ -146,7 +147,7 @@ describe('sanitizeRetroDraft — the cap, applied last', () => {
       ],
     }
 
-    const result = sanitizeRetroDraft(content, KNOWN, NO_ROSTER)
+    const result = sanitizeRetroDraft(content, KNOWN, NO_ROSTER, null)
 
     expect(result.proposals.map((p) => p.summary)).toEqual(['Win 1', 'Win 3', 'Win 4'])
   })
@@ -199,7 +200,11 @@ const ACTION_CANCELED: BakeableRetroAction = {
   body: 'Rotate the on-call doc weekly',
   outcome: 'canceled',
 }
-const PRIOR = { cycleName: 'Cycle 6', actions: [ACTION_SHIPPED, ACTION_CANCELED] }
+const PRIOR: BakeablePriorRetro = {
+  cycleName: 'Cycle 6',
+  actions: [ACTION_SHIPPED, ACTION_CANCELED],
+  totals: { shipped: 1, canceled: 1, in_flight: 0, not_converted: 0 },
+}
 
 // The citable set a cycle with a prior retro produces: this cycle's evidence, plus the prior actions
 // and the four outcome-total keys.
@@ -288,11 +293,70 @@ describe('the cap and the rank count by bucket', () => {
   })
 
   it('survives the whole chain: three follow-ups beside three improvements', () => {
-    const result = sanitizeRetroDraft(mixed, KNOWN_WITH_PRIOR, NO_ROSTER)
+    const result = sanitizeRetroDraft(mixed, KNOWN_WITH_PRIOR, NO_ROSTER, PRIOR)
 
     const buckets = result.proposals.map(retroProposalBucket)
     expect(buckets.filter((bucket) => bucket === 'follow_up')).toHaveLength(3)
     expect(buckets.filter((bucket) => bucket === 'improvement')).toHaveLength(3)
+  })
+})
+
+// THE CAP IS GENUINELY LAST. Both cases below are the same defect seen from its two sides: the bake
+// drops references and therefore RE-BUCKETS proposals, so a bake that ran after the cap would move
+// rows between buckets that had already been counted. Each proposal here stamps the loop-closing kind
+// on a real ISSUE id — citable, so cite-or-omit alone lets it through — which is exactly the crossing
+// `narrowRetroActionRefs` exists to refuse.
+describe('nothing re-buckets a proposal after the cap has counted it', () => {
+  const crossed = (summary: string): RetroDraftContent['proposals'][number] => ({
+    category: 'win',
+    summary,
+    refs: [
+      { kind: 'retro_action', id: 'issue-1' },
+      { kind: 'issue', id: 'issue-1' },
+    ],
+    confidence: 'medium',
+  })
+
+  it('never lets a bucket end up holding four proposals', () => {
+    const content: RetroDraftContent = {
+      proposals: [
+        crossed('A win wearing a follow-up’s kind.'),
+        ...[1, 2, 3].map((n) => proposal('win', `Win ${n}`, ['issue-1'])),
+      ],
+    }
+
+    const result = sanitizeRetroDraft(content, KNOWN_WITH_PRIOR, NO_ROSTER, PRIOR)
+
+    expect(result.proposals).toHaveLength(3)
+    expect(result.proposals.map(retroProposalBucket)).toEqual(['win', 'win', 'win'])
+  })
+
+  it('never lets bogus follow-ups consume the cap and then vanish', () => {
+    const content: RetroDraftContent = {
+      proposals: [
+        // Three that look like follow-ups until the reference is checked, ahead of three real ones.
+        ...[1, 2, 3].map((n) => ({
+          category: 'win' as const,
+          summary: `Not really a follow-up ${n}.`,
+          refs: [{ kind: 'retro_action' as const, id: 'issue-1' }],
+          confidence: 'medium' as const,
+        })),
+        ...[1, 2, 3].map((n) => followUp(`Real follow-up ${n}`, 'action-1')),
+      ],
+    }
+
+    const result = sanitizeRetroDraft(content, KNOWN_WITH_PRIOR, NO_ROSTER, PRIOR)
+
+    expect(result.proposals.map((p) => p.summary)).toEqual([
+      'Real follow-up 1',
+      'Real follow-up 2',
+      'Real follow-up 3',
+    ])
+    expect(result.proposals.map(retroProposalBucket)).toEqual([
+      'follow_up',
+      'follow_up',
+      'follow_up',
+    ])
   })
 })
 
@@ -309,7 +373,7 @@ describe('a first retro produces no follow-up, without a first-retro branch', ()
       ],
     }
 
-    const result = sanitizeRetroDraft(content, KNOWN, NO_ROSTER)
+    const result = sanitizeRetroDraft(content, KNOWN, NO_ROSTER, null)
 
     expect(result.proposals.map((p) => p.summary)).toEqual(['Guest checkout shipped.'])
     expect(result.proposals.map(retroProposalBucket)).not.toContain('follow_up')
@@ -385,7 +449,11 @@ describe('bakeRetroActionRefs', () => {
     const long = 'a'.repeat(200)
     const ref = bakeRetroActionRefs(
       { proposals: [followUp('Reported.', 'action-3')] },
-      { cycleName: 'Cycle 6', actions: [{ id: 'action-3', body: long, outcome: 'in_flight' }] },
+      {
+        cycleName: 'Cycle 6',
+        actions: [{ id: 'action-3', body: long, outcome: 'in_flight' }],
+        totals: { shipped: 0, canceled: 0, in_flight: 1, not_converted: 0 },
+      },
     ).proposals[0]?.refs[0]
 
     expect(ref?.label?.length).toBeLessThan(120)
@@ -415,6 +483,46 @@ describe('bakeRetroActionRefs', () => {
       'Keeps a real citation beside a fake one.',
     ])
     expect(baked.proposals[0]?.refs).toEqual([{ kind: 'issue', id: 'issue-1' }])
+  })
+
+  // The four outcome totals are citable so a proposal can point at a count rather than type one —
+  // which only means something if the count is renderable. No seed metric carries these keys, so
+  // yapm writes their caption here or nothing ever draws them.
+  it('writes yapm’s own count onto a cited outcome total', () => {
+    const content: RetroDraftContent = {
+      proposals: [
+        {
+          category: 'win',
+          summary: 'One of the two improvements we agreed landed.',
+          refs: [{ kind: 'widget', id: 'prior_retro_shipped', label: 'all of them, obviously' }],
+          confidence: 'high',
+        },
+      ],
+    }
+
+    const ref = bakeRetroActionRefs(content, PRIOR).proposals[0]?.refs[0]
+
+    expect(ref).toEqual({
+      kind: 'widget',
+      id: 'prior_retro_shipped',
+      label: '1 shipped',
+      outcome: 'shipped',
+    })
+  })
+
+  it('drops a cited outcome total when there is no prior retro to count', () => {
+    const content: RetroDraftContent = {
+      proposals: [
+        {
+          category: 'win',
+          summary: 'Invents a count out of nothing.',
+          refs: [{ kind: 'widget', id: 'prior_retro_shipped' }],
+          confidence: 'low',
+        },
+      ],
+    }
+
+    expect(bakeRetroActionRefs(content, null).proposals).toEqual([])
   })
 
   it('leaves a baked proposal parseable by the stored schema', () => {

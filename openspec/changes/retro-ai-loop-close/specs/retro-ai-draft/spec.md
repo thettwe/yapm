@@ -80,13 +80,17 @@ admin can already read through an ordinary team-scoped query.
 
 The model SHALL be asked for a closed, typed object of proposals, each carrying a category, a
 one-sentence summary, a confidence flag and evidence references. There SHALL be no free-form field
-beyond the summary and no markdown passthrough. Before anything is stored, three deterministic
+beyond the summary and no markdown passthrough. Before anything is stored, four deterministic
 validators SHALL run in order: every reference SHALL be narrowed to the set of evidence ids, metric
-keys and prior-action ids yapm itself computed for this cycle, and a proposal left with no real
-reference SHALL be dropped; any proposal whose summary names a workspace member SHALL be dropped;
-and the result SHALL be capped at **three proposals per bucket**, keeping model order. The cap SHALL
-be enforced by the validator, never by the prompt alone, and SHALL be applied last so that a dropped
-proposal is replaced by the next surviving one.
+keys and prior-action ids yapm itself computed for this cycle — a reference claiming the prior-action
+kind SHALL be narrowed by that kind as well as by id, so the two id namespaces cannot be crossed —
+and a proposal left with no real reference SHALL be dropped; any proposal whose summary names a
+workspace member SHALL be dropped; yapm SHALL then write its own caption onto every reference the
+client cannot resolve, dropping any that names an action the prior retro does not have; and the
+result SHALL be capped at **three proposals per bucket**, keeping model order. The cap SHALL be
+enforced by the validator, never by the prompt alone, and SHALL be applied last so that a dropped
+proposal is replaced by the next surviving one. No step after the cap SHALL drop a proposal or change
+the bucket it falls in, since either would make the cap neither a maximum nor a target.
 
 A proposal's **bucket** SHALL be wins, losses, improvements, or **follow-ups on the prior retro's
 agreed actions**. The follow-up bucket SHALL be determined by whether the proposal cites a prior
@@ -95,10 +99,13 @@ the cite-or-omit validator itself rather than through a separate branch, and no 
 stored with an empty or placeholder bucket. Every bucket SHALL be capped independently, so
 follow-ups cannot displace the improvements a team should make next.
 
-A proposal SHALL be able to cite a **computed metric key** and a **prior retro action id** as well as
-a work-graph entity id, and the surface SHALL render yapm's own value, trend or outcome for that
-reference rather than any text or number the model produced. A prior-action reference's caption SHALL
-be produced by yapm after validation and SHALL NOT be whatever label the model supplied. The system
+A proposal SHALL be able to cite a **computed metric key**, a **prior retro action id** and a
+**prior-retro outcome total** as well as a work-graph entity id, and the surface SHALL render yapm's
+own value, trend, outcome or count for that reference rather than any text or number the model
+produced. Every citable key SHALL be renderable by the surface: a key the model is invited to cite
+and no surface can resolve SHALL NOT be advertised. A prior-action reference's caption and an outcome
+total's caption SHALL both be produced by yapm after the citation and name checks and before the cap,
+and SHALL NOT be whatever label the model supplied. The system
 SHALL NOT validate numerals appearing in prose against the computed facts — that check is
 deliberately not attempted, because it rejects dates and ordinals; the structural answer is that the
 model points at a fact and yapm renders it.
@@ -128,6 +135,16 @@ from it.
 
 - **WHEN** the model emits three well-cited follow-ups and three well-cited improvements
 - **THEN** all six are stored, three in each bucket
+
+#### Scenario: Nothing re-buckets a proposal after the cap has counted it
+
+- **WHEN** the model emits three clean wins plus a fourth proposal that stamps the prior-action kind on an ordinary issue id
+- **THEN** the stray reference is refused before the cap counts it, the wins bucket holds exactly three proposals rather than four, and nothing lands in the follow-up bucket
+
+#### Scenario: Bogus follow-ups cannot consume the follow-up cap and then vanish
+
+- **WHEN** the model emits three proposals citing the prior-action kind with ids that are not prior actions, followed by three well-cited follow-ups
+- **THEN** the three real follow-ups are stored and the follow-up group is not left empty
 
 #### Scenario: A fabricated prior action cannot create a follow-up
 
@@ -210,10 +227,20 @@ read, with both assignee columns excluded.
 - **WHEN** the most recent prior retro with actions is two cycles back
 - **THEN** the group states which cycle those actions were agreed in
 
+#### Scenario: The cycle is still named once the headings are gone
+
+- **WHEN** the retro advances past voting and the draft is re-ordered contested-first, without group headings
+- **THEN** each follow-up row still states the cycle its reported actions were agreed in, and so does the announcement a screen reader receives
+
+#### Scenario: A cited outcome total is rendered rather than silently dropped
+
+- **WHEN** a stored proposal cites one of the four per-outcome totals
+- **THEN** the surface renders yapm's own count for it beside the sentence, and no count the model wrote is displayed
+
 #### Scenario: The group is reachable and operable by keyboard
 
-- **WHEN** a member tabs into the follow-up group and activates a reported action's reference, using no pointer
-- **THEN** focus is visible at each step and the reference is activatable
+- **WHEN** a member tabs through the follow-up group using no pointer
+- **THEN** focus is visible at each step, every control the group carries — the reaction toggles, and the add-as-an-action button where one is offered — is reachable in order, and the prior-action reference is presented as static text rather than as a control that cannot act
 
 ### Requirement: An operator-visible, team-level record of what teams rejected
 

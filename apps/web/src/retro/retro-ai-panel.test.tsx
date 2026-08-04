@@ -815,6 +815,59 @@ test('a follow-up gets its own group, headed with the cycle those actions were a
   expect(groups[0]?.textContent).not.toContain('The improvement agreed last cycle landed.')
 })
 
+// THE SPOKEN UNIT NAMES THE CYCLE TOO. The prior retro is not necessarily last cycle's — yapm walks
+// back to the most recent one that agreed something — and the live region is the one surface with no
+// visible heading beside it to correct a reader who was told "last retro".
+test('the announcement names the cycle the follow-ups came from', async () => {
+  mount(draftRow('ready'), [proposal({ id: 'w-1', category: 'win' }), followUp()])
+
+  await waitFor(() =>
+    expect(screen.getByTestId('retro-ai-announcement').textContent).toBe(
+      'AI draft ready: 1 win, 1 follow-up from Cycle 6.',
+    ),
+  )
+})
+
+test('the announcement stays vague rather than wrong when no origin was baked', async () => {
+  mount(draftRow('ready'), [
+    followUp({ refs: [{ kind: 'retro_action', id: 'action-1', label: 'Split the check' }] }),
+  ])
+
+  await waitFor(() =>
+    expect(screen.getByTestId('retro-ai-announcement').textContent).toBe(
+      'AI draft ready: 1 follow-up on a previous retro.',
+    ),
+  )
+})
+
+// A cited outcome TOTAL shares the `widget` namespace with the seed's metric keys and has no seed
+// metric behind it, so it resolves against nothing the client holds. Its caption is yapm's, baked
+// beside the reference — without this branch the count a proposal was pointing at is never drawn.
+test('a cited prior-retro total renders yapm’s count as an inert chip', () => {
+  const onOpenMetric = vi.fn()
+  mount(
+    draftRow('ready'),
+    [
+      followUp({
+        refs: [
+          { kind: 'retro_action', id: 'action-1', label: 'Split the check', origin: 'Cycle 6' },
+          { kind: 'widget', id: 'prior_retro_shipped', label: '1 shipped', outcome: 'shipped' },
+        ],
+      }),
+    ],
+    { canWrite: false, onOpenMetric },
+  )
+
+  const chip = screen.getByTestId('retro-ai-evidence-prior-total')
+  expect(chip.textContent).toContain('1 shipped')
+  expect(chip.dataset.outcome).toBe('shipped')
+  expect(chip.tagName).toBe('SPAN')
+  expect(chip.closest('a, button')).toBeNull()
+
+  fireEvent.click(chip)
+  expect(onOpenMetric).not.toHaveBeenCalled()
+})
+
 // The one chip that is not a control. The prior retro's rows are not synced into this view and this
 // change added no query for them, so a chip that looked like a link and did nothing would be worse
 // than a chip that plainly is not one.
@@ -849,8 +902,10 @@ test('a prior-action reference with no baked label renders no chip at all', () =
 })
 
 // Change 19's flat contested-first list draws the bucket chip on every row; a follow-up must read as
-// a follow-up there too, not as the category it is stored under.
-test('the flat contested-first list labels a follow-up a follow-up', () => {
+// a follow-up there too, not as the category it is stored under — AND it must still say which retro
+// it is reporting on. From `discuss` onward there are no group headings left to carry that, which is
+// exactly when the team is arguing about the row.
+test('the flat contested-first list labels a follow-up with the cycle it reports on', () => {
   mount(draftRow('ready'), [
     proposal({ id: 'w-1', category: 'win', verdict: 'agreed', agreeCount: 2, disagreeCount: 0 }),
     followUp({ verdict: 'contested', agreeCount: 2, disagreeCount: 1 }),
@@ -860,6 +915,22 @@ test('the flat contested-first list labels a follow-up a follow-up', () => {
   expect(rows[0]?.dataset.bucket).toBe('follow_up')
   expect(rows[0]?.dataset.category).toBe('win')
   expect(rows[0]?.querySelector('[data-testid="retro-ai-category-chip"]')?.textContent).toBe(
-    'Follow-ups',
+    'Follow-ups from Cycle 6',
   )
+})
+
+test('a follow-up row with no baked origin falls back to the plain bucket label', () => {
+  mount(draftRow('ready'), [
+    followUp({
+      refs: [{ kind: 'retro_action', id: 'action-1', label: 'Split the release check — shipped' }],
+      verdict: 'contested',
+      agreeCount: 1,
+      disagreeCount: 1,
+    }),
+  ])
+
+  expect(
+    screen.getByTestId('retro-ai-proposal').querySelector('[data-testid="retro-ai-category-chip"]')
+      ?.textContent,
+  ).toBe('Follow-ups')
 })

@@ -15,6 +15,7 @@ import {
   type RetroSeed,
   type RetroSeedMetric,
   type RetroSeedRef,
+  retroActionOutcomeFromKey,
   retroProposalBucket,
   sortContestedFirst,
 } from '@yapm/schema'
@@ -39,6 +40,7 @@ import {
   type EvidenceIndex,
   resolveEvidence,
 } from '@/cycles/digest'
+import { RETRO_BUCKET_LABEL, RETRO_VERDICT_LABEL } from '@/retro/ai-labels'
 import { retroCan } from '@/retro/model'
 import type { RetroAiFocus } from '@/retro/retro-command'
 import { findSeedMetric, formatSeedDelta, formatSeedValue } from '@/retro/seed-model'
@@ -69,12 +71,10 @@ import { findSeedMetric, formatSeedDelta, formatSeedValue } from '@/retro/seed-m
 //     lands in the bucket. The prior retro's rows are NOT synced into this view and this file adds no
 //     query for them, which is why a `retro_action` reference renders as a plain chip carrying the
 //     label yapm baked server-side rather than a link.
-const BUCKET_LABEL: Record<RetroProposalBucket, string> = {
-  win: 'Wins',
-  loss: 'Losses',
-  improvement: 'Improvements',
-  follow_up: 'Follow-ups',
-}
+//  5. **The reported cycle is named on the ROW, not only on the heading.** After ratification the
+//     headings are gone — the list is contested-first across buckets — so a follow-up that named its
+//     cycle only in a group title would stop saying which retro it was reporting on at exactly the
+//     moment the team started discussing it.
 
 const CHIP =
   'inline-flex shrink-0 items-center gap-1 rounded-pill border border-accent-line bg-accent-soft/50 px-2 py-0.5 text-[11px] text-text-2 outline-none hover:text-text-1 focus-visible:ring-2 focus-visible:ring-accent'
@@ -431,7 +431,13 @@ function ProposalItem({
   // The chip says which BUCKET the row is in — a follow-up is labelled a follow-up in the flat
   // ratified list exactly as it is under its own heading — while `data-category` keeps reporting the
   // STORED value, so nothing that keys off storage moves.
+  //
+  // A follow-up names its cycle ON THE ROW. The flat ratified list has no headings at all, so a row
+  // that carried the cycle only in its group title would go quiet about which retro it reports on
+  // from `discuss` onward, which is precisely when the team is arguing about it.
   const bucket = retroProposalBucket(proposal)
+  const bucketLabel =
+    bucket === 'follow_up' ? followUpLabel(proposal.refs ?? []) : RETRO_BUCKET_LABEL[bucket]
 
   return (
     <li
@@ -448,7 +454,7 @@ function ProposalItem({
         </span>
         {showCategory ? (
           <Badge variant="outline" data-testid="retro-ai-category-chip">
-            {BUCKET_LABEL[bucket]}
+            {bucketLabel}
           </Badge>
         ) : null}
         <ConfidenceNote confidence={proposal.confidence} />
@@ -562,12 +568,8 @@ function ReactionToggles({
 // `variant="solid"` is `bg-accent text-on-accent`, asserted at AA in all six by
 // `styles/contrast.test.ts`. This is the first product use of either variant, so the choice is being
 // made rather than inherited.
-const VERDICT_LABEL: Record<RetroProposalVerdict, string> = {
-  agreed: 'Agreed',
-  contested: 'Contested',
-  rejected: 'Rejected',
-  unrated: 'Nobody responded',
-}
+// The words themselves are in `ai-labels`, shared with the operator's verdict log so the two
+// surfaces cannot describe the same stored value differently.
 
 // A TEAM-LEVEL AGGREGATE WITH NO PER-PERSON DIMENSION. There is no name here and no surface anywhere
 // that could pair one with a direction — the counts are the whole of what the team's decision says.
@@ -583,7 +585,7 @@ function VerdictNote({
   return (
     <div className="flex flex-wrap items-center gap-1.5" data-testid="retro-ai-verdict">
       <Badge variant={verdict === 'contested' ? 'solid' : 'outline'}>
-        {VERDICT_LABEL[verdict]}
+        {RETRO_VERDICT_LABEL[verdict]}
       </Badge>
       {verdict === 'unrated' ? null : (
         <span className="text-[11px] text-text-2" data-testid="retro-ai-verdict-counts">
@@ -633,14 +635,24 @@ const BUCKET_UNIT: Record<RetroProposalBucket, readonly [string, string]> = {
   win: ['win', 'wins'],
   loss: ['loss', 'losses'],
   improvement: ['improvement', 'improvements'],
-  follow_up: ['follow-up on last retro', 'follow-ups on last retro'],
+  follow_up: ['follow-up', 'follow-ups'],
+}
+
+// THE SPOKEN UNIT NAMES THE CYCLE, because the prior retro is not necessarily last cycle's: yapm
+// walks back to the most recent retro that actually agreed something. "follow-ups on last retro"
+// would tell a screen-reader user the actions are more recent than they are, and that surface is the
+// one place a reader has no visible heading to correct it against.
+function bucketUnit(group: BucketGroup, count: number): string {
+  const [one, many] = BUCKET_UNIT[group.bucket]
+  const unit = count === 1 ? one : many
+  if (group.bucket !== 'follow_up') return unit
+  return group.origin === null ? `${unit} on a previous retro` : `${unit} from ${group.origin}`
 }
 
 function readyAnnouncement(groups: readonly BucketGroup[]): string {
   const counted = groups.map((group) => {
-    const [one, many] = BUCKET_UNIT[group.bucket]
     const count = group.proposals.length
-    return `${count} ${count === 1 ? one : many}`
+    return `${count} ${bucketUnit(group, count)}`
   })
   return `AI draft ready: ${counted.join(', ')}.`
 }
@@ -648,18 +660,22 @@ function readyAnnouncement(groups: readonly BucketGroup[]): string {
 interface BucketGroup {
   readonly bucket: RetroProposalBucket
   readonly heading: string
+  // The cycle the reported actions were agreed in, or null when nothing baked one.
+  readonly origin: string | null
   readonly proposals: readonly RetroAiProposalRow[]
 }
 
 // The cycle the reported actions were agreed in, taken from the `origin` yapm baked onto the
 // reference server-side. It is read here rather than queried because the prior retro is not in this
 // retro's sync scope and a cross-retro query for a caption would be a new permission surface for a
-// string. Absent (an older row, drafted before this capability) ⇒ the plain heading.
-function followUpHeading(proposals: readonly RetroAiProposalRow[]): string {
-  const origin = proposals
-    .flatMap((proposal) => proposal.refs ?? [])
-    .find((ref) => isRetroActionRef(ref) && ref.origin !== undefined)?.origin
-  return origin === undefined ? BUCKET_LABEL.follow_up : `Follow-ups from ${origin}`
+// string. Absent (an older row, drafted before this capability) ⇒ the plain label.
+function followUpOrigin(refs: readonly RetroSeedRef[]): string | null {
+  return refs.find((ref) => isRetroActionRef(ref) && ref.origin !== undefined)?.origin ?? null
+}
+
+function followUpLabel(refs: readonly RetroSeedRef[]): string {
+  const origin = followUpOrigin(refs)
+  return origin === null ? RETRO_BUCKET_LABEL.follow_up : `Follow-ups from ${origin}`
 }
 
 // The query orders by `category` then `rank`, which is alphabetical across categories; the reader
@@ -672,9 +688,12 @@ function groupByBucket(rows: readonly RetroAiProposalRow[]): BucketGroup[] {
     const proposals = rows
       .filter((row) => retroProposalBucket(row) === bucket)
       .sort((a, b) => a.rank - b.rank)
+    const refs = proposals.flatMap((proposal) => proposal.refs ?? [])
+    const origin = bucket === 'follow_up' ? followUpOrigin(refs) : null
     return {
       bucket,
-      heading: bucket === 'follow_up' ? followUpHeading(proposals) : BUCKET_LABEL[bucket],
+      heading: bucket === 'follow_up' ? followUpLabel(refs) : RETRO_BUCKET_LABEL[bucket],
+      origin,
       proposals,
     }
   }).filter((group) => group.proposals.length > 0)
@@ -713,6 +732,20 @@ function EvidenceChips({
       )
     }
     if (ref.kind === 'widget') {
+      // A prior-retro outcome TOTAL shares the `widget` namespace with the seed's metric keys but has
+      // no seed metric behind it — it is counted from a retro this view does not sync. Its caption is
+      // yapm's own, baked beside the reference server-side for exactly the reason an action's is, and
+      // the chip is inert for the same reason: there is nothing here to navigate to.
+      if (retroActionOutcomeFromKey(ref.id) !== null) {
+        return ref.label === undefined ? null : (
+          <PriorActionChip
+            key={`widget-${ref.id}`}
+            label={ref.label}
+            outcome={ref.outcome}
+            testId="retro-ai-evidence-prior-total"
+          />
+        )
+      }
       const metric = findSeedMetric(seed, ref.id)
       return metric === null ? null : (
         <MetricChip key={`widget-${ref.id}`} metric={metric} onOpen={onOpenMetric} />
@@ -774,18 +807,26 @@ function evidenceTargetFor(
   return target.kind === 'plain' ? null : target
 }
 
-// A prior retro's agreed action: THE ONE CHIP THAT IS NOT A CONTROL. It does not navigate, because
-// the action lives on another retro whose rows are not synced here and this change adds no query for
-// them; a chip that looked like a link and did nothing would be worse than a chip that plainly is
-// not one. Its text is `ref.label` — which for this kind alone is yapm's own writing, overwritten
-// server-side after validation (`bakeRetroActionRefs`), never the model's — and the outcome is
-// carried by yapm's word for it, not by hue.
-function PriorActionChip({ label, outcome }: { label: string; outcome: RetroSeedRef['outcome'] }) {
+// A prior retro's agreed action, and the count of how many of them ended that way: THE TWO CHIPS THAT
+// ARE NOT CONTROLS. Neither navigates, because both are about another retro whose rows are not synced
+// here and this change adds no query for them; a chip that looked like a link and did nothing would be
+// worse than a chip that plainly is not one. The text is `ref.label` — which for these two references
+// alone is yapm's own writing, overwritten server-side after validation (`bakeRetroActionRefs`), never
+// the model's — and the outcome is carried by yapm's word for it, not by hue.
+function PriorActionChip({
+  label,
+  outcome,
+  testId = 'retro-ai-evidence-action',
+}: {
+  label: string
+  outcome: RetroSeedRef['outcome']
+  testId?: string
+}) {
   const Icon = outcome === undefined ? ListChecksIcon : OUTCOME_ICON[outcome]
   return (
     <span
       className="inline-flex shrink-0 items-center gap-1 rounded-pill border border-border bg-bg-hover/60 px-2 py-0.5 text-[11px] text-text-2"
-      data-testid="retro-ai-evidence-action"
+      data-testid={testId}
       data-outcome={outcome}
     >
       <Icon className="size-3" aria-hidden="true" />

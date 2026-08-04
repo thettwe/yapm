@@ -54,6 +54,23 @@ interface Recording {
   readonly columns: Set<string>
 }
 
+// `.select()` also takes a CALLBACK — the aggregate form the verdict log uses — and a callback
+// records no column strings at all, so an intercepted argument list is not enough on its own. Every
+// executed statement is therefore compiled and its projection read back out of the SQL: whatever the
+// query actually asked Postgres for, in whichever form it was written.
+function recordProjection(builder: unknown, recording: Recording): void {
+  const compile = (builder as { compile?: () => { sql: string } }).compile
+  if (typeof compile !== 'function') return
+  const projection = /^\s*select\s+(.*?)\s+from\s/is.exec(compile.call(builder).sql)?.[1]
+  if (projection === undefined) return
+  // `select *` and `select "t".*`, but never the `*` inside `count(*)`.
+  if (/(?:^|[\s,])(?:"[^"]+"\.)?\*/.test(projection)) recording.columns.add('*')
+  for (const match of projection.matchAll(/"([^"]+)"/g)) {
+    const token = match[1]
+    if (token !== undefined) recording.columns.add(token)
+  }
+}
+
 // A recording proxy over the Kysely instance. `selectFrom` is the only entry point this module uses,
 // so wrapping it records every table; the compiled SQL of each executed query records every column
 // token. Cheaper and stricter than a query log: it observes what the code actually did.
@@ -74,6 +91,7 @@ function recordingDb(db: Kysely<DB>, recording: Recording): Kysely<DB> {
             const table = args[0]
             if (typeof table === 'string') recording.tables.add(table.split(' ')[0] as string)
           }
+          if (prop === 'execute' || prop === 'executeTakeFirst') recordProjection(target, recording)
           const result = (value as (...a: unknown[]) => unknown).apply(target, args)
           if (prop === 'execute' || prop === 'executeTakeFirst') return result
           return typeof result === 'object' && result !== null ? wrapBuilder(result) : result
@@ -754,6 +772,12 @@ describe.skipIf(DATABASE_URL === undefined)('retroVerdictLogForWorkspace against
     for (const forbidden of ['retro_ai_reaction', 'workspace_member', 'user', 'retro_card']) {
       expect(recording.tables, forbidden).not.toContain(forbidden)
     }
+    // The per-team totals are an AGGREGATE, written with the callback form of `.select` — a form that
+    // hands Kysely a builder rather than column names. These two prove the recorder read that query's
+    // projection back out of the compiled SQL, so the guard below is not passing on an empty set.
+    expect(recording.columns).toContain('verdict')
+    expect(recording.columns).toContain('teamKey')
+
     expect(recording.columns).not.toContain('*')
     for (const column of recording.columns) {
       for (const forbidden of ['user_id', 'created_by', 'facilitator_id']) {

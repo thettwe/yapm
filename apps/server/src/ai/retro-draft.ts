@@ -1,6 +1,5 @@
 import {
   type AiArtifactStatus,
-  bakeRetroActionRefs,
   newId,
   RETRO_ACTION_OUTCOME_LABEL,
   RETRO_ACTION_OUTCOMES,
@@ -212,11 +211,14 @@ export async function runRetroAiDraft(
 
     // The roster is read AFTER the call, never before: it is the backstop, not an input.
     const roster = await loadRoster(deps.db, workspaceId)
-    // Sanitize, THEN bake: the label a `retro_action` reference is stored with is yapm's own text and
-    // never the model's, and baking after the validators means it is only ever computed for a
-    // reference that survived cite-or-omit (design §D4).
-    const content = bakeRetroActionRefs(
-      sanitizeRetroDraft(result.object, new Set(facts.citableIds), roster),
+    // ONE CHAIN, and the prior retro goes into it rather than being applied afterwards. Baking is a
+    // validator like the other two — it drops references and re-buckets proposals — so it runs inside
+    // `sanitizeRetroDraft`, between the name backstop and the cap, and the cap stays genuinely last
+    // (design §D4, §D6).
+    const content = sanitizeRetroDraft(
+      result.object,
+      new Set(facts.citableIds),
+      roster,
       facts.priorRetro,
     )
 

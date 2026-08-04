@@ -158,11 +158,27 @@ other reference kind the UI resolves the id against synced rows and ignores the 
 retro's view and adding a cross-retro query for a caption would be a new permission surface for a
 string.
 
-So the server does what it already does for `widget`: after `sanitizeRetroDraft` runs, every
-surviving `retro_action` reference has its `label` **overwritten** with yapm's own text — the action
-body (truncated) and the yapm-computed outcome of its converted issue. The model points; yapm says
-what it is pointing at. A label the model wrote never reaches storage, and the panel renders a
-plain, non-navigating chip rather than a link into another retro.
+So the server does what it already does for `widget`: every surviving `retro_action` reference has
+its `label` **overwritten** with yapm's own text — the action body (truncated) and the yapm-computed
+outcome of its converted issue. The model points; yapm says what it is pointing at. A label the model
+wrote never reaches storage, and the panel renders a plain, non-navigating chip rather than a link
+into another retro.
+
+The same applies to the four **outcome totals** of §D5. They are citable keys in the `widget`
+namespace with no seed metric behind them, so `findSeedMetric` can never resolve one: the client has
+no synced source for the count. yapm therefore bakes their caption too (`2 shipped`), and the panel
+draws them with the same inert chip. Advertising a citable key that no surface can render would have
+been an instruction to the model to point at nothing.
+
+**The bake runs INSIDE `sanitizeRetroDraft`, between the name backstop and the cap — not after the
+chain.** It is a validator, not a formatter: it drops a reference whose action is unknown, drops a
+proposal left with no reference, and therefore **re-buckets** a proposal whose only `retro_action`
+reference it removed. Run after the cap, it could leave a bucket holding four proposals, or leave the
+follow-up group empty after three bogus follow-ups had consumed its whole cap while three real ones
+were discarded. The spec's "the cap is applied last" only holds if nothing downstream of it drops or
+moves a row. For the same reason a `retro_action` reference is narrowed by **kind and id** before
+cite-or-omit runs: every id yapm computed lives in one flat set, so without that step a model could
+stamp the loop-closing kind on a real issue id and buy a place in the follow-up bucket.
 
 ### D5 — Outcome vocabulary: `shipped`, `canceled`, `in_flight`, `not_converted`
 

@@ -63,12 +63,19 @@ const CATEGORY_LABEL: Record<RetroProposalCategory, string> = {
 const CHIP =
   'inline-flex shrink-0 items-center gap-1 rounded-pill border border-accent-line bg-accent-soft/50 px-2 py-0.5 text-[11px] text-text-2 outline-none hover:text-text-1 focus-visible:ring-2 focus-visible:ring-accent'
 
-// Every colour is a semantic token and the pressed state is carried by a border, a soft fill AND the
-// `aria-pressed` value — never by hue alone, so it survives every preset in both light and dark.
+// Every colour is a semantic token and the pressed state is carried by a border, a soft fill, a step
+// up in ink AND the `aria-pressed` value — never by hue alone, so it survives every preset in both
+// light and dark.
+//
+// THE PRESSED INK IS `text-1`, NOT `accent-strong`, and that is a contrast fact rather than a taste:
+// `--accent-strong` over the soft-accent wash lands at 3.94–4.38 in Focused light, Focused dark and
+// Editorial light — below AA for text this size. The mention typeahead's active row already learned
+// this (see `styles/contrast.test.ts`); the highlight is the wash and the ink stays the readable
+// pair. `contrast.test.ts` pins both toggle states so this cannot drift back.
 const TOGGLE =
   'inline-flex shrink-0 items-center gap-1 rounded-pill border px-2 py-0.5 text-[11px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent'
 const TOGGLE_OFF = 'border-border text-text-2 hover:text-text-1'
-const TOGGLE_ON = 'border-accent-line bg-accent-soft text-accent-strong'
+const TOGGLE_ON = 'border-accent-line bg-accent-soft text-text-1'
 
 export interface RetroAiProposalRow {
   readonly id: string
@@ -464,6 +471,12 @@ function ReactionToggles({
 // `contested` is the routing signal — the reason the ceremony exists — so it is the one verdict that
 // gets the accent. The other three are carried by their words alone, the same discipline
 // `ConfidenceNote` holds: no meaning depends on hue, and nothing is dimmed below AA to make a point.
+//
+// It takes the SOLID accent rather than the soft one. `Badge variant="accent"` is
+// `bg-accent-soft text-accent-strong`, which is the pair that misses AA in three of the six presets;
+// `variant="solid"` is `bg-accent text-on-accent`, asserted at AA in all six by
+// `styles/contrast.test.ts`. This is the first product use of either variant, so the choice is being
+// made rather than inherited.
 const VERDICT_LABEL: Record<RetroProposalVerdict, string> = {
   agreed: 'Agreed',
   contested: 'Contested',
@@ -484,7 +497,7 @@ function VerdictNote({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5" data-testid="retro-ai-verdict">
-      <Badge variant={verdict === 'contested' ? 'accent' : 'outline'}>
+      <Badge variant={verdict === 'contested' ? 'solid' : 'outline'}>
         {VERDICT_LABEL[verdict]}
       </Badge>
       {verdict === 'unrated' ? null : (

@@ -417,4 +417,97 @@ unticked. What *was* done, because leaving it undone would have left the tree re
 shapes and assertions, the `queries.anonymity.pg.test.ts` registry entry that keeps
 covered == registry true, and the existing `retro-ai-panel.test.tsx` mounts.
 
+### G9 — The pressed toggle's ink is `text-1`, and the contested badge is SOLID: G3 shipped an AA failure
+
+G3 chose `Badge variant="accent"` for `contested` and `text-accent-strong` for a pressed reaction
+toggle, on the reasoning that `contested` is the routing signal and deserves the accent. Both put
+**`--accent-strong` on a soft-accent wash**, and measured against the six preset blocks that pair
+lands at:
+
+| | ratio |
+|---|---|
+| Warm light / dark | 4.55 / 5.30 |
+| Focused light / dark | **4.38** / **3.95** |
+| Editorial light / dark | **3.94** / 4.89 |
+
+Three of six are under AA for 11px text — and `packages/ui/src/styles/contrast.test.ts` had already
+written that fact down at the mention typeahead ("`--accent-strong` over the soft-accent wash lands
+at ~3.9 in three of the six presets"), which is exactly why the mention list carries `text-1`/`text-2`
+ink on an accent-washed row. G3 reached for the pair anyway; nothing failed, because no test covered
+the AI panel's toggles and `Badge variant="accent"` had never been used on a product surface before
+this change — only in the showcase.
+
+**Chosen:**
+
+- The pressed toggle keeps the border and the soft fill and steps its ink up to **`text-1`**
+  (11.08–16.10 across the six). Pressed is still carried by three signals plus `aria-pressed`; only
+  the one that could not be read is gone.
+- `contested` takes **`Badge variant="solid"`** (`bg-accent text-on-accent`), whose pair the contrast
+  file already asserts at AA in all six. It is a stronger routing marker than the soft chip, not a
+  weaker one.
+- `contrast.test.ts` grows both toggle states as a pinned pair, plus a bounded note recording why the
+  `accent` badge variant is not used on this surface — so the obvious future edit ("make the pressed
+  state look more accented") fails in CI instead of shipping.
+
+This is the AA half of task 4.5, done by measurement rather than by eye. The keyboard half is task
+5.1's e2e walk; the "every colour is a token" half is visible in the file — every class in
+`retro-ai-panel.tsx` resolves through a semantic token, with no literal colour anywhere.
+
+### G10 — Keyboard proof is split: element nature in jsdom, real keystrokes in Playwright
+
+jsdom does not synthesize a `click` from Enter on a focused `<button>`, and this repo has no
+`@testing-library/user-event` — adding one for this would be a new dependency for a claim a browser
+already settles.
+
+**Chosen:** the component test asserts what jsdom can actually see — the toggles are real `BUTTON`s,
+not disabled, no negative tabindex, focusable, carrying `aria-pressed` — which is the discipline
+`follow-control.test.tsx` already states in a comment ("asserting the element's nature is the honest
+jsdom proof; the real keystroke is an e2e concern"). The real Tab/Enter walk, including the
+withdrawal, lives in `retro-ai.spec.ts`.
+
+### G11 — "No counter is written" is asserted from RECORDED SQL, not from the absence of a call
+
+The claim the whole design rests on is negative, and a negative is the easy thing to assert
+vacuously. `createDatabase` already accepts a `log` callback, so the pg test builds its database with
+one, snapshots the statement list around the two concurrent reactions, and asserts over that slice:
+every write names `retro_ai_reaction` and nothing else, no statement matches `set …count…`, no
+statement mentions `retro_vote_tally`, and no `update retro_ai_proposal` happens at all while a
+reaction is being recorded. Bumping a counter anywhere on that path fails on the statement text
+rather than on a downstream number that might still happen to be right.
+
+The same recorder proves the opted-out case: a retro whose draft was deleted advances `vote → discuss`
+issuing no statement that mentions a reaction or updates a proposal.
+
+### G12 — The anonymity walk now carries a real reaction row, and the offence list grew by one
+
+Task 5.9 asks that the registry walk grow by exactly the new query with no allowlist edit. The
+registry entry alone satisfies "covered == registry", but it would have walked an **empty table** —
+and a self-scoped query over no rows is indistinguishable from a leak-free one.
+
+**Chosen:** the anonymous retro now seeds an AI draft, one proposal and A's own `disagree`, so the
+walk really traverses `retro_ai_reaction`. The consequences, both deliberate:
+
+- `IDENTITY_BY_DESIGN` is **unchanged** — a reaction is not identity-by-design, so any of them
+  reaching B or C fails the two existing tests. That is the point of not editing the allowlist.
+- The "finds the author's id when the author is the one asking" list grows from three entries to
+  four. That test exists to prove the walk can find something; the fourth entry is the new thing it
+  can find, and its absence would have meant the sweep never reached the table.
+- The per-principal sweep gains a reaction leg beside drafts and votes, with an explicit non-vacuity
+  assertion that A really holds a row.
+
+### G13 — What this pass did NOT establish
+
+Two boxes stay unticked, and neither is quietly ticked:
+
+- **Task 1.5 (replica evidence)** — still open, for the reason §G7 gives: `docker compose` was
+  forbidden in both build passes. CI's compose smoke test is where the migration is observed reaching
+  a replica.
+- **Task 7.1 / 7.3 (full build, compose smoke)** — not run locally by instruction, because the open
+  PR runs the whole suite on every push. The fast gates (typecheck, lint, test, boundary check) and
+  the docs build were run here.
+
+The pg and e2e specs written in this pass were **not executed locally** — they need a live Postgres
+and a live stack respectively. They typecheck and lint; CI is where they first run. Said plainly
+because "the tests are written" and "the tests pass" are different claims.
+
 <!-- Further entries appended during the build phase: what was ambiguous, what was chosen, and why. -->

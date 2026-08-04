@@ -415,6 +415,36 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
         ctx: B,
       }),
     )
+    // An AI draft with one proposal, and A's private reaction to it. Seeded here rather than left
+    // out so the walk really TRAVERSES `retro_ai_reaction` — a self-scoped query over an empty table
+    // is indistinguishable from a leak-free one, and this is what makes the two "never reaches B / C"
+    // assertions below say something about the reaction table rather than about missing rows.
+    const aiDraftId = newId()
+    const aiProposalId = newId()
+    await sql`
+      insert into retro_ai_draft (id, retro_id, team_id, status, provider, model)
+      values (${aiDraftId}, ${anonymousRetroId}, ${teamId}, 'ready', 'anthropic', 'test-model')
+    `.execute(database.db)
+    await sql`
+      insert into retro_ai_proposal (id, draft_id, retro_id, team_id, category, summary, confidence, rank)
+      values (
+        ${aiProposalId}, ${aiDraftId}, ${anonymousRetroId}, ${teamId}, 'improvement',
+        'Start reviews earlier in the cycle', 'high', 0
+      )
+    `.execute(database.db)
+    await apply((tx) =>
+      mutators.retroAiReaction.set.fn({
+        tx,
+        args: {
+          proposalId: aiProposalId,
+          value: 'disagree',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+        ctx: A,
+      }),
+    )
+
     await moveTo(anonymousRetroId, 'vote')
     for (let dot = 0; dot < 2; dot += 1) {
       await apply((tx) =>
@@ -540,8 +570,8 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
       'retroDrafts.mine': { retroId: anonymousRetroId },
       'retroVotes.mine': { retroId: anonymousRetroId },
       // Self-scoped with no admin bypass, like the two above, and swept by the same walk because a
-      // reaction row binds a person to a direction. The dedicated no-admin-bypass assertion lives in
-      // `queries.retro-ratification.pg.test.ts`; this entry is what makes covered == registry hold.
+      // reaction row binds a person to a direction. The dedicated three-principal assertion lives in
+      // `retro-ratification.pg.test.ts`; this entry is what makes covered == registry hold.
       'retroAiReactions.mine': { retroId: anonymousRetroId },
       // Self-scoped like the two above and swept by the same walk: a notification carries both a
       // recipient and an actor, so if it ever synced past its recipient it would put one person's
@@ -634,13 +664,15 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
   })
 
   // The check must be able to fail. Evaluated as A, the very same walk finds A's id on exactly the
-  // rows a caller is supposed to hold about itself — its own drafts, its own votes, its own
-  // preference — so an empty offence list for B and C is a fact about the queries rather than about
-  // a walk that never looks anywhere. None of the three is in `IDENTITY_BY_DESIGN`, deliberately:
-  // each is self-scoped, so any of them reaching another member must fail the two tests above.
+  // rows a caller is supposed to hold about itself — its own drafts, its own votes, its own reaction
+  // to an AI proposal, its own preference — so an empty offence list for B and C is a fact about the
+  // queries rather than about a walk that never looks anywhere. None of the four is in
+  // `IDENTITY_BY_DESIGN`, deliberately: each is self-scoped, so any of them reaching another member
+  // must fail the two tests above.
   it('finds the author’s id when the author is the one asking', async () => {
     const visited = await visitEverything(A)
     expect(offendingValues(visited, A.userID)).toEqual([
+      'retro_ai_reaction.userId',
       'retro_draft.authorId',
       'retro_vote.voterId',
       'user_preference.userId',
@@ -667,19 +699,30 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
     expect(await visitEverything(undefined)).toEqual([])
   })
 
-  it('reaches no row of another member’s drafts or votes, for anyone', async () => {
+  // The same self-scoping claim for all three private retro signals, swept across every principal
+  // INCLUDING the workspace admin C — who reads every issue in the workspace and not one of these.
+  // Reactions are here for the reason the two beside them are: the row binds a person to a
+  // direction, and the moment one reaches anybody else the tally stops being anonymous.
+  it('reaches no row of another member’s drafts, votes or reactions, for anyone', async () => {
     for (const ctx of [A, B, C, D]) {
       const visited = await visitEverything(ctx)
       const drafts = visited.filter((entry) => entry.table === 'retro_draft')
       const votes = visited.filter((entry) => entry.table === 'retro_vote')
+      const reactions = visited.filter((entry) => entry.table === 'retro_ai_reaction')
       for (const entry of drafts) {
         expect(entry.row.authorId).toBe(ctx.userID)
       }
       for (const entry of votes) {
         expect(entry.row.voterId).toBe(ctx.userID)
       }
+      for (const entry of reactions) {
+        expect(entry.row.userId).toBe(ctx.userID)
+      }
       expect(visited.some((entry) => entry.table === 'retro_card_author')).toBe(false)
     }
+    // Not vacuous: A really does hold a reaction row, so "nobody else does" is a scoping fact.
+    const asAuthor = await visitEverything(A)
+    expect(asAuthor.some((entry) => entry.table === 'retro_ai_reaction')).toBe(true)
   })
 
   it('shows a teammate the anonymous card body with a null author', async () => {

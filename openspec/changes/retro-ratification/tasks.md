@@ -71,7 +71,7 @@
       add the command-palette entries (agree / disagree / clear my reaction / add this improvement as
       an action) in `apps/web/src/retro/retro-command.tsx`, acting on the focused proposal via the
       existing `onFocusCapture` last-focused-element pattern.
-- [ ] 4.5 Verify every new control is reachable and operable with the keyboard alone, that every
+- [x] 4.5 Verify every new control is reachable and operable with the keyboard alone, that every
       colour and font comes from a semantic token, and that the surface is AA-contrast in Warm,
       Focused and Editorial in both light and dark.
 
@@ -80,61 +80,61 @@
 - [x] 5.1 Unit: `ratify.test.ts` — the verdict function over the full table of (agree, disagree)
       pairs including 0/0, 1/0, 0/1, 4/1, 2/3, 3/3; and the contested-first comparator's stability
       within the non-contested tail.
-- [ ] 5.2 Unit: the reaction mutators — **a viewer's call is rejected before any existence check**
+- [x] 5.2 Unit: the reaction mutators — **a viewer's call is rejected before any existence check**
       (assert with a proposal id that does not exist, and assert the error is indistinguishable from
       the same call against a real id and that no row was read); a reaction in `discuss` is rejected
       with the phase error; the user component comes from `ctx`, not from an argument.
-- [ ] 5.3 Unit: `createRetroAction` with `aiProposalId` — a proposal from another retro is rejected;
+- [x] 5.3 Unit: `createRetroAction` with `aiProposalId` — a proposal from another retro is rejected;
       the created action's `assigneeId` is null.
-- [ ] 5.4 Integration (pg): **two concurrent reactions on one proposal, then `vote → discuss`** —
+- [x] 5.4 Integration (pg): **two concurrent reactions on one proposal, then `vote → discuss`** —
       the stored counts and verdict match a hand-count of the reaction rows, and a recorded-statement
       assertion proves no `UPDATE ... SET count = count ± 1`-shaped write occurred on the reaction
       path and that no counter column exists on either table.
-- [ ] 5.5 Integration (pg): **a member's reaction row never reaches another member and never reaches
+- [x] 5.5 Integration (pg): **a member's reaction row never reaches another member and never reaches
       a workspace admin** — evaluate `retroAiReactions.mine` as the author, as a second team member,
       and as a workspace admin, asserting the admin case explicitly (the no-admin-bypass deviation),
       plus an unauthenticated/non-member empty result.
-- [ ] 5.6 Integration (pg): **a converted improvement's issue has a NULL assignee** — create an
+- [x] 5.6 Integration (pg): **a converted improvement's issue has a NULL assignee** — create an
       action from an agreed improvement, convert it, assert the issue row's `assignee_id` is null and
       that its per-team number was server-assigned.
-- [ ] 5.7 Integration (pg): stepping back `discuss → vote` clears verdict, counts and stamp while
+- [x] 5.7 Integration (pg): stepping back `discuss → vote` clears verdict, counts and stamp while
       every reaction row survives; advancing again recomputes including a reaction added in between.
-- [ ] 5.8 Integration (pg): the schema-drift test covers the new table, its compound primary key and
+- [x] 5.8 Integration (pg): the schema-drift test covers the new table, its compound primary key and
       the new columns on `retro_ai_proposal` and `retro_action`.
-- [ ] 5.9 Integration (pg): the registry anonymity walk (`queries.anonymity.pg.test.ts`) grows by
+- [x] 5.9 Integration (pg): the registry anonymity walk (`queries.anonymity.pg.test.ts`) grows by
       exactly the new query with no allowlist edit.
-- [ ] 5.10 Component: `retro-ai-panel.test.tsx` — reaction controls absent when the team has not
+- [x] 5.10 Component: `retro-ai-panel.test.tsx` — reaction controls absent when the team has not
       opted in and when the phase is `discuss`; only the caller's own reaction is rendered before the
       stamp; contested sorts first after it; the counts render no name; the whole flow is driven by
       keyboard events only.
-- [ ] 5.11 Regression: with AI off, opening a retro and advancing `vote → discuss` fires no new
+- [x] 5.11 Regression: with AI off, opening a retro and advancing `vote → discuss` fires no new
       query, renders no new element, logs no error and does no ratification work — the change-10
       retro stays byte-identical.
 
 ## 6. Documentation
 
-- [ ] 6.1 `apps/docs/src/content/docs/features/retro-ai-draft.md`: a ratification section — how to
+- [x] 6.1 `apps/docs/src/content/docs/features/retro-ai-draft.md`: a ratification section — how to
       react, the phase window, the fixed knob-free verdict rule stated in full (including that one
       disagree means contested and that there is no setting to change it), contested-first ordering,
       and the improvement→issue path **stating that no owner is ever suggested and why**.
-- [ ] 6.2 Same page: the two residuals, written the way retro-board documented its own boundary —
+- [x] 6.2 Same page: the two residuals, written the way retro-board documented its own boundary —
       plainly, as known limits rather than solved problems. (a) A tally in a two- or three-person
       team is partly self-identifying. (b) A proposal can echo the substance of someone's anonymous
       card; the pipeline never read it, and here is why that is structurally true, but the perception
       is real.
-- [ ] 6.3 `apps/docs/src/content/docs/features/retrospectives.md`: the AI section is no longer
+- [x] 6.3 `apps/docs/src/content/docs/features/retrospectives.md`: the AI section is no longer
       opinion-free; state the AI-proposals-only asymmetry and that human cards keep dot voting as
       their only ranking signal.
-- [ ] 6.4 Update `README.md` (feature list) and `ROADMAP.md` (row 19 status). Confirm `.env.example`
+- [x] 6.4 Update `README.md` (feature list) and `ROADMAP.md` (row 19 status). Confirm `.env.example`
       needs no change — this change adds no environment variable — and say so in the PR body.
-- [ ] 6.5 Update `openspec/SCOPE-ai-features.md` §9 to record items 8, 9 and 10 as answered, and
+- [x] 6.5 Update `openspec/SCOPE-ai-features.md` §9 to record items 8, 9 and 10 as answered, and
       item 1 as **raised and consciously waived**, pointing at `design.md` §G1.
-- [ ] 6.6 `pnpm --filter @yapm/docs build` passes.
+- [x] 6.6 `pnpm --filter @yapm/docs build` passes.
 
 ## 7. Verification
 
 - [ ] 7.1 `pnpm turbo lint typecheck test build` clean.
-- [ ] 7.2 The boundary check passes: no ZQL or mutator outside `packages/schema`, no package
+- [x] 7.2 The boundary check passes: no ZQL or mutator outside `packages/schema`, no package
       importing an app, no second spend accessor or validator walker.
 - [ ] 7.3 The compose smoke test passes on the `yapm-rr` project and ports, from `down -v`.
-- [ ] 7.4 Walk every scenario in the change's four spec files and confirm each is true.
+- [x] 7.4 Walk every scenario in the change's four spec files and confirm each is true.

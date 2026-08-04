@@ -271,41 +271,7 @@ test('a drafted section is keyboard-operable end to end and holds in every theme
 }) => {
   test.slow()
   await enterApp(page)
-  await createTeam(page)
-
-  const issueTitle = unique('Reconnect fix')
-  await createIssue(page, issueTitle)
-
-  await completedCycleWithRetro(page)
-  const retroId = await openRetro(page)
-  const retroUrl = page.url()
-  await runToGroup(page)
-
-  const db = openDb()
-  try {
-    const issue = await findIssue(db, issueTitle)
-    await seedRetroAiDraft(db, {
-      retroId,
-      teamId: issue.teamId,
-      proposals: [
-        {
-          category: 'win',
-          summary: 'Work in this cycle reached review sooner than in the last one.',
-          refs: [{ kind: 'issue', id: issue.id }],
-        },
-        {
-          category: 'improvement',
-          summary: 'Hold scope where it was this cycle rather than growing it mid-flight.',
-          refs: [{ kind: 'widget', id: METRIC_KEY }],
-        },
-      ],
-    })
-  } finally {
-    await db.close()
-  }
-
-  await page.goto(retroUrl)
-  await expect(page.locator(PANEL)).toBeVisible({ timeout: 30_000 })
+  const retroUrl = await draftedRetro(page)
   // The line that keeps the section from reading as a conclusion the team reached.
   await expect(page.getByTestId('retro-ai-unratified')).toBeVisible()
   await expect(page.getByTestId('retro-ai-category')).toHaveCount(2)
@@ -349,6 +315,171 @@ test('a drafted section is keyboard-operable end to end and holds in every theme
       await expect(page.locator('html')).toHaveAttribute('data-theme', preset)
       await expect(page.locator(PANEL)).toBeVisible({ timeout: 30_000 })
       await expect(page.getByTestId('retro-ai-evidence-metric')).toBeVisible()
+      // The ratification controls hold in every preset too. Their token pairs are measured against
+      // AA in `packages/ui/src/styles/contrast.test.ts`; this is the half that proves they render.
+      await expect(page.getByTestId('retro-ai-agree').first()).toBeVisible()
+      await expect(page.getByTestId('retro-ai-disagree').first()).toBeVisible()
     }
+  }
+})
+
+// A drafted section, ready to be ratified: everything the two ratification specs below need, seeded
+// once each because the retro has to be a real one driven through the real phase machine.
+async function draftedRetro(page: Page): Promise<string> {
+  await createTeam(page)
+  const issueTitle = unique('Ratify fix')
+  await createIssue(page, issueTitle)
+  await completedCycleWithRetro(page)
+  const retroId = await openRetro(page)
+  const retroUrl = page.url()
+  await runToGroup(page)
+
+  const db = openDb()
+  try {
+    const issue = await findIssue(db, issueTitle)
+    await seedRetroAiDraft(db, {
+      retroId,
+      teamId: issue.teamId,
+      proposals: [
+        {
+          category: 'win',
+          summary: 'Work in this cycle reached review sooner than in the last one.',
+          refs: [{ kind: 'issue', id: issue.id }],
+        },
+        {
+          category: 'improvement',
+          summary: 'Hold scope where it was this cycle rather than growing it mid-flight.',
+          refs: [{ kind: 'widget', id: METRIC_KEY }],
+        },
+      ],
+    })
+  } finally {
+    await db.close()
+  }
+
+  await page.goto(retroUrl)
+  await expect(page.locator(PANEL)).toBeVisible({ timeout: 30_000 })
+  return retroUrl
+}
+
+// The half of the ratification surface neither a unit nor an integration test can reach: the real
+// controls, in a real browser, driven with nothing but Tab and Enter — including the withdrawal,
+// which is the interaction that keeps a mis-click from becoming a permanent opinion.
+test('the whole ratification flow is operable with the keyboard alone', async ({ page }) => {
+  test.slow()
+  await enterApp(page)
+  await draftedRetro(page)
+
+  const agree = page.getByTestId('retro-ai-agree').first()
+  const disagree = page.getByTestId('retro-ai-disagree').first()
+  await expect(agree).toHaveAttribute('aria-pressed', 'false')
+
+  // From the seed panel's own control into the reaction toggles, with no pointer at any step.
+  await page.getByTestId('retro-seed-toggle').focus()
+  await tabTo(page, 'retro-ai-agree', 20)
+  await page.keyboard.press('Enter')
+  await expect(agree).toHaveAttribute('aria-pressed', 'true')
+
+  // Pressing the pressed value withdraws it: a different write, not a second opinion.
+  await page.keyboard.press('Enter')
+  await expect(agree).toHaveAttribute('aria-pressed', 'false')
+
+  // The other value replaces it, and the two are mutually exclusive on screen because there is one
+  // row per member per proposal in storage.
+  await page.keyboard.press('Enter')
+  await expect(agree).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('Tab')
+  await page.keyboard.press('Enter')
+  await expect(disagree).toHaveAttribute('aria-pressed', 'true')
+  await expect(agree).toHaveAttribute('aria-pressed', 'false')
+
+  // Nothing anywhere on the surface reports another member's reaction, or a running total, while
+  // the window is still open.
+  await expect(page.getByTestId('retro-ai-verdict')).toHaveCount(0)
+  await expect(page.getByTestId('retro-ai-unratified')).toBeVisible()
+
+  // RATIFICATION IS AI-ONLY. The board's own card is on screen and carries no reaction control:
+  // human cards keep dot voting as their single ranking signal, and a second differently-shaped one
+  // on the same board would be two scoreboards.
+  await expect(page.locator(CARD)).toHaveCount(1)
+  await expect(page.locator(`${CARD} [data-testid="retro-ai-agree"]`)).toHaveCount(0)
+  await expect(page.locator(`${CARD} [data-testid="retro-ai-reactions"]`)).toHaveCount(0)
+
+  // Advance out of `vote` from the keyboard and the verdict is stamped once, server-side.
+  await page.keyboard.press(']')
+  await expect(phaseStep(page, 'vote')).toHaveAttribute('aria-current', 'step', { timeout: 20_000 })
+  await expect(page.getByTestId('retro-ai-agree').first()).toBeVisible()
+  await page.keyboard.press(']')
+  await expect(phaseStep(page, 'discuss')).toHaveAttribute('aria-current', 'step', {
+    timeout: 20_000,
+  })
+
+  // The one proposal that was reacted to carries the count the reader actually cast; the one nobody
+  // touched reads as unrated, with no count at all — silence is never rendered as consent.
+  const rows = page.getByTestId('retro-ai-proposal')
+  await expect(rows.first()).toHaveAttribute('data-verdict', 'rejected', { timeout: 30_000 })
+  await expect(page.getByTestId('retro-ai-verdict-counts').first()).toHaveText(
+    '0 agreed, 1 disagreed',
+  )
+  await expect(rows.nth(1)).toHaveAttribute('data-verdict', 'unrated')
+  await expect(rows.nth(1).getByTestId('retro-ai-verdict-counts')).toHaveCount(0)
+  await expect(rows.nth(1).getByTestId('retro-ai-verdict')).toContainText('Nobody responded')
+
+  // The window is shut: the toggles are gone rather than offering a write the server would refuse.
+  await expect(page.getByTestId('retro-ai-reactions')).toHaveCount(0)
+  await expect(page.getByTestId('retro-ai-unratified')).toHaveCount(0)
+})
+
+// Multi-client convergence, which is the other thing only a browser can settle: the verdict is
+// computed by somebody ELSE's phase advance, and it has to reach a client that is sitting still.
+//
+// Both contexts sign in as the same bootstrap admin, deliberately: a second invited account would
+// make this a test of the invite flow, and the claim here is about sync, not about tallying — the
+// multi-member hand-count lives in `retro-ratification.pg.test.ts` where the count can be checked
+// against real rows.
+test('a verdict stamped by another client arrives without a reload', async ({ browser }) => {
+  test.slow()
+  const first = await browser.newContext()
+  const second = await browser.newContext()
+
+  try {
+    const reader = await first.newPage()
+    const facilitator = await second.newPage()
+    await enterApp(reader)
+    const retroUrl = await draftedRetro(reader)
+
+    // The reader records a reaction and then does nothing else for the rest of the test.
+    await reader.getByTestId('retro-ai-agree').first().focus()
+    await reader.keyboard.press('Enter')
+    await expect(reader.getByTestId('retro-ai-agree').first()).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await expect(reader.getByTestId('retro-ai-verdict')).toHaveCount(0)
+
+    // The other client walks the retro out of `vote`, which is the moment the verdict is computed.
+    await enterApp(facilitator)
+    await facilitator.goto(retroUrl)
+    await expect(facilitator.locator(PANEL)).toBeVisible({ timeout: 30_000 })
+    await facilitator.keyboard.press(']')
+    await expect(phaseStep(facilitator, 'vote')).toHaveAttribute('aria-current', 'step', {
+      timeout: 20_000,
+    })
+    await facilitator.keyboard.press(']')
+    await expect(phaseStep(facilitator, 'discuss')).toHaveAttribute('aria-current', 'step', {
+      timeout: 20_000,
+    })
+
+    // NO RELOAD ANYWHERE ON THE READER. The stamp arrives over the sync connection, the reaction
+    // toggles stand down because the window is shut, and the count is the one the reader cast.
+    await expect(reader.getByTestId('retro-ai-verdict').first()).toBeVisible({ timeout: 30_000 })
+    await expect(reader.getByTestId('retro-ai-verdict-counts').first()).toHaveText(
+      '1 agreed, 0 disagreed',
+    )
+    await expect(reader.getByTestId('retro-ai-reactions')).toHaveCount(0)
+    await expect(reader.getByTestId('retro-ai-unratified')).toHaveCount(0)
+  } finally {
+    await first.close()
+    await second.close()
   }
 })

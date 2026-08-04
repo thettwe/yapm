@@ -146,7 +146,11 @@
 
 ## 8. Verification
 
-- [ ] 8.1 `pnpm turbo lint typecheck test build`.
-- [ ] 8.2 The pg suite against a live Postgres on the assigned ports, from `down -v`.
+- [x] 8.1 `pnpm turbo lint typecheck test build` — lint, typecheck and test locally; `build` by CI's
+      quality job on `1fc1ac7`, green.
+- [~] 8.2 The pg suite against a live Postgres — **run by CI, not locally.** No Postgres was
+      reachable on the assigned port and this pass was instructed not to run `docker compose`; CI's
+      quality job sets `DATABASE_URL` and ran `retro-facts.pg.test.ts` (15 tests) with the whole
+      schema suite at **941 passed, 0 skipped**, plus 406 server tests likewise unskipped.
 - [x] 8.3 `pnpm --filter @yapm/docs build`.
 - [x] 8.4 Confirm no migration was added and `packages/schema/src/migrations/` is unchanged.

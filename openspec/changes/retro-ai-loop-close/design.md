@@ -368,5 +368,12 @@ against the same proxy, and a reader who breaks one should find the other on the
   `retro-facts.pg.test.ts` (four new cases: all four outcomes distinctly, the two-cycles-back
   selection, the prior-retro-with-no-actions absence, and the four verdict-log cases),
   `retro-draft.test.ts`'s end-to-end bake case, and `admin-routes.test.ts`'s two verdict-log cases.
-- **The full `build` task and the compose smoke test were also not run**, by the same instruction;
-  task 8.1 and 8.2 are left unticked rather than reported as done.
+- **The full `build` task and the compose smoke test were also not run** locally, by the same
+  instruction.
+- **CI then ran all of it, on `1fc1ac7`, and all six checks are green.** The quality job sets
+  `DATABASE_URL`, so the schema suite reports **941 passed and 0 skipped** — `retro-facts.pg.test.ts`
+  among them at 15 tests, which is the eight it had plus the three new fact cases and the four
+  verdict-log ones — and the server suite **406 passed, 0 skipped**, which is where the end-to-end
+  bake case and the two admin-gated verdict-log cases actually executed. The compose smoke test and
+  the Playwright walk passed on the first run, with no flake this time. That upgrades the paragraph
+  above from "the test is written" to "the test passes", which are the two different claims it names.

@@ -216,8 +216,8 @@ below is: it is about a retro this view does not sync, so there is nothing to na
 
 ### What a follow-up looks like
 
-A follow-up is an ordinary proposal — a sentence, a confidence, evidence chips — that happens to cite
-a **prior retro action**. It carries its own heading naming the cycle those actions were agreed in
+A follow-up is an ordinary proposal — a sentence, a confidence, evidence chips — whose **category is
+`follow_up`**, one of the four values a proposal can be stored under. It carries its own heading naming the cycle those actions were agreed in
 ("Follow-ups from Cycle 6"), because the prior retro is not necessarily *last* cycle's: if a team
 skipped a retro, yapm walks back to the most recent one that actually agreed something, and says so
 rather than implying it was last cycle. Once the team has voted the headings go away — the list
@@ -234,13 +234,25 @@ Follow-ups are **capped at three like everything else**, counted separately from
 groups. A cycle full of follow-ups cannot crowd out the improvements the team should make next, and a
 team with nothing to follow up on loses no room to a group that is not there.
 
+**A follow-up must cite the action it reports on.** That is not a stylistic expectation, it is a
+validator: a proposal categorised `follow_up` that carries no prior-action reference is **discarded**
+before anything is stored. A follow-up is a report on something the team actually agreed, so one that
+cannot point at what it is reporting on has nothing to report.
+
+**A repeat of the same problem is an improvement, not a follow-up.** If the team agreed something last
+cycle, it did not happen, and the proposal is asking them to try again, that arrives as an
+**improvement** — which may still cite the prior action it repeats. That distinction is what a
+follow-up is *doing*, and it is load-bearing: only an agreed improvement offers the one-keystroke
+*Add as an action*, because a follow-up reports an outcome rather than proposing a thing to do next.
+
 ### Why a first retro cannot produce one
 
-The same rule that stops a hallucinated issue number stops an invented action: a proposal may only
-cite evidence yapm itself computed. On a team's first retro **there is no prior action id in that
-set**, so a model that invents one has the citation stripped and the proposal dropped with it. The
-absence is a property of the data, not a branch somebody has to remember to write — which is why
-there is no code path that could render an apologetic empty state.
+Two rules, and either alone is enough. The same one that stops a hallucinated issue number stops an
+invented action: a proposal may only cite evidence yapm itself computed, and on a team's first retro
+**there is no prior action id in that set**, so a model that invents one has the citation stripped.
+And a `follow_up` left with no prior-action reference — whether it never had one or had it stripped —
+is dropped. The absence is a property of the data and of a validator, not a branch somebody has to
+remember to write, which is why there is no code path that could render an apologetic empty state.
 
 ### The identity stripping, and why it gets its own test
 
@@ -372,19 +384,22 @@ Four deterministic checks run over the model's output before a single row is sto
 3. **yapm writes the captions.** Every surviving prior-action reference and every cited outcome total
    gets yapm's own text, and a reference to an action the prior retro does not have is dropped along
    with any proposal left holding nothing.
-4. **At most three per group**, keeping the model's own order — three wins, three losses, three
+4. **A follow-up must be backed by a prior action.** Any proposal categorised `follow_up` whose
+   surviving references contain no prior-action reference is dropped.
+5. **At most three per category**, keeping the model's own order — three wins, three losses, three
    improvements and, from a team's second retro, three follow-ups, counted independently.
 
 The cap is **last** on purpose: a proposal dropped by an earlier check is replaced by the next
-surviving one rather than leaving a hole. That is also why check 3 sits *before* it rather than after
-the chain: dropping a prior-action reference moves its proposal out of the follow-up group, and a
-group cannot be counted before the last thing that can change its membership has run. The cap is
-enforced by code, not by asking the model nicely — the prompt requests three, the validator
-guarantees it.
+surviving one rather than leaving a hole. That is also why checks 3 and 4 sit *before* it rather than
+after the chain, and why 4 sits after 3: dropping a prior-action reference can leave a follow-up with
+nothing backing it, and a category cannot be counted before the last thing that can change its
+membership has run. The cap is enforced by code, not by asking the model nicely — the prompt requests
+three, the validators guarantee it.
 
-Check 1 is also what makes the follow-up group's absence structural. A prior retro's action ids are
-in the citable set only when there **is** a prior retro; on a team's first one there are none, so a
-proposal claiming to report on last cycle has nothing legal to point at and is dropped.
+Checks 1 and 4 together are what make the follow-up group's absence structural. A prior retro's
+action ids are in the citable set only when there **is** a prior retro; on a team's first one there
+are none, so a proposal claiming to report on last cycle has nothing legal to point at, and a
+`follow_up` left holding nothing is dropped.
 
 What yapm deliberately does **not** attempt is checking numerals in prose against the computed facts.
 That check rejects dates and ordinals and produces confident nonsense; the structural answer is the

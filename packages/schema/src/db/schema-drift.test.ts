@@ -1,7 +1,12 @@
 import { type Kysely, sql } from 'kysely'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { AI_ARTIFACT_STATUS_CHECK, AI_DISCLOSURE_EVENT_CHECK } from '../zero/context.js'
+import {
+  AI_ARTIFACT_STATUS_CHECK,
+  AI_DISCLOSURE_EVENT_CHECK,
+  RETRO_PROPOSAL_CATEGORY_CHECK,
+} from '../zero/context.js'
 import { tableShapes } from '../zero/introspect.js'
+import { RETRO_PROPOSAL_CATEGORIES } from '../zero/retro/ai-draft.js'
 import { schema } from '../zero/schema.js'
 import { createDatabase } from './client.js'
 import { migrateToLatest } from './migrate.js'
@@ -939,6 +944,34 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
     expect(AI_DISCLOSURE_EVENT_CHECK).toBe(
       "event in ('policy_changed', 'generated', 'published', 'unpublished')",
     )
+  })
+
+  // `follow_up` IS A STORED VALUE, and this is where that stops being a claim. Migration 0022 widened
+  // 0018's three-value CHECK; if the migration is missing or is reverted, `RETRO_PROPOSAL_CATEGORIES`
+  // still type-checks everywhere and the failure only appears as a constraint violation the first
+  // time a model emits a follow-up on a real instance.
+  it('constrains retro_ai_proposal.category to the four stored categories in Postgres', async () => {
+    const checks = (await checkConstraints(database.db, 'retro_ai_proposal'))
+      .map((definition) => definition.replace(/\s+/gu, ' '))
+      .join(' ')
+
+    for (const category of RETRO_PROPOSAL_CATEGORIES) {
+      expect(checks).toContain(`'${category}'`)
+    }
+    expect(RETRO_PROPOSAL_CATEGORY_CHECK).toBe(
+      "category in ('win', 'loss', 'improvement', 'follow_up')",
+    )
+  })
+
+  // The migration's DDL is a frozen literal (design §D2) so a fifth category cannot silently change
+  // what 0022 emits on a fresh database. This is the other half of that trade: the literal must still
+  // name exactly the members of the union, so adding a fifth category without a migration fails here
+  // rather than at insert time in production.
+  it('spells the CHECK literal as exactly the members of RETRO_PROPOSAL_CATEGORIES', () => {
+    const quoted = [...(RETRO_PROPOSAL_CATEGORY_CHECK.matchAll(/'([^']+)'/gu) ?? [])].map(
+      (match) => match[1],
+    )
+    expect(quoted).toEqual([...RETRO_PROPOSAL_CATEGORIES])
   })
 
   it.each([

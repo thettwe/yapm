@@ -188,4 +188,119 @@ action.
 
 ## Decisions made during implementation
 
-_(Recorded during the build passes.)_
+### L1 — The CHECK constant is a frozen literal, breaking with its own file's precedent
+
+`zero/context.ts` already holds three CHECK constants and all three are **derived** —
+`` `value in (${RETRO_REACTION_VALUES.map(...)})` ``. `RETRO_PROPOSAL_CATEGORY_CHECK` is a plain
+string literal instead, which makes it the odd one out in the file it lives in.
+
+Kept as D2 specified, and the divergence is the point rather than an oversight: the derived constants
+are a latent version of exactly the hazard D2 names, since adding a fifth reaction value would
+silently change what migration 0012 emits on a fresh database while every existing database stayed on
+the old constraint. Not fixed here — those are three unrelated migrations and this change is one
+file — but the new constant does not join them, and the unit test in `schema-drift.test.ts` pins the
+literal to the members of `RETRO_PROPOSAL_CATEGORIES` so the coupling that matters is still checked.
+
+### L2 — The migration's constraint name was verified against live Postgres, not assumed
+
+§D3's SQL names `retro_ai_proposal_category_check`. Migration `0018_retro_ai` never spells that name —
+it attaches the CHECK inline via Kysely's `.check()` on `addColumn`, leaving Postgres to auto-name it.
+`drop constraint <name>` would fail on a name Postgres did not pick. Confirmed against the live stack
+rather than reasoned about:
+
+```
+retro_ai_proposal_category_check|CHECK ((category = ANY (ARRAY['win'::text, 'loss'::text,
+  'improvement'::text, 'follow_up'::text])))
+```
+
+and `kysely_migration` shows `0022_retro_followup_category` applied on top of `0021_pm_digest` from a
+`down -v`.
+
+### L3 — The CHECK was probed by insert, using the FK as the discriminator
+
+Task 1.4 asks for evidence that `follow_up` is accepted and a bogus value refused. A bare insert hits
+the `draft_id` FK before anything useful is learned, so the probe supplies every NOT NULL column and
+reads *which* constraint rejects it — CHECKs are evaluated before FK triggers, so the two cases are
+cleanly distinguishable:
+
+- `category = 'follow_up'` → `violates foreign key constraint "retro_ai_proposal_draft_id_fkey"`.
+  It cleared the CHECK; only the fabricated draft id stopped it.
+- `category = 'bogus_value'` → `violates check constraint "retro_ai_proposal_category_check"`.
+
+The same fact is asserted at a higher altitude by the server test, which runs a real draft end to end
+and reads back a stored row whose `category` is `follow_up`.
+
+### L4 — No backfill, confirmed rather than re-argued, and the consequence has a test
+
+§D5's reasoning is unchanged after implementation: nothing stored recovers whether a pre-change row
+meant a report or a repeat, so a backfill would encode a guess as a stored fact. What the build adds
+is the test §D5 implied but did not name — `retro-ai-panel.test.tsx` renders a row storing
+`improvement` and carrying a baked `retro_action` reference and asserts it lands under **Improvements**
+with its prior-action chip intact. The cosmetic regression is therefore pinned as intended behaviour
+rather than left to be discovered as a bug.
+
+### L5 — `data-bucket` and `data-category` are now identical, and both stay
+
+Tasks 4.2 kept both attributes. They are now necessarily the same string, which reads as redundant.
+Kept anyway: both are load-bearing selectors in the shipped e2e suite and in the panel's own tests,
+and collapsing them is a rename with no behavioural content that would enlarge this diff into files
+this change otherwise does not touch. Worth removing later as its own cleanup; not worth smuggling in
+here.
+
+### L6 — Two pre-existing tests are load-flaky under a fully parallel `turbo` run
+
+`pnpm turbo lint typecheck test build` failed twice with **different** tests failing each time —
+`apps/web/src/routes.test.tsx > the search route is registered…` (1111 ms, a timeout) and
+`apps/server/src/jobs/search.pg.test.ts > misses a backdated row in the tail…`. Neither is touched by
+this change, and neither reproduces in isolation: `@yapm/web` passed 413/413 four consecutive times
+and `@yapm/server` 452/452 twice.
+
+Checked rather than assumed: the same fully parallel gate run with this change **stashed** also
+failed, on a third task. These are timing-sensitive tests contending for CPU and for the single dev
+Postgres, not a regression. Reported here rather than smoothed over — CI runs each package's suite
+with its own resources, and the honest statement is that the serial gate is green and the fully
+parallel local one is flaky independently of this change.
+
+Green as run: `lint`, `typecheck`, `build`, `@yapm/schema` 1009/1009 (including the pg-backed
+migration and schema-drift suites against the `yapm-rfc` stack from `down -v`), `@yapm/web` 413/413,
+`@yapm/server` 452/452, `@yapm/ui` 252/252, `@yapm/email` 27/27, `node scripts/check-boundaries.mjs`,
+and `pnpm --filter @yapm/docs build`.
+
+### L8 — The compose smoke test and the browser e2e suite could NOT be run here, and CI is the first place they execute
+
+Task 7.3 asks for the compose smoke test, and it did not pass. **It does not pass on this branch and it
+does not pass on the baseline either** — every browser-driven check in this environment fails at
+sign-up, before any yapm surface is reached:
+
+- The three-container production stack builds and boots cleanly on isolated ports (`yapm-rfc-smoke`,
+  app 3007, zero-cache 4857). `/readyz` reports `status: ready` with all four checks green —
+  database, logical replication with an active slot, search, storage — so **migration 0022 applies
+  against the production image and the app boots on top of it.** That much is verified.
+- `scripts/smoke.mjs` then fails, alternating between `sign-up failed: Invalid email` and `sign-up
+  did not establish a session cookie`.
+- The same failure was reproduced with this change **stashed** and the production image rebuilt from
+  the baseline tree: identical, both signatures, across three runs. It is not caused by this change.
+- The browser e2e suite fails the same way. `retro-ai.spec.ts` fails 6/6 waiting on
+  `[data-testid="workspace-name"]`, which is what a session that never established looks like — and
+  `auth.spec.ts`, which this change does not touch at any remove, fails too.
+- `POST /api/auth/sign-up/email` returns **200 with a correct `Set-Cookie:
+  better-auth.session_token=…; Path=/; HttpOnly; SameSite=Lax`** when driven by `curl`, so the server
+  is behaving; the cookie is not surviving into the local Playwright Chromium's jar.
+
+Stated plainly rather than dressed up: **task 5.9's "the shipped `retro-ai.spec.ts` must keep passing
+unchanged" is unverified locally, and so is task 7.3.** They are unverified because the harness is
+broken here for reasons predating this change, not because they were skipped. The e2e seed's category
+union was widened (task 3.3) and no e2e assertion in `retro-ai.spec.ts` referenced `retroProposalBucket`
+or the derived grouping, so the expectation is that both pass — but that is an expectation, not a
+result, and CI's `e2e` and `smoke` jobs are the first place it is actually tested. If either fails
+there, this note is where to start.
+
+### L7 — Root docs checked for staleness, and the check's result is "none"
+
+Task 6.3 asks for the check to be stated rather than skipped. `README.md`, `TECHSTACK.md`,
+`.env.example` and `reference/` were searched for the deleted identifiers and for the follow-up
+vocabulary: **no hits, and nothing stale.** This change adds no dependency, no environment variable,
+no container and no library surface, so there is nothing in any of them to update. `ROADMAP.md` did
+need two touches (row 22's derived-bucket prose gets a superseding pointer rather than a rewrite,
+since it is history, plus the "where v1 actually stands" paragraph's "it cost no migration" clause)
+and gets a row 24 of its own.

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RetroProposalVerdict } from '../context.js'
+import type { RetroProposalCategory } from './ai-draft.js'
 import { contestedFirst, retroProposalVerdict, sortContestedFirst } from './ratify.js'
 
 // The rule, spelled out as a table, so changing the predicate has to change this too. It is FIXED
@@ -83,32 +84,27 @@ describe('contestedFirst', () => {
   })
 })
 
-// Change 22 pointed this comparator at `retroProposalBucket`, so the flat contested-first list and
-// the grouped rendering cannot disagree about what a follow-up is. Every field but the verdict is
-// optional, and a row carrying none of them must sort exactly as it did before the bucket existed —
-// which the four cases above assert, and this one completes.
-describe('contestedFirst — bucket then rank', () => {
+// This comparator sorts on the STORED category, the same value the panel groups on, so the flat
+// contested-first list and the grouped rendering cannot disagree about which category a proposal is
+// in. Every field but the verdict is optional, and a row carrying none of them must sort exactly as
+// it did before the category leg existed — which the four cases above assert, and this one completes.
+describe('contestedFirst — category then rank', () => {
   const row = (
     id: string,
     verdict: RetroProposalVerdict | null,
-    category: 'win' | 'loss' | 'improvement',
+    category: RetroProposalCategory,
     rank: number,
-    refs?: readonly { readonly kind: string }[],
-  ) => ({ id, verdict, category, rank, ...(refs === undefined ? {} : { refs }) })
+  ) => ({ id, verdict, category, rank })
 
-  const FOLLOW_UP = [{ kind: 'retro_action', id: 'action-1' }]
-
-  it('orders contested first, then by bucket, then by rank within the bucket', () => {
+  it('orders contested first, then by category, then by rank within the category', () => {
     const sorted = sortContestedFirst([
       row('i-1', 'agreed', 'improvement', 0),
-      row('f-1', 'agreed', 'improvement', 0, FOLLOW_UP),
+      row('f-1', 'agreed', 'follow_up', 0),
       row('w-2', 'agreed', 'win', 1),
-      // Stored as an improvement, but it points at a prior action — so it sorts as a follow-up,
-      // after every improvement, rather than among them.
-      row('f-0', 'contested', 'improvement', 1, FOLLOW_UP),
+      row('f-0', 'contested', 'follow_up', 1),
       row('w-1', 'unrated', 'win', 0),
       row('l-1', 'rejected', 'loss', 0),
-      row('f-2', 'agreed', 'win', 1, FOLLOW_UP),
+      row('f-2', 'agreed', 'follow_up', 1),
     ])
 
     expect(sorted.map((entry) => entry.id)).toEqual([

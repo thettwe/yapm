@@ -76,6 +76,15 @@ export const RETRO_REACTION_VALUE_CHECK = `value in (${RETRO_REACTION_VALUES.map
 
 export const RETRO_PROPOSAL_VERDICT_CHECK = `verdict in (${RETRO_PROPOSAL_VERDICTS.map((verdict) => `'${verdict}'`).join(', ')})`
 
+// The four categories a drafted proposal may be stored under, as migration 0022 spells them. A
+// FROZEN LITERAL rather than a value mapped off `RETRO_PROPOSAL_CATEGORIES`, unlike the two above:
+// a migration's DDL is history, and deriving it would let a future fifth category silently change
+// what 0022 emits on a fresh database while every existing database stayed on the old constraint.
+// The coupling that does matter — this literal names exactly the members of the category union — is
+// asserted as a unit test, so a fifth category added without a migration fails a test rather than an
+// insert.
+export const RETRO_PROPOSAL_CATEGORY_CHECK = `category in ('win', 'loss', 'improvement', 'follow_up')`
+
 // A column's accent is stored as a retro-SEMANTIC key, never a color literal and never a CSS
 // variable name: `packages/ui` maps each key to a theme token so the accent stays correct in
 // Warm/Focused/Editorial, light and dark, at AA.

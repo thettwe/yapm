@@ -204,7 +204,7 @@ export async function readRetroAiDraft(
 }
 
 export interface SeedRetroAiProposal {
-  category: 'win' | 'loss' | 'improvement'
+  category: 'win' | 'loss' | 'improvement' | 'follow_up'
   summary: string
   confidence?: 'high' | 'medium' | 'low'
   // Evidence the CLIENT can name from its own rows: a work-graph id or a computed seed metric key.

@@ -324,7 +324,17 @@ signal that the section is genuinely independent of the card above it.
   unticked. 6.1 and 6.2 were done here because the allowlist EQUALITY assertion goes red the moment
   the two new tables are read — leaving it that way would have handed the next pass a broken tree
   rather than a finished stage.
-- What *was* run: `turbo typecheck`, `biome ci`, `turbo test` (699 schema / 294 server / 365 web / 246
+- **CI did run the pg suite, and it is green.** The `quality` job sets `DATABASE_URL`, and
+  `retro-facts.pg.test.ts` throws rather than skips when that is unset under CI — so the new
+  falsifiable check and the first-retro case genuinely executed against Postgres on commit `8a3be25`
+  and passed, along with the compose smoke test.
+- **One e2e flake, identified and not mine.** The first Playwright run failed at
+  `retro.spec.ts:236` ("take a dot back" left the budget at `2/3`), with the server log carrying
+  fourteen `Ignoring mutation … as it was already processed` PushProcessor errors spread across the
+  whole run, most in tests that passed. Nothing in this change touches a vote mutator, the vote query
+  or the palette. **Re-running the identical commit passed all six checks**, which is the evidence
+  rather than the assertion.
+- What *was* run locally: `turbo typecheck`, `biome ci`, `turbo test` (699 schema / 294 server / 365 web / 246
   ui passing, pg and e2e suites skipped for want of a database), and `scripts/check-boundaries.mjs`.
   The pure bucket/cap/rank/bake/comparator behaviour was additionally exercised by hand through a
   throwaway vitest file that was deleted afterwards; it confirmed the follow-up bucket, the ≤3 cap per

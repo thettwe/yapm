@@ -25,6 +25,7 @@ import {
   loadEnv,
   mailEnv,
 } from './config/env.js'
+import { describeShippedDefaults, enforceShippedDefaults } from './config/shipped-defaults.js'
 import { createConnectorAdminRoutes } from './connectors/admin-routes.js'
 import { createGithubConnector, githubConnector } from './connectors/github/index.js'
 import { createGithubWebhookRoute } from './connectors/github/routes.js'
@@ -55,6 +56,10 @@ function readEnvOrExit(): Env {
 async function main(): Promise<void> {
   const env = readEnvOrExit()
   const logger = createLogger(env)
+
+  // BEFORE the database is touched: a refusal that fired after `migrateToLatest` would leave a
+  // half-migrated database behind, which is a worse state than the one it refused to enter.
+  enforceShippedDefaults({ env, logger, exit: (code) => process.exit(code) })
 
   const database = createDatabase({
     connectionString: env.DATABASE_URL,
@@ -284,12 +289,17 @@ async function main(): Promise<void> {
       // behind it is O(corpus), so recomputing it per probe would be the readiness check costing
       // more than the traffic it guards.
       nonGatingCheck('search', searchFreshness),
+      // Non-gating for the same reason, and only that reason: an instance still holding a published
+      // secret is misconfigured, not unable to serve, and taking it out of rotation would turn a
+      // warning into an outage. This is what lets an operator see the boot warning after the fact.
+      nonGatingCheck('configuration', () => Promise.resolve(describeShippedDefaults(env))),
       // GATING, unlike search freshness: a read-only or missing volume means every upload fails and
       // every image 404s, which is an instance that should not take traffic. For the local provider
       // this is a write-and-unlink probe in the configured directory, so a container with no
       // persistent mount fails at boot rather than at somebody's first paste.
       gatingCheck('storage', () => storage.health()),
     ],
+    zeroCacheUrl: env.ZERO_CACHE_PUBLIC_URL,
     webDistDir: env.WEB_DIST_DIR,
     authRoutes: createAuthRoutes({
       auth,

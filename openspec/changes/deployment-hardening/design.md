@@ -189,3 +189,41 @@ so under its own heading, with the exact remedy — including the fact that chan
 
 - Whether image signing (cosign) and an SBOM belong in the next deployment change or in the first
   release checklist. Not decided here; deliberately not claimed in SECURITY.md either way.
+
+## Decisions made during implementation
+
+- **`RuntimeConfigGate` lives in `runtime-config.tsx`, not `.ts`.** The tasks name a `.ts` file, but
+  the module holds a React component with JSX, and `provider.tsx` is `.tsx` for exactly that reason.
+  The test is `runtime-config.test.tsx`; `pnpm --filter @yapm/web test src/zero/runtime-config.test.ts`
+  still selects it, because Vitest's positional argument is a path substring filter.
+- **The gate passes the config down as a render prop, not through context.** `children` is
+  `(config) => ReactNode`, so `ZeroRoot` is not merely hidden before the origin resolves — it is not
+  in the element tree at all, and no Zero client can be constructed early by an accident of
+  ordering. A context would have required `ZeroRoot` to read a possibly-undefined value and decide
+  for itself, which is the decision this gate exists to take away from it.
+- **`AppOptions.zeroCacheUrl` is optional and the route is mounted only when it is present.**
+  Making it required would have forced a value into eleven existing `createApp` call sites in tests
+  that have nothing to do with sync configuration. An app constructed without it 404s `/api/config`,
+  which the SPA reports by name — a louder failure than a fabricated default. `index.ts` always
+  passes it, and the schema gives it a default, so the shipped deployment always has one.
+- **`SHIPPED_DEFAULTS.DATABASE_URL` holds the shipped *password*, not a connection string**, and the
+  detector compares it against `new URL(value).password`. Host, port and database name are
+  deployment facts; only the password is a secret this repo publishes. The reported name is
+  `DATABASE_URL` (what the server reads), and `SHIPPED_DEFAULT_REMEDIES` names `POSTGRES_PASSWORD`
+  as the remedy, because under the shipped compose stack that is the variable an operator edits.
+- **`scripts/init-env.mjs` duplicates the variable list rather than importing it.** It runs against a
+  clean checkout before `pnpm install`, so it cannot import a TypeScript module. Its list differs
+  from `SHIPPED_DEFAULTS` in two deliberate ways, both commented in the file: `POSTGRES_PASSWORD`
+  replaces `DATABASE_URL`, and `ZERO_ADMIN_PASSWORD` is added.
+- **`init-env.mjs` rewrites only uncommented assignments,** and writes the file `0600`. A commented
+  `# NAME=value` in `.env.example` documents a default the operator has not chosen; uncommenting it
+  would turn documentation into configuration.
+- **Two files outside the tasks' enumeration also carried `VITE_ZERO_CACHE_URL`** and were changed:
+  `turbo.json` (the `dev` task's `passThroughEnv`, which now lists `ZERO_CACHE_PUBLIC_URL` and
+  `YAPM_ALLOW_INSECURE_DEFAULTS`) and `scripts/dev.mjs` (the `pnpm dev` default, now
+  `ZERO_CACHE_PUBLIC_URL` so the host-run server serves it). `apps/docs/.../sync-recovery.md`'s two
+  references were corrected in the same pass — they described a value baked in at image build time,
+  which is no longer true and would have sent an operator to rebuild an image for nothing.
+- **The failure copy waits for the backoff ceiling, ~30s of retries.** That is what §D3 asks for and
+  it is a deliberate trade: a page that says "can't reach the server" during a slow first paint has
+  cried wolf, and the neutral shell is honest for as long as the answer is genuinely unknown.

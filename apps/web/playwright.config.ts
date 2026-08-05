@@ -52,6 +52,9 @@ export default defineConfig({
         // at boot (gating, deliberately — a read-only mount must not take traffic), so this env is
         // what keeps the harness reaching `ready` at all. `data/` is gitignored.
         STORAGE_LOCAL_DIR: 'data/e2e-files',
+        // The SPA reads this back through `GET /api/config` (Vite proxies `/api` to this server),
+        // which is the only way it learns where to open its sync socket.
+        ZERO_CACHE_PUBLIC_URL: ZERO_CACHE_URL,
         BETTER_AUTH_SECRET: process.env.E2E_BETTER_AUTH_SECRET ?? 'e2e-development-secret-value',
         BETTER_AUTH_URL: SERVER_ORIGIN,
         WEB_ORIGIN: `http://localhost:${WEB_PORT}`,
@@ -65,7 +68,6 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       env: {
         SERVER_ORIGIN,
-        VITE_ZERO_CACHE_URL: ZERO_CACHE_URL,
       },
     },
   ],

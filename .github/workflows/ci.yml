@@ -129,7 +129,9 @@ jobs:
       YAPM_HOST_PORT: '3210'
       DATABASE_URL: postgres://yapm:yapm@localhost:5440/yapm
       E2E_ZERO_CACHE_URL: http://localhost:4848
-      VITE_ZERO_CACHE_URL: http://localhost:4848
+      # Not a production deployment: the harness runs on its own throwaway secrets and should not
+      # need generated ones to start.
+      YAPM_ALLOW_INSECURE_DEFAULTS: 'true'
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -173,8 +175,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install smoke browser
         run: pnpm exec playwright install --with-deps chromium
+      # Exactly the two commands the README quickstart prints, in that order. The stack boots with
+      # NO YAPM_ALLOW_INSECURE_DEFAULTS, so a `.env` that was not read — or secrets that did not
+      # reach the container — is a failed boot rather than a silently insecure one.
+      - name: Generate .env with real secrets
+        run: node scripts/init-env.mjs
       - name: Build and start the three-container stack
-        run: docker compose -f docker/docker-compose.yml up -d --build --wait --wait-timeout 300
+        run: docker compose --env-file .env -f docker/docker-compose.yml up -d --build --wait --wait-timeout 300
       - name: Wait for /readyz
         run: |
           set -euo pipefail
@@ -193,7 +200,7 @@ jobs:
         run: node scripts/smoke.mjs
       - name: Compose logs
         if: always()
-        run: docker compose -f docker/docker-compose.yml logs --no-color
+        run: docker compose --env-file .env -f docker/docker-compose.yml logs --no-color
       - name: Tear down
         if: always()
-        run: docker compose -f docker/docker-compose.yml down -v
+        run: docker compose --env-file .env -f docker/docker-compose.yml down -v

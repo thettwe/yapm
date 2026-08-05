@@ -31,8 +31,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-      args:
-        VITE_ZERO_CACHE_URL: ${VITE_ZERO_CACHE_URL:-http://localhost:4848}
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
@@ -48,7 +46,16 @@ services:
       CYCLE_MAINTENANCE_CRON: "${CYCLE_MAINTENANCE_CRON:-* * * * *}"
       ZERO_QUERY_API_KEY: ${ZERO_QUERY_API_KEY:-yapm-zero-query-key-change-me}
       ZERO_MUTATE_API_KEY: ${ZERO_MUTATE_API_KEY:-yapm-zero-mutate-key-change-me}
-      # better-auth runs in-process (no extra container). CHANGE the secret in production.
+      # The origin the BROWSER opens its sync socket to, served to the SPA by GET /api/config. It is
+      # runtime configuration, not a build arg: one published image has to serve every host. Set it
+      # to whatever a user's browser actually reaches — never the in-network `zero-cache:4848`.
+      ZERO_CACHE_PUBLIC_URL: ${ZERO_CACHE_PUBLIC_URL:-http://localhost:4848}
+      # Permit a production boot on the secrets this repository publishes. EVALUATION ONLY: with it
+      # false (the default) the app refuses to start while POSTGRES_PASSWORD, BETTER_AUTH_SECRET or
+      # either Zero API key is still at its shipped value. `node scripts/init-env.mjs` fills them.
+      YAPM_ALLOW_INSECURE_DEFAULTS: "${YAPM_ALLOW_INSECURE_DEFAULTS:-false}"
+      # better-auth runs in-process (no extra container). CHANGE the secret in production — it
+      # encrypts the JWKS private key at rest, so a known value forges any user's sync token.
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-yapm-dev-secret-change-me-in-production}
       # The browser-facing URL of this app; OAuth callbacks and token issuer/audience use it.
       # Set both to your real origin (and rebuild) when serving from a domain or a non-3000 port.

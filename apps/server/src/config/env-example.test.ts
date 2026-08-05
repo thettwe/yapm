@@ -26,7 +26,6 @@ const COMPOSE_ONLY = new Set([
   'ZERO_IMAGE',
   'YAPM_HOST_PORT',
   'YAPM_IMAGE',
-  'VITE_ZERO_CACHE_URL',
 ])
 
 function envExampleKeys(): Set<string> {
@@ -121,7 +120,7 @@ describe('.env.example and the Zod env schema', () => {
   // This change's three variables, named explicitly. The set checks above would catch a missing one,
   // but naming them is what makes a future deletion of one a failing test rather than a silent
   // shrinking of the documented surface.
-  it('documents, declares and ships the three variables this change adds', () => {
+  it('documents, declares and ships the three variables the disclosure change added', () => {
     const passed = composeYapmEnvKeys()
     for (const key of [
       'AI_PM_DIGEST_READY_EMAIL',
@@ -132,5 +131,41 @@ describe('.env.example and the Zod env schema', () => {
       expect(declared.has(key)).toBe(true)
       expect(passed.has(key)).toBe(true)
     }
+  })
+
+  // Same precedent, for deployment-hardening's two. `ZERO_CACHE_PUBLIC_URL` in particular is only
+  // useful if it reaches the container: it replaced a build-time constant, and a runtime variable
+  // that compose does not pass through would be the same defect wearing a different name.
+  it('documents, declares and ships the two variables this change adds', () => {
+    const passed = composeYapmEnvKeys()
+    for (const key of ['YAPM_ALLOW_INSECURE_DEFAULTS', 'ZERO_CACHE_PUBLIC_URL']) {
+      expect(documented.has(key)).toBe(true)
+      expect(declared.has(key)).toBe(true)
+      expect(passed.has(key)).toBe(true)
+    }
+  })
+})
+
+// The MECHANISM behind the quickstart, not its prose. `-f docker/…` makes `docker/` Compose's
+// project directory, so a documented command without `--env-file` reads no env file at all and
+// applies every published default in silence — which is how a production deploy came to run on a
+// secret printed in this repository. Asserted here so a later docs edit cannot reintroduce it.
+describe('the README quickstart reads the operator env file', () => {
+  const readme = readFileSync(new URL('../../../../README.md', import.meta.url), 'utf8')
+
+  const composeCommands = readme
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('docker compose') || line.startsWith('$ docker compose'))
+
+  it('finds the compose invocations it is meant to be checking', () => {
+    expect(composeCommands.length).toBeGreaterThan(0)
+  })
+
+  it('passes --env-file on every invocation that points -f into docker/', () => {
+    const offending = composeCommands.filter(
+      (command) => command.includes('-f docker/') && !command.includes('--env-file'),
+    )
+    expect(offending).toEqual([])
   })
 })

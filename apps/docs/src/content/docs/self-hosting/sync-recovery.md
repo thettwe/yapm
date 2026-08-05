@@ -107,13 +107,15 @@ container while diagnosing).
 Work down this list; each step rules out one layer.
 
 1. **Is `zero-cache` up and reachable from the browser?** The browser connects *directly* to it, not
-   through the app. From the affected machine and network, `curl -f <VITE_ZERO_CACHE_URL>/keepalive`
-   — that is the same endpoint the container's own healthcheck uses.
+   through the app. From the affected machine and network,
+   `curl -f <ZERO_CACHE_PUBLIC_URL>/keepalive` — that is the same endpoint the container's own
+   healthcheck uses.
    `docker compose -f docker/docker-compose.yml logs zero-cache` shows the server side.
-2. **Is `VITE_ZERO_CACHE_URL` the browser-reachable origin?** It is baked into the SPA **at image
-   build time**, so an in-network hostname like `http://zero-cache:4848` or a stale
-   `http://localhost:4848` cannot work from anyone else's browser. Changing it means rebuilding the
-   app image, not just restarting it.
+2. **Is `ZERO_CACHE_PUBLIC_URL` the browser-reachable origin?** The SPA fetches it at runtime from
+   the app's own `GET /api/config` — `curl -s http://your-host:3000/api/config` shows exactly what
+   the browser is told. An in-network hostname like `http://zero-cache:4848` or a stale
+   `http://localhost:4848` cannot work from anyone else's browser. Changing it is an env change and
+   a container restart; there is nothing to rebuild.
 3. **Does your proxy pass WebSockets?** yapm needs no reverse proxy, but if you added one it has to
    forward the `Upgrade`/`Connection` headers to `zero-cache` and allow long-lived idle
    connections. A proxy that closes idle sockets after 60 seconds produces a permanent

@@ -169,11 +169,17 @@ tokens, no cloud services.
 git clone https://github.com/thettwe/yapm.git && cd yapm
 
 # Run it (self-host): the whole production deployment is three containers
-docker compose -f docker/docker-compose.yml up -d --build --wait
+node scripts/init-env.mjs
+docker compose --env-file .env -f docker/docker-compose.yml up -d --build --wait
 
 # Or hack on it: Postgres + zero-cache in Docker, server + Vite on the host, one command
 pnpm install && pnpm dev
 ```
+
+`init-env.mjs` writes a repo-root `.env` with a generated value for every secret this repository
+publishes; `--env-file .env` is **not optional**, because `-f docker/…` makes `docker/` Compose's
+project directory, so without it Compose finds no env file at all and silently applies every
+published default. In production the app refuses to boot on those defaults, naming each one.
 
 The production stack is **exactly three containers** — the app (API + Zero endpoints + static SPA
 in one process), `zero-cache`, and Postgres. No Redis, no reverse proxy, no object store. On an

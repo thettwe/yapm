@@ -41,10 +41,11 @@
         "SEED_WORKSPACE_NAME",
         "SERVER_ORIGIN",
         "SMTP_URL",
-        "VITE_ZERO_CACHE_URL",
         "WEB_DIST_DIR",
         "WEB_ORIGIN",
+        "YAPM_ALLOW_INSECURE_DEFAULTS",
         "YAPM_BOOTSTRAP_ADMIN_EMAIL",
+        "ZERO_CACHE_PUBLIC_URL",
         "ZERO_MUTATE_API_KEY",
         "ZERO_QUERY_API_KEY"
       ]

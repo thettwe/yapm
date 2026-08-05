@@ -30,8 +30,6 @@ import {
   shouldRefreshOnWake,
 } from '@/zero/session'
 
-const CACHE_URL = import.meta.env.VITE_ZERO_CACHE_URL ?? 'http://localhost:4848'
-
 // Zero keeps writes queued while `connecting`; the default minute before it admits
 // to being `disconnected` is a minute of a user typing into a surface that cannot save.
 const DISCONNECT_TIMEOUT_MS = 5_000
@@ -368,7 +366,15 @@ function useUnavailableRetry(session: SyncSessionRecord, remint: () => void): vo
   }, [retrying, revision, remint])
 }
 
-export function ZeroRoot({ children }: { children: ReactNode }) {
+interface ZeroRootProps {
+  // Resolved at runtime by `RuntimeConfigGate` and handed down. It MUST be a stable string across
+  // renders: the options memo's identity is what `ZeroProvider` keys the whole client on, and a
+  // value that changes identity per render reopens IndexedDB and rehydrates every query.
+  cacheUrl: string
+  children: ReactNode
+}
+
+export function ZeroRoot({ cacheUrl, children }: ZeroRootProps) {
   const [session, setSession] = useState<SyncSessionRecord>(PENDING)
   const { data: authSession } = useSession()
   const authUserId = authSession?.user.id ?? null
@@ -451,14 +457,14 @@ export function ZeroRoot({ children }: { children: ReactNode }) {
       ({
         schema,
         mutators,
-        cacheURL: CACHE_URL,
+        cacheURL: cacheUrl,
         userID,
         auth: token,
         context,
         kvStore: 'idb',
         disconnectTimeoutMs: DISCONNECT_TIMEOUT_MS,
       }) satisfies ZeroOptions,
-    [userID, token, context],
+    [cacheUrl, userID, token, context],
   )
 
   const control = useMemo<SyncControl>(() => ({ refresh, retry }), [refresh, retry])

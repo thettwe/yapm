@@ -62,10 +62,16 @@ function SsoSettingsAdmin() {
   // stored on the provider row the list reads — it is minted on request and read back only here.
   const [tokens, setTokens] = useState<Record<string, string>>({})
   const [redirectUri, setRedirectUri] = useState<string | undefined>(undefined)
+  // Successful registrations, counted. The redirect URI cannot be the trigger for the handoff below
+  // — registering the same provider id again yields the same URI — and a one-shot flag cannot be
+  // either, because StrictMode invokes a layout effect twice on mount.
+  const [registrations, setRegistrations] = useState(0)
+  const handedOff = useRef(registrations)
   // Removing a provider unmounts the button that was focused. Without somewhere to hand focus to,
   // it falls to `<body>` and the next Tab restarts at the top of the document — so the heading is a
   // stable anchor that outlives every row, exactly as `pm-digest-card.tsx` does for publish/retract.
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const redirectCopyRef = useRef<HTMLButtonElement>(null)
 
   const reload = useCallback(async () => {
     try {
@@ -85,6 +91,18 @@ function SsoSettingsAdmin() {
   useEffect(() => {
     void reload()
   }, [reload])
+
+  // Registering clears the six fields, and an empty form is what disables Register — so this
+  // feature's happy path applies `disabled` to the control that holds focus, which blurs it to
+  // `<body>` in a real browser. The panel the registration just produced is both what appeared and
+  // what an admin has to do next, so focus goes to its copy control; the heading catches a render
+  // that has no panel to offer.
+  useLayoutEffect(() => {
+    if (handedOff.current === registrations) return
+    handedOff.current = registrations
+    if (redirectCopyRef.current !== null) redirectCopyRef.current.focus()
+    else headingRef.current?.focus()
+  }, [registrations])
 
   const providers = data?.providers ?? []
 
@@ -137,6 +155,7 @@ function SsoSettingsAdmin() {
               <CopyableValue
                 label="Redirect URI"
                 value={redirectUri}
+                copyRef={redirectCopyRef}
                 onCopied={setAnnouncement}
                 onError={setError}
               />
@@ -175,6 +194,7 @@ function SsoSettingsAdmin() {
                   : { ...current, [result.providerId]: result.domainVerificationToken },
               )
               setRedirectUri(result.redirectURI)
+              setRegistrations((count) => count + 1)
               setAnnouncement(`Identity provider ${result.providerId} registered.`)
               await reload()
             }}
@@ -828,7 +848,9 @@ function RegisterProviderForm({
         {/* Disabled only by an incomplete form, never by the request being in flight: registration
             performs OIDC discovery against the admin's issuer, and disabling the element that holds
             focus blurs it to `<body>` for as long as that round-trip takes. `submit` refuses
-            re-entry itself; the status line beside it is the in-flight signal. */}
+            re-entry itself; the status line beside it is the in-flight signal. Success DOES disable
+            it — the fields clear — which is what the redirect-URI handoff in `SsoSettingsAdmin`
+            exists to catch. */}
         <Button type="submit" size="sm" disabled={!complete} data-testid="sso-register">
           <PlusIcon />
           Register provider

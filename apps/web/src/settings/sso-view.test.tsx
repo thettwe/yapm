@@ -319,7 +319,7 @@ test('a client secret can be rotated from the provider row, write-only in both d
   expect(document.body.innerHTML).not.toContain(CLIENT_SECRET)
 })
 
-async function submitRegistration(): Promise<void> {
+async function fillRegistration(): Promise<void> {
   await screen.findByTestId('sso-register-form')
   const fill = (label: RegExp, value: string) =>
     fireEvent.change(screen.getByLabelText(label), { target: { value } })
@@ -328,8 +328,31 @@ async function submitRegistration(): Promise<void> {
   fill(/^issuer url/i, 'https://acme.okta.example')
   fill(/^client id/i, 'client-a1b2c3d4e5')
   fill(/^client secret/i, CLIENT_SECRET)
+}
+
+async function submitRegistration(): Promise<void> {
+  await fillRegistration()
   fireEvent.submit(screen.getByTestId('sso-register-form'))
 }
+
+// Registering is the one thing this page exists for, and succeeding at it empties the six fields —
+// which is what puts `disabled` on the Register button while it still holds focus. The redirect URI
+// the registration just produced is what appeared and what an admin has to do next, so that is where
+// focus goes; nothing on the happy path may leave it on `<body>`.
+test('a successful registration hands focus to the redirect URI it just produced', async () => {
+  render(<SsoSettingsView />)
+  await fillRegistration()
+
+  const register = screen.getByTestId('sso-register')
+  register.focus()
+  expect(register).toHaveFocus()
+  fireEvent.submit(screen.getByTestId('sso-register-form'))
+
+  const copy = await screen.findByRole('button', { name: /copy redirect uri/i })
+  await waitFor(() => expect(copy).toHaveFocus())
+  // The clears are what disable it, so the handoff has to have already happened.
+  expect(register).toBeDisabled()
+})
 
 // Registration answers 409 for two unrelated refusals with unrelated remedies, and 502 for an
 // issuer it could not reach — which is not a domain-verification failure and must not be described

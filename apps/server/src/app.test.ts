@@ -1,5 +1,5 @@
 import { pino } from 'pino'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createApp } from './app.js'
 import { databaseCheck } from './health.js'
 
@@ -85,5 +85,63 @@ describe('createApp', () => {
 
     expect(response.status).toBe(503)
     expect(body.reason).toBe('database: connect ECONNREFUSED 127.0.0.1:5432 (ECONNREFUSED)')
+  })
+})
+
+describe('GET /api/config', () => {
+  it('serves the sync origin it was given', async () => {
+    const app = createApp({
+      logger: silent,
+      readinessChecks: [],
+      zeroCacheUrl: 'https://sync.example.com',
+    })
+
+    const response = await app.request('/api/config')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ zeroCacheUrl: 'https://sync.example.com' })
+  })
+
+  // A cached copy would survive a change of origin in exactly the deployment where the origin just
+  // changed — an operator who moves the stack behind a domain and cannot work out why the old host
+  // is still being dialled.
+  it('forbids caching the answer', async () => {
+    const app = createApp({
+      logger: silent,
+      readinessChecks: [],
+      zeroCacheUrl: 'https://sync.example.com',
+    })
+
+    const response = await app.request('/api/config')
+
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+
+  // The value comes through `AppOptions`, from the caller that validated it — never read out of the
+  // ambient environment here, where a second reader could disagree with the one at boot.
+  it('ignores the ambient environment', async () => {
+    vi.stubEnv('ZERO_CACHE_PUBLIC_URL', 'https://ambient.example.com')
+
+    const app = createApp({
+      logger: silent,
+      readinessChecks: [],
+      zeroCacheUrl: 'https://injected.example.com',
+    })
+
+    const response = await app.request('/api/config')
+
+    await expect(response.json()).resolves.toEqual({
+      zeroCacheUrl: 'https://injected.example.com',
+    })
+  })
+
+  // An app built without one 404s rather than fabricating a default: the SPA reports the endpoint by
+  // name, which is a louder failure than a client quietly dialling localhost.
+  it('is absent when no origin was configured', async () => {
+    const app = createApp({ logger: silent, readinessChecks: [] })
+
+    const response = await app.request('/api/config')
+
+    expect(response.status).toBe(404)
   })
 })

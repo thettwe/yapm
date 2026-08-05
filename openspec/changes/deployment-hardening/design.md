@@ -227,3 +227,52 @@ so under its own heading, with the exact remedy — including the fact that chan
 - **The failure copy waits for the backoff ceiling, ~30s of retries.** That is what §D3 asks for and
   it is a deliberate trade: a page that says "can't reach the server" during a slow first paint has
   cried wolf, and the neutral shell is honest for as long as the answer is genuinely unknown.
+- **The drift test (4.3) binds each shipped default to the artifact that actually produces it, which
+  is not one artifact.** `BETTER_AUTH_SECRET` has a Zod default and is bound to it. The two Zero API
+  keys are `optional()` in the schema with **no** default there — their shipped values exist only as
+  compose's `${VAR:-…}` interpolation — and `DATABASE_URL`'s password comes from
+  `${POSTGRES_PASSWORD:-yapm}`. So the test reads `docker-compose.yml`, asserts each `${NAME:-…}`
+  default is self-consistent across the `yapm` and `zero-cache` services, and compares. It closes
+  with the end-to-end form: the environment an empty `.env` actually produces is parsed by the real
+  schema and every one of the four is detected, then the gate refuses. Falsified by hand —
+  perturbing one character of `SHIPPED_DEFAULTS.BETTER_AUTH_SECRET` fails three of those tests.
+- **The configuration reference is parsed as "the name in the first table cell, in backticks".** One
+  row per variable, and `env-example.test.ts` asserts set equality in both directions against the
+  schema modulo the same two lists, plus the presence of every compose-only variable — those are the
+  ones an operator most needs the page for (`POSTGRES_PASSWORD` and `ZERO_ADMIN_PASSWORD` are two of
+  the five secrets the hardening page tells them to change), so they are asserted rather than merely
+  permitted. Unlike the `.env.example` legs, `CONTAINER_SET` is **not** excused in the "documents
+  everything" direction: `DATABASE_URL`, `HOST`, `PORT` and `WEB_DIST_DIR` are real configuration for
+  anyone running the server outside the shipped compose stack, so the reference documents all 59
+  schema variables plus all 10 compose-only ones. The check found no drift on its first run.
+- **`GET /api/config` is asserted to ignore the ambient environment** by stubbing
+  `ZERO_CACHE_PUBLIC_URL` to a different origin while passing another through `AppOptions`. Without
+  that assertion the route could be rewritten to read `process.env` directly and every other test
+  would still pass — and a second reader of the same variable is how the served value and the
+  validated value come to disagree.
+- **Task 4.9's compose smoke run was NOT performed locally.** PROCESS.md §3 makes CI the gate of
+  record for the compose path and explicitly excludes docker from the local fast gates, and the
+  build instruction for this pass repeated that. The end-to-end proof is therefore the CI smoke job
+  as rewritten in task 3.4: it runs `node scripts/init-env.mjs`, boots with
+  `docker compose --env-file .env -f docker/docker-compose.yml up -d --build --wait`, and sets **no**
+  `YAPM_ALLOW_INSECURE_DEFAULTS` — so if the env file were not read, the generated secrets would not
+  reach the container, the boot gate would fire under `NODE_ENV=production`, and the job would fail
+  on a refusal naming the variables. A green smoke job *is* the assertion that the operator's env
+  file is read. Recorded rather than claimed: this was not run on this machine.
+
+## Root-doc staleness sweep (PROCESS.md §2)
+
+| Doc | Verdict |
+|---|---|
+| `README.md` | **Updated** — quickstart is `init-env.mjs` + `--env-file` (earlier pass), and the self-hosting paragraph now links the three new pages. |
+| `ROADMAP.md` | **Updated** — row 25, and one sentence at the end of "Where v1 actually stands" saying what none of the features were any use without. |
+| `TECHSTACK.md` | **Updated** — three §Self-host operations entries: runtime sync origin, shipped-default detection, and publishing decoupled from release automation; the upgrade bullet now points at the rollback truth; the configuration bullet points at the checked reference. |
+| `SECURITY.md` | **Updated** — the self-hoster section was one sentence promising an artifact that did not exist. Now: change these five secrets and what each protects, the boot refusal, `--env-file`, the real tag set, an upgrade command that works, and an explicit **no signing, no provenance, no scanning**. |
+| `.env.example` | **Updated** in the earlier pass; still set-equal to the schema, and now to the configuration reference as well. |
+| `PROCESS.md` | **Updated** — §2's "mechanical checks" clause described two legs of `env-example.test.ts`; there are now four plus the README check. |
+| `CONTRIBUTING.md` | Not stale. It documents the `pnpm dev` loop, which this change leaves unchanged (`ZERO_CACHE_PUBLIC_URL` defaults to `http://localhost:4848`, and no web-side default exists to disagree with it). |
+| `VISION.md` | Reviewed, **left alone**. #6 says "One `docker compose up` on a small VPS". The deployment is still one compose command; it is now preceded by a one-off secret generator, which is the difference between deployable-in-minutes and deployable-in-minutes-and-compromised. |
+| `DESIGN.md` | Not stale — no UI surface changed. The pre-config boot shell is the page background and nothing else. |
+| `reference/*.md` | Not stale. Nothing here contradicted a harvested API note; `grep` for `VITE_ZERO`, `docker compose` and `--env-file` across `reference/` finds only an unrelated Kysely CLI `--env-file` flag. |
+| `CLAUDE.md` | Not stale — no constraint changed. Three containers still, no new service. |
+| `apps/docs/**` | **Three pages added** (deploy, upgrade, configuration) plus the sidebar; `sync-recovery.md`'s two build-time-constant claims were corrected in the earlier pass. |

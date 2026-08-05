@@ -83,21 +83,21 @@
 
 ## 4. Tests
 
-- [ ] 4.1 `apps/server/src/config/shipped-defaults.test.ts` (unit): every shipped default is detected
+- [x] 4.1 `apps/server/src/config/shipped-defaults.test.ts` (unit): every shipped default is detected
       by name; several at once are all named in one list; a value never appears in the output; a
       configured environment yields an empty list; the `DATABASE_URL` password is read from the
       connection string and a non-default password is not flagged; a malformed `DATABASE_URL` does not
       throw out of the detector.
-- [ ] 4.2 A boot-gate test (unit, alongside `env.test.ts`'s style): production + defaults + no flag
+- [x] 4.2 A boot-gate test (unit, alongside `env.test.ts`'s style): production + defaults + no flag
       ⇒ the fatal path is taken and the message names `BETTER_AUTH_SECRET`; production + defaults +
       flag ⇒ the warn path; non-production + defaults ⇒ the warn path. Assert on the injected logger
       and an injected exit, not on a real `process.exit`.
-- [ ] 4.3 **The falsifiable check for the shipped-default table itself**: assert that every value in
+- [x] 4.3 **The falsifiable check for the shipped-default table itself**: assert that every value in
       `SHIPPED_DEFAULTS` is byte-identical to the default the Zod schema actually produces (and, for
       the database password, to the one `docker-compose.yml` interpolates). A detector that has
       drifted from the defaults it is supposed to recognise is worse than no detector, and this is
       the only test that can catch it.
-- [ ] 4.4 `apps/server/src/app.test.ts`: `GET /api/config` returns the configured origin and
+- [x] 4.4 `apps/server/src/app.test.ts`: `GET /api/config` returns the configured origin and
       `Cache-Control: no-store`; the origin it returns is the one passed in, not one read from the
       ambient environment.
 - [x] 4.5 `apps/web/src/zero/runtime-config.test.ts` (unit, jsdom): **the headline check** — with
@@ -124,10 +124,15 @@
       `YAPM_ALLOW_INSECURE_DEFAULTS` — which is the end-to-end proof that the env file is read.
       No new Playwright spec: PROCESS.md §3's big-feature rule is not met (no synced entity, no
       mutator, no permission surface, no signature UI), so do not add e2e reflexively.
+      **NOT RUN LOCALLY.** PROCESS.md §3 makes CI the gate of record for the compose path and
+      excludes docker from the local fast gates. The CI smoke job rewritten in 3.4 *is* this proof:
+      it boots through `init-env.mjs` + `--env-file .env` with no `YAPM_ALLOW_INSECURE_DEFAULTS`, so
+      an env file that is not read means a boot refusal and a red job. Recorded in design.md rather
+      than claimed.
 
 ## 5. Documentation
 
-- [ ] 5.1 `apps/docs/src/content/docs/self-hosting/deploy.md` — production deployment and hardening.
+- [x] 5.1 `apps/docs/src/content/docs/self-hosting/deploy.md` — production deployment and hardening.
       The exact secrets to change and **what each one protects** (`BETTER_AUTH_SECRET` encrypts the
       JWKS private key at rest: a known value plus a database read forges any user's sync token);
       the boot refusal and its one escape hatch; TLS termination and reverse-proxying **both**
@@ -136,36 +141,38 @@
       and disk sizing (the ~0.85 GiB idle figure the README already cites, plus replica and pgdata
       growth); a first-run checklist. No fourth container, no required proxy — a proxy the operator
       already runs, described.
-- [ ] 5.2 `apps/docs/src/content/docs/self-hosting/upgrade.md` — upgrade and rollback. Both shapes
+- [x] 5.2 `apps/docs/src/content/docs/self-hosting/upgrade.md` — upgrade and rollback. Both shapes
       with commands that work against the shipped compose file. Rollback stated plainly: forward-only
       migrations, no down-migration, an older image against a newer schema crash-loops, and the
       answer is restore from backup (link `backup-restore.md`). A "breaking upgrades" section naming
       this change: an instance previously on defaults now refuses to boot, and changing
       `BETTER_AUTH_SECRET` invalidates every session and the stored JWKS.
-- [ ] 5.3 `apps/docs/src/content/docs/self-hosting/configuration.md` — the configuration reference the
+- [x] 5.3 `apps/docs/src/content/docs/self-hosting/configuration.md` — the configuration reference the
       two existing spec scenarios already cite. Every variable the schema validates: name, default,
       what it does, and whether it is security-relevant. Written in the shape task 4.7's check parses.
-- [ ] 5.4 `apps/docs/astro.config.mjs`: three sidebar entries, ordered so deployment comes first in
+- [x] 5.4 `apps/docs/astro.config.mjs`: three sidebar entries, ordered so deployment comes first in
       the Self-hosting group. Expect a rebase here — the sibling `sso-admin-gating` build adds its
       own page to the same list.
-- [ ] 5.5 `README.md`: the quickstart becomes `node scripts/init-env.mjs` then
+- [x] 5.5 `README.md`: the quickstart becomes `node scripts/init-env.mjs` then
       `docker compose --env-file .env -f docker/docker-compose.yml up -d --build --wait`, with one
       sentence on why the flag is not optional. Link the three new pages.
-- [ ] 5.6 `SECURITY.md`: correct the self-hoster section to what is true after task 3.1 — `edge` and
+- [x] 5.6 `SECURITY.md`: correct the self-hoster section to what is true after task 3.1 — `edge` and
       `sha-<7>` images on every push to `main`, version and `stable` tags on releases — and the
       upgrade line to the real command. **Claim no signing, no provenance and no scanning**, because
       this change makes none of them true.
-- [ ] 5.7 `TECHSTACK.md`: record that the browser-facing sync origin is runtime configuration served
+- [x] 5.7 `TECHSTACK.md`: record that the browser-facing sync origin is runtime configuration served
       by the app, not a Vite build-time constant, and why (one prebuilt image must serve every host).
-- [ ] 5.8 `ROADMAP.md`: a row for this change.
-- [ ] 5.9 Root-doc staleness sweep per PROCESS.md §2 — `README`, `ROADMAP`, `TECHSTACK`,
+- [x] 5.8 `ROADMAP.md`: a row for this change.
+- [x] 5.9 Root-doc staleness sweep per PROCESS.md §2 — `README`, `ROADMAP`, `TECHSTACK`,
       `.env.example`, `SECURITY`, `CONTRIBUTING`, and any `reference/` page this makes stale — and
       record the sweep's result in `design.md`, including "none" where nothing was stale.
 
 ## 6. Verification
 
-- [ ] 6.1 `pnpm turbo lint typecheck test build` clean, with the actual output reported.
-- [ ] 6.2 `pnpm --filter @yapm/docs build` clean (PROCESS.md §2's close gate).
-- [ ] 6.3 `node scripts/check-boundaries.mjs` clean — no app imported from a package, no ZQL or
+- [ ] 6.1 `pnpm turbo lint typecheck test build` clean, with the actual output reported. Fast gates
+      (`typecheck`, `lint`, affected `test`, `check-boundaries`) run and green locally; the full
+      `build`, Playwright and the compose smoke test are CI's, per PROCESS.md §3.
+- [x] 6.2 `pnpm --filter @yapm/docs build` clean (PROCESS.md §2's close gate).
+- [x] 6.3 `node scripts/check-boundaries.mjs` clean — no app imported from a package, no ZQL or
       mutator outside `packages/schema`.
-- [ ] 6.4 Confirm the compose file still defines exactly three services.
+- [x] 6.4 Confirm the compose file still defines exactly three services.

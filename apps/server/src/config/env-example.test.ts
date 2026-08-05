@@ -71,6 +71,25 @@ function composeYapmEnvKeys(): Set<string> {
   return keys
 }
 
+// The configuration reference in the docs site, read the same way and for the same reason. Two spec
+// scenarios have required "the environment example and the configuration reference are compared
+// against the validated schema … with no drift" since before the page existed. This is what makes
+// the page a checked artifact rather than prose that was true on the day it was written.
+//
+// The shape it parses is one table row per variable, with the name in the FIRST cell in backticks.
+function configurationReferenceKeys(): Set<string> {
+  const source = readFileSync(
+    new URL('../../../docs/src/content/docs/self-hosting/configuration.md', import.meta.url),
+    'utf8',
+  )
+  const keys = new Set<string>()
+  for (const line of source.split('\n')) {
+    const match = /^\|\s*`([A-Z][A-Z0-9_]*)`\s*\|/.exec(line)
+    if (match?.[1] !== undefined) keys.add(match[1])
+  }
+  return keys
+}
+
 function sorted(values: Iterable<string>): string[] {
   return [...values].sort()
 }
@@ -138,11 +157,41 @@ describe('.env.example and the Zod env schema', () => {
   // that compose does not pass through would be the same defect wearing a different name.
   it('documents, declares and ships the two variables this change adds', () => {
     const passed = composeYapmEnvKeys()
+    const reference = configurationReferenceKeys()
     for (const key of ['YAPM_ALLOW_INSECURE_DEFAULTS', 'ZERO_CACHE_PUBLIC_URL']) {
       expect(documented.has(key)).toBe(true)
       expect(declared.has(key)).toBe(true)
       expect(passed.has(key)).toBe(true)
+      expect(reference.has(key)).toBe(true)
     }
+  })
+
+  // THE FOURTH LEG. An operator reading the docs site never opens `.env.example`, so a reference
+  // that has drifted from the schema is the same defect as an example that has — one layer further
+  // from the code, where nothing else would catch it. Set equality in BOTH directions, modulo the
+  // same two commented lists: the reference documents every variable the server validates, and it
+  // invents none.
+  it('documents every variable the schema validates in the configuration reference', () => {
+    const reference = configurationReferenceKeys()
+    const missing = sorted(declared).filter((key) => !reference.has(key))
+    expect(missing).toEqual([])
+  })
+
+  it('names nothing in the configuration reference that no one reads', () => {
+    const reference = configurationReferenceKeys()
+    const invented = sorted(reference).filter(
+      (key) => !declared.has(key) && !COMPOSE_ONLY.has(key) && !CONTAINER_SET.has(key),
+    )
+    expect(invented).toEqual([])
+  })
+
+  // The compose-only variables are the ones an operator is MOST likely to need the reference for —
+  // `POSTGRES_PASSWORD` and `ZERO_ADMIN_PASSWORD` are two of the five secrets the hardening page
+  // tells them to change — so their presence is asserted rather than merely permitted.
+  it('carries the compose-only variables in the configuration reference too', () => {
+    const reference = configurationReferenceKeys()
+    const missing = sorted(COMPOSE_ONLY).filter((key) => !reference.has(key))
+    expect(missing).toEqual([])
   })
 })
 

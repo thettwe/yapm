@@ -66,7 +66,7 @@ Tracked so they are not forgotten — promises made in prose that the code does 
 
 ## Differentiation commitments
 
-- **Issue list shows reality, not just intention** — rows carry a delivery signal (PR/CI/deploy/review) and a divergence flag derived from the work graph; see [DESIGN.md](DESIGN.md). Layout built in `issue-core`; git data populates via `connectors`; with `auto-status` a team can opt in to having the reality *correct* the intention instead of only flagging it; and with `deploy-history-edge` the row can say a change actually reached production, because the moment it did is finally stored rather than overwritten.
+- **Issue list shows reality, not just intention** — rows carry a delivery signal (PR/CI/deploy/review) and a divergence flag derived from the work graph; see [DESIGN.md](DESIGN.md). Layout built in `issue-core`; git data populates via `connectors`; with `auto-status` a team can opt in to having the reality *correct* the intention instead of only flagging it; and with `deploy-history-edge` the row can say a change actually shipped, because the moment a deployment carrying its merge commit succeeded is finally stored rather than overwritten.
 - **Connectors, not special-cases** — GitHub is the first implementation of a reusable first-party framework; GitLab and others follow as connectors.
 - **AI as a moat is AI-over-the-work-graph** — BYO-key, self-hosted, provider-agnostic, operating under the same permission model as humans (which is also the safety story). Architected from the start, shipped once the graph is rich.
 

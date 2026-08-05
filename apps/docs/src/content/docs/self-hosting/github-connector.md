@@ -152,8 +152,8 @@ Open *Settings → Connectors* in yapm (workspace admins only), **Enable** the G
 map each repository (`owner/repo`) to the team that should own its pull requests, checks, and
 deployments. Ingested work-graph rows land inside that team's boundary; a webhook for an unmapped
 repo is dropped. Once mapped, a PR whose branch name or body mentions an issue key (e.g. `ENG-142`)
-lights up that issue's **reality strip** — PR state, CI health, whether the change reached
-production, and review age — on the issue row and detail.
+lights up that issue's **reality strip** — PR state, CI health, whether a deployment carrying the
+merge commit succeeded, and review age — on the issue row and detail.
 
 ## 10. Optionally, let pull requests drive issue status
 

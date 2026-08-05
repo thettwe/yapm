@@ -5,6 +5,7 @@ import { Button } from '@yapm/ui/components/button'
 import {
   Menu,
   MenuContent,
+  MenuGroup,
   MenuGroupLabel,
   MenuLinkItem,
   MenuSeparator,
@@ -29,22 +30,28 @@ export function Switcher({ current }: { current: string }) {
         }
       />
       <MenuContent>
-        <MenuGroupLabel>Workspace</MenuGroupLabel>
-        <MenuLinkItem render={<Link to="/">{workspace?.name ?? 'Workspace'}</Link>} />
+        {/* Each label belongs to the group it names: a group label reads its group off context and
+            THROWS without one, which takes the whole popup down the moment it opens. */}
+        <MenuGroup>
+          <MenuGroupLabel>Workspace</MenuGroupLabel>
+          <MenuLinkItem render={<Link to="/">{workspace?.name ?? 'Workspace'}</Link>} />
+        </MenuGroup>
         {teams.length > 0 ? (
           <>
             <MenuSeparator />
-            <MenuGroupLabel>Teams</MenuGroupLabel>
-            {teams.map((team) => (
-              <MenuLinkItem
-                key={team.id}
-                render={
-                  <Link to="/teams/$teamId" params={{ teamId: team.id }}>
-                    {team.name}
-                  </Link>
-                }
-              />
-            ))}
+            <MenuGroup>
+              <MenuGroupLabel>Teams</MenuGroupLabel>
+              {teams.map((team) => (
+                <MenuLinkItem
+                  key={team.id}
+                  render={
+                    <Link to="/teams/$teamId" params={{ teamId: team.id }}>
+                      {team.name}
+                    </Link>
+                  }
+                />
+              ))}
+            </MenuGroup>
           </>
         ) : null}
       </MenuContent>

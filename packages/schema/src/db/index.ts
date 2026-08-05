@@ -213,6 +213,13 @@ export {
   seedDemoContent,
   seedWorkspace,
 } from './seed.js'
+export type { RedactedSsoProvider, SsoProviderRow } from './sso.js'
+export {
+  claimSsoProvider,
+  hasUsableSsoProvider,
+  listSsoProvidersRedacted,
+  redactSsoProvider,
+} from './sso.js'
 export type {
   AiDisclosureAudit,
   AiDisclosureAuditTable,
@@ -315,6 +322,8 @@ export type {
   SearchDocument,
   SearchDocumentTable,
   SearchDocumentUpdate,
+  SsoProvider,
+  SsoProviderTable,
   Team,
   TeamMembership,
   TeamMembershipTable,

@@ -8,6 +8,7 @@ import { pino } from 'pino'
 import sharp from 'sharp'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AuthService, SessionUser } from '../auth.js'
+import { unreachableSsoMethods } from '../testing/auth.js'
 import { createLocalStorageProvider } from './local.js'
 import { createFileRoutes, FILES_API_BASE } from './routes.js'
 
@@ -30,6 +31,9 @@ function fakeAuth(): AuthService {
     migrateAuth: () => Promise.resolve({ created: [], altered: [] }),
     issueSyncToken: () => Promise.resolve({ token: 'token', expiresAt: null }),
     verifySyncToken: () => Promise.resolve(undefined),
+    // The SSO management seam. Unreachable from this surface, and it throws rather than resolving so
+    // a route that ever started calling it would fail loudly here instead of silently passing.
+    ...unreachableSsoMethods(),
   }
 }
 

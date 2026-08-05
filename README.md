@@ -52,7 +52,10 @@ part of engineering metrics disappears.
 ## What works today
 
 Accounts, teams, and roles (admin / member / viewer — viewers free and unlimited) · email,
-GitHub, and OIDC sign-in, all free · a keyboard-first issue list with a command palette and
+GitHub, and **OIDC/SSO** sign-in, all free and unlimited — SSO registered by a workspace admin in
+*Settings → Single sign-on* against an email domain you prove you own by DNS, and offered on the
+login form only once it can actually complete ·
+a keyboard-first issue list with a command palette and
 filtering · an issue detail view with rich-text descriptions and comments · a kanban board ·
 time-boxed cycles with a progress view and automatic rollover of unfinished work ·
 a keyboard-first triage inbox for incoming issues (accept / decline / route, without a seventh status) ·

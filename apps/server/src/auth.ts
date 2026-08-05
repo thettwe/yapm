@@ -13,6 +13,30 @@ const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24
 // default is too short. The web client refreshes on a 401/403 from the sync endpoints.
 const SYNC_TOKEN_EXPIRATION = '1h'
 
+// Per-user cap the SSO plugin enforces at registration. Defence in depth only — registration is
+// admin-gated at `/api/v1/sso` — but it must never be `0`: the plugin reads a falsy limit as
+// "registration is disabled" and would refuse the admin surface too.
+const SSO_PROVIDERS_LIMIT = 5
+
+// The SSO plugin's provider-MANAGEMENT endpoints, removed from better-auth's router so the only way
+// to reach them is the workspace-admin-gated `/api/v1/sso`. These are PATHS, matched exactly by
+// better-auth's own `onRequest` after `normalizePathname` strips the query string and any trailing
+// slash — there is no prefix semantics here, which is precisely why the list is safe.
+//
+// NO CALLBACK OR SIGN-IN PATH MAY EVER BE ADDED. `/sign-in/sso`, `/sso/callback`,
+// `/sso/callback/:providerId` and every `/sso/saml2/*` path must stay reachable to an anonymous
+// browser mid-flow; disabling one of them breaks sign-in for everyone rather than locking anything
+// down. `auth.test.ts` asserts both halves of that.
+export const SSO_DISABLED_PATHS = [
+  '/sso/register',
+  '/sso/update-provider',
+  '/sso/delete-provider',
+  '/sso/providers',
+  '/sso/get-provider',
+  '/sso/request-domain-verification',
+  '/sso/verify-domain',
+] as const
+
 export interface VerifiedToken {
   sub: string
   // `exp` as epoch seconds when the JWT carries one. Absent is tolerated rather than
@@ -30,6 +54,45 @@ export interface SessionUser {
   email: string
 }
 
+export interface SsoOidcConfigInput {
+  clientId?: string
+  clientSecret?: string
+  discoveryEndpoint?: string
+  authorizationEndpoint?: string
+  tokenEndpoint?: string
+  userInfoEndpoint?: string
+  jwksEndpoint?: string
+  tokenEndpointAuthentication?: 'client_secret_post' | 'client_secret_basic'
+  scopes?: string[]
+  pkce?: boolean
+  skipDiscovery?: boolean
+}
+
+export interface SsoProviderRegistration {
+  providerId: string
+  issuer: string
+  domain: string
+  oidcConfig: SsoOidcConfigInput & { clientId: string; clientSecret: string }
+}
+
+export interface SsoProviderUpdate {
+  providerId: string
+  issuer?: string
+  domain?: string
+  oidcConfig?: SsoOidcConfigInput
+}
+
+// What the admin surface may learn about a provider it just registered. The plugin's own
+// `/sso/register` response carries the WHOLE row back, `oidcConfig.clientSecret` included; this
+// narrowing is where that stops, so no caller of `AuthService` is in a position to echo it.
+export interface SsoRegistrationResult {
+  providerId: string
+  domain: string
+  domainVerified: boolean
+  domainVerificationToken: string | null
+  redirectURI: string
+}
+
 // Only the surface the routes need — deliberately not exposing the raw `Auth<Options>`
 // instance, whose type is invariant in the concrete options and would leak everywhere.
 export interface AuthService {
@@ -38,6 +101,20 @@ export interface AuthService {
   migrateAuth: () => Promise<{ created: string[]; altered: string[] }>
   issueSyncToken: (headers: Headers) => Promise<SyncToken>
   verifySyncToken: (token: string) => Promise<VerifiedToken | undefined>
+  // The five provider-management calls `SSO_DISABLED_PATHS` removed from the router. Each takes the
+  // caller's headers because the plugin's own `sessionMiddleware` still runs inside them — the
+  // workspace-admin check at `/api/v1/sso` is an ADDITIONAL gate, never a replacement for a session.
+  registerSsoProvider: (
+    headers: Headers,
+    body: SsoProviderRegistration,
+  ) => Promise<SsoRegistrationResult>
+  updateSsoProvider: (headers: Headers, body: SsoProviderUpdate) => Promise<void>
+  deleteSsoProvider: (headers: Headers, providerId: string) => Promise<void>
+  requestSsoDomainVerification: (
+    headers: Headers,
+    providerId: string,
+  ) => Promise<{ domainVerificationToken: string }>
+  verifySsoDomain: (headers: Headers, providerId: string) => Promise<void>
 }
 
 // Not annotated `: BetterAuthOptions` — `satisfies` keeps the concrete plugin types so
@@ -70,8 +147,13 @@ export function buildAuthOptions(db: Kysely<DB>, env: Env) {
           audience: env.BETTER_AUTH_URL,
         },
       }),
-      sso(),
+      // `domainVerification` makes the plugin refuse sign-in against a provider whose domain has
+      // not been proven by a DNS TXT record — the claim "this instance may sign in @acme.com
+      // employees" becomes a claim about acme.com rather than about whoever clicked Register. It
+      // resolves the record with `node:dns` in this process, so it adds no container.
+      sso({ providersLimit: SSO_PROVIDERS_LIMIT, domainVerification: { enabled: true } }),
     ],
+    disabledPaths: [...SSO_DISABLED_PATHS],
   } satisfies BetterAuthOptions
 }
 
@@ -129,5 +211,33 @@ export function createAuth(db: Kysely<DB>, env: Env): AuthService {
     },
 
     verifySyncToken: verify,
+
+    registerSsoProvider: async (headers, body) => {
+      const result = await auth.api.registerSSOProvider({ headers, body })
+      return {
+        providerId: result.providerId,
+        domain: result.domain,
+        domainVerified: result.domainVerified ?? false,
+        domainVerificationToken: result.domainVerificationToken ?? null,
+        redirectURI: result.redirectURI,
+      }
+    },
+
+    updateSsoProvider: async (headers, body) => {
+      await auth.api.updateSSOProvider({ headers, body })
+    },
+
+    deleteSsoProvider: async (headers, providerId) => {
+      await auth.api.deleteSSOProvider({ headers, body: { providerId } })
+    },
+
+    requestSsoDomainVerification: async (headers, providerId) => {
+      const result = await auth.api.requestDomainVerification({ headers, body: { providerId } })
+      return { domainVerificationToken: result.domainVerificationToken }
+    },
+
+    verifySsoDomain: async (headers, providerId) => {
+      await auth.api.verifyDomain({ headers, body: { providerId } })
+    },
   }
 }

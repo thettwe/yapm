@@ -3,6 +3,7 @@ import type { DB } from '@yapm/schema/db'
 import {
   acceptInvite,
   bootstrapFirstAdmin,
+  hasUsableSsoProvider,
   inviteEmailTarget,
   lookupWorkspaceRole,
   resolvePmAudienceTeamIds,
@@ -58,13 +59,20 @@ export function createAuthRoutes(options: AuthRoutesOptions): Hono {
   })
 
   // The login UI reflects only configured methods (an unconfigured provider is absent, not
-  // paywalled). Report the enabled set from env so the client has a single source of truth.
-  // SSO is always available (the plugin is enabled and free); email/password is always on.
-  app.get('/api/auth-methods', (c) =>
+  // paywalled). Email/password is always on; `github` comes from env.
+  //
+  // `sso` is a fact about the DATABASE, not a constant: true only when some provider is registered
+  // AND its domain is verified, which is exactly the condition under which the plugin will complete
+  // a sign-in. A registered-but-unverified provider therefore shows no button rather than a button
+  // that fails — `/settings/sso` is where an admin is told why.
+  //
+  // Anonymous, like the `github` flag beside it and exactly as sensitive: it says a sign-in method
+  // exists, which the button would say anyway.
+  app.get('/api/auth-methods', async (c) =>
     c.json({
       emailPassword: true,
       github: env.GITHUB_CLIENT_ID !== undefined && env.GITHUB_CLIENT_SECRET !== undefined,
-      sso: true,
+      sso: await hasUsableSsoProvider(db),
     }),
   )
 

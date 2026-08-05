@@ -1078,6 +1078,56 @@ const authClient = createAuthClient({ plugins: [ ssoClient() ] })
 ```
 Then `npx auth migrate` (or `generate`). Docs tag the plugin `OIDC / OAuth2 / SSO / SAML`.
 
+#### 4.7.1 `sso()` is **not** safe bare — verified against `@better-auth/sso@1.6.24` on disk
+
+The snippet above is the plugin's own quickstart and it is the shape yapm shipped for a year. It is
+an **authorization hole** on any instance with open sign-up: `POST /sso/register` is gated by
+`sessionMiddleware` and a per-user count and **nothing else** (`use: [sessionMiddleware]` at
+index.mjs 1321, 1368, 1437, 1518, 1564, 1601, 2381), while `POST /sign-in/sso` resolves a provider
+**purely by the email domain the caller types**. So any account that can sign up can bind its own IdP
+to any domain. Registration must carry an application-level admin gate.
+
+The endpoints split in two, and the split is by **exact path, not by method** (`delete-provider` is a
+POST):
+
+| Must be admin-gated (management) | Must stay anonymous (sign-in / callback) |
+|---|---|
+| `/sso/register`, `/sso/update-provider`, `/sso/delete-provider`, `/sso/providers`, `/sso/get-provider`, `/sso/request-domain-verification`, `/sso/verify-domain` | `/sign-in/sso` (**not** under `/sso/`), `/sso/callback`, `/sso/callback/:providerId`, `/sso/saml2/callback/:providerId`, `/sso/saml2/sp/acs/:providerId`, `/sso/saml2/sp/slo/:providerId`, `/sso/saml2/logout/:providerId`, `/sso/saml2/sp/metadata` |
+
+Facts read out of the installed build, each of which contradicts a plausible guess:
+
+- **`disabledPaths` is an exact-match deny list, not a prefix.** better-auth's own `onRequest`
+  (`better-auth/dist/api/index.mjs:164`) compares `normalizePathname(req.url, basePath)` — query
+  string and trailing slash stripped — with `Array.includes`. `/sso/callback/acme` can never equal
+  `/sso/register`, so removing the seven management paths cannot catch a callback. It is enforced in
+  the **router only**: `auth.api.registerSSOProvider(...)` and its siblings keep working
+  server-side, so a first-party admin surface can delegate to them with all discovery and validation
+  intact.
+- **`providersLimit: 0` means "registration disabled"**, not "unlimited" (index.mjs:2552), and the
+  count is **per registering user** (`findMany where userId = <session user>`, index.mjs:2553), not
+  per instance. Default is 10.
+- **`domainVerification: { enabled: true }`** adds a `domainVerified` column, mints a token at
+  registration, exposes the two verification endpoints, and **refuses sign-in against an unverified
+  provider** (index.mjs 2002, 2874, 3025). It needs **no new service**: verification resolves
+  `_${tokenPrefix||"better-auth-token"}-${providerId}.<domain>` TXT with
+  `await import('node:dns/promises')` in-process (index.mjs 1559, 1630–1648), under **every**
+  comma-separated domain the provider carries. The token lives 7 days and
+  `/sso/request-domain-verification` returns the existing one while it is unexpired.
+- **Access control on update/delete/verify is `provider.userId === session.user.id`** with the
+  organization plugin absent (`checkProviderAccess`, index.mjs:1348), and `/sso/providers` lists only
+  rows the caller registered. For a single-workspace product that strands configuration when its
+  registering admin leaves.
+- **The redirect URI is `${baseURL}/sso/callback/${providerId}`** where `baseURL` already includes
+  the base path — i.e. `https://host/api/auth/sso/callback/<id>` (`getOIDCRedirectURI`,
+  index.mjs:2251).
+- **The client secret is stored as plain JSON text.** `ssoProvider.oidcConfig` is a `text` column
+  (not `jsonb`) and the plugin does **no** symmetric encryption of it; `/sso/register`'s own
+  response hands the whole row back, `clientSecret` included. Any first-party surface in front of it
+  has to redact.
+
+`ssoProvider`'s captured DDL, and the six facts about that table, are in `kysely-stack.md` §5.4
+(`getMigrations()` — auth tables at boot). yapm's applied shape is `openspec/changes/sso-admin-gating/design.md`.
+
 Being an IdP yourself — prefer **`@better-auth/oauth-provider`** (OAuth 2.1, PKCE-required, `authorization_code` / `refresh_token` / `client_credentials`, dynamic client registration, introspection + revocation, OIDC via the `openid` scope):
 
 ```ts title="auth.ts"

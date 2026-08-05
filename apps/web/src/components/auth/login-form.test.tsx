@@ -48,6 +48,32 @@ test('an unconfigured provider is absent, not shown as an upsell', () => {
   expect(screen.queryByText(/upgrade|license|seat/i)).not.toBeInTheDocument()
 })
 
+// The honesty half of admin-gating SSO. `/api/auth-methods` reports `sso` from the database — a
+// registered provider whose domain is verified — so the button exists exactly when the flow behind
+// it works. An instance with no provider showed a button that led nowhere; it now shows nothing,
+// which is the same absence an unconfigured GitHub gets.
+test('with SSO unavailable the button is absent and the provider divider collapses', () => {
+  mocks.methods = { emailPassword: true, github: false, sso: false }
+  render(<LoginForm />)
+
+  expect(screen.queryByTestId('login-sso')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('login-github')).not.toBeInTheDocument()
+  expect(screen.queryByText('or')).not.toBeInTheDocument()
+  expect(screen.getByTestId('login-submit')).toBeInTheDocument()
+})
+
+test('with SSO available the button renders and starts the provider flow', async () => {
+  mocks.methods = { emailPassword: true, github: false, sso: true }
+  render(<LoginForm />)
+
+  expect(screen.getByText('or')).toBeInTheDocument()
+  typeInto(/email/i, 'staff@acme.example')
+  fireEvent.click(screen.getByTestId('login-sso'))
+
+  await waitFor(() => expect(mocks.signInSso).toHaveBeenCalledTimes(1))
+  expect(mocks.signInSso).toHaveBeenCalledWith({ email: 'staff@acme.example', callbackURL: '/' })
+})
+
 test('submitting the form signs in with the entered credentials', async () => {
   render(<LoginForm />)
 

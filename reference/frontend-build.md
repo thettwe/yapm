@@ -1329,6 +1329,34 @@ Under TS 7 that is `error TS5102: Option 'baseUrl' has been removed`. **Drop `ba
 Also, that guide assumes the `create vite` multi-file `tsconfig.app.json` / `tsconfig.node.json` split;
 a single tsconfig per package (as in §1.8) is simpler and works.
 
+### 6.6 🚩 Base UI 1.6 group labels THROW outside their group, and only when the popup opens
+
+Read from `@base-ui/react@1.6.0`'s own source (`menu/group-label/MenuGroupLabel.js` →
+`menu/group/MenuGroupContext.js`), not from the docs:
+
+```js
+function useMenuGroupRootContext() {
+  const context = React.useContext(MenuGroupContext)   // no default value
+  if (context === undefined) {
+    throw new Error('Base UI: MenuGroupContext is missing. Menu group parts must be used within <Menu.Group> or <Menu.RadioGroup>.')
+  }
+  return context
+}
+```
+
+`Menu.GroupLabel` registers its id with the enclosing `Menu.Group` so the group can carry
+`aria-labelledby`. There is no fallback: a label rendered as a loose child of `Menu.Popup` throws.
+
+Two things make this expensive to find. The popup's children mount **only when it opens**, so the
+component renders, typechecks, lints and passes any test that asserts on the trigger; the throw
+lands in the router's error boundary and the whole menu — every unrelated item in it — disappears.
+And the failure is a render-time exception, not a missing `aria-labelledby`, so no accessibility
+check catches it either.
+
+**Rule: every `MenuGroupLabel` lives inside a `MenuGroup`**, even a group holding nothing else (the
+account menu's "Signed in as …" line is one). **Test rule: a menu test must OPEN the menu** —
+`apps/web/src/components/header-menus.test.tsx` does exactly that for the two header menus.
+
 ---
 
 ## 7. Vitest 4.1 + Playwright 1.61

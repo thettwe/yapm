@@ -6,9 +6,12 @@ export interface AuthMethods {
   sso: boolean
 }
 
-// Email/password is always available; providers appear only when configured. Optimistic
-// default keeps the form usable if the probe is slow or fails.
-const DEFAULT_METHODS: AuthMethods = { emailPassword: true, github: false, sso: true }
+// Email/password is always available; a PROVIDER is absent until the instance says it is present.
+// Both `github` and `sso` therefore default to false and are read as an explicit `true`: a probe
+// that is slow, fails, or answers a shape this build does not understand renders no provider button
+// rather than one that leads nowhere. `/api/auth-methods` reports `sso` from the database — at
+// least one registered provider whose domain is verified — so a button here means a working flow.
+const DEFAULT_METHODS: AuthMethods = { emailPassword: true, github: false, sso: false }
 
 function asMethods(value: unknown): AuthMethods {
   if (typeof value !== 'object' || value === null) return DEFAULT_METHODS
@@ -16,7 +19,7 @@ function asMethods(value: unknown): AuthMethods {
   return {
     emailPassword: record.emailPassword !== false,
     github: record.github === true,
-    sso: record.sso !== false,
+    sso: record.sso === true,
   }
 }
 

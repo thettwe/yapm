@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { computeDeliverySignal, computeDivergence, type LinkedEntities } from './delivery.js'
+import {
+  assembleLinkedEntities,
+  computeDeliverySignal,
+  computeDivergence,
+  type IssueLinkRow,
+  type LinkedEntities,
+} from './delivery.js'
 import { evaluateFilter, type IssueView, matchesFilter } from './filter.js'
 
 const issue = (over: Partial<IssueView> = {}): IssueView => ({
@@ -149,6 +155,38 @@ describe('merged-not-deployed, with the reserved slot filled', () => {
         (r) => r.title,
       ),
     ).toEqual(['Waiting'])
+  })
+
+  // Two merged pull requests on one issue, an older one shipped and the newest not. The signal's
+  // `pr` axis reports the NEWEST, so the deploy axis has to report the newest too — read off the
+  // issue as a whole, the old deploy would hide a change nobody has released.
+  it('still matches when an OLDER linked PR shipped but the newest one did not', () => {
+    const links: IssueLinkRow[] = [
+      {
+        pullRequest: {
+          state: 'merged',
+          openedAt: 1_000,
+          repo: 'acme/app',
+          mergeCommitSha: 'shipped',
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+      {
+        pullRequest: {
+          state: 'merged',
+          openedAt: 8_000,
+          repo: 'acme/app',
+          mergeCommitSha: 'waiting',
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+    ]
+    const linked = assembleLinkedEntities(links, [
+      { repo: 'acme/app', sha: 'shipped', deployedAt: 5_000 },
+    ])
+    expect(
+      matchesFilter(issue(), { delivery: ['merged-not-deployed'] }, { linkedFor: () => linked }),
+    ).toBe(true)
   })
 
   it('does not match a merged change that is still open rather than undeployed', () => {

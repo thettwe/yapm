@@ -2,6 +2,7 @@ import type { ReadonlyJSONValue } from '@rocicorp/zero'
 import { useQuery, useZero } from '@rocicorp/zero/react'
 import { useNavigate } from '@tanstack/react-router'
 import {
+  buildDeploymentIndex,
   DELIVERY_PREDICATES,
   type DeliveryPredicate,
   ISSUE_PRIORITIES,
@@ -126,7 +127,12 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
   // merged-PR match is a computed join, so the list needs the team's deployments to evaluate
   // `merged-not-deployed` and to render the strip's deploy glyph.
   const [deployments] = useQuery(queries.deployments.byTeam({ teamId }))
-  const deployRows = deployments as readonly TeamDeploymentRow[]
+  // Indexed once for the whole list, not rescanned per row: the join is `repo + merge commit`, so
+  // one pass over the team's deployments serves every issue (design §Risks).
+  const deployIndex = useMemo(
+    () => buildDeploymentIndex(deployments as readonly TeamDeploymentRow[]),
+    [deployments],
+  )
 
   const team = teams.find((candidate) => candidate.id === teamId)
   const teamKey = team?.key ?? ''
@@ -166,10 +172,10 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
           : null,
         linked: linkedEntitiesFor(
           (issue as { issueLinks?: readonly LinkedIssueRow[] }).issueLinks,
-          deployRows,
+          deployIndex,
         ),
       })),
-    [issuesRaw, deployRows],
+    [issuesRaw, deployIndex],
   )
 
   const onOpenIssue = useCallback(

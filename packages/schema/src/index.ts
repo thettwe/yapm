@@ -228,6 +228,7 @@ export {
 export type {
   CiHealth,
   DeliverySignal,
+  DeploymentIndex,
   DivergenceKind,
   IssueLinkRow,
   LinkedEntities,
@@ -237,6 +238,7 @@ export type {
 } from './zero/delivery.js'
 export {
   assembleLinkedEntities,
+  buildDeploymentIndex,
   ciHealthFromConclusion,
   computeDeliverySignal,
   computeDivergence,

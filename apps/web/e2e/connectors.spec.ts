@@ -95,6 +95,64 @@ test('a linked merged PR lights up the reality strip and divergence flag on row 
   await expect(panel.getByText(DIVERGENCE).first()).toBeVisible()
 })
 
+test('a deployment carrying the merge commit lights the deploy glyph, and Delivery narrows to what has not shipped', async ({
+  page,
+}) => {
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  const shipped = unique('Shipped change')
+  const waiting = unique('Waiting change')
+  await createIssue(page, shipped)
+  await createIssue(page, waiting)
+
+  const db = openDb()
+  try {
+    const shippedIssue = await findIssue(db, shipped)
+    await seedLinkedPr(db, {
+      teamId: shippedIssue.teamId,
+      issueId: shippedIssue.id,
+      repo: 'acme/app',
+      prNumber: 11,
+      prState: 'merged',
+      ciConclusion: 'success',
+      mergeCommitSha: 'aaaa1111',
+      deployment: { sha: 'aaaa1111' },
+    })
+    const waitingIssue = await findIssue(db, waiting)
+    await seedLinkedPr(db, {
+      teamId: waitingIssue.teamId,
+      issueId: waitingIssue.id,
+      repo: 'acme/app',
+      prNumber: 12,
+      prState: 'merged',
+      ciConclusion: 'success',
+      mergeCommitSha: 'bbbb2222',
+      // A deployment that carried somebody ELSE's commit is not a deployment of this change.
+      deployment: { sha: 'cccc3333' },
+    })
+  } finally {
+    await db.close()
+  }
+
+  // The deploy glyph is named in the strip's accessible summary — and only for the change whose
+  // merge commit a deployment actually carried.
+  const shippedStrip = row(page, shipped).locator('[data-slot="reality-strip"]')
+  await expect(shippedStrip).toHaveAttribute('aria-label', /Deployed/, { timeout: 30_000 })
+  const waitingStrip = row(page, waiting).locator('[data-slot="reality-strip"]')
+  await expect(waitingStrip).toBeVisible({ timeout: 30_000 })
+  await expect(waitingStrip).not.toHaveAttribute('aria-label', /Deployed/)
+
+  // Apply Delivery -> "Merged, not deployed" with the keyboard alone; only the unshipped row
+  // survives the filter that shipped empty until this change.
+  await page.getByRole('button', { name: 'Filter by Delivery' }).focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('menuitem', { name: 'Merged, not deployed' }).press('Enter')
+  await page.keyboard.press('Escape')
+  await expect(row(page, waiting)).toBeVisible({ timeout: 20_000 })
+  await expect(row(page, shipped)).toHaveCount(0)
+})
+
 test('the reality strip renders in all three presets, light and dark', async ({ page }) => {
   await enterApp(page)
   await openTeamIssues(page)

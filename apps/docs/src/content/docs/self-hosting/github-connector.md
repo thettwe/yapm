@@ -100,10 +100,20 @@ or environment variable.
 
 **Expect a sparse first week.** Deployments ingested before you upgraded have no recorded commit and
 no success timestamp, and no migration can invent one — the moment of a past success is exactly what
-was being overwritten. The ETag reconcile sweep (`GITHUB_RECONCILE_CRON`, every 15 minutes by
-default) backfills the commit for the deployments GitHub still lists per repository, and stamps the
-success moment for those whose newest status is still `success`. Anything older stays unknown and
-reads as not deployed. From the upgrade forward, every new deployment records both.
+was being overwritten.
+
+What heals it is the reconcile sweep (`GITHUB_RECONCILE_CRON`, every 15 minutes by default), which
+re-lists each mapped repository's 100 most recent deployments. That poll is *conditional*: normally
+it re-runs only when the repository's deployment list has changed, so the upgrade drops the stored
+deployment-list marker once to force exactly one full re-poll per repository. On that sweep, yapm
+backfills the commit for every deployment GitHub still lists, and stamps the success moment for
+those whose **newest** status is still `success`.
+
+Two things stay unknown, permanently and by design: a deployment GitHub no longer lists, and one
+that succeeded and was already superseded (`inactive`) before the sweep saw it — the sweep can only
+read the newest status, and a past success is exactly what `auto_inactive` overwrote. Both read as
+not deployed. From the upgrade forward, every new deployment records both facts as it happens, from
+the webhook rather than the sweep.
 
 ## 4. Subscribe to events
 

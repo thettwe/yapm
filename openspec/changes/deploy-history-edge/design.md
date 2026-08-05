@@ -317,15 +317,54 @@ drift here anyway.
 consumes what this change stores, so it should take 28; if both branches claim 27 the conflict lands
 in `ROADMAP.md` and nowhere else, and is a one-line renumber.
 
-**No new e2e, and the conditional in task 6.11 resolved to "no".** The shipped `issues.spec.ts` has
-no Delivery-menu test, so 6.11's clause would have had one written — except that the only thing
-browser-reachable here is menu *keyboard operability*, and `FilterMenu` is a thin wrapper over the
-shared `Menu`/`MenuTrigger`/`MenuItem` primitives from `packages/ui` whose keyboard behaviour is the
-primitive's, not this change's. A Playwright test over it would assert the component library. The
-signal itself is unreachable: no work-graph row can exist in the e2e stack without a configured
-GitHub App and a webhook, and the suite has no work-graph seed — the same reason change 14 shipped
-an e2e covering only its settings toggle. The requirement this change takes instead is that
-`issues.spec.ts` passes **unchanged**, which CI is the first place to prove.
+**An e2e leg, because PROCESS §3's big-feature rule asks for one and the suite can reach this.**
+The first pass claimed the deploy signal was not browser-reachable — "no work-graph row can exist
+without a configured GitHub App, and the suite has no work-graph seed". That was **false**:
+`apps/web/e2e/db.ts` has shipped `seedLinkedPr` since `connectors`, writing the work-graph tables
+straight to Postgres precisely because they are Zero-synced and replicate to the signed-in client
+with no ingest path, and `connectors.spec.ts` already asserts the reality strip over it. Change 14's
+precedent does not transfer: its toggle really had nothing seedable behind it. This change touches
+the synced schema, the connector write path and the signature reality-strip UI — three of the four
+triggers — so the third tier is owed and is now written.
+
+`seedLinkedPr` gained a `merge_commit_sha` on the pull request and an optional same-repo
+`deployment` insert (`state: 'success'` with a `sha` and a `deployed_at`), which is exactly the
+shape the join reads. `connectors.spec.ts` gains one test over two seeded merged issues — one whose
+deployment carries its merge commit, one whose deployment carries somebody else's — asserting the
+deploy glyph appears in the strip's accessible name for the first and not the second, then applying
+**Delivery → Merged, not deployed** by keyboard alone and asserting only the unshipped row survives.
+That is the whole change end to end in a browser: the column, the join, the glyph and the filter
+that shipped empty. `issues.spec.ts` still has to pass unchanged.
+
+**The deploy axis is keyed to the pull request it came from, not to the issue.** The first pass
+collected every matching deployment into one issue-level list while the `pr` axis kept reporting the
+*latest* pull request alone. On an issue with two linked merges — an older one shipped, the newest
+not — the two axes then described different changes: the strip said "Deployed" and
+`merged-not-deployed` hid the row that most needed listing. `LinkedEntities.pullRequests[i]` now
+carries an optional `deployedAt`, `assembleLinkedEntities` fills it inside the loop iteration that
+already holds the pull request, and `computeDeliverySignal` reads the deploy axis off the same
+`latestPr` the `pr` axis reports. The field is `number | null | undefined` and the three values are
+distinct on purpose: `undefined` means the caller handed over an issue-level list instead (every
+hand-built caller and every pre-deploy-axis test), which still rolls up to the earliest, so nothing
+that compiled before compiles differently now.
+
+**The join is an index built once per list, not a rescan per row.** §Risks promised "a single pass
+over the team's deployments, not one per row", and the first pass delivered the opposite: the
+always-mounted issue list called `assembleLinkedEntities` per issue and each call walked the team's
+whole deployment history, i.e. O(issues x deployments) on every render of a filtered list.
+`buildDeploymentIndex(rows)` builds `repo + sha -> earliest success` once; `assembleLinkedEntities`
+accepts either that index or the raw array (issue-detail and the tests keep passing the array), and
+`issue-list.tsx` memoizes the index alongside the query. Same answers, O(deployments + issues).
+
+**Migration `0023` drops the stored deployment-list ETags.** §D5 says "the reconcile cron is the
+backfill", but `reconcileDeployments` is a conditional GET keyed `deployments:<repo>`: on an
+unchanged list GitHub answers `304` and the sweep emits nothing, so a pre-upgrade row would have
+waited for the repository's *next* deployment to acquire its commit — the backfill the docs promise
+would not have run at all. The migration now deletes only the `deployments:*` keys from
+`connector_installation.etags`, which costs one unconditional re-poll per mapped repo on the first
+sweep after the upgrade and leaves every other resource's ETag alone. What still cannot heal is
+stated on the connector page rather than only here: a deployment GitHub no longer lists, and a
+success already superseded by `auto_inactive` before the sweep saw it, both stay unknown.
 
 ### What ran, and what CI is the first place to execute
 
@@ -338,9 +377,11 @@ and the smoke test because the open PR already runs the whole suite): task 1.5's
 apply, task 8.2's Postgres suites, and task 8.3's compose smoke test. That means **CI is the first
 place migration `0023` executes against a real database and the first place `schema-drift.test.ts`
 compares the three new columns to live Postgres** — 393 pg-gated tests are skipped in a DB-less run.
-The migration is three `alter table ... add column` statements and one `create index`, matching the
-shape of `0011` and `0019`, and the drift expectations were written to match (`nullable: true,
-hasDefault: false` for all three). If CI disagrees, that is the honest place to find out.
+The migration is three `alter table ... add column` statements, one `create index` and (from the
+review round) one `update connector_installation` that drops the stored deployment-list ETags,
+matching the shape of `0011` and `0019`, and the drift expectations were written to match
+(`nullable: true, hasDefault: false` for all three columns). If CI disagrees, that is the honest
+place to find out.
 
 **Second pass (tests and docs).** Ran locally and green: `pnpm turbo run typecheck
 '--filter=...[origin/main]'`, `pnpm lint`, `pnpm turbo run test '--filter=...[origin/main]'`,
@@ -349,3 +390,10 @@ same instruction: the live-stack migration apply (1.5), the Postgres suites (8.2
 test (8.3) and Playwright. Task 8.1 asks for the full `build` as well; the docs build was run
 because the docs are this pass's deliverable, and the rest of `build` is left to the open PR's CI
 rather than duplicated locally.
+
+**Third pass (review fixes).** Ran locally and green: `pnpm turbo run typecheck
+'--filter=...[origin/main]'`, `pnpm lint`, `pnpm turbo run test '--filter=...[origin/main]'`
+(schema 787, ui 256, server 370, web 446 passing), `node scripts/check-boundaries.mjs`. The new e2e
+leg and migration `0023`'s ETag reset both execute for the first time in CI, for the same reason
+everything else Docker-shaped does: the fix pass runs fast gates only and pushes so CI overlaps the
+next review round.

@@ -44,7 +44,7 @@ ignored.
 
 A merged pull request counts as deployed when **a deployment in the same repository carried its merge
 commit and succeeded**. Nothing looser: it is an exact commit match, not "a deploy happened after the
-merge". The timestamp shown is the *first* such success.
+merge". The moment recorded is the *first* such success — the strip shows that it happened, not when.
 
 That fact is recorded once and never rewritten. GitHub marks a deployment `inactive` as soon as the
 next one supersedes it, so the deployment's *current state* changes constantly — but the moment it

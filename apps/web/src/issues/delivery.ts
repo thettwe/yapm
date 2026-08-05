@@ -2,6 +2,7 @@ import {
   assembleLinkedEntities,
   computeDeliverySignal,
   computeDivergence,
+  type DeploymentIndex,
   type DivergenceKind,
   type IssueLinkRow,
   type IssueStatus,
@@ -32,10 +33,11 @@ export const DIVERGENCE_LABEL: Record<DivergenceKind, string> = {
 // Assemble the linked entities for an issue from its raw synced links (empty for an unlinked
 // issue). Kept separate so a row can memoize it once and reuse it for both the strip and the
 // reality-aware filter's `linkedFor`. `deployments` is the whole team's deployment rows — the same
-// list for every row, so the caller passes one array and this walks it, never re-querying per row.
+// data for every row, so a LIST passes the pre-built `DeploymentIndex` (one pass over the team's
+// deployments, shared by every row) and a single-issue surface can pass the raw array.
 export function linkedEntitiesFor(
   links: readonly LinkedIssueRow[] | undefined,
-  deployments?: readonly TeamDeploymentRow[],
+  deployments?: readonly TeamDeploymentRow[] | DeploymentIndex,
 ): LinkedEntities {
   return assembleLinkedEntities(links ?? [], deployments)
 }

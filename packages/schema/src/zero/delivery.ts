@@ -25,7 +25,17 @@ export interface DeliverySignal {
 // empty for an unlinked issue, which is why the signal is null there. `deployments` is optional,
 // so every caller that predates the deploy axis keeps compiling and keeps its result.
 export interface LinkedEntities {
-  readonly pullRequests?: readonly { readonly state: PrState; readonly openedAt: number }[]
+  readonly pullRequests?: readonly {
+    readonly state: PrState
+    readonly openedAt: number
+    // The earliest deployment that carried THIS pull request's merge commit, or null when none
+    // did. Keyed per pull request rather than rolled up onto the issue: the `pr` axis reports the
+    // LATEST pull request, so a deploy axis flattened over every linked one would let an older,
+    // shipped change vouch for a newer one that never shipped — the strip would claim "Deployed"
+    // and `merged-not-deployed` would hide the row. `undefined` means the producer did not key
+    // deployments at all, and the flat `deployments` list below is read instead.
+    readonly deployedAt?: number | null
+  }[]
   readonly ciRuns?: readonly { readonly health: CiHealth }[]
   readonly reviews?: readonly { readonly state: ReviewState; readonly submittedAt: number }[]
   readonly deployments?: readonly { readonly deployedAt: number }[]
@@ -55,6 +65,19 @@ export function ciHealthFromConclusion(conclusion: CiConclusion): CiHealth {
     default:
       return 'pending'
   }
+}
+
+// The EARLIEST of a flat list: the moment the change first reached production, not the most recent
+// redeploy of the same commit. Only read for callers that hand over an issue-level list rather
+// than per-pull-request timestamps.
+function earliestDeployedAt(
+  deployments: readonly { readonly deployedAt: number }[],
+): number | null {
+  return deployments.reduce<number | null>(
+    (earliest, deploy) =>
+      earliest === null || deploy.deployedAt < earliest ? deploy.deployedAt : earliest,
+    null,
+  )
 }
 
 // Rolls up many checks into one dot: any failing dominates, then any pending, else passing.
@@ -101,13 +124,13 @@ export function computeDeliverySignal(
         ? Date.now() - latestPr.openedAt
         : null
 
-  // The EARLIEST match: the moment the change first reached production, not the most recent
-  // redeploy of the same commit.
-  const deployedAt = (linked.deployments ?? []).reduce<number | null>(
-    (earliest, deploy) =>
-      earliest === null || deploy.deployedAt < earliest ? deploy.deployedAt : earliest,
-    null,
-  )
+  // The deploy axis reads the SAME pull request the `pr` axis reports. A producer that keys
+  // deployments per pull request (`assembleLinkedEntities`) always sets the field, so a `null`
+  // there means "this change did not ship" and must not be replaced by an older linked PR's
+  // deployment. `undefined` means the caller handed over an issue-level list instead, which still
+  // rolls up to the earliest.
+  const perPr = latestPr === undefined ? undefined : latestPr.deployedAt
+  const deployedAt = perPr !== undefined ? perPr : earliestDeployedAt(linked.deployments ?? [])
 
   return {
     pr,
@@ -162,20 +185,61 @@ export interface TeamDeploymentRow {
   readonly deployedAt?: number | null
 }
 
+// The §D3 join in index form: `repo + sha -> the earliest moment a deployment carrying that commit
+// succeeded`. Built ONCE per team deployment list, so a list of N issues costs O(deployments +
+// issues) rather than rescanning the team's whole deploy history per row — the cost design §Risks
+// promises ("a single pass over the team's deployments, not one per row").
+export type DeploymentIndex = ReadonlyMap<string, number>
+
+// A space separator, because neither a repo full name (`owner/name`) nor a git sha can contain
+// one — so two distinct (repo, sha) pairs can never collide into a single key.
+function deploymentKey(repo: string, sha: string): string {
+  return `${repo} ${sha}`
+}
+
+export function buildDeploymentIndex(deployments: readonly TeamDeploymentRow[]): DeploymentIndex {
+  const index = new Map<string, number>()
+  for (const deploy of deployments) {
+    // A deployment that carries the commit but never succeeded is not a deployment of it, and one
+    // whose commit was never recorded (every row predating the deploy-history migration) cannot be
+    // joined to anything.
+    if (deploy.deployedAt == null || !deploy.sha) continue
+    const key = deploymentKey(deploy.repo, deploy.sha)
+    const earliest = index.get(key)
+    if (earliest === undefined || deploy.deployedAt < earliest) index.set(key, deploy.deployedAt)
+  }
+  return index
+}
+
+function isDeploymentIndex(
+  value: readonly TeamDeploymentRow[] | DeploymentIndex,
+): value is DeploymentIndex {
+  return typeof (value as DeploymentIndex).get === 'function'
+}
+
 // Assembles a `LinkedEntities` for one issue from its `issueLinks -> pullRequest -> {ciChecks,
 // reviews}` related rows, mapping stored CI conclusions to the strip's health dots. This is
 // the `connectors`-owned producer the seam consumes; feeding an empty list yields `{}`, i.e.
 // the null signal. Pure and provider-neutral.
 //
-// `deployments` is the team's deployment rows, optional: omitting it yields exactly today's
-// result. The join is exact and same-repo — a merged PR's `mergeCommitSha` against a deployment's
-// `sha` — with NO `headSha` fallback: a deploy carrying the head commit deployed the branch, not
-// the merge, and matching it would reintroduce the false-positive class design §D3 rejects.
+// `deployments` is the team's deployment rows — or the same rows pre-indexed by
+// `buildDeploymentIndex`, which is what a list of many issues passes so the index is built once
+// instead of per row. Optional: omitting it yields exactly today's result. The join is exact and
+// same-repo — a merged PR's `mergeCommitSha` against a deployment's `sha` — with NO `headSha`
+// fallback: a deploy carrying the head commit deployed the branch, not the merge, and matching it
+// would reintroduce the false-positive class design §D3 rejects. The match is recorded ON the pull
+// request that produced it, never flattened to the issue.
 export function assembleLinkedEntities(
   links: readonly IssueLinkRow[],
-  deployments?: readonly TeamDeploymentRow[],
+  deployments?: readonly TeamDeploymentRow[] | DeploymentIndex,
 ): LinkedEntities {
-  const pullRequests: { state: PrState; openedAt: number }[] = []
+  const index =
+    deployments === undefined
+      ? undefined
+      : isDeploymentIndex(deployments)
+        ? deployments
+        : buildDeploymentIndex(deployments)
+  const pullRequests: { state: PrState; openedAt: number; deployedAt: number | null }[] = []
   const ciRuns: { health: CiHealth }[] = []
   const reviews: { state: ReviewState; submittedAt: number }[] = []
   const deployed: { deployedAt: number }[] = []
@@ -183,20 +247,18 @@ export function assembleLinkedEntities(
   for (const link of links) {
     const pr = link.pullRequest
     if (!pr) continue
-    pullRequests.push({ state: pr.state, openedAt: pr.openedAt })
+    const deployedAt =
+      index !== undefined && pr.state === 'merged' && pr.mergeCommitSha && pr.repo
+        ? (index.get(deploymentKey(pr.repo, pr.mergeCommitSha)) ?? null)
+        : null
+    pullRequests.push({ state: pr.state, openedAt: pr.openedAt, deployedAt })
     for (const check of pr.ciChecks ?? []) {
       ciRuns.push({ health: ciHealthFromConclusion(check.conclusion) })
     }
     for (const r of pr.reviews ?? []) {
       reviews.push({ state: r.state, submittedAt: r.submittedAt })
     }
-    if (pr.state !== 'merged' || !pr.mergeCommitSha || !pr.repo) continue
-    for (const deploy of deployments ?? []) {
-      if (deploy.repo !== pr.repo || deploy.sha !== pr.mergeCommitSha) continue
-      // A deployment that carries the commit but never succeeded is not a deployment of it.
-      if (deploy.deployedAt == null) continue
-      deployed.push({ deployedAt: deploy.deployedAt })
-    }
+    if (deployedAt !== null) deployed.push({ deployedAt })
   }
 
   return { pullRequests, ciRuns, reviews, deployments: deployed }

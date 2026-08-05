@@ -147,13 +147,14 @@
       two rows report the same strip width.
 - [x] 6.11 PROCESS §3's big-feature rule, judged honestly: this touches the synced schema, the
       connector write path, and the signature reality-strip UI — three of the four triggers, so the
-      rule asks for all three tiers. State plainly in design.md that **the deployment signal is not
-      reachable from e2e**: no work-graph row can be created without a configured GitHub App, and
-      the suite has no work-graph seed (change 14's `auto-status.spec.ts` covers only its toggle for
-      the same reason). The e2e leg is therefore what the browser can actually reach — the Delivery
-      filter menu still lists `merged-not-deployed` and is still keyboard-operable — asserted by the
-      shipped `issues.spec.ts` passing unchanged, plus a new keyboard assertion only if the existing
-      spec does not already cover the Delivery menu.
+      rule asks for all three tiers. The signal IS browser-reachable: `apps/web/e2e/db.ts`'s
+      `seedLinkedPr` writes the Zero-synced work-graph tables straight to Postgres and
+      `connectors.spec.ts` already asserts the strip over it. Extend that seeder with the PR's
+      `merge_commit_sha` and an optional same-repo successful `deployment`, and add one spec over
+      two merged issues — one whose deployment carries its merge commit, one whose does not —
+      asserting the deploy glyph in the strip's accessible name for the first only, then applying
+      **Delivery → Merged, not deployed** by keyboard and asserting only the unshipped row survives.
+      `issues.spec.ts` must still pass unchanged.
 
 ## 7. Documentation
 
@@ -170,10 +171,12 @@
       entity that change failure rate and MTTR need, and deploy-driven status transitions remain
       out of scope for the reason change 14 gave.
 - [x] 7.4 `DESIGN.md` §Reality strip (line 45) — the slot's contents, now four signals not three.
-- [x] 7.5 Check `README.md`, `TECHSTACK.md`, `.env.example` and `reference/` for staleness —
+- [x] 7.5 `apps/docs/src/content/docs/index.md` — the landing page's delivery-signals bullet
+      enumerates the strip's signals in the same sentence `README.md` does; it lists four now.
+- [x] 7.6 Check `README.md`, `TECHSTACK.md`, `.env.example` and `reference/` for staleness —
       expected to be none (no dependency, no env var, no container, no new permission). Say so
       explicitly rather than skipping the check.
-- [x] 7.6 `pnpm --filter @yapm/docs build` passes.
+- [x] 7.7 `pnpm --filter @yapm/docs build` passes.
 
 ## 8. Verification
 

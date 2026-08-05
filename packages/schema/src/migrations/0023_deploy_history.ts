@@ -1,4 +1,4 @@
-import type { Kysely } from 'kysely'
+import { type Kysely, sql } from 'kysely'
 
 // Deployment stops being a per-environment current state and becomes a history.
 //
@@ -28,6 +28,25 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .on('deployment')
     .columns(['team_id', 'deployed_at'])
     .execute()
+
+  // The reconcile sweep IS the backfill (design §D5) — but it is a conditional GET gated by a
+  // stored per-resource ETag, so on an unchanged deployment list GitHub answers `304`, the sweep
+  // emits no mutation, and the commit and the success moment would only fill in on a repository's
+  // NEXT deployment. Dropping the stored deployment-list ETags costs one unconditional re-poll per
+  // mapped repo on the first sweep after the upgrade, which is what makes the backfill real rather
+  // than promised. Every other resource's ETag is left alone: nothing about a PR or a check run
+  // changed here.
+  await sql`
+    update connector_installation
+    set etags = coalesce(
+      (
+        select jsonb_object_agg(key, value)
+        from jsonb_each(etags)
+        where key not like 'deployments:%'
+      ),
+      '{}'::jsonb
+    )
+  `.execute(db)
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {

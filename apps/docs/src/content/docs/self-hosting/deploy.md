@@ -95,9 +95,33 @@ curl -s localhost:3000/readyz | jq '.checks[] | select(.name == "configuration")
   "name": "configuration",
   "ok": true,
   "durationMs": 0.04,
-  "detail": "shipped defaults still in use: BETTER_AUTH_SECRET"
+  "detail": "1 shipped default still in use; a workspace admin can read which at /api/v1/configuration"
 }
 ```
+
+**A count, not the names — deliberately.** `/readyz` has no authentication, and the proxy stanza
+above forwards it to the internet like every other path. Naming the variables there would hand any
+passer-by a confirmed list of which published secrets this host is still running on. The count is the
+signal an operator needs; the names are one admin-gated request away, from a browser tab signed in as
+the workspace admin (or with that session's cookie):
+
+```bash
+curl -s --cookie "$COOKIE" https://yapm.example.com/api/v1/configuration
+```
+
+```json
+{
+  "shippedDefaults": [
+    {
+      "name": "BETTER_AUTH_SECRET",
+      "remedy": "set BETTER_AUTH_SECRET to 32 random bytes; it encrypts the JWKS private key"
+    }
+  ]
+}
+```
+
+Anyone who is not an admin gets `401`/`403` and learns nothing. Values are never returned, by either
+surface — a response you can paste into an issue must not publish the secret it is complaining about.
 
 The `configuration` entry is deliberately **non-gating**: it reports, it never fails readiness. An
 instance holding a published secret is misconfigured, not unable to serve, and taking it out of

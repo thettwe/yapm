@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { BACKOFF_CAP_MS } from './backoff'
 
@@ -120,6 +120,55 @@ test('a response without a usable zeroCacheUrl is a failure, never a silent defa
 
   expect(mocks.options).toEqual([])
   expect(screen.getByTestId('runtime-config-failed')).toHaveTextContent(RUNTIME_CONFIG_URL)
+})
+
+// This surface replaced the shipped sync-unavailable one for a server that is unreachable at page
+// load, so it owes the same affordances: a landmark, a polite live region, and a way out that does
+// not require a reload. Matched to `SyncUnavailable` in `components/authenticated.tsx`.
+test('the failure surface is a landmark with a live region and a keyboard-reachable retry', async () => {
+  vi.useFakeTimers()
+  serve({}, 500)
+  render(<App />)
+
+  for (let step = 0; step < 10; step += 1) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(BACKOFF_CAP_MS + 1_000)
+    })
+  }
+
+  const failed = screen.getByTestId('runtime-config-failed')
+  expect(failed.tagName).toBe('MAIN')
+  const live = screen.getByRole('status')
+  expect(live).toHaveAttribute('aria-live', 'polite')
+  expect(live).toHaveTextContent(RUNTIME_CONFIG_URL)
+
+  // Pressing it takes the answer of a config that is now being served, without a reload.
+  serve({ zeroCacheUrl: 'https://d.example' })
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Retry now' }))
+    await vi.advanceTimersByTimeAsync(0)
+  })
+
+  expect(screen.getByTestId('app')).toBeInTheDocument()
+  expect(mocks.options.at(-1)?.cacheURL).toBe('https://d.example')
+})
+
+test('the boot wait is announced politely, a beat after it starts', async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => new Promise<Response>(() => {})),
+  )
+  render(<App />)
+
+  // The region exists from the first paint — one added at the same moment as its text is not
+  // reliably announced — and says nothing while there is nothing true to say.
+  expect(screen.getByRole('status')).toBeEmptyDOMElement()
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1_500)
+  })
+  expect(screen.getByRole('status')).toHaveTextContent('Loading…')
 })
 
 // The grep in the falsifiable-check list, as a test that stays green rather than a one-off. On

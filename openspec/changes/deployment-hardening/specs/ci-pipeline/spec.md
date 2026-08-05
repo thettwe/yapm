@@ -49,7 +49,18 @@ file is a CI failure rather than a silent production defect.
 - **WHEN** a change breaks boot ordering, migration-on-boot, or the sync pipeline
 - **THEN** the compose smoke test fails before the change can merge
 
+The smoke test SHALL also assert the **boot composition** that no unit test can reach: that the
+running instance's readiness report carries the configuration entry and reports no shipped defaults
+in use, and that a container started with a shipped-default secret under `NODE_ENV=production` exits
+refusing to start.
+
 #### Scenario: The documented quickstart mechanism is the tested one
 
 - **WHEN** the documented quickstart stops passing the operator's environment file to Compose
 - **THEN** the smoke path no longer receives the generated secrets and CI fails
+
+#### Scenario: The shipped-default gate is wired into boot, not merely implemented
+
+- **WHEN** the configuration readiness entry or the boot-time refusal is dropped from the server's
+  composition while its pure functions still pass their unit tests
+- **THEN** the compose smoke test fails

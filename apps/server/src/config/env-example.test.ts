@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { envSchema } from './env.js'
 
@@ -195,25 +195,81 @@ describe('.env.example and the Zod env schema', () => {
   })
 })
 
-// The MECHANISM behind the quickstart, not its prose. `-f docker/…` makes `docker/` Compose's
-// project directory, so a documented command without `--env-file` reads no env file at all and
-// applies every published default in silence — which is how a production deploy came to run on a
-// secret printed in this repository. Asserted here so a later docs edit cannot reintroduce it.
-describe('the README quickstart reads the operator env file', () => {
-  const readme = readFileSync(new URL('../../../../README.md', import.meta.url), 'utf8')
+// The MECHANISM behind every documented compose command, not the prose around it. `-f docker/…`
+// makes `docker/` Compose's project directory, so a documented command without `--env-file` reads no
+// env file at all and applies every published default in silence — which is how a production deploy
+// came to run on a secret printed in this repository. The README quickstart is only the most visible
+// instance: a restore procedure or a troubleshooting step that recreates a container without it does
+// the same damage, so EVERY documented page is scanned rather than swept by hand.
 
-  const composeCommands = readme
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('docker compose') || line.startsWith('$ docker compose'))
+// One `docker compose …` command, terminated by a newline, an inline-code backtick, or the start of
+// the next one — so `a && docker compose b` is two commands, not one string in which either half's
+// `--env-file` excuses the other.
+const COMPOSE_COMMAND = /docker compose(?:(?!docker compose)[^\n`])*/g
+
+// Two shapes have to be reassembled before scanning, because each is ONE command written across two
+// source lines: a fenced block's `\` continuation, and an inline code span that the prose wrapped.
+function composeCommands(markdown: string): string[] {
+  const lines: string[] = []
+  const prose: string[] = []
+  let fenced = false
+  let pending = ''
+
+  for (const raw of markdown.split('\n')) {
+    if (/^\s*```/.test(raw)) {
+      fenced = !fenced
+      continue
+    }
+    if (!fenced) {
+      prose.push(raw.trim())
+      continue
+    }
+    pending += raw.trim()
+    if (pending.endsWith('\\')) {
+      pending = `${pending.slice(0, -1)} `
+      continue
+    }
+    lines.push(pending)
+    pending = ''
+  }
+  if (pending.length > 0) lines.push(pending)
+
+  // Prose is scanned as one joined string: a wrapped inline span is still one command, and outside
+  // the fences there is no other line-sensitive structure to preserve.
+  lines.push(prose.join(' '))
+
+  return lines.flatMap((line) =>
+    [...line.matchAll(COMPOSE_COMMAND)].map((match) => match[0].trim()),
+  )
+}
+
+function documentedMarkdown(): { path: string; source: string }[] {
+  const roots = ['../../../../README.md', '../../../../SECURITY.md']
+  const docs = new URL('../../../docs/src/content/docs/', import.meta.url)
+  const pages = readdirSync(docs, { recursive: true })
+    .map((entry) => String(entry))
+    .filter((entry) => entry.endsWith('.md') || entry.endsWith('.mdx'))
+    .map((entry) => new URL(entry, docs))
+
+  return [...roots.map((path) => new URL(path, import.meta.url)), ...pages].map((url) => ({
+    path: url.pathname,
+    source: readFileSync(url, 'utf8'),
+  }))
+}
+
+describe('every documented compose command reads the operator env file', () => {
+  const documents = documentedMarkdown()
 
   it('finds the compose invocations it is meant to be checking', () => {
-    expect(composeCommands.length).toBeGreaterThan(0)
+    const found = documents.flatMap((document) => composeCommands(document.source))
+    expect(found.filter((command) => command.includes('-f docker/')).length).toBeGreaterThan(0)
   })
 
   it('passes --env-file on every invocation that points -f into docker/', () => {
-    const offending = composeCommands.filter(
-      (command) => command.includes('-f docker/') && !command.includes('--env-file'),
+    const offending = documents.flatMap((document) =>
+      composeCommands(document.source)
+        .filter((command) => command.includes('-f docker/') && !command.includes('--env-file'))
+        .map((command) => `${document.path}: ${command}`),
     )
     expect(offending).toEqual([])
   })

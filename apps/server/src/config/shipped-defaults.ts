@@ -101,11 +101,21 @@ export function enforceShippedDefaults(options: ShippedDefaultsGateOptions): voi
   )
 }
 
+// Where an operator reads the NAMES. It lives here rather than beside the route because the
+// readiness detail below has to name the endpoint, and one constant is what keeps the two agreeing.
+export const CONFIGURATION_API_PATH = '/api/v1/configuration'
+
 // The `/readyz` line. Non-gating deliberately: an instance on a published secret is misconfigured,
 // not unable to serve, and taking it out of rotation would convert a warning into an outage.
+//
+// A COUNT, never the names. `/readyz` has no auth middleware and the hardening page puts it behind a
+// catch-all public proxy, so naming the variables there would hand an anonymous scanner a confirmed
+// list of which published secrets this host is still using. The count is enough for the operator
+// signal this exists to give — "you are not clean, go look" — and the names are one admin-gated
+// request away at `CONFIGURATION_API_PATH`.
 export function describeShippedDefaults(env: ShippedDefaultsSource): string {
-  const variables = findShippedDefaults(env)
-  return variables.length === 0
-    ? 'no shipped defaults in use'
-    : `shipped defaults still in use: ${variables.join(', ')}`
+  const count = findShippedDefaults(env).length
+  if (count === 0) return 'no shipped defaults in use'
+  const plural = count === 1 ? 'default' : 'defaults'
+  return `${count} shipped ${plural} still in use; a workspace admin can read which at ${CONFIGURATION_API_PATH}`
 }

@@ -43,7 +43,7 @@ production — see [the boot refusal](/self-hosting/deploy/#the-boot-refusal).
 | `WEB_DIST_DIR` | *(the built SPA)* | — | Path to the built SPA directory containing `index.html`. Supplied by the image; set it only when running the server outside its container. |
 | `SEED_WORKSPACE_NAME` | `yapm` | — | Name of the workspace row seeded on first boot against an empty database. |
 | `SEED_DEMO_CONTENT` | `false` | — | `true` seeds a demo team and a handful of issues when the first admin signs in on a fresh instance. One-shot: inert once any team exists. |
-| `YAPM_ALLOW_INSECURE_DEFAULTS` | `false` | **yes** | `true` downgrades the production refusal on shipped-default secrets to a warning. **Evaluation only** — it is warned about by name on every boot and reported by `/readyz`. |
+| `YAPM_ALLOW_INSECURE_DEFAULTS` | `false` | **yes** | `true` downgrades the production refusal on shipped-default secrets to a warning. **Evaluation only** — it is warned about by name on every boot and counted by `/readyz`, whose entry names nothing because it is unauthenticated; an admin reads the names from `/api/v1/configuration`. |
 
 ## Sync (zero-cache)
 

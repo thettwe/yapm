@@ -250,6 +250,29 @@ so under its own heading, with the exact remedy — including the fact that chan
   that assertion the route could be rewritten to read `process.env` directly and every other test
   would still pass — and a second reader of the same variable is how the served value and the
   validated value come to disagree.
+- **`/readyz` counts the shipped defaults; an admin-gated endpoint names them.** The first
+  implementation put the variable names in the readiness detail. `/readyz` has no auth middleware
+  and this change's own deploy guidance puts it behind a catch-all public reverse proxy, so that
+  detail told any passer-by which published secrets a host was running on — the same information a
+  refusal exists to keep from being useful. The split keeps both audiences: the count is the
+  operator signal ("you are not clean"), and `GET /api/v1/configuration` returns the names plus each
+  remedy behind the same session-then-role gate the connector and AI admin surfaces use, checked
+  before anything is read. Neither surface ever returns a value. The path lives as one constant in
+  `shipped-defaults.ts` so the readiness line and the route cannot drift apart.
+- **The `/api/config` failure surface owes what the sync-unavailable surface already gave.** It
+  replaced `SyncUnavailable` for the case where the server is unreachable at page load, so it is now
+  a `<main>` with a polite live region and a keyboard-reachable **Retry now** that resets the attempt
+  counter (the effect then schedules the next load with no delay — it can only shorten the wait).
+  The boot shell keeps its no-spinner, no-visible-copy rule and gains an `sr-only` live region,
+  mounted empty from the first paint and filled after one second: a region added at the same moment
+  as its text is not reliably announced, and a silent indefinite wait is the one state assistive
+  technology cannot observe at all.
+- **The mechanical `--env-file` check scans every documented page, not just the README.** The
+  original leg asserted the quickstart and left the restore procedure — which recreates `zero-cache`
+  and, through `depends_on`, the app — free to omit it. The scanner now reads `README.md`,
+  `SECURITY.md` and every page under `apps/docs/src/content/docs/`, and it reassembles the two
+  shapes markdown breaks across lines (a fenced block's `\` continuation and a wrapped inline code
+  span) before matching, so a command a reader could copy is a command the check sees.
 - **Task 4.9's compose smoke run was NOT performed locally.** PROCESS.md §3 makes CI the gate of
   record for the compose path and explicitly excludes docker from the local fast gates, and the
   build instruction for this pass repeated that. The end-to-end proof is therefore the CI smoke job
@@ -259,6 +282,15 @@ so under its own heading, with the exact remedy — including the fact that chan
   reach the container, the boot gate would fire under `NODE_ENV=production`, and the job would fail
   on a refusal naming the variables. A green smoke job *is* the assertion that the operator's env
   file is read. Recorded rather than claimed: this was not run on this machine.
+- **The smoke job also asserts the boot composition, which nothing else could.** Every unit test
+  exercises `shipped-defaults.ts` as pure functions; `apps/server` has no `index.test.ts`, and the
+  smoke job only ever booted the branch where no shipped default is present — so both headline
+  scenarios rested on wiring no test touched. Two steps close that: the readiness body must contain
+  `no shipped defaults in use` (which pins the `configuration` registration *and* that the generated
+  secrets reached the container), and a one-shot `docker compose run` with a shipped
+  `BETTER_AUTH_SECRET` must exit non-zero saying `refusing to start` (which pins the gate under
+  `NODE_ENV=production`). Extracting a `guardConfiguration()` seam for the fast gates was the
+  alternative; it would pin the ordering but not the wiring, and the wiring is what was untested.
 
 ## Root-doc staleness sweep (PROCESS.md §2)
 
@@ -272,7 +304,7 @@ so under its own heading, with the exact remedy — including the fact that chan
 | `PROCESS.md` | **Updated** — §2's "mechanical checks" clause described two legs of `env-example.test.ts`; there are now four plus the README check. |
 | `CONTRIBUTING.md` | Not stale. It documents the `pnpm dev` loop, which this change leaves unchanged (`ZERO_CACHE_PUBLIC_URL` defaults to `http://localhost:4848`, and no web-side default exists to disagree with it). |
 | `VISION.md` | Reviewed, **left alone**. #6 says "One `docker compose up` on a small VPS". The deployment is still one compose command; it is now preceded by a one-off secret generator, which is the difference between deployable-in-minutes and deployable-in-minutes-and-compromised. |
-| `DESIGN.md` | Not stale — no UI surface changed. The pre-config boot shell is the page background and nothing else. |
+| `DESIGN.md` | Not stale. The one new surface reuses what is already documented: the pre-config boot shell is the page background plus an `sr-only` live region, and the failure state is the shared `Button` and the same polite-live-region pattern as `SyncUnavailable`. Every colour is a token; no new pattern was introduced. |
 | `reference/*.md` | Not stale. Nothing here contradicted a harvested API note; `grep` for `VITE_ZERO`, `docker compose` and `--env-file` across `reference/` finds only an unrelated Kysely CLI `--env-file` flag. |
 | `CLAUDE.md` | Not stale — no constraint changed. Three containers still, no new service. |
 | `apps/docs/**` | **Three pages added** (deploy, upgrade, configuration) plus the sidebar; `sync-recovery.md`'s two build-time-constant claims were corrected in the earlier pass. |

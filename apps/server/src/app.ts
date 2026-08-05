@@ -17,6 +17,7 @@ export interface AppOptions {
   authRoutes?: Hono
   githubWebhook?: Hono
   connectorAdmin?: Hono
+  configurationAdmin?: Hono
   aiAdmin?: Hono
   search?: Hono
   files?: Hono
@@ -74,6 +75,10 @@ export function createApp(options: AppOptions): Hono {
 
   if (options.connectorAdmin) {
     app.route('/', options.connectorAdmin)
+  }
+
+  if (options.configurationAdmin) {
+    app.route('/', options.configurationAdmin)
   }
 
   if (options.aiAdmin) {

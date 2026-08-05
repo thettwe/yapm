@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { loadEnv } from './env.js'
 import {
+  CONFIGURATION_API_PATH,
   describeShippedDefaults,
   enforceShippedDefaults,
   findShippedDefaults,
@@ -169,12 +170,26 @@ describe('enforceShippedDefaults', () => {
   })
 })
 
+// `/readyz` is unauthenticated and, per the hardening page's own proxy guidance, publicly reachable.
+// So the detail counts and points; it must never confirm to an anonymous caller WHICH published
+// secret this host is still running on. The names live behind `CONFIGURATION_API_PATH`.
 describe('describeShippedDefaults', () => {
-  it('names the offenders for /readyz', () => {
+  it('counts the offenders for /readyz without naming them', () => {
     const detail = describeShippedDefaults(EVERY_DEFAULT)
-    expect(detail).toContain('BETTER_AUTH_SECRET')
-    expect(detail).toContain('ZERO_MUTATE_API_KEY')
+    expect(detail).toContain('4 shipped defaults still in use')
+    expect(detail).toContain(CONFIGURATION_API_PATH)
+    for (const name of Object.keys(SHIPPED_DEFAULTS)) {
+      expect(detail).not.toContain(name)
+    }
     expect(detail).not.toContain(SHIPPED_DEFAULTS.BETTER_AUTH_SECRET)
+  })
+
+  it('counts one as one', () => {
+    const detail = describeShippedDefaults({
+      ...CONFIGURED,
+      BETTER_AUTH_SECRET: SHIPPED_DEFAULTS.BETTER_AUTH_SECRET,
+    })
+    expect(detail).toContain('1 shipped default still in use')
   })
 
   it('says so plainly when nothing is defaulted', () => {

@@ -194,6 +194,30 @@ jobs:
           done
           echo "::error::/readyz never became ready"
           exit 1
+      # The two steps below pin the BOOT COMPOSITION, which no unit test can: `shipped-defaults.ts`
+      # is exercised in isolation everywhere else, and a build that dropped either its `/readyz`
+      # registration or its call in `index.ts` would still be green.
+      - name: The configuration check is wired up, and the generated secrets reached the container
+        run: |
+          set -euo pipefail
+          curl -fsS http://localhost:3000/readyz | tee /dev/stderr | grep -q 'no shipped defaults in use'
+      - name: A shipped default refuses to boot under NODE_ENV=production
+        run: |
+          set -uo pipefail
+          # `timeout` bounds the regression case: a build that lost the gate would BOOT here and
+          # listen forever, and a hung job is a worse signal than a failed one.
+          if output=$(timeout 120 docker compose --env-file .env -f docker/docker-compose.yml \
+            run --rm --no-deps -e BETTER_AUTH_SECRET=yapm-dev-secret-change-me-in-production \
+            yapm node dist/index.js 2>&1); then
+            echo "$output"
+            echo "::error::the app booted on a shipped BETTER_AUTH_SECRET"
+            exit 1
+          fi
+          echo "$output"
+          if ! echo "$output" | grep -q 'refusing to start'; then
+            echo "::error::the app exited, but not on the shipped-default refusal"
+            exit 1
+          fi
       - name: Assert sign-up and Zero sync work in the prod image
         env:
           SMOKE_URL: http://localhost:3000

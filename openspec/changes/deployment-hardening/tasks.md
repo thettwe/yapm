@@ -18,14 +18,20 @@
       escape hatch ⇒ log the named list at `fatal` and `process.exit(1)`. Otherwise ⇒ one `warn` with
       the names and the remedy (`node scripts/init-env.mjs`). No branch of this prints a value.
 - [x] 1.4 Add the non-gating readiness entry: `nonGatingCheck('configuration', …)` in the
-      `readinessChecks` array in `index.ts`, reporting either that nothing is defaulted or the sorted
-      names. Non-gating deliberately — see the spec requirement's own reasoning; do not make it
-      gating "for safety", that converts a warning into an outage.
+      `readinessChecks` array in `index.ts`, reporting either that nothing is defaulted or **how
+      many** variables are. Non-gating deliberately — see the spec requirement's own reasoning; do
+      not make it gating "for safety", that converts a warning into an outage. It reports a count
+      and never the names: `/readyz` has no auth and the hardening page puts it behind a catch-all
+      public proxy.
 - [x] 1.5 Add `scripts/init-env.mjs`: copy `.env.example` to a repo-root `.env`, replacing every
       value in `SHIPPED_DEFAULTS` **plus `ZERO_ADMIN_PASSWORD`** with
       `randomBytes(32).toString('base64url')` from `node:crypto`. Refuse to overwrite an existing
       `.env` (exit non-zero, say so). Print the variables it filled, by name. No dependency: this
       runs before `pnpm install` in a clean checkout, so it must be dependency-free Node.
+- [x] 1.6 Add the operator-only half: `apps/server/src/config/admin-routes.ts` serving
+      `GET /api/v1/configuration` with the offending **names** and their remedies, admin-gated
+      (session, then role, before anything is read) and `no-store`. Never a value, on either
+      surface. `/readyz` points at it by path, from one shared constant.
 
 ## 2. The sync origin becomes runtime configuration
 
@@ -40,10 +46,12 @@
 - [x] 2.3 Add `apps/web/src/zero/runtime-config.ts`: `fetchRuntimeConfig()` (parses the response,
       rejects a missing or non-URL `zeroCacheUrl` rather than defaulting past it) and a
       `RuntimeConfigGate` component. The gate renders a **neutral boot shell** — page background,
-      no spinner, no copy — while in flight; retries on the existing `backoffDelay` from
-      `@/zero/backoff` rather than inventing a second backoff; and only after the ceiling renders a
-      failure that names `/api/config`. Every colour via tokens, correct in all three themes light
-      and dark.
+      no spinner, no visible copy, and a polite live region that says "Loading…" a beat later so the
+      wait is not silent to a screen reader — while in flight; retries on the existing `backoffDelay`
+      from `@/zero/backoff` rather than inventing a second backoff; and only after the ceiling
+      renders a failure that names `/api/config`. Both phases are `<main>`; the failure carries a
+      polite live region and a **Retry now** button, matching `SyncUnavailable`. Every colour via
+      tokens, correct in all three themes light and dark.
 - [x] 2.4 `apps/web/src/zero/provider.tsx`: delete
       `const CACHE_URL = import.meta.env.VITE_ZERO_CACHE_URL ?? …`. `ZeroRoot` takes `cacheUrl` as a
       prop. It must remain a stable string across renders — the options memo's identity is what

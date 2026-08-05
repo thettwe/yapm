@@ -17,6 +17,7 @@ import { createAiGateway } from './ai/gateway.js'
 import { createApp } from './app.js'
 import { createAuth } from './auth.js'
 import { createAuthRoutes } from './auth-routes.js'
+import { createConfigurationAdminRoutes } from './config/admin-routes.js'
 import {
   aiEnv,
   type Env,
@@ -292,6 +293,8 @@ async function main(): Promise<void> {
       // Non-gating for the same reason, and only that reason: an instance still holding a published
       // secret is misconfigured, not unable to serve, and taking it out of rotation would turn a
       // warning into an outage. This is what lets an operator see the boot warning after the fact.
+      // It reports a COUNT — the names are behind `configurationAdmin` below, because this endpoint
+      // is unauthenticated and publicly proxied.
       nonGatingCheck('configuration', () => Promise.resolve(describeShippedDefaults(env))),
       // GATING, unlike search freshness: a read-only or missing volume means every upload fails and
       // every image 404s, which is an instance that should not take traffic. For the local provider
@@ -310,6 +313,14 @@ async function main(): Promise<void> {
     }),
     githubWebhook,
     connectorAdmin,
+    // The names of the variables still at a published default, for an operator with no shell access
+    // to the container. Admin-gated: `/readyz` gives everyone a count, and only an admin gets the
+    // list of which known secrets this instance is running on.
+    configurationAdmin: createConfigurationAdminRoutes({
+      getSessionUser: auth.getSessionUser,
+      lookupRole: (userId) => lookupWorkspaceRole(database.db, userId),
+      env,
+    }),
     aiAdmin,
     search: createSearchRoutes({
       auth,

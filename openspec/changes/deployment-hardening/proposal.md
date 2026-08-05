@@ -55,7 +55,9 @@ triplet and does not do for the one secret that forges credentials.
   an empty `.env`" is a promise to evaluators, and this change keeps it deliberately rather than
   breaking it silently. See design §D2.
 - **A non-gating `/readyz` entry**, `configuration`, following the `nonGatingCheck('search')`
-  precedent: an operator can see after the fact which variables are still shipped defaults.
+  precedent: an operator can see after the fact that variables are still at shipped defaults, and
+  how many. It names none of them — `/readyz` is unauthenticated and publicly proxied — so the names
+  come from the admin-gated `GET /api/v1/configuration` instead.
 
 **The sync origin becomes runtime configuration (defect 2).**
 

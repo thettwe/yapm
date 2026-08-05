@@ -57,7 +57,7 @@ deleted, not one you lost.
 
 ```bash
 # 1. The database first.
-docker compose -f docker/docker-compose.yml exec -T postgres \
+docker compose --env-file .env -f docker/docker-compose.yml exec -T postgres \
   pg_dump -U yapm -d yapm --clean --if-exists > yapm-db.sql
 
 # 2. Then the files, which are a superset of what the dump names.
@@ -69,7 +69,7 @@ Restore, into a stack whose containers are running but which has no data yet:
 
 ```bash
 # 1. Database first.
-docker compose -f docker/docker-compose.yml exec -T postgres \
+docker compose --env-file .env -f docker/docker-compose.yml exec -T postgres \
   psql -U yapm -d yapm < yapm-db.sql
 
 # 2. Then the files.
@@ -77,10 +77,15 @@ docker run --rm -v yapm_files:/files -v "$PWD:/backup" busybox \
   tar xzf /backup/yapm-files.tar.gz -C /files
 
 # 3. Discard the stale replica and let zero-cache resync from Postgres.
-docker compose -f docker/docker-compose.yml stop zero-cache
+docker compose --env-file .env -f docker/docker-compose.yml stop zero-cache
 docker volume rm yapm_zero-replica
-docker compose -f docker/docker-compose.yml up -d zero-cache
+docker compose --env-file .env -f docker/docker-compose.yml up -d zero-cache
 ```
+
+`--env-file .env` is on every command here for the reason [Deploy and
+harden](/self-hosting/deploy/) states: `-f docker/…` makes `docker/` Compose's project directory, so
+without it Compose reads no environment file and recreates the container on the secrets this
+repository publishes.
 
 Step 3 is not optional. zero-cache's replica was built from the *old* database; after a restore it
 must be rebuilt, and the shortest correct way to do that is to delete it.

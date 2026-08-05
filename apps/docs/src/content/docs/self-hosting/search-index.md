@@ -181,7 +181,7 @@ and rebuilt at any time with no data loss. Nothing else in the schema references
 
 ```sql
 -- Against the app's database, e.g.
---   docker compose -f docker/docker-compose.yml exec postgres psql -U yapm -d yapm
+--   docker compose --env-file .env -f docker/docker-compose.yml exec postgres psql -U yapm -d yapm
 DELETE FROM search_document;
 ```
 

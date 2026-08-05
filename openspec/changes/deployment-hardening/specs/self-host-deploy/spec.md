@@ -55,16 +55,34 @@ secret's value — only its variable name.
 ### Requirement: Shipped defaults in use are visible in the readiness report
 
 The readiness report SHALL carry a **non-gating** `configuration` entry reporting whether any
-security-relevant variable is still at its shipped default and, if so, naming them — so an operator
-who missed the boot log can discover the state of a running instance without shell access to it. It
-SHALL be non-gating, following the search-freshness precedent: a defaulted secret is a security
-problem, not a reason to take an instance out of load-balancer rotation, and making it gating would
-turn a warning into an outage.
+security-relevant variable is still at its shipped default — so an operator who missed the boot log
+can discover the state of a running instance without shell access to it. It SHALL be non-gating,
+following the search-freshness precedent: a defaulted secret is a security problem, not a reason to
+take an instance out of load-balancer rotation, and making it gating would turn a warning into an
+outage.
 
-#### Scenario: Defaults are reported without failing readiness
+The readiness entry SHALL report **how many** variables are affected and SHALL NOT name them:
+`/readyz` is unauthenticated and the deployment guidance places it behind a catch-all public reverse
+proxy, so naming them would confirm to an anonymous caller which published secrets a host is running
+on. The **names** SHALL be available on an operator-only surface — an admin-gated endpoint under
+`/api/v1` that refuses a non-admin before reading anything — so the operator still gets them without
+shell access. Neither surface SHALL ever return a value.
+
+#### Scenario: Defaults are counted without failing readiness
 
 - **WHEN** an instance is running with one or more shipped defaults still in place
-- **THEN** `/readyz` names them in the `configuration` entry and the instance still reports ready
+- **THEN** `/readyz` reports how many in the `configuration` entry, names none of them, and the
+  instance still reports ready
+
+#### Scenario: An admin can read which variables are affected
+
+- **WHEN** a workspace admin requests the configuration endpoint on that instance
+- **THEN** every offending variable is named with its remedy, and no value is returned
+
+#### Scenario: A non-admin learns nothing
+
+- **WHEN** an anonymous caller, a member or a viewer requests the configuration endpoint
+- **THEN** the request is refused before any configuration is read, and no variable is named
 
 #### Scenario: A configured instance reports clean
 

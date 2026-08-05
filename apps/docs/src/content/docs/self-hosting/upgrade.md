@@ -25,11 +25,14 @@ Every upgrade applies migrations at boot, and that is the step you cannot undo. 
 
 ```bash
 docker compose --env-file .env -f docker/docker-compose.yml exec -T postgres \
-  pg_dump -U yapm -d yapm --format=custom > yapm-$(date +%F).dump
+  pg_dump -U yapm -d yapm --clean --if-exists > yapm-$(date +%F).sql
 ```
 
-The full procedure, including attachment bytes, is on [Backup and
-restore](/self-hosting/backup-restore/).
+That is deliberately the **same artifact** [Backup and restore](/self-hosting/backup-restore/) takes
+and the same one its restore step consumes with `psql` — one round trip, described in one place.
+`--clean --if-exists` is what lets it be restored over a database that already has the newer schema,
+which is exactly the situation a rollback is. The full procedure, including attachment bytes, is on
+that page.
 
 ## Upgrading a locally-built stack
 
@@ -141,7 +144,8 @@ affected. Two ways forward:
   `ZERO_MUTATE_API_KEY` in `.env` to random values and restart. See [Deploy and
   harden](/self-hosting/deploy/#what-has-to-change-before-you-expose-it).
 - **Defer it**, for an evaluation box only: set `YAPM_ALLOW_INSECURE_DEFAULTS=true`. It boots, warns
-  by name every time, and `/readyz` reports it for as long as it is set.
+  by name every time, and `/readyz` counts the defaulted variables for as long as it is set — the
+  names are behind the admin-only `/api/v1/configuration`.
 
 **Changing `BETTER_AUTH_SECRET` on an instance with users signs everyone out.** It invalidates every
 session cookie and makes the stored JWKS unreadable, so the key material is regenerated on the next

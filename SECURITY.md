@@ -38,12 +38,13 @@ a sync token for any user.
 
 `node scripts/init-env.mjs` generates all five. Under `NODE_ENV=production` the app **refuses to
 start** on the four it can observe, naming each one, unless `YAPM_ALLOW_INSECURE_DEFAULTS=true` is set
-— which is for evaluation boxes, warns by name on every boot, and is reported by `/readyz`. See
+— which is for evaluation boxes, warns by name on every boot, and is counted by `/readyz` (the names
+are behind the admin-only `/api/v1/configuration`, because `/readyz` is unauthenticated). See
 [Deploy and harden](apps/docs/src/content/docs/self-hosting/deploy.md).
 
-Note that `docker compose … -f docker/docker-compose.yml` must be passed `--env-file .env`: `-f
-docker/…` makes `docker/` Compose's project directory, so without it your environment file is not
-read and the published defaults apply silently.
+Note that `--env-file .env` is required on every compose command that passes `-f docker/…`: that
+flag makes `docker/` Compose's project directory, so without it your environment file is not read and
+the published defaults apply silently.
 
 ### Images
 

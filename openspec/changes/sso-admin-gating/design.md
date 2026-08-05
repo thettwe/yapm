@@ -342,6 +342,50 @@ paths to one absence rather than an error banner: a capability you may not confi
 Both are asserted in `sso-view.test.tsx`, and the second matters because `useMembership` reads a
 synced roster that can lag a role change by a round trip.
 
+### L10 — The client secret is stored in cleartext, and the docs say so rather than implying otherwise
+
+`/settings/sso` treats the client secret exactly as `/settings/ai` treats a provider API key — write
+only, never returned, rotated by re-entering — and the temptation when writing the docs page was to
+carry the AI page's sentence across. It would have been false. `SECRETS_ENCRYPTION_KEY` protects
+secrets **yapm** stores; the SSO client secret is stored by the plugin inside its own
+`ssoProvider.oidcConfig`, a `text` column holding plain JSON with no symmetric encryption anywhere in
+`@better-auth/sso@1.6.24`. yapm cannot encrypt it without breaking the plugin, which reads the row
+itself during sign-in.
+
+So the docs page states it: a database dump carries an IdP credential, and rotate in the IdP if one
+leaks. Encrypting it would mean owning the config table, which §D-Non-goals refused for good reasons.
+Naming the exposure is the honest half of a change whose other half is about not claiming more than
+ships.
+
+### L11 — SAML ends up with no registration path at all, and the docs say that instead of the non-goal's sentence
+
+The proposal's non-goals said "no SAML **UI**, but the API path remains available for operators who
+need it." As built it is not: `registerBody` requires `oidcConfig` and Zod strips anything else, so
+`POST /api/v1/sso/providers` cannot create a SAML provider, and `/api/auth/sso/register` is one of
+the seven paths removed. Net effect on this release: **SAML sign-in endpoints all exist and are
+anonymous; nothing can register a SAML provider.**
+
+Considered and rejected: widen the body to pass `samlConfig` through. The plugin validates a
+certificate, IdP metadata, and signing/encryption algorithm allow-lists, none of which this change
+can exercise against a real SAML IdP — an unvalidated passthrough would be a surface that appears to
+work and fails at the assertion, which is the exact failure mode this change exists to remove. The
+expected affected population is zero (no supported way to register any provider existed on main), so
+the cost is a capability nobody had.
+
+The docs page states it plainly under "SAML: not configurable on this release", names the OIDC-bridge
+workaround every major IdP offers, and marks first-class SAML as unforeclosed rather than promised.
+The proposal's sentence is superseded by this entry.
+
+### L12 — `reference/server-stack.md` §4.7 showed the shape that caused this
+
+The harvest's SSO section was the plugin's own quickstart — `sso()` with no options — presented with
+no note that registration is session-gated and nothing more. That reference is what a future agent
+reads before writing auth code, so it got §4.7.1: the management/sign-in path split, `disabledPaths`
+exact-match semantics, `providersLimit: 0` meaning *disabled*, the per-user provider count, the
+in-process `node:dns/promises` verification and its 7-day token, the `${baseURL}/sso/callback/:id`
+redirect URI, and the cleartext `clientSecret`. Every line is a file-and-line citation into the
+installed build. Fixing the reference is the part of this change that prevents the next one.
+
 ## Migration / Rollout
 
 No data migration and no downtime step. On first boot after deploy, `getMigrations()` adds

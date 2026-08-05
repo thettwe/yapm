@@ -113,9 +113,11 @@ step, and the copy-pasteable admin request for operators who prefer the API), th
 
 ## Non-goals
 
-- **No SAML configuration UI.** The plugin's SAML endpoints keep working and are gated identically,
-  but `/settings/sso` registers OIDC only. SAML's configuration surface is an order of magnitude
-  larger and nothing in v1 asks for it; the API path remains available for operators who need it.
+- **No SAML configuration.** The plugin's SAML **sign-in** endpoints keep working, are anonymous and
+  are untouched, but `/settings/sso` registers OIDC only. SAML's configuration surface is an order of
+  magnitude larger and nothing in v1 asks for it. *(Superseded in part by design.md §L11: as built
+  there is no SAML registration path at all — the admin body requires `oidcConfig` — so the docs page
+  says so and names the OIDC-bridge workaround, rather than pointing at an API that would reject it.)*
 - **No new env var and no changes to `apps/server/src/config/env.ts`, `.env.example`, `docker/`,
   `SECURITY.md` or `apps/web/src/zero/provider.tsx`** — the concurrent `deployment-hardening` build
   owns those files.

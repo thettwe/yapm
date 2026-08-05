@@ -34,6 +34,7 @@ export default defineConfig({
             { label: 'Deploy & harden', slug: 'self-hosting/deploy' },
             { label: 'Configuration reference', slug: 'self-hosting/configuration' },
             { label: 'Upgrade & rollback', slug: 'self-hosting/upgrade' },
+            { label: 'Single sign-on (OIDC)', slug: 'self-hosting/sso' },
             { label: 'Connect GitHub', slug: 'self-hosting/github-connector' },
             { label: 'Enable AI', slug: 'self-hosting/ai-setup' },
             { label: 'The disclosure model', slug: 'self-hosting/ai-disclosure' },

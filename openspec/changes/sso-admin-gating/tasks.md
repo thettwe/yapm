@@ -112,17 +112,17 @@
 
 ## 6. Documentation
 
-- [ ] 6.1 `apps/docs/src/content/docs/self-hosting/sso.md` (new): the whole configuration path —
+- [x] 6.1 `apps/docs/src/content/docs/self-hosting/sso.md` (new): the whole configuration path —
       who may do it (workspace admin), the `/settings/sso` walkthrough, the DNS TXT step and why it
       exists, and a **copy-pasteable** `curl` against `/api/v1/sso/providers` with an admin session
       cookie for operators who prefer the API. Include the SAML note (API-only, no UI) and the
       upgrade note from design §"Migration / Rollout": any provider registered before this change
       is now unverified and must be verified before it can sign anyone in.
-- [ ] 6.2 `apps/docs/astro.config.mjs`: add the page to the Self-hosting sidebar. Expect to rebase —
+- [x] 6.2 `apps/docs/astro.config.mjs`: add the page to the Self-hosting sidebar. Expect to rebase —
       the concurrent `deployment-hardening` build also adds pages to this list.
-- [ ] 6.3 `README.md`: the "What works today" sign-in claim only — say OIDC/SSO is
+- [x] 6.3 `README.md`: the "What works today" sign-in claim only — say OIDC/SSO is
       admin-configured, and leave the rest of the file to the sibling build. One line, surgical.
-- [ ] 6.4 `ROADMAP.md`: row 25 for this change, in the established voice.
-- [ ] 6.5 `design.md` gains its `## Decisions made during implementation` section: at minimum the
+- [x] 6.4 `ROADMAP.md`: row 25 for this change, in the established voice.
+- [x] 6.5 `design.md` gains its `## Decisions made during implementation` section: at minimum the
       captured DDL (1.4), anything the plugin did differently from what §D1-§D8 predicted, and the
       final `providersLimit` value with its reasoning.

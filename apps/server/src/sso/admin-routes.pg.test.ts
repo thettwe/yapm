@@ -79,6 +79,25 @@ describe.skipIf(DATABASE_URL === undefined)('SSO administration is workspace-adm
     return { userId: user.id, cookie }
   }
 
+  // The docs page's `curl -c yapm-cookies.txt … /api/auth/sign-in/email` step. Registration below is
+  // asserted through a cookie obtained THIS way, not through the one sign-up happened to return, so
+  // the test covers the procedure an operator copy-pastes rather than only the handler behind it.
+  const signIn = async (label: string): Promise<string> => {
+    const response = await app.request('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: ORIGIN },
+      body: JSON.stringify({
+        email: `${label}-${suffix}@example.test`,
+        password: `password-${suffix}`,
+      }),
+    })
+    expect(response.status, `sign-in for ${label}`).toBe(200)
+    return response.headers
+      .getSetCookie()
+      .map((value) => value.split(';')[0])
+      .join('; ')
+  }
+
   const post = (path: string, cookie: string | null, body?: unknown) =>
     app.request(path, {
       method: 'POST',
@@ -158,13 +177,26 @@ describe.skipIf(DATABASE_URL === undefined)('SSO administration is workspace-adm
     expect(await providerRows(PROVIDER_ID)).toHaveLength(0)
   })
 
-  it('lets a workspace admin register a provider', async () => {
-    const response = await post('/api/v1/sso/providers', cookies.admin, providerBody)
+  it('lets a workspace admin register a provider by the documented procedure', async () => {
+    const sessionCookie = await signIn('admin')
+    const response = await post('/api/v1/sso/providers', sessionCookie, providerBody)
     expect(response.status).toBe(200)
-    const payload = (await response.json()) as { providerId: string; domainVerified: boolean }
+    const body = await response.text()
+    expect(body).not.toContain(CLIENT_SECRET)
+    const payload = JSON.parse(body) as {
+      providerId: string
+      domainVerified: boolean
+      domainVerificationToken: string | null
+      redirectURI: string
+    }
     expect(payload.providerId).toBe(PROVIDER_ID)
     // Registration alone never makes SSO usable: the domain is unproven until DNS says otherwise.
     expect(payload.domainVerified).toBe(false)
+    // Both facts the docs page tells an operator to act on: the TXT record's value, and the exact
+    // redirect URI to paste into the IdP. Its shape is the plugin's, `<baseURL>/sso/callback/<id>`
+    // with the base path included — documented as a literal, so asserted as one.
+    expect(payload.domainVerificationToken).toEqual(expect.any(String))
+    expect(payload.redirectURI).toBe(`${ORIGIN}/api/auth/sso/callback/${PROVIDER_ID}`)
     expect(await providerRows(PROVIDER_ID)).toHaveLength(1)
   })
 

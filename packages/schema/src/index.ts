@@ -288,6 +288,51 @@ export {
   matchesFilter,
 } from './zero/filter.js'
 export type {
+  DeliveredContext,
+  DeliveryEmptyState,
+  DeliveryMetric,
+  DeliveryPeriod,
+  DeliverySection,
+  DeliveryUnit,
+  FlowContext,
+  MetricDescriptor,
+  MetricSeries,
+} from './zero/metrics/descriptors.js'
+export {
+  buildMetrics,
+  CYCLE_PERIOD,
+  DELIVERED_METRICS,
+  deliverySections,
+  FLOW_METRICS,
+  flowEmptyState,
+  fromHistory,
+  toMetric,
+} from './zero/metrics/descriptors.js'
+export type {
+  DeliveredCounts,
+  DeliveryCycleInput,
+  DeliveryIssueInput,
+  DeliveryPrInput,
+  DeliveryScope,
+  FlowMeasures,
+} from './zero/metrics/scope.js'
+export {
+  deliveredCounts,
+  flowMeasures,
+  scopeOfCycle,
+  scopeOfCycles,
+} from './zero/metrics/scope.js'
+export type {
+  DeliveryWindow,
+  DeliveryWindowInput,
+  DeliveryWindowSize,
+} from './zero/metrics/window.js'
+export {
+  buildDeliveryWindow,
+  DELIVERY_WINDOW_SIZES,
+  MAX_DELIVERY_WINDOW,
+} from './zero/metrics/window.js'
+export type {
   CastRetroVoteArgs,
   ClearRetroAiReactionArgs,
   ConvertRetroActionToIssueArgs,

@@ -20,6 +20,10 @@
       "types": "./dist/zero/server-mutators.d.ts",
       "default": "./dist/zero/server-mutators.js"
     },
+    "./testing": {
+      "types": "./dist/zero/testing/blameless.d.ts",
+      "default": "./dist/zero/testing/blameless.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

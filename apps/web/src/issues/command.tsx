@@ -28,6 +28,7 @@ import {
   CheckCheckIcon,
   CheckIcon,
   CircleDotIcon,
+  GaugeIcon,
   InboxIcon,
   PlusIcon,
   RocketIcon,
@@ -335,6 +336,18 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
     [navigate, close],
   )
 
+  const navigateTeamDelivery = useCallback(
+    (id: string) => {
+      void navigate({
+        to: '/teams/$teamId/delivery',
+        params: { teamId: id },
+        search: { window: 6 },
+      })
+      close()
+    },
+    [navigate, close],
+  )
+
   const actionGroups = useMemo<PaletteGroup[]>(() => {
     switch (page) {
       case 'root':
@@ -364,6 +377,7 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
             close()
           },
           onNavigateTeam: navigateTeam,
+          onNavigateTeamDelivery: navigateTeamDelivery,
         })
       case 'status':
         return statusGroups(applyStatus)
@@ -393,6 +407,7 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
     applyTriage,
     markAllNotificationsRead,
     navigateTeam,
+    navigateTeamDelivery,
     navigate,
     close,
     start,
@@ -636,6 +651,7 @@ interface RootActions {
   onNavigateInbox: () => void
   onNavigateHome: () => void
   onNavigateTeam: (id: string) => void
+  onNavigateTeamDelivery: (id: string) => void
 }
 
 // The action rows as DATA, in declaration order. Each `search` string is the value the row used to
@@ -825,6 +841,17 @@ function rootActionGroups(actions: RootActions): PaletteGroup[] {
             <>
               <ArrowRightIcon />
               Go to {team.name} issues
+            </>
+          ),
+        })),
+        ...actions.teams.map((team) => ({
+          id: `action:go-team-delivery:${team.id}`,
+          search: `go to ${team.name} delivery metrics dora flow`,
+          onSelect: () => actions.onNavigateTeamDelivery(team.id),
+          content: (
+            <>
+              <GaugeIcon />
+              Go to {team.name} delivery
             </>
           ),
         })),

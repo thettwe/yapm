@@ -221,12 +221,33 @@ describe('sparklineGeometry', () => {
 
   it('draws a flat series on the mid-line rather than collapsing it to the floor', () => {
     const geometry = sparklineGeometry([4, 4, 4], 60, 20)
-    expect(geometry?.points).toBe('0,10 30,10 60,10')
+    expect(geometry?.segments).toEqual(['0,10 30,10 60,10'])
     expect(geometry?.last).toEqual({ x: 60, y: 10 })
   })
 
   it('maps the highest value to the top and the lowest to the bottom', () => {
     const geometry = sparklineGeometry([1, 5], 60, 20)
-    expect(geometry?.points).toBe('0,20 60,0')
+    expect(geometry?.segments).toEqual(['0,20 60,0'])
+  })
+
+  // A window cycle with nothing to measure keeps its x position and breaks the line, rather than
+  // sliding its neighbours together as if they had been consecutive.
+  it('spends the x position of an unmeasured cycle and breaks the line across it', () => {
+    const geometry = sparklineGeometry([1, undefined, 5], 60, 20)
+    expect(geometry?.segments).toEqual(['0,20 0,20', '60,0 60,0'])
+    expect(geometry?.last).toEqual({ x: 60, y: 0 })
+  })
+
+  // A single-point polyline strokes nothing, so a window whose every measured cycle is isolated
+  // would render an empty box. Each lone point carries its coordinate twice, which `linecap=round`
+  // paints as a dot.
+  it('renders an isolated measured cycle as a dot rather than as nothing', () => {
+    const geometry = sparklineGeometry([2, undefined, 6, undefined, 4], 60, 20)
+    expect(geometry?.segments).toEqual(['0,20 0,20', '30,0 30,0', '60,10 60,10'])
+    expect(geometry?.last).toEqual({ x: 60, y: 10 })
+  })
+
+  it('needs two measured points, not two slots', () => {
+    expect(sparklineGeometry([1, undefined, undefined], 60, 20)).toBeNull()
   })
 })

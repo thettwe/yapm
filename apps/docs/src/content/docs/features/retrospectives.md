@@ -159,6 +159,9 @@ Three rules hold everywhere in the panel:
   is outside your synced slice, the panel does not render at all rather than showing a board of
   zeros.
 
+The same figures, over a rolling window of completed cycles rather than one, are the team's
+[Delivery view](/features/delivery/) — same formulas, same tiles, no retro required.
+
 A card captured from a figure keeps an **evidence chip**. Activating the chip reveals the panel and
 focuses the figure it came from, so a card and its number are a two-way link.
 

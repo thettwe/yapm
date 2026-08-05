@@ -373,7 +373,7 @@ own text after validation and before the row is stored, so no caption a model wr
 
 ### Cite evidence or be omitted
 
-Four deterministic checks run over the model's output before a single row is stored, in this order:
+Five deterministic checks run over the model's output before a single row is stored, in this order:
 
 1. **Cite or omit.** Every reference is narrowed to the set of evidence ids and metric keys yapm
    itself computed for this cycle. A reference claiming to be a prior retro action is narrowed by

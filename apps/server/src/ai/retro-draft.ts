@@ -213,9 +213,11 @@ export async function runRetroAiDraft(
     // The roster is read AFTER the call, never before: it is the backstop, not an input.
     const roster = await loadRoster(deps.db, workspaceId)
     // ONE CHAIN, and the prior retro goes into it rather than being applied afterwards. Baking is a
-    // validator like the other two — it drops references and re-buckets proposals — so it runs inside
-    // `sanitizeRetroDraft`, between the name backstop and the cap, and the cap stays genuinely last
-    // (design §D4, §D6).
+    // validator: it DROPS a reference naming an action the prior retro does not have, and the
+    // proposal left holding none — so it runs inside `sanitizeRetroDraft`, between the name backstop
+    // and the cap, and it is one of the four steps ahead of the cap that can drop a proposal
+    // (`dropUnbackedFollowUps`, which a bake-orphaned follow-up falls to, included). The cap stays
+    // genuinely last (design §D4, §D6).
     const content = sanitizeRetroDraft(result.object, facts.citations, roster, facts.priorRetro)
 
     const proposals = await write('ready', {

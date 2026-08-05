@@ -668,9 +668,32 @@ test.each([
   ['unrated', 'improvement'],
   ['agreed', 'win'],
   ['agreed', 'loss'],
+  ['agreed', 'follow_up'],
 ] as const)('no action path on a %s %s', (verdict, category) => {
   mount(draftRow('ready'), [proposal({ id: 'x-1', category, verdict })], { phase: 'discuss' })
   expect(screen.queryByTestId('retro-ai-add-action')).toBeNull()
+})
+
+// THE OTHER HALF OF DESIGN §D4, and the reason the panel needed no second "categories that can
+// become an action" list: a report on how last cycle's action turned out is a `follow_up` and offers
+// nothing to convert, while "we agreed this and it never landed, let us try again" is an
+// `improvement` that HAPPENS to cite the prior action — and it keeps the one keystroke. The prompt
+// draws that line; these two tests are what pin the panel to it.
+test('an agreed improvement citing a prior action still offers the action path', () => {
+  mount(
+    draftRow('ready'),
+    [
+      followUp({
+        id: 'i-again',
+        category: 'improvement',
+        summary: 'The release split never landed; let us try it again.',
+        verdict: 'agreed',
+      }),
+    ],
+    { phase: 'discuss' },
+  )
+
+  expect(screen.getByTestId('retro-ai-add-action')).toBeInTheDocument()
 })
 
 test('the action path is absent in a phase where actions cannot be written', () => {

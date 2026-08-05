@@ -107,7 +107,15 @@
       `login-sso` testid renders; with `sso: true` it does and activating it starts the flow.
 - [x] 5.6 `apps/web/src/settings/sso-view.test.tsx`: unverified provider renders the TXT record and
       the Verify control; a 403 renders the admin-only absence; no secret string reaches the DOM.
-- [ ] 5.7 `pnpm turbo lint typecheck test build`, then the compose smoke test on
+- [x] 5.7 `apps/web/e2e/sso.spec.ts` (new): an admin reaches *Settings → Single sign-on* from the
+      user menu and Tabs through provider id / email domain / issuer / client id / client secret,
+      submitting with Enter; an unverified provider (seeded straight to Postgres — registration
+      performs OIDC discovery and e2e has no IdP) shows the TXT record name, the write-only rotation
+      field and a Remove confirm that keeps focus; the surface renders in all three presets light and
+      dark; a member and a viewer at `/settings/sso` get the admins-only absence and no register
+      form. Plus the one-line assertion in `auth.spec.ts` that an instance with no verified provider
+      renders no `login-sso` control.
+- [ ] 5.8 `pnpm turbo lint typecheck test build`, then the compose smoke test on
       `-p yapm-sso` with the assigned ports. Report actual output.
 
 ## 6. Documentation

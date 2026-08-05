@@ -420,6 +420,49 @@ export async function findUserId(db: Database, email: string): Promise<string> {
   return row.id
 }
 
+export interface SeedSsoProviderOptions {
+  providerId: string
+  domain: string
+  userId: string
+}
+
+// `ssoProvider` is better-auth's own table, created by its migrations at boot and deliberately
+// absent from the sync schema. Seeded straight to Postgres because REGISTERING one performs OIDC
+// discovery against a real issuer, and the e2e harness has no identity provider to discover — this
+// is the only way the settings surface can be exercised in the state that matters, a provider whose
+// domain is not yet proven.
+//
+// ALWAYS UNVERIFIED. A verified row would make `/api/auth-methods` report SSO available and put a
+// "Continue with SSO" button on the login form for every other spec sharing this database.
+export async function seedSsoProvider(
+  db: Database,
+  options: SeedSsoProviderOptions,
+): Promise<void> {
+  await db.db
+    .insertInto('ssoProvider')
+    .values({
+      id: newId(),
+      issuer: 'https://idp.example.test',
+      providerId: options.providerId,
+      domain: options.domain,
+      userId: options.userId,
+      domainVerified: false,
+      oidcConfig: JSON.stringify({
+        issuer: 'https://idp.example.test',
+        clientId: 'e2e-client-id-4321',
+        clientSecret: 'e2e-placeholder-not-a-real-secret',
+        discoveryEndpoint: 'https://idp.example.test/.well-known/openid-configuration',
+      }),
+      samlConfig: null,
+      organizationId: null,
+    })
+    .execute()
+}
+
+export async function deleteSsoProvider(db: Database, providerId: string): Promise<void> {
+  await db.db.deleteFrom('ssoProvider').where('providerId', '=', providerId).execute()
+}
+
 // Write a description straight to Postgres. It replicates to the signed-in client through the same
 // path a typed description takes, and the search change needs one that reached the replica WITHOUT
 // the client having rendered the editor — the on-device pass reads the synced row, not the DOM.

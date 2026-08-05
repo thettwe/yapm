@@ -104,7 +104,9 @@ publish the new value.
 
 A provider bound to several comma-separated domains needs the record under **every** one of them —
 verification resolves them all, and the settings page lists a record per domain for exactly that
-reason.
+reason. Changing the domain list later — even to add one — sends the provider back to unverified and
+takes the SSO button off the login form until you repeat this step, so publish the new record
+*before* you change the domain.
 
 ## 4. Sign in
 
@@ -114,6 +116,15 @@ provider, and the browser goes to your IdP.
 
 With no verified provider, that button does not exist. That is the whole point of the honesty half
 of this feature: yapm advertises a sign-in method only when the method works.
+
+## Rotating the client secret
+
+When your IdP issues a new secret, open *Settings → Single sign-on*, paste it into **New client
+secret** on the provider, and press **Replace secret**. There is no reveal control and no read-back:
+the field starts empty every time, and the only thing it can do is replace. Over the API it is
+`POST /api/v1/sso/providers/<id>` with `{"oidcConfig":{"clientSecret":"…"}}`.
+
+Rotating the secret does **not** reset domain verification and does not sign anyone out.
 
 ## Configure it from the API instead
 
@@ -156,7 +167,7 @@ The rest of the surface:
 |---|---|
 | `GET /api/v1/sso` | `{ configured, providers: [...] }` — the redacted list, no secret material |
 | `POST /api/v1/sso/providers` | Register (above) |
-| `POST /api/v1/sso/providers/<id>` | Update — every field optional; sending `oidcConfig.clientSecret` rotates the secret |
+| `POST /api/v1/sso/providers/<id>` | Update — every field optional; sending `oidcConfig.clientSecret` rotates the secret. **Changing `domain` resets verification** — see the caution below |
 | `DELETE /api/v1/sso/providers/<id>` | Remove the provider |
 | `POST /api/v1/sso/providers/<id>/domain-verification` | Mint (or re-read) the TXT record value |
 | `POST /api/v1/sso/providers/<id>/verify` | Resolve the record and mark the domain verified |
@@ -164,6 +175,19 @@ The rest of the surface:
 Every one of them answers `401` with no session and `403` to a signed-in non-admin — **before** it
 looks up whether the provider exists, so the answer is the same for a provider id that exists and
 one that does not.
+
+:::caution[Changing `domain` turns the SSO button off until you re-verify]
+An update that changes `domain` — including one that only **adds** a second comma-separated domain —
+resets `domainVerified` to `false`. The provider stops signing anyone in and **Continue with SSO**
+disappears from the login form workspace-wide until every listed domain has its own TXT record
+published and verified again (step 3). Publish the records first, then change the domain, then
+verify — that way the gap is minutes rather than however long DNS takes.
+
+Changing `issuer`, `clientId`, `discoveryEndpoint` or any of the endpoint URLs after people have
+already signed in through the provider is refused with `409` — those fields decide which external
+account a yapm user is, and moving them would silently re-point existing linked accounts. Register a
+second provider instead, then remove the old one.
+:::
 
 ### better-auth's own SSO endpoints answer 404
 
@@ -213,5 +237,9 @@ first-class SAML if you want it prioritised; nothing in the design here foreclos
 | **Verify** says the record was not found | DNS has not propagated, or the record is on the wrong name. Confirm with `dig +short TXT _better-auth-token-<id>.<domain>`. |
 | `403` from `/api/v1/sso` | The session is not a workspace admin. Another admin can change a role in the **Members** list on the workspace home page. |
 | `409 provider_exists` on register | That provider id is already taken. Delete it first, or pick another slug. |
+| `409 provider_limit_reached` on register | This admin account has registered the five providers it may. Remove one, or have a colleague with the admin role register this one. |
+| `502 issuer_unreachable` on register | yapm could not read the issuer's discovery document — a wrong issuer URL, or no outbound route from the server to your IdP. `curl` the `.well-known/openid-configuration` URL from the yapm host to tell the two apart. |
+| `400 invalid_provider_config` on register | The provider id is reserved (it collides with a built-in or social provider name), or the issuer/discovery URL is not a valid absolute URL. Pick another slug. |
+| `502 domain_verification_failed` on **verify** | The TXT lookup ran and found no matching record — see the row above about propagation. |
 | `404` from `/api/auth/sso/register` | Expected — that path is removed. Use `POST /api/v1/sso/providers`. |
 | Sign-in bounces back with an IdP error about the redirect URI | The URI in your IdP does not match `https://<your-yapm-domain>/api/auth/sso/callback/<provider-id>`. The settings page prints the exact value after registration. |

@@ -3,7 +3,17 @@ import { Button } from '@yapm/ui/components/button'
 import { Input } from '@yapm/ui/components/input'
 import { Label } from '@yapm/ui/components/label'
 import { CheckIcon, CopyIcon, PlusIcon, ShieldCheckIcon } from 'lucide-react'
-import { type FormEvent, useCallback, useEffect, useId, useState } from 'react'
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { useMembership } from '@/auth/use-membership'
 import {
   deleteSsoProvider,
@@ -15,6 +25,7 @@ import {
   type SsoStatusResponse,
   ssoDomains,
   ssoRecordName,
+  updateSsoProvider,
   verifySsoDomain,
 } from '@/settings/sso'
 
@@ -51,6 +62,10 @@ function SsoSettingsAdmin() {
   // stored on the provider row the list reads — it is minted on request and read back only here.
   const [tokens, setTokens] = useState<Record<string, string>>({})
   const [redirectUri, setRedirectUri] = useState<string | undefined>(undefined)
+  // Removing a provider unmounts the button that was focused. Without somewhere to hand focus to,
+  // it falls to `<body>` and the next Tab restarts at the top of the document — so the heading is a
+  // stable anchor that outlives every row, exactly as `pm-digest-card.tsx` does for publish/retract.
+  const headingRef = useRef<HTMLHeadingElement>(null)
 
   const reload = useCallback(async () => {
     try {
@@ -76,7 +91,12 @@ function SsoSettingsAdmin() {
   return (
     <section aria-labelledby="sso-heading" className="flex flex-col gap-5">
       <header className="flex flex-col gap-1">
-        <h1 id="sso-heading" className="font-heading text-2xl font-semibold tracking-tight">
+        <h1
+          id="sso-heading"
+          ref={headingRef}
+          tabIndex={-1}
+          className="font-heading text-2xl font-semibold tracking-tight outline-none"
+        >
           Single sign-on
         </h1>
         <p className="text-sm text-text-3">
@@ -134,6 +154,7 @@ function SsoSettingsAdmin() {
                 <SsoProviderRow
                   key={provider.providerId}
                   provider={provider}
+                  focusAnchor={headingRef}
                   token={tokens[provider.providerId]}
                   onToken={(providerId, token) =>
                     setTokens((current) => ({ ...current, [providerId]: token }))
@@ -167,6 +188,7 @@ function SsoSettingsAdmin() {
 
 function SsoProviderRow({
   provider,
+  focusAnchor,
   token,
   onToken,
   onChanged,
@@ -174,6 +196,7 @@ function SsoProviderRow({
   onError,
 }: {
   provider: RedactedSsoProvider
+  focusAnchor: RefObject<HTMLElement | null>
   token: string | undefined
   onToken: (providerId: string, token: string) => void
   onChanged: () => Promise<void>
@@ -183,6 +206,32 @@ function SsoProviderRow({
   const [busy, setBusy] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [verificationError, setVerificationError] = useState<string | undefined>(undefined)
+  const rowRef = useRef<HTMLLIElement>(null)
+  const removeRef = useRef<HTMLButtonElement>(null)
+  const confirmRef = useRef<HTMLButtonElement>(null)
+  const settled = useRef(false)
+
+  // Remove and its confirm/cancel pair REPLACE each other, so activating either unmounts the
+  // control that was focused and focus falls to `<body>`. Focus follows the swap in both
+  // directions; the guard keeps first paint from stealing focus onto a row nobody asked for.
+  useLayoutEffect(() => {
+    if (!settled.current) {
+      settled.current = true
+      return
+    }
+    if (confirming) confirmRef.current?.focus()
+    else removeRef.current?.focus()
+  }, [confirming])
+
+  // A successful removal unmounts the whole row. React runs this cleanup before the subtree's DOM
+  // nodes go, which is the only moment the focused control both still exists and is known to be
+  // leaving — so the handoff to the page heading happens here rather than in `remove`.
+  useLayoutEffect(() => {
+    const row = rowRef.current
+    return () => {
+      if (row?.contains(document.activeElement)) focusAnchor.current?.focus()
+    }
+  }, [focusAnchor])
 
   const showRecord = async () => {
     setBusy(true)
@@ -225,6 +274,12 @@ function SsoProviderRow({
     }
   }
 
+  const cancelOnEscape = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Escape') return
+    event.stopPropagation()
+    setConfirming(false)
+  }
+
   const remove = async () => {
     setBusy(true)
     onError(undefined)
@@ -242,6 +297,7 @@ function SsoProviderRow({
 
   return (
     <li
+      ref={rowRef}
       className="flex flex-col gap-3 rounded-card border border-border p-4"
       data-testid="sso-provider"
       data-provider-id={provider.providerId}
@@ -263,15 +319,31 @@ function SsoProviderRow({
         {confirming ? (
           <span className="flex items-center gap-2">
             <span className="text-xs text-text-2">Remove this provider?</span>
-            <Button size="sm" disabled={busy} onClick={remove} data-testid="sso-remove-confirm">
+            {/* Escape cancels, the way every other dismissible surface in the app does. The confirm
+                is inline rather than a dialog, so the key is bound on the two controls that can
+                hold focus while it is open. */}
+            <Button
+              ref={confirmRef}
+              size="sm"
+              disabled={busy}
+              onClick={remove}
+              onKeyDown={cancelOnEscape}
+              data-testid="sso-remove-confirm"
+            >
               Remove
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setConfirming(false)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setConfirming(false)}
+              onKeyDown={cancelOnEscape}
+            >
               Cancel
             </Button>
           </span>
         ) : (
           <Button
+            ref={removeRef}
             size="sm"
             variant="outline"
             disabled={busy}
@@ -300,6 +372,12 @@ function SsoProviderRow({
         </dd>
       </dl>
 
+      <SecretRotation
+        providerId={provider.providerId}
+        onChanged={onChanged}
+        onAnnounce={onAnnounce}
+      />
+
       {provider.domainVerified ? null : (
         <DomainVerification
           provider={provider}
@@ -313,6 +391,84 @@ function SsoProviderRow({
         />
       )}
     </li>
+  )
+}
+
+// Rotation, never reveal. The stored secret is not returned by any response, so this field starts
+// empty on every render and the only thing it can do is REPLACE — which is what the page promises an
+// admin, and what makes an IdP credential leak recoverable without a database client.
+function SecretRotation({
+  providerId,
+  onChanged,
+  onAnnounce,
+}: {
+  providerId: string
+  onChanged: () => Promise<void>
+  onAnnounce: (message: string) => void
+}) {
+  const fieldId = useId()
+  const [secret, setSecret] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | undefined>(undefined)
+
+  const value = secret.trim()
+
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (busy || value.length === 0) return
+    setBusy(true)
+    setError(undefined)
+    try {
+      await updateSsoProvider(providerId, { oidcConfig: { clientSecret: value } })
+      setSecret('')
+      onAnnounce(`Client secret replaced for ${providerId}.`)
+      await onChanged()
+    } catch {
+      setError('Could not replace the client secret. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form
+      className="flex flex-wrap items-end gap-2"
+      onSubmit={save}
+      data-testid="sso-rotate-secret-form"
+    >
+      <div className="flex min-w-56 flex-1 flex-col gap-1">
+        <Label htmlFor={fieldId} className="text-[11px] text-text-3">
+          {`New client secret for ${providerId}`}
+        </Label>
+        <Input
+          id={fieldId}
+          type="password"
+          value={secret}
+          autoComplete="off"
+          placeholder="Rotate the secret…"
+          aria-describedby={`${fieldId}-hint`}
+          onChange={(event) => setSecret(event.target.value)}
+          className="h-8 text-sm"
+        />
+        <span id={`${fieldId}-hint`} className="text-[11px] text-text-3">
+          Paste the new secret from your IdP. yapm never reads the old one back.
+        </span>
+      </div>
+      <Button
+        type="submit"
+        size="sm"
+        variant="outline"
+        disabled={busy || value.length === 0}
+        data-testid="sso-rotate-secret"
+      >
+        Replace secret
+      </Button>
+      {error === undefined ? null : (
+        <p className="text-[12.5px] text-status-urgent" role="alert" data-testid="sso-rotate-error">
+          {error}
+        </p>
+      )}
+    </form>
   )
 }
 
@@ -522,15 +678,21 @@ function RegisterProviderForm({
       setDomain('')
       await onRegistered(result)
     } catch (cause) {
-      const status = cause instanceof SsoRequestError ? cause.status : 500
+      const failure = cause instanceof SsoRequestError ? cause : undefined
+      // The code, not the status, decides between the two 409s: an id already taken and the
+      // per-account provider cap have different remedies and must not share a message.
       setFormError(
-        status === 409
-          ? 'A provider with that id already exists. Choose another id, or remove the existing one.'
-          : status === 403
-            ? 'Only a workspace admin can register an identity provider.'
-            : status === 400
-              ? 'yapm could not register that provider. The id must be lowercase letters, digits and hyphens; the issuer and discovery URL must be absolute https URLs reachable from this server.'
-              : 'Could not register the provider. Try again.',
+        failure?.code === 'provider_limit_reached'
+          ? 'This account has registered as many identity providers as it may. Remove one you no longer use, or ask another workspace admin to register this one.'
+          : failure?.status === 409
+            ? 'A provider with that id already exists. Choose another id, or remove the existing one.'
+            : failure?.status === 403
+              ? 'Only a workspace admin can register an identity provider.'
+              : failure?.status === 502
+                ? 'yapm could not reach that issuer to read its OpenID Connect discovery document. Check the issuer URL is correct and reachable from this server, then try again.'
+                : failure?.status === 400
+                  ? 'yapm could not register that provider. The id must be lowercase letters, digits and hyphens; the issuer and discovery URL must be absolute https URLs reachable from this server.'
+                  : 'Could not register the provider. Try again.',
       )
     } finally {
       setBusy(false)
@@ -551,7 +713,8 @@ function RegisterProviderForm({
         <p className="text-sm text-text-2">
           yapm reads the provider's OpenID Connect discovery document to find its endpoints, so the
           issuer URL is usually all it needs. The client secret is stored on your instance and never
-          returned to this page — rotating it means entering the new one here.
+          returned to this page — rotating it later means pasting the new one into{' '}
+          <strong className="font-semibold">New client secret</strong> on the provider above.
         </p>
       </header>
 

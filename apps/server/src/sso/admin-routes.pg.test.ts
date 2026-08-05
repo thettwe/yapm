@@ -1,6 +1,6 @@
 import { newId } from '@yapm/schema'
 import type { Database } from '@yapm/schema/db'
-import { createDatabase, migrateToLatest } from '@yapm/schema/db'
+import { claimSsoProvider, createDatabase, migrateToLatest } from '@yapm/schema/db'
 import { Hono } from 'hono'
 import { pino } from 'pino'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -26,6 +26,7 @@ const suffix = newId().replaceAll('-', '').slice(0, 12)
 const PROVIDER_ID = `acme-${suffix}`
 const ABSENT_PROVIDER_ID = `ghost-${suffix}`
 const DOMAIN = `${suffix}.example.test`
+const NEW_DOMAIN = `alt-${suffix}.example.test`
 const CLIENT_SECRET = `secret-${suffix}`
 
 // `skipDiscovery` plus explicit endpoints: registration must not reach the network for a test to
@@ -51,12 +52,18 @@ describe.skipIf(DATABASE_URL === undefined)('SSO administration is workspace-adm
   let env: Env
 
   const workspaceId = newId()
-  const cookies: Record<'admin' | 'member' | 'viewer' | 'outsider', string> = {
+  const cookies: Record<'admin' | 'admin2' | 'member' | 'viewer' | 'outsider', string> = {
     admin: '',
+    admin2: '',
     member: '',
     viewer: '',
     outsider: '',
   }
+  // The admin who did NOT register the provider. Every write below is made as this account, because
+  // "a provider is workspace configuration, not the registering admin's property" is only proven by
+  // a second admin succeeding at it.
+  let admin2Id = ''
+  let adminId = ''
 
   // Sign up through the real handler so every session in this file is one better-auth minted.
   const signUp = async (label: string): Promise<{ userId: string; cookie: string }> => {
@@ -112,7 +119,7 @@ describe.skipIf(DATABASE_URL === undefined)('SSO administration is workspace-adm
   const providerRows = async (providerId: string) =>
     database.db
       .selectFrom('ssoProvider')
-      .select(['providerId', 'domain'])
+      .select(['providerId', 'domain', 'domainVerified', 'userId'])
       .where('providerId', '=', providerId)
       .execute()
 
@@ -141,19 +148,24 @@ describe.skipIf(DATABASE_URL === undefined)('SSO administration is workspace-adm
     app.route('/', createSsoAdminRoutes({ auth, db: database.db, logger: silent }))
 
     const admin = await signUp('admin')
+    const admin2 = await signUp('admin2')
     const member = await signUp('member')
     const viewer = await signUp('viewer')
     // No `workspace_member` row at all — the account an AccessGate is showing right now.
     const outsider = await signUp('outsider')
     cookies.admin = admin.cookie
+    cookies.admin2 = admin2.cookie
     cookies.member = member.cookie
     cookies.viewer = viewer.cookie
     cookies.outsider = outsider.cookie
+    adminId = admin.userId
+    admin2Id = admin2.userId
 
     await database.db
       .insertInto('workspace_member')
       .values([
         { id: newId(), workspace_id: workspaceId, user_id: admin.userId, role: 'admin' },
+        { id: newId(), workspace_id: workspaceId, user_id: admin2.userId, role: 'admin' },
         { id: newId(), workspace_id: workspaceId, user_id: member.userId, role: 'member' },
         { id: newId(), workspace_id: workspaceId, user_id: viewer.userId, role: 'viewer' },
       ])
@@ -197,6 +209,16 @@ describe.skipIf(DATABASE_URL === undefined)('SSO administration is workspace-adm
     // with the base path included — documented as a literal, so asserted as one.
     expect(payload.domainVerificationToken).toEqual(expect.any(String))
     expect(payload.redirectURI).toBe(`${ORIGIN}/api/auth/sso/callback/${PROVIDER_ID}`)
+    expect(await providerRows(PROVIDER_ID)).toHaveLength(1)
+  })
+
+  // The mistake an operator following the docs actually makes, and the one the published `/api/v1`
+  // contract names. The plugin PRE-CHECKS the id and raises 422 rather than letting the table's
+  // unique constraint fire, so an unmapped 422 answers this with a 500 that says nothing.
+  it('answers a duplicate provider id with the documented 409, not a 500', async () => {
+    const response = await post('/api/v1/sso/providers', cookies.admin, providerBody)
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'provider_exists' })
     expect(await providerRows(PROVIDER_ID)).toHaveLength(1)
   })
 
@@ -301,5 +323,61 @@ describe.skipIf(DATABASE_URL === undefined)('SSO administration is workspace-adm
     const payload = (await response.json()) as { url: string; redirect: boolean }
     expect(payload.redirect).toBe(true)
     expect(payload.url.startsWith('https://idp.example.test/authorize')).toBe(true)
+  })
+
+  // A PROVIDER IS WORKSPACE CONFIGURATION. Every write below is made by the admin who did NOT
+  // register it — the plugin would refuse all three (`provider.userId === session.user.id`), so
+  // these pass only because `claimSsoProvider` moves the ownership pointer first. Without them the
+  // spec's "an admin's departure never strands the workspace's SSO configuration" is unasserted.
+  it('lets a second workspace admin update a provider they did not register', async () => {
+    const response = await post(`/api/v1/sso/providers/${PROVIDER_ID}`, cookies.admin2, {
+      domain: NEW_DOMAIN,
+    })
+    expect(response.status).toBe(200)
+
+    const [row] = await providerRows(PROVIDER_ID)
+    expect(row?.domain).toBe(NEW_DOMAIN)
+    expect(row?.userId).toBe(admin2Id)
+    // Changing the domain resets verification (the plugin does this, and the docs page warns about
+    // it), which takes the SSO button back off the login form until the new domain is proven.
+    expect(row?.domainVerified).toBe(false)
+    const methods = await app.request('/api/auth-methods')
+    expect(await methods.json()).toMatchObject({ sso: false })
+  })
+
+  it('lets that second admin mint the DNS token for the new domain', async () => {
+    const response = await post(
+      `/api/v1/sso/providers/${PROVIDER_ID}/domain-verification`,
+      cookies.admin2,
+    )
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      providerId: PROVIDER_ID,
+      domainVerificationToken: expect.any(String),
+    })
+  })
+
+  // The ownership transfer on its own, against the real table. Its return value is what every
+  // mutating route turns into a 404, so "no such provider" must be `false` AND must write nothing —
+  // a helper that reported success for an absent id would make each of those routes answer 200 for
+  // a provider that does not exist.
+  it('transfers ownership only for a provider that exists', async () => {
+    expect(await claimSsoProvider(database.db, ABSENT_PROVIDER_ID, admin2Id)).toBe(false)
+    expect(await providerRows(ABSENT_PROVIDER_ID)).toHaveLength(0)
+
+    const [before] = await providerRows(PROVIDER_ID)
+    expect(before?.userId).toBe(admin2Id)
+    expect(await claimSsoProvider(database.db, PROVIDER_ID, adminId)).toBe(true)
+    expect((await providerRows(PROVIDER_ID))[0]?.userId).toBe(adminId)
+  })
+
+  it('lets that second admin delete the provider, and reports SSO unavailable again', async () => {
+    const response = await app.request(`/api/v1/sso/providers/${PROVIDER_ID}`, {
+      method: 'DELETE',
+      headers: { cookie: cookies.admin2, origin: ORIGIN },
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ configured: false, providers: [] })
+    expect(await providerRows(PROVIDER_ID)).toHaveLength(0)
   })
 })

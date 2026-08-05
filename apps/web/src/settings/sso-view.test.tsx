@@ -27,6 +27,8 @@ const api = vi.hoisted(() => ({
   providers: [] as unknown[],
   token: 'tok-abc123',
   verifyStatus: 200,
+  registerStatus: 200,
+  registerError: undefined as string | undefined,
 }))
 
 const UNVERIFIED: RedactedSsoProvider = {
@@ -46,6 +48,8 @@ beforeEach(() => {
   api.status = 200
   api.providers = []
   api.verifyStatus = 200
+  api.registerStatus = 200
+  api.registerError = undefined
   clipboard.writeText.mockClear()
   vi.stubGlobal('navigator', { clipboard })
   vi.stubGlobal(
@@ -61,6 +65,9 @@ beforeEach(() => {
       if (api.status !== 200) {
         return Promise.resolve({ ok: false, status: api.status } as Response)
       }
+      // A removal really removes: the reload that follows has to be able to unmount the row, which
+      // is what the focus handoff hangs off.
+      if (method === 'DELETE') api.providers = []
       if (url.endsWith('/domain-verification')) {
         return Promise.resolve({
           ok: true,
@@ -71,6 +78,13 @@ beforeEach(() => {
       }
       if (url.endsWith('/verify') && api.verifyStatus !== 200) {
         return Promise.resolve({ ok: false, status: api.verifyStatus } as Response)
+      }
+      if (url.endsWith('/providers') && method === 'POST' && api.registerStatus !== 200) {
+        return Promise.resolve({
+          ok: false,
+          status: api.registerStatus,
+          json: () => Promise.resolve({ error: api.registerError }),
+        } as Response)
       }
       if (url.endsWith('/providers') && method === 'POST') {
         return Promise.resolve({
@@ -208,3 +222,79 @@ test('removing a provider asks first', async () => {
   fireEvent.click(screen.getByTestId('sso-remove-confirm'))
   await waitFor(() => expect(requests.some((request) => request.method === 'DELETE')).toBe(true))
 })
+
+// The only destructive control on the page, and activating it REPLACES the button that was
+// focused. Without a handoff, focus lands on `<body>` and a keyboard-only admin restarts their Tab
+// journey at the top of the document — three times over: confirm, cancel, and the removal itself.
+test('focus follows the remove confirmation rather than falling to the body', async () => {
+  api.providers = [UNVERIFIED]
+  render(<SsoSettingsView />)
+
+  const remove = await screen.findByTestId('sso-remove')
+  remove.focus()
+  fireEvent.click(remove)
+  await waitFor(() => expect(screen.getByTestId('sso-remove-confirm')).toHaveFocus())
+
+  // Escape cancels without a pointer, and focus returns to the control that opened the confirm.
+  fireEvent.keyDown(screen.getByTestId('sso-remove-confirm'), { key: 'Escape' })
+  await waitFor(() => expect(screen.getByTestId('sso-remove')).toHaveFocus())
+
+  fireEvent.click(screen.getByTestId('sso-remove'))
+  fireEvent.click(await screen.findByTestId('sso-remove-confirm'))
+  // The row unmounts on success; the page heading is the anchor that outlives it.
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Single sign-on' })).toHaveFocus())
+})
+
+test('a client secret can be rotated from the provider row, write-only in both directions', async () => {
+  api.providers = [{ ...UNVERIFIED, domainVerified: true }]
+  render(<SsoSettingsView />)
+
+  const field = await screen.findByLabelText(/new client secret for acme-okta/i)
+  expect(field).toHaveValue('')
+  fireEvent.change(field, { target: { value: CLIENT_SECRET } })
+  fireEvent.submit(screen.getByTestId('sso-rotate-secret-form'))
+
+  await waitFor(() =>
+    expect(
+      requests.some(
+        (request) => request.url === '/api/v1/sso/providers/acme-okta' && request.method === 'POST',
+      ),
+    ).toBe(true),
+  )
+  const rotate = requests.find((request) => request.url === '/api/v1/sso/providers/acme-okta')
+  expect(rotate?.body).toEqual({ oidcConfig: { clientSecret: CLIENT_SECRET } })
+
+  await waitFor(() => expect(field).toHaveValue(''))
+  expect(document.body.innerHTML).not.toContain(CLIENT_SECRET)
+})
+
+async function submitRegistration(): Promise<void> {
+  await screen.findByTestId('sso-register-form')
+  const fill = (label: RegExp, value: string) =>
+    fireEvent.change(screen.getByLabelText(label), { target: { value } })
+  fill(/^provider id/i, 'acme-okta')
+  fill(/^email domain/i, 'acme.example')
+  fill(/^issuer url/i, 'https://acme.okta.example')
+  fill(/^client id/i, 'client-a1b2c3d4e5')
+  fill(/^client secret/i, CLIENT_SECRET)
+  fireEvent.submit(screen.getByTestId('sso-register-form'))
+}
+
+// Registration answers 409 for two unrelated refusals with unrelated remedies, and 502 for an
+// issuer it could not reach — which is not a domain-verification failure and must not be described
+// as one. The message is chosen by the server's error CODE where the status is ambiguous.
+test.each([
+  [409, 'provider_limit_reached', /as many identity providers as it may/i],
+  [409, 'provider_exists', /already exists/i],
+  [502, 'issuer_unreachable', /could not reach that issuer/i],
+])(
+  'a %i %s registration failure names what an admin can do about it',
+  async (status, code, message) => {
+    api.registerStatus = status
+    api.registerError = code
+    render(<SsoSettingsView />)
+    await submitRegistration()
+
+    expect(await screen.findByTestId('sso-register-error')).toHaveTextContent(message)
+  },
+)

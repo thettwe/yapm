@@ -77,11 +77,30 @@ export function ssoDomains(domain: string): string[] {
 
 export class SsoRequestError extends Error {
   readonly status: number
+  // The server's own error code, when it sent one. The status alone is ambiguous: registration
+  // answers 409 both for a provider id already taken (`provider_exists`) and for the per-account
+  // provider cap (`provider_limit_reached`), and those have different remedies.
+  readonly code: string | undefined
 
-  constructor(status: number, message: string) {
-    super(message)
+  constructor(status: number, code?: string) {
+    super(code === undefined ? `request failed with ${status}` : `${code} (${status})`)
     this.name = 'SsoRequestError'
     this.status = status
+    this.code = code
+  }
+}
+
+// A refusal body is `{ error: '<code>' }`, but a proxy or a network fault can produce a non-JSON
+// body on any status, so an unreadable one degrades to "no code" rather than to a thrown parse error
+// that would hide the status the caller actually needs.
+async function errorCode(response: Response): Promise<string | undefined> {
+  try {
+    const body: unknown = await response.json()
+    if (typeof body !== 'object' || body === null) return undefined
+    const code = (body as Record<string, unknown>).error
+    return typeof code === 'string' ? code : undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -92,7 +111,7 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
     ...init,
   })
   if (!response.ok) {
-    throw new SsoRequestError(response.status, `request failed with ${response.status}`)
+    throw new SsoRequestError(response.status, await errorCode(response))
   }
   return (await response.json()) as T
 }

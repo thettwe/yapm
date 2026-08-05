@@ -267,19 +267,37 @@ providers cannot register a sixth. Five is far above the one or two IdPs a singl
 self-hosted instance has, and the failure is a clear 403 an admin can resolve by having a colleague
 register, so the interaction is recorded rather than designed around. It must never be `0`.
 
-### L3 — The plugin's `APIError` statuses are mapped, and its 403 is folded into 404
+### L3 — The plugin's `APIError` statuses are mapped, and the same status means two things
 
-`checkProviderAccess` answers `403 "You don't have access to this provider"` when ownership does not
-match. `claimSsoProvider` makes that unreachable, but if it ever were reached, passing it through
-would give `/api/v1/sso` two incompatible meanings for 403 — "you are not a workspace admin" and
-"another account owns this row". It is folded into `provider_not_found` (404), and no plugin message
-is echoed. `failure()` switches on `APIError.statusCode` (a number) rather than `.status`, whose type
-is a `string | number` union.
+`failure()` switches on `APIError.statusCode` (a number) rather than `.status`, whose type is a
+`string | number` union. Two of the plugin's statuses mean **different things on the registration
+route than on a route that already resolved a `:providerId`**, so `failure(error, kind)` takes the
+route kind rather than guessing:
 
-A duplicate `providerId` does not raise an `APIError` at all — the plugin calls `adapter.create`
-directly, so it surfaces as a Postgres unique-constraint violation. That is the mistake an operator
-following the docs actually makes, so it is caught by name and answered `409 provider_exists`
-instead of 500.
+| Status | On `POST /providers` | On update / delete / domain-verification / verify |
+|---|---|---|
+| 403 | the per-account provider cap (index.mjs:2552, `"You have reached the maximum number of SSO providers"`) → `409 provider_limit_reached` | `checkProviderAccess`'s ownership refusal → folded into `404 provider_not_found` |
+| 502 | OIDC discovery timed out or failed (`mapDiscoveryErrorToAPIError`, index.mjs:690) → `502 issuer_unreachable` | the DNS TXT lookup found no matching record (index.mjs:1656) → `502 domain_verification_failed` |
+
+The 403 fold on the claimed routes is the original reasoning: `claimSsoProvider` makes the plugin's
+refusal unreachable, but passing it through would give `/api/v1/sso` two incompatible meanings for
+403 — "you are not a workspace admin" and "another account owns this row". No plugin message is
+echoed in either direction. The register 403 must *not* be folded that way: it names no provider at
+all, so answering `404 provider_not_found` would be a lie about a request that asked about nothing.
+
+**Correcting §D's premise about duplicates.** The proposal assumed a duplicate `providerId` reaches
+`adapter.create` and surfaces as a Postgres unique-constraint violation. It does not. The plugin
+**pre-checks** with `adapter.findOne` (index.mjs:2599-2610) and throws
+`APIError("UNPROCESSABLE_ENTITY", "SSO provider with this providerId already exists")` — a 422, which
+the original mapper had no case for, so the documented `409 provider_exists` was unreachable and the
+mistake an operator actually makes answered `500`. `case 422` now disambiguates on the message,
+because 422 also carries two refusals with no remedy an admin can act on (a **reserved** providerId,
+index.mjs:2578, and one already used by a **SCIM** provider, index.mjs:2590) — those map to
+`400 invalid_provider_config`.
+
+The unique-violation branch is kept as a second net, demoted: two registrations racing can both pass
+the pre-check and collide on the constraint. That path is a race rather than a fault, so it answers
+`409 provider_exists` without `logger.error`.
 
 ### L4 — Four existing `AuthService` fakes had to grow
 
@@ -385,6 +403,37 @@ exact-match semantics, `providersLimit: 0` meaning *disabled*, the per-user prov
 in-process `node:dns/promises` verification and its 7-day token, the `${baseURL}/sso/callback/:id`
 redirect URI, and the cleartext `clientSecret`. Every line is a file-and-line citation into the
 installed build. Fixing the reference is the part of this change that prevents the next one.
+
+### L13 — Rotation is a control on the page, not a `curl` in the docs
+
+§D8 promised "re-entering it is how it is rotated", and the page said so in prose while rendering no
+control: `updateSsoProvider` was exported by the typed client and called from nowhere. The two ways
+out were to render the control or to demote the promise to an API-only note. The control was built —
+a write-only field plus **Replace secret** on each provider row — because an IdP credential leak is
+exactly the moment an admin must not be sent to a terminal, and because the alternative left an
+exported function with no caller.
+
+It is safe to do from the update endpoint: `clientSecret` is not one of
+`OIDC_IDENTITY_BOUNDARY_FIELDS` (index.mjs:1192), so a rotation never trips the plugin's
+`409 "Cannot change SSO provider identity fields while linked accounts exist"` and never resets
+`domainVerified`. Changing `domain` **does** reset verification (index.mjs:1458), which is a
+workspace-wide effect with no warning anywhere in the product — so it is now a `:::caution` on the
+docs page rather than a surprise, and the pg test asserts it.
+
+### L14 — The e2e tier this change was missing
+
+A new permission surface and a new settings page shipped with unit and integration coverage but no
+browser tier, so the spec's keyboard-only scenario was asserted nowhere. `apps/web/e2e/sso.spec.ts`
+adds it. One thing it cannot do: complete a registration. That performs OIDC discovery against a real
+issuer and the harness has no IdP, so the provider is **seeded straight to Postgres** and the
+successful-registration facts (the redirect URI, the minted token) stay where they already are, in
+the pg test. What e2e proves is what only a browser can: the menu route, tab order through the five
+fields, Enter submitting, focus surviving the Remove/confirm/cancel swap, the absence for a member
+and a viewer, and the surface in three presets light and dark.
+
+The seeded row is always **unverified** — a verified one would make `/api/auth-methods` report SSO
+available and put a "Continue with SSO" button on the login form for every other spec sharing the
+database.
 
 ## Migration / Rollout
 

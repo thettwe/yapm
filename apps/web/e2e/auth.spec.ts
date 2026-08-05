@@ -110,6 +110,9 @@ test.describe
       try {
         const page = await context.newPage()
         await page.goto('/login')
+        // No verified SSO provider on this instance, so the form advertises no SSO control at all
+        // — absence, not a button that cannot complete.
+        await expect(page.getByTestId('login-sso')).toHaveCount(0)
         await page.getByLabel('Email').focus()
         await page.keyboard.type(viewer.email)
         await page.keyboard.press('Tab')

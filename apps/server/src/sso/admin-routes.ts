@@ -21,6 +21,28 @@ interface AdminSession {
   workspaceId: string
 }
 
+// `register` names no existing provider and runs no ownership transfer; `claimed` is every route
+// that resolved a `:providerId` and called `claimSsoProvider` first. The plugin reuses statuses
+// across the two, so the mapper below needs to know which one it is answering for.
+type RouteKind = 'register' | 'claimed'
+
+interface Failure {
+  code: string
+  status: 400 | 404 | 409 | 502 | 500
+}
+
+// A `providerId` collision is answered 409 by `failure()` off the plugin's own 422 pre-check. Two
+// registrations racing can still both pass that check and collide on the table's unique constraint,
+// which arrives as a driver error rather than an `APIError`. That is a race, not a fault, so it gets
+// the same 409 without being logged as a server error.
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    !(error instanceof APIError) &&
+    error instanceof Error &&
+    /duplicate key|unique/iu.test(error.message)
+  )
+}
+
 declare module 'hono' {
   interface ContextVariableMap {
     ssoAdmin: AdminSession
@@ -101,19 +123,39 @@ export function createSsoAdminRoutes(options: SsoAdminRoutesOptions): Hono {
   // check answers "You don't have access to this provider"), and its 403 would contradict the 403
   // this surface means. So the status is mapped and the message is replaced with a yapm-owned code —
   // never echoed verbatim.
-  const failure = (error: unknown): { code: string; status: 400 | 404 | 409 | 502 | 500 } => {
+  //
+  // The SAME plugin status means different things on the two kinds of route, so the kind is threaded
+  // in rather than guessed. `register` runs no `claimSsoProvider` and names no existing provider:
+  // its 403 is the per-account provider cap (index.mjs:2552) and its 502 is OIDC discovery failing
+  // to reach the issuer (`mapDiscoveryErrorToAPIError`, index.mjs:690). On a `claimed` route the 403
+  // is the plugin's ownership refusal and the 502 is a DNS lookup that did not find the TXT record
+  // (index.mjs:1656).
+  const failure = (error: unknown, kind: RouteKind): Failure => {
     if (!(error instanceof APIError)) return { code: 'internal_server_error', status: 500 }
     switch (error.statusCode) {
-      // 403 is the plugin's own ownership refusal, which `claimSsoProvider` has already made
-      // unreachable. Folded into 404 rather than passed through, because a 403 from THIS surface
-      // means "you are not a workspace admin" and must not come to mean two different things.
       case 403:
+        // On a claimed route this is the plugin's ownership refusal, which `claimSsoProvider` has
+        // already made unreachable. Folded into 404 rather than passed through, because a 403 from
+        // THIS surface means "you are not a workspace admin" and must not come to mean two things.
+        return kind === 'register'
+          ? { code: 'provider_limit_reached', status: 409 }
+          : { code: 'provider_not_found', status: 404 }
       case 404:
         return { code: 'provider_not_found', status: 404 }
       case 409:
         return { code: 'conflict', status: 409 }
+      // UNPROCESSABLE_ENTITY carries three distinct registration refusals: a `providerId` already
+      // taken (the plugin PRE-CHECKS with `adapter.findOne` at index.mjs:2599 — no unique-constraint
+      // violation ever fires), a reserved id, and one already used by a SCIM provider. Only the
+      // first has a documented code and a remedy an admin can act on, so it is the one disambiguated.
+      case 422:
+        return /already exists/iu.test(error.message)
+          ? { code: 'provider_exists', status: 409 }
+          : { code: 'invalid_provider_config', status: 400 }
       case 502:
-        return { code: 'domain_verification_failed', status: 502 }
+        return kind === 'register'
+          ? { code: 'issuer_unreachable', status: 502 }
+          : { code: 'domain_verification_failed', status: 502 }
       case 400:
         return { code: 'invalid_provider_config', status: 400 }
       default:
@@ -143,14 +185,10 @@ export function createSsoAdminRoutes(options: SsoAdminRoutesOptions): Hono {
         ...(await statusPayload()),
       })
     } catch (error) {
-      const { code, status } = failure(error)
+      if (isUniqueViolation(error)) return c.json({ error: 'provider_exists' }, 409)
+      const { code, status } = failure(error, 'register')
       if (status === 500) logger.error({ err: error }, 'sso provider registration failed')
-      // A duplicate `providerId` violates the table's unique constraint rather than raising an
-      // `APIError`, so it would otherwise be a 500. Named here because it is the mistake an operator
-      // following the docs actually makes.
-      const duplicate =
-        status === 500 && error instanceof Error && /duplicate key|unique/iu.test(error.message)
-      return duplicate ? c.json({ error: 'provider_exists' }, 409) : c.json({ error: code }, status)
+      return c.json({ error: code }, status)
     }
   })
 
@@ -172,7 +210,7 @@ export function createSsoAdminRoutes(options: SsoAdminRoutesOptions): Hono {
       logger.info({ providerId }, 'sso provider updated')
       return c.json(await statusPayload())
     } catch (error) {
-      const { code, status } = failure(error)
+      const { code, status } = failure(error, 'claimed')
       if (status === 500) logger.error({ err: error, providerId }, 'sso provider update failed')
       return c.json({ error: code }, status)
     }
@@ -188,7 +226,7 @@ export function createSsoAdminRoutes(options: SsoAdminRoutesOptions): Hono {
       logger.info({ providerId }, 'sso provider deleted')
       return c.json(await statusPayload())
     } catch (error) {
-      const { code, status } = failure(error)
+      const { code, status } = failure(error, 'claimed')
       if (status === 500) logger.error({ err: error, providerId }, 'sso provider deletion failed')
       return c.json({ error: code }, status)
     }
@@ -206,7 +244,7 @@ export function createSsoAdminRoutes(options: SsoAdminRoutesOptions): Hono {
       )
       return c.json({ providerId, domainVerificationToken })
     } catch (error) {
-      const { code, status } = failure(error)
+      const { code, status } = failure(error, 'claimed')
       if (status === 500)
         logger.error({ err: error, providerId }, 'sso domain token request failed')
       return c.json({ error: code }, status)
@@ -223,7 +261,7 @@ export function createSsoAdminRoutes(options: SsoAdminRoutesOptions): Hono {
       logger.info({ providerId }, 'sso provider domain verified')
       return c.json(await statusPayload())
     } catch (error) {
-      const { code, status } = failure(error)
+      const { code, status } = failure(error, 'claimed')
       if (status === 500) logger.error({ err: error, providerId }, 'sso domain verification failed')
       return c.json({ error: code }, status)
     }

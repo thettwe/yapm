@@ -183,6 +183,15 @@ describe('buildRetroDraftInput — the prior retro', () => {
     expect(RETRO_DRAFT_SYSTEM_PROMPT).toContain('retro_action')
     expect(RETRO_DRAFT_SYSTEM_PROMPT).toContain('When no prior actions are given')
   })
+
+  // The prompt asks; `dropUnbackedFollowUps` enforces. Both must exist — a model told nothing about
+  // the obligation would emit follow-ups the validator silently discards, and the team would see a
+  // shorter draft with no explanation.
+  it('names the fourth category and states its citation obligation', () => {
+    expect(RETRO_DRAFT_SYSTEM_PROMPT).toContain('at most three follow_ups')
+    expect(RETRO_DRAFT_SYSTEM_PROMPT).toContain('A follow_up reports the OUTCOME')
+    expect(RETRO_DRAFT_SYSTEM_PROMPT).toContain('one that does not is discarded')
+  })
 })
 
 const DATABASE_URL = process.env.DATABASE_URL
@@ -516,7 +525,7 @@ describe.skipIf(DATABASE_URL === undefined)('runRetroAiDraft (live db, faked gat
           object: {
             proposals: [
               {
-                category: 'win',
+                category: 'follow_up',
                 summary: 'The improvement agreed last cycle landed.',
                 refs: [
                   {
@@ -531,10 +540,10 @@ describe.skipIf(DATABASE_URL === undefined)('runRetroAiDraft (live db, faked gat
                 ],
                 confidence: 'high',
               },
-              // An action id that does not exist: dropped by cite-or-omit, so nothing lands in the
-              // follow-up bucket for it.
+              // An action id that does not exist: dropped by cite-or-omit, so nothing lands under
+              // the follow-up heading for it.
               {
-                category: 'improvement',
+                category: 'follow_up',
                 summary: 'Reports on an action nobody agreed.',
                 refs: [{ kind: 'retro_action', id: newId() }],
                 confidence: 'low',
@@ -554,6 +563,9 @@ describe.skipIf(DATABASE_URL === undefined)('runRetroAiDraft (live db, faked gat
       expect(stored.map((row) => row.summary)).toEqual([
         'The improvement agreed last cycle landed.',
       ])
+      // `follow_up` REACHED POSTGRES. Migration 0022 widened 0018's CHECK to admit it; without that
+      // migration this insert is the constraint violation the drift test exists to catch earlier.
+      expect(stored[0]?.category).toBe('follow_up')
       // The name backstop only ever reads a SUMMARY, so a model-authored label is not dropped by it —
       // for every other reference kind the client resolves the chip from its own synced row and never
       // renders the label, and for this one kind the bake is what makes that true.

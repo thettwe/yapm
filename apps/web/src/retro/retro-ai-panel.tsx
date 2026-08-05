@@ -6,9 +6,8 @@ import {
   isRetroActionRef,
   queries,
   type RETRO_ACTION_OUTCOME_LABEL,
-  RETRO_PROPOSAL_BUCKETS,
+  RETRO_PROPOSAL_CATEGORIES,
   type RetroPhase,
-  type RetroProposalBucket,
   type RetroProposalCategory,
   type RetroProposalVerdict,
   type RetroReactionValue,
@@ -16,7 +15,6 @@ import {
   type RetroSeedMetric,
   type RetroSeedRef,
   retroActionOutcomeFromKey,
-  retroProposalBucket,
   sortContestedFirst,
 } from '@yapm/schema'
 import { Badge } from '@yapm/ui/components/badge'
@@ -67,14 +65,14 @@ import { findSeedMetric, formatSeedDelta, formatSeedValue } from '@/retro/seed-m
 //     that could return another member's reaction, so there is nothing to render.
 //  4. **The fourth group is absent, not empty.** A team with no prior retro to report on — which is
 //     every team on its first retro — renders no heading, no placeholder and no reserved space, and
-//     that is a property of the data rather than a branch: no prior action is citable, so no proposal
-//     lands in the bucket. The prior retro's rows are NOT synced into this view and this file adds no
-//     query for them, which is why a `retro_action` reference renders as a plain chip carrying the
-//     label yapm baked server-side rather than a link.
+//     that is a property of the data rather than a branch: a `follow_up` with no citable prior action
+//     is dropped server-side, so no row ever carries the category. The prior retro's rows are NOT
+//     synced into this view and this file adds no query for them, which is why a `retro_action`
+//     reference renders as a plain chip carrying the label yapm baked server-side rather than a link.
 //  5. **The reported cycle is named on the ROW, not only on the heading.** After ratification the
-//     headings are gone — the list is contested-first across buckets — so a follow-up that named its
-//     cycle only in a group title would stop saying which retro it was reporting on at exactly the
-//     moment the team started discussing it.
+//     headings are gone — the list is contested-first across categories — so a follow-up that named
+//     its cycle only in a group title would stop saying which retro it was reporting on at exactly
+//     the moment the team started discussing it.
 
 const CHIP =
   'inline-flex shrink-0 items-center gap-1 rounded-pill border border-accent-line bg-accent-soft/50 px-2 py-0.5 text-[11px] text-text-2 outline-none hover:text-text-1 focus-visible:ring-2 focus-visible:ring-accent'
@@ -428,14 +426,14 @@ function ProposalItem({
   // is not itself a thing to do. The mutator is deliberately laxer (design D8) — this is the
   // affordance, not the authority.
   const actionable = canAct && verdict === 'agreed' && proposal.category === 'improvement'
-  // The chip says which BUCKET the row is in — a follow-up is labelled a follow-up in the flat
-  // ratified list exactly as it is under its own heading — while `data-category` keeps reporting the
-  // STORED value, so nothing that keys off storage moves.
+  // The chip says which category the row is in, read straight off the stored value. `data-bucket`
+  // and `data-category` are now necessarily identical and both stay, because shipped selectors
+  // (including the e2e suite's) key off each.
   //
   // A follow-up names its cycle ON THE ROW. The flat ratified list has no headings at all, so a row
   // that carried the cycle only in its group title would go quiet about which retro it reports on
   // from `discuss` onward, which is precisely when the team is arguing about it.
-  const bucket = retroProposalBucket(proposal)
+  const bucket = proposal.category
   const bucketLabel =
     bucket === 'follow_up' ? followUpLabel(proposal.refs ?? []) : RETRO_BUCKET_LABEL[bucket]
 
@@ -631,7 +629,7 @@ function AiSection({
 // What the reader is told when the background pass finishes: the counts, in the order they are drawn.
 // Nothing model-authored is spoken — a summary read aloud out of context would be exactly the
 // unratified claim the section spends a line of copy disclaiming.
-const BUCKET_UNIT: Record<RetroProposalBucket, readonly [string, string]> = {
+const BUCKET_UNIT: Record<RetroProposalCategory, readonly [string, string]> = {
   win: ['win', 'wins'],
   loss: ['loss', 'losses'],
   improvement: ['improvement', 'improvements'],
@@ -658,7 +656,7 @@ function readyAnnouncement(groups: readonly BucketGroup[]): string {
 }
 
 interface BucketGroup {
-  readonly bucket: RetroProposalBucket
+  readonly bucket: RetroProposalCategory
   readonly heading: string
   // The cycle the reported actions were agreed in, or null when nothing baked one.
   readonly origin: string | null
@@ -679,15 +677,13 @@ function followUpLabel(refs: readonly RetroSeedRef[]): string {
 }
 
 // The query orders by `category` then `rank`, which is alphabetical across categories; the reader
-// wants Wins, Losses, Improvements, Follow-ups. So the grouping imposes the canonical BUCKET order —
-// `retroProposalBucket`, the same function the cap, the rank and the ratified list use — and keeps
-// `rank` within it. An empty bucket renders no heading at all rather than a hollow one, which is what
-// makes a team's first retro identical to what it was before this capability existed.
+// wants Wins, Losses, Improvements, Follow-ups. So the grouping imposes the canonical CATEGORY order
+// — the same constant the cap, the rank and the ratified list read — and keeps `rank` within it. An
+// empty category renders no heading at all rather than a hollow one, which is what makes a team's
+// first retro identical to what it was before this capability existed.
 function groupByBucket(rows: readonly RetroAiProposalRow[]): BucketGroup[] {
-  return RETRO_PROPOSAL_BUCKETS.map((bucket) => {
-    const proposals = rows
-      .filter((row) => retroProposalBucket(row) === bucket)
-      .sort((a, b) => a.rank - b.rank)
+  return RETRO_PROPOSAL_CATEGORIES.map((bucket) => {
+    const proposals = rows.filter((row) => row.category === bucket).sort((a, b) => a.rank - b.rank)
     const refs = proposals.flatMap((proposal) => proposal.refs ?? [])
     const origin = bucket === 'follow_up' ? followUpOrigin(refs) : null
     return {

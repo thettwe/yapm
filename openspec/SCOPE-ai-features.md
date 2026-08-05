@@ -173,7 +173,9 @@ Extends `retroFactsForCycle` with the prior retro's actions and their converted 
 **stripped of `assignee_id`** — `retro_action` carries one and so does `issue`, making this the
 only place the fact assembly touches an identity-bearing column, so it gets its own stripping test
 — plus a proposal category that reports on them. Optionally the rejected-proposal log as an
-operator-visible tuning signal. No migration.
+operator-visible tuning signal. No migration — a promise kept when this shipped and since spent by
+`retro-followup-category` (24), which buys the stored category with migration
+`0022_retro_followup_category`.
 
 > **BUILT** (`retro-ai-loop-close`), and the optional half was **built too**: it was marked optional
 > only because it needed change 19's verdicts, which did not exist when this was written and do now.
@@ -187,6 +189,15 @@ operator-visible tuning signal. No migration.
 > crossing it for those two and nothing else — an action is the team's agreed public output with no
 > author column, a card is one person's testimony — is in that design as §D1, and the equality
 > assertion in `retro-facts.pg.test.ts` is what keeps "exactly two" true.
+>
+> **Superseded in part by `retro-followup-category` (24).** The maintainer took the alternative that
+> design specified: `follow_up` is now a **fourth stored `category` value** under migration
+> `0022_retro_followup_category`, whose CHECK the drift test asserts against live Postgres, and
+> `retroProposalBucket` no longer exists — the cap, the rank, change 19's comparator and the panel
+> all read `proposal.category`. The property the derivation gave for free, "no prior actions ⇒ no
+> follow-up", is restored explicitly by a `dropUnbackedFollowUps` validator sitting after the caption
+> bake and before the cap. Everything else in this note still stands, the `retro_action` reference
+> kind included: this removed the derivation, not the kind §D4's baked label depends on.
 
 ---
 

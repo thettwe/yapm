@@ -6,9 +6,9 @@ import {
   capRetroProposals,
   type RetroCitations,
   type RetroDraftContent,
+  type RetroProposalCategory,
   rankRetroProposals,
   retroDraftContentSchema,
-  retroProposalBucket,
   sanitizeRetroDraft,
 } from './ai-draft.js'
 
@@ -23,7 +23,7 @@ const KNOWN: RetroCitations = {
 const NO_ROSTER: { name?: string | null; email?: string | null }[] = []
 
 function proposal(
-  category: 'win' | 'loss' | 'improvement',
+  category: RetroProposalCategory,
   summary: string,
   refIds: readonly string[],
 ): RetroDraftContent['proposals'][number] {
@@ -217,7 +217,7 @@ const KNOWN_WITH_PRIOR: RetroCitations = {
 function followUp(
   summary: string,
   actionId: string,
-  category: 'win' | 'loss' | 'improvement' = 'win',
+  category: RetroProposalCategory = 'follow_up',
 ): RetroDraftContent['proposals'][number] {
   return {
     category,
@@ -227,47 +227,83 @@ function followUp(
   }
 }
 
-// A reference as the bucket classifier sees one: it inspects `kind` and nothing else, which is what
-// lets the stored row, the model's parsed output and the client's synced row all be bucketed by the
-// same function with no adapter between them.
-const ref = (kind: string, id: string): { kind: string; id: string } => ({ kind, id })
-
-describe('retroProposalBucket', () => {
-  it('is the stored category when nothing points at a prior action', () => {
-    for (const category of ['win', 'loss', 'improvement'] as const) {
-      expect(retroProposalBucket(proposal(category, 'x', ['issue-1']))).toBe(category)
-      expect(retroProposalBucket({ category, refs: [ref('widget', 'shipped')] })).toBe(category)
-      expect(retroProposalBucket({ category })).toBe(category)
-      expect(retroProposalBucket({ category, refs: null })).toBe(category)
+// A `follow_up` MUST BE BACKED BY THE ACTION IT REPORTS ON. This is the one property change 22's
+// derived bucket got for free — a follow-up could not exist without citing a prior action, because
+// citing one WAS the definition — and the property a stored category has to enforce. Every case here
+// runs through `sanitizeRetroDraft`, so it is the shipped path rather than a direct validator call.
+describe('a follow_up with no prior-action reference is dropped', () => {
+  it('drops one whose only citation is a perfectly valid issue', () => {
+    const content: RetroDraftContent = {
+      proposals: [
+        proposal('follow_up', 'We agreed something last retro and it went well.', ['issue-1']),
+        proposal('win', 'Guest checkout shipped.', ['issue-2']),
+      ],
     }
+
+    const result = sanitizeRetroDraft(content, KNOWN_WITH_PRIOR, NO_ROSTER, PRIOR)
+
+    expect(result.proposals.map((p) => p.summary)).toEqual(['Guest checkout shipped.'])
   })
 
-  // IFF. A follow-up is a proposal that cites a `retro_action`, whatever it was stored as — which is
-  // the whole reason the bucket is derived rather than stored.
-  it('is follow_up exactly when a retro_action reference is present, at any position', () => {
-    expect(retroProposalBucket(followUp('Shipped last cycle’s fix.', 'action-1'))).toBe('follow_up')
-    expect(retroProposalBucket(followUp('Abandoned it.', 'action-2', 'loss'))).toBe('follow_up')
-    expect(
-      retroProposalBucket({
-        category: 'improvement',
-        refs: [ref('issue', 'issue-1'), ref('retro_action', 'action-1')],
-      }),
-    ).toBe('follow_up')
+  // AFTER THE BAKE, and this is the case that fixes the validator's position in the chain. The bake
+  // removes a reference naming an action the prior retro does not have; the follow-up left behind is
+  // still cited — by the issue — so cite-or-omit keeps it. Only a validator downstream of the bake
+  // drops it, rather than storing a follow-up backed by an issue chip and nothing else.
+  it('drops one the bake orphaned, rather than leaving it backed by an issue', () => {
+    const content: RetroDraftContent = {
+      proposals: [
+        {
+          category: 'follow_up',
+          summary: 'Reports on an action this retro never agreed.',
+          refs: [
+            { kind: 'retro_action', id: 'action-9' },
+            { kind: 'issue', id: 'issue-1' },
+          ],
+          confidence: 'medium',
+        },
+      ],
+    }
+
+    const withAction9: RetroCitations = {
+      ...KNOWN_WITH_PRIOR,
+      retroAction: [...KNOWN_WITH_PRIOR.retroAction, 'action-9'],
+    }
+
+    expect(sanitizeRetroDraft(content, withAction9, NO_ROSTER, PRIOR).proposals).toEqual([])
+  })
+
+  // THE CONVERSE IS DELIBERATELY NOT ENFORCED. An `improvement` may cite the prior action it is a
+  // repeat of and is stored as what it says it is — which is what keeps change 19's one-keystroke
+  // "add this improvement as an action" on the proposal most likely to deserve it.
+  it('keeps an improvement that cites a real prior action, with its baked caption intact', () => {
+    const content: RetroDraftContent = {
+      proposals: [followUp('Let us try the release split again.', 'action-2', 'improvement')],
+    }
+
+    const result = sanitizeRetroDraft(content, KNOWN_WITH_PRIOR, NO_ROSTER, PRIOR)
+
+    expect(result.proposals[0]?.category).toBe('improvement')
+    expect(result.proposals[0]?.refs[0]).toEqual({
+      kind: 'retro_action',
+      id: 'action-2',
+      label: 'Rotate the on-call doc weekly — canceled',
+      outcome: 'canceled',
+      origin: 'Cycle 6',
+    })
   })
 })
 
-describe('the cap and the rank count by bucket', () => {
-  // Four follow-ups and four improvements, all STORED as `improvement`, so bucketing by the stored
-  // column would keep three of the eight. Bucketing by the derived bucket keeps three of each — which
-  // is what stops a cycle full of follow-ups from crowding out what the team should do next.
+describe('the cap and the rank count by stored category', () => {
+  // Four follow-ups and four improvements. The cap counts follow-ups on the same line as every other
+  // category, which is what stops a cycle full of them from crowding out what the team should do next.
   const mixed: RetroDraftContent = {
     proposals: [
-      ...[1, 2, 3, 4].map((n) => followUp(`Follow-up ${n}`, 'action-1', 'improvement')),
+      ...[1, 2, 3, 4].map((n) => followUp(`Follow-up ${n}`, 'action-1')),
       ...[1, 2, 3, 4].map((n) => proposal('improvement', `Improvement ${n}`, ['issue-1'])),
     ],
   }
 
-  it('gives three follow-ups AND three improvements out of eight rows stored as one category', () => {
+  it('caps four follow-ups to three, and gives three improvements beside them', () => {
     const capped = capRetroProposals(mixed, 3)
 
     expect(capped.proposals.map((p) => p.summary)).toEqual([
@@ -278,13 +314,12 @@ describe('the cap and the rank count by bucket', () => {
       'Improvement 2',
       'Improvement 3',
     ])
-    expect(capped.proposals.filter((p) => p.category === 'improvement')).toHaveLength(6)
   })
 
-  it('ranks densely within each bucket, not within the stored category', () => {
+  it('ranks densely within each category', () => {
     const ranked = rankRetroProposals(capRetroProposals(mixed, 3))
 
-    expect(ranked.map((p) => [retroProposalBucket(p), p.rank])).toEqual([
+    expect(ranked.map((p) => [p.category, p.rank])).toEqual([
       ['follow_up', 0],
       ['follow_up', 1],
       ['follow_up', 2],
@@ -292,16 +327,14 @@ describe('the cap and the rank count by bucket', () => {
       ['improvement', 1],
       ['improvement', 2],
     ])
-    // Every row still stores one of the three legal category values: the bucket costs no DDL.
-    for (const row of ranked) expect(row.category).toBe('improvement')
   })
 
   it('survives the whole chain: three follow-ups beside three improvements', () => {
     const result = sanitizeRetroDraft(mixed, KNOWN_WITH_PRIOR, NO_ROSTER, PRIOR)
 
-    const buckets = result.proposals.map(retroProposalBucket)
-    expect(buckets.filter((bucket) => bucket === 'follow_up')).toHaveLength(3)
-    expect(buckets.filter((bucket) => bucket === 'improvement')).toHaveLength(3)
+    const categories = result.proposals.map((p) => p.category)
+    expect(categories.filter((category) => category === 'follow_up')).toHaveLength(3)
+    expect(categories.filter((category) => category === 'improvement')).toHaveLength(3)
   })
 })
 
@@ -332,7 +365,7 @@ describe('nothing re-buckets a proposal after the cap has counted it', () => {
     const result = sanitizeRetroDraft(content, KNOWN_WITH_PRIOR, NO_ROSTER, PRIOR)
 
     expect(result.proposals).toHaveLength(3)
-    expect(result.proposals.map(retroProposalBucket)).toEqual(['win', 'win', 'win'])
+    expect(result.proposals.map((p) => p.category)).toEqual(['win', 'win', 'win'])
   })
 
   it('never lets bogus follow-ups consume the cap and then vanish', () => {
@@ -356,11 +389,7 @@ describe('nothing re-buckets a proposal after the cap has counted it', () => {
       'Real follow-up 2',
       'Real follow-up 3',
     ])
-    expect(result.proposals.map(retroProposalBucket)).toEqual([
-      'follow_up',
-      'follow_up',
-      'follow_up',
-    ])
+    expect(result.proposals.map((p) => p.category)).toEqual(['follow_up', 'follow_up', 'follow_up'])
   })
 })
 
@@ -396,7 +425,8 @@ describe('a namespace cannot be crossed in either direction', () => {
     const result = sanitizeRetroDraft(content, KNOWN_WITH_PRIOR, NO_ROSTER, PRIOR)
 
     expect(result.proposals.map((p) => p.summary)).toEqual(['Cites a prior action as itself.'])
-    expect(result.proposals.map(retroProposalBucket)).toEqual(['follow_up'])
+    // Stored as the win it says it is: citing a prior action no longer re-classifies a proposal.
+    expect(result.proposals.map((p) => p.category)).toEqual(['win'])
   })
 
   it('keeps a proposal whose surviving reference is the one on the right side of the line', () => {
@@ -436,7 +466,7 @@ describe('a first retro produces no follow-up, without a first-retro branch', ()
     const result = sanitizeRetroDraft(content, KNOWN, NO_ROSTER, null)
 
     expect(result.proposals.map((p) => p.summary)).toEqual(['Guest checkout shipped.'])
-    expect(result.proposals.map(retroProposalBucket)).not.toContain('follow_up')
+    expect(result.proposals.map((p) => p.category)).not.toContain('follow_up')
   })
 
   it('bakes nothing when there is no prior retro, so no follow-up chip can exist', () => {

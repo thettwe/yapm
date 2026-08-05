@@ -48,9 +48,10 @@ export interface RetroVerdictProposal {
   readonly teamId: string
   readonly teamName: string
   readonly summary: string
-  // The STORED category. The derived `follow_up` bucket lives on the refs, which this read
-  // deliberately does not carry: an operator is looking at what the team threw away, not at how yapm
-  // grouped it.
+  // The stored category, `follow_up` included — the same value the panel groups on, so the log and
+  // the board cannot disagree about which category a rejected proposal was in. The refs are
+  // deliberately not carried: an operator is looking at what the team threw away, not at the
+  // evidence it pointed at.
   readonly category: RetroProposalCategory
   readonly verdict: RetroProposalVerdict
   readonly agreeCount: number

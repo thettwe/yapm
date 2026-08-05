@@ -191,6 +191,7 @@ export {
   RETRO_PHASES,
   RETRO_PRESENCE_HEARTBEAT_MS,
   RETRO_PRESENCE_STALE_MS,
+  RETRO_PROPOSAL_CATEGORY_CHECK,
   RETRO_PROPOSAL_VERDICT_CHECK,
   RETRO_PROPOSAL_VERDICTS,
   RETRO_REACTION_VALUE_CHECK,
@@ -596,19 +597,17 @@ export { initialRanks, rankBetween } from './zero/rank.js'
 export type {
   BakeablePriorRetro,
   BakeableRetroAction,
-  BucketableProposal,
   RankedRetroProposal,
   RetroCitations,
   RetroDraftContent,
   RetroDraftProposal,
-  RetroProposalBucket,
   RetroProposalCategory,
 } from './zero/retro/ai-draft.js'
 export {
   bakeRetroActionRefs,
   capRetroProposals,
+  dropUnbackedFollowUps,
   isRetroActionRef,
-  RETRO_PROPOSAL_BUCKETS,
   RETRO_PROPOSAL_CATEGORIES,
   RETRO_PROPOSALS_PER_CATEGORY,
   rankRetroProposals,
@@ -617,7 +616,6 @@ export {
   retroDraftFromArtifact,
   retroDraftProposalSchema,
   retroDraftToArtifact,
-  retroProposalBucket,
   sanitizeRetroDraft,
 } from './zero/retro/ai-draft.js'
 export type { RetroColumnTemplate, RetroWriteOp } from './zero/retro/phase.js'

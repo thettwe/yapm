@@ -668,9 +668,32 @@ test.each([
   ['unrated', 'improvement'],
   ['agreed', 'win'],
   ['agreed', 'loss'],
+  ['agreed', 'follow_up'],
 ] as const)('no action path on a %s %s', (verdict, category) => {
   mount(draftRow('ready'), [proposal({ id: 'x-1', category, verdict })], { phase: 'discuss' })
   expect(screen.queryByTestId('retro-ai-add-action')).toBeNull()
+})
+
+// THE OTHER HALF OF DESIGN §D4, and the reason the panel needed no second "categories that can
+// become an action" list: a report on how last cycle's action turned out is a `follow_up` and offers
+// nothing to convert, while "we agreed this and it never landed, let us try again" is an
+// `improvement` that HAPPENS to cite the prior action — and it keeps the one keystroke. The prompt
+// draws that line; these two tests are what pin the panel to it.
+test('an agreed improvement citing a prior action still offers the action path', () => {
+  mount(
+    draftRow('ready'),
+    [
+      followUp({
+        id: 'i-again',
+        category: 'improvement',
+        summary: 'The release split never landed; let us try it again.',
+        verdict: 'agreed',
+      }),
+    ],
+    { phase: 'discuss' },
+  )
+
+  expect(screen.getByTestId('retro-ai-add-action')).toBeInTheDocument()
 })
 
 test('the action path is absent in a phase where actions cannot be written', () => {
@@ -754,13 +777,12 @@ test('an opted-in panel asks for the reaction query, and only its own three plus
   )
 })
 
-// A proposal reporting on an improvement the team agreed in its PREVIOUS retro. Its stored category
-// is still one of the three — the bucket is derived from the reference, which is what let this ship
-// without a migration — and every field on the reference below was written by yapm server-side.
+// A proposal reporting on an improvement the team agreed in its PREVIOUS retro. `follow_up` is its
+// STORED category, and every field on the reference below was written by yapm server-side.
 function followUp(overrides: Partial<RetroAiProposalRow> = {}): RetroAiProposalRow {
   return proposal({
     id: 'f-1',
-    category: 'win',
+    category: 'follow_up',
     summary: 'The improvement agreed last cycle landed.',
     refs: [
       {
@@ -809,7 +831,6 @@ test('a follow-up gets its own group, headed with the cycle those actions were a
   ])
 
   const groups = screen.getAllByTestId('retro-ai-category')
-  // Stored as a win, rendered apart from the wins: the bucket is the reference, not the column.
   expect(groups.map((group) => group.dataset.category)).toEqual(['win', 'follow_up'])
   expect(groups[1]?.querySelector('h3')?.textContent).toBe('Follow-ups from Cycle 6')
   expect(groups[0]?.textContent).not.toContain('The improvement agreed last cycle landed.')
@@ -884,7 +905,7 @@ test('a prior-action reference renders yapm’s baked label and does not navigat
   fireEvent.click(chip)
   expect(onOpenIssue).not.toHaveBeenCalled()
 
-  // The row is still labelled by its bucket, so a follow-up reads as one wherever it is drawn.
+  // The row is labelled by its stored category, so a follow-up reads as one wherever it is drawn.
   expect(screen.getByTestId('retro-ai-proposal').dataset.bucket).toBe('follow_up')
 })
 
@@ -901,10 +922,10 @@ test('a prior-action reference with no baked label renders no chip at all', () =
   )
 })
 
-// Change 19's flat contested-first list draws the bucket chip on every row; a follow-up must read as
-// a follow-up there too, not as the category it is stored under — AND it must still say which retro
-// it is reporting on. From `discuss` onward there are no group headings left to carry that, which is
-// exactly when the team is arguing about the row.
+// Change 19's flat contested-first list draws the category chip on every row; a follow-up must read
+// as a follow-up there too, AND it must still say which retro it is reporting on. From `discuss`
+// onward there are no group headings left to carry that, which is exactly when the team is arguing
+// about the row.
 test('the flat contested-first list labels a follow-up with the cycle it reports on', () => {
   mount(draftRow('ready'), [
     proposal({ id: 'w-1', category: 'win', verdict: 'agreed', agreeCount: 2, disagreeCount: 0 }),
@@ -913,7 +934,7 @@ test('the flat contested-first list labels a follow-up with the cycle it reports
 
   const rows = screen.getAllByTestId('retro-ai-proposal')
   expect(rows[0]?.dataset.bucket).toBe('follow_up')
-  expect(rows[0]?.dataset.category).toBe('win')
+  expect(rows[0]?.dataset.category).toBe('follow_up')
   expect(rows[0]?.querySelector('[data-testid="retro-ai-category-chip"]')?.textContent).toBe(
     'Follow-ups from Cycle 6',
   )
@@ -933,4 +954,27 @@ test('a follow-up row with no baked origin falls back to the plain bucket label'
     screen.getByTestId('retro-ai-proposal').querySelector('[data-testid="retro-ai-category-chip"]')
       ?.textContent,
   ).toBe('Follow-ups')
+})
+
+// A ROW DRAFTED BEFORE THIS CHANGE, and the one visible consequence of not backfilling (design §D5).
+// It stores `improvement` and cites a prior action, so under the derived bucket it rendered under
+// Follow-ups; now it renders as the Improvement it stored. Nothing is lost but the grouping — yapm's
+// baked caption still says which action it is about and how that action turned out — and nothing
+// throws, which is the whole of what "old rows keep rendering" has to mean.
+test('a pre-existing improvement citing a prior action renders under Improvements, chip intact', () => {
+  mount(draftRow('ready'), [
+    followUp({
+      id: 'i-old',
+      category: 'improvement',
+      summary: 'The release split never landed; let us try it again.',
+    }),
+  ])
+
+  const group = screen.getByTestId('retro-ai-category')
+  expect(group.dataset.category).toBe('improvement')
+  expect(group.querySelector('h3')?.textContent).toBe('Improvements')
+  expect(screen.getByTestId('retro-ai-evidence-action').textContent).toContain(
+    'Split the release check in two — shipped',
+  )
+  expect(screen.getByTestId('retro-ai-proposal').dataset.category).toBe('improvement')
 })

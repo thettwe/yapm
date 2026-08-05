@@ -21,47 +21,29 @@ import {
 // DB, no SDK, no UI import. The model emits exactly a `RetroDraftContent`; the chain below then
 // enforces the substrate guarantees before anything is stored or shown.
 
-// Wins / Losses / Improvements. The MODEL classifies into these three; it never gets to title them,
-// which is why the artifact adapter carries `heading: null` — the UI supplies the labels.
-export const RETRO_PROPOSAL_CATEGORIES = ['win', 'loss', 'improvement'] as const
+// Wins / Losses / Improvements / Follow-ups — the four buckets the MODEL classifies into and the
+// four values `retro_ai_proposal.category` may store, CHECK-constrained by migration 0022. It never
+// gets to title them, which is why the artifact adapter carries `heading: null` — the UI supplies
+// the labels. The cap, the rank, the ratification comparator, the panel's grouping and its category
+// chip all read this stored value directly; there is no derivation and no second vocabulary.
+//
+// `follow_up` is the one that carries an obligation the other three do not: a proposal reporting on
+// a prior retro's agreed action must cite that action, which `dropUnbackedFollowUps` enforces.
+export const RETRO_PROPOSAL_CATEGORIES = ['win', 'loss', 'improvement', 'follow_up'] as const
 
 export type RetroProposalCategory = (typeof RETRO_PROPOSAL_CATEGORIES)[number]
 
-// The fourth BUCKET, and it is deliberately not a fourth stored category (design §D3).
-// `retro_ai_proposal.category` is a text column under `check (category in ('win','loss',
-// 'improvement'))`, so a fourth stored value costs DDL; `refs` is jsonb with no constraint, so a
-// fourth reference KIND costs nothing. A proposal is a follow-up exactly when it cites one of the
-// prior retro's agreed actions — which means "no prior actions ⇒ no follow-up" falls out of the
-// shipped cite-or-omit validator (no action id is citable, so the reference is narrowed away and the
-// proposal is dropped) rather than out of a first-retro branch somebody has to remember to write.
-export const RETRO_PROPOSAL_BUCKETS = ['win', 'loss', 'improvement', 'follow_up'] as const
-
-export type RetroProposalBucket = (typeof RETRO_PROPOSAL_BUCKETS)[number]
-
-// At most three per bucket. A VALIDATOR, not a prompt instruction: the prompt asks for three, this
+// At most three per category. A VALIDATOR, not a prompt instruction: the prompt asks for three, this
 // number is what guarantees it.
 export const RETRO_PROPOSALS_PER_CATEGORY = 3
 
-// The ONE place a reference is inspected for the loop-closing kind. Everything that needs to know
-// whether something points at a prior action — the bucket, the server's label baking, the panel's
-// chip — asks this, so "what is a follow-up" has exactly one definition.
+// The ONE place a reference is inspected for the loop-closing kind — the server's label baking, the
+// panel's origin lookup and the follow-up citation validator. It identifies a reference KIND, not a
+// proposal's category: what a follow-up IS is the stored value above.
 export function isRetroActionRef<T extends { readonly kind: string }>(
   ref: T,
 ): ref is T & { readonly kind: 'retro_action' } {
   return ref.kind === 'retro_action'
-}
-
-// Enough of a proposal to bucket one: the stored row, the model's parsed output and the client's
-// synced row all satisfy it structurally, so there is no adapter and no second classifier.
-export interface BucketableProposal {
-  readonly category: RetroProposalCategory
-  readonly refs?: readonly { readonly kind: string }[] | null
-}
-
-// THE single definition of a proposal's bucket, used by the cap, the rank, the ratification
-// comparator, the panel's grouping and its category chip.
-export function retroProposalBucket(proposal: BucketableProposal): RetroProposalBucket {
-  return (proposal.refs ?? []).some(isRetroActionRef) ? 'follow_up' : proposal.category
 }
 
 // `refs` reuses `retroSeedRefSchema` rather than the digest's, so `widget` is a legal ref kind and a
@@ -122,21 +104,20 @@ export function retroDraftFromArtifact(artifact: AiArtifact): RetroDraftContent 
   }
 }
 
-// At most `perCategory` proposals per BUCKET, keeping the model's own order within each. Applied
+// At most `perCategory` proposals per category, keeping the model's own order within each. Applied
 // LAST in the chain (see `sanitizeRetroDraft`) so a dropped proposal is replaced by the next real
-// one rather than leaving a hole. Counting by bucket rather than by stored category is what keeps a
-// cycle full of follow-ups from crowding out the improvements the team should make next.
+// one rather than leaving a hole. Follow-ups count under their own category on this same line, which
+// is what keeps a cycle full of them from crowding out the improvements the team should make next.
 export function capRetroProposals(
   content: RetroDraftContent,
   perCategory: number,
 ): RetroDraftContent {
-  const kept = new Map<RetroProposalBucket, number>()
+  const kept = new Map<RetroProposalCategory, number>()
   return {
     proposals: content.proposals.filter((proposal) => {
-      const bucket = retroProposalBucket(proposal)
-      const seen = kept.get(bucket) ?? 0
+      const seen = kept.get(proposal.category) ?? 0
       if (seen >= perCategory) return false
-      kept.set(bucket, seen + 1)
+      kept.set(proposal.category, seen + 1)
       return true
     }),
   }
@@ -233,6 +214,22 @@ export function bakeRetroActionRefs(
   return { proposals }
 }
 
+// "NO PRIOR ACTIONS ⇒ NO FOLLOW-UP PROPOSAL", restored explicitly — the one property that was free
+// under change 22's derived bucket and is not free under a stored category. A derived follow-up
+// could not exist without citing a prior action, because citing one was the whole definition; on a
+// team's first retro the `retroAction` namespace is empty, so an invented action id was narrowed
+// away and the proposal dropped. A stored category breaks that implication: the model can say
+// `follow_up` while citing nothing but a perfectly valid issue, and every shipped validator passes
+// it — it is cited, it names no member, its references are in their own namespaces, it fits the cap.
+// It would then be rendered as a report on a prior retro the team may never have had.
+export function dropUnbackedFollowUps(content: RetroDraftContent): RetroDraftContent {
+  return {
+    proposals: content.proposals.filter(
+      (proposal) => proposal.category !== 'follow_up' || proposal.refs.some(isRetroActionRef),
+    ),
+  }
+}
+
 // WHAT YAPM COMPUTED, PARTITIONED BY THE KIND IT MAY BE CITED UNDER — never one flat id set. Each
 // namespace is resolved by exactly one surface: an evidence id by the client's synced work-graph
 // rows, a `widget` key by `findSeedMetric` or by yapm's baked outcome caption, a prior action id by
@@ -243,8 +240,9 @@ export interface RetroCitations {
   readonly evidence: readonly string[]
   // Computed seed metric keys plus the four prior-retro outcome-total keys.
   readonly widget: readonly string[]
-  // The prior retro's agreed action ids. Empty for a team's first retro, which is what makes "no
-  // prior actions ⇒ no follow-up proposal" a property of this narrowing rather than of a branch.
+  // The prior retro's agreed action ids. Empty for a team's first retro, so no `retro_action`
+  // reference survives the narrowing and `dropUnbackedFollowUps` then has nothing to keep — which is
+  // how "no prior actions ⇒ no follow-up proposal" holds without a first-retro branch.
   readonly retroAction: readonly string[]
 }
 
@@ -264,8 +262,8 @@ export function retroCitableIds(citations: RetroCitations): ReadonlySet<string> 
 }
 
 // Narrowing by (namespace, id) rather than by id alone, BEFORE cite-or-omit runs. A model that
-// stamps the loop-closing kind on a real issue id would otherwise buy itself a place in the
-// follow-up bucket; a model that stamps an ordinary kind on a prior action id or an outcome-total
+// stamps the loop-closing kind on a real issue id would otherwise buy a follow-up the citation that
+// backs it; a model that stamps an ordinary kind on a prior action id or an outcome-total
 // key would otherwise keep a reference no surface can draw, leaving a proposal on screen with no
 // evidence at all. Both are the same defect — a crossed namespace — and one filter refuses both.
 function narrowRetroRefNamespaces(
@@ -292,14 +290,20 @@ function narrowRetroRefNamespaces(
 //   2. cite-or-omit, which drops a proposal left with no surviving reference,
 //   3. drop anything naming a workspace member (the roster is loaded AFTER the model call),
 //   4. bake yapm's own caption onto the two references the client cannot resolve,
-//   5. cap at three per BUCKET, follow-ups included.
+//   5. drop a `follow_up` proposal left backing its claim with no prior action at all,
+//   6. cap at three per category, follow-ups included.
 //
-// THE BAKE IS INSIDE THE CHAIN, and that is a correctness fact rather than tidiness. Baking DROPS a
-// reference whose action is unknown and the proposal left with none, and dropping a `retro_action`
-// reference also RE-BUCKETS its proposal — so a bake that ran after the cap could leave a bucket
-// holding four proposals, and could leave the follow-up group empty after three bogus follow-ups had
-// consumed its entire cap. The cap is last so that a dropped proposal is replaced by the next real
-// one, which only holds if nothing downstream of it drops or moves anything.
+// BOTH HALVES OF STEP 5'S POSITION ARE LOAD-BEARING. It runs AFTER the bake because the bake is what
+// removes a reference naming an action the prior retro does not have: a follow-up whose only
+// prior-action reference the bake dropped must go with it, not survive backed by an issue chip. It
+// runs BEFORE the cap for the reason the bake does — anything that drops a proposal must run before
+// the cap, or three proposals that were going to be discarded can consume a category's entire
+// allowance and leave a legitimate fourth one on the floor.
+//
+// THE BAKE IS INSIDE THE CHAIN for that same reason: it DROPS a reference whose action is unknown,
+// and the proposal left with none, so a bake that ran after the cap could leave a category holding
+// four proposals. The cap is last so that a dropped proposal is replaced by the next real one, which
+// only holds if nothing downstream of it drops anything.
 //
 // Pure and synchronous — nothing here reads a database or a clock.
 export function sanitizeRetroDraft(
@@ -311,21 +315,18 @@ export function sanitizeRetroDraft(
   const kinded = narrowRetroRefNamespaces(content, citations)
   const cited = dropUncitedAiItems(retroDraftToArtifact(kinded), retroCitableIds(citations))
   const named = dropAiItemsNamingMembers(cited, roster)
-  return capRetroProposals(
-    bakeRetroActionRefs(retroDraftFromArtifact(named), prior),
-    RETRO_PROPOSALS_PER_CATEGORY,
-  )
+  const baked = bakeRetroActionRefs(retroDraftFromArtifact(named), prior)
+  return capRetroProposals(dropUnbackedFollowUps(baked), RETRO_PROPOSALS_PER_CATEGORY)
 }
 
-// `rank` is the 0-based index WITHIN the bucket, assigned after the chain so it is dense. Two
-// follow-ups stored as `improvement` therefore rank 0 and 1 among follow-ups, not among the
-// improvements they are rendered apart from.
+// `rank` is the 0-based index WITHIN the stored category, assigned after the chain so it is dense.
+// Two follow-ups therefore rank 0 and 1 among follow-ups, independently of how many improvements
+// they are rendered beside.
 export function rankRetroProposals(content: RetroDraftContent): RankedRetroProposal[] {
-  const next = new Map<RetroProposalBucket, number>()
+  const next = new Map<RetroProposalCategory, number>()
   return content.proposals.map((proposal) => {
-    const bucket = retroProposalBucket(proposal)
-    const rank = next.get(bucket) ?? 0
-    next.set(bucket, rank + 1)
+    const rank = next.get(proposal.category) ?? 0
+    next.set(proposal.category, rank + 1)
     return { ...proposal, rank }
   })
 }

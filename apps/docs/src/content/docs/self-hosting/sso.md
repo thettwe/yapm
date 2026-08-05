@@ -56,7 +56,8 @@ also publish a discovery document at `<issuer>/.well-known/openid-configuration`
 
 ## 2. Register the provider in yapm
 
-Open the **avatar menu → Single sign-on** (`/settings/sso`). It is visible to workspace admins only.
+Open *Settings → Single sign-on* from the account menu in the header (`/settings/sso`). It is
+visible to workspace admins only.
 The whole surface is keyboard-operable: Tab through the fields, press Enter to submit.
 
 | Field | What to enter |

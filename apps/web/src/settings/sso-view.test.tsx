@@ -65,9 +65,16 @@ beforeEach(() => {
       if (api.status !== 200) {
         return Promise.resolve({ ok: false, status: api.status } as Response)
       }
-      // A removal really removes: the reload that follows has to be able to unmount the row, which
-      // is what the focus handoff hangs off.
+      // A removal really removes, and a verification really verifies: the reload that follows each
+      // has to be able to unmount what was on screen — the row, and the verification section — which
+      // is what the focus handoffs hang off.
       if (method === 'DELETE') api.providers = []
+      if (url.endsWith('/verify') && api.verifyStatus === 200) {
+        api.providers = api.providers.map((provider) => ({
+          ...(provider as RedactedSsoProvider),
+          domainVerified: true,
+        }))
+      }
       if (url.endsWith('/domain-verification')) {
         return Promise.resolve({
           ok: true,
@@ -243,6 +250,50 @@ test('focus follows the remove confirmation rather than falling to the body', as
   fireEvent.click(await screen.findByTestId('sso-remove-confirm'))
   // The row unmounts on success; the page heading is the anchor that outlives it.
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Single sign-on' })).toHaveFocus())
+})
+
+// Domain verification is this feature's happy path, and both of its controls end by removing
+// themselves: showing the record value replaces the button that asked for it, and verifying removes
+// the whole section. Neither may drop a keyboard admin on `<body>`.
+test('showing the DNS record value hands focus to the control that replaced the button', async () => {
+  api.providers = [UNVERIFIED]
+  render(<SsoSettingsView />)
+
+  const show = await screen.findByTestId('sso-show-record')
+  show.focus()
+  fireEvent.click(show)
+
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /copy txt record value/i })).toHaveFocus(),
+  )
+})
+
+test('verifying the domain hands focus to a control that outlives the section', async () => {
+  api.providers = [UNVERIFIED]
+  render(<SsoSettingsView />)
+
+  const verify = await screen.findByTestId('sso-verify')
+  verify.focus()
+  fireEvent.click(verify)
+
+  await waitFor(() => expect(screen.queryByTestId('sso-verification')).not.toBeInTheDocument())
+  expect(screen.getByTestId('sso-remove')).toHaveFocus()
+})
+
+test("a record value already in hand steals nobody's focus on a later render", async () => {
+  api.providers = [UNVERIFIED]
+  render(<SsoSettingsView />)
+
+  fireEvent.click(await screen.findByTestId('sso-show-record'))
+  await screen.findByRole('button', { name: /copy txt record value/i })
+
+  // A re-render for an unrelated reason must not re-run the handoff: the guard is the PREVIOUS
+  // value, not a one-shot flag that StrictMode's second layout pass would already have spent.
+  screen.getByTestId('sso-remove').focus()
+  fireEvent.change(screen.getByLabelText(/new client secret for acme-okta/i), {
+    target: { value: 'nudge-a-render' },
+  })
+  await waitFor(() => expect(screen.getByTestId('sso-remove')).toHaveFocus())
 })
 
 test('a client secret can be rotated from the provider row, write-only in both directions', async () => {

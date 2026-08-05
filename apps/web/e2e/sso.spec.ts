@@ -44,16 +44,29 @@ async function mintInvite(page: Page, role: 'member' | 'viewer'): Promise<string
 test('an admin reaches and operates the SSO surface with the keyboard alone', async ({ page }) => {
   await enterApp(page)
 
-  // Into the surface by keyboard, from the same menu the AI and connector pages hang off.
-  await page.getByRole('button', { name: /account menu/i }).click()
-  await page.getByRole('menuitem', { name: 'Single sign-on' }).click()
+  // Into the surface by keyboard, from the same menu the AI and connector pages hang off — and by
+  // key press, not by click: the popup's roving focus is the only way a keyboard-only admin reaches
+  // this page, so it is what this navigation exercises. A menu part that throws on open takes every
+  // entry down with it, which no assertion on the trigger alone would notice.
+  await page.getByRole('button', { name: /account menu/i }).focus()
+  await page.keyboard.press('Enter')
+  const entry = page.getByRole('menuitem', { name: 'Single sign-on' })
+  await expect(entry).toBeVisible({ timeout: 20_000 })
+  // Walk down rather than counting: the entry's position among Connectors, AI and Sign out is
+  // arrangement, not behaviour, and the fact under test is that arrow keys reach it at all.
+  for (let step = 0; step < 8; step += 1) {
+    if (await entry.evaluate((node) => node === document.activeElement)) break
+    await page.keyboard.press('ArrowDown')
+  }
+  await expect(entry).toBeFocused()
+  await page.keyboard.press('Enter')
   await expect(page.getByRole('heading', { name: 'Single sign-on', level: 1 })).toBeVisible({
     timeout: 20_000,
   })
   await expect(page.getByTestId('sso-no-providers')).toBeVisible()
 
-  // Tab order is DOM order through the five fields a registration needs. Enter submits: no pointer
-  // touches the form after the first field is focused.
+  // Tab order is DOM order through the five fields a registration needs. Enter submits: after the
+  // first field is put into focus, every step to the submission is a key press.
   await page.getByLabel('Provider id').focus()
   await page.keyboard.type(PROVIDER_ID)
   await page.keyboard.press('Tab')

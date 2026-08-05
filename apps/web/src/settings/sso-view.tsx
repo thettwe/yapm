@@ -235,6 +235,15 @@ function SsoProviderRow({
     }
   }, [focusAnchor])
 
+  // Verifying the domain succeeds by REMOVING the section the admin was standing in — the happy
+  // path of this feature unmounts the button that holds focus. Remove outlives the section and
+  // keeps the admin in this provider's row; the page heading catches the case where the confirm has
+  // replaced it. Stable identity, so the section's cleanup fires on unmount and never mid-life.
+  const handoffOutOfVerification = useCallback(() => {
+    if (removeRef.current !== null) removeRef.current.focus()
+    else focusAnchor.current?.focus()
+  }, [focusAnchor])
+
   // None of the three async controls below DISABLES itself while it runs, and that is deliberate:
   // disabling the element that currently holds focus blurs it to `<body>` in a real browser, which
   // both strands a keyboard admin mid-page and — for the removal — empties `document.activeElement`
@@ -397,6 +406,7 @@ function SsoProviderRow({
           onVerify={verify}
           onAnnounce={onAnnounce}
           onError={onError}
+          onLeaving={handoffOutOfVerification}
         />
       )}
     </li>
@@ -496,6 +506,7 @@ function DomainVerification({
   onVerify,
   onAnnounce,
   onError,
+  onLeaving,
 }: {
   provider: RedactedSsoProvider
   token: string | undefined
@@ -504,12 +515,38 @@ function DomainVerification({
   onVerify: () => Promise<void>
   onAnnounce: (message: string) => void
   onError: (message: string | undefined) => void
+  onLeaving: () => void
 }) {
   const headingId = useId()
   const domains = ssoDomains(provider.domain)
+  const sectionRef = useRef<HTMLElement>(null)
+  const recordValueRef = useRef<HTMLButtonElement>(null)
+  const hadToken = useRef(token !== undefined)
+
+  // Showing the record value REPLACES the button that asked for it, so focus follows into the copy
+  // control that took its place — the next thing an admin does with a value they just revealed. The
+  // guard compares the previous value rather than asking whether this effect has run, because
+  // StrictMode invokes it twice on mount and a row that arrives with its token already in hand must
+  // not steal focus from wherever the admin actually is.
+  useLayoutEffect(() => {
+    const has = token !== undefined
+    if (has && !hadToken.current) recordValueRef.current?.focus()
+    hadToken.current = has
+  }, [token])
+
+  // Verification succeeding unmounts this whole section. Same moment, same reason as the row's own
+  // handoff: this cleanup is the last point at which the focused control still exists and is known
+  // to be leaving.
+  useLayoutEffect(() => {
+    const section = sectionRef.current
+    return () => {
+      if (section?.contains(document.activeElement)) onLeaving()
+    }
+  }, [onLeaving])
 
   return (
     <section
+      ref={sectionRef}
       aria-labelledby={headingId}
       className="flex flex-col gap-3 rounded-control bg-bg-hover/60 p-3"
       data-testid="sso-verification"
@@ -542,6 +579,7 @@ function DomainVerification({
         <CopyableValue
           label="TXT record value"
           value={token}
+          copyRef={recordValueRef}
           onCopied={onAnnounce}
           onError={onError}
         />
@@ -575,11 +613,13 @@ function DomainVerification({
 function CopyableValue({
   label,
   value,
+  copyRef,
   onCopied,
   onError,
 }: {
   label: string
   value: string
+  copyRef?: RefObject<HTMLButtonElement | null>
   onCopied: (message: string) => void
   onError: (message: string | undefined) => void
 }) {
@@ -608,6 +648,7 @@ function CopyableValue({
         {value}
       </code>
       <Button
+        ref={copyRef}
         variant="ghost"
         size="icon-sm"
         aria-label={`Copy ${label}`}
@@ -784,7 +825,11 @@ function RegisterProviderForm({
       ) : null}
 
       <div className="flex items-center gap-2">
-        <Button type="submit" size="sm" disabled={busy || !complete} data-testid="sso-register">
+        {/* Disabled only by an incomplete form, never by the request being in flight: registration
+            performs OIDC discovery against the admin's issuer, and disabling the element that holds
+            focus blurs it to `<body>` for as long as that round-trip takes. `submit` refuses
+            re-entry itself; the status line beside it is the in-flight signal. */}
+        <Button type="submit" size="sm" disabled={!complete} data-testid="sso-register">
           <PlusIcon />
           Register provider
         </Button>

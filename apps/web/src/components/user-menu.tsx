@@ -3,6 +3,7 @@ import { Button } from '@yapm/ui/components/button'
 import {
   Menu,
   MenuContent,
+  MenuGroup,
   MenuGroupLabel,
   MenuItem,
   MenuLinkItem,
@@ -30,9 +31,14 @@ export function UserMenu({ name, email }: { name?: string; email?: string }) {
         }
       />
       <MenuContent>
+        {/* A group label reads its group off context and THROWS without one, which takes the whole
+            popup — every settings entry and Sign out with it — down on open. So every label this app
+            renders lives inside its `MenuGroup`. */}
         {email ? (
           <>
-            <MenuGroupLabel>Signed in as {email}</MenuGroupLabel>
+            <MenuGroup>
+              <MenuGroupLabel>Signed in as {email}</MenuGroupLabel>
+            </MenuGroup>
             <MenuSeparator />
           </>
         ) : null}

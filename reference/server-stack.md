@@ -1126,7 +1126,7 @@ Facts read out of the installed build, each of which contradicts a plausible gue
   has to redact.
 
 `ssoProvider`'s captured DDL, and the six facts about that table, are in `kysely-stack.md` §5.4
-(`getMigrations()` — auth tables at boot). yapm's applied shape is `openspec/changes/sso-admin-gating/design.md`.
+(`getMigrations()` — auth tables at boot). yapm's applied shape is `openspec/changes/archive/2026-08-05-sso-admin-gating/design.md`.
 
 Being an IdP yourself — prefer **`@better-auth/oauth-provider`** (OAuth 2.1, PKCE-required, `authorization_code` / `refresh_token` / `client_credentials`, dynamic client registration, introspection + revocation, OIDC via the `openid` scope):
 

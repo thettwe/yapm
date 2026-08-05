@@ -209,18 +209,20 @@ function SsoProviderRow({
   const rowRef = useRef<HTMLLIElement>(null)
   const removeRef = useRef<HTMLButtonElement>(null)
   const confirmRef = useRef<HTMLButtonElement>(null)
-  const settled = useRef(false)
+  const wasConfirming = useRef(confirming)
 
   // Remove and its confirm/cancel pair REPLACE each other, so activating either unmounts the
   // control that was focused and focus falls to `<body>`. Focus follows the swap in both
-  // directions; the guard keeps first paint from stealing focus onto a row nobody asked for.
+  // directions, and only on a swap: the guard compares the PREVIOUS value rather than asking
+  // whether this effect has ever run, because StrictMode invokes a layout effect twice on mount and
+  // a one-shot flag is already spent by the second pass — which would then steal focus onto a row
+  // nobody asked for, on every dev and e2e render.
   useLayoutEffect(() => {
-    if (!settled.current) {
-      settled.current = true
-      return
+    if (wasConfirming.current !== confirming) {
+      if (confirming) confirmRef.current?.focus()
+      else removeRef.current?.focus()
     }
-    if (confirming) confirmRef.current?.focus()
-    else removeRef.current?.focus()
+    wasConfirming.current = confirming
   }, [confirming])
 
   // A successful removal unmounts the whole row. React runs this cleanup before the subtree's DOM
@@ -233,7 +235,15 @@ function SsoProviderRow({
     }
   }, [focusAnchor])
 
+  // None of the three async controls below DISABLES itself while it runs, and that is deliberate:
+  // disabling the element that currently holds focus blurs it to `<body>` in a real browser, which
+  // both strands a keyboard admin mid-page and — for the removal — empties `document.activeElement`
+  // out of the row before the unmount handoff can read it. `pm-digest-card.tsx` reaches the same
+  // conclusion for the same reason. Re-entry is refused in the handler instead: React flushes the
+  // `setBusy` from a discrete event before the next one is dispatched, so the second activation
+  // sees `busy`.
   const showRecord = async () => {
+    if (busy) return
     setBusy(true)
     setVerificationError(undefined)
     try {
@@ -252,6 +262,7 @@ function SsoProviderRow({
   }
 
   const verify = async () => {
+    if (busy) return
     setBusy(true)
     setVerificationError(undefined)
     try {
@@ -281,6 +292,7 @@ function SsoProviderRow({
   }
 
   const remove = async () => {
+    if (busy) return
     setBusy(true)
     onError(undefined)
     try {
@@ -325,7 +337,6 @@ function SsoProviderRow({
             <Button
               ref={confirmRef}
               size="sm"
-              disabled={busy}
               onClick={remove}
               onKeyDown={cancelOnEscape}
               data-testid="sso-remove-confirm"
@@ -346,7 +357,6 @@ function SsoProviderRow({
             ref={removeRef}
             size="sm"
             variant="outline"
-            disabled={busy}
             onClick={() => setConfirming(true)}
             data-testid="sso-remove"
           >
@@ -382,7 +392,6 @@ function SsoProviderRow({
         <DomainVerification
           provider={provider}
           token={token}
-          busy={busy}
           error={verificationError}
           onShowRecord={showRecord}
           onVerify={verify}
@@ -407,6 +416,7 @@ function SecretRotation({
   onAnnounce: (message: string) => void
 }) {
   const fieldId = useId()
+  const fieldRef = useRef<HTMLInputElement>(null)
   const [secret, setSecret] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
@@ -421,6 +431,11 @@ function SecretRotation({
     try {
       await updateSsoProvider(providerId, { oidcConfig: { clientSecret: value } })
       setSecret('')
+      // Emptying the field is what disables the submit button, and disabling the element that holds
+      // focus blurs it to `<body>`. So focus goes back to the field it came from, before the commit
+      // that disables the button — an admin who rotated one secret is one Tab from the next control
+      // rather than back at the top of the document.
+      fieldRef.current?.focus()
       onAnnounce(`Client secret replaced for ${providerId}.`)
       await onChanged()
     } catch {
@@ -442,6 +457,7 @@ function SecretRotation({
         </Label>
         <Input
           id={fieldId}
+          ref={fieldRef}
           type="password"
           value={secret}
           autoComplete="off"
@@ -458,7 +474,7 @@ function SecretRotation({
         type="submit"
         size="sm"
         variant="outline"
-        disabled={busy || value.length === 0}
+        disabled={value.length === 0}
         data-testid="sso-rotate-secret"
       >
         Replace secret
@@ -475,7 +491,6 @@ function SecretRotation({
 function DomainVerification({
   provider,
   token,
-  busy,
   error,
   onShowRecord,
   onVerify,
@@ -484,7 +499,6 @@ function DomainVerification({
 }: {
   provider: RedactedSsoProvider
   token: string | undefined
-  busy: boolean
   error: string | undefined
   onShowRecord: () => Promise<void>
   onVerify: () => Promise<void>
@@ -521,13 +535,7 @@ function DomainVerification({
       ))}
 
       {token === undefined ? (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          onClick={onShowRecord}
-          data-testid="sso-show-record"
-        >
+        <Button size="sm" variant="outline" onClick={onShowRecord} data-testid="sso-show-record">
           Show record value
         </Button>
       ) : (
@@ -546,7 +554,7 @@ function DomainVerification({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" disabled={busy} onClick={onVerify} data-testid="sso-verify">
+        <Button size="sm" onClick={onVerify} data-testid="sso-verify">
           Verify domain
         </Button>
         <a

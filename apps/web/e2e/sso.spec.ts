@@ -14,7 +14,11 @@ import { ADMIN, ensureAccount, uniqueEmail } from './support'
 
 const PROVIDER_ID = `e2e-idp-${Date.now().toString(36)}`
 const DOMAIN = 'sso-e2e.example.test'
-const UPSELL = /upgrade|seat|licen[cs]e|per user|billing|pro plan|trial/i
+// PHRASES, not words. The page's own honest copy says "there is no seat count and no SSO tier" and
+// names the licence in the docs link, so a bare /seat|licence/ matches the very sentences that
+// prove the point. What free-means-free forbids is the ASK — a price, a plan gate, a trial — and
+// none of these phrasings can appear in copy that has nothing to sell.
+const UPSELL = /upgrade to|seat cap|licen[cs]e key|per user\/month|start (a )?trial/i
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
@@ -69,9 +73,11 @@ test('an admin reaches and operates the SSO surface with the keyboard alone', as
   await page.keyboard.press('Enter')
 
   // There is no IdP at `idp.example.test`, so this fails — and the failure is a stated reason, not
-  // a wall. Nothing on this page ever mentions a plan, a seat or a licence.
+  // a wall. The two surfaces that could plausibly carry an ask, the registration form and the
+  // sentence that reports the refusal, name nothing to buy.
   await expect(page.getByTestId('sso-register-error')).toBeVisible({ timeout: 30_000 })
-  await expect(page.locator('section[aria-labelledby="sso-heading"]')).not.toHaveText(UPSELL)
+  await expect(page.getByTestId('sso-register-error')).not.toHaveText(UPSELL)
+  await expect(page.getByTestId('sso-register-form')).not.toHaveText(UPSELL)
 })
 
 test('an unverified provider shows the DNS record an admin has to publish', async ({ page }) => {
@@ -88,6 +94,10 @@ test('an unverified provider shows the DNS record an admin has to publish', asyn
     await page.goto('/settings/sso')
     const provider = page.locator(`[data-provider-id="${PROVIDER_ID}"]`)
     await expect(provider).toBeVisible({ timeout: 20_000 })
+    // First paint must not steal focus onto a destructive control. React runs layout effects twice
+    // on mount under StrictMode — which every dev build and therefore every one of these runs uses —
+    // so the confirm/cancel focus swap guards on the previous value, not on a one-shot flag.
+    await expect(provider.getByTestId('sso-remove')).not.toBeFocused()
     await expect(provider.getByTestId('sso-verified-badge')).toHaveText('Domain not verified')
     // The record NAME is derived in the browser and renders before anything is minted.
     await expect(provider.getByTestId('sso-verification')).toContainText(
@@ -123,6 +133,17 @@ test('an unverified provider shows the DNS record an admin has to publish', asyn
         await expect(row.getByTestId('sso-verification')).toBeVisible()
       }
     }
+
+    // And the removal itself, which unmounts the control that is holding focus. The confirm does
+    // not disable itself while the request is in flight — that would blur it to `<body>` before the
+    // row could hand focus anywhere — so the heading catches it. jsdom never blurs on disable, so
+    // this is the assertion only a real browser can make.
+    await provider.getByTestId('sso-remove').focus()
+    await page.keyboard.press('Enter')
+    await expect(provider.getByTestId('sso-remove-confirm')).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(provider).toHaveCount(0, { timeout: 20_000 })
+    await expect(page.getByRole('heading', { name: 'Single sign-on', level: 1 })).toBeFocused()
   } finally {
     await deleteSsoProvider(db, PROVIDER_ID)
     await db.close()

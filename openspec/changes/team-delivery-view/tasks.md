@@ -138,7 +138,8 @@
       is defined (completed cycles, why the in-progress one is excluded, the 12 ceiling), why a
       connector-less team still sees Delivered, that everything is computed on the client from
       already-synced rows, that no metric is ever per-person, and the explicit "not shown yet" table
-      from design §D7. Add it to the Starlight sidebar beside `retrospectives.md`.
+      from design §D7. Add it to the Starlight sidebar beside `retrospectives.md`, and to the
+      docs-site landing page's feature list in `index.md`, which enumerates every feature page.
 - [x] 4.2 `README.md` — add the Delivery view to the feature list, and rewrite the "Next: DORA and
       review-health metrics…" line at :161, which this change partly delivers and therefore makes
       stale. Say precisely what now exists and what still does not.

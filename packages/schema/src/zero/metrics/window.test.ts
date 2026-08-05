@@ -161,6 +161,11 @@ describe('buildDeliveryWindow — the blameless guarantee at the window entry po
       size: 2,
     })
     const keys = collectKeys(built)
+    // Proof the walk reached the window before anything is claimed about what it did not find.
+    expect(keys.has('sections')).toBe(true)
+    expect(keys.has('metrics')).toBe(true)
+    expect(keys.has('caption')).toBe(true)
+
     for (const forbidden of FORBIDDEN_IDENTITY_KEYS) {
       expect(keys.has(forbidden), forbidden).toBe(false)
     }

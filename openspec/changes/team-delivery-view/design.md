@@ -383,3 +383,28 @@ is no new entity (no migration), no mutator (the view writes nothing), and no pe
 and integration coverage only. The shipped `retro.spec.ts` and `retro-ai.spec.ts` still exercise the
 lifted tiles through the retro's own selectors, which is the regression this change could plausibly
 cause and the one an e2e spec would have been for.
+
+### The identity walker is calibrated, because every other blamelessness assertion is read through it
+
+Both entry-point tests prove their claim the same way: collect the model's key set, find nothing
+forbidden in it. That is an argument from an *absence*, and an absence is only evidence if the
+instrument was pointed at something. A `collectKeys` that returned an empty set — or a build that
+returned `null` — would make `metrics/window.test.ts` and `delivery/window-model.test.ts` pass
+while measuring nothing, and the change's most important guarantee would be a test that cannot fail.
+
+Three things now stand behind it. `testing/blameless.test.ts` calibrates the instrument: the walker
+is shown finding a key at depth, through arrays, and planted in the exact `sections[].metrics[]`
+shape a `DeliveryWindow` has; it is shown returning nothing for `null`, which is *why* the call sites
+assert non-null first; and `FORBIDDEN_IDENTITY_KEYS` is asserted to still name the columns the synced
+work graph actually carries, so the list cannot quietly lose `author` and take every assertion built
+on it with it. Both entry-point tests then assert *positively* that the walk reached `sections`,
+`metrics`, `caption` and `trend` before claiming anything about what it did not reach.
+
+And the chain was verified by mutation rather than by reading. Adding the drill-down a future change
+would plausibly reach for — `return { ...built, issues }` in `buildTeamDeliveryFor`, handing the raw
+synced rows back with the window — fails **both** identity assertions: the key walk finds `assignee`,
+`creator` and `author`, and the string check finds `Ada Lovelace`, `ada@example.com` and `octocat`.
+Worth recording alongside it: leaking an identity into the *input* projection alone does not fail the
+test, and correctly so — `toSeedIssue` spreading the whole row changes nothing observable, because
+nothing in `buildDeliveryWindow` copies an input into its output. The assertion is on the assembled
+model, which is the thing the view renders and therefore the thing that can leak.

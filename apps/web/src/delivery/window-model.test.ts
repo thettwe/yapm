@@ -121,6 +121,13 @@ describe('buildTeamDeliveryFor is blameless by construction', () => {
     expect(model).not.toBeNull()
 
     const keys = collectKeys(model)
+    // The absences below are only evidence if the walk reached the model. A build that returned
+    // nothing would collect nothing, and every assertion after this one would hold vacuously.
+    expect(keys).toContain('sections')
+    expect(keys).toContain('metrics')
+    expect(keys).toContain('caption')
+    expect(keys).toContain('trend')
+
     for (const forbidden of FORBIDDEN_IDENTITY_KEYS) {
       expect(keys).not.toContain(forbidden)
     }

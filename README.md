@@ -104,6 +104,13 @@ of the improvements agreed in the team's **most recent previous retro** — with
 they came from — each reported as **shipped, canceled, still open or never tracked**, computed by yapm
 from the live status of the issue it became and stripped of the assignee on both the action and that
 issue ·
+a team **Delivery view** at `/teams/<teamId>/delivery` that lifts those same flow numbers out of the
+one retro they were reachable from: PR cycle time, time to first review, review rounds, unlinked
+issues and the CI failing rate, over a rolling window of 3, 6 or 12 completed cycles, with the
+Delivered half populated from cycles alone on an instance with no connectors at all — computed in
+your browser from rows already synced (no aggregate query, no reporting endpoint, instant and
+correct offline), **team-level only** at every depth because the model it renders has nowhere to put
+a person, and carrying a permanent, non-dismissible list of the DORA keys it does *not* have ·
 a keyboard-first **notification inbox** at
 `/inbox` with an unread badge, for
 assignments (including triage routing), comments on issues you're involved in, and product digests
@@ -159,10 +166,14 @@ not AI is enabled. A named reader can optionally be emailed when a digest is rel
 message carries **a link and nothing else**: a mailed artifact sits outside the kill switch, outside
 retention and outside the audit log at the same time, so the one path that leaves the governed
 surface carries nothing that could survive them. Retraction still stops further reads without
-un-reading, and the product still says so in those words. Next: DORA and review-health metrics
-computed from the graph — team-level only, never individual scorecards. More connectors
-(GitLab, …) slot into the same framework with no feature-code change — inheriting the reality strip
-and the status automation above for free.
+un-reading, and the product still says so in those words. The **review-health and CI-health half of
+the metrics story is now a view rather than a promise**: the team Delivery view ships PR cycle time,
+time to first review, review rounds and the CI failing rate over a rolling window — team-level only,
+never individual scorecards — and says on the page which DORA keys it still lacks. Of the four,
+lead time is partial (open→merge, not commit→deploy); **deployment frequency** waits on durable
+deploy history, and **change failure rate** and **MTTR** wait on an incident record that does not
+exist yet (Phase 3). Next: those. More connectors (GitLab, …) slot into the same framework with no
+feature-code change — inheriting the reality strip and the status automation above for free.
 
 ## Quickstart
 

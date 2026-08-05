@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { cn } from '@yapm/ui/lib/utils'
 import {
+  GaugeIcon,
   InboxIcon,
   KanbanSquareIcon,
   ListIcon,
@@ -16,7 +17,8 @@ const INACTIVE = 'text-text-3 hover:text-text-1'
 const LINK_CLASS =
   'flex items-center gap-1.5 rounded-control px-2.5 py-1 text-xs font-medium transition-colors'
 
-// The List ↔ Board ↔ Cycles ↔ Triage ↔ Retros toggle: peer views of the same team-scoped work.
+// The List ↔ Board ↔ Cycles ↔ Triage ↔ Retros ↔ Delivery toggle: peer views of the same
+// team-scoped work.
 // These are route navigation links, not an ARIA tab widget (no tabpanel, no roving tabindex), so
 // they use a plain <nav> with aria-current marking the active view.
 export function ViewSwitch({
@@ -24,7 +26,7 @@ export function ViewSwitch({
   current,
 }: {
   teamId: string
-  current: 'list' | 'board' | 'cycles' | 'triage' | 'projects' | 'roadmap' | 'retros'
+  current: 'list' | 'board' | 'cycles' | 'triage' | 'projects' | 'roadmap' | 'retros' | 'delivery'
 }) {
   return (
     <nav
@@ -75,6 +77,16 @@ export function ViewSwitch({
       >
         <MessagesSquareIcon className="size-3.5" />
         Retros
+      </Link>
+      <Link
+        to="/teams/$teamId/delivery"
+        params={{ teamId }}
+        search={{ window: 6 }}
+        aria-current={current === 'delivery' ? 'page' : undefined}
+        className={cn(LINK_CLASS, current === 'delivery' ? ACTIVE : INACTIVE)}
+      >
+        <GaugeIcon className="size-3.5" />
+        Delivery
       </Link>
       <Link
         to="/teams/$teamId/projects"

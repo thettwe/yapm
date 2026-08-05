@@ -327,3 +327,59 @@ Every **formula** site is in `packages/schema/src/zero/metrics/scope.ts`:
   same two projections.
 - `rolledOverFromCycleId ===` — zero hits outside a comment. Every membership test is now a
   `cycleStarts.has` lookup in `scope.ts`.
+
+### `formatSeedDelta` gained one optional parameter rather than being moved strictly verbatim
+
+Task 2.1 says move the six formatters verbatim. Five of them are. `formatSeedDelta` hard-coded
+`vs. last cycle`, which is a lie on the team view — §D3's own worked example is *"Median 18h, −4h vs.
+the previous 6 cycles"*, and the delta there is measured against the preceding **window**, not the
+preceding cycle. The alternatives were a second formatter (the duplication this change exists to
+avoid, in the file whose whole job is to be the single copy) or a caption that misnames its own
+basis. It now takes `basis`, defaulting to `'last cycle'` — so the retro's output is unchanged
+character for character and `retro/seed-model.test.ts` passes untouched, which was the constraint the
+"verbatim" instruction was protecting.
+
+### `rows.ts` exports a cycle projection, not a `DeliveryScope`
+
+Task 2.2 asks for `scopeOfCycles(cycles, issues): DeliveryScope`. That signature was written before
+stage 1 settled `buildDeliveryWindow`'s input, which takes `cycles` and `priorCycles` as
+`DeliveryCycleInput[]` rather than a scope — because it needs the *per-cycle* scopes for the
+sparkline and the *preceding window's* scope for the delta, neither of which is recoverable from one
+pooled `DeliveryScope`. `rows.ts` therefore exports `toDeliveryCycle` / `toDeliveryCycles`, and the
+pooling stays where stage 1 put it, in `scopeOfCycles` in the schema package. The name would also
+have collided with the schema export of the same name at every call site that needs both.
+
+### `window-model.ts` applies the upper bound before slicing the preceding window
+
+`buildDeliveryWindow` clamps `size` internally, by design (§D4), so no caller can widen the window.
+But the *preceding* window is sliced here, and slicing it against an unclamped size while the current
+window is clamped would compare twelve cycles against an arbitrary number of them. One
+`Math.min(size, MAX_DELIVERY_WINDOW)` — reading the schema's own constant, deriving nothing — keeps
+both slices the same length. The route's `validateSearch` already narrows to 3/6/12, so this only
+matters for a direct caller.
+
+### `routes.test.tsx` needed a `@/zero/connection` mock
+
+Every `/teams/$teamId/*` route calls `useConnectionSummary()` in its own component body, above
+`Authenticated` — a shape this route follows exactly, per task 2.7. That hook talks to the live Zero
+client, so the first routing test to touch a team route failed on `useZero must be used within a
+ZeroProvider`. The mock is added beside the file's existing `@/zero/provider` one rather than by
+restructuring seven shipped routes to move the hook below the gate; the routing facts this file
+asserts do not involve the connection pill.
+
+### The `ViewSwitch` link and the palette command both supply `?window=6`
+
+`window` is a required search param on the route, so a `<Link>` to it must carry one. Both entry
+points hand over the default rather than trying to preserve a window the caller last chose: a
+switcher entry that remembered a window would make the same link mean different things on different
+days, and there is nowhere team-scoped to persist it that is not new synced state.
+
+### Task 3.9 — no new e2e spec, recorded
+
+PROCESS.md §3's big-feature rule asks whether the change touches a synced entity or schema, a
+mutator, a permission surface, or a signature UI. It touches **one**: a new read-only surface. There
+is no new entity (no migration), no mutator (the view writes nothing), and no permission predicate
+(both queries are the shipped `cycles.byTeam` / `issues.byTeam`). It is a small change and takes unit
+and integration coverage only. The shipped `retro.spec.ts` and `retro-ai.spec.ts` still exercise the
+lifted tiles through the retro's own selectors, which is the regression this change could plausibly
+cause and the one an e2e spec would have been for.

@@ -51,42 +51,42 @@
 
 ## 2. The team Delivery view (build pass 2)
 
-- [ ] 2.1 Create `apps/web/src/delivery/metric-format.ts` and move `formatSeedValue`,
+- [x] 2.1 Create `apps/web/src/delivery/metric-format.ts` and move `formatSeedValue`,
       `formatSeedDelta`, `seedTrendTone`, `SeedTrendTone`, `SparklineGeometry` and
       `sparklineGeometry` there **verbatim** from `retro/seed-model.ts`. Re-export all six from
       `retro/seed-model.ts` under their existing names so `retro/seed-model.test.ts` stays untouched
       (design §D5).
-- [ ] 2.2 Create `apps/web/src/delivery/rows.ts`: move `SeedPrRow`, `SeedIssueRow`, `SeedCycleRow`,
+- [x] 2.2 Create `apps/web/src/delivery/rows.ts`: move `SeedPrRow`, `SeedIssueRow`, `SeedCycleRow`,
       `pullRequestsOf`, `toSeedIssue`, `issuesTouching` there and add `scopeOfCycles(cycles, issues)`
       returning a `DeliveryScope` for a set of cycles. `retro/seed-model.ts` imports them and keeps
       re-exporting the three row types.
-- [ ] 2.3 Create `apps/web/src/delivery/metric-tiles.tsx`: lift `SeedWidget` → `MetricTile`,
+- [x] 2.3 Create `apps/web/src/delivery/metric-tiles.tsx`: lift `SeedWidget` → `MetricTile`,
       `Sparkline`, `TONE_GLYPH` and the section body out of `retro/retro-seed-panel.tsx`, unchanged
       in markup and classes. Every `data-testid` comes from props (`testId`, `sparklineTestId`,
       `noTrendTestId`, `emptyTestId`); `data-metric` and `tabIndex={-1}` stay. The "Add a card from
       this" affordance stays behind an optional `action` render prop supplied only by the retro.
-- [ ] 2.4 Rewrite `apps/web/src/retro/retro-seed-panel.tsx` to render `MetricTile` / `MetricSection`,
+- [x] 2.4 Rewrite `apps/web/src/retro/retro-seed-panel.tsx` to render `MetricTile` / `MetricSection`,
       passing `retro-seed-widget`, `retro-seed-sparkline`, `retro-seed-no-trend`,
       `retro-seed-empty` and `retro-seed-section`. `seedRefForMetric` and `seedWidgetSelector` stay
       exported from this file — `retro-view.tsx` and `retro-ai-panel.tsx` import them.
-- [ ] 2.5 Create `apps/web/src/delivery/window-model.ts`:
+- [x] 2.5 Create `apps/web/src/delivery/window-model.ts`:
       `buildTeamDeliveryFor(cycles, issues, size): DeliveryWindow | null` — filter to
       `status === 'completed'`, sort by `compareCycles`, take the last `size` as the window and the
       `size` before that as the prior window, project both through `rows.ts`, and call
       `buildDeliveryWindow`. This sits **beside** `buildRetroSeedFor`; it must not re-derive a
       formula or a projection either one already owns.
-- [ ] 2.6 Create `apps/web/src/delivery/delivery-view.tsx`: reads `queries.cycles.byTeam` and
+- [x] 2.6 Create `apps/web/src/delivery/delivery-view.tsx`: reads `queries.cycles.byTeam` and
       `queries.issues.byTeam` (no new query), memoizes `buildTeamDeliveryFor`, renders the window
       label, the keyboard-operable size `Select`, the two sections, the no-completed-cycle empty
       state (design §D10), and the permanent "What this doesn't show yet" block from design §D7.
       Tokens only; no per-person control of any kind.
-- [ ] 2.7 Create `apps/web/src/routes/teams.$teamId.delivery.tsx` following
+- [x] 2.7 Create `apps/web/src/routes/teams.$teamId.delivery.tsx` following
       `teams.$teamId.retros.index.tsx` exactly, with `validateSearch` narrowing `window` to
       `3 | 6 | 12` (default 6) and `ViewSwitch current="delivery"`.
-- [ ] 2.8 `apps/web/src/board/view-switch.tsx`: add `'delivery'` to the `current` union and an eighth
+- [x] 2.8 `apps/web/src/board/view-switch.tsx`: add `'delivery'` to the `current` union and an eighth
       `<Link>` with `GaugeIcon` (verified present in the installed `lucide-react`), placed after
       Retros. Update the file's leading comment, which enumerates the views.
-- [ ] 2.9 `apps/web/src/issues/command.tsx`: add a *Go to {team} delivery* command to the `navigate`
+- [x] 2.9 `apps/web/src/issues/command.tsx`: add a *Go to {team} delivery* command to the `navigate`
       group beside the existing team commands.
 
 ## 3. Tests
@@ -102,55 +102,55 @@
       the flow section is `empty` with the connector empty state when no window issue has a linked
       PR. **Plus the identity walk** over `buildDeliveryWindow`'s output using
       `collectKeys` / `FORBIDDEN_IDENTITY_KEYS`.
-- [ ] 3.3 **The falsifiable check.** `apps/web/src/delivery/window-model.test.ts` — build the model
+- [x] 3.3 **The falsifiable check.** `apps/web/src/delivery/window-model.test.ts` — build the model
       from issue rows that are supersets carrying `assignee: { name, email }`, `creator`, and
       `issueLinks[].pullRequest.reviews[].author = 'octocat'` (the shape `queries.issues.byTeam`
       really returns), then assert (a) `collectKeys(model)` contains no member of
       `FORBIDDEN_IDENTITY_KEYS` at any depth and (b) `JSON.stringify(model)` contains none of the
       planted names, logins or email addresses. Assert against the built object, never the rendered
       string.
-- [ ] 3.4 `apps/web/src/delivery/window-model.test.ts` (same file) — the two-team case: a team whose
+- [x] 3.4 `apps/web/src/delivery/window-model.test.ts` (same file) — the two-team case: a team whose
       issues have linked PRs renders both sections `ready`; a team with the same issues and no links
       renders Delivered `ready` and Flow `empty` with the connector empty state, and no zeroed flow
       metric.
-- [ ] 3.5 `apps/web/src/delivery/delivery-view.test.tsx` — renders the window label, the size
+- [x] 3.5 `apps/web/src/delivery/delivery-view.test.tsx` — renders the window label, the size
       selector and the "What this doesn't show yet" block naming deployment frequency, change
       failure rate and MTTR; renders the single empty state for a team with no completed cycle;
       exposes no control that mentions a person.
-- [ ] 3.6 `apps/web/src/routes.test.tsx` — a test that `/teams/$teamId/delivery?window=6` is
+- [x] 3.6 `apps/web/src/routes.test.tsx` — a test that `/teams/$teamId/delivery?window=6` is
       registered, parses its search param, and is gated behind `Authenticated`, following the
       `/search` test's shape.
-- [ ] 3.7 Run `apps/web/src/retro/seed-model.test.ts`, `retro-ai-panel.test.ts` and
+- [x] 3.7 Run `apps/web/src/retro/seed-model.test.ts`, `retro-ai-panel.test.ts` and
       `packages/schema/src/zero/retro/seed.test.ts` **unedited**. Any edit needed to any of the three
       means a regression, not a test that needs updating.
 - [x] 3.8 The grep proof, recorded in `design.md` under `## Decisions made during implementation`:
       `grep -rn "mergedAt as number\|reviewSubmittedAt\|rolledOverFromCycleId ===\|carryoverCount"
       apps packages --include='*.ts' --include='*.tsx'` returns exactly one definition site per
       formula, all under `packages/schema/src/zero/metrics/scope.ts`.
-- [ ] 3.9 No new e2e spec. PROCESS.md §3's big-feature rule: this change touches **one** of
+- [x] 3.9 No new e2e spec. PROCESS.md §3's big-feature rule: this change touches **one** of
       {synced entity/schema, mutator, permission surface, signature UI} — no entity, no mutator, no
       permission predicate — so it is a small change and takes unit + integration only. Record that
       judgement in `design.md`.
 
 ## 4. Documentation
 
-- [ ] 4.1 New `apps/docs/src/content/docs/features/delivery.md` — what the view shows, how the window
+- [x] 4.1 New `apps/docs/src/content/docs/features/delivery.md` — what the view shows, how the window
       is defined (completed cycles, why the in-progress one is excluded, the 12 ceiling), why a
       connector-less team still sees Delivered, that everything is computed on the client from
       already-synced rows, that no metric is ever per-person, and the explicit "not shown yet" table
       from design §D7. Add it to the Starlight sidebar beside `retrospectives.md`.
-- [ ] 4.2 `README.md` — add the Delivery view to the feature list, and rewrite the "Next: DORA and
+- [x] 4.2 `README.md` — add the Delivery view to the feature list, and rewrite the "Next: DORA and
       review-health metrics…" line at :161, which this change partly delivers and therefore makes
       stale. Say precisely what now exists and what still does not.
-- [ ] 4.3 `ROADMAP.md` — add the row for this change, and amend §Post-v1 **Phase 2** (:74): the
+- [x] 4.3 `ROADMAP.md` — add the row for this change, and amend §Post-v1 **Phase 2** (:74): the
       review-health and CI-health half of "DORA + review-health + CI-health views (team-level only)"
       now ships as the team Delivery view; what remains in Phase 2 is deploy ingestion and deployment
       frequency. Do not claim more than that.
-- [ ] 4.4 `VISION.md` §Phase 2 (:89) — amend only if 4.3 makes its wording untrue; if it stays
+- [x] 4.4 `VISION.md` §Phase 2 (:89) — amend only if 4.3 makes its wording untrue; if it stays
       accurate, say so in `design.md` rather than editing it for symmetry.
-- [ ] 4.5 `apps/docs/src/content/docs/features/retrospectives.md` — one sentence pointing at the
+- [x] 4.5 `apps/docs/src/content/docs/features/retrospectives.md` — one sentence pointing at the
       Delivery view for the same metrics outside a retro. The panel's own description does not change.
-- [ ] 4.6 `pnpm --filter @yapm/docs build` passes, and `apps/server/src/config/env-example.test.ts`
+- [x] 4.6 `pnpm --filter @yapm/docs build` passes, and `apps/server/src/config/env-example.test.ts`
       still passes (no new env var, but the docs-page assertions in it cover new pages).
 
 ## 5. Verification

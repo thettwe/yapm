@@ -297,6 +297,51 @@ With `disabledPaths` removed and nothing else changed, three assertions in
 `POST /api/v1/sso/providers` answers 403 to a member, a viewer and an authenticated non-member alike
 — for a provider id that exists and one that does not.
 
+### L6 — The login form needed no change, which was the point of checking
+
+Task 4.2 predicted no code change and none was needed. `login-form.tsx:200` already renders the SSO
+button only under `methods.sso`, and `hasProviders = methods.github || methods.sso` (line 106)
+already collapses the whole "or" block — divider included — when both providers are absent. The lie
+was one line up the stack: `DEFAULT_METHODS.sso` was `true` and `asMethods` read `record.sso !==
+false`, so a missing, slow or failing probe produced a button. Both now match `github` exactly
+(`false`, `record.sso === true`), and `use-auth-methods.test.tsx` asserts the three readings that
+matter: before the probe answers, when the flag is missing, and when the probe fails.
+
+### L7 — The DNS record NAME is derived in the browser; only the VALUE is server-minted
+
+`/api/v1/sso/providers/:id/domain-verification` returns `{ providerId, domainVerificationToken }`
+and nothing else — the plugin never tells a caller which DNS label it will resolve. The label is
+`_${tokenPrefix}-${providerId}` (index.mjs:1559, `DEFAULT_TOKEN_PREFIX = "better-auth-token"`), and
+yapm does not set `tokenPrefix`, so `settings/sso.ts` derives `_better-auth-token-<providerId>.<domain>`
+itself rather than round-tripping it.
+
+That is a second coupling to a plugin-owned constant, in the browser this time, and it is worth a
+reviewer's attention: if a future version changed the prefix, the page would print a record an admin
+would publish and verification would then fail with a 502 that says "not found" — confusing, but
+fail-closed and visible on the first verify. It is confined to one exported function
+(`ssoRecordName`) so a change has one place to land. `ssoDomains` splits the plugin's own
+comma-separated multi-domain form, because `verifyDomain` resolves the record under **every** domain
+(index.mjs:1640) and showing only the first would strand a two-domain provider.
+
+### L8 — Minting the token is a write, so it is behind a button
+
+Rendering an unverified provider does not request a verification token. The plugin's
+`/sso/request-domain-verification` creates a `verification` row (or returns the unexpired one), and a
+page load that writes on behalf of a reader is the wrong default even when it is idempotent. The
+record **name** therefore renders immediately — an admin can publish the label and come back — and
+"Show record value" fetches the token. Registration seeds it for free: the register response already
+carries `domainVerificationToken`, so the admin who just registered a provider never sees that
+button.
+
+### L9 — The admin-only absence is reached two ways, deliberately
+
+`SsoSettingsView` renders the absence when `useMembership().canManage` is false, exactly as
+`ai-view.tsx` and `connectors-view.tsx` do. `SsoSettingsAdmin` *also* renders it when the read comes
+back `403`, because the server is the authority and it answers before it looks anything up. Two
+paths to one absence rather than an error banner: a capability you may not configure has not failed.
+Both are asserted in `sso-view.test.tsx`, and the second matters because `useMembership` reads a
+synced roster that can lag a role change by a round trip.
+
 ## Migration / Rollout
 
 No data migration and no downtime step. On first boot after deploy, `getMigrations()` adds

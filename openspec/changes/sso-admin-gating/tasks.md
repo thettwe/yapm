@@ -62,20 +62,20 @@
 
 ## 4. The web surfaces
 
-- [ ] 4.1 `apps/web/src/auth/use-auth-methods.ts`: `DEFAULT_METHODS.sso` becomes `false` and
+- [x] 4.1 `apps/web/src/auth/use-auth-methods.ts`: `DEFAULT_METHODS.sso` becomes `false` and
       `asMethods` reads `record.sso === true`, matching `github`. Update the comment.
-- [ ] 4.2 `apps/web/src/components/auth/login-form.tsx`: no code change is expected — verify that
+- [x] 4.2 `apps/web/src/components/auth/login-form.tsx`: no code change is expected — verify that
       `methods.sso` already gates the button and that `hasProviders` collapses the divider when both
       providers are absent. If it does not, fix it; do not restructure the form.
-- [ ] 4.3 `apps/web/src/settings/sso.ts` (new): typed client for `/api/v1/sso`, following
+- [x] 4.3 `apps/web/src/settings/sso.ts` (new): typed client for `/api/v1/sso`, following
       `apps/web/src/settings/connectors.ts` — one `request<T>` helper, a `SsoRequestError` carrying
       the status, and interfaces mirroring the server's redacted shapes.
-- [ ] 4.4 `apps/web/src/settings/sso-view.tsx` (new): the admin surface of design §D8 — provider
+- [x] 4.4 `apps/web/src/settings/sso-view.tsx` (new): the admin surface of design §D8 — provider
       list, register form, the TXT record with a copy control and a Verify button for an unverified
       provider, delete confirm. Non-admin (403) renders the same absence the AI and connectors views
       render, not an error. Tokens only, AA in all three themes light and dark, every control
       keyboard-reachable, status/alert regions for verification results.
-- [ ] 4.5 `apps/web/src/routes/settings.sso.tsx` (new), copying `settings.ai.tsx` verbatim in shape;
+- [x] 4.5 `apps/web/src/routes/settings.sso.tsx` (new), copying `settings.ai.tsx` verbatim in shape;
       regenerate `routeTree.gen.ts`. Add the menu item to `apps/web/src/components/user-menu.tsx`
       beside Connectors and AI.
 
@@ -103,9 +103,9 @@
 - [x] 5.4 Unit test for `listSsoProvidersRedacted`: given a row whose `oidcConfig` JSON contains a
       `clientSecret`, the returned object has no key whose name or value carries it. Assert on the
       serialized object, not on the type.
-- [ ] 5.5 `apps/web/src/components/auth/login-form.test.tsx`: with `sso: false` no
+- [x] 5.5 `apps/web/src/components/auth/login-form.test.tsx`: with `sso: false` no
       `login-sso` testid renders; with `sso: true` it does and activating it starts the flow.
-- [ ] 5.6 `apps/web/src/settings/sso-view.test.tsx`: unverified provider renders the TXT record and
+- [x] 5.6 `apps/web/src/settings/sso-view.test.tsx`: unverified provider renders the TXT record and
       the Verify control; a 403 renders the admin-only absence; no secret string reaches the DOM.
 - [ ] 5.7 `pnpm turbo lint typecheck test build`, then the compose smoke test on
       `-p yapm-sso` with the assigned ports. Report actual output.

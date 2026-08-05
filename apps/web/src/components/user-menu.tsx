@@ -40,6 +40,7 @@ export function UserMenu({ name, email }: { name?: string; email?: string }) {
           <>
             <MenuLinkItem render={<Link to="/settings/connectors">Connectors</Link>} />
             <MenuLinkItem render={<Link to="/settings/ai">AI</Link>} />
+            <MenuLinkItem render={<Link to="/settings/sso">Single sign-on</Link>} />
           </>
         ) : null}
         <MenuItem onClick={signOut.signOut} disabled={signOut.busy}>

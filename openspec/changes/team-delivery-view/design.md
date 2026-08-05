@@ -188,7 +188,7 @@ Four DORA keys, and this view carries one and a half:
 | DORA key | Status here |
 |---|---|
 | Lead time for changes | **Partial** — `pr_cycle_time` is open→merge only. Commit→deploy is absent. |
-| Deployment frequency | **Absent.** Needs the durable deploy history `deploy-history-edge` is building; lands in a later change. |
+| Deployment frequency | **Absent.** The durable deploy history it needs shipped in `deploy-history-edge`; the metric over it lands in a later change. |
 | Change failure rate | **Absent.** Needs an incident entity that does not exist (VISION Phase 3). |
 | Time to restore (MTTR) | **Absent.** Same. |
 

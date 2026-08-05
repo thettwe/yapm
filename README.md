@@ -170,9 +170,9 @@ un-reading, and the product still says so in those words. The **review-health an
 the metrics story is now a view rather than a promise**: the team Delivery view ships PR cycle time,
 time to first review, review rounds and the CI failing rate over a rolling window — team-level only,
 never individual scorecards — and says on the page which DORA keys it still lacks. Of the four,
-lead time is partial (open→merge, not commit→deploy); **deployment frequency** waits on durable
-deploy history, and **change failure rate** and **MTTR** wait on an incident record that does not
-exist yet (Phase 3). Next: those. More connectors (GitLab, …) slot into the same framework with no
+lead time is partial (open→merge, not commit→deploy); **deployment frequency** is now computable
+from the durable deploy history the connector records but is not yet a tile, and **change failure
+rate** and **MTTR** wait on an incident record that does not exist yet (Phase 3). Next: those. More connectors (GitLab, …) slot into the same framework with no
 feature-code change — inheriting the reality strip and the status automation above for free.
 
 ## Quickstart

@@ -145,8 +145,9 @@ function NotShownYet() {
           cycle time is measured open to merge only. Commit to deploy is not measured.
         </li>
         <li>
-          <span className="font-medium text-text-2">Deployment frequency</span> is absent. It needs
-          durable deploy history, which is being built; it lands here in a later change.
+          <span className="font-medium text-text-2">Deployment frequency</span> is absent. The
+          durable deploy history it needs is now recorded; the metric over it lands here in a later
+          change.
         </li>
         <li>
           <span className="font-medium text-text-2">Change failure rate</span> and{' '}

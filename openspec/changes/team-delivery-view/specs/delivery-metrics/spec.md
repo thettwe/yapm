@@ -164,7 +164,7 @@ keys.
 #### Scenario: The absences are on the page
 
 - **WHEN** a member reads the Delivery view
-- **THEN** it names deployment frequency, change failure rate and time-to-restore as not shown, describes its own cycle-time metric as open-to-merge, and says which of the absences is waiting on data and which is waiting on an entity that does not exist
+- **THEN** it names deployment frequency, change failure rate and time-to-restore as not shown, describes its own cycle-time metric as open-to-merge, and says which of the absences is waiting only on a metric yet to be built over data yapm already records and which is waiting on an entity that does not exist
 
 ### Requirement: Keyboard-first and tokenized
 

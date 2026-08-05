@@ -111,6 +111,6 @@ DORA-adjacent heading and saying nothing would imply four keys it does not have.
 | DORA key | Status |
 |---|---|
 | Lead time for changes | **Partial.** PR cycle time is open→merge only. Commit→deploy is not measured. |
-| Deployment frequency | **Absent.** Needs durable deploy history, which is being built. Lands here in a later change. |
+| Deployment frequency | **Absent.** The durable deploy history it needs is now recorded. The metric over it lands here in a later change. |
 | Change failure rate | **Absent.** Needs an incident record yapm does not have yet. |
 | Time to restore (MTTR) | **Absent.** Same. |

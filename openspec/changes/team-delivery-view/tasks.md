@@ -1,11 +1,11 @@
 ## 1. The measurement scope: one definition of every formula (build pass 1)
 
-- [ ] 1.1 Commit a golden snapshot **before touching anything**: add
+- [x] 1.1 Commit a golden snapshot **before touching anything**: add
       `packages/schema/src/zero/retro/seed.golden.test.ts` asserting `buildRetroSeed`'s full output
       (both sections, every metric, every caption, every empty state) for a fixture with one cycle
       plus three priors, one connector-less variant, and one flow-populated variant. This is the
       tripwire for the whole refactor — if it needs editing afterwards, the refactor is wrong.
-- [ ] 1.2 Create `packages/schema/src/zero/metrics/scope.ts`. Move `median`, `round`, `HOUR_MS`,
+- [x] 1.2 Create `packages/schema/src/zero/metrics/scope.ts`. Move `median`, `round`, `HOUR_MS`,
       `plural`, `deliveredCounts`, `flowMeasures`, `pullRequests`, `reviewWaitDominates`, `NO_FLOW`
       and the `DeliveredCounts` / `FlowMeasures` interfaces out of `retro/seed.ts` verbatim, then
       generalize the four membership expressions exactly as design §D2's table specifies:
@@ -14,7 +14,7 @@
       rather than a scope-wide start. Export `DeliveryIssueInput`, `DeliveryPrInput`, `DeliveryScope`
       and `scopeOfCycle(cycle)`. Do **not** use the directory name `delivery/` — `zero/delivery.ts`
       already exists and the two would be ambiguous to resolve.
-- [ ] 1.3 Create `packages/schema/src/zero/metrics/descriptors.ts`: the canonical `DeliveryUnit`,
+- [x] 1.3 Create `packages/schema/src/zero/metrics/descriptors.ts`: the canonical `DeliveryUnit`,
       `DeliveryMetric`, `DeliveryEmptyState`, `DeliverySection` types; the generalized `MetricSpec`
       of design §D3 (`value`, `trend`, `previous`); `toMetric`; a `fromHistory(value, history)`
       helper for the retro's one call site; `DeliveryPeriod = { kind: 'cycle' } | { kind: 'window',
@@ -22,15 +22,15 @@
       holding key / label / unit / betterWhen / `read(measures)` / `caption(value, ctx)`. Each
       caption is ONE function with a branch per period kind, and the `'cycle'` branch returns today's
       string character for character. `flowEmptyState(period)` likewise.
-- [ ] 1.4 Rewrite `packages/schema/src/zero/retro/seed.ts` as the cycle-scope adapter: `buildRetroSeed`
+- [x] 1.4 Rewrite `packages/schema/src/zero/retro/seed.ts` as the cycle-scope adapter: `buildRetroSeed`
       builds a one-cycle `DeliveryScope` per cycle, walks the two descriptor tables, and assembles the
       same `RetroSeed`. Keep **every** currently exported name; `RetroSeedUnit` / `RetroSeedMetric` /
       `RetroSeedEmptyState` / `RetroSeedSection` become type aliases of the `Delivery*` types
       (design §D9), and `RetroSeedIssueInput` / `RetroSeedPrInput` / `RetroSeedCycleInput` /
       `RetroSeedInput` keep their shapes. Nothing outside this file changes its imports.
-- [ ] 1.5 Run 1.1's golden test and the whole existing `seed.test.ts` **unedited**. Both must pass
+- [x] 1.5 Run 1.1's golden test and the whole existing `seed.test.ts` **unedited**. Both must pass
       before continuing. If either needs a change, stop and fix the generalization, not the test.
-- [ ] 1.6 Create `packages/schema/src/zero/metrics/window.ts`: `DELIVERY_WINDOW_SIZES = [3, 6, 12]`,
+- [x] 1.6 Create `packages/schema/src/zero/metrics/window.ts`: `DELIVERY_WINDOW_SIZES = [3, 6, 12]`,
       `MAX_DELIVERY_WINDOW = 12`, and
       `buildDeliveryWindow(input: { cycles, priorCycles, size }): DeliveryWindow` where
       `DeliveryWindow = { label, cycleCount, sections }`. Value = the metric against the whole-window
@@ -38,15 +38,15 @@
       the metric against the preceding window's scope, or `undefined` when that window is not full
       (design §D3). Clamp the input cycle list to `MAX_DELIVERY_WINDOW` inside this function, not at
       the call site. Return `null` when the window contains no cycle.
-- [ ] 1.7 Create `packages/schema/src/zero/testing/blameless.ts` exporting `collectKeys(value)` (the
+- [x] 1.7 Create `packages/schema/src/zero/testing/blameless.ts` exporting `collectKeys(value)` (the
       walker moved out of `seed.test.ts:85`) and `FORBIDDEN_IDENTITY_KEYS` (the existing list plus
       `login`, `githubLogin`, `email`, `handle`, `avatar`, `image`). Add the `./testing` export
       subpath to `packages/schema/package.json` and make sure `tsconfig.build.json` emits it.
-- [ ] 1.8 Export `buildDeliveryWindow`, `DeliveryWindow`, `DELIVERY_WINDOW_SIZES`,
+- [x] 1.8 Export `buildDeliveryWindow`, `DeliveryWindow`, `DELIVERY_WINDOW_SIZES`,
       `MAX_DELIVERY_WINDOW`, `DeliveryMetric`, `DeliverySection`, `DeliveryUnit`,
       `DeliveryEmptyState`, `DeliveryScope`, `DeliveryIssueInput`, `DeliveryPrInput` from
       `packages/schema/src/index.ts`.
-- [ ] 1.9 `pnpm --filter @yapm/schema typecheck test` and `pnpm turbo build` — the whole workspace
+- [x] 1.9 `pnpm --filter @yapm/schema typecheck test` and `pnpm turbo build` — the whole workspace
       must still compile, because `RetroSeed*` is imported in eight places outside this package.
 
 ## 2. The team Delivery view (build pass 2)
@@ -91,12 +91,12 @@
 
 ## 3. Tests
 
-- [ ] 3.1 `packages/schema/src/zero/metrics/scope.test.ts` — the reduction proof: for a table of
+- [x] 3.1 `packages/schema/src/zero/metrics/scope.test.ts` — the reduction proof: for a table of
       fixtures, every metric evaluated against `scopeOfCycle(cycle)` equals the value asserted in
       `seed.test.ts` today, including the absent cases; and the window-scope readings of `total`,
       `carried_out` and `added_mid_cycle` are the exact ones design §D2 specifies (distinct issues,
       carries out of the *window*, and mid-cycle relative to the issue's own cycle).
-- [ ] 3.2 `packages/schema/src/zero/metrics/window.test.ts` — value/trend/delta composition (§D3):
+- [x] 3.2 `packages/schema/src/zero/metrics/window.test.ts` — value/trend/delta composition (§D3):
       the sparkline is per-cycle and the value is not its sum; the delta is `null` when fewer than
       `2 × size` completed cycles exist; the window clamps at 12; an empty window returns `null`;
       the flow section is `empty` with the connector empty state when no window issue has a linked
@@ -123,7 +123,7 @@
 - [ ] 3.7 Run `apps/web/src/retro/seed-model.test.ts`, `retro-ai-panel.test.ts` and
       `packages/schema/src/zero/retro/seed.test.ts` **unedited**. Any edit needed to any of the three
       means a regression, not a test that needs updating.
-- [ ] 3.8 The grep proof, recorded in `design.md` under `## Decisions made during implementation`:
+- [x] 3.8 The grep proof, recorded in `design.md` under `## Decisions made during implementation`:
       `grep -rn "mergedAt as number\|reviewSubmittedAt\|rolledOverFromCycleId ===\|carryoverCount"
       apps packages --include='*.ts' --include='*.tsx'` returns exactly one definition site per
       formula, all under `packages/schema/src/zero/metrics/scope.ts`.

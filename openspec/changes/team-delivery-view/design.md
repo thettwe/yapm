@@ -262,3 +262,68 @@ name keeps its meaning.
 
 None blocking. Two settled by fiat and logged above rather than left open: the window unit (§D1) and
 the delta basis (§D3).
+
+## Decisions made during implementation
+
+### `seed.test.ts` keeps its own walker; the shared list is added beside it, not swapped in
+
+§D6 lists `retro/seed.test.ts` as one of the three call sites of the shared `collectKeys` /
+`FORBIDDEN_IDENTITY_KEYS`. It is not, and deliberately: the brief's second tripwire is that
+`seed.test.ts` passes **with the file unedited** after the scope generalization, and swapping its
+inline walker for the shared import is an edit. Changing the file at all would forfeit the evidence
+that the refactor preserved the retro exactly — the one thing that test is here to prove in this
+pass. `metrics/window.test.ts` and (in pass 2) `delivery/window-model.test.ts` use the shared helper;
+folding `seed.test.ts` into it is a one-line cleanup for a later change, once the refactor it guards
+is no longer the thing under review.
+
+### `tsconfig.build.json` now emits the whole `testing/` directory, not a hand-listed subset
+
+`packages/schema/tsconfig.build.json` excluded `src/**/testing/**` wholesale, so `blameless.ts`
+would not have been emitted and the new `./testing` export subpath would have resolved to nothing.
+The alternatives were naming the three existing harness files (`pg-transaction.ts`, `query-ast.ts`,
+`query-walk.ts`) in the exclude list, which silently breaks the next file added there, or emitting
+everything. Everything is emitted: the package is private, the three harness files already typecheck
+under `tsc --noEmit`, and the cost is four extra files in `dist/` against a fragile list that fails
+open. The exclude is now just `src/**/*.test.ts`.
+
+### `scopeOfCycles` pools issues by id
+
+§D2 says the window's `total` counts distinct issues. Concatenating the per-cycle issue lists does
+not give that: an issue the rollover carried from one window cycle to the next appears in both, and
+would be counted twice. `scopeOfCycles` therefore keys the pool by issue id (first occurrence wins;
+the rows are the same row). This is what makes `total = inScope + carriedOut` a distinct count at
+window scope rather than only at cycle scope.
+
+### `previous` requires **two** full windows, not just a full preceding one
+
+§D3 says `previous` is `undefined` when the preceding window is not full. `buildDeliveryWindow`
+also requires the *current* window to be full (`cycles.length === size`), which is the reading task
+3.2 asserts: the delta is `null` until `2 × size` completed cycles exist. A team with four completed
+cycles and a size of 3 would otherwise compare a 3-cycle window against a 1-cycle one.
+
+### The `'window'` branch of every caption names the window
+
+Six of the seven Delivered captions named the window naturally; `added_mid_cycle`'s did not, because
+its wording is already relative to *a cycle* rather than to the period. It now reads "…across the
+last N completed cycles" in both its zero and non-zero forms. Without that, a tile on the team view
+would read exactly like the same tile inside a retro while reporting a different number — the
+specific confusion §D2's `carried_out` note exists to prevent, one metric over.
+
+### The grep proof (task 3.8)
+
+```
+grep -rn "mergedAt as number\|reviewSubmittedAt\|rolledOverFromCycleId ===\|carryoverCount" \
+  apps packages --include='*.ts' --include='*.tsx'
+```
+
+Every **formula** site is in `packages/schema/src/zero/metrics/scope.ts`:
+
+- `mergedAt as number` — `scope.ts:169` only.
+- `reviewSubmittedAt` as a measurement — `scope.ts:174,181,182` only. `seed-model.ts:55` and
+  `db/retro-facts.ts:333` are row *projections* (they build the input shape from synced rows and
+  from Postgres respectively); neither computes a median or a wait.
+- `carryoverCount >= 2` — `scope.ts:103` only. The other hits are the Zero column
+  (`schema.ts:131`), the rollover mutator that increments it (`mutators.ts:1070`), seed data and the
+  same two projections.
+- `rolledOverFromCycleId ===` — zero hits outside a comment. Every membership test is now a
+  `cycleStarts.has` lookup in `scope.ts`.

@@ -145,7 +145,7 @@
 - [x] 6.10 `packages/ui` / `apps/web` component test — a row with a `deployedAt` renders the deploy
       glyph and names it in the strip's accessible label; a row without one renders neither, and the
       two rows report the same strip width.
-- [ ] 6.11 PROCESS §3's big-feature rule, judged honestly: this touches the synced schema, the
+- [x] 6.11 PROCESS §3's big-feature rule, judged honestly: this touches the synced schema, the
       connector write path, and the signature reality-strip UI — three of the four triggers, so the
       rule asks for all three tiers. State plainly in design.md that **the deployment signal is not
       reachable from e2e**: no work-graph row can be created without a configured GitHub App, and
@@ -157,23 +157,23 @@
 
 ## 7. Documentation
 
-- [ ] 7.1 `apps/docs/src/content/docs/features/delivery-signals.md` — the strip's fourth signal, and
+- [x] 7.1 `apps/docs/src/content/docs/features/delivery-signals.md` — the strip's fourth signal, and
       **Merged, not deployed** stops being reserved: what it now matches, the exact-commit rule, and
       the batched-deploy over-report stated in the filter's own description (spec: "the product
       SHALL state that limitation"). Correct lines 73-74, which say the edge is not modeled.
-- [ ] 7.2 `apps/docs/src/content/docs/self-hosting/github-connector.md` — the Deployments read
+- [x] 7.2 `apps/docs/src/content/docs/self-hosting/github-connector.md` — the Deployments read
       permission now yields deploy history, not just current state; no new permission is requested;
       the reconcile sweep backfills the commit for deployments GitHub still lists and older rows
       stay unknown (§D5), so a sparse first week is expected rather than broken.
-- [ ] 7.3 `ROADMAP.md` — a row for this change, and correct Phase 2's "an issue↔deployment edge that
+- [x] 7.3 `ROADMAP.md` — a row for this change, and correct Phase 2's "an issue↔deployment edge that
       is not modelled" (line 74): the edge exists now; what remains unmodelled is the incident
       entity that change failure rate and MTTR need, and deploy-driven status transitions remain
       out of scope for the reason change 14 gave.
-- [ ] 7.4 `DESIGN.md` §Reality strip (line 45) — the slot's contents, now four signals not three.
-- [ ] 7.5 Check `README.md`, `TECHSTACK.md`, `.env.example` and `reference/` for staleness —
+- [x] 7.4 `DESIGN.md` §Reality strip (line 45) — the slot's contents, now four signals not three.
+- [x] 7.5 Check `README.md`, `TECHSTACK.md`, `.env.example` and `reference/` for staleness —
       expected to be none (no dependency, no env var, no container, no new permission). Say so
       explicitly rather than skipping the check.
-- [ ] 7.6 `pnpm --filter @yapm/docs build` passes.
+- [x] 7.6 `pnpm --filter @yapm/docs build` passes.
 
 ## 8. Verification
 
@@ -181,6 +181,6 @@
 - [ ] 8.2 The pg suites against the `yapm-dhe` stack from `down -v`: migrations and schema-drift, so
       `0023` is proven to apply on a fresh database and the hand-written Zero schema matches it.
 - [ ] 8.3 The compose smoke test on the `yapm-dhe` project name and ports. Report the actual output.
-- [ ] 8.4 Record in `design.md` under `## Decisions made during implementation` what ran, what did
+- [x] 8.4 Record in `design.md` under `## Decisions made during implementation` what ran, what did
       not, what CI is the first place to execute, and every decision taken that these tasks did not
       anticipate.

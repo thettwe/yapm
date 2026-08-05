@@ -78,6 +78,33 @@ What yapm does with the response is as important as the permission:
   [the rate budget](/self-hosting/ai-setup/#the-github-rate-budget-this-spends) for the caps that
   bound it when you do.
 
+### Deploy history
+
+The **Deployments: Read-only** permission in the table above now yields deploy *history*, not just
+the current deploy per environment — again with **no new permission and no re-consent**. Two fields
+yapm was already receiving are now kept:
+
+- **The commit each deployment carried.** It arrives in the same object as the ref and the
+  environment; yapm used to drop it. It is what links a merged pull request to the deploy that
+  shipped it, and it drives the reality strip's
+  [deployed signal](/features/delivery-signals/#how-a-change-is-counted-as-deployed).
+- **The moment a deployment first succeeded**, stored separately from its state and never rewritten.
+  GitHub's `auto_inactive` flips a superseded deployment to `inactive` the moment the next one
+  succeeds, so a deployment's state describes the present. Without a separate timestamp, every past
+  success was overwritten and "how often do we deploy" counted roughly one row per environment
+  forever.
+
+**What this does not do:** it requests nothing new, writes nothing to GitHub, subscribes to no new
+event (**Deployment** and **Deployment status** were already in step 4), and adds no container, job
+or environment variable.
+
+**Expect a sparse first week.** Deployments ingested before you upgraded have no recorded commit and
+no success timestamp, and no migration can invent one — the moment of a past success is exactly what
+was being overwritten. The ETag reconcile sweep (`GITHUB_RECONCILE_CRON`, every 15 minutes by
+default) backfills the commit for the deployments GitHub still lists per repository, and stamps the
+success moment for those whose newest status is still `success`. Anything older stays unknown and
+reads as not deployed. From the upgrade forward, every new deployment records both.
+
 ## 4. Subscribe to events
 
 Check exactly: **Pull request**, **Push**, **Check run**, **Check suite**, **Status**,
@@ -125,8 +152,8 @@ Open *Settings → Connectors* in yapm (workspace admins only), **Enable** the G
 map each repository (`owner/repo`) to the team that should own its pull requests, checks, and
 deployments. Ingested work-graph rows land inside that team's boundary; a webhook for an unmapped
 repo is dropped. Once mapped, a PR whose branch name or body mentions an issue key (e.g. `ENG-142`)
-lights up that issue's **reality strip** — PR state, CI health, and review age — on the issue row
-and detail.
+lights up that issue's **reality strip** — PR state, CI health, whether the change reached
+production, and review age — on the issue row and detail.
 
 ## 10. Optionally, let pull requests drive issue status
 

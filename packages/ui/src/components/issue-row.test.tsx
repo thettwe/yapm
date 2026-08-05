@@ -14,7 +14,8 @@ test('names the deployment in the strip label and carries its own glyph', () => 
   const { container } = render(<RealityStrip {...BASE} deployedAt={1_759_000_000_000} />)
   const strip = screen.getByRole('img')
 
-  expect(strip.getAttribute('aria-label')).toContain('Deployed to production')
+  // "Deployed" and no environment: the join does not consult one, so the label may not claim one.
+  expect(strip.getAttribute('aria-label')).toContain('Deployed')
   // Glyph, not hue alone: one more icon than the same strip without a deployment.
   const deployed = container.querySelectorAll('svg').length
 

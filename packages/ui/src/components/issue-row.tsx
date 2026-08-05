@@ -112,9 +112,10 @@ export interface RealityStripProps {
   pr: PrGlyphState | null
   ci: CiHealthState | null
   reviewAgeMs: number | null
-  // The moment this change first reached production, or null when nothing carrying its merge
-  // commit has succeeded. Its own glyph, for the same reason CI health has one: a signal this
-  // load-bearing may not be carried by hue.
+  // The moment a deployment carrying this change's merge commit first succeeded, or null when
+  // none has. The environment is not consulted — yapm cannot know which of a team's environment
+  // strings means production — so the label says "Deployed" and no more. Its own glyph, for the
+  // same reason CI health has one: a signal this load-bearing may not be carried by hue.
   deployedAt: number | null
 }
 
@@ -130,7 +131,7 @@ function RealityStrip({ pr, ci, reviewAgeMs, deployedAt }: RealityStripProps) {
   const summary = [
     prGlyph?.label,
     ciGlyph?.label,
-    deployedAt != null ? 'Deployed to production' : null,
+    deployedAt != null ? 'Deployed' : null,
     reviewAgeMs != null ? `reviewed ${formatReviewAge(reviewAgeMs)} ago` : null,
   ]
     .filter(Boolean)

@@ -282,6 +282,51 @@ yields null rather than `undefined`.
 `merge_commit_sha` (`9f1c2d3e4b5a`) is deliberately DIFFERENT from its `head.sha` (`abc123def456`),
 so a future head-sha fallback would visibly change a test result rather than pass silently.
 
+**The strip's accessible label claimed an environment the join never checks.** The first pass
+labelled the deploy glyph "Deployed to production", which contradicts §D6 in the one place a user
+can read: the join has no `environment` filter, so a successful *staging* deploy carrying the merge
+commit lights the glyph. The label is now "Deployed" and claims nothing further, the comment on
+`RealityStripProps.deployedAt` states the constraint, and the component test asserts the shorter
+string. Docs say the same thing in both places rather than only in the design.
+
+**Both docs pages were already in the Starlight sidebar, so nothing was wired.** This change adds no
+capability that needs a page of its own: it extends the reality strip (`features/delivery-signals`)
+and what an existing GitHub App permission yields (`self-hosting/github-connector`). A third page
+would split one story across three files.
+
+**`reference/connectors.md` was corrected, not just consulted.** Its §4 table lists "Deploy state"
+with the statuses endpoint and says nothing about `auto_inactive`, nothing about
+`deployment.sha`, and nothing about `merge_commit_sha` — which is precisely the harvest gap that let
+change 8 map `ref` and `environment` and drop the commit sitting in the same object. Three verified
+corrections were appended under the table, attributed to this change and to
+`@octokit/openapi-types@27.0.0`.
+
+**ROADMAP's "Where v1 actually stands" narrative was deliberately left alone.** It already stops at
+change 25 and does not mention 26, so appending a sentence for 27 would assert a sequence the
+paragraph does not tell. What this change *did* make stale is corrected: the change table gains row
+27, Phase 2 stops saying the issue↔deployment edge "is not modelled" (and now names the incident
+entity as what actually remains, with lead time and deployment frequency called out as computable
+from what this stores), Phase 3 gains the same distinction, the differentiation bullet lists four
+signals, and VISION §Phase 2 gets the matching correction. `README.md`'s reality-strip sentence grew
+its fourth signal. **`TECHSTACK.md` and `.env.example` are unchanged and were checked, not skipped**:
+this change adds no dependency, no container, no environment variable and no App permission, so
+neither can be stale. `.env.example`'s set-equality test against the Zod schema would have caught a
+drift here anyway.
+
+**Change number 27, and the collision risk is real.** The sibling `team-delivery-view` build
+consumes what this change stores, so it should take 28; if both branches claim 27 the conflict lands
+in `ROADMAP.md` and nowhere else, and is a one-line renumber.
+
+**No new e2e, and the conditional in task 6.11 resolved to "no".** The shipped `issues.spec.ts` has
+no Delivery-menu test, so 6.11's clause would have had one written — except that the only thing
+browser-reachable here is menu *keyboard operability*, and `FilterMenu` is a thin wrapper over the
+shared `Menu`/`MenuTrigger`/`MenuItem` primitives from `packages/ui` whose keyboard behaviour is the
+primitive's, not this change's. A Playwright test over it would assert the component library. The
+signal itself is unreachable: no work-graph row can exist in the e2e stack without a configured
+GitHub App and a webhook, and the suite has no work-graph seed — the same reason change 14 shipped
+an e2e covering only its settings toggle. The requirement this change takes instead is that
+`issues.spec.ts` passes **unchanged**, which CI is the first place to prove.
+
 ### What ran, and what CI is the first place to execute
 
 Ran locally, green: `pnpm turbo run typecheck '--filter=...[origin/main]'`, `pnpm lint`,
@@ -296,3 +341,11 @@ compares the three new columns to live Postgres** — 393 pg-gated tests are ski
 The migration is three `alter table ... add column` statements and one `create index`, matching the
 shape of `0011` and `0019`, and the drift expectations were written to match (`nullable: true,
 hasDefault: false` for all three). If CI disagrees, that is the honest place to find out.
+
+**Second pass (tests and docs).** Ran locally and green: `pnpm turbo run typecheck
+'--filter=...[origin/main]'`, `pnpm lint`, `pnpm turbo run test '--filter=...[origin/main]'`,
+`node scripts/check-boundaries.mjs`, and `pnpm --filter @yapm/docs build`. Still not run here, by the
+same instruction: the live-stack migration apply (1.5), the Postgres suites (8.2), the compose smoke
+test (8.3) and Playwright. Task 8.1 asks for the full `build` as well; the docs build was run
+because the docs are this pass's deliverable, and the rest of `build` is left to the open PR's CI
+rather than duplicated locally.

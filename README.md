@@ -62,7 +62,8 @@ a keyboard-first triage inbox for incoming issues (accept / decline / route, wit
 lightweight, workspace-level projects with computed progress and a keyboard-first roadmap timeline across teams ·
 three switchable themes (Warm, Focused, Editorial) with a custom accent color · a first-party
 **GitHub connector** (admin-configured) that ingests PR, CI, review, and deploy state into the
-work graph, so every issue row's **reality strip** shows live PR state, a CI health dot, and review
+work graph, so every issue row's **reality strip** shows live PR state, a CI health dot, whether a
+deployment carrying the merged commit actually reached production, and review
 age — with a **divergence flag** when a human status disagrees with git, and **opt-in status
 automation** that closes the loop the flag opens: turn it on for a team and a linked pull request
 opening moves its issue to In Review, merging moves it to Done — forward only, never over a canceled

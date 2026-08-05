@@ -348,6 +348,17 @@ distinct on purpose: `undefined` means the caller handed over an issue-level lis
 hand-built caller and every pre-deploy-axis test), which still rolls up to the earliest, so nothing
 that compiled before compiles differently now.
 
+**Refined: keyed to the newest MERGED pull request, not the newest one overall.** Reading the axis
+off `latestPr` fixed the older-merge-vouches-for-a-newer-one direction but opened its mirror: only a
+merged PR can have shipped, so any *later unmerged* link — a follow-up, a revert, a stacked PR, a
+mere body reference — took over the axis with its `deployedAt: null` and erased a deployment that
+provably exists. `computeDeliverySignal` now derives `latestMergedPr` (max `openedAt` among
+`state === 'merged'`) alongside `latestPr` and reads the deploy axis off it; the `pr` axis still
+reports `latestPr`, and the `undefined` fallback to the issue-level list is untouched, so
+issue-level callers are unchanged. The round-1 property still holds — two merges with the newest
+unshipped yields `null`, so `merged-not-deployed` still lists the row — because that predicate
+additionally requires `signal.pr === 'merged'`. Both directions are pinned by tests.
+
 **The join is an index built once per list, not a rescan per row.** §Risks promised "a single pass
 over the team's deployments, not one per row", and the first pass delivered the opposite: the
 always-mounted issue list called `assembleLinkedEntities` per issue and each call walked the team's
@@ -369,7 +380,7 @@ success already superseded by `auto_inactive` before the sweep saw it, both stay
 ### What ran, and what CI is the first place to execute
 
 Ran locally, green: `pnpm turbo run typecheck '--filter=...[origin/main]'`, `pnpm lint`,
-`pnpm turbo run test '--filter=...[origin/main]'` (schema 784, ui 256, server 370, web 446 passing),
+`pnpm turbo run test '--filter=...[origin/main]'` (schema 789, ui 256, server 370, web 446 passing),
 and `node scripts/check-boundaries.mjs`.
 
 **Not run here, by instruction** (the build phase was told to skip Docker, the full build, Playwright

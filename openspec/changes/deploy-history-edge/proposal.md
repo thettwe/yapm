@@ -98,8 +98,11 @@ _None._
 Docs: `apps/docs/src/content/docs/self-hosting/github-connector.md` (what the Deployments permission
 now yields and that the sweep backfills), `apps/docs/src/content/docs/features/delivery-signals.md`
 (the strip's fourth signal, and "Merged, not deployed" stops being reserved — including the exact-sha
-caveat), `ROADMAP.md` (a row for this change, and Phase 2's "an issue↔deployment edge that is not
-modelled" is now half-true and must say which half), `DESIGN.md` §Reality strip (the slot's contents).
+caveat), `apps/docs/src/content/docs/index.md` (the landing page enumerates the strip's signals),
+`ROADMAP.md` (a row for this change, and Phase 2's "an issue↔deployment edge that is not modelled"
+is now half-true and must say which half), `VISION.md` §Phase 2 (the same issue↔deployment edge
+correction), `README.md` (the reality-strip sentence gains its fourth signal), `DESIGN.md` §Reality
+strip (the slot's contents).
 
 ## Non-goals
 

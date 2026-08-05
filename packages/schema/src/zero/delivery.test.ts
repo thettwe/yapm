@@ -294,6 +294,75 @@ describe('assembleLinkedEntities — the deployment join', () => {
     ).toBe(7_000)
   })
 
+  // Only a merged PR can have shipped. A later follow-up, revert, stacked PR or body reference
+  // that is still open must not unclaim a deployment that provably happened.
+  it('keeps the merged PR deployment when a newer linked PR is not merged', () => {
+    const links: IssueLinkRow[] = [
+      {
+        pullRequest: {
+          state: 'merged',
+          openedAt: 100,
+          repo: 'acme/app',
+          mergeCommitSha: 'shippedmerge',
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+      {
+        pullRequest: {
+          state: 'open',
+          openedAt: 900,
+          repo: 'acme/app',
+          mergeCommitSha: null,
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+    ]
+    const deployments: TeamDeploymentRow[] = [
+      { repo: 'acme/app', sha: 'shippedmerge', deployedAt: 4_000 },
+    ]
+    expect(deployedAtOf(links, deployments)).toBe(4_000)
+    // The `pr` axis still reports the latest PR overall, so the two axes stay independent.
+    expect(computeDeliverySignal(issue, assembleLinkedEntities(links, deployments))?.pr).toBe(
+      'open',
+    )
+  })
+
+  // Still true after keying the axis to the newest merged PR: two merges, only the older shipped.
+  it('reports nothing when the newest MERGED pull request never shipped', () => {
+    const links: IssueLinkRow[] = [
+      {
+        pullRequest: {
+          state: 'merged',
+          openedAt: 100,
+          repo: 'acme/app',
+          mergeCommitSha: 'oldmerge',
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+      {
+        pullRequest: {
+          state: 'merged',
+          openedAt: 900,
+          repo: 'acme/app',
+          mergeCommitSha: 'newmerge',
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+      {
+        pullRequest: {
+          state: 'open',
+          openedAt: 1_500,
+          repo: 'acme/app',
+          mergeCommitSha: null,
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+    ]
+    expect(deployedAtOf(links, [{ repo: 'acme/app', sha: 'oldmerge', deployedAt: 4_000 }])).toBe(
+      null,
+    )
+  })
+
   it('takes a prebuilt index and an array to the same answer', () => {
     const rows: TeamDeploymentRow[] = [
       { repo: 'acme/app', sha: 'cafebabe', deployedAt: 9_000 },

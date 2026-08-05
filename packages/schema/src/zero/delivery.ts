@@ -29,11 +29,11 @@ export interface LinkedEntities {
     readonly state: PrState
     readonly openedAt: number
     // The earliest deployment that carried THIS pull request's merge commit, or null when none
-    // did. Keyed per pull request rather than rolled up onto the issue: the `pr` axis reports the
-    // LATEST pull request, so a deploy axis flattened over every linked one would let an older,
-    // shipped change vouch for a newer one that never shipped — the strip would claim "Deployed"
-    // and `merged-not-deployed` would hide the row. `undefined` means the producer did not key
-    // deployments at all, and the flat `deployments` list below is read instead.
+    // did. Keyed per pull request rather than rolled up onto the issue: the deploy axis reports the
+    // NEWEST MERGED pull request, so a deploy axis flattened over every linked one would let an
+    // older, shipped change vouch for a newer merge that never shipped — the strip would claim
+    // "Deployed" and `merged-not-deployed` would hide the row. `undefined` means the producer did
+    // not key deployments at all, and the flat `deployments` list below is read instead.
     readonly deployedAt?: number | null
   }[]
   readonly ciRuns?: readonly { readonly health: CiHealth }[]
@@ -109,6 +109,15 @@ export function computeDeliverySignal(
     (latest, pr) => (latest === undefined || pr.openedAt > latest.openedAt ? pr : latest),
     undefined,
   )
+  // Only a merged pull request can have shipped, so the deploy axis reads the newest MERGED one.
+  // Keying it to `latestPr` instead would let any later unmerged link — a follow-up, a revert, a
+  // stacked PR, a body reference — unclaim a deployment that provably happened.
+  const latestMergedPr = prs
+    .filter((pr) => pr.state === 'merged')
+    .reduce<(typeof prs)[number] | undefined>(
+      (latest, pr) => (latest === undefined || pr.openedAt > latest.openedAt ? pr : latest),
+      undefined,
+    )
   const latestReview = reviews.reduce<(typeof reviews)[number] | undefined>(
     (latest, r) => (latest === undefined || r.submittedAt > latest.submittedAt ? r : latest),
     undefined,
@@ -124,12 +133,11 @@ export function computeDeliverySignal(
         ? Date.now() - latestPr.openedAt
         : null
 
-  // The deploy axis reads the SAME pull request the `pr` axis reports. A producer that keys
-  // deployments per pull request (`assembleLinkedEntities`) always sets the field, so a `null`
-  // there means "this change did not ship" and must not be replaced by an older linked PR's
-  // deployment. `undefined` means the caller handed over an issue-level list instead, which still
-  // rolls up to the earliest.
-  const perPr = latestPr === undefined ? undefined : latestPr.deployedAt
+  // The deploy axis reads the newest MERGED pull request. A producer that keys deployments per pull
+  // request (`assembleLinkedEntities`) always sets the field, so a `null` there means "this change
+  // did not ship" and must not be replaced by an older linked PR's deployment. `undefined` means
+  // the caller handed over an issue-level list instead, which still rolls up to the earliest.
+  const perPr = latestMergedPr === undefined ? undefined : latestMergedPr.deployedAt
   const deployedAt = perPr !== undefined ? perPr : earliestDeployedAt(linked.deployments ?? [])
 
   return {

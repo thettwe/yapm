@@ -232,6 +232,71 @@ Editorial, light and dark. No new colour pair is introduced — verified/unverif
 - **SAML is gated but has no UI.** An operator with a SAML IdP must use the API path. Stated in the
   docs page rather than left to be discovered.
 
+## Decisions made during implementation
+
+### L1 — The captured `ssoProvider` DDL
+
+Task 1.4. Captured on 2026-08-05 from `getMigrations(...).compileMigrations()` against PostgreSQL 18
+in the dev compose stack, with `sso({ providersLimit: 5, domainVerification: { enabled: true } })`
+in place. `toBeCreated` was `[ 'user', 'session', 'account', 'verification', 'jwks', 'ssoProvider' ]`
+and the sixth statement is, verbatim:
+
+```sql
+create table "ssoProvider" ("id" text not null primary key, "issuer" text not null, "oidcConfig" text, "samlConfig" text, "userId" text not null references "user" ("id") on delete cascade, "providerId" text not null unique, "organizationId" text, "domain" text not null, "domainVerified" boolean);
+```
+
+Three things §D7 did not predict, all of which the interface and the drift test now encode:
+
+1. **No `createdAt`/`updatedAt`.** It is the only better-auth table without them. A `SsoProviderTable`
+   copied from `UserTable`'s shape would have failed the drift test with two phantom columns.
+2. **`domainVerified` is nullable with no default**, not `boolean not null default false`. So the
+   availability probe tests `domainVerified = true` — `is not false` would count a freshly
+   registered, unproven provider and put a broken button on the login form.
+3. **`oidcConfig`/`samlConfig` are `text`, not `jsonb`.** `db/sso.ts` therefore parses them itself,
+   which is also why `redactSsoProvider` is a pure function over a row rather than a projection.
+
+No index on `domainVerified`; the probe is a `limit 1` over a table with single-digit cardinality.
+No migration was added — highest on main is still `0022`, as §D7 said.
+
+### L2 — `providersLimit = 5`, and the interaction with the ownership transfer
+
+The plugin counts providers **per registering user** (`findMany where userId = <session user>`,
+index.mjs:2553), and §D4's `claimSsoProvider` moves `userId` to whichever admin last mutated a
+provider. So the limit is really "providers owned by one admin", and an admin who has touched five
+providers cannot register a sixth. Five is far above the one or two IdPs a single-workspace
+self-hosted instance has, and the failure is a clear 403 an admin can resolve by having a colleague
+register, so the interaction is recorded rather than designed around. It must never be `0`.
+
+### L3 — The plugin's `APIError` statuses are mapped, and its 403 is folded into 404
+
+`checkProviderAccess` answers `403 "You don't have access to this provider"` when ownership does not
+match. `claimSsoProvider` makes that unreachable, but if it ever were reached, passing it through
+would give `/api/v1/sso` two incompatible meanings for 403 — "you are not a workspace admin" and
+"another account owns this row". It is folded into `provider_not_found` (404), and no plugin message
+is echoed. `failure()` switches on `APIError.statusCode` (a number) rather than `.status`, whose type
+is a `string | number` union.
+
+A duplicate `providerId` does not raise an `APIError` at all — the plugin calls `adapter.create`
+directly, so it surfaces as a Postgres unique-constraint violation. That is the mistake an operator
+following the docs actually makes, so it is caught by name and answered `409 provider_exists`
+instead of 500.
+
+### L4 — Four existing `AuthService` fakes had to grow
+
+`ai/admin-routes.test.ts`, `connectors/admin-routes.test.ts`, `search/routes.pg.test.ts` and
+`storage/routes.pg.test.ts` all build a literal `AuthService`. Rather than five stub lines in each,
+`testing/auth.ts` exports `unreachableSsoMethods()`, whose five methods **reject**. A surface that
+started calling one fails loudly instead of passing against a stub that pretends to have registered
+an identity provider.
+
+### L5 — The falsification, run
+
+With `disabledPaths` removed and nothing else changed, three assertions in
+`sso/admin-routes.pg.test.ts` fail, and the first is the vulnerability itself:
+`POST /api/auth/sso/register` **returned 200** and created the row. Restored, it returns 404 while
+`POST /api/v1/sso/providers` answers 403 to a member, a viewer and an authenticated non-member alike
+— for a provider id that exists and one that does not.
+
 ## Migration / Rollout
 
 No data migration and no downtime step. On first boot after deploy, `getMigrations()` adds

@@ -9,6 +9,7 @@ import {
 import { pino } from 'pino'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AuthService, SessionUser } from '../auth.js'
+import { unreachableSsoMethods } from '../testing/auth.js'
 import { createConnectorAdminRoutes } from './admin-routes.js'
 
 const DATABASE_URL = process.env.DATABASE_URL
@@ -31,6 +32,9 @@ function fakeAuth(): AuthService {
     migrateAuth: () => Promise.resolve({ created: [], altered: [] }),
     issueSyncToken: () => Promise.resolve({ token: 'token', expiresAt: null }),
     verifySyncToken: () => Promise.resolve(undefined),
+    // The SSO management seam. Unreachable from this surface, and it throws rather than resolving so
+    // a route that ever started calling it would fail loudly here instead of silently passing.
+    ...unreachableSsoMethods(),
   }
 }
 

@@ -538,6 +538,20 @@ const KYSELY_DB: Record<string, Record<string, { nullable: boolean; hasDefault: 
     createdAt: { nullable: false, hasDefault: true },
     updatedAt: { nullable: false, hasDefault: true },
   },
+  // Also better-auth's, from its SSO plugin. The one better-auth table with NO `createdAt`/
+  // `updatedAt`, and `domainVerified` is nullable with no default — null is "not verified", which is
+  // why the availability probe tests `= true`.
+  ssoProvider: {
+    id: { nullable: false, hasDefault: false },
+    issuer: { nullable: false, hasDefault: false },
+    oidcConfig: { nullable: true, hasDefault: false },
+    samlConfig: { nullable: true, hasDefault: false },
+    userId: { nullable: false, hasDefault: false },
+    providerId: { nullable: false, hasDefault: false },
+    organizationId: { nullable: true, hasDefault: false },
+    domain: { nullable: false, hasDefault: false },
+    domainVerified: { nullable: true, hasDefault: false },
+  },
 }
 
 // The `user` table is created at boot by better-auth's `getMigrations()`, not by our
@@ -554,6 +568,26 @@ async function createAuthUserTable(db: Kysely<DB>): Promise<void> {
       "image" text,
       "createdAt" timestamptz default current_timestamp not null,
       "updatedAt" timestamptz default current_timestamp not null
+    )
+  `.execute(db)
+}
+
+// Likewise for the SSO plugin's provider table, with `domainVerification` enabled (which is what
+// adds `domainVerified`). Verbatim from the `compileMigrations()` output recorded in
+// reference/kysely-stack.md §5.4 — do not "tidy" it: the absent `createdAt`/`updatedAt` and the
+// nullable `domainVerified` are the two things the drift assertions above exist to pin.
+async function createAuthSsoProviderTable(db: Kysely<DB>): Promise<void> {
+  await sql`
+    create table if not exists "ssoProvider" (
+      "id" text not null primary key,
+      "issuer" text not null,
+      "oidcConfig" text,
+      "samlConfig" text,
+      "userId" text not null references "user" ("id") on delete cascade,
+      "providerId" text not null unique,
+      "organizationId" text,
+      "domain" text not null,
+      "domainVerified" boolean
     )
   `.execute(db)
 }
@@ -658,6 +692,11 @@ describe('server-only tables are excluded from the Zero schema', () => {
       // happened becomes a synced artifact — readable, and therefore arguable about, by the people it
       // is evidence against. It is written server-side and read by nobody in this change.
       'ai_disclosure_audit',
+      // The SSO provider registry. `oidcConfig`/`samlConfig` hold the IdP client secret (and, for
+      // SAML, the SP private key) in cleartext, so if this table ever appears in the Zero schema
+      // every signed-in client replicates the credential yapm authenticates the whole workspace
+      // with. It is read only by the admin surface, and only through a redacting helper.
+      'ssoProvider',
     ]) {
       expect(Object.keys(KYSELY_DB)).toContain(name)
       expect(zeroTables).not.toContain(name)
@@ -708,6 +747,7 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
   beforeAll(async () => {
     await migrateToLatest(database.db)
     await createAuthUserTable(database.db)
+    await createAuthSsoProviderTable(database.db)
     tables = (await database.db.introspection.getTables()).filter(
       (table) => table.schema === 'public' && !table.isView,
     )

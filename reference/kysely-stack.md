@@ -1319,6 +1319,27 @@ create index "account_userId_idx" on "account" ("userId");
 create index "verification_identifier_idx" on "verification" ("identifier");
 ```
 
+With `@better-auth/sso@1.6.24` added as a sixth plugin and `domainVerification: { enabled: true }`,
+`compileMigrations()` emits one more table ✅ *executed* against PostgreSQL 18 on 2026-08-05
+(`toBeCreated: [ 'user', 'session', 'account', 'verification', 'jwks', 'ssoProvider' ]`):
+
+```sql
+create table "ssoProvider" ("id" text not null primary key, "issuer" text not null, "oidcConfig" text, "samlConfig" text, "userId" text not null references "user" ("id") on delete cascade, "providerId" text not null unique, "organizationId" text, "domain" text not null, "domainVerified" boolean);
+```
+
+Facts specific to that table:
+- **No `createdAt`/`updatedAt`.** It is the only better-auth table with no timestamps, so a
+  `Generated<Timestamp>` pair copied from `user` would fail the drift test.
+- `"domainVerified"` exists **only** when `domainVerification.enabled` is set, and it is
+  **nullable with no default** — null means "not verified", which is why an availability probe must
+  test `= true` rather than `is not false`.
+- `"oidcConfig"`/`"samlConfig"` are `text` holding JSON, **not** `jsonb`, and they carry
+  `clientSecret` / `privateKey` / `decryptionPvk` in cleartext. Nothing may select them raw into a
+  response.
+- `"providerId"` (the operator-chosen slug) is `unique`; `"id"` is better-auth's own primary key.
+- `"userId"` is `not null` and cascades from `"user"` — deleting the admin who registered a provider
+  deletes the provider.
+
 Facts to carry into your own `DB` interface and Zero schema:
 - Table names are **singular and unquoted-lowercase**; `"user"` is a reserved word in Postgres and is always quoted.
 - Columns are **camelCase** (`emailVerified`, `createdAt`, `userId`) — the one place in the schema that is not snake_case. In a Zero schema you'd write `userId: string()` with no `.from()`.

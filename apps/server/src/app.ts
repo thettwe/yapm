@@ -19,6 +19,7 @@ export interface AppOptions {
   connectorAdmin?: Hono
   configurationAdmin?: Hono
   aiAdmin?: Hono
+  ssoAdmin?: Hono
   search?: Hono
   files?: Hono
 }
@@ -83,6 +84,10 @@ export function createApp(options: AppOptions): Hono {
 
   if (options.aiAdmin) {
     app.route('/', options.aiAdmin)
+  }
+
+  if (options.ssoAdmin) {
+    app.route('/', options.ssoAdmin)
   }
 
   if (options.search) {

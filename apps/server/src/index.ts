@@ -37,6 +37,7 @@ import { createLogger, type Logger } from './logger.js'
 import { createMailer } from './mail/index.js'
 import { createSearchFreshnessProbe } from './search/freshness.js'
 import { createSearchRoutes } from './search/routes.js'
+import { createSsoAdminRoutes } from './sso/admin-routes.js'
 import { createStorageProvider } from './storage/index.js'
 import { createFileRoutes } from './storage/routes.js'
 import { createSessionContextResolver } from './zero/context.js'
@@ -155,6 +156,11 @@ async function main(): Promise<void> {
   const secretCodec: SecretCodec | null = env.SECRETS_ENCRYPTION_KEY
     ? createSecretCodec(env.SECRETS_ENCRYPTION_KEY)
     : null
+
+  // The only supported way to register an SSO provider: better-auth's own management endpoints are
+  // removed from its router (see `SSO_DISABLED_PATHS`), so this surface and its workspace-admin gate
+  // are the door.
+  const ssoAdmin = createSsoAdminRoutes({ auth, db: database.db, logger })
 
   const aiAdmin = createAiAdminRoutes({
     auth,
@@ -322,6 +328,7 @@ async function main(): Promise<void> {
       env,
     }),
     aiAdmin,
+    ssoAdmin,
     search: createSearchRoutes({
       auth,
       db: database.db,

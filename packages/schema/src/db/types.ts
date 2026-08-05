@@ -742,6 +742,27 @@ export interface UserTable {
   updatedAt: Generated<Timestamp>
 }
 
+// Owned by better-auth's SSO plugin, like `user` above and read here for exactly three reasons: the
+// anonymous availability probe, the redacted admin list, and the workspace-ownership transfer. The
+// column list is the DDL `compileMigrations()` actually emitted (reference/kysely-stack.md §5.4) —
+// this table has NO `createdAt`/`updatedAt`, unlike every other better-auth table.
+//
+// `oidcConfig`/`samlConfig` are `text` holding JSON with `clientSecret`, `privateKey` and
+// `decryptionPvk` in cleartext. They are typed here so `db/sso.ts` can parse one field out of them;
+// no other file may select them, and nothing on this table ever reaches the Zero schema.
+export interface SsoProviderTable {
+  id: string
+  issuer: string
+  oidcConfig: Nullable<string>
+  samlConfig: Nullable<string>
+  userId: string
+  providerId: string
+  organizationId: Nullable<string>
+  domain: string
+  // Nullable with no default: null is "not verified", so a usable-provider probe tests `= true`.
+  domainVerified: Nullable<boolean>
+}
+
 export interface DB {
   workspace: WorkspaceTable
   workspace_member: WorkspaceMemberTable
@@ -787,6 +808,7 @@ export interface DB {
   search_document: SearchDocumentTable
   attachment: AttachmentTable
   user: UserTable
+  ssoProvider: SsoProviderTable
 }
 
 export type Workspace = Selectable<WorkspaceTable>
@@ -944,3 +966,5 @@ export type NewAttachment = Insertable<AttachmentTable>
 export type AttachmentUpdate = Updateable<AttachmentTable>
 
 export type User = Selectable<UserTable>
+
+export type SsoProvider = Selectable<SsoProviderTable>

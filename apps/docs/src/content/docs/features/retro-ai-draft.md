@@ -217,12 +217,13 @@ below is: it is about a retro this view does not sync, so there is nothing to na
 ### What a follow-up looks like
 
 A follow-up is an ordinary proposal — a sentence, a confidence, evidence chips — whose **category is
-`follow_up`**, one of the four values a proposal can be stored under. It carries its own heading naming the cycle those actions were agreed in
-("Follow-ups from Cycle 6"), because the prior retro is not necessarily *last* cycle's: if a team
-skipped a retro, yapm walks back to the most recent one that actually agreed something, and says so
-rather than implying it was last cycle. Once the team has voted the headings go away — the list
-re-sorts contested-first across all four groups — so each follow-up row then carries the cycle name
-on its own chip, and the announcement a screen reader gets says it too.
+`follow_up`**, one of the four values a proposal can be stored under. It carries its own heading
+naming the cycle those actions were agreed in ("Follow-ups from Cycle 6"), because the prior retro is
+not necessarily *last* cycle's: if a team skipped a retro, yapm walks back to the most recent one
+that actually agreed something, and says so rather than implying it was last cycle. Once the team has
+voted the headings go away — the list re-sorts contested-first across all four groups — so each
+follow-up row then carries the cycle name on its own chip, and the announcement a screen reader gets
+says it too.
 
 The prior action's chip is **the one chip in the section that is not a control.** It does not
 navigate. The prior retro's rows are not synced into this retro's view and yapm did not add a query

@@ -380,3 +380,51 @@ sign-up-driven smoke assertion. §L8's diagnosis is confirmed by the same eviden
 was the Playwright Chromium cookie jar, not the stack and not this change. Tasks 5.9 and 7.3 are
 ticked on that basis, with the provenance named rather than implied — they were verified in CI, not
 here.
+
+### L14 — The falsifiable check was verified by MUTATION, not by watching it pass
+
+A test that passes proves nothing about whether it can fail, and `dropUnbackedFollowUps` is the one
+validator in this change that has no counterpart on `main` to diff against — on `main`
+`category: 'follow_up'` does not type-check at all, so "it fails on main" is true for the
+uninteresting reason. The interesting question is whether the assertion is coupled to the validator
+or to something incidental about the fixture.
+
+Answered by removing the validator from the chain on this branch — `capRetroProposals(baked, …)` in
+place of `capRetroProposals(dropUnbackedFollowUps(baked), …)` — and re-running the suite:
+
+```
+× drops one whose only citation is a perfectly valid issue
+    expected [ 'Guest checkout shipped.', …(1) ] to deeply equal [ 'Guest checkout shipped.' ]
+× drops one the bake orphaned, rather than leaving it backed by an issue
+    expected [ { category: 'follow_up', …(3) } ] to deeply equal []
+Tests  2 failed | 26 passed (28)
+```
+
+Exactly two tests fail and both are the intended ones; the other 26 in the file are indifferent to
+the validator's presence, which is the second half of the claim — the check is coupled to this
+validator and to nothing else. The mutation was reverted.
+
+§L9's DB-gated CHECK assertion got the same treatment offline, since Postgres could not be started
+here: its extraction regex was run over both constraint texts, the live four-value one recorded in
+§L2 and the three-value one `0018` alone produces.
+
+```
+four  -> ["win","loss","improvement","follow_up"]
+three -> ["win","loss","improvement"]
+```
+
+The three-value form yields three members and fails the equality against `RETRO_PROPOSAL_CATEGORIES`,
+so the assertion still discriminates a database missing 0022 — which is the only thing it is for.
+
+### L15 — Docs reflow, and the root-doc staleness check re-run rather than inherited
+
+The follow-up section of `features/retro-ai-draft.md` had one 142-column line left by the edit that
+introduced the stored-category wording, in a file that otherwise wraps at ~100. Reflowed; prose
+unchanged. `pnpm --filter @yapm/docs build` builds 25 pages.
+
+§L7's conclusion was re-derived rather than taken on trust: a grep for `derived bucket`,
+`bucket is derived`, `follow-up bucket`, `not a fourth stored` and `three legal categories` across
+`apps/docs`, `README.md`, `TECHSTACK.md`, `VISION.md`, `DESIGN.md`, `PROCESS.md`, `reference/` and
+`.env.example` returns nothing, and the only `bucket` hits in the docs site are S3 buckets and the
+"group by cycle/project" verb. No dependency, no env var and no container changed, so `.env.example`
+and `TECHSTACK.md` are correctly untouched.

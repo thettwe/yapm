@@ -67,6 +67,7 @@ const prMutation = (
     state: 'open',
     url: 'https://github.com/acme/app/pull/12',
     headSha: 'abc123',
+    mergeCommitSha: null,
     openedAt: 1_699_000_000_000,
     mergedAt: null,
     updatedAt: 1_699_500_000_000,
@@ -285,6 +286,7 @@ describe('applyWorkGraphMutation — checks, reviews, deploys', () => {
       externalId: 'DEPLOY_1',
       ref: 'main',
       environment: 'production',
+      sha: 'deadbeef',
       state: 'pending',
       sourceUpdatedAt: 1_000,
     }
@@ -326,6 +328,7 @@ describe('applyWorkGraphMutation — checks, reviews, deploys', () => {
       externalId: 'DEPLOY_1',
       ref: 'main',
       environment: 'production',
+      sha: 'deadbeef',
       state: 'success',
       sourceUpdatedAt: CTX.now,
     }
@@ -339,7 +342,177 @@ describe('applyWorkGraphMutation — checks, reviews, deploys', () => {
       teamId: 'team-1',
       state: 'success',
       environment: 'production',
+      sha: 'deadbeef',
+      deployedAt: CTX.now,
     })
+  })
+})
+
+// The durable fact. GitHub's `auto_inactive` flips a superseded deployment to `inactive` the moment
+// the next one succeeds, so `state`/`updatedAt` describe the present while `deployedAt` records
+// what happened — two rules on one row, and these pin the difference.
+describe('applyWorkGraphMutation — the write-once deploy fact', () => {
+  const T1 = 1_700_000_000_000
+  const T2 = T1 + 3_600_000
+
+  const deployMutation = (
+    over: Partial<Extract<WorkGraphMutation, { kind: 'upsertDeployment' }>> = {},
+  ) =>
+    ({
+      kind: 'upsertDeployment',
+      id: newId(),
+      installationId: INSTALL,
+      provider: 'github',
+      repo: 'acme/app',
+      externalId: 'DEPLOY_1',
+      ref: 'main',
+      environment: 'production',
+      sha: 'deadbeef',
+      state: 'success',
+      sourceUpdatedAt: T1,
+      ...over,
+    }) satisfies WorkGraphMutation
+
+  const existingRow = (over: Record<string, unknown> = {}) => ({
+    id: 'deploy-existing',
+    updatedAt: T1,
+    deployedAt: null,
+    sha: 'deadbeef',
+    ...over,
+  })
+
+  it('keeps deployedAt at the success moment when auto_inactive supersedes the deployment', async () => {
+    const { tx, calls } = fakeTx([existingRow({ deployedAt: T1 })])
+    await applyWorkGraphMutation(
+      tx,
+      CTX,
+      deployMutation({ state: 'inactive', sourceUpdatedAt: T2 }),
+    )
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({ table: 'deployment', verb: 'update' })
+    expect(calls[0]?.value).toMatchObject({
+      id: 'deploy-existing',
+      state: 'inactive',
+      updatedAt: T2,
+      deployedAt: T1,
+    })
+  })
+
+  it('never stamps deployedAt from an inactive-only deployment', async () => {
+    const { tx, calls } = fakeTx([undefined])
+    await applyWorkGraphMutation(tx, CTX, deployMutation({ state: 'inactive' }))
+    expect(calls[0]?.value).toMatchObject({ state: 'inactive', deployedAt: null })
+
+    const superseded = fakeTx([existingRow()])
+    await applyWorkGraphMutation(
+      superseded.tx,
+      CTX,
+      deployMutation({ state: 'inactive', sourceUpdatedAt: T2 }),
+    )
+    expect(superseded.calls[0]?.value).toMatchObject({ deployedAt: null })
+  })
+
+  it('counts three successive deploys to one environment as three, not one', async () => {
+    // Three GitHub deployment ids, each superseding the last: three rows, three distinct moments.
+    const moments = [T1, T1 + 60_000, T1 + 120_000]
+    const stamped: unknown[] = []
+
+    for (const [index, at] of moments.entries()) {
+      const { tx, calls } = fakeTx([undefined])
+      await applyWorkGraphMutation(
+        tx,
+        CTX,
+        deployMutation({ externalId: `DEPLOY_${index}`, sourceUpdatedAt: at }),
+      )
+      stamped.push(calls[0]?.value)
+
+      if (index === 0) continue
+      // The previous deployment goes inactive at this moment; its own stamp must not move.
+      const prior = fakeTx([existingRow({ deployedAt: moments[index - 1] })])
+      await applyWorkGraphMutation(
+        prior.tx,
+        CTX,
+        deployMutation({
+          externalId: `DEPLOY_${index - 1}`,
+          state: 'inactive',
+          sourceUpdatedAt: at,
+        }),
+      )
+      expect(prior.calls[0]?.value).toMatchObject({ deployedAt: moments[index - 1] })
+    }
+
+    expect(stamped).toHaveLength(3)
+    expect(stamped.map((row) => (row as { deployedAt: number }).deployedAt)).toEqual(moments)
+  })
+
+  it('is idempotent under webhook redelivery: deployedAt does not move', async () => {
+    const { tx, calls } = fakeTx([existingRow({ deployedAt: T1 })])
+    await applyWorkGraphMutation(tx, CTX, deployMutation({ sourceUpdatedAt: T1 }))
+    expect(calls[0]?.value).toMatchObject({ deployedAt: T1, updatedAt: T1 })
+  })
+
+  it('cannot be regressed by the reconcile sweep, which only ever sees the newest status', async () => {
+    // The sweep re-derives state from `statuses.data[0]` — for a superseded deploy that is
+    // `inactive`, at the poll time. It must leave the fact alone.
+    const { tx, calls } = fakeTx([existingRow({ deployedAt: T1 })])
+    await applyWorkGraphMutation(
+      tx,
+      CTX,
+      deployMutation({ state: 'inactive', sourceUpdatedAt: T2 + 86_400_000 }),
+    )
+    expect(calls[0]?.value).toMatchObject({ deployedAt: T1 })
+  })
+
+  it('stamps a stale success the row never recorded, without touching current state', async () => {
+    // A redelivered older `success` arriving after `auto_inactive`'s newer `inactive`. Too old to
+    // move `state`, but it carries a fact nothing else can recover.
+    const { tx, calls } = fakeTx([existingRow({ updatedAt: T2, deployedAt: null })])
+    await applyWorkGraphMutation(tx, CTX, deployMutation({ sourceUpdatedAt: T1 }))
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]?.value).toEqual({ id: 'deploy-existing', deployedAt: T1 })
+  })
+
+  it('leaves a stale event alone once the fact is already recorded', async () => {
+    const { tx, calls } = fakeTx([existingRow({ updatedAt: T2, deployedAt: T1 })])
+    await applyWorkGraphMutation(tx, CTX, deployMutation({ sourceUpdatedAt: T1 - 1 }))
+    expect(calls).toHaveLength(0)
+  })
+
+  it('fills the sha when absent and never blanks one already stored', async () => {
+    const stale = fakeTx([existingRow({ updatedAt: T2, sha: null })])
+    await applyWorkGraphMutation(stale.tx, CTX, deployMutation({ sourceUpdatedAt: T1 }))
+    expect(stale.calls[0]?.value).toMatchObject({ sha: 'deadbeef' })
+
+    const omitted = fakeTx([existingRow({ deployedAt: T1 })])
+    await applyWorkGraphMutation(
+      omitted.tx,
+      CTX,
+      deployMutation({ sha: null, state: 'inactive', sourceUpdatedAt: T2 }),
+    )
+    expect(omitted.calls[0]?.value).toMatchObject({ sha: 'deadbeef' })
+  })
+
+  it('round-trips mergeCommitSha on a pull request insert and update', async () => {
+    const inserted = fakeTx([undefined, { autoStatusSince: null }])
+    await applyWorkGraphMutation(
+      inserted.tx,
+      CTX,
+      prMutation({ mergeCommitSha: 'cafebabe', state: 'merged', mergedAt: T1, updatedAt: T1 }),
+    )
+    expect(inserted.calls[0]?.value).toMatchObject({ mergeCommitSha: 'cafebabe' })
+
+    const updated = fakeTx([
+      { id: 'pr-1', teamId: 'team-1', state: 'open', mergedAt: null, updatedAt: T1 },
+      { autoStatusSince: null },
+    ])
+    await applyWorkGraphMutation(
+      updated.tx,
+      CTX,
+      prMutation({ mergeCommitSha: 'cafebabe', state: 'merged', mergedAt: T2, updatedAt: T2 }),
+    )
+    expect(updated.calls[0]?.value).toMatchObject({ mergeCommitSha: 'cafebabe' })
   })
 })
 

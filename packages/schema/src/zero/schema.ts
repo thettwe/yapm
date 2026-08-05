@@ -226,6 +226,9 @@ const pullRequest = table('pull_request')
     state: enumeration<PullRequestState>(),
     url: string().optional(),
     headSha: string().from('head_sha').optional(),
+    // The commit the merge produced. The PR side of the exact PR->deployment join
+    // (`merge_commit_sha = deployment.sha`), which is a computed join, not a relationship.
+    mergeCommitSha: string().from('merge_commit_sha').optional(),
     openedAt: number().from('opened_at'),
     mergedAt: number().from('merged_at').optional(),
     createdAt: number().from('created_at'),
@@ -273,7 +276,11 @@ const deployment = table('deployment')
     externalId: string().from('external_id'),
     ref: string().optional(),
     environment: string().optional(),
+    sha: string().optional(),
     state: enumeration<DeploymentState>(),
+    // Write-once: the moment this deployment first reached `success`. `updatedAt` follows the
+    // newest status (including the `inactive` a superseding deploy writes); this one does not move.
+    deployedAt: number().from('deployed_at').optional(),
     createdAt: number().from('created_at'),
     updatedAt: number().from('updated_at'),
   })

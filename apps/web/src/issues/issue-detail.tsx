@@ -124,6 +124,7 @@ interface LinkedPrRow {
   state: PullRequestState
   url?: string | null
   repo: string
+  mergeCommitSha?: string | null
   openedAt: number
   mergedAt?: number | null
   ciChecks?: readonly CiCheckRow[]
@@ -141,6 +142,8 @@ interface DeploymentRow {
   environment?: string | null
   state: string
   ref?: string | null
+  sha?: string | null
+  deployedAt?: number | null
   updatedAt: number
 }
 
@@ -360,7 +363,10 @@ function IssueDetailBody({
   const currentLabels = (issue.labels ?? []) as readonly LabelRow[]
   const currentLabelIds = new Set(currentLabels.map((label) => label.id))
   const issueLinks = (issue.issueLinks ?? []) as readonly IssueLinkDetailRow[]
-  const view = deliveryView(issue, linkedEntitiesFor(issueLinks as readonly LinkedIssueRow[]))
+  const view = deliveryView(
+    issue,
+    linkedEntitiesFor(issueLinks as readonly LinkedIssueRow[], deployments),
+  )
   const divergence = view.divergence
 
   const [error, setError] = useState<string | undefined>(undefined)

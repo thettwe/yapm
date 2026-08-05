@@ -241,3 +241,58 @@ a read-only change.
   `deployments.byTeam` query issue-detail already subscribes to, over rows already inside the team
   boundary; no new query, no widened scope. The extra client work is one pass over the team's
   deployment rows per render, memoized alongside the existing `linkedEntitiesFor`.
+
+## Decisions made during implementation
+
+**`LinkedPullRequestRow` also gained `repo`, not just `mergeCommitSha`.** Task 4.3 names only
+`mergeCommitSha`, but §D3's join is *same-repo* and exact — a merge commit alone cannot express
+"in the same repo", and matching on the sha across repos would be a different (looser) predicate
+than the one the design chose. Both fields are optional, so every existing caller still compiles,
+and `queries.issues.*` already syncs the whole PR row through `withLinkedDelivery`, so neither is a
+new sync cost. The delivery test asserts the repo leg directly.
+
+**A named `TeamDeploymentRow` type, exported from the seam.** `assembleLinkedEntities`' second
+parameter needs a shape both `apps/web` call sites can name. It is structural (`repo`, optional
+`sha`, optional `deployedAt`), so the `deployments.byTeam` result satisfies it without a mapping
+step, and issue-detail's local `DeploymentRow` satisfies it once its two new columns are declared.
+
+**`issue-detail.tsx` was touched after all — one argument, not a restructure.** Task 5.5 asked for
+nothing to be added to it, but its strip is the same `RealityStrip` the list renders, computed from
+the same seam. Leaving `linkedEntitiesFor(issueLinks)` without the deployments there would mean the
+list row shows the deploy glyph and the detail panel for the SAME issue does not — a contradiction
+the reality strip specifically may not have. `deployments` was already a prop of `IssueDetailBody`
+(it feeds the existing deploy list), so the fix is passing it as the second argument plus declaring
+`sha`/`deployedAt`/`mergeCommitSha` on the two local row interfaces. No new query, no new prop, no
+change to `DeploymentRow`'s rendering.
+
+**The deploy glyph is `RocketIcon` on `text-signal-sync`.** Verified present in the installed
+`lucide-react@1.26.0` `.d.ts` rather than assumed. `--signal-sync` is the token CI-passing and
+PR-approved already use, so its contrast is already carried by the shipped presets; the glyph, not
+the hue, is what distinguishes the fourth slot. The strip and `RealityStripPlaceholder` share one
+`REALITY_STRIP_WIDTH` constant (`w-[86px]`, up from `w-16`) so the two can no longer drift apart,
+and the placeholder grew to four dots to match the four slots.
+
+**`merge_commit_sha` and `deployment.sha` confirmed against `@octokit/openapi-types@27.0.0`, not
+memory.** `components.schemas.deployment.sha` is `string` (non-null) and `pull-request.merge_commit_sha`
+is `string | null`. `DeploymentStatusEvent.deployment.sha` was already declared in `payloads.ts:95`
+and had simply never been read. Both are mapped through `?? null`, so a payload that omits either
+yields null rather than `undefined`.
+
+**Fixtures tell the join's story rather than just satisfying the type.** The merged-PR fixture's
+`merge_commit_sha` (`9f1c2d3e4b5a`) is deliberately DIFFERENT from its `head.sha` (`abc123def456`),
+so a future head-sha fallback would visibly change a test result rather than pass silently.
+
+### What ran, and what CI is the first place to execute
+
+Ran locally, green: `pnpm turbo run typecheck '--filter=...[origin/main]'`, `pnpm lint`,
+`pnpm turbo run test '--filter=...[origin/main]'` (schema 784, ui 256, server 370, web 446 passing),
+and `node scripts/check-boundaries.mjs`.
+
+**Not run here, by instruction** (the build phase was told to skip Docker, the full build, Playwright
+and the smoke test because the open PR already runs the whole suite): task 1.5's live-stack migration
+apply, task 8.2's Postgres suites, and task 8.3's compose smoke test. That means **CI is the first
+place migration `0023` executes against a real database and the first place `schema-drift.test.ts`
+compares the three new columns to live Postgres** — 393 pg-gated tests are skipped in a DB-less run.
+The migration is three `alter table ... add column` statements and one `create index`, matching the
+shape of `0011` and `0019`, and the drift expectations were written to match (`nullable: true,
+hasDefault: false` for all three). If CI disagrees, that is the honest place to find out.

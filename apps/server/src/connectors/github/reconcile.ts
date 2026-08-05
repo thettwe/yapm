@@ -247,6 +247,7 @@ async function reconcilePulls(
         state: derivePrState(pr),
         url: pr.html_url ?? null,
         headSha,
+        mergeCommitSha: pr.merge_commit_sha ?? null,
         openedAt: toEpochMs(pr.created_at, now),
         mergedAt: pr.merged_at ? toEpochMs(pr.merged_at, now) : null,
         updatedAt: toEpochMs(pr.updated_at, now),
@@ -321,6 +322,11 @@ async function reconcileDeployments(
       externalId: String(deployment.id),
       ref: deployment.ref ?? null,
       environment: latest?.environment ?? deployment.environment ?? null,
+      // The sweep is the backfill: rows ingested before the commit was stored fill in here for
+      // anything GitHub still lists. It can only ever see the NEWEST status, so it can never stamp
+      // a `deployedAt` the write path has not already recorded — and, by the write-once rule
+      // there, can never clear one either.
+      sha: deployment.sha ?? null,
       state: latest ? mapDeploymentState(latest.state) : 'pending',
       sourceUpdatedAt: toEpochMs(latest?.updated_at ?? latest?.created_at, now),
     })

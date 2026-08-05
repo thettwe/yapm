@@ -309,6 +309,7 @@ export interface PullRequestTable {
   state: PullRequestState
   url: Nullable<string>
   head_sha: Nullable<string>
+  merge_commit_sha: Nullable<string>
   opened_at: Timestamp
   merged_at: TimestampOrNull
   created_at: Generated<Timestamp>
@@ -344,8 +345,12 @@ export interface ReviewTable {
   updated_at: Generated<Timestamp>
 }
 
-// A deployment's latest state for a repo/ref/environment. Repo-anchored (not PR-anchored);
-// stored for the issue-detail deploy view. Not part of the fixed `DeliverySignal` shape.
+// One deployment's whole life, repo-anchored (not PR-anchored). `state` and `updated_at` are
+// current: they follow the newest status event, including the `inactive` that `auto_inactive`
+// writes when the next deploy supersedes this one. `deployed_at` is not current state — it is the
+// immutable moment this deployment first reached `success`, written once and never moved, which is
+// what makes the table a deploy HISTORY rather than a per-environment snapshot. `sha` is the commit
+// it carried, and the PR side of the exact join is `pull_request.merge_commit_sha`.
 export interface DeploymentTable {
   id: string
   team_id: string
@@ -355,7 +360,9 @@ export interface DeploymentTable {
   external_id: string
   ref: Nullable<string>
   environment: Nullable<string>
+  sha: Nullable<string>
   state: DeploymentState
+  deployed_at: TimestampOrNull
   created_at: Generated<Timestamp>
   updated_at: Generated<Timestamp>
 }

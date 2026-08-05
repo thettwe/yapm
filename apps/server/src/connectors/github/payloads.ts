@@ -23,6 +23,10 @@ export interface GithubPullRequest {
   draft?: boolean
   merged?: boolean
   merged_at?: string | null
+  // Before a merge this is the SHA of a *test* merge commit; after one it is the commit the merge
+  // actually produced (merge, squash, or rebase). Only the merged case is joined against a
+  // deployment's sha, so the pre-merge value is stored and simply never matches.
+  merge_commit_sha?: string | null
   html_url?: string | null
   body?: string | null
   created_at?: string | null

@@ -7,6 +7,8 @@ import {
   computeDivergence,
   type IssueLinkRow,
   type LinkedEntities,
+  type LinkedPullRequestRow,
+  type TeamDeploymentRow,
 } from './delivery.js'
 
 const issue = { status: 'todo' } as const
@@ -175,6 +177,84 @@ describe('assembleLinkedEntities', () => {
       pr: 'approved',
       ciHealth: 'passing',
       reviewAgeMs: expect.any(Number),
+      deployedAt: null,
     })
+  })
+})
+
+// The PR->deployment edge: an exact, same-repo match on the merge commit. Both directions in one
+// place, plus the three ways a near-match must NOT count.
+describe('assembleLinkedEntities — the deployment join', () => {
+  const mergedPr = (over: Partial<LinkedPullRequestRow> = {}): IssueLinkRow[] => [
+    {
+      pullRequest: {
+        state: 'merged',
+        openedAt: 500,
+        repo: 'acme/app',
+        mergeCommitSha: 'cafebabe',
+        ciChecks: [{ conclusion: 'success' }],
+        ...over,
+      },
+    },
+  ]
+
+  const deployedAtOf = (links: IssueLinkRow[], deployments: TeamDeploymentRow[]) =>
+    computeDeliverySignal(issue, assembleLinkedEntities(links, deployments))?.deployedAt ?? null
+
+  it('reports the earliest deployment carrying the merge commit', () => {
+    expect(
+      deployedAtOf(mergedPr(), [
+        { repo: 'acme/app', sha: 'cafebabe', deployedAt: 9_000 },
+        { repo: 'acme/app', sha: 'cafebabe', deployedAt: 4_000 },
+      ]),
+    ).toBe(4_000)
+  })
+
+  it('reports nothing when no deployment carried that commit', () => {
+    expect(deployedAtOf(mergedPr(), [{ repo: 'acme/app', sha: 'other', deployedAt: 4_000 }])).toBe(
+      null,
+    )
+  })
+
+  it('does not count a same-sha deployment in a different repo', () => {
+    expect(
+      deployedAtOf(mergedPr(), [{ repo: 'acme/other', sha: 'cafebabe', deployedAt: 4_000 }]),
+    ).toBe(null)
+  })
+
+  it('does not count a deployment that carried the commit but never succeeded', () => {
+    expect(
+      deployedAtOf(mergedPr(), [{ repo: 'acme/app', sha: 'cafebabe', deployedAt: null }]),
+    ).toBe(null)
+  })
+
+  it('does not match on the head sha — a deployed branch is not a deployed merge', () => {
+    expect(
+      deployedAtOf(mergedPr({ mergeCommitSha: null }), [
+        { repo: 'acme/app', sha: 'headsha', deployedAt: 4_000 },
+      ]),
+    ).toBe(null)
+  })
+
+  it('does not consider an unmerged PR deployed', () => {
+    expect(
+      deployedAtOf(mergedPr({ state: 'open' }), [
+        { repo: 'acme/app', sha: 'cafebabe', deployedAt: 4_000 },
+      ]),
+    ).toBe(null)
+  })
+
+  it('never manufactures a signal from deployments alone', () => {
+    expect(
+      computeDeliverySignal(
+        issue,
+        assembleLinkedEntities([], [{ repo: 'acme/app', sha: 'cafebabe', deployedAt: 4_000 }]),
+      ),
+    ).toBeNull()
+  })
+
+  it('yields the same result as before the deploy axis when the argument is omitted', () => {
+    expect(deployedAtOf(mergedPr(), [])).toBe(null)
+    expect(assembleLinkedEntities(mergedPr()).deployments).toEqual([])
   })
 })

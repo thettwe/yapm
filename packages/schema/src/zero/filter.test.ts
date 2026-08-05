@@ -122,7 +122,47 @@ describe('delivery predicates narrow to matching linked delivery state', () => {
     ).toEqual(['FailingCI', 'Blocked'])
   })
 
-  it('matches nothing for merged-not-deployed even when a merged PR is linked (no deployment data)', () => {
-    expect(evaluateFilter(rows, { delivery: ['merged-not-deployed'] }, { linkedFor })).toEqual([])
+  it('matches nothing for any delivery predicate when an issue has no linked entities at all', () => {
+    expect(
+      evaluateFilter(rows, { delivery: ['merged-not-deployed'] }, { linkedFor: () => ({}) }),
+    ).toEqual([])
+  })
+})
+
+// `merged-not-deployed` shipped as a reserved slot: selectable, spec-sanctioned, and empty because
+// nothing recorded which commit reached production. The slot is now filled, so the predicate is
+// asserted against real deployment data rather than against its own emptiness.
+describe('merged-not-deployed, with the reserved slot filled', () => {
+  const shipped = issue({ title: 'Shipped', number: 1 })
+  const waiting = issue({ title: 'Waiting', number: 2 })
+  const rows = [shipped, waiting]
+
+  const linkedFor = (row: IssueView): LinkedEntities => ({
+    pullRequests: [{ state: 'merged', openedAt: 1_000 }],
+    ciRuns: [{ health: 'passing' }],
+    deployments: row === shipped ? [{ deployedAt: 5_000 }] : [],
+  })
+
+  it('narrows to the merged change whose commit no deployment carried', () => {
+    expect(
+      evaluateFilter(rows, { delivery: ['merged-not-deployed'] }, { linkedFor }).map(
+        (r) => r.title,
+      ),
+    ).toEqual(['Waiting'])
+  })
+
+  it('does not match a merged change that is still open rather than undeployed', () => {
+    expect(
+      matchesFilter(
+        issue(),
+        { delivery: ['merged-not-deployed'] },
+        {
+          linkedFor: () => ({
+            pullRequests: [{ state: 'open', openedAt: 1_000 }],
+            ciRuns: [{ health: 'passing' }],
+          }),
+        },
+      ),
+    ).toBe(false)
   })
 })

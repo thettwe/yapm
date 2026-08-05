@@ -45,13 +45,21 @@ describe('mapGithubEvent — pull_request', () => {
     expect(typeof (mutation as { id: string }).id).toBe('string')
   })
 
-  it('maps a merged PR to the merged state with a merge timestamp', () => {
+  it('maps a merged PR to the merged state with a merge timestamp and its merge commit', () => {
     const [mutation] = mapFixture('pull_request', 'pull_request.closed_merged.json')
     expect(mutation).toMatchObject({
       kind: 'upsertPullRequest',
       state: 'merged',
       mergedAt: Date.parse('2026-07-21T09:30:00Z'),
+      // Distinct from `headSha` on purpose: the deployment join matches the merge, not the branch.
+      mergeCommitSha: '9f1c2d3e4b5a',
+      headSha: 'abc123def456',
     })
+  })
+
+  it('maps a PR with no merge commit to a null one rather than dropping the field', () => {
+    const [mutation] = mapFixture('pull_request', 'pull_request.opened.json')
+    expect(mutation).toMatchObject({ kind: 'upsertPullRequest', mergeCommitSha: null })
   })
 })
 
@@ -103,6 +111,8 @@ describe('mapGithubEvent — reviews, checks, deploys', () => {
       externalId: '8001',
       ref: 'eng-1-login-race',
       environment: 'production',
+      // Sent in the same object as `ref` and silently dropped until this change.
+      sha: 'abc123def456',
       state: 'success',
     })
   })

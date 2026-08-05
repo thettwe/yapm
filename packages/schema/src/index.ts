@@ -233,6 +233,7 @@ export type {
   LinkedEntities,
   LinkedPullRequestRow,
   PrState,
+  TeamDeploymentRow,
 } from './zero/delivery.js'
 export {
   assembleLinkedEntities,

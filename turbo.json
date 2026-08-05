@@ -59,6 +59,14 @@
     },
     "test": {
       "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/README.md",
+        "$TURBO_ROOT$/SECURITY.md",
+        "$TURBO_ROOT$/.env.example",
+        "$TURBO_ROOT$/docker/docker-compose.yml",
+        "$TURBO_ROOT$/apps/docs/src/content/docs/**"
+      ],
       "outputs": ["coverage/**"],
       "env": ["DATABASE_URL", "CI"]
     },

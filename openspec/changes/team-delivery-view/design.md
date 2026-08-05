@@ -408,3 +408,40 @@ Worth recording alongside it: leaking an identity into the *input* projection al
 test, and correctly so — `toSeedIssue` spreading the whole row changes nothing observable, because
 nothing in `buildDeliveryWindow` copies an input into its output. The assertion is on the assembled
 model, which is the thing the view renders and therefore the thing that can leak.
+
+### "Carried twice or more" is read per cycle in scope, not against the window's outer edge
+
+`carriedOut` and `carriedIn` are relative to the whole scope by design (§D2): a carry from one window
+cycle into the next never left the window, so neither counts it. Computing `carriedTwicePlus` off
+`carriedOut` inherited that scoping, and it is wrong for this metric — an issue the rollover has
+moved twice *between two cycles of the same window* is precisely what the metric exists to surface,
+and the window reading would have said zero while the tile's own sparkline plotted a one, under a
+caption reading "the plan is holding". It now counts any issue with `carryover_count >= 2` whose
+`rolled_over_from_cycle_id` names a cycle in scope, whether or not the issue then left the scope. For
+a one-cycle scope such an issue no longer points at that cycle, so this is exactly the expression it
+replaced and the retro is unchanged.
+
+### A window trend keeps one slot per cycle; the retro's compaction moved to its own call site
+
+`toMetric` dropped `undefined` points out of `trend`. For a retro that is harmless — the history is
+"the last few readings", and a prior cycle nobody linked a PR to simply is not one of them. For a
+window it is not: the series is one point *per cycle*, so dropping a gap re-spaces the survivors as
+if they had been consecutive and makes the sparkline's own `aria-label` claim a cycle count the
+window does not have. `DeliveryMetric.trend` is now `(number | undefined)[]`, the compaction moved
+into `fromHistory` where the retro's semantics live, and `sparklineGeometry` spends an unmeasured
+cycle's x position and breaks the line across it — returning one `points` string per unbroken run,
+which for a gapless series is one segment and one `<polyline>`, exactly what the retro rendered
+before.
+
+### `MetricSection` takes the host page's heading level
+
+The lifted section hard-coded `<h3>`, correct under the retro panel's own `<h2>` and a skipped level
+under the Delivery page's `<h1>`. It now takes `headingLevel`, defaulting to 3 so the retro's DOM is
+byte-identical; the Delivery page passes 2, giving that page a flat `h1 → h2 → h2 → h2` outline.
+
+### Changing the window pushes a history entry rather than replacing one
+
+The window navigation used `replace: true`, which erased the previous window from history — so Back
+left the view entirely rather than returning to the window the reader came from, contradicting the
+"the back button behaves" reason the window is in the URL at all. Each selection now pushes one
+entry.

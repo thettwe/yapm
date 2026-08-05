@@ -143,8 +143,13 @@ describe('scopeOfCycle — the one-cycle scope reduces to the retro’s reading'
   })
 })
 
-// A three-cycle window where one issue is carried from cycle 1 to cycle 2 to cycle 3, one is
+// A three-cycle window where one issue has been carried twice and now sits in cycle 3, one is
 // carried out of the window entirely, and one joins cycle 3 late.
+//
+// An issue is ONE row, so it appears in every cycle it touches with the SAME shape — `carryover_count`
+// and `rolled_over_from_cycle_id` record the latest hop only, which is why the twice-carried issue
+// below shows up under w-2 (the cycle it was last carried out of) and w-3 (the cycle it points at),
+// and not under w-1. `issuesTouching` in the web app builds exactly these lists.
 function windowCycle(n: number, issues: DeliveryCycleInput['issues']): DeliveryCycleInput {
   return { id: `w-${n}`, name: `Cycle ${n}`, startDate: START + n * 14 * DAY, issues }
 }
@@ -177,28 +182,8 @@ const cameFromOutside = {
 } as const
 
 const windowCycles: readonly DeliveryCycleInput[] = [
-  windowCycle(1, [
-    { id: 'a', status: 'done', cycleId: 'w-1' },
-    cameFromOutside,
-    {
-      id: 'twice',
-      status: 'todo',
-      cycleId: 'w-2',
-      rolledOverFromCycleId: 'w-1',
-      carryoverCount: 1,
-    },
-  ]),
-  windowCycle(2, [
-    { id: 'b', status: 'done', cycleId: 'w-2' },
-    {
-      id: 'twice',
-      status: 'todo',
-      cycleId: 'w-2',
-      rolledOverFromCycleId: 'w-1',
-      carryoverCount: 1,
-    },
-    twiceCarried,
-  ]),
+  windowCycle(1, [{ id: 'a', status: 'done', cycleId: 'w-1' }, cameFromOutside]),
+  windowCycle(2, [{ id: 'b', status: 'done', cycleId: 'w-2' }, twiceCarried]),
   windowCycle(3, [
     { id: 'c', status: 'done', cycleId: 'w-3' },
     twiceCarried,
@@ -224,8 +209,21 @@ describe('scopeOfCycles — the window reading is exact, not a sum of cycles', (
 
   it('counts only the issues that carried out of the WINDOW, not between its cycles', () => {
     expect(counts.carriedOut).toBe(1)
+    // Two carry-outs happened inside the window — one out of w-2 and one out of w-3 — and only the
+    // second of them left the window at all.
     const perCycle = windowCycles.map((cycle) => deliveredCounts(scopeOfCycle(cycle)).carriedOut)
-    expect(perCycle).toEqual([1, 1, 1])
+    expect(perCycle).toEqual([0, 1, 1])
+  })
+
+  // The one Delivered count that is NOT relative to the window's outer edge. `twice` was carried out
+  // of w-2 for the second time and landed in w-3, so it never left the window — reading this off
+  // `carriedOut` would report zero while the tile's own sparkline plots a one.
+  it('counts a repeat rollover between two window cycles, not only one that left the window', () => {
+    expect(counts.carriedTwicePlus).toBe(1)
+    const perCycle = windowCycles.map(
+      (cycle) => deliveredCounts(scopeOfCycle(cycle)).carriedTwicePlus,
+    )
+    expect(perCycle).toEqual([0, 1, 0])
   })
 
   it('counts only the issues that carried in from OUTSIDE the window', () => {

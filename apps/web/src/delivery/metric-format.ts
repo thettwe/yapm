@@ -39,27 +39,54 @@ export function formatSeedDelta(metric: DeliveryMetric, basis = 'last cycle'): s
 }
 
 export interface SparklineGeometry {
-  readonly points: string
+  // One polyline per unbroken run of measured cycles. A series with nothing missing is exactly one
+  // segment, which is what keeps the retro's rendered SVG unchanged.
+  readonly segments: readonly string[]
   readonly last: { readonly x: number; readonly y: number }
 }
 
 // A flat series renders on the mid-line rather than collapsing to the floor, so "unchanged" reads as
 // steady instead of as zero.
+//
+// A cycle with nothing to measure is a HOLE, not an absent slot: its x position is still spent, so
+// the surviving points keep their true spacing, and the line breaks across the hole rather than
+// drawing through it as if the two neighbours were consecutive.
 export function sparklineGeometry(
-  trend: readonly number[],
+  trend: readonly (number | undefined)[],
   width: number,
   height: number,
 ): SparklineGeometry | null {
-  if (trend.length < 2) return null
-  const min = Math.min(...trend)
-  const max = Math.max(...trend)
+  const measured = trend.filter((entry): entry is number => entry !== undefined)
+  if (trend.length < 2 || measured.length < 2) return null
+  const min = Math.min(...measured)
+  const max = Math.max(...measured)
   const span = max - min
   const step = width / (trend.length - 1)
-  const coords = trend.map((value, index) => ({
-    x: Math.round(index * step * 100) / 100,
-    y: span === 0 ? height / 2 : Math.round((height - ((value - min) / span) * height) * 100) / 100,
-  }))
-  const last = coords.at(-1)
+  const coords = trend.map((value, index) =>
+    value === undefined
+      ? undefined
+      : {
+          x: Math.round(index * step * 100) / 100,
+          y:
+            span === 0
+              ? height / 2
+              : Math.round((height - ((value - min) / span) * height) * 100) / 100,
+        },
+  )
+
+  const segments: string[] = []
+  let run: string[] = []
+  for (const point of coords) {
+    if (point === undefined) {
+      if (run.length > 0) segments.push(run.join(' '))
+      run = []
+      continue
+    }
+    run.push(`${point.x},${point.y}`)
+  }
+  if (run.length > 0) segments.push(run.join(' '))
+
+  const last = coords.findLast((point) => point !== undefined)
   if (last === undefined) return null
-  return { points: coords.map((point) => `${point.x},${point.y}`).join(' '), last }
+  return { segments, last }
 }

@@ -91,7 +91,11 @@ function Sparkline({
   noTrendTestId: string
 }) {
   const geometry = sparklineGeometry(metric.trend, SPARK_WIDTH, SPARK_HEIGHT)
-  const description = `Trend across ${metric.trend.length} cycles: ${metric.trend.join(', ')}`
+  // The count is the series' own length, gaps included, so the label never claims a cycle count the
+  // window does not have.
+  const description = `Trend across ${metric.trend.length} cycles: ${metric.trend
+    .map((entry) => (entry === undefined ? 'no data' : entry))
+    .join(', ')}`
 
   if (geometry === null) {
     return (
@@ -111,14 +115,17 @@ function Sparkline({
         viewBox={`0 0 ${SPARK_WIDTH} ${SPARK_HEIGHT}`}
         className="overflow-visible text-text-3"
       >
-        <polyline
-          points={geometry.points}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.25}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        {geometry.segments.map((points) => (
+          <polyline
+            key={points}
+            points={points}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.25}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ))}
         <circle cx={geometry.last.x} cy={geometry.last.y} r={2} className="fill-accent" />
       </svg>
     </span>
@@ -130,6 +137,10 @@ export interface MetricSectionProps extends MetricTestIds {
   readonly sectionTestId: string
   readonly emptyTestId: string
   readonly deltaBasis?: string
+  // Where the section sits in the HOST page's outline, which the component cannot know. The retro
+  // nests these under its panel's own `<h2>`; the Delivery page puts them directly under its `<h1>`,
+  // and an `<h3>` there would skip a level. Default 3 so the retro's DOM is untouched.
+  readonly headingLevel?: 2 | 3
   readonly action?: (metric: DeliveryMetric) => ReactNode
 }
 
@@ -140,14 +151,17 @@ export function MetricSection({
   sectionTestId,
   emptyTestId,
   deltaBasis,
+  headingLevel = 3,
   action,
   ...tileIds
 }: MetricSectionProps) {
+  const Heading = headingLevel === 2 ? 'h2' : 'h3'
+
   return (
     <section aria-label={section.title} data-testid={sectionTestId} data-section={section.key}>
-      <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-2">
+      <Heading className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-text-2">
         {section.title}
-      </h3>
+      </Heading>
       {section.state === 'empty' ? (
         <div
           className="rounded-card border border-dashed border-border px-3 py-2.5"

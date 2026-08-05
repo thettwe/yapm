@@ -33,6 +33,16 @@ carry inside the window is not reported as a carry out of it.
 - **WHEN** an issue is carried from one cycle in the window into the next cycle in the same window
 - **THEN** the window's "carried out" total does not count it, the sparkline point for the cycle it left does, and the window's "in scope" total counts that issue exactly once
 
+#### Scenario: A repeat rollover inside the window is still counted as one
+
+- **WHEN** an issue the rollover has already moved once is moved again, from one cycle in the window into the next cycle in the same window
+- **THEN** the window's "carried twice or more" total counts it, even though it never left the window, and its caption does not report that the plan is holding
+
+#### Scenario: A cycle with nothing to measure is a gap in the trend, not a missing point
+
+- **WHEN** one cycle in the window has no data behind a metric — no linked pull request, say — while the cycles around it do
+- **THEN** that metric's sparkline still carries one entry per cycle in the window, the surviving points keep their true spacing, the line breaks across the gap rather than being drawn through it, and the trend's accessible description reports the window's cycle count rather than the number of measured cycles
+
 #### Scenario: The delta compares like with like
 
 - **WHEN** the team has fewer completed cycles than twice the selected window size

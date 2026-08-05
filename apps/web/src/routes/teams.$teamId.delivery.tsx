@@ -57,12 +57,13 @@ function DeliveryPage() {
         <DeliveryView
           teamId={teamId}
           size={window}
+          // One history entry per window, not a replace: the reader who widens 3 → 12 to check a
+          // trend expects Back to return them to the 3 they came from, not out of the view.
           onSizeChange={(size) => {
             void navigate({
               to: '/teams/$teamId/delivery',
               params: { teamId },
               search: { window: size },
-              replace: true,
             })
           }}
         />

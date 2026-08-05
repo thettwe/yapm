@@ -5,11 +5,12 @@ description: The team's flow and delivery metrics over a rolling window of compl
 
 The **Delivery view** answers *"did we ship faster and safer lately, and what is blocking review?"*
 for a team, over a rolling window rather than inside a single retrospective. It lives at
-`/teams/<teamId>/delivery` and is the eighth entry in the view switcher, beside Retros.
+`/teams/<teamId>/delivery` and sits on the same view switcher, between Retros and Projects.
 
 These are the same metrics the [retro's data panel](/features/retrospectives/) shows — the same
-formulas, the same captions, the same empty states, the same trend sparkline. The only difference is
-scope: a retro reads one cycle, this reads several.
+formulas, the same tiles, the same trend sparkline. The only difference is scope: a retro reads one
+cycle, this reads several, and each caption and empty state names the window it covers rather than
+a single cycle.
 
 ## What it shows
 
@@ -23,7 +24,7 @@ connectors at all**:
 | Shipped | Issues in scope that finished `done` |
 | Carried out | Issues that left the window rather than being dropped |
 | Carried in | Issues already in flight when the window opened |
-| Carried twice or more | Issues the rollover has moved at least twice |
+| Carried twice or more | Issues the rollover has moved at least twice, out of any cycle in the window |
 | Added mid-cycle | Issues that joined a cycle after that cycle started |
 | Canceled | Issues canceled in scope |
 | In scope | Distinct issues that touched the window, carried work included |
@@ -67,6 +68,10 @@ Three numbers appear on each tile, and they are three different readings:
 One consequence worth knowing: the window's **Carried out** is smaller than the sum of its
 sparkline. A carry from cycle 9 into cycle 10 is a carry out of cycle 9, but it never left the
 window. The tile's caption says which reading it is.
+
+**Carried twice or more** is deliberately not scoped that way. It counts a repeat rollover out of
+*any* cycle in the window, whether or not the issue then left it — an item that has been moved twice
+between two cycles of the same window is exactly the thing the metric exists to surface.
 
 ## No connector, no cycles
 

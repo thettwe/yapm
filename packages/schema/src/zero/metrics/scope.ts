@@ -83,6 +83,10 @@ export interface DeliveredCounts {
 // Every membership test is a lookup in `cycleStarts`, which for a one-cycle scope reduces to the
 // `=== cycle.id` comparison it replaced. `carriedOut` and `carriedIn` are relative to the SCOPE, so
 // at window scope a carry from one window cycle to the next is neither — it never left the window.
+// `carriedTwicePlus` is deliberately NOT relative to the scope in that way: it counts repeat
+// rollovers out of ANY cycle in the scope, which is what its name, its sparkline and its caption all
+// say. Reading it off `carriedOut` would ask whether the issue left the whole window, and report
+// "the plan is holding" for exactly the rollover a window exists to surface.
 export function deliveredCounts(scope: DeliveryScope): DeliveredCounts {
   const within = scope.issues.filter((issue) => inScope(scope, issue))
   const carriedOut = scope.issues.filter(
@@ -100,7 +104,15 @@ export function deliveredCounts(scope: DeliveryScope): DeliveredCounts {
       (issue) =>
         issue.rolledOverFromCycleId != null && !scope.cycleStarts.has(issue.rolledOverFromCycleId),
     ).length,
-    carriedTwicePlus: carriedOut.filter((issue) => (issue.carryoverCount ?? 0) >= 2).length,
+    // Any issue the rollover moved out of a cycle IN SCOPE, having already been moved before —
+    // whether or not it then left the scope. For a one-cycle scope such an issue no longer points at
+    // that cycle, so this is exactly the `carriedOut.filter(...)` expression it replaced.
+    carriedTwicePlus: scope.issues.filter(
+      (issue) =>
+        issue.rolledOverFromCycleId != null &&
+        scope.cycleStarts.has(issue.rolledOverFromCycleId) &&
+        (issue.carryoverCount ?? 0) >= 2,
+    ).length,
     // Only issues STILL in scope: `cycle_assigned_at` records the last assignment, so for an issue
     // the rollover carried out it already describes the successor cycle, not this one. The
     // comparison is against the ISSUE'S OWN cycle start rather than a scope-wide start, which is

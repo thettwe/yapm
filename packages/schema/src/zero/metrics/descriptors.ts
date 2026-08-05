@@ -21,8 +21,10 @@ export interface DeliveryMetric {
   readonly value: number
   readonly unit: DeliveryUnit
   // The sparkline, oldest first, trends leading. For a cycle that is the prior cycles with this
-  // one last; for a window it is one point per cycle in the window.
-  readonly trend: readonly number[]
+  // one last; for a window it is ONE ENTRY PER CYCLE IN THE WINDOW, `undefined` where that cycle
+  // had nothing to measure. Dropping the gaps instead would re-space the survivors as if they were
+  // consecutive and make the series report a cycle count it does not have.
+  readonly trend: readonly (number | undefined)[]
   readonly delta: number | null
   readonly betterWhen: 'lower' | 'higher' | null
   readonly caption: string
@@ -60,12 +62,16 @@ export interface MetricSeries {
 
 // The retro's one call site: value and history are the same kind of number, so the sparkline is the
 // history with the value appended and the comparison basis is the last defined history point.
+//
+// The history is compacted HERE rather than in `toMetric`, because a retro's sparkline is "the last
+// few readings of this metric" — an unmeasurable prior cycle is not a gap in it, it is simply not
+// one of them. A window's sparkline is the opposite: one slot per cycle, gaps included.
 export function fromHistory(
   value: number | undefined,
   history: readonly (number | undefined)[],
 ): MetricSeries {
   const defined = history.filter((entry): entry is number => entry !== undefined)
-  return { value, trend: [...history, value], previous: defined.at(-1) }
+  return { value, trend: [...defined, value], previous: defined.at(-1) }
 }
 
 export interface MetricSpec extends MetricSeries {
@@ -84,7 +90,7 @@ export function toMetric(spec: MetricSpec): DeliveryMetric | undefined {
     label: spec.label,
     value: spec.value,
     unit: spec.unit,
-    trend: spec.trend.filter((entry): entry is number => entry !== undefined),
+    trend: spec.trend,
     delta: spec.previous === undefined ? null : round(spec.value - spec.previous, 2),
     betterWhen: spec.betterWhen,
     caption: spec.caption(spec.value),

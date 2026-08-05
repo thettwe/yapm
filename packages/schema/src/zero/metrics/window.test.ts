@@ -151,6 +151,36 @@ describe('buildDeliveryWindow — Flow degrades to one named empty state', () =>
     // Per-cycle points, one each — the value is the pooled median, not their average.
     expect(metric(built?.sections ?? [], 'flow', 'pr_cycle_time')?.trend).toEqual([10, 20])
   })
+
+  // A cycle nobody linked a pull request to is a HOLE in the series, not an absent slot. Dropping it
+  // would re-space the surviving points as if they had been consecutive and make the sparkline's
+  // own label claim a cycle count the window does not have.
+  it('keeps one trend slot per cycle when a cycle has nothing to measure', () => {
+    const gapped: readonly DeliveryCycleInput[] = [
+      cycleAt(1, [
+        {
+          id: 'g-1',
+          status: 'done',
+          cycleId: 'c-1',
+          pullRequests: [{ openedAt: START, mergedAt: START + 10 * HOUR }],
+        },
+      ]),
+      // No linked pull request at all: every flow measure for this cycle is undefined.
+      shipping(2, 2),
+      cycleAt(3, [
+        {
+          id: 'g-3',
+          status: 'done',
+          cycleId: 'c-3',
+          pullRequests: [{ openedAt: START, mergedAt: START + 20 * HOUR }],
+        },
+      ]),
+    ]
+    const built = buildDeliveryWindow({ cycles: gapped, size: 3 })
+    const cycleTime = metric(built?.sections ?? [], 'flow', 'pr_cycle_time')
+    expect(cycleTime?.trend).toHaveLength(built?.cycleCount as number)
+    expect(cycleTime?.trend).toEqual([10, undefined, 20])
+  })
 })
 
 describe('buildDeliveryWindow — the blameless guarantee at the window entry point', () => {

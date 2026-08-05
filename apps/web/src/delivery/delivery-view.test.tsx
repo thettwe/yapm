@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import type { SeedCycleRow, SeedIssueRow } from './rows'
 
@@ -10,6 +10,9 @@ const zero = vi.hoisted(() => ({
   teams: [] as unknown[],
   cycles: [] as unknown[],
   issues: [] as unknown[],
+  // Every read this view makes, counted — the load-bearing claim about changing the window is that
+  // it issues none.
+  reads: 0,
 }))
 
 vi.mock('@yapm/schema', async (importOriginal) => {
@@ -25,10 +28,10 @@ vi.mock('@yapm/schema', async (importOriginal) => {
 })
 
 vi.mock('@rocicorp/zero/react', () => ({
-  useQuery: (query: { tag: 'teams' | 'cycles' | 'issues' }) => [
-    zero[query.tag],
-    { type: 'complete' },
-  ],
+  useQuery: (query: { tag: 'teams' | 'cycles' | 'issues' }) => {
+    zero.reads += 1
+    return [zero[query.tag], { type: 'complete' }]
+  },
 }))
 
 import { DeliveryView } from './delivery-view'
@@ -51,6 +54,7 @@ function issue(over: Partial<SeedIssueRow> & { id: string }): SeedIssueRow {
 }
 
 beforeEach(() => {
+  zero.reads = 0
   zero.teams = [{ id: 'team-1', name: 'Platform', key: 'ENG' }]
   zero.cycles = [1, 2, 3, 4, 5, 6].map((number) => cycle(number))
   zero.issues = [1, 2, 3, 4, 5, 6].map((number) =>
@@ -77,6 +81,22 @@ test('names the window it is reading and offers the three sizes from one control
     'Last 6 cycles',
     'Last 12 cycles',
   ])
+})
+
+// The only interactive control on the page. `Number(event.target.value)` is the whole of it, and a
+// string leaking through would slice the window array by a string and clamp somewhere surprising.
+test('reports the chosen window as a number, and reads nothing new to do it', () => {
+  const { onSizeChange } = renderView()
+  const reads = zero.reads
+
+  fireEvent.change(screen.getByLabelText('Window'), { target: { value: '3' } })
+
+  expect(onSizeChange).toHaveBeenCalledTimes(1)
+  expect(onSizeChange).toHaveBeenCalledWith(3)
+  expect(onSizeChange.mock.calls[0]?.[0]).toBeTypeOf('number')
+  // CLAUDE.md #9: changing the window re-runs a pure function over rows already in memory. If this
+  // ever grows a query the count moves and this fails.
+  expect(zero.reads).toBe(reads)
 })
 
 test('renders the Delivered and Flow sections from the shared tiles', () => {

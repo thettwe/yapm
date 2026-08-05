@@ -206,6 +206,27 @@ test('the existing action rows still filter and execute', async () => {
   expect(harness.navigate).toHaveBeenCalledWith({ to: '/inbox' })
 })
 
+// The palette is the keyboard route to the team Delivery view, which has no other launcher besides
+// the view switcher. One row per team, in the same Navigate group as "Go to {team} issues", opening
+// the default window rather than whatever the last reading happened to be.
+test('a Navigate row reaches a team’s delivery view', async () => {
+  mount()
+
+  const row = screen.getByText('Go to Platform delivery').closest('[cmdk-item=""]')
+  expect(row).not.toBeNull()
+  expect(row?.closest('[cmdk-group=""]')).toHaveTextContent('Navigate')
+
+  await type('platform delivery')
+  expect(activeValue()).toBe('action:go-team-delivery:team-1')
+
+  fireEvent.keyDown(input(), { key: 'Enter' })
+  expect(harness.navigate).toHaveBeenCalledWith({
+    to: '/teams/$teamId/delivery',
+    params: { teamId: 'team-1' },
+    search: { window: 6 },
+  })
+})
+
 // `cmdk`'s scorer matched a fuzzy subsequence, so `gti` reached "Go to inbox". Taking filtering off
 // it (D8) had to keep that reach, or every abbreviation anybody had learned stopped working.
 test('an abbreviation still reaches the action row it always reached', async () => {

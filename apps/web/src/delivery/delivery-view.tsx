@@ -111,6 +111,7 @@ export function DeliveryView({ teamId, size, onSizeChange }: DeliveryViewProps) 
               testId="delivery-widget"
               sparklineTestId="delivery-sparkline"
               noTrendTestId="delivery-no-trend"
+              headingLevel={2}
               deltaBasis={`the previous ${delivery.cycleCount} cycles`}
             />
           ))}

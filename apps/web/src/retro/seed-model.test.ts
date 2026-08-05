@@ -234,8 +234,17 @@ describe('sparklineGeometry', () => {
   // sliding its neighbours together as if they had been consecutive.
   it('spends the x position of an unmeasured cycle and breaks the line across it', () => {
     const geometry = sparklineGeometry([1, undefined, 5], 60, 20)
-    expect(geometry?.segments).toEqual(['0,20', '60,0'])
+    expect(geometry?.segments).toEqual(['0,20 0,20', '60,0 60,0'])
     expect(geometry?.last).toEqual({ x: 60, y: 0 })
+  })
+
+  // A single-point polyline strokes nothing, so a window whose every measured cycle is isolated
+  // would render an empty box. Each lone point carries its coordinate twice, which `linecap=round`
+  // paints as a dot.
+  it('renders an isolated measured cycle as a dot rather than as nothing', () => {
+    const geometry = sparklineGeometry([2, undefined, 6, undefined, 4], 60, 20)
+    expect(geometry?.segments).toEqual(['0,20 0,20', '30,0 30,0', '60,10 60,10'])
+    expect(geometry?.last).toEqual({ x: 60, y: 10 })
   })
 
   it('needs two measured points, not two slots', () => {

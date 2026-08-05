@@ -41,6 +41,11 @@ export function formatSeedDelta(metric: DeliveryMetric, basis = 'last cycle'): s
 export interface SparklineGeometry {
   // One polyline per unbroken run of measured cycles. A series with nothing missing is exactly one
   // segment, which is what keeps the retro's rendered SVG unchanged.
+  //
+  // A run of ONE carries its coordinate twice. A single-point polyline has no length to stroke and
+  // paints nothing at all, so a window whose measured cycles are each isolated by a gap would render
+  // an empty box — several real readings, no ink. Repeated, the point is a zero-length segment,
+  // which `stroke-linecap="round"` renders as a dot.
   readonly segments: readonly string[]
   readonly last: { readonly x: number; readonly y: number }
 }
@@ -76,15 +81,19 @@ export function sparklineGeometry(
 
   const segments: string[] = []
   let run: string[] = []
+  const closeRun = () => {
+    if (run.length === 0) return
+    segments.push(run.length === 1 ? `${run[0]} ${run[0]}` : run.join(' '))
+    run = []
+  }
   for (const point of coords) {
     if (point === undefined) {
-      if (run.length > 0) segments.push(run.join(' '))
-      run = []
+      closeRun()
       continue
     }
     run.push(`${point.x},${point.y}`)
   }
-  if (run.length > 0) segments.push(run.join(' '))
+  closeRun()
 
   const last = coords.findLast((point) => point !== undefined)
   if (last === undefined) return null

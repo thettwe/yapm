@@ -417,9 +417,13 @@ cycle into the next never left the window, so neither counts it. Computing `carr
 moved twice *between two cycles of the same window* is precisely what the metric exists to surface,
 and the window reading would have said zero while the tile's own sparkline plotted a one, under a
 caption reading "the plan is holding". It now counts any issue with `carryover_count >= 2` whose
-`rolled_over_from_cycle_id` names a cycle in scope, whether or not the issue then left the scope. For
-a one-cycle scope such an issue no longer points at that cycle, so this is exactly the expression it
-replaced and the retro is unchanged.
+`rolled_over_from_cycle_id` names a cycle in scope, whether or not the issue then left the scope —
+**except** an issue whose `cycle_id` is that same cycle, which is the one input where dropping the
+old `carriedOut` scoping would have changed a number the retro already reports. Such an issue was
+assigned back into the cycle it rolled out of, undoing the hop the marker records; it is a carry of
+nothing at either scope, and the old expression excluded it via `i.cycleId !== cycle.id`. With that
+exclusion restored the one-cycle reading is exactly the expression it replaced, on every input rather
+than on every input a test happened to carry. `scope.test.ts` pins the number at both scopes.
 
 ### A window trend keeps one slot per cycle; the retro's compaction moved to its own call site
 
@@ -432,6 +436,13 @@ into `fromHistory` where the retro's semantics live, and `sparklineGeometry` spe
 cycle's x position and breaks the line across it — returning one `points` string per unbroken run,
 which for a gapless series is one segment and one `<polyline>`, exactly what the retro rendered
 before.
+
+A run of one carries its coordinate **twice**. A single-point polyline has no length to stroke and
+paints nothing, so a window whose measured cycles are each isolated by a gap — an intermittently
+linked connector, which is the common shape — would have rendered an empty 64×18 box with only the
+accent dot on it, several real readings and no ink. Repeated, the point is a zero-length segment,
+which `stroke-linecap="round"` renders as a dot. A gapless series is unaffected, so the retro's SVG
+is still byte-identical.
 
 ### `MetricSection` takes the host page's heading level
 

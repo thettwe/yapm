@@ -105,11 +105,14 @@ export function deliveredCounts(scope: DeliveryScope): DeliveredCounts {
         issue.rolledOverFromCycleId != null && !scope.cycleStarts.has(issue.rolledOverFromCycleId),
     ).length,
     // Any issue the rollover moved out of a cycle IN SCOPE, having already been moved before —
-    // whether or not it then left the scope. For a one-cycle scope such an issue no longer points at
-    // that cycle, so this is exactly the `carriedOut.filter(...)` expression it replaced.
+    // whether or not it then left the scope. The one exclusion is the issue pointing back at the
+    // very cycle it rolled out of: that issue was re-assigned into its origin cycle, undoing the
+    // hop the marker records, and it is not a carry at any scope. With it excluded this is exactly
+    // the `carriedOut.filter(...)` expression it replaced whenever the scope is one cycle.
     carriedTwicePlus: scope.issues.filter(
       (issue) =>
         issue.rolledOverFromCycleId != null &&
+        issue.cycleId !== issue.rolledOverFromCycleId &&
         scope.cycleStarts.has(issue.rolledOverFromCycleId) &&
         (issue.carryoverCount ?? 0) >= 2,
     ).length,

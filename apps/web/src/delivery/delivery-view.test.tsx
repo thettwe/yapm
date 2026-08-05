@@ -1,4 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import type { DeliveryWindowSize } from '@yapm/schema'
+import { useState } from 'react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import type { SeedCycleRow, SeedIssueRow } from './rows'
 
@@ -62,10 +64,27 @@ beforeEach(() => {
   )
 })
 
-function renderView(size: 3 | 6 | 12 = 6) {
+function renderView(size: DeliveryWindowSize = 6) {
   const onSizeChange = vi.fn()
   render(<DeliveryView teamId="team-1" size={size} onSizeChange={onSizeChange} />)
   return { onSizeChange }
+}
+
+// The view is controlled, so a spy for `onSizeChange` would swallow the interaction: nothing
+// re-renders, and a read count that cannot move proves nothing. This harness owns the window the
+// way the route does, so changing it actually re-runs the component.
+function Harness({ onSizeChange }: { onSizeChange: (size: DeliveryWindowSize) => void }) {
+  const [size, setSize] = useState<DeliveryWindowSize>(6)
+  return (
+    <DeliveryView
+      teamId="team-1"
+      size={size}
+      onSizeChange={(next) => {
+        onSizeChange(next)
+        setSize(next)
+      }}
+    />
+  )
 }
 
 test('names the window it is reading and offers the three sizes from one control', () => {
@@ -86,17 +105,25 @@ test('names the window it is reading and offers the three sizes from one control
 // The only interactive control on the page. `Number(event.target.value)` is the whole of it, and a
 // string leaking through would slice the window array by a string and clamp somewhere surprising.
 test('reports the chosen window as a number, and reads nothing new to do it', () => {
-  const { onSizeChange } = renderView()
-  const reads = zero.reads
+  const onSizeChange = vi.fn()
+  render(<Harness onSizeChange={onSizeChange} />)
+  // What one render of this view costs in reads, measured rather than assumed.
+  const perRender = zero.reads
+  expect(perRender).toBeGreaterThan(0)
 
   fireEvent.change(screen.getByLabelText('Window'), { target: { value: '3' } })
 
   expect(onSizeChange).toHaveBeenCalledTimes(1)
   expect(onSizeChange).toHaveBeenCalledWith(3)
   expect(onSizeChange.mock.calls[0]?.[0]).toBeTypeOf('number')
-  // CLAUDE.md #9: changing the window re-runs a pure function over rows already in memory. If this
-  // ever grows a query the count moves and this fails.
-  expect(zero.reads).toBe(reads)
+  // The interaction really did re-render — without this the read comparison below could hold
+  // because nothing happened at all.
+  expect(screen.getByLabelText('Window')).toHaveValue('3')
+  expect(screen.getByTestId('delivery-window-label')).toHaveTextContent('Last 3 completed cycles')
+  // CLAUDE.md #9: the new window re-runs a pure function over rows already in memory, so the render
+  // it causes costs exactly what the first render cost. A query that appeared when the window
+  // changed — or one issued per window cycle — moves this and fails.
+  expect(zero.reads).toBe(perRender * 2)
 })
 
 test('renders the Delivered and Flow sections from the shared tiles', () => {

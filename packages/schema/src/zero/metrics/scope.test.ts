@@ -72,6 +72,30 @@ describe('scopeOfCycle — the one-cycle scope reduces to the retro’s reading'
     expect(counts.addedMidCycle).toBe(1)
   })
 
+  // An issue can be assigned back into the cycle it rolled out of, leaving `cycle_id` and
+  // `rolled_over_from_cycle_id` naming the same cycle. The hop the marker records was undone, so it
+  // is a carry of nothing — the reading the retro has always given, and the one input where reading
+  // `carriedTwicePlus` off the raw marker would have changed the retro's number.
+  it('does not count an issue re-assigned back into the cycle it rolled out of', () => {
+    const undone: DeliveryCycleInput = {
+      ...cyclesOnly,
+      issues: [
+        {
+          id: 'i-back',
+          status: 'in_progress',
+          cycleId: 'cycle-2',
+          rolledOverFromCycleId: 'cycle-2',
+          carryoverCount: 2,
+        },
+      ],
+    }
+    const counts = deliveredCounts(scopeOfCycle(undone))
+    expect(counts.carriedTwicePlus).toBe(0)
+    expect(counts.carriedOut).toBe(0)
+    expect(counts.carriedIn).toBe(0)
+    expect(counts.total).toBe(1)
+  })
+
   it('reports no flow measure at all rather than zeros when nothing is linked', () => {
     expect(flowMeasures(scopeOfCycle(cyclesOnly))).toEqual({
       prCycleTimeHours: undefined,
@@ -224,6 +248,20 @@ describe('scopeOfCycles — the window reading is exact, not a sum of cycles', (
       (cycle) => deliveredCounts(scopeOfCycle(cycle)).carriedTwicePlus,
     )
     expect(perCycle).toEqual([0, 1, 0])
+  })
+
+  it('still reads an undone carry as no carry when the scope is a window', () => {
+    const undone = {
+      id: 'undone',
+      status: 'todo',
+      cycleId: 'w-2',
+      rolledOverFromCycleId: 'w-2',
+      carryoverCount: 3,
+    } as const
+    const withUndone = windowCycles.map((cycle) =>
+      cycle.id === 'w-2' ? { ...cycle, issues: [...cycle.issues, undone] } : cycle,
+    )
+    expect(deliveredCounts(scopeOfCycles(withUndone)).carriedTwicePlus).toBe(1)
   })
 
   it('counts only the issues that carried in from OUTSIDE the window', () => {

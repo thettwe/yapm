@@ -361,3 +361,22 @@ two that deliberately narrate the reversal (migration 0022's header and `dropUnb
   hygiene, Lint/typecheck/test/build and the **Compose smoke test** — which is the result §L8 could
   not obtain locally, and it contradicts nothing there: §L8's failure was a local Playwright cookie
   jar, not the stack.
+
+### L13 — §L8's two unverified claims are now results, obtained in CI
+
+§L8 stated plainly that the compose smoke test and `retro-ai.spec.ts` were **unverified locally**,
+because every browser-driven check in this environment fails at sign-up on this branch and on the
+baseline alike. CI has now run both on `6f456f4`, and all six checks are green:
+
+```
+Compose smoke test = success        Playwright e2e = success
+Lint, typecheck, test, build = success   Package boundaries = success
+Catalog guard = success             Commit hygiene = success
+```
+
+So `retro-ai.spec.ts` does pass unchanged against the stored category — task 5.9's expectation was
+correct — and the three-container stack boots with migration 0022 applied and completes the
+sign-up-driven smoke assertion. §L8's diagnosis is confirmed by the same evidence: the local failure
+was the Playwright Chromium cookie jar, not the stack and not this change. Tasks 5.9 and 7.3 are
+ticked on that basis, with the provenance named rather than implied — they were verified in CI, not
+here.

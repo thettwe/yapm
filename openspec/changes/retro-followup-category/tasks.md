@@ -98,7 +98,7 @@
       with its chip intact and nothing throws (design §D5, the pre-existing-row case).
 - [x] 5.8 `retro-draft.test.ts` (server) — the prompt names the follow-up category and its citation
       obligation, and an end-to-end draft run stores a `follow_up` row.
-- [~] 5.9 No new e2e (shipped spec UNVERIFIED locally — design.md §L8). PROCESS §3's big-feature rule: this touches the synced schema and nothing else
+- [x] 5.9 No new e2e; the shipped `retro-ai.spec.ts` passes UNCHANGED (verified in CI, not locally — design.md §L8, §L13). PROCESS §3's big-feature rule: this touches the synced schema and nothing else
       on the list (no mutator, no permission surface, no new signature UI), so it is unit +
       integration. The shipped `retro-ai.spec.ts` must keep passing unchanged.
 
@@ -119,7 +119,8 @@
 
 - [x] 7.1 `pnpm turbo lint typecheck test build` and `node scripts/check-boundaries.mjs`.
 - [x] 7.2 The pg suites against the `yapm-rfc` stack from `down -v`: migrations, schema-drift.
-- [~] 7.3 The compose smoke test — stack boots and `/readyz` is green with 0022 applied, but the
-      sign-up-driven assertion fails here on this branch AND on the baseline. UNVERIFIED; see §L8.
+- [x] 7.3 The compose smoke test — GREEN IN CI on `6f456f4`. Locally the stack boots and `/readyz`
+      is green with 0022 applied, but the sign-up-driven assertion fails here on this branch AND on
+      the baseline; that is a local harness fault, not this change. See §L8 and §L13.
 - [x] 7.4 Record in `design.md` under `## Decisions made during implementation` what ran, what did
       not, and why — including anything CI is the first place to execute.

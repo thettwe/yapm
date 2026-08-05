@@ -44,6 +44,7 @@ describe('reconcileInstallation', () => {
                   body: 'Closes ENG-1',
                   created_at: '2026-07-20T10:00:00Z',
                   head: { sha: 'sha1', ref: 'eng-1-fix' },
+                  merge_commit_sha: 'merge1',
                 },
               ],
             }),
@@ -108,6 +109,7 @@ describe('reconcileInstallation', () => {
         externalId: '5001',
         state: 'open',
         repo: 'acme/app',
+        mergeCommitSha: 'merge1',
         issueRefs: [
           { teamKey: 'ENG', number: 1, source: 'branch' },
           { teamKey: 'ENG', number: 1, source: 'body' },
@@ -131,6 +133,9 @@ describe('reconcileInstallation', () => {
         repo: 'acme/app',
         externalId: '8001',
         environment: 'production',
+        // The backfill leg: the sweep emits the commit for every deployment GitHub still lists,
+        // which is how rows ingested before this change acquire one.
+        sha: 'sha1',
         state: 'success',
       }),
     ])

@@ -27,6 +27,10 @@ export type WorkGraphMutation =
       readonly state: PullRequestState
       readonly url: string | null
       readonly headSha: string | null
+      // The commit the merge produced, matched against `deployment.sha` to decide whether this
+      // change reached production. Distinct from `headSha`: a deploy carrying the head commit
+      // deployed the branch, not the merge.
+      readonly mergeCommitSha: string | null
       readonly openedAt: number
       readonly mergedAt: number | null
       // The source event's own modification time (GitHub `updated_at`), NOT wall clock. Carried
@@ -70,6 +74,9 @@ export type WorkGraphMutation =
       readonly externalId: string
       readonly ref: string | null
       readonly environment: string | null
+      // The commit this deployment carried, matched against a merged PR's `mergeCommitSha` to
+      // decide whether that change reached production. Never blanked by an event that omits it.
+      readonly sha: string | null
       readonly state: DeploymentState
       // The source event's own modification time (deployment_status created/updated, or the
       // reconcile poll time), NOT wall clock. Persisted on the row's `updatedAt` so an
@@ -226,6 +233,7 @@ export async function applyWorkGraphMutation(
           state: effectiveState,
           url: mutation.url,
           headSha: mutation.headSha,
+          mergeCommitSha: mutation.mergeCommitSha,
           mergedAt: terminalMerged ? existing.mergedAt : mutation.mergedAt,
           updatedAt: mutation.updatedAt,
         })
@@ -258,6 +266,7 @@ export async function applyWorkGraphMutation(
         state: mutation.state,
         url: mutation.url,
         headSha: mutation.headSha,
+        mergeCommitSha: mutation.mergeCommitSha,
         openedAt: mutation.openedAt,
         mergedAt: mutation.mergedAt,
         createdAt: now,
@@ -351,17 +360,45 @@ export async function applyWorkGraphMutation(
           .where('installationId', mutation.installationId)
           .where('externalId', mutation.externalId)
           .one(),
-      )) as { id: string; updatedAt: number } | undefined
+      )) as
+        | { id: string; updatedAt: number; deployedAt: number | null; sha: string | null }
+        | undefined
+      // `success` is the only state that means "it shipped". `inactive` is a SUPERSEDED success —
+      // its timestamp is the moment the next deploy took over, not the moment this one succeeded —
+      // so it must never stamp the fact.
+      const incomingDeployedAt = mutation.state === 'success' ? mutation.sourceUpdatedAt : null
       if (existing) {
         // Ordering safety net: an out-of-order or redelivered older deployment event must never
         // overwrite fresher state. Equal timestamps proceed — the write is idempotent.
-        if (mutation.sourceUpdatedAt < existing.updatedAt) return
+        if (mutation.sourceUpdatedAt < existing.updatedAt) {
+          // The one branch where the two rules disagree. Current state is last-writer-wins, so a
+          // stale event may not touch it; the deploy fact is monotone, so a stale event that
+          // carries a success the row never recorded still stamps it. Without this, a redelivered
+          // older `success` arriving after `auto_inactive`'s newer `inactive` loses the fact
+          // permanently — and the reconcile sweep, which reads only the newest status, can never
+          // recover it. Writes nothing the newer event could have set: `deployedAt` is null by
+          // this branch's own condition, and `sha` only when absent.
+          if (incomingDeployedAt === null || existing.deployedAt != null) return
+          await tx.mutate.deployment.update({
+            id: existing.id,
+            deployedAt: incomingDeployedAt,
+            ...(existing.sha == null && mutation.sha !== null ? { sha: mutation.sha } : {}),
+          })
+          return
+        }
         await tx.mutate.deployment.update({
           id: existing.id,
           repo: mutation.repo,
           ref: mutation.ref,
           environment: mutation.environment,
+          // Fill-if-absent: an event that omits the sha (an older payload, a provider that stops
+          // sending it) must not blank a commit already recorded.
+          sha: mutation.sha ?? existing.sha,
           state: mutation.state,
+          // Write-once, never `min`: the two differ only when a second, later `success` arrives
+          // first, which a deployment that succeeds once cannot produce — and `min` would let a
+          // clock-skewed payload drag a real timestamp into the past.
+          deployedAt: existing.deployedAt ?? incomingDeployedAt,
           updatedAt: mutation.sourceUpdatedAt,
         })
         return
@@ -375,7 +412,9 @@ export async function applyWorkGraphMutation(
         externalId: mutation.externalId,
         ref: mutation.ref,
         environment: mutation.environment,
+        sha: mutation.sha,
         state: mutation.state,
+        deployedAt: incomingDeployedAt,
         createdAt: now,
         updatedAt: mutation.sourceUpdatedAt,
       })

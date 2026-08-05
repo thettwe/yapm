@@ -12,9 +12,10 @@ import {
 } from './context.js'
 import { computeDeliverySignal, type LinkedEntities } from './delivery.js'
 
-// The reserved reality axis. These resolve empty in issue-core (the delivery signal is
-// always null); `connectors` teaches `computeDeliverySignal` to return real signals and
-// these light up with no change to this model.
+// The reality axis. All three resolve empty in issue-core (the delivery signal is always null);
+// `connectors` taught `computeDeliverySignal` to return real signals, and `deploy-history-edge`
+// gave the third one the deployment data it had been reserved for — each without changing this
+// list or the persisted filter shape.
 export const DELIVERY_PREDICATES = [
   'blocked-on-review',
   'failing-ci',
@@ -23,8 +24,9 @@ export const DELIVERY_PREDICATES = [
 
 export type DeliveryPredicate = (typeof DELIVERY_PREDICATES)[number]
 
-// A structured, typed filter — never free SQL. Intention axes are queryable today; the
-// `delivery` axis is reserved and matches nothing in this change.
+// A structured, typed filter — never free SQL. Intention axes query the row; the `delivery` axis
+// routes through the delivery-signal seam and matches nothing when an issue has no linked git
+// entities to consult.
 export interface IssueFilter {
   readonly status?: readonly IssueStatus[]
   readonly priority?: readonly IssuePriority[]
@@ -92,9 +94,9 @@ function matchesIntention(issue: IssueView, filter: IssueFilter, teamKey?: strin
   return true
 }
 
-// The reality axis. Routes through the delivery-signal seam; in issue-core the signal is
-// always null so any delivery predicate matches nothing — a delivery-only filter is empty
-// by construction, which is why no reality views ship now.
+// The reality axis. Routes through the delivery-signal seam, so an issue with no linked git
+// entities has a null signal and matches no delivery predicate — "no data" means empty, never a
+// guess. The caller supplies the linked entities; this function never queries.
 function matchesDelivery(
   issue: IssueView,
   predicates: readonly DeliveryPredicate[],
@@ -109,11 +111,13 @@ function matchesDelivery(
         return signal.ciHealth === 'failing'
       case 'blocked-on-review':
         return signal.pr === 'open'
-      // The delivery signal carries no deployment field and the issue->deployment edge is
-      // deferred, so this predicate has no data to consult: per the issue-list spec it matches
-      // nothing rather than aliasing to merged (which would wrongly include merged+deployed).
+      // The reserved slot, now filled. `deployedAt` is non-null exactly when some deployment
+      // carried the merged PR's merge commit and succeeded. A deploy that batches several merges
+      // carries only the tip commit, so this OVER-reports: a change that shipped inside a batch
+      // still reads as not deployed. Deliberate (design §D3) — this filter may cost a glance, but
+      // it may never hide a change that is genuinely unreleased.
       case 'merged-not-deployed':
-        return false
+        return signal.pr === 'merged' && signal.deployedAt === null
       default:
         return false
     }

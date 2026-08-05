@@ -16,7 +16,9 @@ export function RealityStripStates() {
             priority="high"
             status="in-review"
             date="2h"
-            realityStrip={<RealityStrip pr="open" ci="passing" reviewAgeMs={7_200_000} />}
+            realityStrip={
+              <RealityStrip pr="open" ci="passing" reviewAgeMs={7_200_000} deployedAt={null} />
+            }
           />
           <IssueRow
             issueKey="ENG-143"
@@ -24,15 +26,24 @@ export function RealityStripStates() {
             priority="medium"
             status="in-review"
             date="1h"
-            realityStrip={<RealityStrip pr="approved" ci="pending" reviewAgeMs={3_600_000} />}
+            realityStrip={
+              <RealityStrip pr="approved" ci="pending" reviewAgeMs={3_600_000} deployedAt={null} />
+            }
           />
           <IssueRow
             issueKey="ENG-144"
-            title="Merged while still marked in progress"
+            title="Merged and deployed, still marked in progress"
             priority="high"
             status="in-progress"
             date="10m"
-            realityStrip={<RealityStrip pr="merged" ci="passing" reviewAgeMs={600_000} />}
+            realityStrip={
+              <RealityStrip
+                pr="merged"
+                ci="passing"
+                reviewAgeMs={600_000}
+                deployedAt={1_759_000_000_000}
+              />
+            }
             divergenceFlag={<DivergenceFlag label="PR merged but this issue is not marked done" />}
           />
           <IssueRow
@@ -41,7 +52,9 @@ export function RealityStripStates() {
             priority="urgent"
             status="in-progress"
             date="30m"
-            realityStrip={<RealityStrip pr="draft" ci="failing" reviewAgeMs={null} />}
+            realityStrip={
+              <RealityStrip pr="draft" ci="failing" reviewAgeMs={null} deployedAt={null} />
+            }
           />
           <IssueRow
             issueKey="ENG-146"

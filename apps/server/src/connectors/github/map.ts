@@ -93,6 +93,7 @@ function pullRequestMutation(
     state: derivePrState(pr),
     url: pr.html_url ?? null,
     headSha: pr.head?.sha ?? null,
+    mergeCommitSha: pr.merge_commit_sha ?? null,
     openedAt: toEpochMs(pr.created_at, now),
     mergedAt: pr.merged_at ? toEpochMs(pr.merged_at, now) : null,
     updatedAt: toEpochMs(pr.updated_at, now),
@@ -203,6 +204,7 @@ export function mapGithubEvent(
           externalId: String(event.deployment.id),
           ref: event.deployment.ref ?? null,
           environment: event.deployment_status.environment ?? event.deployment.environment ?? null,
+          sha: event.deployment.sha ?? null,
           state: mapDeploymentState(event.deployment_status.state),
           sourceUpdatedAt: toEpochMs(
             event.deployment_status.updated_at ?? event.deployment_status.created_at,

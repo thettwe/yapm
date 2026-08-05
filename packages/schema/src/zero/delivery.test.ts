@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 import type { CiConclusion } from './context.js'
 import {
   assembleLinkedEntities,
+  buildDeploymentIndex,
   ciHealthFromConclusion,
   computeDeliverySignal,
   computeDivergence,
   type IssueLinkRow,
   type LinkedEntities,
+  type LinkedPullRequestRow,
+  type TeamDeploymentRow,
 } from './delivery.js'
 
 const issue = { status: 'todo' } as const
@@ -148,7 +151,7 @@ describe('assembleLinkedEntities', () => {
       { pullRequest: null },
     ]
     const linked = assembleLinkedEntities(links)
-    expect(linked.pullRequests).toEqual([{ state: 'open', openedAt: 500 }])
+    expect(linked.pullRequests).toEqual([{ state: 'open', openedAt: 500, deployedAt: null }])
     expect(linked.ciRuns).toEqual([{ health: 'failing' }, { health: 'passing' }])
     expect(linked.reviews).toEqual([{ state: 'approved', submittedAt: 600 }])
   })
@@ -175,6 +178,203 @@ describe('assembleLinkedEntities', () => {
       pr: 'approved',
       ciHealth: 'passing',
       reviewAgeMs: expect.any(Number),
+      deployedAt: null,
     })
+  })
+})
+
+// The PR->deployment edge: an exact, same-repo match on the merge commit. Both directions in one
+// place, plus the three ways a near-match must NOT count.
+describe('assembleLinkedEntities — the deployment join', () => {
+  const mergedPr = (over: Partial<LinkedPullRequestRow> = {}): IssueLinkRow[] => [
+    {
+      pullRequest: {
+        state: 'merged',
+        openedAt: 500,
+        repo: 'acme/app',
+        mergeCommitSha: 'cafebabe',
+        ciChecks: [{ conclusion: 'success' }],
+        ...over,
+      },
+    },
+  ]
+
+  const deployedAtOf = (links: IssueLinkRow[], deployments: TeamDeploymentRow[]) =>
+    computeDeliverySignal(issue, assembleLinkedEntities(links, deployments))?.deployedAt ?? null
+
+  it('reports the earliest deployment carrying the merge commit', () => {
+    expect(
+      deployedAtOf(mergedPr(), [
+        { repo: 'acme/app', sha: 'cafebabe', deployedAt: 9_000 },
+        { repo: 'acme/app', sha: 'cafebabe', deployedAt: 4_000 },
+      ]),
+    ).toBe(4_000)
+  })
+
+  it('reports nothing when no deployment carried that commit', () => {
+    expect(deployedAtOf(mergedPr(), [{ repo: 'acme/app', sha: 'other', deployedAt: 4_000 }])).toBe(
+      null,
+    )
+  })
+
+  it('does not count a same-sha deployment in a different repo', () => {
+    expect(
+      deployedAtOf(mergedPr(), [{ repo: 'acme/other', sha: 'cafebabe', deployedAt: 4_000 }]),
+    ).toBe(null)
+  })
+
+  it('does not count a deployment that carried the commit but never succeeded', () => {
+    expect(
+      deployedAtOf(mergedPr(), [{ repo: 'acme/app', sha: 'cafebabe', deployedAt: null }]),
+    ).toBe(null)
+  })
+
+  it('does not match on the head sha — a deployed branch is not a deployed merge', () => {
+    expect(
+      deployedAtOf(mergedPr({ mergeCommitSha: null }), [
+        { repo: 'acme/app', sha: 'headsha', deployedAt: 4_000 },
+      ]),
+    ).toBe(null)
+  })
+
+  it('does not consider an unmerged PR deployed', () => {
+    expect(
+      deployedAtOf(mergedPr({ state: 'open' }), [
+        { repo: 'acme/app', sha: 'cafebabe', deployedAt: 4_000 },
+      ]),
+    ).toBe(null)
+  })
+
+  it('never manufactures a signal from deployments alone', () => {
+    expect(
+      computeDeliverySignal(
+        issue,
+        assembleLinkedEntities([], [{ repo: 'acme/app', sha: 'cafebabe', deployedAt: 4_000 }]),
+      ),
+    ).toBeNull()
+  })
+
+  it('yields the same result as before the deploy axis when the argument is omitted', () => {
+    expect(deployedAtOf(mergedPr(), [])).toBe(null)
+    expect(assembleLinkedEntities(mergedPr()).deployments).toEqual([])
+  })
+
+  // The deploy axis and the `pr` axis must describe the SAME pull request. Rolled up over the
+  // issue, an older shipped change would vouch for a newer one that never shipped.
+  it('reads the deployment of the latest PR, not of an older linked one', () => {
+    const links: IssueLinkRow[] = [
+      {
+        pullRequest: {
+          state: 'merged',
+          openedAt: 100,
+          repo: 'acme/app',
+          mergeCommitSha: 'oldmerge',
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+      {
+        pullRequest: {
+          state: 'merged',
+          openedAt: 900,
+          repo: 'acme/app',
+          mergeCommitSha: 'newmerge',
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+    ]
+    const shippedTheOldOne: TeamDeploymentRow[] = [
+      { repo: 'acme/app', sha: 'oldmerge', deployedAt: 4_000 },
+    ]
+    expect(deployedAtOf(links, shippedTheOldOne)).toBe(null)
+    expect(
+      deployedAtOf(links, [
+        ...shippedTheOldOne,
+        { repo: 'acme/app', sha: 'newmerge', deployedAt: 7_000 },
+      ]),
+    ).toBe(7_000)
+  })
+
+  // Only a merged PR can have shipped. A later follow-up, revert, stacked PR or body reference
+  // that is still open must not unclaim a deployment that provably happened.
+  it('keeps the merged PR deployment when a newer linked PR is not merged', () => {
+    const links: IssueLinkRow[] = [
+      {
+        pullRequest: {
+          state: 'merged',
+          openedAt: 100,
+          repo: 'acme/app',
+          mergeCommitSha: 'shippedmerge',
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+      {
+        pullRequest: {
+          state: 'open',
+          openedAt: 900,
+          repo: 'acme/app',
+          mergeCommitSha: null,
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+    ]
+    const deployments: TeamDeploymentRow[] = [
+      { repo: 'acme/app', sha: 'shippedmerge', deployedAt: 4_000 },
+    ]
+    expect(deployedAtOf(links, deployments)).toBe(4_000)
+    // The `pr` axis still reports the latest PR overall, so the two axes stay independent.
+    expect(computeDeliverySignal(issue, assembleLinkedEntities(links, deployments))?.pr).toBe(
+      'open',
+    )
+  })
+
+  // Still true after keying the axis to the newest merged PR: two merges, only the older shipped.
+  it('reports nothing when the newest MERGED pull request never shipped', () => {
+    const links: IssueLinkRow[] = [
+      {
+        pullRequest: {
+          state: 'merged',
+          openedAt: 100,
+          repo: 'acme/app',
+          mergeCommitSha: 'oldmerge',
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+      {
+        pullRequest: {
+          state: 'merged',
+          openedAt: 900,
+          repo: 'acme/app',
+          mergeCommitSha: 'newmerge',
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+      {
+        pullRequest: {
+          state: 'open',
+          openedAt: 1_500,
+          repo: 'acme/app',
+          mergeCommitSha: null,
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+    ]
+    expect(deployedAtOf(links, [{ repo: 'acme/app', sha: 'oldmerge', deployedAt: 4_000 }])).toBe(
+      null,
+    )
+  })
+
+  it('takes a prebuilt index and an array to the same answer', () => {
+    const rows: TeamDeploymentRow[] = [
+      { repo: 'acme/app', sha: 'cafebabe', deployedAt: 9_000 },
+      { repo: 'acme/app', sha: 'cafebabe', deployedAt: 4_000 },
+      { repo: 'acme/app', sha: null, deployedAt: 1_000 },
+      { repo: 'acme/app', sha: 'cafebabe', deployedAt: null },
+    ]
+    const index = buildDeploymentIndex(rows)
+    // One entry, the earliest success: the unrecorded-commit and never-succeeded rows are unjoinable.
+    expect([...index.values()]).toEqual([4_000])
+    expect(
+      computeDeliverySignal(issue, assembleLinkedEntities(mergedPr(), index))?.deployedAt,
+    ).toBe(deployedAtOf(mergedPr(), rows))
   })
 })

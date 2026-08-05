@@ -99,7 +99,9 @@ export interface IssueRowData {
   readonly labels?: readonly IssueLabelRow[]
   readonly assignee?: IssueAssigneeRow | null
   // Assembled linked work-graph entities behind the delivery-signal seam (empty for an
-  // unlinked issue). Feeds the reality strip, the divergence flag, and reality-derived filters.
+  // unlinked issue), including the deployments whose commit a linked merged PR produced. Feeds
+  // the reality strip, the divergence flag, and reality-derived filters. Assembled once per row
+  // over the team's deployments, so `merged-not-deployed` and the strip read the same value.
   readonly linked?: LinkedEntities
 }
 

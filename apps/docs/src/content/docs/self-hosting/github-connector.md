@@ -78,6 +78,43 @@ What yapm does with the response is as important as the permission:
   [the rate budget](/self-hosting/ai-setup/#the-github-rate-budget-this-spends) for the caps that
   bound it when you do.
 
+### Deploy history
+
+The **Deployments: Read-only** permission in the table above now yields deploy *history*, not just
+the current deploy per environment — again with **no new permission and no re-consent**. Two fields
+yapm was already receiving are now kept:
+
+- **The commit each deployment carried.** It arrives in the same object as the ref and the
+  environment; yapm used to drop it. It is what links a merged pull request to the deploy that
+  shipped it, and it drives the reality strip's
+  [deployed signal](/features/delivery-signals/#how-a-change-is-counted-as-deployed).
+- **The moment a deployment first succeeded**, stored separately from its state and never rewritten.
+  GitHub's `auto_inactive` flips a superseded deployment to `inactive` the moment the next one
+  succeeds, so a deployment's state describes the present. Without a separate timestamp, every past
+  success was overwritten and "how often do we deploy" counted roughly one row per environment
+  forever.
+
+**What this does not do:** it requests nothing new, writes nothing to GitHub, subscribes to no new
+event (**Deployment** and **Deployment status** were already in step 4), and adds no container, job
+or environment variable.
+
+**Expect a sparse first week.** Deployments ingested before you upgraded have no recorded commit and
+no success timestamp, and no migration can invent one — the moment of a past success is exactly what
+was being overwritten.
+
+What heals it is the reconcile sweep (`GITHUB_RECONCILE_CRON`, every 15 minutes by default), which
+re-lists each mapped repository's 100 most recent deployments. That poll is *conditional*: normally
+it re-runs only when the repository's deployment list has changed, so the upgrade drops the stored
+deployment-list marker once to force exactly one full re-poll per repository. On that sweep, yapm
+backfills the commit for every deployment GitHub still lists, and stamps the success moment for
+those whose **newest** status is still `success`.
+
+Two things stay unknown, permanently and by design: a deployment GitHub no longer lists, and one
+that succeeded and was already superseded (`inactive`) before the sweep saw it — the sweep can only
+read the newest status, and a past success is exactly what `auto_inactive` overwrote. Both read as
+not deployed. From the upgrade forward, every new deployment records both facts as it happens, from
+the webhook rather than the sweep.
+
 ## 4. Subscribe to events
 
 Check exactly: **Pull request**, **Push**, **Check run**, **Check suite**, **Status**,
@@ -125,8 +162,8 @@ Open *Settings → Connectors* in yapm (workspace admins only), **Enable** the G
 map each repository (`owner/repo`) to the team that should own its pull requests, checks, and
 deployments. Ingested work-graph rows land inside that team's boundary; a webhook for an unmapped
 repo is dropped. Once mapped, a PR whose branch name or body mentions an issue key (e.g. `ENG-142`)
-lights up that issue's **reality strip** — PR state, CI health, and review age — on the issue row
-and detail.
+lights up that issue's **reality strip** — PR state, CI health, whether a deployment carrying the
+merge commit succeeded, and review age — on the issue row and detail.
 
 ## 10. Optionally, let pull requests drive issue status
 

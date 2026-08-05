@@ -169,6 +169,7 @@ describe.skipIf(DATABASE_URL === undefined)('status automation, end to end', () 
       state: over.state ?? 'open',
       url: 'https://github.com/acme/app/pull/12',
       headSha: 'abc123',
+      mergeCommitSha: null,
       openedAt: over.openedAt ?? OPENED_AT,
       mergedAt: over.mergedAt ?? null,
       updatedAt: over.updatedAt ?? OPENED_AT,

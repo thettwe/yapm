@@ -54,10 +54,17 @@ export interface SeedLinkedPrOptions {
   prNumber?: number
   prState?: 'draft' | 'open' | 'merged' | 'closed'
   ciConclusion?: 'success' | 'failure' | 'pending'
+  // The commit the merge produced — the deploy join's left-hand side. Deliberately different from
+  // `head_sha` by default, so a head-sha fallback would visibly change a browser assertion.
+  mergeCommitSha?: string
+  // A successful deployment for the same repo. `sha` is what decides the join: pass the PR's
+  // `mergeCommitSha` for a change that shipped, anything else for one that did not.
+  deployment?: { sha: string; environment?: string; deployedAt?: Date }
 }
 
-// Seed a connector installation plus a pull request linked to the issue, with one CI check.
-// Returns the pull_request id so a follow-up can advance its state.
+// Seed a connector installation plus a pull request linked to the issue, with one CI check, and
+// optionally a deployment for the same repo. Returns the pull_request id so a follow-up can
+// advance its state.
 export async function seedLinkedPr(
   db: Database,
   options: SeedLinkedPrOptions,
@@ -95,10 +102,30 @@ export async function seedLinkedPr(
       state,
       url: `https://github.com/${repo}/pull/${options.prNumber ?? 7}`,
       head_sha: 'deadbeef',
+      merge_commit_sha: state === 'merged' ? (options.mergeCommitSha ?? '9f1c2d3e4b5a') : null,
       opened_at: openedAt,
       merged_at: state === 'merged' ? now : null,
     })
     .execute()
+
+  if (options.deployment) {
+    await db.db
+      .insertInto('deployment')
+      .values({
+        id: newId(),
+        team_id: options.teamId,
+        installation_id: installation.id,
+        provider: 'github',
+        repo,
+        external_id: `deploy-${newId()}`,
+        environment: options.deployment.environment ?? 'production',
+        state: 'success',
+        ref: 'main',
+        sha: options.deployment.sha,
+        deployed_at: options.deployment.deployedAt ?? now,
+      })
+      .execute()
+  }
 
   await db.db
     .insertInto('ci_check')

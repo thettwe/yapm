@@ -2,10 +2,12 @@ import {
   assembleLinkedEntities,
   computeDeliverySignal,
   computeDivergence,
+  type DeploymentIndex,
   type DivergenceKind,
   type IssueLinkRow,
   type IssueStatus,
   type LinkedEntities,
+  type TeamDeploymentRow,
 } from '@yapm/schema'
 import type { RealityStripProps } from '@yapm/ui/components/issue-row'
 
@@ -30,9 +32,14 @@ export const DIVERGENCE_LABEL: Record<DivergenceKind, string> = {
 
 // Assemble the linked entities for an issue from its raw synced links (empty for an unlinked
 // issue). Kept separate so a row can memoize it once and reuse it for both the strip and the
-// reality-aware filter's `linkedFor`.
-export function linkedEntitiesFor(links: readonly LinkedIssueRow[] | undefined): LinkedEntities {
-  return assembleLinkedEntities(links ?? [])
+// reality-aware filter's `linkedFor`. `deployments` is the whole team's deployment rows — the same
+// data for every row, so a LIST passes the pre-built `DeploymentIndex` (one pass over the team's
+// deployments, shared by every row) and a single-issue surface can pass the raw array.
+export function linkedEntitiesFor(
+  links: readonly LinkedIssueRow[] | undefined,
+  deployments?: readonly TeamDeploymentRow[] | DeploymentIndex,
+): LinkedEntities {
+  return assembleLinkedEntities(links ?? [], deployments)
 }
 
 // Compute the reality strip + divergence for one issue over its assembled linked entities.
@@ -45,7 +52,12 @@ export function deliveryView(
   const divergence = computeDivergence(issue.status, signal)
   if (signal === null) return { strip: null, divergence }
   return {
-    strip: { pr: signal.pr, ci: signal.ciHealth, reviewAgeMs: signal.reviewAgeMs },
+    strip: {
+      pr: signal.pr,
+      ci: signal.ciHealth,
+      reviewAgeMs: signal.reviewAgeMs,
+      deployedAt: signal.deployedAt,
+    },
     divergence,
   }
 }

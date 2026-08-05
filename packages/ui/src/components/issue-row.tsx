@@ -11,6 +11,7 @@ import {
   GitPullRequestIcon,
   LoaderIcon,
   type LucideIcon,
+  RocketIcon,
   TriangleAlertIcon,
   XIcon,
 } from 'lucide-react'
@@ -48,13 +49,18 @@ function initials(name: string): string {
     .join('')
 }
 
+// One fixed width shared with `RealityStrip`, so populating a signal can never shift a row's
+// alignment. Four slots now: PR, CI, deploy, review age.
+const REALITY_STRIP_WIDTH = 'w-[86px]'
+
 function RealityStripPlaceholder() {
   return (
     <span
       role="img"
       aria-label="No delivery signal yet"
-      className="flex w-16 shrink-0 items-center gap-1 text-text-3"
+      className={cn('flex shrink-0 items-center gap-1 text-text-3', REALITY_STRIP_WIDTH)}
     >
+      <span className="size-1.5 rounded-full border border-current opacity-40" />
       <span className="size-1.5 rounded-full border border-current opacity-40" />
       <span className="size-1.5 rounded-full border border-current opacity-40" />
       <span className="size-1.5 rounded-full border border-current opacity-40" />
@@ -106,12 +112,18 @@ export interface RealityStripProps {
   pr: PrGlyphState | null
   ci: CiHealthState | null
   reviewAgeMs: number | null
+  // The moment a deployment carrying this change's merge commit first succeeded, or null when
+  // none has. The environment is not consulted — yapm cannot know which of a team's environment
+  // strings means production — so the label says "Deployed" and no more. Its own glyph, for the
+  // same reason CI health has one: a signal this load-bearing may not be carried by hue.
+  deployedAt: number | null
 }
 
-// The reality strip: PR lifecycle glyph, CI health dot, and review age — the row's "reality
-// over ritual" slot. Occupies the same reserved width as the placeholder so populating a signal
-// never shifts row alignment. Every color is a theme token; correct in all presets, light+dark.
-function RealityStrip({ pr, ci, reviewAgeMs }: RealityStripProps) {
+// The reality strip: PR lifecycle glyph, CI health dot, deploy glyph, and review age — the row's
+// "reality over ritual" slot. Occupies the same reserved width as the placeholder so populating a
+// signal never shifts row alignment. Every color is a theme token; correct in all presets,
+// light+dark.
+function RealityStrip({ pr, ci, reviewAgeMs, deployedAt }: RealityStripProps) {
   const prGlyph = pr ? PR_GLYPH[pr] : null
   const ciGlyph = ci ? CI_GLYPH[ci] : null
   const PrIcon = prGlyph?.icon
@@ -119,6 +131,7 @@ function RealityStrip({ pr, ci, reviewAgeMs }: RealityStripProps) {
   const summary = [
     prGlyph?.label,
     ciGlyph?.label,
+    deployedAt != null ? 'Deployed' : null,
     reviewAgeMs != null ? `reviewed ${formatReviewAge(reviewAgeMs)} ago` : null,
   ]
     .filter(Boolean)
@@ -129,7 +142,10 @@ function RealityStrip({ pr, ci, reviewAgeMs }: RealityStripProps) {
       data-slot="reality-strip"
       role="img"
       aria-label={summary || 'Delivery signal'}
-      className="flex w-16 shrink-0 items-center gap-1.5 font-mono text-[10.5px] tabular-nums text-text-3"
+      className={cn(
+        'flex shrink-0 items-center gap-1.5 font-mono text-[10.5px] tabular-nums text-text-3',
+        REALITY_STRIP_WIDTH,
+      )}
     >
       {PrIcon && prGlyph ? (
         <PrIcon className={cn('size-3.5 shrink-0', prGlyph.tone)} aria-hidden="true" />
@@ -138,6 +154,9 @@ function RealityStrip({ pr, ci, reviewAgeMs }: RealityStripProps) {
       )}
       {CiIcon && ciGlyph ? (
         <CiIcon className={cn('size-3 shrink-0', ciGlyph.tone)} aria-hidden="true" />
+      ) : null}
+      {deployedAt != null ? (
+        <RocketIcon className="size-3 shrink-0 text-signal-sync" aria-hidden="true" />
       ) : null}
       {reviewAgeMs != null ? (
         <span className="truncate">{formatReviewAge(reviewAgeMs)}</span>

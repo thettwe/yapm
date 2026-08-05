@@ -2,6 +2,7 @@ import type { ReadonlyJSONValue } from '@rocicorp/zero'
 import { useQuery, useZero } from '@rocicorp/zero/react'
 import { useNavigate } from '@tanstack/react-router'
 import {
+  buildDeploymentIndex,
   DELIVERY_PREDICATES,
   type DeliveryPredicate,
   ISSUE_PRIORITIES,
@@ -15,6 +16,7 @@ import {
   mutators,
   newId,
   queries,
+  type TeamDeploymentRow,
 } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { Input } from '@yapm/ui/components/input'
@@ -121,6 +123,16 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
   const [labels] = useQuery(queries.labels.byTeam({ teamId }))
   const [cycles] = useQuery(queries.cycles.byTeam({ teamId }))
   const [projects] = useQuery(queries.projects.all())
+  // The same team-scoped query issue-detail already subscribes to, unchanged. The deployment ->
+  // merged-PR match is a computed join, so the list needs the team's deployments to evaluate
+  // `merged-not-deployed` and to render the strip's deploy glyph.
+  const [deployments] = useQuery(queries.deployments.byTeam({ teamId }))
+  // Indexed once for the whole list, not rescanned per row: the join is `repo + merge commit`, so
+  // one pass over the team's deployments serves every issue (design §Risks).
+  const deployIndex = useMemo(
+    () => buildDeploymentIndex(deployments as readonly TeamDeploymentRow[]),
+    [deployments],
+  )
 
   const team = teams.find((candidate) => candidate.id === teamId)
   const teamKey = team?.key ?? ''
@@ -158,9 +170,12 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
               image: issue.assignee.image,
             }
           : null,
-        linked: linkedEntitiesFor((issue as { issueLinks?: readonly LinkedIssueRow[] }).issueLinks),
+        linked: linkedEntitiesFor(
+          (issue as { issueLinks?: readonly LinkedIssueRow[] }).issueLinks,
+          deployIndex,
+        ),
       })),
-    [issuesRaw],
+    [issuesRaw, deployIndex],
   )
 
   const onOpenIssue = useCallback(

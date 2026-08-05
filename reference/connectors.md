@@ -323,6 +323,12 @@ DESIGN.md §"Issue list" reality strip = PR state (draft→open→approved→mer
 
 Verified enum sources: check-runs https://docs.github.com/en/rest/checks/runs ; deployment statuses https://docs.github.com/en/rest/deployments/statuses ; reviews https://docs.github.com/en/rest/pulls/reviews .
 
+**What this table got wrong about deployments** (corrected by change 27, `deploy-history-edge`, and verified against the installed `@octokit/openapi-types@27.0.0`, not from memory):
+
+- A deployment's **state is not its history.** GitHub's `auto_inactive` sets a superseded deployment's newest status to `inactive` the moment the next one succeeds, so the "Deploy state" row above describes *the current deploy per environment* and nothing else. Reading `statuses.data[0]` — which the reconcile sweep does — can therefore only ever recover the present. Whatever a connector wants to *count* (deployment frequency, lead time) has to be stamped once, on the state edge, into a column the sweep never rewrites.
+- **The deployment object carries the commit**: `components.schemas.deployment.sha` is `string` (non-null), present on both the REST list response and the `deployment_status` webhook's `deployment` object, in the same object as `ref` and `environment`. It is the only field that links a deployment back to a merge, and it was silently dropped by the original mapper.
+- **`pull-request.merge_commit_sha` is `string | null`** and is sent on every `pull_request` payload. It is a different object from `head.sha`: a deploy carrying the head sha means the *branch* was deployed, not the merge.
+
 **Push vs poll rule:** everything above is **webhook-push primary**; polling is the **reconciliation safety net** (missed/redelivered events, deploys that outlive a webhook, backfill on first install). First-install **backfill** must be a REST/GraphQL sweep (webhooks are future-only). Use `app.eachRepository` + `octokit.paginate` for the initial sweep, then rely on webhooks + ETag reconcile.
 
 ---

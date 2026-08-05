@@ -591,19 +591,35 @@ interface PrimaryKeyRow {
 }
 
 interface CheckConstraintRow {
+  name: string
   definition: string
 }
 
-async function checkConstraints(db: Kysely<DB>, table: string): Promise<string[]> {
+async function checkConstraintRows(db: Kysely<DB>, table: string): Promise<CheckConstraintRow[]> {
   const { rows } = await sql<CheckConstraintRow>`
-    select pg_get_constraintdef(c.oid) as definition
+    select c.conname as name, pg_get_constraintdef(c.oid) as definition
     from pg_constraint c
     join pg_class t on t.oid = c.conrelid
     join pg_namespace n on n.oid = t.relnamespace
     where c.contype = 'c' and n.nspname = 'public' and t.relname = ${table}
   `.execute(db)
 
-  return rows.map((row) => row.definition)
+  return rows
+}
+
+async function checkConstraints(db: Kysely<DB>, table: string): Promise<string[]> {
+  return (await checkConstraintRows(db, table)).map((row) => row.definition)
+}
+
+// The definition of ONE constraint by name, because "some CHECK on this table mentions the value" is
+// a weaker claim than "this constraint admits it" — a table carrying three CHECKs can satisfy the
+// former through the wrong one.
+async function checkConstraintByName(
+  db: Kysely<DB>,
+  table: string,
+  name: string,
+): Promise<string | null> {
+  return (await checkConstraintRows(db, table)).find((row) => row.name === name)?.definition ?? null
 }
 
 async function primaryKeys(db: Kysely<DB>): Promise<Map<string, string[]>> {
@@ -665,6 +681,21 @@ describe('server-only tables are excluded from the Zero schema', () => {
         (column) => column.serverName.includes('user') || column.serverName.includes('voter'),
       ),
     ).toEqual([])
+  })
+})
+
+// DELIBERATELY OUTSIDE THE DATABASE-GATED BLOCK BELOW. The migration's DDL is a frozen literal
+// (design §D2) so that a fifth category cannot silently change what 0022 emits on a fresh database;
+// the other half of that trade is that the literal must still name exactly the members of the union.
+// Gating this on `DATABASE_URL` would hand a contributor without Postgres a green run for exactly
+// the mistake it exists to catch — adding a category and no migration.
+describe('the retro category CHECK literal tracks the category union', () => {
+  it('spells the CHECK literal as exactly the members of RETRO_PROPOSAL_CATEGORIES', () => {
+    const quoted = [...RETRO_PROPOSAL_CATEGORY_CHECK.matchAll(/'([^']+)'/gu)].map(
+      (match) => match[1],
+    )
+    expect(quoted).toEqual([...RETRO_PROPOSAL_CATEGORIES])
+    expect(RETRO_PROPOSAL_CATEGORY_CHECK.startsWith('category in (')).toBe(true)
   })
 })
 
@@ -950,28 +981,22 @@ describe.skipIf(DATABASE_URL === undefined)('schema drift', () => {
   // 0018's three-value CHECK; if the migration is missing or is reverted, `RETRO_PROPOSAL_CATEGORIES`
   // still type-checks everywhere and the failure only appears as a constraint violation the first
   // time a model emits a follow-up on a real instance.
+  //
+  // Asserted against the constraint BY NAME, and against the values it admits rather than its text:
+  // Postgres rewrites `category in (...)` to `category = ANY (ARRAY[...])`, so the stored definition
+  // never spells `RETRO_PROPOSAL_CATEGORY_CHECK` back verbatim and comparing strings would pin the
+  // rewrite rather than the behaviour.
   it('constrains retro_ai_proposal.category to the four stored categories in Postgres', async () => {
-    const checks = (await checkConstraints(database.db, 'retro_ai_proposal'))
-      .map((definition) => definition.replace(/\s+/gu, ' '))
-      .join(' ')
-
-    for (const category of RETRO_PROPOSAL_CATEGORIES) {
-      expect(checks).toContain(`'${category}'`)
-    }
-    expect(RETRO_PROPOSAL_CATEGORY_CHECK).toBe(
-      "category in ('win', 'loss', 'improvement', 'follow_up')",
+    const definition = await checkConstraintByName(
+      database.db,
+      'retro_ai_proposal',
+      'retro_ai_proposal_category_check',
     )
-  })
 
-  // The migration's DDL is a frozen literal (design §D2) so a fifth category cannot silently change
-  // what 0022 emits on a fresh database. This is the other half of that trade: the literal must still
-  // name exactly the members of the union, so adding a fifth category without a migration fails here
-  // rather than at insert time in production.
-  it('spells the CHECK literal as exactly the members of RETRO_PROPOSAL_CATEGORIES', () => {
-    const quoted = [...(RETRO_PROPOSAL_CATEGORY_CHECK.matchAll(/'([^']+)'/gu) ?? [])].map(
-      (match) => match[1],
-    )
-    expect(quoted).toEqual([...RETRO_PROPOSAL_CATEGORIES])
+    expect(definition).not.toBeNull()
+    expect(definition).toContain('category')
+    const admitted = [...(definition ?? '').matchAll(/'([^']+)'::text/gu)].map((match) => match[1])
+    expect(admitted).toEqual([...RETRO_PROPOSAL_CATEGORIES])
   })
 
   it.each([

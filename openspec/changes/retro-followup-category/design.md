@@ -304,3 +304,60 @@ no container and no library surface, so there is nothing in any of them to updat
 need two touches (row 22's derived-bucket prose gets a superseding pointer rather than a rewrite,
 since it is history, plus the "where v1 actually stands" paragraph's "it cost no migration" clause)
 and gets a row 24 of its own.
+
+### L9 — The CHECK is asserted by NAME and by the values it admits, not by its text
+
+Task 5.5's first pass joined every CHECK on `retro_ai_proposal` into one string and asserted each
+category appeared somewhere in it. That table carries three CHECKs (`status`, `verdict`, `category`),
+so "some constraint on this table mentions `'follow_up'`" is a strictly weaker claim than "the
+category constraint admits it" — a future migration adding `follow_up` to an unrelated enum would
+have kept the test green with 0022 reverted.
+
+**Chosen:** `checkConstraintByName` fetches `retro_ai_proposal_category_check` alone, and the
+assertion reads the values it admits rather than its text. Postgres rewrites `category in (...)` to
+`category = ANY (ARRAY['win'::text, …])`, so comparing the stored definition to
+`RETRO_PROPOSAL_CATEGORY_CHECK` verbatim would pin the planner's rewrite instead of the behaviour;
+extracting the quoted literals and comparing to `RETRO_PROPOSAL_CATEGORIES` in order does not. Still
+falsifiable in the direction that matters: on main the same extraction yields three values.
+
+Verified against the live constraint text recorded in §L2 rather than against an imagined one — no
+Postgres was reachable in this pass (see §L10), so that recorded output is the evidence.
+
+### L10 — The literal-pinning test was moved OUT of the database-gated describe
+
+Task 5.6's test — `RETRO_PROPOSAL_CATEGORY_CHECK` names exactly the members of
+`RETRO_PROPOSAL_CATEGORIES` — touches no database, but it had been written inside
+`describe.skipIf(DATABASE_URL === undefined)`. It therefore did not run for anyone without Postgres,
+which is precisely the contributor whose mistake it exists to catch: adding a fifth category and no
+migration, then seeing a green local `pnpm test`.
+
+**Chosen:** its own top-level `describe`, ungated. The schema suite now reports 760 passing locally
+rather than 759, and the one extra test is this one actually executing.
+
+### L11 — A stale comment in `retro-verdict-log.ts` was the last surviving definition of follow-up-ness
+
+`RetroVerdictProposal.category` carried the comment "The derived `follow_up` bucket lives on the
+refs, which this read deliberately does not carry." No code depended on it, but the constraint this
+change is held to is that **no second definition of what a follow-up is may survive anywhere**, and a
+comment asserting the derivation still exists is one — pointed at the next reader rather than at the
+compiler. Rewritten to state that the log reads the same stored category the panel groups on.
+
+`grep -rn "retroProposalBucket\|RETRO_PROPOSAL_BUCKETS\|BucketableProposal\|RetroProposalBucket"
+apps packages scripts` is empty, and the only remaining `derived bucket` mentions in `src/` are the
+two that deliberately narrate the reversal (migration 0022's header and `dropUnbackedFollowUps`'s).
+
+### L12 — What this pass ran, and what it did not
+
+- **Ran and green:** `pnpm turbo run typecheck --filter=...[origin/main]`, `pnpm lint` (biome ci, 576
+  files), `pnpm turbo run test --filter=...[origin/main]` — schema 760 passed / 249 skipped, server
+  333 / 119, web 413, ui 252 — and `node scripts/check-boundaries.mjs`.
+- **NOT run: the pg suites, the full build, Playwright and the compose smoke test**, by instruction.
+  Port 5447 was closed and the `yapm-rfc` stack was down; the only running containers belong to
+  unrelated projects. So **the rewritten `retro_ai_proposal_category_check` assertion first executes
+  in CI**, exactly as §L5 and §L7 of the archived change had to say about their own pg cases. "The
+  test is written" and "the test passes" remain different claims and this pass makes only the first
+  about that one case — every other case in this pass ran here.
+- CI on the previous commit (`f45b2b2`) was green on Catalog guard, Package boundaries, Commit
+  hygiene, Lint/typecheck/test/build and the **Compose smoke test** — which is the result §L8 could
+  not obtain locally, and it contradicts nothing there: §L8's failure was a local Playwright cookie
+  jar, not the stack.

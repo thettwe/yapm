@@ -89,7 +89,7 @@ function Probe() {
 
 async function mount() {
   const view = render(
-    <ZeroRoot>
+    <ZeroRoot cacheUrl="http://localhost:4848">
       <Probe />
     </ZeroRoot>,
   )
@@ -368,7 +368,7 @@ test('concurrent recovery and membership refreshes share one in-flight token req
   )
 
   render(
-    <ZeroRoot>
+    <ZeroRoot cacheUrl="http://localhost:4848">
       <Probe />
     </ZeroRoot>,
   )

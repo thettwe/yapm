@@ -22,8 +22,9 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 
 COPY . .
 
-ARG VITE_ZERO_CACHE_URL=http://localhost:4848
-ENV VITE_ZERO_CACHE_URL=$VITE_ZERO_CACHE_URL
+# No build args. The browser-facing sync origin is RUNTIME configuration (`ZERO_CACHE_PUBLIC_URL`,
+# served to the SPA by `GET /api/config`), so one published image serves every host. Baking it in
+# with Vite is what made every published image dial the end user's own localhost.
 RUN pnpm turbo run build --filter=@yapm/server --filter=@yapm/web
 RUN pnpm deploy --filter=@yapm/server --prod --legacy /app
 

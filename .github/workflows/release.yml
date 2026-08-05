@@ -33,7 +33,11 @@ jobs:
 
   publish:
     name: Publish image to GHCR
+    # `needs` is kept for the version outputs only; `!cancelled()` is what decouples `edge` and
+    # `sha-<7>` from release-please succeeding. NOT a separate tag-triggered workflow: a tag pushed
+    # by GITHUB_TOKEN triggers no workflow run, so that variant would silently never fire.
     needs: release-please
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -76,8 +80,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.tags.outputs.tags }}
-          build-args: |
-            VITE_ZERO_CACHE_URL=http://localhost:4848
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false

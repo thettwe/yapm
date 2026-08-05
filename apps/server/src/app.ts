@@ -8,11 +8,16 @@ import { createZeroRoutes, type ZeroRoutesOptions } from './zero/routes.js'
 export interface AppOptions {
   logger: Logger
   readinessChecks: ReadinessCheck[]
+  // The browser-reachable zero-cache origin the SPA fetches before it constructs a Zero client.
+  // Passed in rather than read from the ambient environment here, so the value the app serves is
+  // the value its caller validated.
+  zeroCacheUrl?: string
   webDistDir?: string
   zero?: ZeroRoutesOptions
   authRoutes?: Hono
   githubWebhook?: Hono
   connectorAdmin?: Hono
+  configurationAdmin?: Hono
   aiAdmin?: Hono
   search?: Hono
   files?: Hono
@@ -52,6 +57,14 @@ export function createApp(options: AppOptions): Hono {
     return c.json(report, report.status === 'ready' ? 200 : 503, { 'Cache-Control': 'no-store' })
   })
 
+  // Unauthenticated on purpose: the value is public to every browser that connects, and the SPA
+  // needs it before it has a session. `no-store` because a cached copy would survive a change of
+  // origin in exactly the deployment where the origin just changed.
+  if (options.zeroCacheUrl !== undefined) {
+    const zeroCacheUrl = options.zeroCacheUrl
+    app.get('/api/config', (c) => c.json({ zeroCacheUrl }, 200, { 'Cache-Control': 'no-store' }))
+  }
+
   if (options.authRoutes) {
     app.route('/', options.authRoutes)
   }
@@ -62,6 +75,10 @@ export function createApp(options: AppOptions): Hono {
 
   if (options.connectorAdmin) {
     app.route('/', options.connectorAdmin)
+  }
+
+  if (options.configurationAdmin) {
+    app.route('/', options.configurationAdmin)
   }
 
   if (options.aiAdmin) {

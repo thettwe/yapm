@@ -169,15 +169,29 @@ tokens, no cloud services.
 git clone https://github.com/thettwe/yapm.git && cd yapm
 
 # Run it (self-host): the whole production deployment is three containers
-docker compose -f docker/docker-compose.yml up -d --build --wait
+node scripts/init-env.mjs
+docker compose --env-file .env -f docker/docker-compose.yml up -d --build --wait
 
 # Or hack on it: Postgres + zero-cache in Docker, server + Vite on the host, one command
 pnpm install && pnpm dev
 ```
 
+`init-env.mjs` writes a repo-root `.env` with a generated value for every secret this repository
+publishes; `--env-file .env` is **not optional**, because `-f docker/…` makes `docker/` Compose's
+project directory, so without it Compose finds no env file at all and silently applies every
+published default. In production the app refuses to boot on those defaults, naming each one.
+
 The production stack is **exactly three containers** — the app (API + Zero endpoints + static SPA
 in one process), `zero-cache`, and Postgres. No Redis, no reverse proxy, no object store. On an
-Apple-Silicon test box it idles at ~0.85 GiB RAM total. Full self-hosting docs live in
+Apple-Silicon test box it idles at ~0.85 GiB RAM total.
+
+Before you put a domain in front of it, read
+[**Deploy and harden**](apps/docs/src/content/docs/self-hosting/deploy.md) — the secrets to change and
+what each protects, TLS in front of *both* published ports (3000 and 4848), sizing, and a first-run
+checklist. Then [**Upgrade and rollback**](apps/docs/src/content/docs/self-hosting/upgrade.md), which
+says plainly that migrations are forward-only and a rollback is a database restore, and the
+[**configuration reference**](apps/docs/src/content/docs/self-hosting/configuration.md), which lists
+every variable and is checked against the schema in CI. Full self-hosting docs live in
 [`apps/docs`](apps/docs).
 
 ## Built with

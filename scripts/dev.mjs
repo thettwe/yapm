@@ -14,7 +14,9 @@ const cachePort = process.env.ZERO_CACHE_HOST_PORT ?? '4848'
 
 const defaults = {
   DATABASE_URL: `postgres://${user}:${password}@localhost:${pgPort}/${database}`,
-  VITE_ZERO_CACHE_URL: `http://localhost:${cachePort}`,
+  // Read by the host-run SERVER and handed to the SPA through `GET /api/config`, which Vite
+  // proxies. Nothing about the sync origin is baked into the bundle any more.
+  ZERO_CACHE_PUBLIC_URL: `http://localhost:${cachePort}`,
   SERVER_ORIGIN: `http://localhost:${process.env.PORT ?? '3000'}`,
   // Attachment bytes for the host-run server. The shipped default is `/var/lib/yapm/files`, which
   // is where the container writes and which no developer machine will let a normal user create —

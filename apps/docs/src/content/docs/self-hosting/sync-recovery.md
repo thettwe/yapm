@@ -107,13 +107,16 @@ container while diagnosing).
 Work down this list; each step rules out one layer.
 
 1. **Is `zero-cache` up and reachable from the browser?** The browser connects *directly* to it, not
-   through the app. From the affected machine and network, `curl -f <VITE_ZERO_CACHE_URL>/keepalive`
-   — that is the same endpoint the container's own healthcheck uses.
-   `docker compose -f docker/docker-compose.yml logs zero-cache` shows the server side.
-2. **Is `VITE_ZERO_CACHE_URL` the browser-reachable origin?** It is baked into the SPA **at image
-   build time**, so an in-network hostname like `http://zero-cache:4848` or a stale
-   `http://localhost:4848` cannot work from anyone else's browser. Changing it means rebuilding the
-   app image, not just restarting it.
+   through the app. From the affected machine and network,
+   `curl -f <ZERO_CACHE_PUBLIC_URL>/keepalive` — that is the same endpoint the container's own
+   healthcheck uses.
+   `docker compose --env-file .env -f docker/docker-compose.yml logs zero-cache` shows the server
+   side.
+2. **Is `ZERO_CACHE_PUBLIC_URL` the browser-reachable origin?** The SPA fetches it at runtime from
+   the app's own `GET /api/config` — `curl -s http://your-host:3000/api/config` shows exactly what
+   the browser is told. An in-network hostname like `http://zero-cache:4848` or a stale
+   `http://localhost:4848` cannot work from anyone else's browser. Changing it is an env change and
+   a container restart; there is nothing to rebuild.
 3. **Does your proxy pass WebSockets?** yapm needs no reverse proxy, but if you added one it has to
    forward the `Upgrade`/`Connection` headers to `zero-cache` and allow long-lived idle
    connections. A proxy that closes idle sockets after 60 seconds produces a permanent
@@ -121,7 +124,7 @@ Work down this list; each step rules out one layer.
 4. **Can `zero-cache` reach the app?** `zero-cache` calls back into the app at `ZERO_QUERY_URL` and
    `ZERO_MUTATE_URL` (`http://yapm:3000/api/zero/...` on the bundled compose) to authorise queries
    and mutations. From the `zero-cache` container:
-   `docker compose -f docker/docker-compose.yml exec zero-cache curl -f http://yapm:3000/readyz`.
+   `docker compose --env-file .env -f docker/docker-compose.yml exec zero-cache curl -f http://yapm:3000/readyz`.
    If that fails, every connection stalls at validation no matter how healthy the socket is.
 5. **Do `ZERO_QUERY_API_KEY` and `ZERO_MUTATE_API_KEY` match?** Both containers read the same two
    variables, so they can only disagree if you set them per-service. A mismatch makes the app
@@ -138,6 +141,6 @@ Work down this list; each step rules out one layer.
    audience. If it still says `http://localhost:3000` on a deployment served from a domain, tokens
    are minted for the wrong audience and rejected on arrival.
 
-If all seven check out and a tab is still cycling, capture `docker compose -f
-docker/docker-compose.yml logs zero-cache` around the failure and open an issue — include the pill
-label people saw, which is the client's half of the story.
+If all seven check out and a tab is still cycling, capture
+`docker compose --env-file .env -f docker/docker-compose.yml logs zero-cache` around the failure and
+open an issue — include the pill label people saw, which is the client's half of the story.

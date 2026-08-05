@@ -154,8 +154,22 @@ export const envSchema = z
         z.enum(['true', 'false']),
       )
       .default('false'),
+    // Permit a boot on the values this repository publishes. Evaluation only: outside production
+    // the shipped defaults are a named warning either way, and in production they are a refusal
+    // unless this is 'true'. See `shipped-defaults.ts` and design §D2.
+    YAPM_ALLOW_INSECURE_DEFAULTS: z
+      .preprocess(
+        (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
+        z.enum(['true', 'false']),
+      )
+      .default('false'),
     ZERO_QUERY_API_KEY: z.string().min(1).optional(),
     ZERO_MUTATE_API_KEY: z.string().min(1).optional(),
+    // The origin the BROWSER opens its sync socket to, served to the SPA at runtime by
+    // `GET /api/config`. It is therefore a public, browser-reachable URL — never the in-network
+    // `http://zero-cache:4848` the app itself could use, which no end user can resolve. Runtime
+    // rather than a Vite build-time constant so one published image serves every host.
+    ZERO_CACHE_PUBLIC_URL: z.string().url().default('http://localhost:4848'),
     // Cycle auto-rollover scheduler (pg-boss on the existing Postgres). Enabled by default;
     // disable it in tests/e2e for deterministic timing. The cron controls how often the
     // idempotent maintenance pass (activate due cycles, complete ended ones) runs.
@@ -434,8 +448,12 @@ export const EXPECTED_FORMAT: Record<string, string> = {
   WEB_DIST_DIR: 'a path to the built SPA directory containing index.html',
   SEED_WORKSPACE_NAME: 'a non-empty string',
   SEED_DEMO_CONTENT: "'true' to seed demo issues on a fresh instance, or 'false'",
+  YAPM_ALLOW_INSECURE_DEFAULTS:
+    "'true' to boot in production on the secrets this repository publishes (evaluation only), or 'false'",
   ZERO_QUERY_API_KEY: 'the shared secret zero-cache sends as X-Api-Key to /api/zero/query',
   ZERO_MUTATE_API_KEY: 'the shared secret zero-cache sends as X-Api-Key to /api/zero/mutate',
+  ZERO_CACHE_PUBLIC_URL:
+    'the browser-reachable zero-cache origin, e.g. http://localhost:4848 or https://zero.example.com',
   CYCLE_MAINTENANCE: "'true' to run the cycle auto-rollover scheduler, or 'false' to disable it",
   CYCLE_MAINTENANCE_CRON:
     "a five-field cron expression (minute hour day-of-month month day-of-week), e.g. '* * * * *' for every minute",

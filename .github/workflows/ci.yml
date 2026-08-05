@@ -129,7 +129,9 @@ jobs:
       YAPM_HOST_PORT: '3210'
       DATABASE_URL: postgres://yapm:yapm@localhost:5440/yapm
       E2E_ZERO_CACHE_URL: http://localhost:4848
-      VITE_ZERO_CACHE_URL: http://localhost:4848
+      # Not a production deployment: the harness runs on its own throwaway secrets and should not
+      # need generated ones to start.
+      YAPM_ALLOW_INSECURE_DEFAULTS: 'true'
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -173,8 +175,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install smoke browser
         run: pnpm exec playwright install --with-deps chromium
+      # Exactly the two commands the README quickstart prints, in that order. The stack boots with
+      # NO YAPM_ALLOW_INSECURE_DEFAULTS, so a `.env` that was not read — or secrets that did not
+      # reach the container — is a failed boot rather than a silently insecure one.
+      - name: Generate .env with real secrets
+        run: node scripts/init-env.mjs
       - name: Build and start the three-container stack
-        run: docker compose -f docker/docker-compose.yml up -d --build --wait --wait-timeout 300
+        run: docker compose --env-file .env -f docker/docker-compose.yml up -d --build --wait --wait-timeout 300
       - name: Wait for /readyz
         run: |
           set -euo pipefail
@@ -187,13 +194,37 @@ jobs:
           done
           echo "::error::/readyz never became ready"
           exit 1
+      # The two steps below pin the BOOT COMPOSITION, which no unit test can: `shipped-defaults.ts`
+      # is exercised in isolation everywhere else, and a build that dropped either its `/readyz`
+      # registration or its call in `index.ts` would still be green.
+      - name: The configuration check is wired up, and the generated secrets reached the container
+        run: |
+          set -euo pipefail
+          curl -fsS http://localhost:3000/readyz | tee /dev/stderr | grep -q 'no shipped defaults in use'
+      - name: A shipped default refuses to boot under NODE_ENV=production
+        run: |
+          set -uo pipefail
+          # `timeout` bounds the regression case: a build that lost the gate would BOOT here and
+          # listen forever, and a hung job is a worse signal than a failed one.
+          if output=$(timeout 120 docker compose --env-file .env -f docker/docker-compose.yml \
+            run --rm --no-deps -e BETTER_AUTH_SECRET=yapm-dev-secret-change-me-in-production \
+            yapm node dist/index.js 2>&1); then
+            echo "$output"
+            echo "::error::the app booted on a shipped BETTER_AUTH_SECRET"
+            exit 1
+          fi
+          echo "$output"
+          if ! echo "$output" | grep -q 'refusing to start'; then
+            echo "::error::the app exited, but not on the shipped-default refusal"
+            exit 1
+          fi
       - name: Assert sign-up and Zero sync work in the prod image
         env:
           SMOKE_URL: http://localhost:3000
         run: node scripts/smoke.mjs
       - name: Compose logs
         if: always()
-        run: docker compose -f docker/docker-compose.yml logs --no-color
+        run: docker compose --env-file .env -f docker/docker-compose.yml logs --no-color
       - name: Tear down
         if: always()
-        run: docker compose -f docker/docker-compose.yml down -v
+        run: docker compose --env-file .env -f docker/docker-compose.yml down -v

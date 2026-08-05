@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { envSchema } from './env.js'
 
@@ -26,7 +26,6 @@ const COMPOSE_ONLY = new Set([
   'ZERO_IMAGE',
   'YAPM_HOST_PORT',
   'YAPM_IMAGE',
-  'VITE_ZERO_CACHE_URL',
 ])
 
 function envExampleKeys(): Set<string> {
@@ -67,6 +66,25 @@ function composeYapmEnvKeys(): Set<string> {
     if (inEnvironment && /^ {0,4}\S/.test(line)) inEnvironment = false
     if (!inEnvironment) continue
     const match = /^ {6}([A-Z][A-Z0-9_]*):/.exec(line)
+    if (match?.[1] !== undefined) keys.add(match[1])
+  }
+  return keys
+}
+
+// The configuration reference in the docs site, read the same way and for the same reason. Two spec
+// scenarios have required "the environment example and the configuration reference are compared
+// against the validated schema … with no drift" since before the page existed. This is what makes
+// the page a checked artifact rather than prose that was true on the day it was written.
+//
+// The shape it parses is one table row per variable, with the name in the FIRST cell in backticks.
+function configurationReferenceKeys(): Set<string> {
+  const source = readFileSync(
+    new URL('../../../docs/src/content/docs/self-hosting/configuration.md', import.meta.url),
+    'utf8',
+  )
+  const keys = new Set<string>()
+  for (const line of source.split('\n')) {
+    const match = /^\|\s*`([A-Z][A-Z0-9_]*)`\s*\|/.exec(line)
     if (match?.[1] !== undefined) keys.add(match[1])
   }
   return keys
@@ -121,7 +139,7 @@ describe('.env.example and the Zod env schema', () => {
   // This change's three variables, named explicitly. The set checks above would catch a missing one,
   // but naming them is what makes a future deletion of one a failing test rather than a silent
   // shrinking of the documented surface.
-  it('documents, declares and ships the three variables this change adds', () => {
+  it('documents, declares and ships the three variables the disclosure change added', () => {
     const passed = composeYapmEnvKeys()
     for (const key of [
       'AI_PM_DIGEST_READY_EMAIL',
@@ -132,5 +150,127 @@ describe('.env.example and the Zod env schema', () => {
       expect(declared.has(key)).toBe(true)
       expect(passed.has(key)).toBe(true)
     }
+  })
+
+  // Same precedent, for deployment-hardening's two. `ZERO_CACHE_PUBLIC_URL` in particular is only
+  // useful if it reaches the container: it replaced a build-time constant, and a runtime variable
+  // that compose does not pass through would be the same defect wearing a different name.
+  it('documents, declares and ships the two variables this change adds', () => {
+    const passed = composeYapmEnvKeys()
+    const reference = configurationReferenceKeys()
+    for (const key of ['YAPM_ALLOW_INSECURE_DEFAULTS', 'ZERO_CACHE_PUBLIC_URL']) {
+      expect(documented.has(key)).toBe(true)
+      expect(declared.has(key)).toBe(true)
+      expect(passed.has(key)).toBe(true)
+      expect(reference.has(key)).toBe(true)
+    }
+  })
+
+  // THE FOURTH LEG. An operator reading the docs site never opens `.env.example`, so a reference
+  // that has drifted from the schema is the same defect as an example that has — one layer further
+  // from the code, where nothing else would catch it. Set equality in BOTH directions, modulo the
+  // same two commented lists: the reference documents every variable the server validates, and it
+  // invents none.
+  it('documents every variable the schema validates in the configuration reference', () => {
+    const reference = configurationReferenceKeys()
+    const missing = sorted(declared).filter((key) => !reference.has(key))
+    expect(missing).toEqual([])
+  })
+
+  it('names nothing in the configuration reference that no one reads', () => {
+    const reference = configurationReferenceKeys()
+    const invented = sorted(reference).filter(
+      (key) => !declared.has(key) && !COMPOSE_ONLY.has(key) && !CONTAINER_SET.has(key),
+    )
+    expect(invented).toEqual([])
+  })
+
+  // The compose-only variables are the ones an operator is MOST likely to need the reference for —
+  // `POSTGRES_PASSWORD` and `ZERO_ADMIN_PASSWORD` are two of the five secrets the hardening page
+  // tells them to change — so their presence is asserted rather than merely permitted.
+  it('carries the compose-only variables in the configuration reference too', () => {
+    const reference = configurationReferenceKeys()
+    const missing = sorted(COMPOSE_ONLY).filter((key) => !reference.has(key))
+    expect(missing).toEqual([])
+  })
+})
+
+// The MECHANISM behind every documented compose command, not the prose around it. `-f docker/…`
+// makes `docker/` Compose's project directory, so a documented command without `--env-file` reads no
+// env file at all and applies every published default in silence — which is how a production deploy
+// came to run on a secret printed in this repository. The README quickstart is only the most visible
+// instance: a restore procedure or a troubleshooting step that recreates a container without it does
+// the same damage, so EVERY documented page is scanned rather than swept by hand.
+
+// One `docker compose …` command, terminated by a newline, an inline-code backtick, or the start of
+// the next one — so `a && docker compose b` is two commands, not one string in which either half's
+// `--env-file` excuses the other.
+const COMPOSE_COMMAND = /docker compose(?:(?!docker compose)[^\n`])*/g
+
+// Two shapes have to be reassembled before scanning, because each is ONE command written across two
+// source lines: a fenced block's `\` continuation, and an inline code span that the prose wrapped.
+function composeCommands(markdown: string): string[] {
+  const lines: string[] = []
+  const prose: string[] = []
+  let fenced = false
+  let pending = ''
+
+  for (const raw of markdown.split('\n')) {
+    if (/^\s*```/.test(raw)) {
+      fenced = !fenced
+      continue
+    }
+    if (!fenced) {
+      prose.push(raw.trim())
+      continue
+    }
+    pending += raw.trim()
+    if (pending.endsWith('\\')) {
+      pending = `${pending.slice(0, -1)} `
+      continue
+    }
+    lines.push(pending)
+    pending = ''
+  }
+  if (pending.length > 0) lines.push(pending)
+
+  // Prose is scanned as one joined string: a wrapped inline span is still one command, and outside
+  // the fences there is no other line-sensitive structure to preserve.
+  lines.push(prose.join(' '))
+
+  return lines.flatMap((line) =>
+    [...line.matchAll(COMPOSE_COMMAND)].map((match) => match[0].trim()),
+  )
+}
+
+function documentedMarkdown(): { path: string; source: string }[] {
+  const roots = ['../../../../README.md', '../../../../SECURITY.md']
+  const docs = new URL('../../../docs/src/content/docs/', import.meta.url)
+  const pages = readdirSync(docs, { recursive: true })
+    .map((entry) => String(entry))
+    .filter((entry) => entry.endsWith('.md') || entry.endsWith('.mdx'))
+    .map((entry) => new URL(entry, docs))
+
+  return [...roots.map((path) => new URL(path, import.meta.url)), ...pages].map((url) => ({
+    path: url.pathname,
+    source: readFileSync(url, 'utf8'),
+  }))
+}
+
+describe('every documented compose command reads the operator env file', () => {
+  const documents = documentedMarkdown()
+
+  it('finds the compose invocations it is meant to be checking', () => {
+    const found = documents.flatMap((document) => composeCommands(document.source))
+    expect(found.filter((command) => command.includes('-f docker/')).length).toBeGreaterThan(0)
+  })
+
+  it('passes --env-file on every invocation that points -f into docker/', () => {
+    const offending = documents.flatMap((document) =>
+      composeCommands(document.source)
+        .filter((command) => command.includes('-f docker/') && !command.includes('--env-file'))
+        .map((command) => `${document.path}: ${command}`),
+    )
+    expect(offending).toEqual([])
   })
 })

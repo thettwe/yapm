@@ -31,6 +31,9 @@ export default defineConfig({
         {
           label: 'Self-hosting',
           items: [
+            { label: 'Deploy & harden', slug: 'self-hosting/deploy' },
+            { label: 'Configuration reference', slug: 'self-hosting/configuration' },
+            { label: 'Upgrade & rollback', slug: 'self-hosting/upgrade' },
             { label: 'Connect GitHub', slug: 'self-hosting/github-connector' },
             { label: 'Enable AI', slug: 'self-hosting/ai-setup' },
             { label: 'The disclosure model', slug: 'self-hosting/ai-disclosure' },

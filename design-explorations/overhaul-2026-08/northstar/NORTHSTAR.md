@@ -16,7 +16,8 @@ Every future build change is judged against these.
 
 Tokens on every file: the Warm LIGHT block from `packages/ui/src/styles/globals.css`
 verbatim, plus the three daylight extensions (row hairline `#efe9dd`, statusline bg
-`#f4efe5`, `--urgent-soft rgba(204,90,64,.08)`). Inline SVG throughout, no motion, no
+`#f4efe5`, `--urgent-soft rgba(204,90,64,.08)`; the build later shipped these to every
+theme block plus a fourth, `--status-urgent-ink` — PR #31). Inline SVG throughout, no motion, no
 iframes, flat + hairlines; elevation only on the drawn transients (delivery's peek, ia's
 menu/peek/how).
 

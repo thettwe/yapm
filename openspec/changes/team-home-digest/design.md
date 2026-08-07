@@ -273,3 +273,41 @@ Pre-seeded scoping decisions (made at proposal time; refine only with evidence):
   never claim what it cannot verify.
 - **NEXT shows no times** (D3): `retro` has no scheduled-time field, so the ritual row
   carries state, not an invented clock time.
+
+Decisions made while building pass 1 (model + primitives):
+
+- **"Active cycle" means `status === 'active'` only** (earliest by `compareCycles`), NOT the
+  `currentCycle` fallback to an upcoming cycle. A cycle that has not started has no day band, no
+  "Day N of M" and no scope-against-plan, so featuring it would force every hero fact to be
+  invented; the degraded no-active-cycle form (D3) is the honest rendering until it starts.
+- **`computeDeliverySignal` gained an optional third `now` parameter** (default `Date.now()`, so
+  every existing caller is byte-identical in behavior). `reviewAgeMs` was the one wall-clock read
+  inside the reused seam, and `buildTeamHome` must be deterministic under an explicit `now`;
+  recomputing the age outside the seam would have duplicated its review-vs-opened rule.
+- **Scope band arithmetic**: each in-cycle issue draws exactly one block — done → `landed`,
+  else added-mid-cycle (`cycleAssignedAt > startDate`, the `metrics/scope.ts` predicate) →
+  `added`, else `open`. The displayed numbers are committed = in-cycle minus added (carry-ins
+  included), landed = all done, added = all added-mid-cycle. The mock's 12/8/3 over a 15-block
+  band is exactly this shape.
+- **The mono age vocabulary is `formatHomeAge`** in the model ("41m", "31h" up to 48h, then
+  "3d") — the mock renders waiting ages in hours past one day, which the issue list's
+  `formatReviewAge` ("1d") cannot say; the two coexist because they annotate different drawings.
+- **Reuse pass findings (task 2.2)**: `StatusGlyph` (status arcs), `PriorityMark` (priority
+  ticks) and `RealityStrip` (icon-based PR/CI/deploy/age summary) are reused as-is where the mock
+  shows them. What the mock's track vocabulary ADDS — node-and-segment tracks, the `//` break,
+  the `empty-urgent` node, day band, scope band, tick-bar, triage dots, cadence chart — is not a
+  variant of any of those components, so they are new app-local drawings in `apps/web/src/home/`
+  (D12) rather than forks: `drawn.tsx` (DayBand, ScopeBand, TickBar, TriageDots, RealityTrack
+  with the break) and `cadence-chart.tsx`. DayBand/ScopeBand render as flex spans exactly like
+  the mock's own drawing (the segments must stretch to the column); the tick-bar, dots, track and
+  chart are static inline SVG/spans. No motion anywhere.
+- **Derived daylight tokens**: warm-light carries the mock's literal values; every other theme
+  block computes the same three tokens from its own palette — hairline =
+  `color-mix(in oklch, var(--border), var(--bg) 50%)`, statusline =
+  `color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%)`, urgent-soft =
+  `color-mix(in srgb, var(--status-urgent) 8%, transparent)` — so the tokens can never be missing
+  in a theme (D11).
+- **The overnight card's provenance names environments** (falling back to the repo when a
+  deployment carries none): the mock's "deploy #142 #143" numbers do not exist on the deployment
+  row (`externalId` is an opaque provider id), so the provenance states the fact yapm has —
+  "N releases went live · production".

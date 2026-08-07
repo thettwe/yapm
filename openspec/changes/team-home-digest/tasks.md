@@ -9,51 +9,51 @@ API), `reference/` for TanStack Router + Tailwind 4.3, the two mocks
 
 ## 1. The page model (packages/schema) — build pass 1
 
-- [ ] 1.1 Create `packages/schema/src/zero/team-home.ts` with `buildTeamHome(input): TeamHomeModel`
+- [x] 1.1 Create `packages/schema/src/zero/team-home.ts` with `buildTeamHome(input): TeamHomeModel`
       taking structural rows (cycles, issues-with-linked-subtree, triage inbox, deployments,
       digest, retros, notifications, team) plus explicit `now` and `viewerId`. Reuse
       `computeDeliverySignal` / `computeDivergence` / `assembleLinkedEntities` /
       `buildDeploymentIndex`, `currentCycle`-style cycle selection (`compareCycles`), and
       the `metrics/scope.ts` added-mid-cycle semantics. No `Date.now()` inside; no identity
       field anywhere in the output types except the viewer's own rows (design §D1).
-- [ ] 1.2 Attention model (§D2): four disjoint classes by precedence
+- [x] 1.2 Attention model (§D2): four disjoint classes by precedence
       (`status_behind_merge` → checks failing → open PR review age > 24h → triage inbox),
       per-class evidence data (track break, failing tick ages, waiting ages, dot count),
       and `attention.count` = the summed distinct-issue total used everywhere.
-- [ ] 1.3 Hero model (§D3): day band segments, day N of M + ends-weekday (UTC, matching
+- [x] 1.3 Hero model (§D3): day band segments, day N of M + ends-weekday (UTC, matching
       `formatCycleRange`), status words, scope numbers/band (committed/landed/added),
       artifact-chip presence flags, NEXT list (open retro only, no times), days left, and
       the no-active-cycle degraded form.
-- [ ] 1.4 Narrative (§D3): stored digest narrative passthrough when ready content exists;
+- [x] 1.4 Narrative (§D3): stored digest narrative passthrough when ready content exists;
       else the deterministic two-sentence fallback over real counts with the quiet-day
       degradation. Pure, templated, unit-testable strings.
-- [ ] 1.5 Since-yesterday model (§D4): 24h window; overnight deployments joined to done
+- [x] 1.5 Since-yesterday model (§D4): 24h window; overnight deployments joined to done
       issues via the merge-commit index (fallback to repo/environment fact); viewer-issue
       review outcomes; team-scoped unread-notification summary; per-card fold flags.
-- [ ] 1.6 Yours model (§D5): viewer's unfinished rows ordered by `updatedAt` desc, bifact
+- [x] 1.6 Yours model (§D5): viewer's unfinished rows ordered by `updatedAt` desc, bifact
       phrase dictionary keyed on (status, signal) predicates, waiting-on-others collapse,
       the team-level zero-open-reviews predicate for the reciprocal line, footnote text.
-- [ ] 1.7 Runway model (§D6): unassigned/untriaged todo-or-backlog issues of the active
+- [x] 1.7 Runway model (§D6): unassigned/untriaged todo-or-backlog issues of the active
       cycle, urgent-first ordering, predicate-keyed why-clear phrase dictionary.
-- [ ] 1.8 Cadence + shipped models (§D7–§D8): `cadenceWeeks` UTC weekly buckets with month
+- [x] 1.8 Cadence + shipped models (§D7–§D8): `cadenceWeeks` UTC weekly buckets with month
       labels, today caret index, retro ticks from closed retros; shipped list with
       Live / Built-not-live from `deployedAt`.
-- [ ] 1.9 Footline composer (§D9): assemble the rule clauses from the fold flags actually
+- [x] 1.9 Footline composer (§D9): assemble the rule clauses from the fold flags actually
       computed; no static aspirational string.
-- [ ] 1.10 Export the model API from `packages/schema/src/index.ts`;
+- [x] 1.10 Export the model API from `packages/schema/src/index.ts`;
       `pnpm --filter @yapm/schema typecheck test` green.
 
 ## 2. Tokens and drawn primitives — build pass 1
 
-- [ ] 2.1 Add `--row-hairline`, `--statusline-bg`, `--urgent-soft` to every theme block in
+- [x] 2.1 Add `--row-hairline`, `--statusline-bg`, `--urgent-soft` to every theme block in
       `packages/ui/src/styles/globals.css` (warm-light literal mock values; other variants
       derived from their own tokens, §D11) and wire them through the `@theme inline`
       mapping so utilities like `border-row-hairline` exist.
-- [ ] 2.2 Search-first reuse pass: identify the existing status glyph, priority mark, and
+- [x] 2.2 Search-first reuse pass: identify the existing status glyph, priority mark, and
       reality-strip components the issue list renders; list what is reusable as-is vs.
       what the mock's track vocabulary adds (the `//` break, empty-urgent node). Extend,
       don't fork, where the same component can carry the addition.
-- [ ] 2.3 Build the new drawn components in `apps/web/src/home/` as static inline SVG, no
+- [x] 2.3 Build the new drawn components in `apps/web/src/home/` as static inline SVG, no
       motion: `DayBand`, `ScopeBand`, `TickBar`, `TriageDots`, `BrokenTrack` (or the
       extended strip), `CadenceChart` (weeks, dots, months, today caret, retro ticks) —
       tokens only, sized per the mock.
@@ -94,7 +94,7 @@ API), `reference/` for TanStack Router + Tailwind 4.3, the two mocks
 
 ## 5. Tests
 
-- [ ] 5.1 Unit (`packages/schema/src/zero/team-home.test.ts`): the falsifiable check —
+- [x] 5.1 Unit (`packages/schema/src/zero/team-home.test.ts`): the falsifiable check —
       with fixture rows (one `status_behind_merge` issue, one failing-checks issue, two
       PRs waiting > 24h, three triage rows) `buildTeamHome` reports `attention.count === 7`
       and the same value in every place the model exposes it; an issue matching two

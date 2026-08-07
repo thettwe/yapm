@@ -48,6 +48,10 @@
   --color-status-urgent: var(--status-urgent);
   --color-signal-sync: var(--signal-sync);
 
+  --color-row-hairline: var(--row-hairline);
+  --color-statusline-bg: var(--statusline-bg);
+  --color-urgent-soft: var(--urgent-soft);
+
   --radius-control: var(--rad-control);
   --radius-pill: var(--rad-pill);
   --radius-card: var(--rad-card);
@@ -124,6 +128,13 @@
   --status-urgent: #cc5a40;
   --signal-sync: #3e8c63;
 
+  /* Daylight extensions (team Home digest). Warm-light carries the mock's literal values; every
+     other theme block derives the same three tokens from its own palette below, so no theme can
+     ever miss them. */
+  --row-hairline: #efe9dd;
+  --statusline-bg: #f4efe5;
+  --urgent-soft: rgba(204, 90, 64, 0.08);
+
   /* Syntax colours. Each is one of this preset's own hues — the in-review violet, the done green,
      the in-progress amber, the accent, the text ramp — with its lightness moved until it clears
      4.5:1 against this preset's `--bg-hover`, the code block's surface. `--code-type` is the string
@@ -180,6 +191,10 @@
   --status-urgent: #e2593f;
   --signal-sync: #3f9e7c;
 
+  --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
+  --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
+  --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+
   --code-keyword: #5860d5;
   --code-string: #307a5f;
   --code-number: #8f6417;
@@ -231,6 +246,10 @@
   --status-done: #2f9068;
   --status-urgent: #d9741c;
   --signal-sync: #2f9068;
+
+  --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
+  --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
+  --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
 
   --code-keyword: #6253de;
   --code-string: #277756;
@@ -287,6 +306,10 @@
   --status-urgent: #df6a4e;
   --signal-sync: #5eb489;
 
+  --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
+  --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
+  --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+
   --code-keyword: #9089da;
   --code-string: #59a57b;
   --code-number: #e7ab44;
@@ -324,6 +347,10 @@
   --status-urgent: #e2593f;
   --signal-sync: #3f9e7c;
 
+  --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
+  --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
+  --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+
   --code-keyword: #6e79f0;
   --code-string: #3f9e7c;
   --code-number: #e0a63c;
@@ -360,6 +387,10 @@
   --status-done: #4fae83;
   --status-urgent: #f0872e;
   --signal-sync: #4fae83;
+
+  --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
+  --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
+  --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
 
   --code-keyword: #9b8cf5;
   --code-string: #4fae83;

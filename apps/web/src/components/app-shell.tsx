@@ -14,7 +14,17 @@ import { InboxBadge } from '@/notifications/inbox-badge'
 import { PmDigestsEntry } from '@/pm-digest/digests-entry'
 import { useConnectionSummary } from '@/zero/connection'
 
-export function AppShell({ current, children }: { current: string; children: ReactNode }) {
+export function AppShell({
+  current,
+  wide = false,
+  children,
+}: {
+  current: string
+  // The Home digest's editorial column (960px in the mock) — an additive opt-in; every other
+  // page keeps the default measure.
+  wide?: boolean
+  children: ReactNode
+}) {
   const connection = useConnectionSummary()
   const { data: session } = useSession()
   const [workspace] = useQuery(queries.workspace.current())
@@ -34,7 +44,12 @@ export function AppShell({ current, children }: { current: string; children: Rea
           {...(session?.user.email ? { email: session.user.email } : {})}
         />
       </header>
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 p-6">
+      <main
+        className={cn(
+          'mx-auto flex w-full flex-1 flex-col gap-8 p-6',
+          wide ? 'max-w-[960px]' : 'max-w-3xl',
+        )}
+      >
         {workspace ? null : (
           <p className="text-muted-foreground text-sm" role="status">
             Loading workspace…

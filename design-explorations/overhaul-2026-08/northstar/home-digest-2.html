@@ -1,0 +1,699 @@
+<!doctype html>
+<!--
+  northstar/home-digest-2 — CANDIDATE, round two: the composed morning. Same moment as
+  the canonical set (Cycle 2 day 9, attention = 4), but each band now takes the strongest
+  drawn form the exploration already owns, instead of five identical row-lists:
+    hero        — a spread: editorial left, drawn vitals right (mornings' scope band,
+                  next rituals, days left). The dead right column finally works.
+    attention   — each exception row carries its drawn evidence: the broken track with
+                  the // mark (ENG-116), waiting ages, the red check tick-bar, triage dots.
+    since yday  — three cards (mornings' card grammar): OVERNIGHT / DECIDED / YOUR REVIEW,
+                  each with a mono kicker and provenance line.
+    yours       — issues-row anatomy: status arc + reality track + bifact (say/git).
+    ready       — handoff-queue anatomy: priority ticks on runway, brief thumbnails on
+                  crit, the verify row's track; crit lane carries crit_at.
+    cadence     — annotated (retro tick + today caret), drawn wider.
+    shipped     — two-column grid, half the height.
+    decided     — real decision chips (PLAY-decisions anatomy), not bare rows.
+  Adaptive, stated on-surface: the composed footline says the rules — attention first,
+  your lens, crit unfolds as crit_at nears, empty bands fold away. The companion file
+  home-digest-2-quiet.html renders day 12 of the same cycle to PROVE the folding: no
+  attention band, hero degraded to two quiet sentences, YOURS empty-state, lanes folded.
+  Tokens: Warm LIGHT verbatim + daylight extensions. Inline SVG, no motion, flat +
+  hairlines; cards are the only elevated surfaces, and they sit at rest (no shadow).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Home · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  body.full .frame{height:auto;overflow:visible}
+  body.full .scroll{overflow:visible}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ content ============ */
+  .scroll{flex:1;overflow:auto}
+  .content{max-width:960px;margin:0 auto;padding:44px 64px 64px}
+
+  /* hero — the spread: editorial left, drawn vitals right */
+  .hero h1{font-size:52px;font-weight:700;letter-spacing:-.032em;line-height:1}
+  .day-band{display:flex;align-items:center;gap:5px;height:12px;margin-top:22px}
+  .day-band i{flex:1;height:6px;border-radius:2.5px;background:var(--row-hairline)}
+  .day-band i.past{background:var(--accent-line)}
+  .day-band i.today{background:var(--accent);height:12px}
+  .h-day{margin-top:10px;color:var(--text-2);font-size:12.5px}
+  .h-grid{display:grid;grid-template-columns:1fr 288px;gap:44px;margin-top:20px}
+  .h-words{display:flex;gap:24px;font-size:15px}
+  .h-word{display:flex;align-items:center;gap:9px;color:var(--text-1);font-weight:500}
+  .h-word .d{width:8px;height:8px;border-radius:50%;flex:none}
+  .h-word.attn{color:var(--status-urgent);font-weight:600}
+  .h-word.attn .d{border-radius:2px}
+  .h-lede{margin-top:18px;font-size:14.5px;line-height:1.65;color:var(--text-1)}
+  .h-lede b{font-weight:600}
+  .h-lede .urgent{color:var(--status-urgent);font-weight:600}
+  .h-artifacts{margin-top:18px;display:flex;align-items:center;gap:10px}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;
+        border:1px solid var(--border-strong);border-radius:6px;background:rgba(255,255,255,.7);
+        font-family:var(--mono);font-size:11.5px;color:var(--text-1);white-space:nowrap}
+  .chip .aff{color:var(--text-3)}
+  .c-ink{color:var(--text-2)}
+
+  /* vitals — drawn facts only, no sentences */
+  .vitals{border-left:1px solid var(--border);padding-left:28px;
+          display:flex;flex-direction:column;gap:18px;align-self:start}
+  .v-kick{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--text-3)}
+  .scope-nums{display:flex;gap:16px;align-items:baseline;margin-top:8px}
+  .sn{display:flex;align-items:baseline;gap:5px}
+  .sn .n{font-size:20px;font-weight:700;letter-spacing:-.02em}
+  .sn .l{font-size:11px;color:var(--text-2)}
+  .sn.added .n{color:var(--status-in-progress)}
+  .scope-band{display:flex;gap:3px;margin-top:9px}
+  .sb{height:11px;flex:1;border-radius:2.5px}
+  .sb.landed{background:var(--status-done)}
+  .sb.open{background:transparent;border:1.4px solid var(--border-strong)}
+  .sb.added{background:transparent;border:1.4px solid var(--status-in-progress);position:relative}
+  .sb.added::after{content:"+";position:absolute;inset:0;display:flex;align-items:center;
+       justify-content:center;color:var(--status-in-progress);font-size:9px;font-weight:700;line-height:1}
+  .v-next{display:flex;flex-direction:column;gap:9px;margin-top:8px}
+  .v-next .vrow{display:flex;align-items:center;gap:9px;font-size:12.5px}
+  .v-next .vrow .g{width:13px;height:13px;flex:none;color:var(--text-2)}
+  .v-next .when{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .v-days{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+
+  /* section bands */
+  .band{margin-top:50px;border-top:1px solid var(--border);padding-top:24px}
+  .band-h{display:flex;align-items:baseline;gap:10px}
+  .band-h .t{font-size:11px;letter-spacing:.09em;font-weight:700;color:var(--text-1)}
+  .band-h .n{font-family:var(--mono);font-size:12px;color:var(--text-3)}
+  .band-h .m{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .band-h .onward{margin-left:auto;color:var(--text-2);font-size:12.5px;font-weight:600}
+  .band-h .onward .c{color:var(--text-3);font-weight:400;margin-left:3px}
+  .band-body{margin-top:18px}
+
+  /* needs attention — each exception carries its drawn evidence */
+  .a-row{display:flex;align-items:center;gap:12px;height:50px;padding:0 12px;
+         border-top:1px solid var(--row-hairline);font-size:13.5px}
+  .a-row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .a-row.lift{background:var(--urgent-soft)}
+  .a-row .d{width:8px;height:8px;border-radius:2px;flex:none}
+  .a-row .d.urgent{background:var(--status-urgent)}
+  .a-row .d.amber{background:var(--status-in-progress)}
+  .a-row .d.dim{background:transparent;border:1.5px solid var(--border-strong);border-radius:50%}
+  .a-row b{font-weight:600}
+  .a-row.urgent-txt{color:var(--status-urgent)}
+  .a-row .ev{margin-left:auto;display:flex;align-items:center;gap:5px}
+  .a-row .where{font-family:var(--mono);font-size:11px;color:var(--text-3);
+                width:76px;text-align:right;flex:none}
+  .a-row .go{color:var(--text-3);font-size:13px}
+
+  /* reality track — same vocabulary on every page */
+  .track{display:flex;align-items:center;width:118px;flex:none}
+  .tn{width:7px;height:7px;border-radius:50%;flex:none}
+  .tn.done{background:var(--status-done)}
+  .tn.rev-wait{background:transparent;border:1.6px solid var(--status-in-review);width:8px;height:8px}
+  .tn.open{background:var(--status-in-review)}
+  .tn.fail{background:var(--status-urgent);border-radius:1.5px}
+  .tn.empty{background:transparent;border:1.4px solid var(--border-strong)}
+  .tn.empty-urgent{background:transparent;border:1.6px solid var(--status-urgent)}
+  .tseg{height:2px;flex:1;background:var(--status-done)}
+  .tseg.review{background:var(--status-in-review)}
+  .tseg.dotted{background:repeating-linear-gradient(90deg,var(--border-strong) 0 3px,transparent 3px 6px);height:1.5px}
+  .tbreak{color:var(--status-urgent);font-family:var(--mono);font-weight:500;font-size:11px;
+          padding:0 3px;letter-spacing:-.05em}
+  .ages{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .tickbar{display:flex;align-items:flex-end;gap:2.5px;height:14px}
+  .tickbar i{width:3px;border-radius:1px;background:var(--border-strong)}
+  .tickbar i.bad{background:var(--status-urgent)}
+  .dots4{display:flex;gap:4px}
+  .dots4 i{width:7px;height:7px;border-radius:50%;border:1.5px solid var(--border-strong)}
+
+  /* since yesterday — three cards, mornings' card grammar */
+  .cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .card{position:relative;background:var(--bg-elevated);border:1px solid var(--border);
+        border-radius:var(--rad-card);padding:14px 16px 13px}
+  .card .kick{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--text-3)}
+  .card .cgo{position:absolute;top:13px;right:15px;color:var(--text-3);font-size:12px}
+  .card .cbody{margin-top:11px;font-size:13.5px;line-height:1.5}
+  .card .prov{margin-top:11px;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .card .lrow{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px}
+  .card .lrow .d{width:7px;height:7px;border-radius:50%;background:var(--status-done);flex:none}
+  .card .lrow .tm{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .card .dsent{display:flex;gap:9px;align-items:flex-start}
+  .card .dsent .g{width:14px;height:14px;flex:none;color:var(--text-2);margin-top:2px}
+  .card .ok{display:flex;gap:9px;align-items:flex-start}
+  .card .ok .g{width:14px;height:14px;flex:none;color:var(--status-in-review);margin-top:2px}
+  .card .ok b{font-weight:600}
+
+  /* yours — issues-row anatomy: arc + track + bifact */
+  .y-row{display:flex;align-items:center;gap:12px;height:52px;padding:0 12px;
+         border-top:1px solid var(--row-hairline);font-size:13.5px}
+  .y-row .st{width:14px;height:14px;flex:none}
+  .y-row .st svg{display:block}
+  .y-row .id{font-family:var(--mono);font-size:12px;color:var(--text-3);width:62px;flex:none}
+  .y-row .title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .y-row .spring{flex:1}
+  .bi{text-align:right;flex:none}
+  .bi .say{font-size:12.5px;font-weight:600;color:var(--text-2);display:block}
+  .bi .say.urgent{color:var(--status-urgent)}
+  .bi .say .prov{display:inline-flex;vertical-align:-1px;margin-left:5px;color:var(--text-3)}
+  .bi .git{font-family:var(--mono);font-size:10.5px;color:var(--text-3);display:block;margin-top:2px}
+  .y-row .go{color:var(--text-3);font-size:12px;width:10px;text-align:right}
+  .collapsed{display:flex;align-items:center;gap:10px;height:36px;padding:0 12px;
+             border-top:1px solid var(--row-hairline);font-size:12.5px;color:var(--text-2)}
+  .collapsed:last-of-type{border-bottom:1px solid var(--row-hairline)}
+  .collapsed .tri{color:var(--text-3);font-size:10px}
+  .collapsed .ok{color:var(--status-done);font-size:12px}
+  .collapsed .m{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .foot{margin-top:12px;padding:0 12px;font-family:var(--mono);font-size:10.5px;
+        line-height:1.6;color:var(--text-3)}
+  .foot .k{color:var(--text-2)}
+
+  /* ready for you — handoff-queue anatomy in lanes */
+  .lane-h{display:flex;align-items:center;gap:9px;height:36px;background:var(--bg-hover);
+          border-top:1px solid var(--row-hairline);padding:0 14px;font-size:12.5px;font-weight:600}
+  .lane-h .ring{width:10px;height:10px;border-radius:50%;flex:none;background:transparent}
+  .lane-h .ring.runway{border:2.3px solid var(--status-done)}
+  .lane-h .ring.crit{border:1.7px dashed var(--status-backlog)}
+  .lane-h .ring.verify{border:2.3px solid var(--status-in-review)}
+  .lane-h .n{font-family:var(--mono);font-weight:400;font-size:11.5px;color:var(--text-3)}
+  .lane-h .act{margin-left:auto;display:flex;align-items:center;gap:7px;
+               color:var(--text-2);font-weight:600;font-size:12px}
+  .lane-h .act .c{color:var(--text-3);font-weight:400}
+  .q-row{display:flex;align-items:center;gap:12px;height:44px;padding:0 14px;
+         border-top:1px solid var(--row-hairline);font-size:13.5px}
+  .q-row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .q-row .pri{width:14px;height:14px;flex:none;color:var(--text-2)}
+  .q-row .pri.urgent{color:var(--status-urgent)}
+  .q-row .id{font-family:var(--mono);font-size:12px;color:var(--text-3);width:62px;flex:none}
+  .q-row .title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .q-row .spring{flex:1}
+  .q-row .phrase{font-size:12.5px;color:var(--text-2);white-space:nowrap}
+  .q-row .phrase.urgent{color:var(--status-urgent);font-weight:600}
+  .q-row .go{color:var(--text-3);font-size:12px;width:10px;text-align:right}
+  .q-row.thumbed{height:52px}
+  .thumb{width:26px;height:34px;flex:none}
+
+  /* ship cadence — annotated */
+  .months{display:flex;color:var(--text-3);font-family:var(--mono);font-size:10.5px;margin-top:2px}
+
+  /* shipped — two columns */
+  .ship-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:44px}
+  .s-row{display:flex;align-items:center;gap:12px;height:40px;
+         border-top:1px solid var(--row-hairline);font-size:13.5px}
+  .ship-col .s-row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .s-row .id{font-family:var(--mono);font-size:12px;color:var(--text-3);width:58px;flex:none}
+  .s-row .title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .s-row .spring{flex:1}
+  .s-row .badge{display:flex;align-items:center;gap:7px;font-size:12.5px;white-space:nowrap}
+  .badge .d{width:7px;height:7px;border-radius:50%;flex:none}
+  .badge.live{color:var(--status-done);font-weight:600}
+  .badge.live .d{background:var(--status-done)}
+  .badge.built{color:var(--text-2)}
+  .badge.built .d{background:transparent;border:1.5px solid var(--status-done)}
+
+  /* decided — the chip, as designed in the decisions play */
+  .dstack{display:flex;flex-direction:column;gap:10px}
+  .dchip{position:relative;background:var(--bg-elevated);border:1px solid var(--border);
+         border-radius:10px;padding:11px 40px 10px 14px}
+  .dchip .l1{display:flex;align-items:center;gap:9px;font-size:13.5px}
+  .dchip .l1 .g{width:14px;height:14px;flex:none;color:var(--text-2)}
+  .dchip .l2{display:flex;align-items:center;gap:10px;margin-top:6px;padding-left:23px;
+             font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .dchip .rev{display:inline-flex;align-items:center;height:18px;padding:0 8px;
+              border:1px solid var(--border-strong);border-radius:var(--rad-pill);
+              font-family:var(--mono);font-size:10px;color:var(--text-2);
+              background:rgba(255,255,255,.6);white-space:nowrap}
+  .dchip .cgo{position:absolute;top:12px;right:14px;color:var(--text-3);font-size:12px}
+
+  /* the composed line + onward footer */
+  .composed{margin-top:48px;font-family:var(--mono);font-size:10.5px;line-height:1.6;
+            color:var(--text-3)}
+  .composed .k{color:var(--text-2)}
+  .onward-foot{margin-top:16px;border-top:1px solid var(--border);padding-top:22px;
+               display:flex;align-items:center;font-size:12.5px;font-weight:600;color:var(--text-2)}
+  .onward-foot .c{color:var(--text-3);font-weight:400;margin-left:2px}
+  .onward-foot .div{color:var(--border-strong);margin:0 10px;font-weight:400}
+  .onward-foot .hint{margin-left:auto;color:var(--text-3);font-weight:400;font-size:12.5px;
+                     display:flex;align-items:center;gap:7px}
+
+  /* ============ band 3 — statusline (identical on every page) ============ */
+  .statusline{height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="g-cycles" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M10 1.4 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="5.5" cy="14.5" r="1.9" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-retro" viewBox="0 0 20 20">
+      <path d="M14.5 4.7 A7 7 0 1 0 16.9 8.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M15.4 10.4 L16.9 8.6 L18.6 10.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="g-decide" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="10" cy="10" r="2.7" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-crit" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-dasharray="2.6 3.4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-progress" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 0 1 10 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-review" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 1 1 3 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="p-2" viewBox="0 0 14 14">
+      <path d="M10 9.6 V5.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-opacity=".35"/>
+      <path d="M4 9.6 V6.8 M7 9.6 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="p-urgent" viewBox="0 0 14 14">
+      <path d="M7 2.6 V8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+      <circle cx="7" cy="11.2" r="1.1" fill="currentColor"/>
+    </symbol>
+    <symbol id="m-github" viewBox="0 0 16 16">
+      <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab active">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>4</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="scroll">
+  <div class="content">
+
+    <!-- hero: the cycle's document left, its vitals drawn right -->
+    <section class="hero">
+      <h1>Cycle 2</h1>
+      <div class="day-band" aria-hidden="true">
+        <i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="today"></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="h-day">Day 9 of 14 · ends Friday</div>
+      <div class="h-grid">
+        <div>
+          <div class="h-words">
+            <span class="h-word"><span class="d" style="background:var(--status-done)"></span>8 shipped</span>
+            <span class="h-word"><span class="d" style="background:var(--status-in-review)"></span>3 in review</span>
+            <span class="h-word attn"><span class="d" style="background:var(--status-urgent)"></span>4 need attention</span>
+          </div>
+          <p class="h-lede">Nine days in, the cycle is ahead of its own pace — <b>eight shipped, six
+            already live</b>, and about 3 releases a week reach production now, up from 1 a week in
+            February. The checkout release went out Aug&nbsp;4, first of three that week; the dots
+            have been denser since the retro asked for smaller PRs. One thing would surprise you
+            later: <span class="urgent">ENG-116 merged clean a day ago, and the board hasn't
+            noticed.</span></p>
+          <div class="h-artifacts">
+            <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-cycles"/></svg><span>Cycle report</span><span class="aff">·</span></span>
+            <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-retro"/></svg><span>Wrapped</span><span class="aff">·</span></span>
+          </div>
+        </div>
+        <aside class="vitals">
+          <div>
+            <div class="v-kick">SCOPE · AGAINST ITS PLAN</div>
+            <div class="scope-nums">
+              <span class="sn"><span class="n">12</span><span class="l">committed</span></span>
+              <span class="sn"><span class="n">8</span><span class="l">landed</span></span>
+              <span class="sn added"><span class="n">3</span><span class="l">added</span></span>
+            </div>
+            <div class="scope-band">
+              <span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb open"></span><span class="sb open"></span><span class="sb open"></span><span class="sb open"></span><span class="sb added"></span><span class="sb added"></span><span class="sb added"></span>
+            </div>
+          </div>
+          <div>
+            <div class="v-kick">NEXT</div>
+            <div class="v-next">
+              <div class="vrow"><svg class="g" viewBox="0 0 20 20"><use href="#g-crit"/></svg>Crit<span class="when">2:00 today</span></div>
+              <div class="vrow"><svg class="g" viewBox="0 0 20 20"><use href="#g-retro"/></svg>Retro<span class="when">Friday 4:00</span></div>
+            </div>
+          </div>
+          <div class="v-days">5 days left in the cycle</div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- needs attention — the four exceptions, each with its evidence drawn -->
+    <section class="band">
+      <div class="band-h"><span class="t">NEEDS ATTENTION</span><span class="n">4</span></div>
+      <div class="band-body">
+        <div class="a-row urgent-txt lift"><span class="d urgent"></span>
+          <span><b>1</b> done in git, not on the board</span>
+          <span class="ev">
+            <span class="track"><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tbreak">//</span><span class="tn empty-urgent"></span></span>
+          </span>
+          <span class="where">ENG-116</span><span class="go">›</span></div>
+        <div class="a-row"><span class="d amber"></span>
+          <span><b>2</b> waiting on review over a day</span>
+          <span class="ev"><span class="ages">31h · 26h</span></span>
+          <span class="where">Board</span><span class="go">›</span></div>
+        <div class="a-row"><span class="d urgent"></span>
+          <span>Checks failing on <b>1</b> change</span>
+          <span class="ev">
+            <span class="tickbar"><i style="height:7px"></i><i style="height:10px"></i><i style="height:6px"></i><i style="height:11px"></i><i class="bad" style="height:13px"></i><i class="bad" style="height:9px"></i></span>
+            <span class="ages" style="margin-left:6px">red 41m</span>
+          </span>
+          <span class="where">ENG-115</span><span class="go">›</span></div>
+        <div class="a-row"><span class="d dim"></span>
+          <span><b>4</b> new in triage</span>
+          <span class="ev"><span class="dots4"><i></i><i></i><i></i><i></i></span></span>
+          <span class="where">Triage</span><span class="go">›</span></div>
+      </div>
+    </section>
+
+    <!-- since yesterday — three cards; facts that expire once seen -->
+    <section class="band">
+      <div class="band-h"><span class="t">SINCE YESTERDAY</span><span class="n">3</span>
+        <span class="m">you left Tue 6:40p</span>
+        <span class="onward">Inbox<span class="c">›</span></span></div>
+      <div class="band-body">
+        <div class="cards3">
+          <div class="card"><span class="kick">OVERNIGHT</span><span class="cgo">›</span>
+            <div class="cbody">
+              <div class="lrow"><span class="d"></span><span>Order history search</span><span class="tm">23:41</span></div>
+              <div class="lrow"><span class="d"></span><span>Tax rounding on splits</span><span class="tm">02:17</span></div>
+            </div>
+            <div class="prov">2 releases went live · deploy #142 #143</div>
+          </div>
+          <div class="card"><span class="kick">DECIDED</span><span class="cgo">›</span>
+            <div class="cbody">
+              <div class="dsent"><svg class="g" viewBox="0 0 20 20"><use href="#g-decide"/></svg>
+                <span>Guest carts persist for 30 days, then expire silently.</span></div>
+            </div>
+            <div class="prov">carts · ENG-122 · from a thread of 5</div>
+          </div>
+          <div class="card"><span class="kick">YOUR REVIEW</span><span class="cgo">›</span>
+            <div class="cbody">
+              <div class="ok"><svg class="g" viewBox="0 0 20 20"><use href="#g-review"/></svg>
+                <span><b>Approved</b> — merge when you're ready.</span></div>
+            </div>
+            <div class="prov">ENG-117 · Marta · 9h ago</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- yours — held work in the issues-row anatomy: arc, track, bifact -->
+    <section class="band">
+      <div class="band-h"><span class="t">YOURS</span><span class="n">5</span></div>
+      <div class="band-body">
+        <div class="y-row">
+          <span class="st" style="color:var(--status-in-review)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-review"/></svg></span>
+          <span class="id">ENG-117</span><span class="title">Rate-limit the coupon endpoint</span>
+          <span class="spring"></span>
+          <span class="track"><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg review"></span><span class="tn open"></span><span class="tseg dotted"></span><span class="tn empty"></span></span>
+          <span class="bi"><span class="say">Approved — merge when ready</span>
+            <span class="git">checks green · approved 9h</span></span>
+          <span class="go">›</span></div>
+        <div class="y-row">
+          <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+          <span class="id">ENG-113</span><span class="title">Split shipping addresses at checkout</span>
+          <span class="spring"></span>
+          <span class="track"><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg dotted"></span><span class="tn empty"></span><span class="tseg dotted"></span><span class="tn empty"></span></span>
+          <span class="bi"><span class="say">In progress</span>
+            <span class="git">change open since Tue · 14 files</span></span>
+          <span class="go">›</span></div>
+        <div class="y-row">
+          <span class="st" style="color:var(--status-urgent)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+          <span class="id">ENG-115</span><span class="title">Retry failed webhook deliveries</span>
+          <span class="spring"></span>
+          <span class="track"><span class="tn open"></span><span class="tseg review"></span><span class="tn fail"></span><span class="tseg dotted"></span><span class="tn rev-wait"></span><span class="tseg dotted"></span><span class="tn empty"></span></span>
+          <span class="bi"><span class="say urgent">Checks failing — the fix is yours<span class="prov"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+            <span class="git">red 41m · webhook_retry.test.ts</span></span>
+          <span class="go">›</span></div>
+        <div class="collapsed"><span class="tri">▸</span>
+          <span>2 of yours are waiting on others</span>
+          <span class="m">review 16h · release</span></div>
+        <div class="collapsed"><span class="ok">✓</span>
+          <span>No reviews owed — nobody is waiting on you</span></div>
+        <div class="foot"><span class="k">yours =</span> assignee you · status &lt; done ·
+          ordered by last movement · your work only — never compared</div>
+      </div>
+    </section>
+
+    <!-- ready for you — the three lanes, each row wearing its seam -->
+    <section class="band">
+      <div class="band-h"><span class="t">READY FOR YOU</span><span class="n">6</span></div>
+      <div class="band-body">
+        <div class="lane-h"><span class="ring runway"></span>Runway<span class="n">3</span>
+          <span class="act">Runway<span class="c">→</span></span></div>
+        <div class="q-row">
+          <span class="pri urgent"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-urgent"/></svg></span>
+          <span class="id">ENG-120</span><span class="title">Migrate legacy coupon codes</span>
+          <span class="spring"></span><span class="phrase urgent">Urgent — nothing blocks a start</span><span class="go">›</span></div>
+        <div class="q-row">
+          <span class="pri"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+          <span class="id">ENG-124</span><span class="title">Refund receipt email</span>
+          <span class="spring"></span><span class="phrase">Design approved — ready to build</span><span class="go">›</span></div>
+        <div class="q-row">
+          <span class="pri"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+          <span class="id">ENG-1</span><span class="title">Focus lost after closing the palette</span>
+          <span class="spring"></span><span class="phrase">Repro attached — all yours</span><span class="go">›</span></div>
+
+        <div class="lane-h" style="border-top:0"><span class="ring crit"></span>Crit<span class="n">2</span>
+          <span class="act"><span class="c">2:00 today</span></span></div>
+        <div class="q-row thumbed">
+          <svg class="thumb" viewBox="0 0 26 34"><rect x=".5" y=".5" width="25" height="33" rx="3.5" fill="#fdfbf7" stroke="#dcd3c4"/><rect x="4" y="5" width="12" height="2.4" rx="1.2" fill="#cfc5b4"/><rect x="4" y="11" width="18" height="4.5" rx="1.5" fill="rgba(189,88,55,.14)"/><rect x="4" y="18" width="18" height="4" rx="1.5" fill="#f0eae0"/><rect x="4" y="25" width="18" height="4.5" rx="2" fill="#cfc5b4"/></svg>
+          <span class="id">ENG-118</span><span class="title">Empty cart state</span>
+          <span class="spring"></span>
+          <span class="bi"><span class="say">Brief ready — needs a mock</span>
+            <span class="git">why: 80 words from product · waiting 2d</span></span>
+          <span class="go">›</span></div>
+        <div class="q-row thumbed">
+          <svg class="thumb" viewBox="0 0 26 34"><rect x=".5" y=".5" width="25" height="33" rx="3.5" fill="#fdfbf7" stroke="#dcd3c4"/><rect x="4" y="5" width="16" height="2.4" rx="1.2" fill="#cfc5b4"/><rect x="4" y="10" width="18" height="2" rx="1" fill="#e7e0d4"/><rect x="4" y="14" width="18" height="2" rx="1" fill="#e7e0d4"/><rect x="4" y="18" width="14" height="2" rx="1" fill="#e7e0d4"/><rect x="4" y="25" width="18" height="4.5" rx="2" fill="#f0eae0"/></svg>
+          <span class="id">ENG-122</span><span class="title">Order status page for guests</span>
+          <span class="spring"></span>
+          <span class="bi"><span class="say">Needs a flow — 2 screens expected</span>
+            <span class="git">flagged at planning · follows ENG-121</span></span>
+          <span class="go">›</span></div>
+
+        <div class="lane-h" style="border-top:0"><span class="ring verify"></span>Verify<span class="n">1</span></div>
+        <div class="q-row thumbed">
+          <span class="track" style="width:96px"><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg dotted"></span><span class="tn empty"></span></span>
+          <span class="id">ENG-119</span><span class="title">Persist cart across sessions</span>
+          <span class="spring"></span>
+          <span class="bi"><span class="say">Built — running on staging</span>
+            <span class="git">merged 4h · preview up · 3 things to check</span></span>
+          <span class="go">›</span></div>
+      </div>
+    </section>
+
+    <!-- ship cadence — annotated, drawn wide -->
+    <section class="band">
+      <div class="band-h"><span class="t">SHIP CADENCE</span>
+        <span class="onward">Delivery<span class="c">›</span></span></div>
+      <div class="band-body">
+        <svg id="cad"></svg>
+        <div class="months" id="months"></div>
+      </div>
+    </section>
+
+    <!-- shipped this cycle — two columns -->
+    <section class="band">
+      <div class="band-h"><span class="t">SHIPPED THIS CYCLE</span><span class="n">8</span></div>
+      <div class="band-body">
+        <div class="ship-grid">
+          <div class="ship-col">
+            <div class="s-row"><span class="id">ENG-108</span><span class="title">Promo codes at checkout</span>
+              <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+            <div class="s-row"><span class="id">ENG-104</span><span class="title">Order confirmation emails</span>
+              <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+            <div class="s-row"><span class="id">ENG-102</span><span class="title">Saved addresses in account</span>
+              <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+            <div class="s-row"><span class="id">ENG-107</span><span class="title">Faster product images</span>
+              <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+          </div>
+          <div class="ship-col">
+            <div class="s-row"><span class="id">ENG-112</span><span class="title">Order history search</span>
+              <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+            <div class="s-row"><span class="id">ENG-99</span><span class="title">Tax rounding on split shipments</span>
+              <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+            <div class="s-row"><span class="id">ENG-110</span><span class="title">Gift wrap option at checkout</span>
+              <span class="spring"></span><span class="badge built"><span class="d"></span>Built — not live</span></div>
+            <div class="s-row"><span class="id">ENG-114</span><span class="title">Cancel an order before it ships</span>
+              <span class="spring"></span><span class="badge built"><span class="d"></span>Built — not live</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- decided this cycle — the record's chips; no owner column, ever -->
+    <section class="band">
+      <div class="band-h"><span class="t">DECIDED THIS CYCLE</span><span class="n">3</span>
+        <span class="onward">Decisions<span class="c">›</span></span></div>
+      <div class="band-body">
+        <div class="dstack">
+          <div class="dchip"><span class="cgo">›</span>
+            <div class="l1"><svg class="g" viewBox="0 0 20 20"><use href="#g-decide"/></svg>
+              <span>Guest carts persist for 30 days, then expire silently.</span></div>
+            <div class="l2"><span>carts · ENG-122 · from a thread of 5 · Aug 6</span></div>
+          </div>
+          <div class="dchip"><span class="cgo">›</span>
+            <div class="l1"><svg class="g" viewBox="0 0 20 20"><use href="#g-decide"/></svg>
+              <span>Saved cards ship behind a flag until fraud review clears.</span></div>
+            <div class="l2"><span>checkout · ENG-116 · from a thread of 12 · Aug 5</span>
+              <span class="rev">resurfaces · Cycle 3 planning</span></div>
+          </div>
+          <div class="dchip"><span class="cgo">›</span>
+            <div class="l1"><svg class="g" viewBox="0 0 20 20"><use href="#g-decide"/></svg>
+              <span>Refund emails come from billing@, not noreply@.</span></div>
+            <div class="l2"><span>refunds · ENG-124 · from a thread of 3 · Aug 1</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- the page says how it composed itself; the quiet file proves the folding -->
+    <div class="composed"><span class="k">composed =</span> attention first · your lens
+      engineer · crit unfolds as 2:00 nears · empty bands fold away</div>
+
+    <div class="onward-foot">
+      <span>Issues<span class="c">›</span></span><span class="div">·</span>
+      <span>Delivery in full<span class="c">›</span></span><span class="div">·</span>
+      <span>Retro<span class="c">›</span></span><span class="div">·</span>
+      <span>Roadmap<span class="c">›</span></span>
+      <span class="hint"><span class="kbd">⌘K</span>goes anywhere</span>
+    </div>
+
+  </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">4 need attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+
+<script>
+if(location.hash==="#full")document.body.classList.add("full");
+const NS="http://www.w3.org/2000/svg";
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e}
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const weeks=[2,2,2,3,2,2,3,3,2,3,3,4];
+const failed={5:1};
+const superseded={3:0,9:2};
+const retroWeek=7, slot=52, W=weeks.length*slot, dotR=3.6;
+(function(){
+  const s=document.getElementById("cad"),H=84,base=H-8;
+  s.setAttribute("width",W);s.setAttribute("height",H);
+  s.appendChild(el("line",{x1:0,x2:W,y1:base,y2:base,stroke:css("--row-hairline"),"stroke-width":1}));
+  // the retro tick — the moment the dots got denser
+  const rx=retroWeek*slot-slot/2+slot/2;
+  s.appendChild(el("line",{x1:rx,x2:rx,y1:14,y2:base,stroke:css("--border-strong"),
+    "stroke-width":1,"stroke-dasharray":"2 3"}));
+  const t1=el("text",{x:rx-6,y:11,"text-anchor":"end",fill:css("--text-3"),
+    "font-family":css("--mono"),"font-size":"10px"});
+  t1.textContent="retro · smaller PRs";s.appendChild(t1);
+  // today caret at the right edge
+  const tx=W-6;
+  s.appendChild(el("path",{d:`M${tx-4} ${H} L${tx} ${H-6} L${tx+4} ${H}`,fill:css("--accent")}));
+  weeks.forEach((n,wi)=>{
+    for(let j=0;j<n;j++){
+      const cx=wi*slot+slot/2,cy=base-5-j*11;
+      let fill=css("--status-done"),stroke="none";
+      if(failed[wi]===j){fill=css("--status-urgent")}
+      else if(superseded[wi]===j){fill=css("--bg");stroke=css("--status-done")}
+      const c=el("circle",{cx,cy,r:dotR,fill});
+      if(stroke!=="none"){c.setAttribute("stroke",stroke);c.setAttribute("stroke-width",1.4)}
+      s.appendChild(c);
+    }
+  });
+})();
+(function(){
+  const m=document.getElementById("months"),
+        spans=[["May",2],["Jun",4],["Jul",4],["Aug",2]];
+  spans.forEach(([n,w])=>{
+    const sp=document.createElement("span");
+    sp.textContent=n;sp.style.display="inline-block";sp.style.width=(w*slot)+"px";
+    m.appendChild(sp);
+  });
+})();
+</script>
+</body>
+</html>

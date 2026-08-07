@@ -51,8 +51,15 @@ const presets = {
 
 const HEX = /^#[0-9a-f]{6}$/i
 
+// Follows single-token `var(...)` aliases within the same block (the dark presets alias
+// `--status-urgent-ink` to `--status-urgent`) before demanding a hex literal.
 function hex(tokens: Record<string, string>, name: string): string {
-  const value = tokens[name]
+  let value = tokens[name]
+  for (let hops = 0; value !== undefined && hops < 4; hops += 1) {
+    const ref = value.match(/^var\((--[\w-]+)\)$/)
+    if (ref?.[1] === undefined) break
+    value = tokens[ref[1]]
+  }
   if (value === undefined) throw new Error(`missing token ${name}`)
   expect(value, name).toMatch(HEX)
   return value
@@ -212,6 +219,34 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     const chip = wash(t['--bg-hover'] ?? '', hex(t, '--bg-elevated'), 0.6)
     for (const ink of ['--text-1', '--text-2'] as const) {
       expect(contrastRatio(hex(t, ink), chip), ink).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
+  // The team Home digest's urgent TEXT — the hero "N need attention", the divergence class row on
+  // its `--urgent-soft` wash, the YOURS urgent say line, the runway urgent phrase, the `//` break
+  // mark — all carry `--status-urgent-ink`, which must meet AA normal over the base surface AND
+  // over the urgent-soft composite (the wash is defined as the urgent hue at 8% over the surface,
+  // reconstructed here the same way). The darks alias the ink to `--status-urgent`, which this
+  // assertion proves is already enough there.
+  it('the urgent text ink meets AA on the base surface and the urgent-soft wash (>= 4.5)', () => {
+    const bg = hex(t, '--bg')
+    const urgentWash = wash(hex(t, '--status-urgent'), bg, 0.08)
+    for (const surface of [bg, urgentWash]) {
+      expect(contrastRatio(hex(t, '--status-urgent-ink'), surface)).toBeGreaterThanOrEqual(
+        AA_NORMAL,
+      )
+    }
+  })
+
+  // The digest's urgent NON-TEXT glyphs — attention dots and squares, failing ticks, the broken
+  // track's urgent node border — keep `--status-urgent` and must clear the 3:1 non-text bar
+  // (WCAG 1.4.11) on the base surface and on the urgent-soft wash of the divergence row. Pinned
+  // because editorial light's original urgent orange measured 2.91 against its own wash.
+  it('the urgent glyph colour is distinguishable on the base surface and its wash (>= 3.0)', () => {
+    const bg = hex(t, '--bg')
+    const urgent = hex(t, '--status-urgent')
+    for (const surface of [bg, wash(urgent, bg, 0.08)]) {
+      expect(contrastRatio(urgent, surface)).toBeGreaterThanOrEqual(AA_LARGE)
     }
   })
 

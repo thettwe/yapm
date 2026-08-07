@@ -1,0 +1,476 @@
+<!doctype html>
+<!--
+  northstar/home-digest — CANDIDATE revision of home.html: Home as the logged-in user's
+  digest. The canonical file is untouched; this is judged against it.
+  What was added, and from where:
+    SINCE YESTERDAY  — new band, the overnight diff (a-row phrase rows), Inbox doorway;
+                       expiring facts only, in the daylight phrase register.
+    YOURS            — repairs NAV-hub's stated loss ("My Issues has no drawn doorway").
+                       mornings graduates folded in: why-it's-clear phrases, the collapsed
+                       waiting-on-others row, the reciprocal no-reviews-owed fact, the mono
+                       derivation footnote. Your-own-work only; nothing compares people.
+    DECIDED THIS CYCLE — PLAY-decisions chip-row (glyph · sentence · area · key · date,
+                       no owner column), one revisit pill, Decisions doorway.
+    onward footer    — revived from horizon/home-hub (dropped in assembly).
+    Crit lane        — carries its crit_at time ("2:00 today"), the one schedule fact.
+  Disciplines kept: one attention number (4 everywhere — YOURS shows ENG-115 through a
+  personal lens, never a second count), hero stays the only editorial voice, gbar and
+  statusline byte-identical to the set, chrome = labels / surfaces = phrases.
+  Tokens: Warm LIGHT block verbatim + daylight extensions. Inline SVG, no motion,
+  flat + hairlines, elevation for transients only (none open here).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Home · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  body.full .frame{height:auto;overflow:visible}
+  body.full .scroll{overflow:visible}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ content ============ */
+  .scroll{flex:1;overflow:auto}
+  .content{max-width:960px;margin:0 auto;padding:44px 64px 64px}
+
+  /* hero — the cycle, the one document on this page */
+  .hero h1{font-size:52px;font-weight:700;letter-spacing:-.032em;line-height:1}
+  .day-band{display:flex;align-items:center;gap:5px;height:12px;margin-top:22px}
+  .day-band i{flex:1;height:6px;border-radius:2.5px;background:var(--row-hairline)}
+  .day-band i.past{background:var(--accent-line)}
+  .day-band i.today{background:var(--accent);height:12px}
+  .h-day{margin-top:10px;color:var(--text-2);font-size:12.5px}
+  .h-words{margin-top:18px;display:flex;gap:26px;font-size:15px}
+  .h-word{display:flex;align-items:center;gap:9px;color:var(--text-1);font-weight:500}
+  .h-word .d{width:8px;height:8px;border-radius:50%;flex:none}
+  .h-word.attn{color:var(--status-urgent);font-weight:600}
+  .h-word.attn .d{border-radius:2px}
+  .h-lede{margin-top:20px;max-width:640px;font-size:14.5px;line-height:1.65;color:var(--text-1)}
+  .h-lede b{font-weight:600}
+  .h-lede .urgent{color:var(--status-urgent);font-weight:600}
+  .h-artifacts{margin-top:18px;display:flex;align-items:center;gap:10px}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;
+        border:1px solid var(--border-strong);border-radius:6px;background:rgba(255,255,255,.7);
+        font-family:var(--mono);font-size:11.5px;color:var(--text-1);white-space:nowrap}
+  .chip .aff{color:var(--text-3)}
+  .c-ink{color:var(--text-2)}
+
+  /* section bands */
+  .band{margin-top:50px;border-top:1px solid var(--border);padding-top:24px}
+  .band-h{display:flex;align-items:baseline;gap:10px}
+  .band-h .t{font-size:11px;letter-spacing:.09em;font-weight:700;color:var(--text-1)}
+  .band-h .n{font-family:var(--mono);font-size:12px;color:var(--text-3)}
+  .band-h .onward{margin-left:auto;color:var(--text-2);font-size:12.5px;font-weight:600}
+  .band-h .onward .c{color:var(--text-3);font-weight:400;margin-left:3px}
+  .band-body{margin-top:18px}
+
+  /* needs attention + since yesterday — each row a doorway */
+  .a-row{display:flex;align-items:center;gap:12px;height:47px;
+         border-top:1px solid var(--row-hairline);font-size:13.5px}
+  .a-row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .a-row .d{width:8px;height:8px;border-radius:2px;flex:none}
+  .a-row .d.urgent{background:var(--status-urgent)}
+  .a-row .d.amber{background:var(--status-in-progress)}
+  .a-row .d.dim{background:transparent;border:1.5px solid var(--border-strong);border-radius:50%}
+  .a-row .d.live{background:var(--status-done);border-radius:50%}
+  .a-row .d.review{background:var(--status-in-review);border-radius:50%}
+  .a-row .glyph{width:14px;height:14px;flex:none;color:var(--text-2);margin:0 -3px}
+  .a-row b{font-weight:600}
+  .a-row.urgent-txt{color:var(--status-urgent)}
+  .a-row .where{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .a-row .go{color:var(--text-3);font-size:13px;margin-left:10px}
+
+  /* ready for you — the three lanes inline */
+  .lane-h{display:flex;align-items:center;gap:9px;height:36px;background:var(--bg-hover);
+          border-top:1px solid var(--row-hairline);padding:0 14px;font-size:12.5px;font-weight:600}
+  .lane-h .ring{width:10px;height:10px;border-radius:50%;flex:none;background:transparent}
+  .lane-h .ring.runway{border:2.3px solid var(--status-done)}
+  .lane-h .ring.crit{border:1.7px dashed var(--status-backlog)}
+  .lane-h .ring.verify{border:2.3px solid var(--status-in-review)}
+  .lane-h .n{font-family:var(--mono);font-weight:400;font-size:11.5px;color:var(--text-3)}
+  .lane-h .act{margin-left:auto;display:flex;align-items:center;gap:7px;
+               color:var(--text-2);font-weight:600;font-size:12px}
+  .lane-h .act .c{color:var(--text-3);font-weight:400}
+  .q-row{display:flex;align-items:center;gap:12px;height:40px;padding:0 14px;
+         border-top:1px solid var(--row-hairline);font-size:13.5px}
+  .q-row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .q-row .id{font-family:var(--mono);font-size:12px;color:var(--text-3);width:62px;flex:none}
+  .q-row .title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .q-row .spring{flex:1}
+  .q-row .phrase{font-size:12.5px;color:var(--text-2);white-space:nowrap}
+  .q-row .phrase.urgent{color:var(--status-urgent);font-weight:600}
+  .q-row .go{color:var(--text-3);font-size:12px;width:10px;text-align:right}
+
+  /* yours — held rows share q-row; the two collapsed facts + the derivation footnote */
+  .y-row .id{width:62px}
+  .collapsed{display:flex;align-items:center;gap:10px;height:36px;padding:0 14px;
+             border-top:1px solid var(--row-hairline);font-size:12.5px;color:var(--text-2)}
+  .collapsed:last-of-type{border-bottom:1px solid var(--row-hairline)}
+  .collapsed .tri{color:var(--text-3);font-size:10px}
+  .collapsed .ok{color:var(--status-done);font-size:12px}
+  .collapsed .m{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .foot{margin-top:12px;padding:0 14px;font-family:var(--mono);font-size:10.5px;
+        line-height:1.6;color:var(--text-3)}
+  .foot .k{color:var(--text-2)}
+
+  /* ship cadence mini */
+  .months{display:flex;color:var(--text-3);font-family:var(--mono);font-size:10.5px;margin-top:2px}
+
+  /* shipped list */
+  .s-row{display:flex;align-items:center;gap:14px;height:40px;
+         border-top:1px solid var(--row-hairline);font-size:13.5px}
+  .s-row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .s-row .id{font-family:var(--mono);font-size:12px;color:var(--text-3);width:64px;flex:none}
+  .s-row .title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .s-row .spring{flex:1}
+  .s-row .badge{display:flex;align-items:center;gap:7px;font-size:12.5px;white-space:nowrap}
+  .badge .d{width:7px;height:7px;border-radius:50%;flex:none}
+  .badge.live{color:var(--status-done);font-weight:600}
+  .badge.live .d{background:var(--status-done)}
+  .badge.built{color:var(--text-2)}
+  .badge.built .d{background:transparent;border:1.5px solid var(--status-done)}
+
+  /* decided this cycle — the record's chip-row: no owner column, ever */
+  .d-row{display:flex;align-items:center;gap:12px;height:44px;
+         border-top:1px solid var(--row-hairline);font-size:13.5px}
+  .d-row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .d-row .glyph{width:14px;height:14px;flex:none;color:var(--text-2)}
+  .d-row .sent{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .d-row .spring{flex:1}
+  .d-row .rev{display:inline-flex;align-items:center;height:18px;padding:0 8px;flex:none;
+              border:1px solid var(--border-strong);border-radius:var(--rad-pill);
+              font-family:var(--mono);font-size:10px;color:var(--text-2);
+              background:rgba(255,255,255,.6);white-space:nowrap}
+  .d-row .meta{font-family:var(--mono);font-size:11px;color:var(--text-3);white-space:nowrap}
+  .d-row .go{color:var(--text-3);font-size:13px}
+
+  /* onward footer — revived from home-hub */
+  .onward-foot{margin-top:54px;border-top:1px solid var(--border);padding-top:22px;
+               display:flex;align-items:center;font-size:12.5px;font-weight:600;color:var(--text-2)}
+  .onward-foot .c{color:var(--text-3);font-weight:400;margin-left:2px}
+  .onward-foot .div{color:var(--border-strong);margin:0 10px;font-weight:400}
+  .onward-foot .hint{margin-left:auto;color:var(--text-3);font-weight:400;font-size:12.5px;
+                     display:flex;align-items:center;gap:7px}
+
+  /* ============ band 3 — statusline (identical on every page) ============ */
+  .statusline{height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="g-cycles" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M10 1.4 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="5.5" cy="14.5" r="1.9" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-retro" viewBox="0 0 20 20">
+      <path d="M14.5 4.7 A7 7 0 1 0 16.9 8.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M15.4 10.4 L16.9 8.6 L18.6 10.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="g-decide" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="10" cy="10" r="2.7" fill="currentColor"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab active">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>4</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="scroll">
+  <div class="content">
+
+    <!-- the hero is Home's one document: editorial voice lives here and only here -->
+    <section class="hero">
+      <h1>Cycle 2</h1>
+      <div class="day-band" aria-hidden="true">
+        <i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="today"></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="h-day">Day 9 of 14 · ends Friday</div>
+      <div class="h-words">
+        <span class="h-word"><span class="d" style="background:var(--status-done)"></span>8 shipped</span>
+        <span class="h-word"><span class="d" style="background:var(--status-in-review)"></span>3 in review</span>
+        <span class="h-word attn"><span class="d" style="background:var(--status-urgent)"></span>4 need attention</span>
+      </div>
+      <p class="h-lede">Nine days in, the cycle is ahead of its own pace — <b>eight shipped, six
+        already live</b>, and about 3 releases a week reach production now, up from 1 a week in
+        February. The checkout release went out Aug&nbsp;4, first of three that week; the dots
+        have been denser since the retro asked for smaller PRs. One thing would surprise you
+        later: <span class="urgent">ENG-116 merged clean a day ago, and the board hasn't
+        noticed.</span></p>
+      <div class="h-artifacts">
+        <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-cycles"/></svg><span>Cycle report</span><span class="aff">·</span></span>
+        <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-retro"/></svg><span>Wrapped</span><span class="aff">·</span></span>
+      </div>
+    </section>
+
+    <!-- needs attention — the four exception classes, each row a doorway -->
+    <section class="band">
+      <div class="band-h"><span class="t">NEEDS ATTENTION</span><span class="n">4</span></div>
+      <div class="band-body">
+        <div class="a-row urgent-txt"><span class="d urgent"></span>
+          <span><b>1</b> done in git, not on the board</span>
+          <span class="where">ENG-116</span><span class="go">›</span></div>
+        <div class="a-row"><span class="d amber"></span>
+          <span><b>2</b> waiting on review over a day</span>
+          <span class="where">Board</span><span class="go">›</span></div>
+        <div class="a-row"><span class="d urgent"></span>
+          <span>Checks failing on <b>1</b> change</span>
+          <span class="where">ENG-115</span><span class="go">›</span></div>
+        <div class="a-row"><span class="d dim"></span>
+          <span><b>4</b> new in triage</span>
+          <span class="where">Triage</span><span class="go">›</span></div>
+      </div>
+    </section>
+
+    <!-- since yesterday — the overnight diff; facts that expire once seen -->
+    <section class="band">
+      <div class="band-h"><span class="t">SINCE YESTERDAY</span><span class="n">3</span>
+        <span class="onward">Inbox<span class="c">›</span></span></div>
+      <div class="band-body">
+        <div class="a-row"><span class="d live"></span>
+          <span><b>2</b> releases went live overnight</span>
+          <span class="where">ENG-112 · ENG-99</span><span class="go">›</span></div>
+        <div class="a-row"><svg class="glyph" viewBox="0 0 20 20"><use href="#g-decide"/></svg>
+          <span>A decision landed — guest carts persist for 30 days</span>
+          <span class="where">ENG-122</span><span class="go">›</span></div>
+        <div class="a-row"><span class="d review"></span>
+          <span>Your rate-limit change came back approved</span>
+          <span class="where">ENG-117</span><span class="go">›</span></div>
+      </div>
+    </section>
+
+    <!-- yours — what you hold; the drawn doorway My Issues never had -->
+    <section class="band">
+      <div class="band-h"><span class="t">YOURS</span><span class="n">5</span></div>
+      <div class="band-body">
+        <div class="q-row y-row"><span class="id">ENG-117</span><span class="title">Rate-limit the coupon endpoint</span>
+          <span class="spring"></span><span class="phrase">Approved — merge when ready</span><span class="go">›</span></div>
+        <div class="q-row y-row"><span class="id">ENG-113</span><span class="title">Split shipping addresses at checkout</span>
+          <span class="spring"></span><span class="phrase">In progress — change open since Tue</span><span class="go">›</span></div>
+        <div class="q-row y-row"><span class="id">ENG-115</span><span class="title">Retry failed webhook deliveries</span>
+          <span class="spring"></span><span class="phrase urgent">Checks failing — the fix is yours</span><span class="go">›</span></div>
+        <div class="collapsed"><span class="tri">▸</span>
+          <span>2 of yours are waiting on others</span>
+          <span class="m">review 16h · release</span></div>
+        <div class="collapsed"><span class="ok">✓</span>
+          <span>No reviews owed — nobody is waiting on you</span></div>
+        <div class="foot"><span class="k">yours =</span> assignee you · status &lt; done ·
+          ordered by last movement · your work only — never compared</div>
+      </div>
+    </section>
+
+    <!-- ready for you — the three lanes, inline -->
+    <section class="band">
+      <div class="band-h"><span class="t">READY FOR YOU</span><span class="n">6</span></div>
+      <div class="band-body">
+        <div class="lane-h"><span class="ring runway"></span>Runway<span class="n">3</span>
+          <span class="act">Runway<span class="c">→</span></span></div>
+        <div class="q-row"><span class="id">ENG-120</span><span class="title">Migrate legacy coupon codes</span>
+          <span class="spring"></span><span class="phrase urgent">Urgent — nothing blocks a start</span><span class="go">›</span></div>
+        <div class="q-row"><span class="id">ENG-124</span><span class="title">Refund receipt email</span>
+          <span class="spring"></span><span class="phrase">Design approved — ready to build</span><span class="go">›</span></div>
+        <div class="q-row"><span class="id">ENG-1</span><span class="title">Focus lost after closing the palette</span>
+          <span class="spring"></span><span class="phrase">Repro attached — all yours</span><span class="go">›</span></div>
+
+        <div class="lane-h" style="border-top:0"><span class="ring crit"></span>Crit<span class="n">2</span>
+          <span class="act"><span class="c">2:00 today</span></span></div>
+        <div class="q-row"><span class="id">ENG-118</span><span class="title">Empty cart state</span>
+          <span class="spring"></span><span class="phrase">Brief ready — needs a mock</span><span class="go">›</span></div>
+        <div class="q-row"><span class="id">ENG-122</span><span class="title">Order status page for guests</span>
+          <span class="spring"></span><span class="phrase">Needs a flow — 2 screens expected</span><span class="go">›</span></div>
+
+        <div class="lane-h" style="border-top:0"><span class="ring verify"></span>Verify<span class="n">1</span></div>
+        <div class="q-row"><span class="id">ENG-119</span><span class="title">Persist cart across sessions</span>
+          <span class="spring"></span><span class="phrase">Built — running on staging</span><span class="go">›</span></div>
+      </div>
+    </section>
+
+    <!-- ship cadence mini — drawn, not narrated -->
+    <section class="band">
+      <div class="band-h"><span class="t">SHIP CADENCE</span>
+        <span class="onward">Delivery<span class="c">›</span></span></div>
+      <div class="band-body">
+        <svg id="cad"></svg>
+        <div class="months" id="months"></div>
+      </div>
+    </section>
+
+    <!-- shipped this cycle -->
+    <section class="band">
+      <div class="band-h"><span class="t">SHIPPED THIS CYCLE</span><span class="n">8</span></div>
+      <div class="band-body">
+        <div class="s-row"><span class="id">ENG-108</span><span class="title">Promo codes at checkout</span>
+          <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+        <div class="s-row"><span class="id">ENG-104</span><span class="title">Order confirmation emails</span>
+          <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+        <div class="s-row"><span class="id">ENG-102</span><span class="title">Saved addresses in the account page</span>
+          <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+        <div class="s-row"><span class="id">ENG-107</span><span class="title">Faster image loading on product pages</span>
+          <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+        <div class="s-row"><span class="id">ENG-112</span><span class="title">Order history search</span>
+          <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+        <div class="s-row"><span class="id">ENG-99</span><span class="title">Tax rounding on split shipments</span>
+          <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+        <div class="s-row"><span class="id">ENG-110</span><span class="title">Gift wrap option at checkout</span>
+          <span class="spring"></span><span class="badge built"><span class="d"></span>Built — not live yet</span></div>
+        <div class="s-row"><span class="id">ENG-114</span><span class="title">Cancel an order before it ships</span>
+          <span class="spring"></span><span class="badge built"><span class="d"></span>Built — not live yet</span></div>
+      </div>
+    </section>
+
+    <!-- decided this cycle — the record's newest sentences; no owner column, ever -->
+    <section class="band">
+      <div class="band-h"><span class="t">DECIDED THIS CYCLE</span><span class="n">3</span>
+        <span class="onward">Decisions<span class="c">›</span></span></div>
+      <div class="band-body">
+        <div class="d-row"><svg class="glyph" viewBox="0 0 20 20"><use href="#g-decide"/></svg>
+          <span class="sent">Guest carts persist for 30 days, then expire silently.</span>
+          <span class="spring"></span><span class="meta">carts · ENG-122 · Aug 6</span><span class="go">›</span></div>
+        <div class="d-row"><svg class="glyph" viewBox="0 0 20 20"><use href="#g-decide"/></svg>
+          <span class="sent">Saved cards ship behind a flag until fraud review clears.</span>
+          <span class="spring"></span><span class="rev">resurfaces · Cycle 3 planning</span>
+          <span class="meta">checkout · ENG-116 · Aug 5</span><span class="go">›</span></div>
+        <div class="d-row"><svg class="glyph" viewBox="0 0 20 20"><use href="#g-decide"/></svg>
+          <span class="sent">Refund emails come from billing@, not noreply@.</span>
+          <span class="spring"></span><span class="meta">refunds · ENG-124 · Aug 1</span><span class="go">›</span></div>
+      </div>
+    </section>
+
+    <!-- onward — the long tail's drawn doorways, revived from home-hub -->
+    <div class="onward-foot">
+      <span>Issues<span class="c">›</span></span><span class="div">·</span>
+      <span>Delivery in full<span class="c">›</span></span><span class="div">·</span>
+      <span>Retro<span class="c">›</span></span><span class="div">·</span>
+      <span>Roadmap<span class="c">›</span></span>
+      <span class="hint"><span class="kbd">⌘K</span>goes anywhere</span>
+    </div>
+
+  </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">4 need attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+
+<script>
+if(location.hash==="#full")document.body.classList.add("full");
+const NS="http://www.w3.org/2000/svg";
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e}
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const weeks=[2,2,2,3,2,2,3,3,2,3,3,4];
+const failed={5:1};
+const superseded={3:0,9:2};
+const slot=34,W=weeks.length*slot,dotR=3.6;
+(function(){
+  const s=document.getElementById("cad"),H=62;
+  s.setAttribute("width",W);s.setAttribute("height",H);
+  s.appendChild(el("line",{x1:0,x2:W,y1:H-6,y2:H-6,stroke:css("--row-hairline"),"stroke-width":1}));
+  weeks.forEach((n,wi)=>{
+    for(let j=0;j<n;j++){
+      const cx=wi*slot+slot/2,cy=H-11-j*11;
+      let fill=css("--status-done"),stroke="none";
+      if(failed[wi]===j){fill=css("--status-urgent")}
+      else if(superseded[wi]===j){fill=css("--bg");stroke=css("--status-done")}
+      const c=el("circle",{cx,cy,r:dotR,fill});
+      if(stroke!=="none"){c.setAttribute("stroke",stroke);c.setAttribute("stroke-width",1.4)}
+      s.appendChild(c);
+    }
+  });
+})();
+(function(){
+  const m=document.getElementById("months"),
+        spans=[["May",2],["Jun",4],["Jul",4],["Aug",2]];
+  spans.forEach(([n,w])=>{
+    const sp=document.createElement("span");
+    sp.textContent=n;sp.style.display="inline-block";sp.style.width=(w*slot)+"px";
+    m.appendChild(sp);
+  });
+})();
+</script>
+</body>
+</html>

@@ -709,6 +709,49 @@ export {
 } from './zero/retro/seed.js'
 export type { Schema } from './zero/schema.js'
 export { schema, zql } from './zero/schema.js'
+export type {
+  AttentionChecksRow,
+  AttentionDivergenceRow,
+  DayBandSegment,
+  TeamHomeAttention,
+  TeamHomeCadence,
+  TeamHomeCadenceWeek,
+  TeamHomeCycleRow,
+  TeamHomeDeploymentRow,
+  TeamHomeDigestRow,
+  TeamHomeHero,
+  TeamHomeHeroCycle,
+  TeamHomeInboxFact,
+  TeamHomeInput,
+  TeamHomeIssueLinkRow,
+  TeamHomeIssueRow,
+  TeamHomeModel,
+  TeamHomeNarrative,
+  TeamHomeNotificationRow,
+  TeamHomeOvernight,
+  TeamHomePullRequestRow,
+  TeamHomeRetroRow,
+  TeamHomeReviewFact,
+  TeamHomeRunway,
+  TeamHomeRunwayRow,
+  TeamHomeScope,
+  TeamHomeShipped,
+  TeamHomeShippedRow,
+  TeamHomeSinceYesterday,
+  TeamHomeStrip,
+  TeamHomeTeamRow,
+  TeamHomeTriageRow,
+  TeamHomeYours,
+  TeamHomeYoursRow,
+} from './zero/team-home.js'
+export {
+  buildTeamHome,
+  CADENCE_WEEK_COUNT,
+  formatHomeAge,
+  REVIEW_OUTCOME_LABEL,
+  TRIAGE_DOT_CAP,
+  YOURS_FOOTNOTE,
+} from './zero/team-home.js'
 export type { IssueRef, WorkGraphContext, WorkGraphMutation } from './zero/work-graph.js'
 export {
   applyWorkGraphMutation,

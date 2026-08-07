@@ -92,10 +92,13 @@ function aggregateCiHealth(runs: readonly { readonly health: CiHealth }[]): CiHe
 // quiet "not linked" state. Real linked PRs/CI/reviews now produce a real signal: the latest
 // PR's lifecycle state (upgraded to `approved` when the newest review approves an open PR),
 // the rolled-up CI health, and the review age (time since the newest review, or — before any
-// review — how long the PR has been open awaiting one). Signature UNCHANGED.
+// review — how long the PR has been open awaiting one). Signature extended ADDITIVELY with an
+// optional clock: every existing caller keeps wall-clock behavior, while a caller that must be
+// deterministic under test (`buildTeamHome`) passes its own `now`.
 export function computeDeliverySignal(
   _issue: DeliveryIssue,
   linked: LinkedEntities,
+  now = Date.now(),
 ): DeliverySignal | null {
   const prs = linked.pullRequests ?? []
   const ciRuns = linked.ciRuns ?? []
@@ -128,9 +131,9 @@ export function computeDeliverySignal(
 
   const reviewAgeMs =
     latestReview !== undefined
-      ? Date.now() - latestReview.submittedAt
+      ? now - latestReview.submittedAt
       : latestPr !== undefined
-        ? Date.now() - latestPr.openedAt
+        ? now - latestPr.openedAt
         : null
 
   // The deploy axis reads the newest MERGED pull request. A producer that keys deployments per pull

@@ -311,3 +311,32 @@ Decisions made while building pass 1 (model + primitives):
   deployment carries none): the mock's "deploy #142 #143" numbers do not exist on the deployment
   row (`externalId` is an opaque provider id), so the provenance states the fact yapm has —
   "N releases went live · production".
+
+Decisions made while building pass 2 (page + routes):
+
+- **`AppShell` gained an additive `wide` prop** (default false, only the team Home passes it):
+  the digest's editorial column is 960px in the mock and the shell's default measure is
+  `max-w-3xl`. Widening one page via an opt-in prop is the smallest change that honors both "the
+  AppShell is not rebuilt" and "match the mock's spacing"; every other page renders byte-identical.
+- **The onward footer carries `Issues` AND `Board`** (mock: Issues · Delivery · Retro · Roadmap).
+  The e2e suites' one navigation contract with the team page is exactly those two links
+  (`issues.spec.ts` et al. click "Issues"; `board.spec.ts` clicks "Board" straight from the team
+  page), and the digest may not regress them. "Delivery in full", "Retro" and "Roadmap" complete
+  the mock's row; the ⌘K hint closes it.
+- **Attention class rows render one row per class**, exactly as the mock draws them, with the
+  bold class count and the first issue's drawn evidence. The row's doorway is the issue itself
+  when the class holds exactly one issue (mock: `ENG-116 ›`) and the board when it holds several —
+  every flagged issue stays reachable, and no row pretends N issues are one.
+- **The mock's "you left Tue 6:40p" line, DECIDED card, Crit/Verify lanes and statusline/gbar
+  chrome do not render** — deferred entities and out-of-scope chrome fold away per the proposal;
+  the composed footline names only the rules that ran (§D9).
+- **The YOURS warmth line's Runway doorway is an in-page anchor** to the READY FOR YOU band and
+  renders only while that band does; when the runway itself is folded there is nothing to open,
+  so the doorway folds with it rather than pointing somewhere that cannot show a runway.
+- **NEXT rows and artifact chips are doorways** (retro detail, Cycles, Retros): the mock draws
+  them inert, but keyboard-first makes every stated fact reachable without a pointer.
+- **`digests.byCycle` is the eighth read and waits for the cycles read** via Zero's documented
+  `useQuery(cond ? request : undefined)` form — no active cycle, no digest query at all.
+- **Verification split per the build instructions**: lint, typecheck, the schema + web unit
+  suites (including the new `team-home.test.tsx` falsifiable renders) ran locally and are green;
+  `turbo build`, Playwright e2e and the compose smoke test run in CI on the already-open PR.

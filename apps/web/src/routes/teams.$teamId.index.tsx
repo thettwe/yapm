@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { AppShell } from '@/components/app-shell'
 import { Authenticated } from '@/components/authenticated'
-import { TeamDetail } from '@/components/team-detail'
+import { TeamHome } from '@/home/team-home'
 
 export const Route = createFileRoute('/teams/$teamId/')({ component: TeamPage })
 
@@ -10,8 +10,8 @@ function TeamPage() {
 
   return (
     <Authenticated>
-      <AppShell current="Team">
-        <TeamDetail teamId={teamId} />
+      <AppShell current="Team" wide>
+        <TeamHome teamId={teamId} />
       </AppShell>
     </Authenticated>
   )

@@ -60,36 +60,36 @@ API), `reference/` for TanStack Router + Tailwind 4.3, the two mocks
 
 ## 3. The digest page — build pass 2
 
-- [ ] 3.1 Create the page component (`apps/web/src/home/team-home.tsx`): the eight
+- [x] 3.1 Create the page component (`apps/web/src/home/team-home.tsx`): the eight
       `useQuery` reads (§D1 table), one `useMemo`d `buildTeamHome`, and the band layout
       per the mock (max-width column, band hairlines, mono kickers, spacing).
-- [ ] 3.2 Hero spread: title, day band, day line, status words, narrative, artifact chips,
+- [x] 3.2 Hero spread: title, day band, day line, status words, narrative, artifact chips,
       vitals column (scope, NEXT, days left); the degraded no-active-cycle form.
-- [ ] 3.3 NEEDS ATTENTION: four class rows with drawn evidence, urgent-lift on the
+- [x] 3.3 NEEDS ATTENTION: four class rows with drawn evidence, urgent-lift on the
       divergence row, each row a Link doorway (issue, board, issue, triage).
-- [ ] 3.4 SINCE YESTERDAY: three-card grid with mono kickers and provenance lines; each
+- [x] 3.4 SINCE YESTERDAY: three-card grid with mono kickers and provenance lines; each
       card a doorway; per-card and whole-band folding.
-- [ ] 3.5 YOURS: rows (status glyph + key + title + track + bifact), collapsed
+- [x] 3.5 YOURS: rows (status glyph + key + title + track + bifact), collapsed
       waiting-on-others row, conditional reciprocal line, mono footnote, warmth empty
       state with Runway doorway.
-- [ ] 3.6 READY FOR YOU: Runway header + count, priority glyphs, predicate phrases,
+- [x] 3.6 READY FOR YOU: Runway header + count, priority glyphs, predicate phrases,
       doorways; folds per §D6.
-- [ ] 3.7 SHIP CADENCE + SHIPPED THIS CYCLE: chart band with Delivery onward link;
+- [x] 3.7 SHIP CADENCE + SHIPPED THIS CYCLE: chart band with Delivery onward link;
       two-column shipped grid with Live / Built-not-live badges.
-- [ ] 3.8 Footline + onward footer: composed clauses from the model; footer links Issues ·
+- [x] 3.8 Footline + onward footer: composed clauses from the model; footer links Issues ·
       Delivery · Retro · Roadmap (accessible name "Issues" — `issues.spec.ts` clicks it)
       + ⌘K hint.
 
 ## 4. Route swap and members relocation — build pass 2
 
-- [ ] 4.1 New route `apps/web/src/routes/teams.$teamId.members.tsx` rendering the existing
+- [x] 4.1 New route `apps/web/src/routes/teams.$teamId.members.tsx` rendering the existing
       management surface (roster, join/leave, admin rename/archive/roster controls)
       unchanged in behavior.
-- [ ] 4.2 Swap `teams.$teamId.index.tsx` content to the digest inside the existing
+- [x] 4.2 Swap `teams.$teamId.index.tsx` content to the digest inside the existing
       `Authenticated` + `AppShell`; add the quiet "Members ›" doorway on the digest.
-- [ ] 4.3 Keyboard pass: every doorway a real focusable Link/button in document order,
+- [x] 4.3 Keyboard pass: every doorway a real focusable Link/button in document order,
       Enter activates, visible focus ring; verify no interaction waits on the network.
-- [ ] 4.4 All three themes × light/dark sanity pass on the page (tokens resolve, AA holds,
+- [x] 4.4 All three themes × light/dark sanity pass on the page (tokens resolve, AA holds,
       no literal hex in components); `pnpm turbo lint typecheck build` green.
 
 ## 5. Tests
@@ -103,7 +103,7 @@ API), `reference/` for TanStack Router + Tailwind 4.3, the two mocks
       UTC-stable; the narrative fallback is deterministic and ≤ 2 sentences; the footline
       contains only executed-rule clauses; the `blameless` key-walker finds no identity
       key in the model outside the viewer's own rows.
-- [ ] 5.2 Unit (web): page component tests with fixture query results — full morning
+- [x] 5.2 Unit (web): page component tests with fixture query results — full morning
       renders all bands in order; quiet day renders no attention/since-yesterday/ready
       band and the YOURS warmth line; the attention number is identical at every DOM
       occurrence; doorways have accessible names and hrefs; Live badge only with a

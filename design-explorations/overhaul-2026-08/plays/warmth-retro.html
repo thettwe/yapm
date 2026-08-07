@@ -1,0 +1,325 @@
+<!doctype html>
+<!--
+  plays/warmth-retro — WARMTH play 2/2: the retro room.
+  Same three-band frame as horizon/, same tokens. The vote phase is shown because it
+  is the one moment where everything the room stands for truthfully coexists per the
+  retrospective spec: cards are revealed (anonymous — there is no author column to
+  hide), the AI draft exists (born at the reveal, reads the work graph only), and
+  dot-votes are live. Phase stepper speaks the cycle day-band language. The board
+  sits on a --bg-sidebar tabletop; paper notes rotate <1deg — the room's 10% human.
+  Tokens: Warm LIGHT verbatim + daylight extensions. No motion, no authors, ever.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Retro · Cycle 2 · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — page-owned masthead: the room ============ */
+  .masthead{display:flex;align-items:flex-end;padding:22px 40px 0}
+  .masthead h1{font-size:26px;font-weight:700;letter-spacing:-.018em}
+  .masthead .of{font-size:14px;color:var(--text-3);font-weight:400;margin:0 8px}
+  .masthead .cyc{font-size:14px;color:var(--text-2);font-weight:600}
+  .mast-right{margin-left:auto;display:flex;align-items:center;gap:18px;padding-bottom:2px}
+  .facil{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text-2)}
+  .facil .fa{width:20px;height:20px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:8px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .timer{display:flex;align-items:baseline;gap:7px}
+  .timer .t{font-family:var(--mono);font-size:20px;font-weight:500;letter-spacing:-.02em}
+  .timer .tl{font-size:12px;color:var(--text-3)}
+  .phasekeys{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-3)}
+
+  /* phase stepper — the day-band language */
+  .stepper{display:flex;align-items:flex-start;gap:26px;padding:16px 40px 14px}
+  .steps{display:flex;gap:6px}
+  .step{width:86px}
+  .step .band{height:8px;border-radius:2.5px;background:var(--bg-hover);
+              border:1px solid var(--border)}
+  .step.done .band{background:var(--accent-soft);border-color:transparent}
+  .step.now .band{background:var(--accent);border-color:transparent}
+  .step .nm{margin-top:6px;font-size:11.5px;color:var(--text-3)}
+  .step.done .nm{color:var(--text-2)}
+  .step.now .nm{color:var(--accent-strong);font-weight:650}
+  .step .tm{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-top:1px}
+  .step-say{margin-left:6px;padding-top:0}
+  .step-say .l1{font-size:13px;font-weight:600}
+  .step-say .l2{font-size:12px;color:var(--text-2);margin-top:2px}
+  .votebudget{display:flex;align-items:center;gap:6px}
+  .vd{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+  .vd.spent{background:transparent;border:1.4px solid var(--border-strong)}
+  .anon{margin-left:auto;display:flex;align-items:center;gap:8px;padding-top:1px}
+  .anon .txt{font-family:var(--mono);font-size:10.5px;color:var(--text-3);letter-spacing:.01em}
+  .anon svg{display:block}
+
+  /* ============ the tabletop ============ */
+  .room{flex:1;display:flex;flex-direction:column;background:var(--bg-sidebar);
+        border-top:1px solid var(--border);padding:22px 40px 12px}
+  .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:32px}
+  .room-foot{margin-top:auto;padding-top:14px;text-align:center;
+             font-size:12px;color:var(--text-3)}
+  .col-h{display:flex;align-items:baseline;gap:8px;margin-bottom:14px}
+  .col-h .cn{font-size:13px;font-weight:650;letter-spacing:.01em}
+  .col-h .cc{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .col-h .cd{width:7px;height:7px;border-radius:50%;align-self:center}
+
+  .stack{display:flex;flex-direction:column;gap:15px}
+
+  .note{position:relative;background:var(--bg-elevated);border:1px solid var(--border);
+        border-bottom:2px solid var(--border-strong);border-radius:3px;
+        padding:15px 30px 13px 16px;font-size:14px;line-height:1.55;color:var(--text-1)}
+  .note::after{content:"";position:absolute;top:-1px;right:-1px;width:13px;height:13px;
+        background:linear-gradient(225deg,var(--bg-sidebar) 0 49%,#efe6d5 51%,#f8f2e7 100%);
+        border-bottom-left-radius:2px}
+  .note .votes{display:flex;gap:4px;margin-top:8px}
+  .note .votes .v{width:8px;height:8px;border-radius:50%;background:var(--accent);opacity:.9}
+  .note .votes .v.mine{outline:1.5px solid var(--accent-line);outline-offset:1.5px}
+  .r1{transform:rotate(-.45deg)} .r2{transform:rotate(.35deg)} .r3{transform:rotate(-.2deg)}
+  .r4{transform:rotate(.5deg)}
+
+  /* a facilitator-made group of notes */
+  .group{position:relative;border:1.5px dashed var(--accent-line);border-radius:7px;
+         padding:12px 10px 10px;transform:rotate(.15deg)}
+  .group .glabel{position:absolute;top:-9px;left:10px;background:var(--bg-sidebar);
+         padding:0 7px;font-size:11.5px;font-weight:650;color:var(--accent-strong)}
+  .group .glabel svg{position:absolute;left:6px;bottom:-4px;width:calc(100% - 12px)}
+  .group .stack{gap:9px}
+
+  /* ============ the AI draft — subordinate, on plain bg ============ */
+  .draftband{background:var(--bg);border-top:1px solid var(--border);padding:13px 40px 14px}
+  .draft-h{display:flex;align-items:baseline;gap:12px}
+  .draft-h .dt{font-size:11px;font-weight:650;letter-spacing:.1em;color:var(--text-2);
+               text-transform:uppercase}
+  .draft-h .dg{font-size:12px;color:var(--text-3)}
+  .draft-h .dg b{color:var(--text-2);font-weight:600}
+  .drafts{display:flex;gap:14px;margin-top:10px}
+  .draft{flex:1;display:flex;align-items:center;gap:12px;border:1px solid var(--border);
+         border-radius:var(--rad-control);padding:9px 12px;background:transparent}
+  .draft .dk{font-family:var(--mono);font-size:10px;color:var(--text-3);flex:none;
+             border:1px solid var(--border);border-radius:4px;padding:1px 5px}
+  .draft .dtxt{font-size:12.5px;color:var(--text-2);line-height:1.4}
+  .draft .dtxt b{color:var(--text-1);font-weight:600}
+  .draft .add{margin-left:auto;flex:none;font-size:11.5px;color:var(--accent-strong);
+              font-weight:600;white-space:nowrap}
+  .draft .add .kbd{margin-left:4px}
+
+  /* ============ band 3 — statusline ============ */
+  .statusline{margin-top:auto;height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab active">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <h1>Retro</h1><span class="of">·</span><span class="cyc">Cycle 2</span>
+    <div class="mast-right">
+      <div class="facil"><span class="fa">DA</span>Dana facilitates · 6 in the room</div>
+      <div class="timer"><span class="t">4:32</span><span class="tl">on the clock</span></div>
+      <div class="phasekeys"><span class="kbd">[</span><span class="kbd">]</span>move the room</div>
+    </div>
+  </div>
+
+  <div class="stepper">
+    <div class="steps">
+      <div class="step done"><div class="band"></div><div class="nm">Brainstorm</div><div class="tm">12 min</div></div>
+      <div class="step done"><div class="band"></div><div class="nm">Group</div><div class="tm">7 min</div></div>
+      <div class="step now"><div class="band"></div><div class="nm">Vote</div><div class="tm">now</div></div>
+      <div class="step"><div class="band"></div><div class="nm">Discuss</div></div>
+      <div class="step"><div class="band"></div><div class="nm">Actions</div></div>
+      <div class="step"><div class="band"></div><div class="nm">Close</div></div>
+    </div>
+    <div class="step-say">
+      <div class="l1">Put your dots where the next cycle should look.</div>
+      <div class="l2" style="display:flex;align-items:center;gap:8px">
+        <span class="votebudget"><span class="vd"></span><span class="vd"></span><span class="vd spent"></span><span class="vd spent"></span><span class="vd spent"></span></span>
+        2 of 5 dots left
+      </div>
+    </div>
+    <div class="anon">
+      <svg width="16" height="16" viewBox="0 0 16 16">
+        <circle cx="8" cy="5.4" r="2.6" fill="none" stroke="var(--text-3)" stroke-width="1.5"/>
+        <path d="M2.8 13.4 C 3.6 10.4, 12.4 10.4, 13.2 13.4" fill="none"
+              stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round"
+              stroke-dasharray="2 2.6"/>
+      </svg>
+      <span class="txt">cards are anonymous by design — there is no author column</span>
+    </div>
+  </div>
+
+  <div class="room">
+    <div class="cols">
+
+      <!-- went well -->
+      <div>
+        <div class="col-h"><span class="cd" style="background:var(--status-done)"></span>
+          <span class="cn">Went well</span><span class="cc">5 cards</span></div>
+        <div class="stack">
+          <div class="note r1">Shipping every day felt calm. No big-bang Friday, nothing to babysit over the weekend.
+            <div class="votes"><span class="v"></span><span class="v"></span></div>
+          </div>
+          <div class="note r2">Pairing on Apple Pay worked — one branch, half the review wait.
+            <div class="votes"><span class="v"></span></div>
+          </div>
+          <div class="note r3">We cut refund scope early instead of late, and it didn’t hurt.</div>
+          <div class="note r4">Triage stayed under ten a week for the first time.</div>
+          <div class="note r2">Deploy notes wrote themselves from the merge queue.</div>
+        </div>
+      </div>
+
+      <!-- didn't go well -->
+      <div>
+        <div class="col-h"><span class="cd" style="background:var(--status-urgent)"></span>
+          <span class="cn">Didn’t go well</span><span class="cc">5 cards</span></div>
+        <div class="stack">
+          <div class="group">
+            <span class="glabel">Waiting on review
+              <svg height="5" viewBox="0 0 80 5" preserveAspectRatio="none">
+                <path d="M1 3.4 C 20 1.4, 40 4.4, 79 2.4" fill="none"
+                      stroke="var(--accent-line)" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <div class="stack">
+              <div class="note r2">Twice this cycle a change sat a full day because it was nobody’s turn to review.
+                <div class="votes"><span class="v"></span><span class="v"></span><span class="v"></span><span class="v mine"></span></div>
+              </div>
+              <div class="note r1">Review pings land in chat and drown by lunch.</div>
+            </div>
+          </div>
+          <div class="note r3">The flaky payment suite made every merge a coin flip.
+            <div class="votes"><span class="v"></span><span class="v"></span><span class="v mine"></span></div>
+          </div>
+          <div class="note r4">The board said “in progress” on work that was already live.
+            <div class="votes"><span class="v"></span><span class="v"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- try next cycle -->
+      <div>
+        <div class="col-h"><span class="cd" style="background:var(--status-in-review)"></span>
+          <span class="cn">Try next cycle</span><span class="cc">4 cards</span></div>
+        <div class="stack">
+          <div class="note r2">A rotating review hour — one person on point each day, everyone off the hook otherwise.
+            <div class="votes"><span class="v"></span><span class="v"></span></div>
+          </div>
+          <div class="note r1">Quarantine the payment suite until it earns trust back.
+            <div class="votes"><span class="v"></span></div>
+          </div>
+          <div class="note r4">Let the board follow the merge — not the other way round.</div>
+          <div class="note r3">Keep the daily ship rhythm — protect it in planning.</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="room-foot">Writing closed when the cards were revealed · dots close when the clock runs out</div>
+  </div>
+
+  <!-- the AI draft — quieter, on plain ground, clearly not a card -->
+  <div class="draftband">
+    <div class="draft-h">
+      <span class="dt">Drafted from the cycle record</span>
+      <span class="dg">The draft reads the <b>work graph only</b> — it has never seen a card. Bring one to the board or leave it here; unused drafts close with the retro.</span>
+    </div>
+    <div class="drafts">
+      <div class="draft">
+        <span class="dk">draft</span>
+        <span class="dtxt"><b>Review wait doubled in week two</b> — 2 changes waited over a day; both merged clean once picked up.</span>
+        <span class="add">Bring to board<span class="kbd">↵</span></span>
+      </div>
+      <div class="draft">
+        <span class="dk">draft</span>
+        <span class="dtxt"><b>Checks failed on 26% of merges</b> — most failures trace to one payment test suite.</span>
+        <span class="add">Bring to board<span class="kbd">↵</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>Retro in vote — 14 cards</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+</body>
+</html>

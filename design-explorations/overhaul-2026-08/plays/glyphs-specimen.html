@@ -1,0 +1,609 @@
+<!doctype html>
+<!--
+  plays/glyphs-specimen — GLYPHS: a bespoke icon language for yapm.
+  Thesis: stop borrowing Linear's vocabulary; own one only yapm could mean.
+  1) status = position in the loop (one circle, progressively arc-filled)
+  2) the divergence "//" formalized as the brand mark
+  3) a full working set sharing the same DNA: one stroke, a 20-grid, dots/rings/ticks/slashes.
+  Frame: horizon three-band deck (global bar / page masthead / statusline).
+  Tokens: Warm LIGHT verbatim + daylight extensions (row hairline #efe9dd,
+  statusline bg #f4efe5, urgent-soft rgba(204,90,64,.08)). All marks inline SVG,
+  stroke 1.6 via vector-effect:non-scaling-stroke so 14px and 20px share one weight.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Glyphs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+  svg{display:block}
+
+  /* ============ band 1 — global bar ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;gap:6px;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab svg{color:var(--text-3)}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active svg{color:var(--accent-strong)}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:5px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox svg{color:var(--text-3)}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — masthead ============ */
+  .masthead{display:flex;align-items:baseline;padding:20px 40px 4px}
+  .masthead h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px;margin-left:10px}
+  .masthead .sub{color:var(--text-2);font-size:13px;margin-left:22px}
+  .masthead .spec{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+
+  /* ============ specimen body ============ */
+  .sheet{padding:10px 40px 0}
+  .sec-h{display:flex;align-items:baseline;gap:10px;margin:14px 0 0;
+         border-top:1px solid var(--border);padding-top:12px}
+  .sec-h .t{font-size:11px;font-weight:700;letter-spacing:.09em;color:var(--text-2)}
+  .sec-h .c{font-size:12px;color:var(--text-3)}
+
+  .toprow{display:flex;gap:56px}
+  .toprow .colA{flex:1.45}
+  .toprow .colB{flex:1;border-left:1px solid var(--border);padding-left:44px}
+
+  /* the loop strip */
+  .loopstrip{display:flex;gap:0;margin-top:16px}
+  .loopcell{flex:1;padding-right:14px}
+  .loopcell .marks{display:flex;align-items:center;gap:10px;height:26px}
+  .loopcell .nm{font-size:12.5px;font-weight:600;margin-top:9px}
+  .loopcell .why{font-size:11px;color:var(--text-3);line-height:1.45;margin-top:3px;max-width:118px}
+  .arcline{display:flex;align-items:center;margin-top:14px;color:var(--text-3);font-size:11px;gap:8px}
+  .arcline .ln{flex:1;height:1px;background:var(--border)}
+
+  /* divergence panel */
+  .divpanel{margin-top:12px}
+  .div-lock{display:flex;align-items:center;gap:13px}
+  .div-lock .word{font-size:37px;font-weight:700;letter-spacing:-.03em;line-height:1}
+  .div-sizes{display:flex;align-items:center;gap:18px;margin-top:13px;color:var(--text-2)}
+  .div-sizes .lab{font-family:var(--mono);font-size:10px;color:var(--text-3)}
+  .div-inline{margin-top:12px;font-size:13px;color:var(--text-1);display:flex;align-items:center;gap:6px}
+  .div-inline b{color:var(--status-urgent);font-weight:600}
+  .div-why{margin-top:9px;font-size:11.5px;color:var(--text-3);line-height:1.5;max-width:330px}
+
+  /* working set grid */
+  .grid{display:grid;grid-template-columns:repeat(6,1fr);column-gap:26px;row-gap:15px;margin-top:14px}
+  .cell .marks{display:flex;align-items:center;gap:9px;height:24px}
+  .cell .nm{font-size:12px;font-weight:600;margin-top:7px}
+  .cell .why{font-size:10.5px;color:var(--text-3);line-height:1.4;margin-top:2px}
+
+  /* construction band */
+  .con{display:flex;gap:60px;margin-top:12px;align-items:center;padding-bottom:10px}
+  .conblk{display:flex;gap:18px;align-items:center}
+  .conblk .cap{font-size:11px;color:var(--text-3);line-height:1.5;max-width:170px}
+  .conblk .cap b{display:block;font-size:12px;color:var(--text-2);font-weight:600;margin-bottom:2px}
+  .con .dim{font-family:var(--mono);font-size:9.5px;fill:var(--text-3)}
+  .con .dimln{stroke:var(--border-strong);stroke-width:1}
+  .con .mark{stroke:var(--text-2)}
+
+  .c-backlog{color:var(--status-backlog)} .c-todo{color:var(--status-todo)}
+  .c-prog{color:var(--status-in-progress)} .c-rev{color:var(--status-in-review)}
+  .c-done{color:var(--status-done)} .c-urgent{color:var(--status-urgent)}
+  .c-ink{color:var(--text-2)} .c-mut{color:var(--text-3)} .c-acc{color:var(--accent)}
+  .c-sync{color:var(--signal-sync)}
+
+  /* ============ band 3 — statusline ============ */
+  .statusline{margin-top:auto;height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- the loop: status as cycle position -->
+    <symbol id="g-backlog" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-dasharray="2 2.4" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-todo" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-progress" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      <path d="M10 3 A7 7 0 0 1 10 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-review" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      <path d="M10 3 A7 7 0 1 1 3 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-done" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7.6" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-canceled" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      <path d="M8.1 14.7 L11.9 5.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+
+    <!-- the divergence mark -->
+    <symbol id="g-div" viewBox="0 0 20 20">
+      <path d="M5.2 15.4 L9.1 4.6 M10.9 15.4 L14.8 4.6" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+
+    <!-- priority: ticks on a scale -->
+    <symbol id="g-p1" viewBox="0 0 20 20">
+      <path d="M6.6 6.3 V13.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <path d="M10 6.3 V13.7" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <path d="M13.4 6.3 V13.7" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-p2" viewBox="0 0 20 20">
+      <path d="M6.6 6.3 V13.7 M10 6.3 V13.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <path d="M13.4 6.3 V13.7" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-p3" viewBox="0 0 20 20">
+      <path d="M6.6 6.3 V13.7 M10 6.3 V13.7 M13.4 6.3 V13.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-purgent" viewBox="0 0 20 20">
+      <path d="M10 4.6 V12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <circle cx="10" cy="15.4" r="1.4" fill="currentColor"/>
+    </symbol>
+
+    <!-- track nodes -->
+    <symbol id="g-merged" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="3.6" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-propen" viewBox="0 0 20 20">
+      <circle cx="7" cy="10" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      <path d="M12 10 H17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+            stroke-dasharray="0 3.2" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-checks" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="6.6" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      <path d="M7.2 10.3 L9.2 12.3 L13 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-checksfail" viewBox="0 0 20 20">
+      <rect x="6.5" y="6.5" width="7" height="7" rx="1.3" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-revnode" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="5.4" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      <path d="M10 4.6 A5.4 5.4 0 0 1 10 15.4 Z" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-live" viewBox="0 0 20 20">
+      <circle cx="10" cy="8.2" r="3.4" fill="currentColor"/>
+      <path d="M4 15.2 H16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+
+    <!-- surfaces -->
+    <symbol id="g-triage" viewBox="0 0 20 20">
+      <circle cx="5" cy="5.4" r="1.5" fill="currentColor"/>
+      <circle cx="10" cy="5.4" r="1.5" fill="currentColor"/>
+      <circle cx="15" cy="5.4" r="1.5" fill="currentColor"/>
+      <path d="M3.6 10.2 H16.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <circle cx="10" cy="15" r="1.9" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-retro" viewBox="0 0 20 20">
+      <path d="M14.5 4.7 A7 7 0 1 0 16.9 8.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <path d="M15.4 10.4 L16.9 8.6 L18.6 10.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-inbox" viewBox="0 0 20 20">
+      <circle cx="10" cy="5.4" r="1.7" fill="currentColor"/>
+      <path d="M4.4 9 V12.8 A2.8 2.8 0 0 0 7.2 15.6 H12.8 A2.8 2.8 0 0 0 15.6 12.8 V9"
+            fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-teams" viewBox="0 0 20 20">
+      <path d="M10 6.2 A4.7 4.7 0 0 1 10 13.8 A4.7 4.7 0 0 1 10 6.2 Z" fill="currentColor" fill-opacity=".3"/>
+      <circle cx="7.3" cy="10" r="4.7" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      <circle cx="12.7" cy="10" r="4.7" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-projects" viewBox="0 0 20 20">
+      <path d="M8 4.6 H5.6 V15.4 H8 M12 4.6 H14.4 V15.4 H12" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      <circle cx="10" cy="10" r="1.5" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-roadmap" viewBox="0 0 20 20">
+      <path d="M2.8 10 H17.2" stroke="currentColor" stroke-opacity=".4" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <path d="M5 6.8 V13.2 M9 6.8 V13.2 M15 6.8 V13.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-attention" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="2.7" fill="currentColor"/>
+      <path d="M10 3.6 A6.4 6.4 0 0 1 16.2 8.4 M10 16.4 A6.4 6.4 0 0 1 3.8 11.6"
+            fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-sync" viewBox="0 0 20 20">
+      <path d="M17 10 A7 7 0 0 0 6 4.5 M3 10 A7 7 0 0 0 14 15.5"
+            fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-home" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      <circle cx="10" cy="10" r="2" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-issues" viewBox="0 0 20 20">
+      <circle cx="5" cy="5.6" r="1.2" fill="currentColor"/>
+      <circle cx="5" cy="10" r="1.2" fill="currentColor"/>
+      <circle cx="5" cy="14.4" r="1.2" fill="currentColor"/>
+      <path d="M8.4 5.6 H15.6 M8.4 10 H15.6 M8.4 14.4 H15.6" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </symbol>
+    <symbol id="g-cycles" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      <path d="M10 1.4 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      <circle cx="5.5" cy="14.5" r="1.9" fill="currentColor"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo" style="font-weight:700;font-size:10.5px">A</span>
+      <span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-home"/></svg>Home</span>
+      <span class="gb-tab"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-issues"/></svg>Issues</span>
+      <span class="gb-tab"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-triage"/></svg>Triage</span>
+      <span class="gb-tab"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-cycles"/></svg>Cycles</span>
+      <span class="gb-tab"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-live"/></svg>Delivery</span>
+      <span class="gb-tab active">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><svg width="12" height="12" viewBox="0 0 20 20"><use href="#g-attention"/></svg>1</div>
+      <div class="gb-inbox"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-inbox"/></svg>Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <h1>Glyphs</h1><span class="count">26 marks</span>
+    <span class="sub">the marks only yapm could mean</span>
+    <span class="spec">one stroke · 1.6px · drawn on a 20 grid</span>
+  </div>
+
+  <div class="sheet">
+
+    <div class="toprow">
+      <div class="colA">
+        <div class="sec-h"><span class="t">STATUS IS CYCLE POSITION</span>
+          <span class="c">one circle — the loop — filled as far as the work has run</span></div>
+        <div class="loopstrip">
+          <div class="loopcell c-backlog">
+            <div class="marks">
+              <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-backlog"/></svg>
+              <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-backlog"/></svg>
+            </div>
+            <div class="nm">Backlog</div>
+            <div class="why">a loop not yet drawn solid — outside every cycle</div>
+          </div>
+          <div class="loopcell c-todo">
+            <div class="marks">
+              <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-todo"/></svg>
+              <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg>
+            </div>
+            <div class="nm">Todo</div>
+            <div class="why">in the loop, not yet begun — the empty ring</div>
+          </div>
+          <div class="loopcell c-prog">
+            <div class="marks">
+              <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-progress"/></svg>
+              <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg>
+            </div>
+            <div class="nm">In progress</div>
+            <div class="why">the arc begins — half the loop run</div>
+          </div>
+          <div class="loopcell c-rev">
+            <div class="marks">
+              <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-review"/></svg>
+              <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-review"/></svg>
+            </div>
+            <div class="nm">In review</div>
+            <div class="why">three-quarters round — nearly home</div>
+          </div>
+          <div class="loopcell c-done">
+            <div class="marks">
+              <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-done"/></svg>
+              <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-done"/></svg>
+            </div>
+            <div class="nm">Done</div>
+            <div class="why">the loop closed — quiet fill, no trophy</div>
+          </div>
+          <div class="loopcell c-backlog">
+            <div class="marks">
+              <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-canceled"/></svg>
+              <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-canceled"/></svg>
+            </div>
+            <div class="nm">Canceled</div>
+            <div class="why">the loop slashed — the same stroke that breaks a track</div>
+          </div>
+        </div>
+        <div class="arcline"><span class="ln"></span><span>the column stops naming states and starts showing distance</span><span class="ln"></span></div>
+      </div>
+
+      <div class="colB">
+        <div class="sec-h"><span class="t">THE DIVERGENCE MARK</span>
+          <span class="c">where ritual and reality split</span></div>
+        <div class="divpanel">
+          <div class="div-lock c-acc">
+            <svg width="44" height="44" viewBox="0 0 20 20">
+              <path d="M5.2 15.4 L9.1 4.6 M10.9 15.4 L14.8 4.6" fill="none" stroke="currentColor"
+                    stroke-width="2.1" stroke-linecap="round"/>
+            </svg>
+            <span class="word" style="color:var(--text-1)">yapm</span>
+          </div>
+          <div class="div-sizes">
+            <span class="lab">48</span>
+            <svg width="30" height="30" viewBox="0 0 20 20" class="c-acc">
+              <path d="M5.2 15.4 L9.1 4.6 M10.9 15.4 L14.8 4.6" fill="none" stroke="currentColor"
+                    stroke-width="1.9" stroke-linecap="round"/>
+            </svg>
+            <span class="lab">30</span>
+            <svg width="16" height="16" viewBox="0 0 20 20" class="c-acc"><use href="#g-div"/></svg>
+            <span class="lab">16</span>
+          </div>
+          <div class="div-inline">
+            <svg width="14" height="14" viewBox="0 0 20 20" class="c-urgent"><use href="#g-div"/></svg>
+            <b>Done in git, not on the board</b><span style="color:var(--text-3)">— the mark in a sentence</span>
+          </div>
+          <div class="div-why">Two strokes: the track the team agreed on, and the one the work
+            actually took. It cancels a loop, breaks a delivery track, and signs the wordmark —
+            one gesture, three duties.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-h"><span class="t">THE WORKING SET</span>
+      <span class="c">same DNA everywhere — dots for facts, rings for promises, ticks for weight, a slash for the difference</span></div>
+
+    <div class="grid">
+      <div class="cell c-ink">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-p3"/></svg>
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-p2"/></svg>
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-p1"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-p3"/></svg>
+        </div>
+        <div class="nm">Priority</div>
+        <div class="why">ticks on a scale, not bars on a chart — count, not volume</div>
+      </div>
+      <div class="cell c-urgent">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-purgent"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-purgent"/></svg>
+        </div>
+        <div class="nm">Urgent</div>
+        <div class="why">one tick standing alone, point made</div>
+      </div>
+      <div class="cell c-rev">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-propen"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-propen"/></svg>
+        </div>
+        <div class="nm">Change open</div>
+        <div class="why">a node reaching for main — not merged yet</div>
+      </div>
+      <div class="cell c-done">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-merged"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-merged"/></svg>
+        </div>
+        <div class="nm">Merged</div>
+        <div class="why">work that landed — a solid fact</div>
+      </div>
+      <div class="cell c-done">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-checks"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-checks"/></svg>
+        </div>
+        <div class="nm">Checks passing</div>
+        <div class="why">the loop agrees with the change</div>
+      </div>
+      <div class="cell c-urgent">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-checksfail"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-checksfail"/></svg>
+        </div>
+        <div class="nm">Checks failing</div>
+        <div class="why">smooth turns to stuck — the circle grows corners</div>
+      </div>
+      <div class="cell c-rev">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-revnode"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-revnode"/></svg>
+        </div>
+        <div class="nm">In review</div>
+        <div class="why">half yours, half theirs</div>
+      </div>
+      <div class="cell c-done">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-live"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-live"/></svg>
+        </div>
+        <div class="nm">Live</div>
+        <div class="why">shipped — standing on the ground it deployed to</div>
+      </div>
+      <div class="cell c-ink">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-triage"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-triage"/></svg>
+        </div>
+        <div class="nm">Triage</div>
+        <div class="why">many above the bar — one let through</div>
+      </div>
+      <div class="cell c-ink">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-retro"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-retro"/></svg>
+        </div>
+        <div class="nm">Retro</div>
+        <div class="why">the loop, read backwards</div>
+      </div>
+      <div class="cell c-ink">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-inbox"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-inbox"/></svg>
+        </div>
+        <div class="nm">Inbox</div>
+        <div class="why">work landing where you will see it</div>
+      </div>
+      <div class="cell c-ink">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-teams"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-teams"/></svg>
+        </div>
+        <div class="nm">Teams</div>
+        <div class="why">the overlap is the team — never the person</div>
+      </div>
+      <div class="cell c-ink">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-projects"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-projects"/></svg>
+        </div>
+        <div class="nm">Projects</div>
+        <div class="why">a set, annotated — mono's own punctuation</div>
+      </div>
+      <div class="cell c-ink">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-roadmap"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-roadmap"/></svg>
+        </div>
+        <div class="nm">Roadmap</div>
+        <div class="why">milestones as ticks — distance, not dates</div>
+      </div>
+      <div class="cell c-urgent">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-attention"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-attention"/></svg>
+        </div>
+        <div class="nm">Attention</div>
+        <div class="why">a flare, not an alarm</div>
+      </div>
+      <div class="cell c-sync">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-sync"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-sync"/></svg>
+        </div>
+        <div class="nm">Synced</div>
+        <div class="why">two halves agreeing — no arrows, nothing spins</div>
+      </div>
+      <div class="cell c-ink">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-home"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-home"/></svg>
+        </div>
+        <div class="nm">Home</div>
+        <div class="why">you are here — the loop with you in it</div>
+      </div>
+      <div class="cell c-ink">
+        <div class="marks">
+          <svg width="20" height="20" viewBox="0 0 20 20"><use href="#g-cycles"/></svg>
+          <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-cycles"/></svg>
+        </div>
+        <div class="nm">Cycles</div>
+        <div class="why">the ring you run — today marked on it</div>
+      </div>
+    </div>
+
+    <div class="sec-h"><span class="t">CONSTRUCTION</span>
+      <span class="c">every mark is drawn once, on the same 20 grid, with the same pen</span></div>
+
+    <div class="con">
+      <div class="conblk">
+        <svg width="96" height="96" viewBox="0 0 112 112">
+          <circle cx="56" cy="56" r="33.6" fill="none" class="mark" stroke-opacity=".28" stroke-width="1.8"/>
+          <path d="M56 22.4 A33.6 33.6 0 1 1 22.4 56" fill="none" class="mark" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="56" y1="56" x2="79.8" y2="32.2" class="dimln"/>
+          <text x="76" y="44" class="dim">r 7</text>
+          <text x="8" y="16" class="dim">20 × 20</text>
+          <text x="76" y="100" class="dim">270°</text>
+        </svg>
+        <div class="cap"><b>The loop</b>a 7-radius circle on a 20 grid; status is how much
+          of it has been drawn</div>
+      </div>
+      <div class="conblk">
+        <svg width="96" height="96" viewBox="0 0 112 112">
+          <path d="M39.7 33 V79 M56 33 V79 M72.3 33 V79" class="mark" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="30" y1="33" x2="30" y2="79" class="dimln"/>
+          <line x1="27" y1="33" x2="33" y2="33" class="dimln"/>
+          <line x1="27" y1="79" x2="33" y2="79" class="dimln"/>
+          <text x="14" y="59" class="dim">7.4</text>
+          <line x1="39.7" y1="90" x2="56" y2="90" class="dimln"/>
+          <text x="43" y="102" class="dim">3.4</text>
+        </svg>
+        <div class="cap"><b>The tick</b>one unit of weight; count says how much, color says
+          how loud</div>
+      </div>
+      <div class="conblk">
+        <svg width="96" height="96" viewBox="0 0 112 112">
+          <path d="M33 88 L54 30 M64.5 88 L85.5 30" class="mark" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="20" y1="88" x2="92" y2="88" class="dimln"/>
+          <path d="M46 88 A18 18 0 0 0 39.5 74" fill="none" class="dimln"/>
+          <text x="49" y="80" class="dim">70°</text>
+        </svg>
+        <div class="cap"><b>The slash</b>a 70° stroke; doubled it is the divergence mark,
+          single it cancels a loop</div>
+      </div>
+      <div class="conblk" style="margin-left:auto;max-width:270px">
+        <div class="cap" style="max-width:270px"><b>Rules of the language</b>
+          dots are facts, rings are promises, arcs are progress, ticks are weight,
+          the slash is the difference between them. Nothing is filled unless it is true;
+          nothing points, blinks, or spins.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><svg width="13" height="13" viewBox="0 0 20 20" class="c-sync"><use href="#g-sync"/></svg>Synced</span>
+  </div>
+</div>
+</body>
+</html>

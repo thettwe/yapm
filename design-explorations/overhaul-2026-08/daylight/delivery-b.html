@@ -1,0 +1,434 @@
+<!doctype html>
+<!--
+  daylight/delivery-b — same layout as delivery-a; Fraunces display face on the masthead
+  title and hero numerals ONLY. Body/UI stays Figtree, mono stays IBM Plex Mono.
+  Tokens: Warm LIGHT block verbatim. Extensions: statusline bg #f4efe5, urgent-soft
+  rgba(204,90,64,.08), row hairline #efe9dd. Tiny vanilla JS only generates static SVG.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Delivery · Engineering (Fraunces display)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,400..700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --display:var(--ui);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .app{display:flex;height:100vh;overflow:hidden}
+
+  /* sidebar */
+  .sidebar{width:244px;min-width:244px;background:var(--bg-sidebar);
+           border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh}
+  .ws{display:flex;align-items:center;gap:8px;padding:14px 12px 10px 14px}
+  .ws-logo{width:26px;height:26px;border-radius:7px;background:var(--accent);color:var(--on-accent);
+           display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+  .ws-name{font-weight:600;font-size:13.5px}
+  .ws-chev{color:var(--text-3);font-size:10px;margin-top:1px}
+  .ws-add{margin-left:auto;width:24px;height:24px;border:1px solid var(--border-strong);
+          border-radius:6px;background:transparent;color:var(--text-2);font-size:14px;
+          display:flex;align-items:center;justify-content:center;line-height:1}
+  .search{margin:2px 12px 10px;display:flex;align-items:center;gap:7px;height:30px;
+          background:rgba(255,255,255,.55);border:1px solid var(--border);
+          border-radius:var(--rad-control);padding:0 8px;color:var(--text-3)}
+  .search .q{font-size:12.5px}
+  .kbd{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .nav{padding:0 8px}
+  .nav-item{display:flex;align-items:center;gap:9px;height:30px;padding:0 8px;border-radius:6px;font-size:13px}
+  .nav-item .ic{width:16px;text-align:center;color:var(--text-2);font-size:13px}
+  .nav-item .count{margin-left:auto;color:var(--text-3);font-size:12px}
+  .sect{margin:16px 16px 6px;font-size:10.5px;letter-spacing:.09em;color:var(--text-3);font-weight:600}
+  .team{display:flex;align-items:center;gap:9px;height:30px;padding:0 8px;margin:0 8px;border-radius:6px;font-weight:600}
+  .team .swatch{width:16px;height:16px;border-radius:4px;font-size:9.5px;font-weight:700;
+                display:flex;align-items:center;justify-content:center}
+  .sw-e{background:#e3d3c3;color:#7a5c3e}.sw-d{background:#d9dbc9;color:#5c6b3e}.sw-p{background:#cfdcd4;color:#3e6b55}
+  .team .chev{margin-left:auto;color:var(--text-3);font-size:10px}
+  .tree{margin:2px 8px 0 8px}
+  .tree .leaf{display:flex;align-items:center;height:28px;padding:0 8px 0 33px;border-radius:6px;
+              color:var(--text-2);font-size:13px;position:relative}
+  .tree .leaf.active{background:var(--accent-soft);color:var(--accent-strong);font-weight:600}
+  .tree .leaf.active::before{content:"";position:absolute;left:-8px;top:4px;bottom:4px;width:3px;
+              border-radius:2px;background:var(--accent)}
+  .side-foot{margin-top:auto;display:flex;align-items:center;gap:8px;padding:12px 14px;
+             border-top:1px solid var(--border)}
+  .avatar{width:22px;height:22px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+          font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .side-foot .nm{font-weight:600;font-size:12.5px}
+  .conn{margin-left:auto;display:flex;align-items:center;gap:5px;color:var(--text-3);font-size:11.5px}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh}
+  .topbar{height:52px;min-height:52px;display:flex;align-items:center;padding:0 24px;
+          border-bottom:1px solid var(--border)}
+  .crumb{color:var(--text-2);font-size:12.5px}
+  .crumb b{color:var(--text-1);font-weight:500}
+  .crumb .sep{margin:0 7px;color:var(--text-3)}
+  .synced{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3);font-size:12px}
+
+  .scroll{flex:1;overflow:auto}
+  .content{padding:52px 64px 80px;max-width:1180px}
+
+  /* ============ masthead — display scale (correction 3) ============ */
+  .masthead{display:flex;align-items:flex-end}
+  .masthead h1{font-family:"Fraunces",Georgia,"Times New Roman",serif;font-size:48px;
+               font-weight:600;letter-spacing:-.012em;line-height:1;
+               font-variation-settings:"opsz" 90}
+  .mast-sub{margin-top:14px;color:var(--text-2);font-size:14px}
+  .window{margin-left:auto;align-self:flex-start}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;gap:6px;font-family:var(--ui)}
+
+  /* ============ hero numerals ============ */
+  .heroes{display:flex;margin-top:52px}
+  .hero{flex:1;padding-right:44px}
+  .hero+.hero{border-left:1px solid var(--border);padding-left:44px}
+  .hero .h-label{font-size:13.5px;font-weight:600;color:var(--text-2)}
+  .hero .h-num{font-family:"Fraunces",Georgia,"Times New Roman",serif;font-size:60px;
+               font-weight:560;letter-spacing:-.012em;line-height:1.05;margin-top:8px;
+               display:flex;align-items:baseline;gap:10px;font-variation-settings:"opsz" 90}
+  .hero .h-unit{font-family:var(--ui);font-size:28px;color:var(--text-2);font-weight:500;letter-spacing:-.01em}
+  .delta{font-family:var(--ui);font-size:13px;font-weight:700;letter-spacing:0;
+         display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:var(--rad-pill);
+         position:relative;top:-6px}
+  .delta.good{color:var(--status-done);background:rgba(62,140,99,.1)}
+  .delta.watch{color:var(--status-in-progress);background:rgba(206,138,38,.12)}
+  .hero .h-cap{color:var(--text-3);font-size:12.5px;margin-top:6px}
+  .hero svg{margin-top:14px;display:block}
+
+  /* ============ sections ============ */
+  .band{margin-top:56px;border-top:1px solid var(--border);padding-top:28px}
+  .band-h{display:flex;align-items:baseline;gap:14px}
+  .band-h .t{font-size:11px;letter-spacing:.09em;font-weight:700;color:var(--text-1)}
+  .band-h .plain{color:var(--text-3);font-size:12.5px}
+  .band-body{margin-top:24px}
+
+  /* cadence */
+  .lane{display:flex;align-items:center;gap:14px}
+  .lane .lane-lbl{width:78px;font-size:12px;color:var(--text-2);text-align:right}
+  .cad-legend{margin-top:16px;color:var(--text-2);font-size:12.5px;display:flex;gap:22px;flex-wrap:wrap}
+  .lg{display:inline-flex;align-items:center;gap:7px}
+  .lg .d{width:7px;height:7px;border-radius:50%}
+  .months{display:flex;margin-left:92px;color:var(--text-3);font-family:var(--mono);font-size:10.5px}
+
+  /* cycle flow */
+  .flow-wrap{display:flex;gap:56px;align-items:flex-start}
+  .flow-legend{margin-top:16px;color:var(--text-2);font-size:12.5px;display:flex;gap:20px;flex-wrap:wrap}
+  .sq{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+  .readout{flex:1;min-width:300px}
+  .ro-row{display:flex;align-items:baseline;padding:11px 0;border-bottom:1px solid var(--row-hairline);font-size:13.5px}
+  .ro-row:first-child{padding-top:0}
+  .ro-row .k{color:var(--text-2)}
+  .ro-row .n{margin-left:auto;font-family:var(--display);font-size:20px;font-weight:650;letter-spacing:-.02em}
+  .ro-row .delta{font-size:11.5px;padding:2px 7px;top:-1px;margin-left:8px}
+  .delta.flat{color:var(--text-3);background:var(--bg-hover)}
+
+  /* review trio */
+  .trio{display:flex;margin-top:24px}
+  .trio .cell{flex:1;padding-right:44px}
+  .trio .cell+.cell{border-left:1px solid var(--border);padding-left:44px}
+  .trio .h-label{font-size:13px;font-weight:600;color:var(--text-2)}
+  .trio .n{font-family:var(--display);font-size:34px;font-weight:650;letter-spacing:-.025em;margin-top:6px;
+           display:flex;align-items:baseline;gap:8px}
+  .trio .u{font-size:19px;color:var(--text-2);font-weight:500}
+  .trio .cap{color:var(--text-3);font-size:12.5px;margin-top:5px}
+  .trio .delta{top:-3px}
+
+  /* footnote */
+  .foot-note{margin-top:56px;border-top:1px solid var(--border);padding-top:24px;max-width:760px}
+  .foot-note .t{font-size:11px;letter-spacing:.09em;font-weight:700;color:var(--text-3)}
+  .foot-note p{margin-top:12px;color:var(--text-2);font-size:13px;line-height:1.6}
+
+  .statusline{height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 28px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="ws">
+      <div class="ws-logo">A</div><div class="ws-name">Acme</div><div class="ws-chev">▾</div>
+      <button class="ws-add">+</button>
+    </div>
+    <div class="search"><span>⌕</span><span class="q">Search</span><span class="kbd">⌘K</span></div>
+    <nav class="nav">
+      <div class="nav-item"><span class="ic">▤</span>Inbox<span class="count">3</span></div>
+      <div class="nav-item"><span class="ic">◎</span>My Issues</div>
+      <div class="nav-item"><span class="ic">⌕</span>Search</div>
+    </nav>
+    <div class="sect">TEAMS</div>
+    <div class="team"><span class="swatch sw-e">E</span>Engineering<span class="chev">▾</span></div>
+    <div class="tree">
+      <div class="leaf">List</div>
+      <div class="leaf">Board</div>
+      <div class="leaf">Cycles</div>
+      <div class="leaf">Triage</div>
+      <div class="leaf">Retros</div>
+      <div class="leaf active">Delivery</div>
+      <div class="leaf">Projects</div>
+      <div class="leaf">Roadmap</div>
+    </div>
+    <div class="team" style="margin-top:6px"><span class="swatch sw-d">D</span>Design<span class="chev">▸</span></div>
+    <div class="team"><span class="swatch sw-p">P</span>Platform<span class="chev">▸</span></div>
+    <div class="side-foot">
+      <div class="avatar">DA</div><span class="nm">Demo Admin</span>
+      <span class="conn"><span class="dot-g"></span>Connected</span>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb"><b>Engineering</b><span class="sep">/</span>Delivery</div>
+      <div class="synced"><span class="dot-g"></span>GitHub synced</div>
+    </div>
+
+    <div class="scroll">
+    <div class="content">
+
+      <div class="masthead">
+        <div>
+          <h1>Delivery</h1>
+          <div class="mast-sub">Last 6 completed cycles · team-level only — never a per-person number.</div>
+        </div>
+        <span class="window"><button class="btn">Last 6 cycles <span style="color:var(--text-3)">▾</span></button></span>
+      </div>
+
+      <!-- heroes -->
+      <div class="heroes">
+        <div class="hero">
+          <div class="h-label">Shipped</div>
+          <div class="h-num">52<span class="delta good">▲ 8</span></div>
+          <div class="h-cap">52 of the 57 issues in scope went out.</div>
+          <svg class="spark" data-series="7,9,9,9,10,8" data-w="230" data-h="44"></svg>
+        </div>
+        <div class="hero">
+          <div class="h-label">Open to merged</div>
+          <div class="h-num">46<span class="h-unit">h</span><span class="delta good">▼ 22h</span></div>
+          <div class="h-cap">Typical time from opening to merging a change.</div>
+          <svg class="spark" data-series="90.8,90.8,51.7,52.8,46.1,32.6" data-w="230" data-h="44"></svg>
+        </div>
+        <div class="hero">
+          <div class="h-label">Checks failing</div>
+          <div class="h-num">26<span class="h-unit">%</span><span class="delta good">▼ 14%</span></div>
+          <div class="h-cap">Share of automated check runs that failed.</div>
+          <svg class="spark" data-series="18,18,38,18,25,13" data-w="230" data-h="44"></svg>
+        </div>
+      </div>
+
+      <!-- ship cadence -->
+      <div class="band">
+        <div class="band-h"><span class="t">SHIP CADENCE</span>
+          <span class="plain">every dot is a release, February to now</span></div>
+        <div class="band-body">
+          <div class="lane"><span class="lane-lbl">production</span><svg id="cad-prod"></svg></div>
+          <div class="lane" style="margin-top:10px"><span class="lane-lbl">staging</span><svg id="cad-stag"></svg></div>
+          <div class="months" id="months"></div>
+          <div class="cad-legend">
+            <span class="lg"><span class="d" style="background:var(--status-done)"></span>48 reached production — from about 1 a week in February to 3 a week now</span>
+            <span class="lg"><span class="d" style="background:var(--status-urgent)"></span>2 failed and were rolled back</span>
+            <span class="lg"><span class="d" style="border:1.5px solid var(--status-done);background:transparent"></span>3 replaced by a newer release before anyone saw them</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- cycle flow -->
+      <div class="band">
+        <div class="band-h"><span class="t">CYCLE FLOW</span>
+          <span class="plain">what each cycle shipped, carried forward, or let go</span></div>
+        <div class="band-body flow-wrap">
+          <div>
+            <svg id="flow"></svg>
+            <div class="flow-legend">
+              <span><span class="sq" style="background:var(--status-done)"></span>shipped</span>
+              <span><span class="sq" style="background:var(--status-in-progress)"></span>carried into the next cycle</span>
+              <span><span class="sq" style="background:var(--border-strong)"></span>canceled</span>
+              <span style="color:var(--text-3)">the soft ribbons follow carried work forward</span>
+            </div>
+          </div>
+          <div class="readout">
+            <div class="ro-row"><span class="k">In scope this window</span><span class="n">57</span><span class="delta good">▲ 5</span></div>
+            <div class="ro-row"><span class="k">Added after a cycle started</span><span class="n">14</span><span class="delta watch">▲ 2</span></div>
+            <div class="ro-row"><span class="k">Carried into the next cycle</span><span class="n">2</span><span class="delta good">▼ 1</span></div>
+            <div class="ro-row"><span class="k">Carried in from outside</span><span class="n">1</span><span class="delta good">▼ 1</span></div>
+            <div class="ro-row"><span class="k">Carried twice or more</span><span class="n">3</span><span class="delta watch">▲ 1</span></div>
+            <div class="ro-row"><span class="k">Canceled</span><span class="n">3</span><span class="delta good">▼ 2</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- review -->
+      <div class="band">
+        <div class="band-h"><span class="t">REVIEW</span>
+          <span class="plain">how long work waits on people</span></div>
+        <div class="trio">
+          <div class="cell">
+            <div class="h-label">Time to first review</div>
+            <div class="n">15<span class="u">h</span><span class="delta good">▼ 9h</span></div>
+            <div class="cap">Typical wait for the first look at a change.</div>
+          </div>
+          <div class="cell">
+            <div class="h-label">Review rounds</div>
+            <div class="n">2<span class="delta flat">no change</span></div>
+            <div class="cap">Back-and-forths before a change is approved.</div>
+          </div>
+          <div class="cell">
+            <div class="h-label">Not linked to a change</div>
+            <div class="n">13<span class="delta good">▼ 1</span></div>
+            <div class="cap">Issues in scope with no code linked to them yet.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="foot-note">
+        <div class="t">WHAT THIS PAGE WON'T GUESS</div>
+        <p>The time from <b>merged to live</b> isn't measured yet — "open to merged" stops at the
+        merge. How often a release <b>causes an incident</b> isn't tracked either; that needs an
+        incident record yapm doesn't have. Where there's no data, this page stays blank rather
+        than invent a number.</p>
+      </div>
+
+    </div>
+    </div>
+
+    <div class="statusline">
+      <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+      <span>8 shipped</span><span class="div">·</span>
+      <span>3 deploys this week</span><span class="div">·</span>
+      <span class="attn">1 needs attention</span>
+      <span class="right"><span class="dot-g"></span>Synced</span>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* #full unclips the scroll column so --full-page captures the whole document */
+  body.full .app{height:auto;overflow:visible}
+  body.full .main{height:auto}
+  body.full .scroll{overflow:visible}
+  body.full .sidebar{height:auto;position:static}
+</style>
+<script>
+if(location.hash==="#full")document.body.classList.add("full");
+/* static SVG generation only */
+const NS="http://www.w3.org/2000/svg";
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e}
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* sparklines with a shared 6-cycle axis: faint guide columns + line + end dot */
+document.querySelectorAll("svg.spark").forEach(s=>{
+  const d=s.dataset.series.split(",").map(Number), w=+s.dataset.w, h=+s.dataset.h;
+  s.setAttribute("width",w); s.setAttribute("height",h);
+  const min=Math.min(...d), max=Math.max(...d), pad=6;
+  const x=i=>pad+i*(w-2*pad)/(d.length-1);
+  const y=v=>max===min?h/2:pad+(h-2*pad)*(1-(v-min)/(max-min));
+  for(let i=0;i<d.length;i++) s.appendChild(el("line",{x1:x(i),x2:x(i),y1:2,y2:h-2,
+    stroke:css("--row-hairline"),"stroke-width":1}));
+  s.appendChild(el("polyline",{points:d.map((v,i)=>`${x(i)},${y(v)}`).join(" "),
+    fill:"none",stroke:css("--text-3"),"stroke-width":1.8,"stroke-linejoin":"round","stroke-linecap":"round"}));
+  s.appendChild(el("circle",{cx:x(d.length-1),cy:y(d[d.length-1]),r:3,fill:css("--accent")}));
+});
+
+/* ship cadence — weekly stacks, Feb -> Aug */
+const prodWeeks=[1,1,1,1, 1,2,1,1, 2,1,2,2, 2,2,2,2, 2,2,3,2, 2,3,3,2, 3,3,4];
+const failed={9:0, 20:1};       /* weekIndex: dotIndex that failed */
+const superseded={12:1, 18:0, 24:2};
+const slot=24, W=prodWeeks.length*slot, dotR=3.2;
+(function(){
+  const s=document.getElementById("cad-prod"), H=52;
+  s.setAttribute("width",W); s.setAttribute("height",H);
+  s.appendChild(el("line",{x1:0,x2:W,y1:H-6,y2:H-6,stroke:css("--row-hairline"),"stroke-width":1}));
+  prodWeeks.forEach((n,wi)=>{
+    for(let j=0;j<n;j++){
+      const cx=wi*slot+slot/2, cy=H-10-j*10;
+      let fill=css("--status-done"), stroke="none";
+      if(failed[wi]===j){fill=css("--status-urgent")}
+      else if(superseded[wi]===j){fill=css("--bg");stroke=css("--status-done")}
+      const c=el("circle",{cx,cy,r:dotR,fill});
+      if(stroke!=="none"){c.setAttribute("stroke",stroke);c.setAttribute("stroke-width",1.4)}
+      s.appendChild(c);
+    }
+  });
+})();
+(function(){
+  const s=document.getElementById("cad-stag"), H=22;
+  s.setAttribute("width",W); s.setAttribute("height",H);
+  s.appendChild(el("line",{x1:0,x2:W,y1:H-6,y2:H-6,stroke:css("--row-hairline"),"stroke-width":1}));
+  prodWeeks.forEach((n,wi)=>{
+    for(let j=0;j<2;j++){
+      s.appendChild(el("circle",{cx:wi*slot+slot/2-4+j*8,cy:H-11,r:2.2,fill:css("--border-strong")}));
+    }
+  });
+})();
+(function(){
+  const m=document.getElementById("months"),
+        names=["Feb","Mar","Apr","May","Jun","Jul","Aug"], starts=[0,4,8,13,17,21,25];
+  names.forEach((n,i)=>{
+    const sp=document.createElement("span");
+    sp.textContent=n; sp.style.position="relative";
+    sp.style.width=((i<6?starts[i+1]-starts[i]:prodWeeks.length-starts[i])*slot)+"px";
+    sp.style.display="inline-block"; m.appendChild(sp);
+  });
+})();
+
+/* cycle flow — stacked bars + carry ribbons */
+(function(){
+  const s=document.getElementById("flow"), W=560, H=252;
+  s.setAttribute("width",W); s.setAttribute("height",H);
+  const shipped=[7,9,9,9,10,8], carried=[2,1,1,1,2,2], canceled=[0,0,1,0,1,1], added=[2,1,3,2,4,2];
+  const labels=["6 ago","5 ago","4 ago","3 ago","2 ago","last"];
+  const unit=13, bw=42, gap=44, x0=8, base=H-42;
+  const X=i=>x0+i*(bw+gap);
+  /* ribbons first (behind) */
+  for(let i=0;i<5;i++){
+    const cH=carried[i]*unit, sH=shipped[i]*unit;
+    const y1t=base-sH-cH, y1b=base-sH;           /* right edge of carried block, cycle i */
+    const x1=X(i)+bw, x2=X(i+1);
+    const y2b=base, y2t=base-carried[i]*unit;    /* bottom of next bar */
+    s.appendChild(el("path",{d:`M ${x1} ${y1t} C ${x1+gap*0.55} ${y1t}, ${x2-gap*0.55} ${y2t}, ${x2} ${y2t}
+                               L ${x2} ${y2b} C ${x2-gap*0.55} ${y2b}, ${x1+gap*0.55} ${y1b}, ${x1} ${y1b} Z`,
+      fill:css("--accent-soft"),opacity:.95}));
+  }
+  for(let i=0;i<6;i++){
+    const x=X(i); let y=base;
+    const seg=(h,color,rx)=>{y-=h;s.appendChild(el("rect",{x,y,width:bw,height:h,fill:color,rx:rx||0}))};
+    seg(shipped[i]*unit,css("--status-done"));
+    seg(carried[i]*unit,css("--status-in-progress"));
+    if(canceled[i]) seg(canceled[i]*unit*0.6,css("--border-strong"));
+    /* added mid-cycle, mono, above */
+    const t=el("text",{x:x+bw/2,y:y-8,"text-anchor":"middle",fill:css("--text-3"),
+      "font-size":"10.5"}); t.textContent="+"+added[i]+" added"; t.style.fontFamily=css("--mono")||"monospace";
+    s.appendChild(t);
+    /* labels below */
+    const l1=el("text",{x:x+bw/2,y:base+18,"text-anchor":"middle",fill:css("--text-3"),"font-size":"11"});
+    l1.textContent=labels[i]; l1.style.fontFamily="Figtree"; s.appendChild(l1);
+    const l2=el("text",{x:x+bw/2,y:base+34,"text-anchor":"middle",fill:css("--text-1"),
+      "font-size":"12","font-weight":"600"}); l2.textContent=shipped[i]; l2.style.fontFamily="Figtree";
+    s.appendChild(l2);
+  }
+  s.appendChild(el("line",{x1:0,x2:X(5)+bw+8,y1:base,y2:base,stroke:css("--border-strong"),"stroke-width":1}));
+})();
+</script>
+</body>
+</html>

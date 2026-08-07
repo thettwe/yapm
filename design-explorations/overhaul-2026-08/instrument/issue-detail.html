@@ -1,0 +1,248 @@
+<!doctype html>
+<!--
+  instrument / issue-detail — the work graph as the right column's hero (throwaway judging artifact)
+  Token extensions beyond the Warm LIGHT block, derived from existing hues:
+    - track (#cbc2b2) / track-dim (#e0d8c9)  metro-rail inks from the border ramp
+    - hazard = status-urgent (#cc5a40) used as a drawn track break, urgent-soft wash rgba(204,90,64,.08)
+    - statusline bg (#f4efe5) midpoint of bg and bg-sidebar
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — instrument — ENG-116</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2; --bg-selected:#f6e6da;
+    --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --inprog:#ce8a26; --review:#6a62c2; --done:#3e8c63; --urgent:#cc5a40; --sync:#3e8c63;
+    --track:#cbc2b2; --track-dim:#e0d8c9; --sl-bg:#f4efe5;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --ui:'Figtree',ui-sans-serif,system-ui,-apple-system,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--text-1);font-family:var(--ui);font-size:13.5px;-webkit-font-smoothing:antialiased}
+  .app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+  .topbar{height:52px;flex:none;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--border)}
+  .back{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-2);font-size:15px}
+  .viewsel{display:flex;align-items:center;gap:6px;border:1px solid var(--border-strong);border-radius:7px;background:var(--bg-elevated);padding:5px 10px;font-weight:600;font-size:13px}
+  .viewsel .car{color:var(--text-3);font-size:10px}
+  .crumb{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--text-2)}
+  .crumb .haz{display:flex;align-items:center;gap:5px;color:var(--urgent);font-size:11px;font-family:var(--mono)}
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:16px;font-size:13px;color:var(--text-2)}
+  .conn{display:flex;align-items:center;gap:6px}
+  .conn i{width:7px;height:7px;border-radius:50%;background:var(--sync)}
+  .who{display:flex;align-items:center;gap:6px;font-weight:500;color:var(--text-1)}
+  .who .car{color:var(--text-3);font-size:10px}
+
+  .body{flex:1;display:flex;overflow:hidden}
+  .content{flex:1;overflow-y:auto;padding:22px 32px 32px}
+  .titleline{display:flex;align-items:baseline;gap:12px}
+  .titleline .key{font-family:var(--mono);font-size:13px;color:var(--text-3)}
+  h1{font-size:19px;font-weight:650;letter-spacing:-.012em}
+  .sect{margin-top:22px}
+  .sect>h2{font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-2);margin-bottom:8px}
+  .descbox{border:1px solid var(--border);border-radius:7px;background:var(--bg-elevated)}
+  .descbox .tools{display:flex;gap:12px;padding:7px 12px;border-bottom:1px solid var(--border);color:var(--text-3);font-size:12px}
+  .descbox .txt{padding:14px 14px 44px;font-size:13.5px;color:var(--text-1)}
+  .quiet{color:var(--text-2);font-size:13px}
+  .filelink{color:var(--text-2);font-size:12.5px;margin-left:10px}
+  .composer{border:1px solid var(--border);border-radius:7px;background:var(--bg-elevated);margin-top:8px}
+  .composer .tools{display:flex;gap:12px;padding:7px 12px;border-bottom:1px solid var(--border);color:var(--text-3);font-size:12px}
+  .composer .txt{padding:13px 14px 30px;color:var(--text-3);font-size:13px}
+  .commentrow{display:flex;align-items:center;gap:10px;margin-top:9px}
+  .cbtn{background:var(--accent);opacity:.55;color:#fff;border-radius:7px;padding:6px 14px;font-size:12.5px;font-weight:550}
+  .khint{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+
+  /* ── right rail: delivery hero, then properties ── */
+  .rail{width:344px;flex:none;overflow-y:auto;border-left:1px solid var(--border);padding:18px 20px 24px}
+  .rail h2{font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-2)}
+  .rail .railhead{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+  .rail .railhead .m{font-family:var(--mono);font-size:10px;color:var(--text-3)}
+
+  .metro{position:relative;padding-left:22px}
+  .metro::before{content:'';position:absolute;left:7px;top:8px;bottom:92px;width:2px;background:var(--track)}
+  .stop{position:relative;padding:0 0 15px}
+  .stop .node{position:absolute;left:-20.5px;top:3px;width:11px;height:11px;border-radius:50%;background:var(--bg);border:2px solid var(--track)}
+  .stop.done .node{background:var(--done);border-color:var(--done)}
+  .stop.review .node{background:var(--review);border-color:var(--review)}
+  .stop.minor .node{width:7px;height:7px;left:-18.5px;top:5px;background:var(--bg);border:2px solid var(--review)}
+  .stop.pending .node{background:var(--bg);border:2px dashed var(--text-3)}
+  .stop .what{font-size:12.5px;font-weight:550;color:var(--text-1)}
+  .stop .what .ref{font-family:var(--mono);font-weight:400;font-size:11px;color:var(--accent-strong)}
+  .stop .meta{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-top:1px}
+  .stop.pending .what{color:var(--text-3);font-weight:450}
+
+  .breakstop{position:relative;padding:2px 0 17px}
+  .breakstop .gap{position:absolute;left:-21px;top:-4px;height:26px;width:13px}
+  .breakstop .what{font-size:11px;color:var(--urgent);font-family:var(--mono);letter-spacing:.01em}
+
+  .divergence{margin-top:4px;border:1px solid rgba(204,90,64,.45);background:rgba(204,90,64,.08);border-radius:7px;padding:9px 11px}
+  .divergence .h{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--urgent)}
+  .divergence p{font-size:11.5px;color:var(--text-2);margin-top:3px;line-height:1.45}
+  .divergence .act{display:flex;gap:8px;margin-top:8px}
+  .divergence .act span{display:flex;align-items:center;gap:6px;border:1px solid var(--border-strong);background:var(--bg-elevated);border-radius:7px;padding:3.5px 9px;font-size:11.5px;font-weight:550}
+  .divergence .act .k{font-family:var(--mono);font-size:9.5px;color:var(--text-3);border:1px solid var(--border);border-radius:3px;padding:0 3.5px}
+
+  .props{margin-top:18px;border-top:1px solid var(--border);padding-top:12px}
+  .prow{display:flex;align-items:center;min-height:30px;font-size:12.5px}
+  .prow .k{width:92px;flex:none;color:var(--text-3)}
+  .prow .v{display:flex;align-items:center;gap:7px;color:var(--text-1);font-weight:500}
+  .prow .v .mono{font-family:var(--mono);font-weight:400;font-size:11.5px;color:var(--text-2)}
+  .pill{display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:20px;padding:2px 9px;font-size:11.5px;font-weight:500;background:var(--bg-elevated)}
+  .pill i{width:7px;height:7px;border-radius:50%}
+  .updates{margin-top:16px;border-top:1px solid var(--border);padding-top:12px;font-size:11.5px;color:var(--text-3)}
+  .updates b{display:block;font-size:12px;font-weight:550;color:var(--text-2)}
+
+  .statusline{flex:none;height:28px;display:flex;align-items:center;padding:0 16px;background:var(--sl-bg);border-top:1px solid var(--border-strong);font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;color:var(--text-2);font-variant-numeric:tabular-nums}
+  .statusline b{font-weight:500;color:var(--text-1)}
+  .statusline .sep{margin:0 12px;width:1px;height:12px;background:var(--border-strong)}
+  .statusline .dim{color:var(--text-3)}
+  .statusline .g{color:var(--sync)}
+  .statusline .u{color:var(--urgent)}
+  .statusline .a{color:var(--inprog)}
+  .statusline .spacer{flex:1}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <span class="back">←</span>
+    <div class="viewsel">Issues <span class="car">▾</span></div>
+    <div class="crumb">
+      <span>ENG-116</span>
+      <span class="haz">▲ status ≠ git</span>
+    </div>
+    <div class="top-right">
+      <span class="conn"><i></i>Connected</span>
+      <span class="who">Demo Admin <span class="car">▾</span></span>
+    </div>
+  </header>
+
+  <div class="body">
+
+    <main class="content">
+      <div class="titleline"><h1>Harden attachment uploads</h1></div>
+
+      <div class="sect">
+        <h2>Description</h2>
+        <div class="descbox">
+          <div class="tools"><span>B</span><span><i>I</i></span><span>S̶</span><span>&lt;&gt;</span><span>H₂</span><span>H₃</span><span>☰</span><span>≔</span><span>❝</span></div>
+          <div class="txt">Tracked from the delivery workstream.</div>
+        </div>
+      </div>
+
+      <div class="sect">
+        <h2>Files</h2>
+        <span class="quiet">No files yet.</span><span class="filelink">⎘ Upload</span>
+      </div>
+
+      <div class="sect">
+        <h2>Comments</h2>
+        <span class="quiet">No comments yet.</span>
+        <div class="composer">
+          <div class="tools"><span>B</span><span><i>I</i></span><span>S̶</span><span>&lt;&gt;</span><span>H₂</span><span>H₃</span><span>☰</span><span>≔</span><span>❝</span></div>
+          <div class="txt">Leave a comment…</div>
+        </div>
+        <div class="commentrow">
+          <span class="cbtn">Comment</span>
+          <span class="khint">⌘⏎ to send</span>
+        </div>
+      </div>
+    </main>
+
+    <aside class="rail">
+
+      <div class="railhead"><h2>Delivery</h2><span class="m">yapm-dev/yapm#188 · lane pr→ci→rev→dep</span></div>
+
+      <div class="metro">
+        <div class="stop review">
+          <span class="node"></span>
+          <div class="what">PR opened <span class="ref">#188</span></div>
+          <div class="meta">3d ago · harden-attachment-uploads → main</div>
+        </div>
+        <div class="stop minor">
+          <span class="node"></span>
+          <div class="what" style="font-weight:450;color:var(--text-2)">review round 1 · changes requested</div>
+          <div class="meta">2d ago</div>
+        </div>
+        <div class="stop minor">
+          <span class="node"></span>
+          <div class="what" style="font-weight:450;color:var(--text-2)">review round 2 · approved</div>
+          <div class="meta">1d ago · 2 rounds total</div>
+        </div>
+        <div class="stop done">
+          <span class="node"></span>
+          <div class="what">Merged into main</div>
+          <div class="meta">1d ago · merge commit 8f21c4a</div>
+        </div>
+        <div class="stop done">
+          <span class="node"></span>
+          <div class="what">CI success</div>
+          <div class="meta">1d ago · 14 checks green</div>
+        </div>
+        <div class="breakstop">
+          <svg class="gap" width="13" height="26" viewBox="0 0 13 26">
+            <line x1="7" y1="0" x2="7" y2="6" stroke="#cbc2b2" stroke-width="2"/>
+            <line x1="10.5" y1="8" x2="3.5" y2="15" stroke="#cc5a40" stroke-width="2" stroke-linecap="round"/>
+            <line x1="13" y1="12" x2="6" y2="19" stroke="#cc5a40" stroke-width="2" stroke-linecap="round"/>
+            <line x1="7" y1="21" x2="7" y2="26" stroke="#e0d8c9" stroke-width="2" stroke-dasharray="2 3"/>
+          </svg>
+          <div class="what" style="padding-left:0">track break — merge commit absent from production</div>
+        </div>
+        <div class="stop pending" style="padding-bottom:4px">
+          <span class="node"></span>
+          <div class="what">Production deploy — not yet</div>
+          <div class="meta">last prod deploy 6h ago did not carry 8f21c4a</div>
+        </div>
+      </div>
+
+      <div class="divergence">
+        <div class="h">▲ Status diverges from delivery reality</div>
+        <p>Status says <b>In Progress</b> — git says <b>merged 1d ago</b>. The work moved; the ritual didn't.</p>
+        <div class="act">
+          <span>Mark Done <span class="k">⏎</span></span>
+          <span>Keep as is <span class="k">esc</span></span>
+        </div>
+      </div>
+
+      <div class="props">
+        <div class="prow"><span class="k">Status</span><span class="v">
+          <svg width="13" height="13" viewBox="0 0 13 13"><circle cx="6.5" cy="6.5" r="5" fill="none" stroke="#ce8a26" stroke-width="1.6"/><path d="M6.5 2.2 a4.3 4.3 0 0 1 0 8.6 Z" fill="#ce8a26"/></svg>
+          In Progress</span></div>
+        <div class="prow"><span class="k">Priority</span><span class="v">
+          <svg width="13" height="12" viewBox="0 0 13 12"><rect x="1" y="7" width="2.4" height="4" rx="1" fill="#6b6357"/><rect x="5.3" y="4" width="2.4" height="7" rx="1" fill="#6b6357"/><rect x="9.6" y="1" width="2.4" height="10" rx="1" fill="#d6cec1"/></svg>
+          Medium</span></div>
+        <div class="prow"><span class="k">Assignee</span><span class="v" style="color:var(--text-2);font-weight:450">◌ Unassigned</span></div>
+        <div class="prow"><span class="k">Cycle</span><span class="v">Cycle 2 <span class="mono">d9/14</span></span></div>
+        <div class="prow"><span class="k">Labels</span><span class="v"><span class="pill"><i style="background:#3e8c63"></i>design</span><span style="color:var(--text-3);font-weight:450;font-size:12px">+ Add</span></span></div>
+      </div>
+
+      <div class="updates">
+        <b>⚑ Follow</b>
+        Follow to get updates on this issue in your inbox.
+      </div>
+
+    </aside>
+  </div>
+
+  <footer class="statusline">
+    <span><b>ENG</b> · cycle 2 · day 9/14</span>
+    <span class="sep"></span>
+    <span>ENG-116 · pr <b>merged 1d</b> · ci <span class="g">green</span> · deploy <span class="u">absent</span></span>
+    <span class="sep"></span>
+    <span class="dim">1 status≠git</span>
+    <span class="spacer"></span>
+    <span><span class="g">●</span> synced · 0 pending</span>
+  </footer>
+
+</div>
+</body>
+</html>

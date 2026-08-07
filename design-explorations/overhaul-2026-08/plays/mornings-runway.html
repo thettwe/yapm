@@ -1,0 +1,300 @@
+<!doctype html>
+<!--
+  plays/mornings-runway — the engineer's runway as a real daily surface in the deck frame.
+  "Runway" masthead, the 3 unblocked issues as full 44px rows with track minis and a plain
+  why-it's-clear phrase, the waiting-on-others section quiet below, keyboard hints, the
+  derivation spelled out in mono. Proves the morning queue is a page, not a pitch column.
+  Tokens: Warm LIGHT block verbatim + daylight extensions (row hairline #efe9dd,
+  statusline bg #f4efe5, urgent-soft rgba(204,90,64,.08)). No other new values.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Runway · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  /* ============ band 1 — global bar ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — masthead ============ */
+  .masthead{display:flex;align-items:baseline;padding:30px 40px 6px;gap:14px}
+  .masthead h1{font-size:32px;font-weight:700;letter-spacing:-.02em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px}
+  .masthead .right{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .hint{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3)}
+  .mast-line{display:flex;align-items:baseline;padding:0 40px 20px;font-size:13.5px;
+             color:var(--text-2)}
+  .mast-line .m{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-left:auto}
+
+  /* ============ list ============ */
+  .group-h{height:35px;display:flex;align-items:center;gap:9px;padding:0 40px;
+           background:var(--bg-hover);border-top:1px solid var(--row-hairline);
+           font-size:12.5px;font-weight:600}
+  .group-h .g-count{color:var(--text-3);font-weight:400}
+  .group-h .g-sub{color:var(--text-3);font-weight:400;margin-left:4px}
+  .group-h.quiet{background:transparent;color:var(--text-2)}
+  .row{height:44px;display:flex;align-items:center;gap:12px;padding:0 40px 0 37px;
+       border-top:1px solid var(--row-hairline);border-left:3px solid transparent}
+  .row.endcap{border-bottom:1px solid var(--row-hairline)}
+  .row.selected{background:var(--bg-selected);border-left-color:var(--accent)}
+  .row .pri{width:14px;color:var(--text-3);display:flex;align-items:flex-end;gap:1px}
+  .row .id{font-family:var(--mono);font-size:12px;color:var(--text-3);width:62px}
+  .row.selected .id{color:var(--accent-strong)}
+  .row .title{font-size:13.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .spring{flex:1}
+  .row .why{font-size:12.5px;color:var(--text-2);white-space:nowrap}
+  .row .label{display:flex;align-items:center;gap:5px;color:var(--text-2);font-size:12px;white-space:nowrap}
+  .ldot{width:7px;height:7px;border-radius:50%}
+  .row .kbd{flex:none}
+
+  .row.quiet .title{color:var(--text-2)}
+  .row.quiet .why{color:var(--text-3)}
+
+  .pbar{display:inline-block;width:3px;border-radius:1px;background:var(--border-strong)}
+  .pbar.on{background:var(--text-2)}
+  .p-urgent{width:14px;height:14px;border-radius:3.5px;background:var(--status-urgent);color:#fff;
+            font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1}
+  .st{width:14px;height:14px;border-radius:50%;position:relative;flex:none}
+  .st.backlog{border:1.6px dashed var(--status-backlog)}
+  .st.todo{border:1.6px solid var(--status-todo)}
+  .st.progress{border:1.6px solid var(--status-in-progress)}
+  .st.progress::after{content:"";position:absolute;inset:2.4px;border-radius:50%;
+       background:conic-gradient(var(--status-in-progress) 0 50%,transparent 50% 100%)}
+
+  .track{display:flex;align-items:center;width:188px;flex:none}
+  .tn{width:7px;height:7px;border-radius:50%;flex:none}
+  .tn.done{background:var(--status-done)}
+  .tn.rev-wait{background:transparent;border:1.6px solid var(--status-in-review);width:8px;height:8px}
+  .tn.open{background:var(--status-in-review)}
+  .tn.empty{background:transparent;border:1.4px solid var(--border-strong)}
+  .tn.empty-urgent{background:transparent;border:1.6px solid var(--status-urgent)}
+  .tseg{height:2px;flex:1;background:var(--status-done)}
+  .tseg.rev{background:var(--status-in-review)}
+  .tseg.dotted{background:repeating-linear-gradient(90deg,var(--border-strong) 0 3px,transparent 3px 6px);height:1.5px}
+  .tbreak{color:var(--status-urgent);font-family:var(--mono);font-weight:500;font-size:11px;
+          padding:0 3px;letter-spacing:-.05em}
+  .t-age{font-family:var(--mono);font-size:11px;color:var(--text-3);width:26px;text-align:right;flex:none}
+
+  .derivation{padding:16px 40px 0;font-family:var(--mono);font-size:10.5px;line-height:1.65;
+              color:var(--text-3)}
+  .derivation .k{color:var(--text-2)}
+  .hints{display:flex;align-items:center;gap:18px;padding:12px 40px 24px}
+
+  /* ============ band 3 — statusline ============ */
+  .statusline{margin-top:auto;height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab active">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <h1>Runway</h1>
+    <span class="count">Wed Aug 12 · 3 clear</span>
+    <div class="right">
+      <span class="hint"><span class="kbd">↵</span>open</span>
+      <span class="hint"><span class="kbd">s</span>start</span>
+      <span class="hint"><span class="kbd">⌘K</span>anything</span>
+    </div>
+  </div>
+  <div class="mast-line">
+    Clear to start — nothing below waits on review, checks, a mock, or another person.
+    <span class="m">recomputed as the graph moves · last change 4m ago</span>
+  </div>
+
+  <!-- ============ clear now ============ -->
+  <div class="group-h">Clear now <span class="g-count">3</span></div>
+
+  <div class="row selected">
+    <span class="p-urgent">!</span>
+    <span class="st backlog"></span>
+    <span class="id">ENG-120</span>
+    <span class="title">Migrate legacy coupon codes</span>
+    <span class="spring"></span>
+    <span class="why">Urgent, and nothing blocks a start</span>
+    <span class="label"><span class="ldot" style="background:var(--status-urgent)"></span>bug</span>
+    <span class="kbd">1</span>
+  </div>
+  <div class="row">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st progress"></span>
+    <span class="id">ENG-119</span>
+    <span class="title">Persist cart across sessions</span>
+    <span class="spring"></span>
+    <span class="why">Review approved — finish and merge</span>
+    <span class="track">
+      <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg dotted"></span><span class="tn empty"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+    </span>
+    <span class="t-age">4h</span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-progress)"></span>feature</span>
+    <span class="kbd">2</span>
+  </div>
+  <div class="row endcap">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st progress"></span>
+    <span class="id">ENG-1</span>
+    <span class="title">Focus lost after closing the palette</span>
+    <span class="spring"></span>
+    <span class="why">Repro attached — all yours</span>
+    <span class="label"><span class="ldot" style="background:var(--status-urgent)"></span>bug</span>
+    <span class="kbd">3</span>
+  </div>
+
+  <!-- ============ waiting on others ============ -->
+  <div class="group-h quiet" style="margin-top:26px">Waiting on others
+    <span class="g-count">2</span>
+    <span class="g-sub">— nothing for you to do here</span>
+  </div>
+
+  <div class="row quiet">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st progress"></span>
+    <span class="id">ENG-113</span>
+    <span class="title">Refund flow for partial orders</span>
+    <span class="spring"></span>
+    <span class="why">In review — waiting 16h</span>
+    <span class="track">
+      <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg rev"></span><span class="tn rev-wait"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+    </span>
+    <span class="t-age">16h</span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+  </div>
+  <div class="row quiet endcap">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st progress"></span>
+    <span class="id">ENG-116</span>
+    <span class="title">Apple Pay in the payment sheet</span>
+    <span class="spring"></span>
+    <span class="why">Built — not live yet</span>
+    <span class="track">
+      <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tbreak">//</span><span class="tn empty-urgent"></span>
+    </span>
+    <span class="t-age">1d</span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+  </div>
+
+  <!-- ============ up next ============ -->
+  <div class="group-h quiet" style="margin-top:26px">Up next — if the runway empties
+    <span class="g-count">2</span>
+    <span class="g-sub">— from Todo, in areas your merged changes touched</span>
+  </div>
+
+  <div class="row quiet">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st todo"></span>
+    <span class="id">ENG-121</span>
+    <span class="title">Guest checkout without an account</span>
+    <span class="spring"></span>
+    <span class="why">Unassigned · area: checkout · mock approved</span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+  </div>
+  <div class="row quiet endcap">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st todo"></span>
+    <span class="id">ENG-118</span>
+    <span class="title">Apple Wallet pass after purchase</span>
+    <span class="spring"></span>
+    <span class="why">Unassigned · area: payments</span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+  </div>
+
+  <div class="derivation">
+    <span class="k">runway =</span> assignee you · status &lt; done · no open blocker edge ·
+    linked change not waiting on review or checks · no design-blocked flag
+    &nbsp;·&nbsp; <span class="k">waiting =</span> yours, but the next move belongs to a reviewer
+    or a release &nbsp;·&nbsp; <span class="k" style="white-space:nowrap">up&nbsp;next =</span>
+    todo, unassigned, change-area overlap with changes you merged
+  </div>
+
+  <div class="hints">
+    <span class="hint"><span class="kbd">1–3</span>jump to a clear issue</span>
+    <span class="hint"><span class="kbd">w</span>peek at what's waiting</span>
+    <span class="hint"><span class="kbd">g i</span>all issues</span>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+</body>
+</html>

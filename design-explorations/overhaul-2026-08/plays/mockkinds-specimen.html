@@ -1,0 +1,693 @@
+<!doctype html>
+<!--
+  plays/mockkinds-specimen — MOCKKINDS play, artifact 1 of 2.
+  ONE DESIGN CARD, TWO KINDS: kind: upload (an image yapm holds — rendered thumbnail)
+  and kind: link (a Figma pointer yapm respects — designed link card, honest no-preview
+  state, never a fake thumbnail, never an iframe). Shown side by side in every context
+  the card appears: issue detail, delivery-rail node payload, gallery, crit queue, peek.
+  KIND changes rendering, never status semantics — same bifact grammar, same state chips.
+  Ends with one issue carrying both (v2 was a Figma link, v3 an upload) as a version list.
+  Base: horizon three-band frame, Warm LIGHT tokens verbatim.
+  Extensions (from daylight): row hairline #efe9dd, statusline bg #f4efe5,
+  urgent-soft rgba(204,90,64,.08). The link-mark is a neutral overlapping-shapes glyph
+  drawn on the 20 grid (glyph DNA) — deliberately NOT the Figma trademark.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Design cards · two kinds</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  /* ============ band 1 — global bar ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)} .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — specimen masthead ============ */
+  .masthead{display:flex;align-items:baseline;padding:26px 40px 6px}
+  .masthead h1{font-size:26px;font-weight:700;letter-spacing:-.018em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:12.5px;margin-left:12px}
+  .masthead .lede{margin-left:16px;font-size:13.5px;color:var(--text-2)}
+  .masthead .right{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .mast-line{padding:0 40px 18px;color:var(--text-2);font-size:13.5px;max-width:880px}
+
+  .wrap{padding:0 40px 34px}
+
+  /* the two-kind legend */
+  .legend{display:grid;grid-template-columns:150px 1fr 1fr;gap:0 26px;
+          border-top:1px solid var(--border);padding:14px 0 16px}
+  .leg-cell{display:flex;gap:12px;align-items:flex-start}
+  .leg-cell .mark{flex:none;margin-top:1px}
+  .leg-name{font-size:13px;font-weight:700;letter-spacing:.02em}
+  .leg-say{font-size:12.5px;color:var(--text-2);margin-top:2px}
+  .leg-git{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:4px;line-height:1.6}
+
+  /* context rows */
+  .ctx{display:grid;grid-template-columns:150px 1fr 1fr;gap:0 26px;
+       border-top:1px solid var(--border);padding:16px 0 20px;align-items:start}
+  .ctx-label{font-size:11px;letter-spacing:.09em;color:var(--text-3);font-weight:600;padding-top:3px}
+  .ctx-label .sub{display:block;letter-spacing:0;font-weight:400;font-size:11.5px;
+                  color:var(--text-3);margin-top:5px;line-height:1.5;text-transform:none}
+  .cell{min-width:0}
+
+  /* ---- shared design-card grammar ---- */
+  .chipline{display:flex;align-items:center;gap:8px}
+  .kchip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 10px;
+         border:1px solid var(--border);border-radius:var(--rad-pill);white-space:nowrap;flex:none;
+         background:rgba(255,255,255,.55);font-size:11.5px;font-weight:600;color:var(--text-1)}
+  .kchip .dot{width:7px;height:7px;border-radius:50%;background:var(--status-done)}
+  .kchip.crit .dot{background:transparent;border:1.6px solid var(--status-in-review);width:6px;height:6px}
+  .vtag{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+
+  /* full card — issue detail */
+  .dcard{background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;
+         overflow:hidden;max-width:430px}
+  .dcard .art{background:var(--statusline-bg);border-bottom:1px solid var(--row-hairline)}
+  .dcard .art svg{display:block;width:100%;height:auto}
+  .dcard .body{padding:11px 14px 12px}
+  .dcard .name{font-size:13px;font-weight:600}
+  .dcard .fname{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:2px}
+  .dcard .row2{display:flex;align-items:center;gap:8px;margin-top:9px}
+  .dcard .row2 .sp{margin-left:auto}
+  .openout{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
+           color:var(--text-2);white-space:nowrap;flex:none}
+  .openout.loud{color:var(--accent-strong)}
+  .row2 .vtag{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+
+  /* the link card face — glyph + title + url + open out + honest line */
+  .linkface{display:flex;gap:12px;padding:13px 14px 11px;align-items:flex-start}
+  .linkface .mark{flex:none;margin-top:2px}
+  .linkface .lf-body{min-width:0;flex:1}
+  .linkface .name{font-size:13px;font-weight:600}
+  .linkface .url{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:3px;
+                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nopreview{border-top:1px solid var(--row-hairline);margin:0 14px;padding:8px 0 10px;
+             font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .dcard.link .row2{padding:0 14px 12px;margin-top:0}
+
+  /* rail payload — 198px, as on the delivery rail's design node */
+  .railwrap .say{font-size:13.5px;font-weight:600;line-height:1.25}
+  .railwrap .say .ago{color:var(--text-3);font-weight:400;margin-left:7px;font-size:12.5px}
+  .railwrap .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:3px}
+  .mock{margin-top:8px;width:198px;background:var(--bg-elevated);border:1px solid var(--border);
+        border-radius:8px;overflow:hidden}
+  .mock svg{display:block;width:100%;height:auto}
+  .mock .m-cap{display:flex;align-items:center;border-top:1px solid var(--row-hairline);
+               padding:5px 9px;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .mock .m-cap .open{margin-left:auto;font-family:var(--ui);color:var(--text-2);font-size:11px}
+  .mock.linky{width:198px}
+  .mock.linky .lrow svg{width:18px;height:18px;flex:none}
+  .mock.linky .lrow{display:flex;align-items:center;gap:8px;padding:8px 9px 7px}
+  .mock.linky .lrow .nm{font-size:12px;font-weight:600;min-width:0;white-space:nowrap;
+                        overflow:hidden;text-overflow:ellipsis}
+  .mock.linky .lrow .open{margin-left:auto;color:var(--text-2);font-size:11px;flex:none}
+  .mock.linky .m-cap{padding:5px 9px 6px}
+
+  /* gallery card */
+  .gcard{background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;
+         overflow:hidden;max-width:318px}
+  .gcard .thumb{background:var(--statusline-bg);border-bottom:1px solid var(--row-hairline);position:relative}
+  .gcard .thumb svg{display:block;width:100%;height:auto}
+  .g-meta{padding:10px 13px 12px}
+  .g-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .g-top .id{font-family:var(--mono);font-size:11.5px;color:var(--text-3)}
+  .g-top .sp{margin-left:auto}
+  .g-title{font-size:13px;font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;
+           text-overflow:ellipsis;margin-bottom:6px}
+  .g-say{font-size:12px;color:var(--text-2)}
+  .g-git{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:2px;
+         white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .thumb-open{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;
+              padding:0 0 12px}
+  .thumb-open span{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 12px;
+              background:var(--bg-elevated);border:1px solid var(--border-strong);
+              border-radius:var(--rad-pill);font-size:12px;font-weight:600;color:var(--accent-strong)}
+
+  /* crit-queue row */
+  .qcard{background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .arow{display:flex;align-items:center;gap:12px;padding:10px 14px}
+  .arow .tile{flex:none}
+  .arow .a-body{min-width:0;flex:1}
+  .arow .a-title{font-size:13px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .arow .a-sub{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:3px;
+               white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .arow .a-when{font-family:var(--mono);font-size:11px;color:var(--text-3);flex:none}
+  .linktile{width:72px;height:54px;border:1px solid var(--border-strong);border-radius:4px;
+            background:#fdfcf9;display:flex;align-items:center;justify-content:center}
+
+  /* peek card — a transient, so it alone earns elevation */
+  .peek{background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--rad-card);
+        overflow:hidden;max-width:430px;box-shadow:0 10px 30px rgba(43,38,32,.14),0 2px 8px rgba(43,38,32,.07)}
+  .peek .art{background:var(--statusline-bg);border-bottom:1px solid var(--row-hairline)}
+  .peek .art svg{display:block;width:100%;height:auto}
+  .peek .body{padding:11px 16px 13px}
+  .peek .row2{display:flex;align-items:center;gap:8px;margin-top:9px}
+  .peek .row2 .sp{margin-left:auto}
+  .peek .name{font-size:13.5px;font-weight:600}
+  .peek .fname{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:2px}
+  .peek .hintline{border-top:1px solid var(--row-hairline);padding:7px 16px 8px;display:flex;
+        font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .peek .hintline .k{margin-left:auto;display:flex;gap:6px;align-items:center;font-family:var(--ui);
+        font-size:11px;color:var(--text-2)}
+  .peek.link .linkface{padding:15px 16px 12px}
+  .peek.link .nopreview{margin:0 16px}
+  .peek.link .row2{padding:0 16px 13px;margin-top:0}
+
+  /* version list — one issue, both kinds */
+  .versions{border-top:1px solid var(--border);padding:16px 0 6px;
+            display:grid;grid-template-columns:150px 1fr;gap:0 26px;align-items:start}
+  .vlist{max-width:640px}
+  .vlist .v-h{display:flex;align-items:baseline;padding-bottom:9px;border-bottom:1px solid var(--border)}
+  .vlist .v-h .t{font-size:13.5px;font-weight:700}
+  .vlist .v-h .m{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .vrow{display:flex;align-items:center;gap:12px;min-height:44px;padding:7px 0;
+        border-bottom:1px solid var(--row-hairline)}
+  .vrow .vno{font-family:var(--mono);font-size:11.5px;color:var(--text-2);width:24px;flex:none}
+  .vrow .tile{flex:none}
+  .vrow .v-body{min-width:0;flex:1}
+  .vrow .v-say{font-size:13px}
+  .vrow .v-say b{font-weight:600}
+  .vrow .v-git{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:2px}
+  .vrow .tail{flex:none;display:flex;align-items:center;gap:10px}
+  .vrow.current{background:linear-gradient(90deg,rgba(246,230,218,.5),transparent 70%)}
+  .vrow.dim .v-say{color:var(--text-2)}
+  .minitile{width:46px;height:34px;border:1px solid var(--border-strong);border-radius:3.5px;
+            background:#fdfcf9;overflow:hidden}
+  .minitile svg{display:block}
+  .minitile.linkt{display:flex;align-items:center;justify-content:center}
+
+  /* rules footer */
+  .rules{border-top:1px solid var(--border);margin:6px 40px 0;padding:14px 0 26px;
+         display:grid;grid-template-columns:150px 1fr 1fr 1fr;gap:0 26px}
+  .rules .rl-label{font-size:11px;letter-spacing:.09em;color:var(--text-3);font-weight:600;padding-top:2px}
+  .rule .r-t{font-size:12.5px;font-weight:700;margin-bottom:4px}
+  .rule .r-s{font-size:12px;color:var(--text-2);line-height:1.55}
+  .rule .r-m{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:5px}
+
+  /* ============ band 3 — statusline ============ */
+  .statusline{margin-top:auto;height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab active">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <h1>Design cards</h1>
+    <span class="count">one card · two kinds</span>
+    <span class="lede">an image you dropped in, or a Figma link you pasted</span>
+    <span class="right">kind changes rendering · never status semantics</span>
+  </div>
+  <div class="mast-line">A mock is a mock however it arrived. Both kinds carry the same name,
+    the same version, the same crit state — only the face differs: an upload shows its pixels,
+    a link shows where it lives.</div>
+
+  <div class="wrap">
+
+    <!-- the two kinds, named -->
+    <div class="legend">
+      <div class="ctx-label">THE TWO KINDS</div>
+      <div class="leg-cell">
+        <span class="mark">
+          <svg width="22" height="22" viewBox="0 0 20 20">
+            <rect x="2.5" y="3.5" width="15" height="13" rx="2.5" fill="#f4efe5" stroke="#9a9186" stroke-width="1.6"/>
+            <circle cx="7.2" cy="8" r="1.7" fill="#c8bfae"/>
+            <path d="M4.5 15 L9.5 10.5 L12 12.6 L15.5 9.5 V15.5 H4.5 Z" fill="#dcd3c4"/>
+          </svg>
+        </span>
+        <span>
+          <span class="leg-name">Upload</span>
+          <div class="leg-say">an image yapm holds — the card shows the image itself</div>
+          <div class="leg-git">kind: upload · file stored with the issue · thumbnail always real</div>
+        </span>
+      </div>
+      <div class="leg-cell">
+        <span class="mark">
+          <svg width="22" height="22" viewBox="0 0 20 20">
+            <rect x="2.5" y="2.5" width="10" height="10" rx="3" fill="none" stroke="#9a9186" stroke-width="1.6"/>
+            <circle cx="13" cy="13" r="4.7" fill="#f6e6da" stroke="rgba(193,90,56,.55)" stroke-width="1.6"/>
+          </svg>
+        </span>
+        <span>
+          <span class="leg-name">Figma link</span>
+          <div class="leg-say">a pointer yapm respects — the card opens the file, never fakes it</div>
+          <div class="leg-git">kind: link · url stored, nothing fetched · preview arrives with the Figma connector</div>
+        </span>
+      </div>
+    </div>
+
+    <!-- (a) full card in issue detail -->
+    <div class="ctx">
+      <div class="ctx-label">IN ISSUE DETAIL
+        <span class="sub">the Design section on ENG-116 — same artifact, same chip, two faces</span>
+      </div>
+      <div class="cell">
+        <div class="dcard">
+          <span class="art">
+            <svg viewBox="0 0 430 208" xmlns="http://www.w3.org/2000/svg">
+              <rect width="430" height="208" fill="#f4efe5"/>
+              <rect x="122" y="18" width="186" height="190" rx="10" fill="#ffffff" stroke="#e7e0d4"/>
+              <rect x="203" y="26" width="24" height="3" rx="1.5" fill="#dcd3c4"/>
+              <rect x="140" y="38" width="46" height="8" rx="2" fill="#dcd3c4"/>
+              <circle cx="290" cy="42" r="6" fill="#efe9dd"/>
+              <rect x="140" y="58" width="150" height="24" rx="6" fill="#2b2620"/>
+              <rect x="193" y="67" width="44" height="7" rx="3.5" fill="#f4efe5" opacity=".92"/>
+              <rect x="140" y="92" width="150" height="1" fill="#efe9dd"/>
+              <rect x="140" y="104" width="22" height="14" rx="3" fill="#f6e6da" stroke="rgba(193,90,56,.34)"/>
+              <rect x="170" y="105" width="70" height="6" rx="2" fill="#e7e0d4"/>
+              <rect x="170" y="115" width="44" height="4" rx="2" fill="#efe9dd"/>
+              <rect x="140" y="132" width="46" height="6" rx="2" fill="#e7e0d4"/>
+              <rect x="260" y="132" width="30" height="6" rx="2" fill="#dcd3c4"/>
+              <rect x="140" y="150" width="150" height="22" rx="6" fill="#efe9dd"/>
+              <rect x="193" y="158" width="44" height="6" rx="2" fill="#dcd3c4"/>
+              <rect x="140" y="182" width="150" height="16" rx="5" fill="#ffffff" stroke="#dcd3c4"/>
+            </svg>
+          </span>
+          <div class="body">
+            <div class="name">Payment sheet — Apple Pay first</div>
+            <div class="fname">payment-sheet-v3.png · v3 · uploaded Tue</div>
+            <div class="row2">
+              <span class="kchip"><span class="dot"></span>Approved in crit</span>
+              <span class="vtag">crit Tue · 2 comments, resolved</span>
+              <span class="sp"></span>
+              <span class="openout">open ↗</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="dcard link">
+          <div class="linkface">
+            <span class="mark">
+              <svg width="26" height="26" viewBox="0 0 20 20">
+                <rect x="2.5" y="2.5" width="10" height="10" rx="3" fill="none" stroke="#9a9186" stroke-width="1.6"/>
+                <circle cx="13" cy="13" r="4.7" fill="#f6e6da" stroke="rgba(193,90,56,.55)" stroke-width="1.6"/>
+              </svg>
+            </span>
+            <span class="lf-body">
+              <div class="name">Payment sheet — Apple Pay first</div>
+              <div class="url">figma.com/file/Xq4kPh2c/payment-sheet · v3 · linked Tue</div>
+            </span>
+          </div>
+          <div class="nopreview">preview arrives with the Figma connector</div>
+          <div class="row2">
+            <span class="kchip"><span class="dot"></span>Approved in crit</span>
+            <span class="vtag">crit Tue · 2 comments</span>
+            <span class="sp"></span>
+            <span class="openout loud">Open in Figma ↗</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- (b) rail design-node payload -->
+    <div class="ctx">
+      <div class="ctx-label">IN THE DELIVERY RAIL
+        <span class="sub">the design node's payload, 198px — the chain reads the same either way</span>
+      </div>
+      <div class="cell railwrap">
+        <div class="say">Designed — approved in crit<span class="ago">Tue</span></div>
+        <div class="git">payment-sheet-v3 · 2 comments · crit Tue</div>
+        <div class="mock">
+          <svg viewBox="0 0 204 128" xmlns="http://www.w3.org/2000/svg">
+            <rect width="204" height="128" fill="#f4efe5"/>
+            <rect x="10" y="14" width="184" height="114" rx="8" fill="#ffffff" stroke="#e7e0d4"/>
+            <rect x="90" y="20" width="24" height="3" rx="1.5" fill="#dcd3c4"/>
+            <rect x="26" y="30" width="40" height="7" rx="2" fill="#dcd3c4"/>
+            <circle cx="176" cy="33" r="5.5" fill="#efe9dd"/>
+            <rect x="26" y="46" width="152" height="20" rx="5" fill="#2b2620"/>
+            <rect x="80" y="53" width="44" height="6" rx="3" fill="#f4efe5" opacity=".92"/>
+            <rect x="26" y="74" width="152" height="1" fill="#efe9dd"/>
+            <rect x="26" y="84" width="20" height="13" rx="3" fill="#f6e6da" stroke="rgba(193,90,56,.34)"/>
+            <rect x="54" y="85" width="66" height="6" rx="2" fill="#e7e0d4"/>
+            <rect x="54" y="95" width="42" height="4" rx="2" fill="#efe9dd"/>
+            <rect x="26" y="110" width="40" height="6" rx="2" fill="#e7e0d4"/>
+            <rect x="148" y="110" width="30" height="6" rx="2" fill="#dcd3c4"/>
+          </svg>
+          <div class="m-cap"><span>payment-sheet-v3</span><span class="open">open ↗</span></div>
+        </div>
+      </div>
+      <div class="cell railwrap">
+        <div class="say">Designed — approved in crit<span class="ago">Tue</span></div>
+        <div class="git">payment-sheet-v3 · 2 comments · crit Tue</div>
+        <div class="mock linky">
+          <div class="lrow">
+            <svg width="18" height="18" viewBox="0 0 20 20">
+              <rect x="2.5" y="2.5" width="10" height="10" rx="3" fill="none" stroke="#9a9186" stroke-width="1.6"/>
+              <circle cx="13" cy="13" r="4.7" fill="#f6e6da" stroke="rgba(193,90,56,.55)" stroke-width="1.6"/>
+            </svg>
+            <span class="nm">payment-sheet-v3</span>
+            <span class="open">open ↗</span>
+          </div>
+          <div class="m-cap"><span>figma.com/file/Xq4kPh2c/…</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- (c) gallery card -->
+    <div class="ctx">
+      <div class="ctx-label">IN THE GALLERY
+        <span class="sub">ENG-121, in crit Thursday — the link card keeps the wall scannable with a drawn pattern, never a fake mock</span>
+      </div>
+      <div class="cell">
+        <div class="gcard">
+          <div class="thumb">
+            <svg viewBox="0 0 320 168" xmlns="http://www.w3.org/2000/svg">
+              <rect width="320" height="168" fill="#f4efe5"/>
+              <rect x="52" y="14" width="216" height="154" rx="8" fill="#ffffff" stroke="#e7e0d4"/>
+              <rect x="72" y="30" width="88" height="8" rx="2" fill="#dcd3c4"/>
+              <rect x="72" y="50" width="176" height="18" rx="4" fill="#ffffff" stroke="#dcd3c4"/>
+              <rect x="80" y="56" width="52" height="5" rx="2" fill="#e7e0d4"/>
+              <rect x="72" y="76" width="84" height="18" rx="4" fill="#ffffff" stroke="#dcd3c4"/>
+              <rect x="164" y="76" width="84" height="18" rx="4" fill="#ffffff" stroke="#dcd3c4"/>
+              <rect x="80" y="82" width="36" height="5" rx="2" fill="#e7e0d4"/>
+              <rect x="172" y="82" width="30" height="5" rx="2" fill="#e7e0d4"/>
+              <rect x="72" y="104" width="9" height="9" rx="2" fill="#ffffff" stroke="#dcd3c4"/>
+              <rect x="87" y="106" width="96" height="5" rx="2" fill="#efe9dd"/>
+              <rect x="72" y="124" width="176" height="20" rx="5" fill="#f6e6da" stroke="rgba(193,90,56,.34)"/>
+              <rect x="134" y="131" width="52" height="6" rx="2" fill="rgba(193,90,56,.45)"/>
+            </svg>
+          </div>
+          <div class="g-meta">
+            <div class="g-top"><span class="id">ENG-121</span><span class="sp"></span><span class="vtag">upload · v2</span></div>
+            <div class="g-title">Guest checkout without an account</div>
+            <div class="g-say">In crit Thursday</div>
+            <div class="g-git">guest-checkout-v2 · 5 comments open</div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="gcard">
+          <div class="thumb">
+            <svg viewBox="0 0 320 168" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="hatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <rect width="14" height="14" fill="#f4efe5"/>
+                  <line x1="0" y1="0" x2="0" y2="14" stroke="#e7e0d4" stroke-width="1.4"/>
+                </pattern>
+              </defs>
+              <rect width="320" height="168" fill="url(#hatch)"/>
+              <g transform="translate(139,42)">
+                <rect x="0" y="0" width="24" height="24" rx="7" fill="#faf7f1" stroke="#9a9186" stroke-width="2.4"/>
+                <circle cx="26" cy="26" r="11.5" fill="#f6e6da" stroke="rgba(193,90,56,.55)" stroke-width="2.4"/>
+              </g>
+            </svg>
+            <div class="thumb-open"><span>Open in Figma ↗</span></div>
+          </div>
+          <div class="g-meta">
+            <div class="g-top"><span class="id">ENG-121</span><span class="sp"></span><span class="vtag">figma link · v2</span></div>
+            <div class="g-title">Guest checkout without an account</div>
+            <div class="g-say">In crit Thursday</div>
+            <div class="g-git">guest-checkout-v2 · 5 comments open</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- (d) crit-queue row -->
+    <div class="ctx">
+      <div class="ctx-label">IN THE CRIT QUEUE
+        <span class="sub">the designer's morning, 11:30 agenda — one glance says which kind you'll be presenting</span>
+      </div>
+      <div class="cell">
+        <div class="qcard">
+          <div class="arow">
+            <span class="tile">
+              <svg width="72" height="54" viewBox="0 0 72 54">
+                <rect x="0.5" y="0.5" width="71" height="53" rx="3.5" fill="#fdfcf9" stroke="#dcd3c4"/>
+                <rect x="0.5" y="0.5" width="71" height="9" rx="3.5" fill="#eee7db"/>
+                <rect x="6" y="15" width="38" height="5" rx="1.5" fill="#e7e0d4"/>
+                <rect x="6" y="24" width="60" height="7" rx="2" fill="#eee7db"/>
+                <rect x="6" y="34" width="60" height="7" rx="2" fill="#eee7db"/>
+                <rect x="6" y="45" width="26" height="6" rx="3" fill="#f6e6da"/>
+              </svg>
+            </span>
+            <span class="a-body">
+              <span class="a-title" style="display:block">Guest checkout — express path</span>
+              <span class="a-sub" style="display:block">DES-31 v4 · ENG-121 · upload · 3 notes</span>
+            </span>
+            <span class="a-when">11:30</span>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="qcard">
+          <div class="arow">
+            <span class="tile">
+              <span class="linktile">
+                <svg width="26" height="26" viewBox="0 0 20 20">
+                  <rect x="2.5" y="2.5" width="10" height="10" rx="3" fill="none" stroke="#9a9186" stroke-width="1.6"/>
+                  <circle cx="13" cy="13" r="4.7" fill="#f6e6da" stroke="rgba(193,90,56,.55)" stroke-width="1.6"/>
+                </svg>
+              </span>
+            </span>
+            <span class="a-body">
+              <span class="a-title" style="display:block">Guest checkout — express path</span>
+              <span class="a-sub" style="display:block">DES-31 v4 · ENG-121 · figma link · 3 notes</span>
+            </span>
+            <span class="openout loud" style="flex:none;margin-right:10px">open ↗</span>
+            <span class="a-when">11:30</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- (e) peek card -->
+    <div class="ctx" style="padding-bottom:30px">
+      <div class="ctx-label">ON PEEK
+        <span class="sub">space over any design reference — the one transient, so the one shadow</span>
+      </div>
+      <div class="cell">
+        <div class="peek">
+          <span class="art">
+            <svg viewBox="0 0 430 190" xmlns="http://www.w3.org/2000/svg">
+              <rect width="430" height="190" fill="#f4efe5"/>
+              <rect x="122" y="16" width="186" height="174" rx="10" fill="#ffffff" stroke="#e7e0d4"/>
+              <rect x="203" y="24" width="24" height="3" rx="1.5" fill="#dcd3c4"/>
+              <rect x="140" y="36" width="46" height="8" rx="2" fill="#dcd3c4"/>
+              <circle cx="290" cy="40" r="6" fill="#efe9dd"/>
+              <rect x="140" y="56" width="150" height="24" rx="6" fill="#2b2620"/>
+              <rect x="193" y="65" width="44" height="7" rx="3.5" fill="#f4efe5" opacity=".92"/>
+              <rect x="140" y="90" width="150" height="1" fill="#efe9dd"/>
+              <rect x="140" y="102" width="22" height="14" rx="3" fill="#f6e6da" stroke="rgba(193,90,56,.34)"/>
+              <rect x="170" y="103" width="70" height="6" rx="2" fill="#e7e0d4"/>
+              <rect x="170" y="113" width="44" height="4" rx="2" fill="#efe9dd"/>
+              <rect x="140" y="130" width="46" height="6" rx="2" fill="#e7e0d4"/>
+              <rect x="260" y="130" width="30" height="6" rx="2" fill="#dcd3c4"/>
+              <rect x="140" y="148" width="150" height="22" rx="6" fill="#efe9dd"/>
+              <rect x="193" y="156" width="44" height="6" rx="2" fill="#dcd3c4"/>
+            </svg>
+          </span>
+          <div class="body">
+            <div class="name">Payment sheet — Apple Pay first</div>
+            <div class="fname">payment-sheet-v3.png · v3 · uploaded Tue · ENG-116</div>
+            <div class="row2">
+              <span class="kchip"><span class="dot"></span>Approved in crit</span>
+              <span class="sp"></span>
+              <span class="openout">open ↗</span>
+            </div>
+          </div>
+          <div class="hintline"><span>space to close · o opens</span></div>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="peek link">
+          <div class="linkface">
+            <span class="mark">
+              <svg width="30" height="30" viewBox="0 0 20 20">
+                <rect x="2.5" y="2.5" width="10" height="10" rx="3" fill="none" stroke="#9a9186" stroke-width="1.6"/>
+                <circle cx="13" cy="13" r="4.7" fill="#f6e6da" stroke="rgba(193,90,56,.55)" stroke-width="1.6"/>
+              </svg>
+            </span>
+            <span class="lf-body">
+              <div class="name">Payment sheet — Apple Pay first</div>
+              <div class="url">figma.com/file/Xq4kPh2c/payment-sheet · v3 · ENG-116</div>
+            </span>
+          </div>
+          <div class="nopreview">preview arrives with the Figma connector</div>
+          <div class="row2">
+            <span class="kchip"><span class="dot"></span>Approved in crit</span>
+            <span class="sp"></span>
+            <span class="openout loud">Open in Figma ↗</span>
+          </div>
+          <div class="hintline"><span>space to close · o opens Figma</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- one issue carrying both kinds — the version list -->
+    <div class="versions">
+      <div class="ctx-label">ONE ISSUE, BOTH
+        <span class="sub">ENG-116's design history — the chain doesn't care how each version arrived</span>
+      </div>
+      <div class="vlist">
+        <div class="v-h"><span class="t">Design — 3 versions</span>
+          <span class="m">newest carries the state · older versions keep their kind</span></div>
+        <div class="vrow current">
+          <span class="vno">v3</span>
+          <span class="tile minitile">
+            <svg width="44" height="32" viewBox="0 0 44 32">
+              <rect width="44" height="32" fill="#f4efe5"/>
+              <rect x="10" y="3" width="24" height="29" rx="3" fill="#ffffff" stroke="#e7e0d4"/>
+              <rect x="13" y="7" width="18" height="5" rx="1.5" fill="#2b2620"/>
+              <rect x="13" y="15" width="5" height="4" rx="1" fill="#f6e6da"/>
+              <rect x="20" y="16" width="11" height="2" rx="1" fill="#e7e0d4"/>
+              <rect x="13" y="23" width="18" height="5" rx="1.5" fill="#efe9dd"/>
+            </svg>
+          </span>
+          <span class="v-body">
+            <span class="v-say" style="display:block"><b>Uploaded Tue</b> — the version crit approved</span>
+            <span class="v-git" style="display:block">payment-sheet-v3.png · kind: upload</span>
+          </span>
+          <span class="tail">
+            <span class="kchip"><span class="dot"></span>Approved in crit</span>
+            <span class="openout">open ↗</span>
+          </span>
+        </div>
+        <div class="vrow dim">
+          <span class="vno">v2</span>
+          <span class="tile minitile linkt">
+            <svg width="18" height="18" viewBox="0 0 20 20">
+              <rect x="2.5" y="2.5" width="10" height="10" rx="3" fill="none" stroke="#9a9186" stroke-width="1.6"/>
+              <circle cx="13" cy="13" r="4.7" fill="#f6e6da" stroke="rgba(193,90,56,.55)" stroke-width="1.6"/>
+            </svg>
+          </span>
+          <span class="v-body">
+            <span class="v-say" style="display:block">Linked from Figma last Fri — reworked after crit notes</span>
+            <span class="v-git" style="display:block">figma.com/file/Xq4kPh2c/payment-sheet · kind: link</span>
+          </span>
+          <span class="tail">
+            <span class="vtag">superseded by v3</span>
+            <span class="openout loud">Open in Figma ↗</span>
+          </span>
+        </div>
+        <div class="vrow dim" style="border-bottom:none">
+          <span class="vno">v1</span>
+          <span class="tile minitile">
+            <svg width="44" height="32" viewBox="0 0 44 32">
+              <rect width="44" height="32" fill="#f4efe5"/>
+              <rect x="10" y="3" width="24" height="29" rx="3" fill="#ffffff" stroke="#e7e0d4"/>
+              <rect x="13" y="7" width="18" height="4" rx="1" fill="#eee7db"/>
+              <rect x="13" y="14" width="18" height="4" rx="1" fill="#eee7db"/>
+              <rect x="13" y="21" width="18" height="5" rx="1.5" fill="#efe9dd"/>
+            </svg>
+          </span>
+          <span class="v-body">
+            <span class="v-say" style="display:block">Uploaded at planning — card form first</span>
+            <span class="v-git" style="display:block">payment-sheet-v1.png · kind: upload</span>
+          </span>
+          <span class="tail">
+            <span class="vtag">superseded by v2</span>
+            <span class="openout">open ↗</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- the laws -->
+  <div class="rules">
+    <div class="rl-label">RULES</div>
+    <div class="rule">
+      <div class="r-t">Kind never touches meaning</div>
+      <div class="r-s">"Approved in crit" is the same chip, the same green, the same
+        fact on both faces. Rendering is the only difference.</div>
+      <div class="r-m">state lives on the artifact, not the file</div>
+    </div>
+    <div class="rule">
+      <div class="r-t">Never a fake thumbnail</div>
+      <div class="r-s">A link card shows the mark, the name, and the address — not an
+        invented picture, and never an embedded frame.</div>
+      <div class="r-m">no iframe · no screenshot we didn't make</div>
+    </div>
+    <div class="rule">
+      <div class="r-t">The honest line</div>
+      <div class="r-s">Where an upload shows pixels, a link says plainly what's missing
+        and when it stops being missing.</div>
+      <div class="r-m">"preview arrives with the Figma connector"</div>
+    </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+</body>
+</html>

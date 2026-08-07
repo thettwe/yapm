@@ -1,0 +1,27 @@
+- generic [ref=f3e4]:
+  - banner [ref=f3e5]:
+    - button "Switch workspace or team" [ref=f3e6]:
+      - generic [ref=f3e7]: Issues
+    - navigation "Issue views" [ref=f3e8]:
+      - link "List" [ref=f3e9] [cursor=pointer]:
+        - /url: /teams/019fd280-fd77-7801-b789-660fa74ed577/issues
+      - link "Board" [ref=f3e11] [cursor=pointer]:
+        - /url: /teams/019fd280-fd77-7801-b789-660fa74ed577/board
+      - link "Cycles" [ref=f3e14] [cursor=pointer]:
+        - /url: /teams/019fd280-fd77-7801-b789-660fa74ed577/cycles
+      - link "Triage" [ref=f3e20] [cursor=pointer]:
+        - /url: /teams/019fd280-fd77-7801-b789-660fa74ed577/triage
+      - link "Retros" [ref=f3e24] [cursor=pointer]:
+        - /url: /teams/019fd280-fd77-7801-b789-660fa74ed577/retros
+      - link "Delivery" [ref=f3e28] [cursor=pointer]:
+        - /url: /teams/019fd280-fd77-7801-b789-660fa74ed577/delivery?window=6
+      - link "Projects" [ref=f3e32] [cursor=pointer]:
+        - /url: /teams/019fd280-fd77-7801-b789-660fa74ed577/projects
+      - link "Roadmap" [ref=f3e38] [cursor=pointer]:
+        - /url: /teams/019fd280-fd77-7801-b789-660fa74ed577/roadmap
+    - status [ref=f3e42]:
+      - generic [ref=f3e44]: Connecting
+    - button "Appearance settings" [ref=f3e45]
+    - button "Account menu for Demo Admin" [ref=f3e46]:
+      - generic [ref=f3e47]: Demo Admin
+  - status [ref=f3e48]: Loading team…

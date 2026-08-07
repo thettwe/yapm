@@ -1,0 +1,414 @@
+<!doctype html>
+<!--
+  frame/ — THE SHELL REVIVAL · delivery (team Delivery view inside the new frame)
+  Tokens: verbatim from globals.css Warm LIGHT. Extensions:
+    · metric lattice: cells separated by 1px --border via grid gap — cards flattened to rules.
+    · cadence bars: production = --accent, staging = --border-strong, failure tick =
+      --status-urgent, superseded = --accent-line. No new hues.
+  Team-level only; the window select and every number match the shared content pack.
+  ~30 lines of vanilla JS draw the sparklines and the deploy-cadence bars from data attrs.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Delivery · Engineering (frame/)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #faf7f1; --bg-sidebar: #f0eae0; --bg-elevated: #ffffff;
+    --bg-hover: #f2ece2; --bg-selected: #f6e6da;
+    --border: #e7e0d4; --border-strong: #dcd3c4;
+    --text-1: #2b2620; --text-2: #6b6357; --text-3: #9a9186;
+    --accent: #bd5837; --accent-strong: #a94d2f; --accent-soft: #f6e6da;
+    --accent-line: rgba(193, 90, 56, 0.34); --on-accent: #ffffff;
+    --status-in-progress: #ce8a26; --status-in-review: #6a62c2; --status-done: #3e8c63;
+    --status-urgent: #cc5a40; --signal-sync: #3e8c63;
+    --type-ui: "Figtree", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --type-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --density-sidebar: 244px;
+    --rad-control: 7px; --rad-pill: 20px; --rad-card: 15px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--type-ui); background: var(--bg); color: var(--text-1);
+    font-size: 13.5px; -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: var(--type-mono); font-variant-numeric: tabular-nums; }
+  svg { display: block; }
+  .app { display: flex; height: 100vh; overflow: hidden; }
+
+  /* ── Sidebar (shared shell) ─────────────────────────────────── */
+  .sidebar {
+    width: var(--density-sidebar); flex: none; background: var(--bg-sidebar);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  }
+  .ws { display: flex; align-items: center; gap: 9px; padding: 14px 14px 10px; }
+  .ws-mark {
+    width: 24px; height: 24px; border-radius: 6px; background: var(--accent);
+    color: var(--on-accent); display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; flex: none;
+  }
+  .ws-name { font-weight: 650; font-size: 14px; letter-spacing: -0.01em; }
+  .ws .chev { color: var(--text-3); margin-left: 1px; }
+  .ws-new {
+    margin-left: auto; width: 24px; height: 24px; border-radius: var(--rad-control);
+    border: 1px solid var(--border-strong); background: transparent; color: var(--text-2);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .search {
+    margin: 2px 12px 10px; height: 30px; display: flex; align-items: center; gap: 7px;
+    padding: 0 9px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--rad-control); color: var(--text-3); font-size: 12.5px;
+  }
+  .search .kbd { margin-left: auto; }
+  .kbd {
+    font-family: var(--type-mono); font-size: 10px; color: var(--text-3);
+    border: 1px solid var(--border-strong); border-radius: 4px; padding: 1.5px 4px;
+    background: var(--bg); line-height: 1;
+  }
+  .nav { padding: 0 8px; }
+  .nav-item {
+    position: relative; display: flex; align-items: center; gap: 8px; height: 28px;
+    padding: 0 8px; border-radius: var(--rad-control); color: var(--text-2);
+    font-size: 13px; font-weight: 500; text-decoration: none;
+  }
+  .nav-item svg { color: var(--text-3); }
+  .nav-item .count { margin-left: auto; font-family: var(--type-mono); font-size: 11px; color: var(--text-3); }
+  .section-label {
+    padding: 16px 16px 5px; font-size: 10.5px; font-weight: 650; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--text-3);
+  }
+  .team-head { color: var(--text-1); font-weight: 600; }
+  .team-mark {
+    width: 18px; height: 18px; border-radius: 5px; display: flex; align-items: center;
+    justify-content: center; font-size: 10.5px; font-weight: 700; flex: none;
+  }
+  .team-mark.e { background: var(--accent-soft); color: var(--accent-strong); }
+  .team-mark.d { background: rgba(106, 98, 194, 0.12); color: var(--status-in-review); }
+  .team-mark.p { background: rgba(62, 140, 99, 0.12); color: var(--status-done); }
+  .team-head .chev { margin-left: auto; color: var(--text-3); }
+  .tree { padding: 1px 0 2px; }
+  .tree .nav-item { padding-left: 34px; height: 27px; }
+  .nav-item.active { background: var(--accent-soft); color: var(--accent-strong); font-weight: 600; }
+  .nav-item.active::before {
+    content: ""; position: absolute; left: -8px; top: 3px; bottom: 3px; width: 3.5px;
+    border-radius: 0 2.5px 2.5px 0; background: var(--accent);
+  }
+  .sidebar-spacer { flex: 1; }
+  .side-foot { border-top: 1px solid var(--border); padding: 10px 14px; display: flex; align-items: center; gap: 8px; }
+  .avatar {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--text-2); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 8.5px;
+    font-weight: 600; font-family: var(--type-mono); flex: none;
+  }
+  .side-foot .who { font-size: 12.5px; font-weight: 550; color: var(--text-1); }
+  .conn { margin-left: auto; display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-3); }
+  .conn .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--signal-sync); }
+
+  /* ── Main ───────────────────────────────────────────────────── */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar {
+    height: 44px; flex: none; display: flex; align-items: center; gap: 8px;
+    padding: 0 20px; border-bottom: 1px solid var(--border);
+  }
+  .crumb { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-3); }
+  .crumb b { color: var(--text-2); font-weight: 550; }
+  .crumb .sep { color: var(--border-strong); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .synced { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-3); }
+  .synced .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--signal-sync); }
+
+  .masthead {
+    flex: none; display: flex; align-items: baseline; gap: 10px;
+    padding: 16px 24px 13px; border-bottom: 1px solid var(--border-strong);
+  }
+  .masthead h1 { font-size: 20px; font-weight: 650; letter-spacing: -0.015em; }
+  .masthead .win { font-family: var(--type-mono); font-size: 12px; color: var(--text-3); }
+  .masthead .actions { margin-left: auto; align-self: center; }
+  .select {
+    display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 11px;
+    border: 1px solid var(--border-strong); border-radius: var(--rad-control);
+    font-size: 12.5px; font-weight: 550; color: var(--text-2); background: transparent;
+  }
+
+  .page { flex: 1; overflow-y: auto; padding: 18px 24px 40px; }
+  .lede { font-size: 12.5px; color: var(--text-2); max-width: 760px; line-height: 1.55; margin-bottom: 20px; }
+  .sec-label {
+    font-size: 10.5px; font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--text-3); margin-bottom: 8px;
+  }
+  .section { margin-bottom: 26px; }
+
+  /* Metric lattice: rules, not cards */
+  .lattice {
+    display: grid; gap: 1px; background: var(--border);
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  }
+  .lattice.c4 { grid-template-columns: repeat(4, 1fr); }
+  .lattice.c5 { grid-template-columns: repeat(5, 1fr); }
+  .cell { background: var(--bg); padding: 11px 14px 12px; min-width: 0; }
+  .cell.filler { padding: 0; }
+  .cell .m-label { font-size: 11.5px; font-weight: 550; color: var(--text-2); }
+  .cell .m-row { display: flex; align-items: flex-end; gap: 10px; margin-top: 2px; }
+  .cell .m-value {
+    font-family: var(--type-mono); font-size: 21px; line-height: 1.15; color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+  }
+  .cell .spark { margin-left: auto; margin-bottom: 3px; color: var(--text-3); }
+  .cell .m-delta { font-size: 11px; color: var(--text-2); margin-top: 4px; }
+  .cell .m-cap {
+    font-size: 11px; color: var(--text-3); line-height: 1.45; margin-top: 3px;
+    overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+
+  /* Ship cadence */
+  .cadence-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+  .legend { display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--text-3); margin-left: auto; }
+  .legend .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .cadence-wrap { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 14px 0 6px; }
+
+  .foot-note { border-top: 1px solid var(--border); padding-top: 12px; max-width: 860px; }
+  .foot-note .sec-label { margin-bottom: 6px; }
+  .foot-note p { font-size: 11.5px; color: var(--text-3); line-height: 1.6; }
+  .foot-note b { color: var(--text-2); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="ws">
+      <span class="ws-mark">A</span>
+      <span class="ws-name">Acme</span>
+      <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      <button class="ws-new"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+    </div>
+    <div class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      Search <span class="kbd">⌘K</span>
+    </div>
+    <nav class="nav">
+      <a class="nav-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+        Inbox <span class="count">3</span>
+      </a>
+      <a class="nav-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>
+        My Issues
+      </a>
+      <a class="nav-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        Search
+      </a>
+    </nav>
+    <div class="section-label">Teams</div>
+    <nav class="nav">
+      <a class="nav-item team-head">
+        <span class="team-mark e">E</span> Engineering
+        <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </a>
+      <div class="tree">
+        <a class="nav-item">List</a>
+        <a class="nav-item">Board</a>
+        <a class="nav-item">Cycles</a>
+        <a class="nav-item">Triage</a>
+        <a class="nav-item">Retros</a>
+        <a class="nav-item active">Delivery</a>
+        <a class="nav-item">Projects</a>
+        <a class="nav-item">Roadmap</a>
+      </div>
+      <a class="nav-item team-head">
+        <span class="team-mark d">D</span> Design
+        <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </a>
+      <a class="nav-item team-head">
+        <span class="team-mark p">P</span> Platform
+        <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </a>
+    </nav>
+    <div class="sidebar-spacer"></div>
+    <div class="side-foot">
+      <span class="avatar">DA</span>
+      <span class="who">Demo Admin</span>
+      <span class="conn"><span class="dot"></span>Connected</span>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="crumb"><b>Engineering</b> <span class="sep">/</span> Delivery</span>
+      <div class="topbar-right">
+        <span class="synced"><span class="dot"></span>GitHub synced</span>
+      </div>
+    </div>
+
+    <header class="masthead">
+      <h1>Delivery</h1>
+      <span class="win">last 6 completed cycles</span>
+      <div class="actions">
+        <button class="select">Last 6 cycles
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="page">
+      <p class="lede">Team-level trends from this team's own work, computed from cycles and linked
+      pull requests. Never a per-person number. The cycle in progress is excluded — a half-finished
+      cycle would read as a decline that is only the calendar.</p>
+
+      <div class="section">
+        <div class="sec-label">Delivered</div>
+        <div class="lattice c4">
+          <div class="cell">
+            <div class="m-label">Shipped</div>
+            <div class="m-row"><span class="m-value">52</span><svg class="spark" data-pts="7,9,9,9,10,8" width="64" height="18"></svg></div>
+            <div class="m-delta">↗ +8 vs. the previous 6 cycles</div>
+            <div class="m-cap">52 of 57 issues in scope shipped across the window.</div>
+          </div>
+          <div class="cell">
+            <div class="m-label">Carried out</div>
+            <div class="m-row"><span class="m-value">2</span><svg class="spark" data-pts="4,1,2,2,2,2" width="64" height="18"></svg></div>
+            <div class="m-delta">↗ −1 vs. the previous 6 cycles</div>
+            <div class="m-cap">Carried out of the window — an in-window carry is not counted here.</div>
+          </div>
+          <div class="cell">
+            <div class="m-label">Carried in</div>
+            <div class="m-row"><span class="m-value">1</span><svg class="spark" data-pts="2,1,2,1,2,1" width="64" height="18"></svg></div>
+            <div class="m-delta">→ −1 vs. the previous 6 cycles</div>
+            <div class="m-cap">Carried in from outside the last 6 completed cycles.</div>
+          </div>
+          <div class="cell">
+            <div class="m-label">Carried twice or more</div>
+            <div class="m-row"><span class="m-value">3</span><svg class="spark" data-pts="1,2,2,3,2,3" width="64" height="18"></svg></div>
+            <div class="m-delta">↘ +1 vs. the previous 6 cycles</div>
+            <div class="m-cap">Usually re-scoping rather than re-committing.</div>
+          </div>
+          <div class="cell">
+            <div class="m-label">Added mid-cycle</div>
+            <div class="m-row"><span class="m-value">14</span><svg class="spark" data-pts="2,1,3,2,4,2" width="64" height="18"></svg></div>
+            <div class="m-delta">↘ +2 vs. the previous 6 cycles</div>
+            <div class="m-cap">Items that joined a cycle after that cycle had started.</div>
+          </div>
+          <div class="cell">
+            <div class="m-label">Canceled</div>
+            <div class="m-row"><span class="m-value">3</span><svg class="spark" data-pts="2,3,1,2,1,3" width="64" height="18"></svg></div>
+            <div class="m-delta">→ −2 vs. the previous 6 cycles</div>
+            <div class="m-cap">Issues canceled across the last 6 completed cycles.</div>
+          </div>
+          <div class="cell">
+            <div class="m-label">In scope</div>
+            <div class="m-row"><span class="m-value">57</span><svg class="spark" data-pts="8,9,10,9,11,10" width="64" height="18"></svg></div>
+            <div class="m-delta">→ +5 vs. the previous 6 cycles</div>
+            <div class="m-cap">Distinct issues that touched the window, carried work included.</div>
+          </div>
+          <div class="cell filler"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sec-label">Flow</div>
+        <div class="lattice c5">
+          <div class="cell">
+            <div class="m-label">PR cycle time</div>
+            <div class="m-row"><span class="m-value">46h</span><svg class="spark" data-pts="90.8,90.8,51.7,52.8,46.1,32.6" width="64" height="18"></svg></div>
+            <div class="m-delta">↗ −22h vs. the previous 6 cycles</div>
+            <div class="m-cap">Median from open to merge.</div>
+          </div>
+          <div class="cell">
+            <div class="m-label">Time to first review</div>
+            <div class="m-row"><span class="m-value">15h</span><svg class="spark" data-pts="18,17.3,18.4,12,17,10" width="64" height="18"></svg></div>
+            <div class="m-delta">↗ −9h vs. the previous 6 cycles</div>
+            <div class="m-cap">Median wait for the first review.</div>
+          </div>
+          <div class="cell">
+            <div class="m-label">Review rounds</div>
+            <div class="m-row"><span class="m-value">2</span><svg class="spark" data-pts="2,2,2,2,2,2" width="64" height="18"></svg></div>
+            <div class="m-delta">· no change</div>
+            <div class="m-cap">Median rounds per pull request.</div>
+          </div>
+          <div class="cell">
+            <div class="m-label">No linked PR</div>
+            <div class="m-row"><span class="m-value">13</span><svg class="spark" data-pts="3,2,3,2,2,1" width="64" height="18"></svg></div>
+            <div class="m-delta">↗ −1 vs. the previous 6 cycles</div>
+            <div class="m-cap">Issues in scope with no linked pull request.</div>
+          </div>
+          <div class="cell">
+            <div class="m-label">CI failing</div>
+            <div class="m-row"><span class="m-value">26%</span><svg class="spark" data-pts="18,18,38,18,25,13" width="64" height="18"></svg></div>
+            <div class="m-delta">↗ −14% vs. the previous 6 cycles</div>
+            <div class="m-cap">Shown next to speed so neither is traded for the other.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="cadence-head">
+          <div class="sec-label" style="margin-bottom:0">Ship cadence</div>
+          <span class="mono" style="font-size:11px;color:var(--text-3)">48 production deploys · Feb–Aug</span>
+          <div class="legend">
+            <span><span class="sw" style="background:var(--accent)"></span>production</span>
+            <span><span class="sw" style="background:var(--border-strong)"></span>staging</span>
+            <span><span class="sw" style="background:var(--status-urgent)"></span>failed</span>
+            <span><span class="sw" style="background:var(--accent-line)"></span>superseded</span>
+          </div>
+        </div>
+        <div class="cadence-wrap">
+          <svg id="cadence" width="1100" height="118"></svg>
+        </div>
+      </div>
+
+      <div class="foot-note">
+        <div class="sec-label">What this doesn't show yet</div>
+        <p><b>Lead time for changes</b> is partial: PR cycle time is measured open to merge only. Commit to deploy is not measured.</p>
+        <p><b>Deployment frequency</b> is above from the recorded deploy history; the metric over it lands in the tiles in a later change.</p>
+        <p><b>Change failure rate</b> and <b>time to restore</b> are absent. Both need an incident record that yapm does not have yet.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Sparklines: normalized polyline + accent last-point dot (same drawing as metric-tiles.tsx).
+  document.querySelectorAll('.spark').forEach(svg => {
+    const pts = svg.dataset.pts.split(',').map(Number);
+    const w = 64, h = 18, min = Math.min(...pts), max = Math.max(...pts), span = max - min;
+    const xy = pts.map((v, i) => [i * (w - 4) / (pts.length - 1) + 2,
+      span === 0 ? h / 2 : h - 3 - (v - min) / span * (h - 6)]);
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    svg.innerHTML =
+      `<polyline points="${xy.map(p => p.map(n => n.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>` +
+      `<circle cx="${xy.at(-1)[0].toFixed(1)}" cy="${xy.at(-1)[1].toFixed(1)}" r="2" fill="#bd5837"/>`;
+  });
+
+  // Deploy cadence: 26 weeks Feb→Aug. Production rises ~1/wk → ~3/wk (48 successes),
+  // staging steady ~2/wk, two failures, one superseded.
+  const prod =    [1,1,1,1, 1,1,1,1, 2,1,2,2, 2,2,1,2, 2,2,3,2, 3,2,3,3, 3,3];
+  const stag =    [2,2,1,2, 2,2,2,1, 2,2,2,2, 1,2,2,2, 2,2,2,2, 2,1,2,2, 2,2];
+  const fail = { 8: 1, 18: 1 };      // week index → failed production deploys
+  const superseded = { 21: 1 };      // week index → superseded deploys
+  const months = ['Feb','Mar','Apr','May','Jun','Jul','Aug'];
+  const svg = document.getElementById('cadence');
+  const slot = 42, bw = 8, base = 92, unit = 24;
+  let out = '';
+  prod.forEach((p, i) => {
+    const x = 8 + i * slot;
+    const sh = stag[i] * unit * 0.55;
+    out += `<rect x="${x}" y="${base - sh}" width="${bw}" height="${sh}" rx="1.5" fill="#dcd3c4"/>`;
+    const ph = p * unit;
+    out += `<rect x="${x + bw + 3}" y="${base - ph}" width="${bw}" height="${ph}" rx="1.5" fill="#bd5837"/>`;
+    if (superseded[i]) out += `<rect x="${x + bw + 3}" y="${base - ph - 7}" width="${bw}" height="5" rx="1.5" fill="rgba(193,90,56,0.34)"/>`;
+    if (fail[i]) out += `<rect x="${x + bw + 3}" y="${base - ph - 7}" width="${bw}" height="5" rx="1.5" fill="#cc5a40"/>`;
+  });
+  out += `<line x1="0" y1="${base + 0.5}" x2="1100" y2="${base + 0.5}" stroke="#e7e0d4"/>`;
+  months.forEach((m, i) => {
+    out += `<text x="${8 + i * slot * 4}" y="${base + 16}" font-family="IBM Plex Mono, monospace" font-size="10" fill="#9a9186">${m}</text>`;
+  });
+  svg.innerHTML = out;
+</script>
+</body>
+</html>

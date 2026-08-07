@@ -1,0 +1,386 @@
+<!doctype html>
+<!--
+  plays/type-applied — THE CYCLE REPORT. The team-internal cycle digest re-imagined as a
+  designed editorial document: masthead, standfirst, the divergence pull-quote, the
+  typographic metrics table, evidence as footnote-chips, cadence as running copy.
+  Same three-band frame (deck global bar / page masthead / statusline) around it.
+  Tokens: Warm LIGHT verbatim + daylight extensions (row hairline #efe9dd,
+  statusline bg #f4efe5, urgent-soft rgba(204,90,64,.08)).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Cycle 2 report · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-in-progress:#ce8a26; --status-in-review:#6a62c2; --status-done:#3e8c63;
+    --status-urgent:#cc5a40; --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  body.full .frame{height:auto;overflow:visible}
+  body.full .scroll{overflow:visible}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)} .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — page-owned masthead ============ */
+  .masthead{display:flex;align-items:center;padding:18px 40px 14px;border-bottom:1px solid var(--border)}
+  .masthead h1{font-size:20px;font-weight:700;letter-spacing:-.015em}
+  .masthead .sub{font-family:var(--mono);color:var(--text-3);font-size:11px;margin-left:12px;letter-spacing:.02em}
+  .mast-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;gap:6px;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+
+  /* ============ the report ============ */
+  .scroll{flex:1;overflow:auto}
+  .doc{max-width:704px;margin:0 auto;padding:60px 0 84px}
+
+  .kicker{display:flex;align-items:baseline;gap:14px}
+  .kicker .k{font-size:10.5px;font-weight:700;letter-spacing:.15em;color:var(--accent-strong)}
+  .kicker .rule{flex:1;height:1px;background:var(--border);transform:translateY(-3px)}
+  .kicker .cyc{font-family:var(--mono);font-size:10.5px;color:var(--text-3);letter-spacing:.03em}
+  .doc h2.title{font-size:54px;font-weight:700;letter-spacing:-.034em;line-height:1.03;margin-top:20px}
+  .standfirst{font-size:19px;font-weight:450;color:var(--text-2);line-height:1.52;margin-top:22px}
+  .standfirst b{color:var(--text-1);font-weight:600}
+  .dateline{margin-top:22px;padding-top:14px;border-top:1px solid var(--text-1);
+            font-family:var(--mono);font-size:10.5px;color:var(--text-3);letter-spacing:.03em}
+
+  /* poster stat band */
+  .statband{display:grid;grid-template-columns:1.25fr 1fr 1fr;margin-top:44px;
+            border-bottom:1px solid var(--border)}
+  .stat{padding:4px 26px 22px 0;border-right:1px solid var(--row-hairline);margin-right:26px}
+  .stat:last-child{border-right:none;margin-right:0}
+  .stat .n{font-size:88px;font-weight:700;letter-spacing:-.042em;line-height:.92;
+           font-variant-numeric:tabular-nums;display:flex;align-items:baseline}
+  .stat .n .u{font-size:34px;font-weight:650;color:var(--text-2);letter-spacing:-.01em;margin-left:2px}
+  .stat.small .n{font-size:56px;padding-top:29px}
+  .stat .w{font-size:15px;font-weight:600;margin-top:12px}
+  .stat .c{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:7px;line-height:1.55}
+  .stat .c .good{color:var(--status-done)}
+  .good{color:var(--status-done)} .watchc{color:var(--status-in-progress)}
+
+  /* sections */
+  .sec{margin-top:52px}
+  .sec-h{display:flex;align-items:baseline;gap:14px}
+  .sec-h .t{font-size:10.5px;font-weight:700;letter-spacing:.15em;color:var(--text-2)}
+  .sec-h .rule{flex:1;height:1px;background:var(--border);transform:translateY(-3px)}
+  .prose{font-size:15.5px;line-height:1.62;margin-top:18px;color:var(--text-1)}
+  .prose + .prose{margin-top:14px}
+  .prose b{font-weight:650}
+  .prose .fn{font-family:var(--mono);font-size:10px;color:var(--accent-strong);
+             vertical-align:super;line-height:0;margin-left:1px}
+  .mono-line{font-family:var(--mono);font-size:10.5px;color:var(--text-3);letter-spacing:.03em;margin-top:16px}
+
+  /* pull-quote */
+  .pq{margin-top:34px;padding-left:26px;border-left:4px solid var(--accent)}
+  .pq .status{font-size:13px;font-weight:700;color:var(--status-urgent);margin-bottom:10px}
+  .pq blockquote{font-size:40px;font-weight:650;letter-spacing:-.03em;line-height:1.1}
+  .pq .attr{margin-top:14px;font-family:var(--mono);font-size:10.5px;color:var(--text-3);letter-spacing:.02em}
+
+  /* shipped list */
+  .shiplist{margin-top:20px;border-top:1px solid var(--border);
+            display:grid;grid-template-columns:1fr 1fr;column-gap:52px}
+  .ship{display:flex;align-items:baseline;gap:10px;padding:10px 0;border-bottom:1px solid var(--row-hairline)}
+  .ship .id{font-family:var(--mono);font-size:11px;color:var(--text-3);width:56px;flex:none}
+  .ship .t{font-size:13.5px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ship .st{font-size:11.5px;font-weight:600;white-space:nowrap}
+  .ship .st.live{color:var(--status-done)}
+  .ship .st.built{color:var(--text-3);font-weight:500}
+
+  /* typographic table (condensed) */
+  .ttable{border-top:1px solid var(--text-1);margin-top:20px}
+  .trow{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border)}
+  .tcell{padding:16px 18px 18px 0;border-right:1px solid var(--row-hairline);margin-right:18px}
+  .tcell:last-child{border-right:none;margin-right:0}
+  .t-label{font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--text-2)}
+  .t-num{font-size:32px;font-weight:650;letter-spacing:-.026em;line-height:1;margin-top:10px;
+         font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:8px}
+  .t-num .u{font-size:16px;font-weight:600;color:var(--text-2);letter-spacing:0;margin-left:-3px}
+  .t-delta{font-family:var(--mono);font-size:10.5px;font-weight:500}
+  .t-delta.good{color:var(--status-done)} .t-delta.watch{color:var(--status-in-progress)}
+  .t-delta.flat{color:var(--text-3)}
+  .t-foot{padding:10px 0;font-family:var(--mono);font-size:10px;color:var(--text-3);letter-spacing:.02em;
+          border-bottom:1px solid var(--text-1)}
+
+  /* attention rows */
+  .attn-rows{margin-top:20px;border-top:1px solid var(--border)}
+  .a-row{display:flex;align-items:baseline;gap:12px;padding:12px 0;border-bottom:1px solid var(--row-hairline)}
+  .a-row .m{width:10px;flex:none;font-size:12px;line-height:1}
+  .a-row .p{font-size:14px;font-weight:600}
+  .a-row .p .n{font-variant-numeric:tabular-nums}
+  .a-row .where{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .a-row.urgent .p{color:var(--status-urgent)}
+
+  /* footnote chips */
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+  .chip{border:1px solid var(--border);border-radius:8px;padding:9px 13px;background:rgba(255,255,255,.5)}
+  .chip .l1{display:flex;align-items:baseline;gap:8px;font-size:12.5px;font-weight:600}
+  .chip .fno{font-family:var(--mono);font-size:10px;color:var(--accent-strong)}
+  .chip .id{font-family:var(--mono);font-size:11px;color:var(--text-3);font-weight:400}
+  .chip .l2{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-top:5px;letter-spacing:.01em}
+
+  .signoff{margin-top:56px;padding-top:16px;border-top:1px solid var(--text-1);
+           display:flex;align-items:baseline;gap:14px}
+  .signoff .logo{width:16px;height:16px;border-radius:4px;background:var(--accent);color:var(--on-accent);
+                 font-weight:700;font-size:8.5px;display:inline-flex;align-items:center;justify-content:center;
+                 transform:translateY(3px);flex:none}
+  .signoff p{font-size:12.5px;color:var(--text-2);line-height:1.6}
+
+  /* ============ band 3 — statusline ============ */
+  .statusline{margin-top:auto;height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab active">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <h1>Cycle 2 · Report</h1>
+    <span class="sub">DRAFTED FROM THE RECORD — EDIT ANYTHING BEFORE IT GOES OUT</span>
+    <div class="mast-actions">
+      <button class="btn">Copy as Markdown</button>
+      <button class="btn primary">Send to the team</button>
+    </div>
+  </div>
+
+  <div class="scroll">
+  <article class="doc">
+
+    <div class="kicker">
+      <span class="k">THE CYCLE REPORT</span>
+      <span class="rule"></span>
+      <span class="cyc">ENGINEERING · CYCLE 2</span>
+    </div>
+    <h2 class="title">Shipping is a habit now.</h2>
+    <p class="standfirst">Eight issues are live or built with five days still on the clock.
+      The pace that needed a push in February — one release a week — now runs at <b>three
+      without anyone pushing</b>. One issue outran the board, and two changes have waited
+      more than a day for a first look.</p>
+    <div class="dateline">JUL 27 – AUG 9 · DAY 9 OF 14 · DRAFTED THU AUG 6, 09:00 · EVERY NUMBER BELOW COMES FROM THE CONNECTED RECORD, NONE WERE HAND-ENTERED</div>
+
+    <div class="statband">
+      <div class="stat">
+        <div class="n">8</div>
+        <div class="w">shipped so far</div>
+        <div class="c"><span class="good">▲ 2</span> VS DAY 9 LAST CYCLE<br>6 LIVE · 2 BUILT — NOT LIVE YET</div>
+      </div>
+      <div class="stat small">
+        <div class="n">46<span class="u">h</span></div>
+        <div class="w">open to merged</div>
+        <div class="c"><span class="good">▼ 22H</span> · TYPICAL CHANGE</div>
+      </div>
+      <div class="stat small">
+        <div class="n">26<span class="u">%</span></div>
+        <div class="w">checks failing</div>
+        <div class="c"><span class="good">▼ 14 POINTS</span> · OF CHECK RUNS</div>
+      </div>
+    </div>
+
+    <!-- the one to talk about -->
+    <section class="sec">
+      <div class="sec-h"><span class="t">THE ONE TO TALK ABOUT</span><span class="rule"></span></div>
+      <div class="pq">
+        <div class="status">Done in git, not on the board</div>
+        <blockquote>The work moved, the ritual didn&rsquo;t.</blockquote>
+        <div class="attr">ENG-116 · APPLE PAY IN THE PAYMENT SHEET</div>
+      </div>
+      <p class="prose">Apple Pay merged yesterday and every check passed, but the board still
+        says <b>In Progress</b>.<span class="fn">1</span> Nobody did anything wrong — the code
+        simply moved faster than the card. Worth thirty seconds at standup: move the card,
+        or decide the column no longer earns its keep.</p>
+    </section>
+
+    <!-- what shipped -->
+    <section class="sec">
+      <div class="sec-h"><span class="t">WHAT SHIPPED</span><span class="rule"></span></div>
+      <p class="prose">Six are in customers&rsquo; hands; two are built and waiting on the next
+        release.<span class="fn">2</span> Checkout carried the cycle — four of the eight touch
+        the payment path.</p>
+      <div class="shiplist">
+        <div class="ship"><span class="id">ENG-121</span><span class="t">Guest checkout without an account</span><span class="st live">Live</span></div>
+        <div class="ship"><span class="id">ENG-119</span><span class="t">Persist cart across sessions</span><span class="st live">Live</span></div>
+        <div class="ship"><span class="id">ENG-109</span><span class="t">Order status emails</span><span class="st live">Live</span></div>
+        <div class="ship"><span class="id">ENG-104</span><span class="t">Promo codes at checkout</span><span class="st live">Live</span></div>
+        <div class="ship"><span class="id">ENG-111</span><span class="t">Faster product search</span><span class="st live">Live</span></div>
+        <div class="ship"><span class="id">ENG-102</span><span class="t">Receipts as PDF</span><span class="st live">Live</span></div>
+        <div class="ship"><span class="id">ENG-113</span><span class="t">Refund flow for partial orders</span><span class="st built">Built — not live yet</span></div>
+        <div class="ship"><span class="id">ENG-107</span><span class="t">Gift wrapping at checkout</span><span class="st built">Built — not live yet</span></div>
+      </div>
+    </section>
+
+    <!-- the pace -->
+    <section class="sec">
+      <div class="sec-h"><span class="t">THE PACE</span><span class="rule"></span></div>
+      <p class="prose">About <b>3 releases a week reach production now — it was 1 a week in
+        February</b>. Across those six months, 48 releases reached customers; two were rolled
+        back within the hour, and three were replaced by a newer release before anyone saw
+        them. The cadence didn&rsquo;t come from working weekends. It came from smaller
+        changes: the typical change now merges in 46 hours, half of what it took in the
+        spring.</p>
+      <div class="mono-line">FEB — AUG · 48 REACHED PRODUCTION · 2 ROLLED BACK · 3 REPLACED UNSEEN</div>
+    </section>
+
+    <!-- the numbers -->
+    <section class="sec">
+      <div class="sec-h"><span class="t">THE NUMBERS</span><span class="rule"></span></div>
+      <div class="ttable">
+        <div class="trow">
+          <div class="tcell"><div class="t-label">SHIPPED</div>
+            <div class="t-num">52<span class="t-delta good">▲ 8</span></div></div>
+          <div class="tcell"><div class="t-label">OPEN TO MERGED</div>
+            <div class="t-num">46<span class="u">h</span><span class="t-delta good">▼ 22h</span></div></div>
+          <div class="tcell"><div class="t-label">CHECKS FAILING</div>
+            <div class="t-num">26<span class="u">%</span><span class="t-delta good">▼ 14</span></div></div>
+          <div class="tcell"><div class="t-label">FIRST REVIEW</div>
+            <div class="t-num">15<span class="u">h</span><span class="t-delta good">▼ 9h</span></div></div>
+        </div>
+        <div class="trow">
+          <div class="tcell"><div class="t-label">REVIEW ROUNDS</div>
+            <div class="t-num">2<span class="t-delta flat">=</span></div></div>
+          <div class="tcell"><div class="t-label">NOT LINKED</div>
+            <div class="t-num">13<span class="t-delta good">▼ 1</span></div></div>
+          <div class="tcell"><div class="t-label">IN SCOPE</div>
+            <div class="t-num">57<span class="t-delta good">▲ 5</span></div></div>
+          <div class="tcell"><div class="t-label">ADDED MID-CYCLE</div>
+            <div class="t-num">14<span class="t-delta watch">▲ 2</span></div></div>
+        </div>
+        <div class="trow">
+          <div class="tcell"><div class="t-label">CARRIED FORWARD</div>
+            <div class="t-num">2<span class="t-delta good">▼ 1</span></div></div>
+          <div class="tcell"><div class="t-label">CARRIED IN</div>
+            <div class="t-num">1<span class="t-delta good">▼ 1</span></div></div>
+          <div class="tcell"><div class="t-label">CARRIED 2×+</div>
+            <div class="t-num">3<span class="t-delta watch">▲ 1</span></div></div>
+          <div class="tcell"><div class="t-label">CANCELED</div>
+            <div class="t-num">3<span class="t-delta good">▼ 2</span></div></div>
+        </div>
+      </div>
+      <div class="t-foot">SIX-CYCLE WINDOW · ▲▼ VS THE SIX BEFORE · <span class="good" style="color:var(--status-done)">GREEN = BETTER</span> · <span style="color:var(--status-in-progress)">AMBER = WATCH</span> · COLORED BY MEANING, NOT DIRECTION</div>
+    </section>
+
+    <!-- what needs attention -->
+    <section class="sec">
+      <div class="sec-h"><span class="t">BEFORE FRIDAY</span><span class="rule"></span></div>
+      <div class="attn-rows">
+        <div class="a-row urgent"><span class="m" style="color:var(--status-urgent)">■</span>
+          <span class="p"><span class="n">2</span> changes waiting on a first review over a day</span>
+          <span class="where">BOARD</span></div>
+        <div class="a-row urgent"><span class="m" style="color:var(--status-urgent)">■</span>
+          <span class="p">Checks failing on <span class="n">1</span> change<span class="fn" style="font-family:var(--mono);font-size:10px;color:var(--accent-strong);vertical-align:super">3</span></span>
+          <span class="where">ENG-115</span></div>
+        <div class="a-row"><span class="m" style="color:var(--text-3)">○</span>
+          <span class="p" style="font-weight:500"><span class="n">4</span> new in triage, oldest from Tuesday</span>
+          <span class="where">TRIAGE</span></div>
+      </div>
+    </section>
+
+    <!-- sources -->
+    <section class="sec">
+      <div class="sec-h"><span class="t">SOURCES</span><span class="rule"></span></div>
+      <div class="chips">
+        <div class="chip">
+          <div class="l1"><span class="fno">1</span>Apple Pay in the payment sheet<span class="id">ENG-116</span></div>
+          <div class="l2">PR #188 · 8f21c4a · 14 OF 14 CHECKS PASSED · BRANCH → MAIN</div>
+        </div>
+        <div class="chip">
+          <div class="l1"><span class="fno">2</span>Waiting on the next release<span class="id">ENG-113 · ENG-107</span></div>
+          <div class="l2">MERGED · NOT IN A PRODUCTION DEPLOY YET</div>
+        </div>
+        <div class="chip">
+          <div class="l1"><span class="fno">3</span>Address autocomplete on shipping step<span class="id">ENG-115</span></div>
+          <div class="l2">PR #191 · CHECKS FAILING 16H · 11 OF 14 PASSED</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="signoff">
+      <span class="logo">A</span>
+      <p>Drafted by yapm from the team&rsquo;s own record. Every number is team-level —
+        per-person figures don&rsquo;t exist here. This draft goes nowhere until someone
+        on the team sends it.</p>
+    </div>
+
+  </article>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+<script>if(location.hash==="#full")document.body.classList.add("full");</script>
+</body>
+</html>

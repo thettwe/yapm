@@ -1,0 +1,399 @@
+<!doctype html>
+<!--
+  frame/ — THE SHELL REVIVAL · issue-detail (ENG-116, work-graph made visible)
+  Tokens: verbatim from globals.css Warm LIGHT. Extensions:
+    · row hairline #efe9dd (lightened --border, shared with issue-list.html)
+    · urgent-soft rgba(204,90,64,0.08) — --status-urgent at 8% for the divergence callout
+      surface; same derivation rule as --accent-soft.
+  The deploy wall is replaced by a compact delivery rail: PR → review → CI → deploy as a
+  drawn timeline, with the divergence stated in words.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — ENG-116 · Harden attachment uploads (frame/)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #faf7f1; --bg-sidebar: #f0eae0; --bg-elevated: #ffffff;
+    --bg-hover: #f2ece2; --bg-selected: #f6e6da;
+    --border: #e7e0d4; --border-strong: #dcd3c4; --border-row: #efe9dd;
+    --text-1: #2b2620; --text-2: #6b6357; --text-3: #9a9186;
+    --accent: #bd5837; --accent-strong: #a94d2f; --accent-soft: #f6e6da;
+    --accent-line: rgba(193, 90, 56, 0.34); --on-accent: #ffffff;
+    --status-backlog: #a79e92; --status-todo: #8a8175; --status-in-progress: #ce8a26;
+    --status-in-review: #6a62c2; --status-done: #3e8c63; --status-urgent: #cc5a40;
+    --signal-sync: #3e8c63; --urgent-soft: rgba(204, 90, 64, 0.08);
+    --type-ui: "Figtree", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --type-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --density-sidebar: 244px;
+    --rad-control: 7px; --rad-pill: 20px; --rad-card: 15px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--type-ui); background: var(--bg); color: var(--text-1);
+    font-size: 13.5px; -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: var(--type-mono); font-variant-numeric: tabular-nums; }
+  svg { display: block; }
+  .app { display: flex; height: 100vh; overflow: hidden; }
+
+  /* ── Sidebar (shared shell) ─────────────────────────────────── */
+  .sidebar {
+    width: var(--density-sidebar); flex: none; background: var(--bg-sidebar);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  }
+  .ws { display: flex; align-items: center; gap: 9px; padding: 14px 14px 10px; }
+  .ws-mark {
+    width: 24px; height: 24px; border-radius: 6px; background: var(--accent);
+    color: var(--on-accent); display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; flex: none;
+  }
+  .ws-name { font-weight: 650; font-size: 14px; letter-spacing: -0.01em; }
+  .ws .chev { color: var(--text-3); margin-left: 1px; }
+  .ws-new {
+    margin-left: auto; width: 24px; height: 24px; border-radius: var(--rad-control);
+    border: 1px solid var(--border-strong); background: transparent; color: var(--text-2);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .search {
+    margin: 2px 12px 10px; height: 30px; display: flex; align-items: center; gap: 7px;
+    padding: 0 9px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--rad-control); color: var(--text-3); font-size: 12.5px;
+  }
+  .search .kbd { margin-left: auto; }
+  .kbd {
+    font-family: var(--type-mono); font-size: 10px; color: var(--text-3);
+    border: 1px solid var(--border-strong); border-radius: 4px; padding: 1.5px 4px;
+    background: var(--bg); line-height: 1;
+  }
+  .nav { padding: 0 8px; }
+  .nav-item {
+    position: relative; display: flex; align-items: center; gap: 8px; height: 28px;
+    padding: 0 8px; border-radius: var(--rad-control); color: var(--text-2);
+    font-size: 13px; font-weight: 500; text-decoration: none;
+  }
+  .nav-item svg { color: var(--text-3); }
+  .nav-item .count { margin-left: auto; font-family: var(--type-mono); font-size: 11px; color: var(--text-3); }
+  .section-label {
+    padding: 16px 16px 5px; font-size: 10.5px; font-weight: 650; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--text-3);
+  }
+  .team-head { color: var(--text-1); font-weight: 600; }
+  .team-mark {
+    width: 18px; height: 18px; border-radius: 5px; display: flex; align-items: center;
+    justify-content: center; font-size: 10.5px; font-weight: 700; flex: none;
+  }
+  .team-mark.e { background: var(--accent-soft); color: var(--accent-strong); }
+  .team-mark.d { background: rgba(106, 98, 194, 0.12); color: var(--status-in-review); }
+  .team-mark.p { background: rgba(62, 140, 99, 0.12); color: var(--status-done); }
+  .team-head .chev { margin-left: auto; color: var(--text-3); }
+  .tree { padding: 1px 0 2px; }
+  .tree .nav-item { padding-left: 34px; height: 27px; }
+  .nav-item.active { background: var(--accent-soft); color: var(--accent-strong); font-weight: 600; }
+  .nav-item.active::before {
+    content: ""; position: absolute; left: -8px; top: 3px; bottom: 3px; width: 3.5px;
+    border-radius: 0 2.5px 2.5px 0; background: var(--accent);
+  }
+  .sidebar-spacer { flex: 1; }
+  .side-foot { border-top: 1px solid var(--border); padding: 10px 14px; display: flex; align-items: center; gap: 8px; }
+  .avatar {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--text-2); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 8.5px;
+    font-weight: 600; font-family: var(--type-mono); flex: none;
+  }
+  .side-foot .who { font-size: 12.5px; font-weight: 550; color: var(--text-1); }
+  .conn { margin-left: auto; display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-3); }
+  .conn .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--signal-sync); }
+
+  /* ── Main ───────────────────────────────────────────────────── */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar {
+    height: 44px; flex: none; display: flex; align-items: center; gap: 8px;
+    padding: 0 20px; border-bottom: 1px solid var(--border);
+  }
+  .crumb { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-3); }
+  .crumb b { color: var(--text-2); font-weight: 550; }
+  .crumb .mono-k { font-family: var(--type-mono); font-size: 12px; color: var(--text-2); }
+  .crumb .sep { color: var(--border-strong); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .synced { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-3); }
+  .synced .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--signal-sync); }
+
+  .masthead {
+    flex: none; padding: 16px 24px 14px; border-bottom: 1px solid var(--border-strong);
+  }
+  .masthead .key-line {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
+  }
+  .masthead .issue-key { font-family: var(--type-mono); font-size: 12.5px; color: var(--text-2); }
+  .diverge-chip {
+    display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 550;
+    color: var(--status-urgent); border: 1px solid rgba(204, 90, 64, 0.3);
+    border-radius: var(--rad-pill); padding: 2.5px 9px; background: var(--urgent-soft);
+  }
+  .masthead .title-line { display: flex; align-items: center; gap: 12px; }
+  .masthead h1 { font-size: 20px; font-weight: 650; letter-spacing: -0.015em; }
+  .masthead .actions { margin-left: auto; display: flex; gap: 8px; }
+  .btn {
+    display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px;
+    border-radius: var(--rad-control); font-family: var(--type-ui); font-size: 12.5px;
+    font-weight: 550; border: 1px solid var(--border-strong); background: transparent;
+    color: var(--text-2);
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+  .body { flex: 1; display: flex; min-height: 0; }
+  .content { flex: 1; min-width: 0; overflow-y: auto; padding: 22px 32px 32px 24px; }
+  .sec-label {
+    font-size: 10.5px; font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--text-3); padding-bottom: 7px; border-bottom: 1px solid var(--border);
+    margin-bottom: 12px; display: flex; align-items: baseline; gap: 10px;
+  }
+  .sec-label .aux {
+    margin-left: auto; font-size: 11.5px; font-weight: 500; letter-spacing: 0;
+    text-transform: none; color: var(--text-2);
+  }
+  .section { margin-bottom: 28px; }
+  .desc { font-size: 13.5px; line-height: 1.65; color: var(--text-1); max-width: 640px; }
+  .quiet { font-size: 12.5px; color: var(--text-3); }
+  .composer {
+    max-width: 640px; border: 1px solid var(--border); border-radius: var(--rad-control);
+    background: var(--bg-elevated); padding: 10px 12px;
+  }
+  .composer .ph { font-size: 13px; color: var(--text-3); padding-bottom: 26px; }
+  .composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .composer-foot .hint { font-size: 11px; color: var(--text-3); display: flex; gap: 5px; align-items: center; }
+
+  /* ── Right rail ─────────────────────────────────────────────── */
+  .rail {
+    width: 304px; flex: none; border-left: 1px solid var(--border); overflow-y: auto;
+    padding: 22px 20px 32px;
+  }
+  .prop { display: flex; align-items: center; gap: 8px; height: 30px; font-size: 12.5px; }
+  .prop .k { width: 82px; flex: none; color: var(--text-3); }
+  .prop .v { display: flex; align-items: center; gap: 7px; color: var(--text-1); font-weight: 500; }
+  .prop .v .mono { font-size: 11.5px; color: var(--text-2); }
+  .prop .muted { color: var(--text-3); font-weight: 400; }
+  .label-chip { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-2); }
+  .label-chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* Delivery rail: the work-graph, drawn */
+  .graph { position: relative; margin-top: 2px; }
+  .graph::before {
+    content: ""; position: absolute; left: 7px; top: 12px; bottom: 32px;
+    width: 1px; background: var(--border-strong);
+  }
+  .node { position: relative; display: flex; gap: 12px; padding: 7px 0 7px 0; }
+  .node .glyph {
+    width: 15px; height: 15px; flex: none; display: flex; align-items: center;
+    justify-content: center; background: var(--bg); position: relative; z-index: 1;
+  }
+  .node .txt { min-width: 0; }
+  .node .t1 { font-size: 12.5px; font-weight: 550; color: var(--text-1); display: flex; align-items: baseline; gap: 7px; }
+  .node .t1 .when { font-family: var(--type-mono); font-size: 10.5px; color: var(--text-3); font-weight: 400; }
+  .node .t2 { font-size: 11.5px; color: var(--text-2); margin-top: 1.5px; line-height: 1.5; }
+  .node a.pr-link { font-family: var(--type-mono); font-size: 11.5px; color: var(--accent-strong); text-decoration: none; }
+  .node.pending .t1 { color: var(--text-2); }
+
+  .diverge-note {
+    margin-top: 12px; border: 1px solid rgba(204, 90, 64, 0.3); background: var(--urgent-soft);
+    border-radius: var(--rad-control); padding: 10px 12px;
+  }
+  .diverge-note .head {
+    display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600;
+    color: var(--status-urgent); margin-bottom: 3px;
+  }
+  .diverge-note p { font-size: 11.5px; line-height: 1.55; color: var(--text-2); }
+  .diverge-note .act {
+    display: inline-flex; margin-top: 7px; font-size: 12px; font-weight: 600;
+    color: var(--accent-strong); text-decoration: none; align-items: center; gap: 5px;
+  }
+  .rail .section { margin-bottom: 24px; }
+  .follow { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-2); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="ws">
+      <span class="ws-mark">A</span>
+      <span class="ws-name">Acme</span>
+      <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      <button class="ws-new"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+    </div>
+    <div class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      Search <span class="kbd">⌘K</span>
+    </div>
+    <nav class="nav">
+      <a class="nav-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+        Inbox <span class="count">3</span>
+      </a>
+      <a class="nav-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>
+        My Issues
+      </a>
+      <a class="nav-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        Search
+      </a>
+    </nav>
+    <div class="section-label">Teams</div>
+    <nav class="nav">
+      <a class="nav-item team-head">
+        <span class="team-mark e">E</span> Engineering
+        <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </a>
+      <div class="tree">
+        <a class="nav-item active">List</a>
+        <a class="nav-item">Board</a>
+        <a class="nav-item">Cycles</a>
+        <a class="nav-item">Triage</a>
+        <a class="nav-item">Retros</a>
+        <a class="nav-item">Delivery</a>
+        <a class="nav-item">Projects</a>
+        <a class="nav-item">Roadmap</a>
+      </div>
+      <a class="nav-item team-head">
+        <span class="team-mark d">D</span> Design
+        <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </a>
+      <a class="nav-item team-head">
+        <span class="team-mark p">P</span> Platform
+        <svg class="chev" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </a>
+    </nav>
+    <div class="sidebar-spacer"></div>
+    <div class="side-foot">
+      <span class="avatar">DA</span>
+      <span class="who">Demo Admin</span>
+      <span class="conn"><span class="dot"></span>Connected</span>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="crumb"><b>Engineering</b> <span class="sep">/</span> Issues <span class="sep">/</span> <span class="mono-k">ENG-116</span></span>
+      <div class="topbar-right">
+        <span class="synced"><span class="dot"></span>GitHub synced</span>
+      </div>
+    </div>
+
+    <header class="masthead">
+      <div class="key-line">
+        <span class="issue-key">ENG-116</span>
+        <span class="diverge-chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          Status behind merge
+        </span>
+      </div>
+      <div class="title-line">
+        <h1>Harden attachment uploads</h1>
+        <div class="actions">
+          <button class="btn">Follow</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="body">
+      <div class="content">
+        <div class="section">
+          <div class="sec-label">Description</div>
+          <p class="desc">Tracked from the delivery workstream.</p>
+        </div>
+        <div class="section">
+          <div class="sec-label">Files <span class="aux">Upload</span></div>
+          <p class="quiet">No files yet.</p>
+        </div>
+        <div class="section">
+          <div class="sec-label">Comments</div>
+          <p class="quiet" style="margin-bottom:12px">No comments yet.</p>
+          <div class="composer">
+            <div class="ph">Leave a comment…</div>
+            <div class="composer-foot">
+              <button class="btn primary" style="height:26px">Comment</button>
+              <span class="hint"><span class="kbd">⌘↵</span> to send</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="rail">
+        <div class="section">
+          <div class="sec-label">Properties</div>
+          <div class="prop"><span class="k">Status</span><span class="v">
+            <svg width="13" height="13" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.2" fill="none" stroke="#ce8a26" stroke-width="1.6"/><path d="M7 2.9 A4.1 4.1 0 0 1 7 11.1 Z" fill="#ce8a26"/></svg>
+            In Progress
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#cc5a40" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          </span></div>
+          <div class="prop"><span class="k">Priority</span><span class="v">
+            <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="7" width="2.4" height="4" rx="1" fill="#6b6357"/><rect x="4.8" y="4" width="2.4" height="7" rx="1" fill="#6b6357"/><rect x="8.6" y="1" width="2.4" height="10" rx="1" fill="#dcd3c4"/></svg>
+            Medium
+          </span></div>
+          <div class="prop"><span class="k">Assignee</span><span class="v muted">Unassigned</span></div>
+          <div class="prop"><span class="k">Cycle</span><span class="v"><span class="mono">Cycle 2</span></span></div>
+          <div class="prop"><span class="k">Labels</span><span class="v">
+            <span class="label-chip"><span class="dot" style="background:#3e8c63"></span>design</span>
+            <span class="label-chip muted">+ Add</span>
+          </span></div>
+        </div>
+
+        <div class="section">
+          <div class="sec-label">Delivery</div>
+          <div class="graph">
+            <div class="node">
+              <span class="glyph"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3e8c63" stroke-width="2.2" stroke-linecap="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg></span>
+              <span class="txt">
+                <span class="t1">PR merged <span class="when">1d ago</span></span>
+                <span class="t2"><a class="pr-link">yapm-dev/yapm#188</a></span>
+              </span>
+            </div>
+            <div class="node">
+              <span class="glyph"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3e8c63" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+              <span class="txt">
+                <span class="t1">Review approved</span>
+                <span class="t2">2 rounds</span>
+              </span>
+            </div>
+            <div class="node">
+              <span class="glyph"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3e8c63" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+              <span class="txt">
+                <span class="t1">CI success</span>
+                <span class="t2">merge commit checks green</span>
+              </span>
+            </div>
+            <div class="node pending">
+              <span class="glyph"><svg width="13" height="13" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5" fill="none" stroke="#9a9186" stroke-width="1.6" stroke-dasharray="2.4 2.2"/></svg></span>
+              <span class="txt">
+                <span class="t1">Not deployed</span>
+                <span class="t2">merge commit absent from production</span>
+              </span>
+            </div>
+          </div>
+
+          <div class="diverge-note">
+            <div class="head">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+              Divergence
+            </div>
+            <p>Status says <b>In Progress</b> — git says <b>merged</b>. The linked PR merged 1d ago with CI green.</p>
+            <a class="act">Move to Done <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="sec-label">Updates</div>
+          <p class="quiet" style="line-height:1.55">Follow to get updates on this issue in your inbox.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</body>
+</html>

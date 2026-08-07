@@ -1,0 +1,232 @@
+- generic [ref=f12e2]:
+  - banner [ref=f12e3]:
+    - generic [ref=f12e4]:
+      - generic [ref=f12e5]: A
+      - generic [ref=f12e6]: Acme
+      - generic [ref=f12e7]: /
+      - generic [ref=f12e8]: Engineering
+      - generic [ref=f12e9]: ▾
+    - navigation [ref=f12e10]:
+      - generic [ref=f12e11]: Home
+      - generic [ref=f12e12]: Issues
+      - generic [ref=f12e13]: Triage
+      - generic [ref=f12e14]: Cycles
+      - generic [ref=f12e15]: Delivery
+      - generic [ref=f12e16]:
+        - text: more
+        - generic [ref=f12e17]: ▾
+    - generic [ref=f12e18]:
+      - generic [ref=f12e19]:
+        - generic [ref=f12e20]: ⌕
+        - generic [ref=f12e21]: ⌘K
+      - generic [ref=f12e22]: "4"
+      - generic [ref=f12e24]:
+        - text: Inbox
+        - generic [ref=f12e25]: "3"
+      - generic [ref=f12e26]: DA
+  - generic [ref=f12e27]:
+    - heading "The map" [level=1] [ref=f12e28]
+    - paragraph [ref=f12e29]: Destinations few, doorways many. This sheet explains; the four pages it maps do not.
+  - generic [ref=f12e30]:
+    - generic [ref=f12e31]: THE FRAME
+    - heading "Three bands. Two belong to the app, one to the page." [level=2] [ref=f12e33]
+    - generic [ref=f12e34]:
+      - generic [ref=f12e35]:
+        - generic [ref=f12e36]:
+          - generic [ref=f12e38]: Acme / Engineering
+          - generic [ref=f12e39]: Home
+          - generic [ref=f12e40]: Issues
+          - generic [ref=f12e41]: Triage
+          - generic [ref=f12e42]: Cycles
+          - generic [ref=f12e43]: Delivery
+          - generic [ref=f12e44]: more ▾
+          - generic [ref=f12e45]:
+            - generic [ref=f12e46]: ⌘K
+            - generic [ref=f12e47]: ● 4
+            - generic [ref=f12e48]: Inbox 3
+        - generic [ref=f12e49]:
+          - text: Issues
+          - generic [ref=f12e50]: List | Board | Gallery · filters · actions
+        - generic [ref=f12e51]: the work surface — rows, rails, tiles, charts
+        - generic [ref=f12e52]:
+          - generic [ref=f12e53]: Cycle 2, day 9 of 14
+          - generic [ref=f12e54]: ·
+          - generic [ref=f12e55]: 8 shipped
+          - generic [ref=f12e56]: ·
+          - generic [ref=f12e57]: 4 need attention
+          - generic [ref=f12e58]: ● Synced
+      - generic [ref=f12e59]:
+        - generic [ref=f12e60]: "band 1 — the deck: identical on every page, pixel for pixel"
+        - generic [ref=f12e61]: "band 2 — the masthead: the page owns it, adapts it"
+        - generic [ref=f12e62]: the work surface — where the word diet holds
+        - generic [ref=f12e63]: "band 3 — the statusline: the team's day, one line, every page"
+  - generic [ref=f12e64]:
+    - generic [ref=f12e65]: THE WORD DIET
+    - heading "Three tiers of voice. A word lives where it earns rent." [level=2] [ref=f12e67]
+    - generic [ref=f12e68]:
+      - generic [ref=f12e69]:
+        - generic [ref=f12e70]: CHROME
+        - generic [ref=f12e71]: Labels only. Bands 1 & 3, mastheads, nav — no sentences; the binding rule ("team-level only — never a per-person number") appears once per app, on Delivery.
+      - generic [ref=f12e72]:
+        - generic [ref=f12e73]: WORK SURFACES
+        - generic [ref=f12e74]: Dictionary phrases at rest. Lists, queues, rails, tiles — derived numbers carry how ·, honesty collapses to one line + more ·, mono sublines only on the detail.
+      - generic [ref=f12e75]:
+        - generic [ref=f12e76]: DOCUMENTS
+        - generic [ref=f12e77]: Full editorial voice. Home's cycle hero, the Cycle report, Wrapped, descriptions — this is where the writing lives.
+  - generic [ref=f12e78]:
+    - generic [ref=f12e79]: DESTINATIONS
+    - heading "Six stops on the bar. Everything else is a doorway, a lens, or an artifact." [level=2] [ref=f12e81]
+    - generic [ref=f12e82]:
+      - generic [ref=f12e83]:
+        - generic [ref=f12e84]:
+          - generic [ref=f12e85]: Home
+          - generic [ref=f12e87]:
+            - generic [ref=f12e88]:
+              - text: cycle hero
+              - generic [ref=f12e90]: the document
+            - generic [ref=f12e91]:
+              - text: attention
+              - generic [ref=f12e93]: 4 doorways
+            - generic [ref=f12e94]:
+              - text: ready for you
+              - generic [ref=f12e96]: runway · crit · verify → Runway page
+            - generic [ref=f12e97]:
+              - text: cadence mini
+              - generic [ref=f12e99]: → Delivery
+            - generic [ref=f12e100]: shipped list
+        - generic [ref=f12e102]:
+          - generic [ref=f12e103]: Issues
+          - generic [ref=f12e105]:
+            - generic [ref=f12e106]:
+              - text: List
+              - generic [ref=f12e108]: lens
+            - generic [ref=f12e109]:
+              - text: Board
+              - generic [ref=f12e110]: lens
+            - generic [ref=f12e111]:
+              - text: Gallery
+              - generic [ref=f12e112]: lens
+            - generic [ref=f12e113]:
+              - text: issue detail
+              - generic [ref=f12e115]: "rail: idea → designed → built → live"
+        - generic [ref=f12e116]:
+          - generic [ref=f12e117]: Triage
+          - generic [ref=f12e120]:
+            - text: the intake queue
+            - generic [ref=f12e122]: 4 new today
+        - generic [ref=f12e123]:
+          - generic [ref=f12e124]: Cycles
+          - generic [ref=f12e126]:
+            - generic [ref=f12e127]: cycle page
+            - generic [ref=f12e129]:
+              - text: ↳ Cycle report
+              - generic [ref=f12e130]: artifact
+            - generic [ref=f12e131]:
+              - text: ↳ Wrapped
+              - generic [ref=f12e132]: artifact
+        - generic [ref=f12e133]:
+          - generic [ref=f12e134]: Delivery
+          - generic [ref=f12e137]:
+            - text: the journalism cut
+            - generic [ref=f12e139]: timeline · strip · flow · rhythm
+        - generic [ref=f12e140]:
+          - generic [ref=f12e141]: more ▾
+          - generic [ref=f12e143]:
+            - generic [ref=f12e144]: Retros
+            - generic [ref=f12e146]: Projects
+            - generic [ref=f12e147]: Roadmap
+            - generic [ref=f12e148]:
+              - text: Decisions
+              - generic [ref=f12e149]: → the Record — also reached from any decision chip
+        - generic [ref=f12e150]: "transients, never destinations: the ⌘K palette · peeks · this menu ↘ the Record and Runway are pages without bar seats — doorways reach them."
+      - generic [ref=f12e151]:
+        - generic [ref=f12e152]:
+          - text: Retros
+          - generic [ref=f12e156]: g r
+        - generic [ref=f12e157]:
+          - text: Projects
+          - generic [ref=f12e161]: g p
+        - generic [ref=f12e162]:
+          - text: Roadmap
+          - generic [ref=f12e166]: g m
+        - generic [ref=f12e167]:
+          - text: Decisions
+          - generic [ref=f12e171]: the Record
+          - generic [ref=f12e172]: g d
+  - generic [ref=f12e173]:
+    - generic [ref=f12e174]: ONE ATTENTION NUMBER
+    - heading "4 — the four exception classes. The same 4 in the bar, the statusline, and Home." [level=2] [ref=f12e176]
+    - generic [ref=f12e177]:
+      - generic [ref=f12e178]: "4"
+      - generic [ref=f12e180]:
+        - text: … 3 deploys this week ·
+        - generic [ref=f12e181]: 4 need attention
+      - generic [ref=f12e182]: NEEDS ATTENTION 4 — done in git not on the board · waiting on review over a day · checks failing · new in triage
+  - generic [ref=f12e183]:
+    - generic [ref=f12e184]: TWO PATTERNS, DRAWN ONCE
+    - heading "The peek, and the how ·" [level=2] [ref=f12e186]
+    - generic [ref=f12e187]:
+      - generic [ref=f12e188]:
+        - paragraph [ref=f12e189]: The peek. Anything dotted opens something; a chip answers “what is this?” without leaving. Hover or focus peeks; ⏎ goes; esc stays. At most one peek is ever open on a page.
+        - generic [ref=f12e190]:
+          - generic [ref=f12e191]: ENG-116
+          - generic [ref=f12e197]:
+            - generic [ref=f12e198]: Apple Pay in the payment sheet
+            - generic [ref=f12e199]:
+              - generic [ref=f12e202]: In Progress
+              - generic [ref=f12e203]: · Cycle 2 · feature
+            - generic [ref=f12e204]: Done in git, not on the board
+            - generic [ref=f12e207]:
+              - generic [ref=f12e208]: Built — not live yet
+              - generic [ref=f12e209]: merged 8f21c4a · 14/14 checks · no prod deploy since
+            - generic [ref=f12e213]:
+              - generic [ref=f12e214]: ⏎
+              - generic [ref=f12e215]: open
+              - generic [ref=f12e216]: ·
+              - generic [ref=f12e217]: esc
+              - generic [ref=f12e218]: stay
+      - generic [ref=f12e219]:
+        - paragraph [ref=f12e220]: The how. A derived number never explains itself at rest — it carries a mono how · instead. Open it, and the derivation appears; close it, and the surface is quiet again. Facts stay; footnotes fold.
+        - generic [ref=f12e221]:
+          - generic [ref=f12e222]:
+            - text: 46h
+            - generic [ref=f12e223]: how ·
+          - generic [ref=f12e224]:
+            - generic [ref=f12e225]: HOW · OPEN TO MERGED
+            - generic [ref=f12e226]: Median of the last 26 merged changes, opened → merged, drawn where it falls — not quoted from a summary.
+            - generic [ref=f12e227]: linear scale · giants included · team-level only
+  - generic [ref=f12e228]:
+    - generic [ref=f12e229]: PROVENANCE
+    - heading "Our glyphs carry meaning · brand marks carry provenance." [level=2] [ref=f12e231]
+    - generic [ref=f12e232]:
+      - generic [ref=f12e233]:
+        - generic [ref=f12e234]: GitHub — the source suffix
+        - generic [ref=f12e238]: Monochrome, 12–14px, currentColor, after the fact it sourced — never replacing a status arc, never colored, never larger than the text.
+        - generic [ref=f12e239]:
+          - generic [ref=f12e240]: change
+          - generic [ref=f12e241]: "#188"
+          - generic [ref=f12e248]: check
+          - generic [ref=f12e249]: 14/14 checks passed
+          - generic [ref=f12e253]: deploy
+          - generic [ref=f12e254]: no prod deploy since
+      - generic [ref=f12e258]:
+        - generic [ref=f12e259]: Figma — on links only
+        - generic [ref=f12e263]: A link-kind design card is a pointer, and wears its source's mark. The rail's design node shows it only when the artifact is a Figma link.
+        - generic [ref=f12e264]:
+          - generic [ref=f12e265]: link
+          - generic [ref=f12e266]: payment-sheet-v2
+      - generic [ref=f12e271]:
+        - generic [ref=f12e272]: Uploads — no mark
+        - generic [ref=f12e273]: "An uploaded design is yapm-native: the card shows its own pixels and carries no brand."
+        - generic [ref=f12e274]:
+          - generic [ref=f12e275]: upload
+          - generic [ref=f12e276]: payment-sheet-v3
+  - generic [ref=f12e281]:
+    - generic [ref=f12e282]: Cycle 2, day 9 of 14
+    - generic [ref=f12e283]: ·
+    - generic [ref=f12e284]: 8 shipped
+    - generic [ref=f12e285]: ·
+    - generic [ref=f12e286]: 3 deploys this week
+    - generic [ref=f12e287]: ·
+    - generic [ref=f12e288]: 4 need attention
+    - generic [ref=f12e289]: Synced

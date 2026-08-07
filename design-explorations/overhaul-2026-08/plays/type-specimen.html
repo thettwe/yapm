@@ -1,0 +1,213 @@
+<!doctype html>
+<!--
+  plays/type-specimen — TYPE: editorial voice as UI. The yapm typographic system pushed:
+  the Figtree display scale (13/16/22/34/48/64+), the mono annotation culture, uppercase
+  micro-labels, and three inventions — divergence as pull-quote, the typographic metrics
+  table (zero chart ink), and the number as poster.
+  Tokens: Warm LIGHT verbatim. Extensions (from daylight): row hairline #efe9dd,
+  statusline bg #f4efe5, urgent-soft rgba(204,90,64,.08). No other new values.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — type specimen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-in-progress:#ce8a26; --status-in-review:#6a62c2; --status-done:#3e8c63;
+    --status-urgent:#cc5a40; --signal-sync:#3e8c63;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .page{max-width:1216px;margin:0 auto;padding:0 56px 72px}
+
+  /* specimen header */
+  .spec-head{display:flex;align-items:baseline;padding:26px 0 18px;border-bottom:1px solid var(--text-1)}
+  .spec-head .brand{display:flex;align-items:center;gap:9px}
+  .spec-logo{width:22px;height:22px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+             font-weight:700;font-size:11px;display:inline-flex;align-items:center;justify-content:center;
+             transform:translateY(3px)}
+  .spec-head h1{font-size:16px;font-weight:700;letter-spacing:-.01em}
+  .spec-head .what{font-size:16px;font-weight:400;color:var(--text-2);margin-left:10px}
+  .spec-head .right{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3);letter-spacing:.02em}
+
+  .micro{font-size:10.5px;font-weight:700;letter-spacing:.14em;color:var(--text-2)}
+  .micro .n{color:var(--accent-strong);margin-right:8px}
+  .sec-head{display:flex;align-items:baseline;padding:44px 0 0}
+  .sec-head .spec{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .sec-rule{height:1px;background:var(--border);margin-top:10px}
+
+  /* 01 — scale + poster */
+  .duo{display:grid;grid-template-columns:1fr 372px;gap:64px;align-items:start}
+  .ladder{margin-top:6px}
+  .step{display:grid;grid-template-columns:150px 1fr;align-items:baseline;
+        padding:15px 0;border-bottom:1px solid var(--row-hairline)}
+  .step:last-child{border-bottom:none}
+  .step .ann{font-family:var(--mono);font-size:10.5px;color:var(--text-3);white-space:nowrap;padding-right:16px}
+  .s64{font-size:64px;font-weight:700;letter-spacing:-.035em;line-height:1.02}
+  .s48{font-size:48px;font-weight:650;letter-spacing:-.032em;line-height:1.05}
+  .s34{font-size:34px;font-weight:650;letter-spacing:-.028em;line-height:1.1}
+  .s22{font-size:22px;font-weight:600;letter-spacing:-.018em}
+  .s16{font-size:16px;font-weight:500}
+  .s13{font-size:13.5px;color:var(--text-2)}
+  .s-mono{font-family:var(--mono);font-size:11.5px;color:var(--text-3)}
+  .s-micro{font-size:10.5px;font-weight:700;letter-spacing:.14em;color:var(--text-2)}
+  .urgentw{color:var(--status-urgent)}
+
+  /* poster */
+  .poster{border-left:1px solid var(--border);padding:10px 0 0 56px;margin-top:6px}
+  .poster .num{font-size:176px;font-weight:700;letter-spacing:-.045em;line-height:.86;
+               font-variant-numeric:tabular-nums;margin-left:-6px}
+  .poster .word{font-size:34px;font-weight:650;letter-spacing:-.028em;margin-top:14px}
+  .poster .cap{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:12px;letter-spacing:.02em}
+  .poster .rule{width:64px;height:3px;background:var(--accent);margin:22px 0 0}
+  .poster .note{font-size:13.5px;color:var(--text-2);margin-top:14px;line-height:1.55;max-width:280px}
+
+  /* 02 — pull-quote */
+  .pq{padding:34px 0 8px;max-width:900px}
+  .pq .rule{width:88px;height:4px;background:var(--accent);margin-bottom:26px}
+  .pq .status{font-size:13px;font-weight:700;color:var(--status-urgent);letter-spacing:.01em;margin-bottom:12px}
+  .pq blockquote{font-size:56px;font-weight:650;letter-spacing:-.033em;line-height:1.06}
+  .pq .attr{margin-top:22px;font-family:var(--mono);font-size:11px;color:var(--text-3);letter-spacing:.02em}
+  .pq .attr b{color:var(--text-2);font-weight:500}
+
+  /* 03 — typographic metrics table */
+  .ttable{border-top:1px solid var(--text-1);margin-top:14px}
+  .trow{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border)}
+  .tcell{padding:20px 26px 22px 0;border-right:1px solid var(--row-hairline);margin-right:26px}
+  .tcell:last-child{border-right:none;margin-right:0}
+  .t-label{font-size:10.5px;font-weight:700;letter-spacing:.13em;color:var(--text-2)}
+  .t-num{font-size:46px;font-weight:650;letter-spacing:-.03em;line-height:1;margin-top:12px;
+         font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:10px}
+  .t-num .u{font-size:22px;font-weight:600;color:var(--text-2);letter-spacing:0;margin-left:-4px}
+  .t-delta{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.01em}
+  .t-delta.good{color:var(--status-done)}
+  .t-delta.watch{color:var(--status-in-progress)}
+  .t-delta.flat{color:var(--text-3)}
+  .t-cap{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:10px;line-height:1.5}
+  .t-foot{display:flex;padding:12px 0;font-family:var(--mono);font-size:10.5px;color:var(--text-3);letter-spacing:.02em}
+  .t-foot .r{margin-left:auto}
+  .t-foot .good{color:var(--status-done)} .t-foot .watch{color:var(--status-in-progress)}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="spec-head">
+    <div class="brand"><span class="spec-logo">A</span><h1>yapm type</h1>
+      <span class="what">— the voice of the product, set</span></div>
+    <span class="right">FIGTREE 300–800 · IBM PLEX MONO 400/500 · WARM LIGHT · NO SERIF, NO CHART INK</span>
+  </header>
+
+  <!-- ============ 01 scale + 03 poster ============ -->
+  <div class="sec-head">
+    <span class="micro"><span class="n">01</span>THE SCALE &nbsp;·&nbsp; <span class="n" style="margin-left:16px">02</span>THE NUMBER AS POSTER</span>
+    <span class="spec">every size is a sentence a PM can read cold</span>
+  </div>
+  <div class="sec-rule"></div>
+
+  <div class="duo">
+    <div class="ladder">
+      <div class="step"><span class="ann">64 / 700 / −.035em</span><span class="s64">Delivery</span></div>
+      <div class="step"><span class="ann">48 / 650 / −.032em</span><span class="s48">Shipping is a habit now.</span></div>
+      <div class="step"><span class="ann">34 / 650 / −.028em</span><span class="s34">Apple Pay in the payment sheet</span></div>
+      <div class="step"><span class="ann">22 / 600 / −.018em</span><span class="s22">8 shipped · 3 in review · <span class="urgentw">1 needs attention</span></span></div>
+      <div class="step"><span class="ann">16 / 500</span><span class="s16">In review — waiting 16h</span></div>
+      <div class="step"><span class="ann">13.5 / 400</span><span class="s13">Every visible word says product. Git stays one level down, on demand.</span></div>
+      <div class="step"><span class="ann">11 / mono 400</span><span class="s-mono">PR #188 · 8f21c4a · 14 of 14 checks passed · branch → main</span></div>
+      <div class="step"><span class="ann">10.5 / 700 / +.14em</span><span class="s-micro">NEEDS ATTENTION &nbsp;&nbsp; SHIP CADENCE &nbsp;&nbsp; WHAT SHIPPED THIS CYCLE</span></div>
+    </div>
+
+    <aside class="poster">
+      <div class="num">52</div>
+      <div class="word">issues shipped</div>
+      <div class="cap">SIX CYCLES · FEB — AUG · TEAM TOTAL<br>176 / 700 / −.045EM · TABULAR</div>
+      <div class="rule"></div>
+      <div class="note">The cycle's headline is a poster, not a tile: one numeral at
+        display size earns the page's whole hierarchy underneath it.</div>
+    </aside>
+  </div>
+
+  <!-- ============ 02 pull-quote ============ -->
+  <div class="sec-head">
+    <span class="micro"><span class="n">03</span>DIVERGENCE AS PULL-QUOTE</span>
+    <span class="spec">56 / 650 / −.033em · how "status is behind the merge" reads in a digest or retro</span>
+  </div>
+  <div class="sec-rule"></div>
+
+  <div class="pq">
+    <div class="rule"></div>
+    <div class="status">Done in git, not on the board</div>
+    <blockquote>The work moved,<br>the ritual didn&rsquo;t.</blockquote>
+    <div class="attr"><b>ENG-116 · APPLE PAY IN THE PAYMENT SHEET</b> &nbsp;—&nbsp; MERGED YESTERDAY, STILL “IN PROGRESS” ON THE BOARD</div>
+  </div>
+
+  <!-- ============ 04 the typographic metrics table ============ -->
+  <div class="sec-head">
+    <span class="micro"><span class="n">04</span>THE TYPOGRAPHIC METRICS TABLE</span>
+    <span class="spec">twelve delivery numbers · zero chart ink · the dense alternative to tiles</span>
+  </div>
+
+  <div class="ttable">
+    <div class="trow">
+      <div class="tcell"><div class="t-label">SHIPPED</div>
+        <div class="t-num">52<span class="t-delta good">▲ 8</span></div>
+        <div class="t-cap">of 57 in scope went out</div></div>
+      <div class="tcell"><div class="t-label">OPEN TO MERGED</div>
+        <div class="t-num">46<span class="u">h</span><span class="t-delta good">▼ 22h</span></div>
+        <div class="t-cap">opening a change to merging it</div></div>
+      <div class="tcell"><div class="t-label">CHECKS FAILING</div>
+        <div class="t-num">26<span class="u">%</span><span class="t-delta good">▼ 14</span></div>
+        <div class="t-cap">share of check runs that failed</div></div>
+      <div class="tcell"><div class="t-label">FIRST REVIEW</div>
+        <div class="t-num">15<span class="u">h</span><span class="t-delta good">▼ 9h</span></div>
+        <div class="t-cap">wait for the first look</div></div>
+    </div>
+    <div class="trow">
+      <div class="tcell"><div class="t-label">REVIEW ROUNDS</div>
+        <div class="t-num">2<span class="t-delta flat">no change</span></div>
+        <div class="t-cap">back-and-forths before approval</div></div>
+      <div class="tcell"><div class="t-label">NOT LINKED TO A CHANGE</div>
+        <div class="t-num">13<span class="t-delta good">▼ 1</span></div>
+        <div class="t-cap">issues with no code linked yet</div></div>
+      <div class="tcell"><div class="t-label">IN SCOPE</div>
+        <div class="t-num">57<span class="t-delta good">▲ 5</span></div>
+        <div class="t-cap">planned across the window</div></div>
+      <div class="tcell"><div class="t-label">ADDED MID-CYCLE</div>
+        <div class="t-num">14<span class="t-delta watch">▲ 2</span></div>
+        <div class="t-cap">arrived after a cycle started</div></div>
+    </div>
+    <div class="trow" style="border-bottom:1px solid var(--text-1)">
+      <div class="tcell"><div class="t-label">CARRIED FORWARD</div>
+        <div class="t-num">2<span class="t-delta good">▼ 1</span></div>
+        <div class="t-cap">rolled into the next cycle</div></div>
+      <div class="tcell"><div class="t-label">CARRIED IN</div>
+        <div class="t-num">1<span class="t-delta good">▼ 1</span></div>
+        <div class="t-cap">arrived from an earlier cycle</div></div>
+      <div class="tcell"><div class="t-label">CARRIED TWICE OR MORE</div>
+        <div class="t-num">3<span class="t-delta watch">▲ 1</span></div>
+        <div class="t-cap">the ones that keep slipping</div></div>
+      <div class="tcell"><div class="t-label">CANCELED</div>
+        <div class="t-num">3<span class="t-delta good">▼ 2</span></div>
+        <div class="t-cap">let go on purpose</div></div>
+    </div>
+    <div class="t-foot">
+      <span>▲▼ AGAINST THE PREVIOUS SIX CYCLES · <span class="good">GREEN = BETTER</span> · <span class="watch">AMBER = WATCH</span> — COLORED BY MEANING, NOT DIRECTION</span>
+      <span class="r">TEAM-LEVEL ONLY — PER-PERSON FIGURES DON'T EXIST HERE</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

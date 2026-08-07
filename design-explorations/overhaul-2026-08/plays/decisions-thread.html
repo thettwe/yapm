@@ -1,0 +1,406 @@
+<!doctype html>
+<!--
+  plays/decisions-thread — memory for the triangle, part 1: a debate RESOLVES.
+  ENG-116's comment thread: PM asks, designer proposes with wireframes (inline SVG),
+  engineer flags a constraint bifact-style — then the Decide moment. The result is a
+  DECISION CHIP pinned above the thread; the thread beneath collapses to quiet.
+  The decision belongs to the team: comments carry authors + role labels (real products
+  show authors), the decision carries none.
+  Horizon three-band frame; Warm LIGHT tokens verbatim. Extensions (from daylight):
+  row hairline #efe9dd, statusline bg #f4efe5, urgent-soft rgba(204,90,64,.08).
+  Assumes: thread resolution + a decision entity (see PLAY-decisions.md).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — ENG-116 · Apple Pay in the payment sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  /* ============ band 1 — global bar ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)} .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — masthead ============ */
+  .masthead{padding:22px 40px 18px;border-bottom:1px solid var(--border)}
+  .crumb{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-3)}
+  .crumb .back{color:var(--text-2)}
+  .crumb .key{font-family:var(--mono);color:var(--text-2)}
+  .m-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;gap:7px;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .btn .kbd{margin-left:2px}
+  .m-title{font-size:26px;font-weight:700;letter-spacing:-.02em;margin-top:10px}
+  .m-meta{display:flex;align-items:center;gap:9px;margin-top:9px;font-size:13px;color:var(--text-2);flex-wrap:wrap}
+  .m-meta .st-word{display:inline-flex;align-items:center;gap:7px;font-weight:600;color:var(--text-1)}
+  .st{width:13px;height:13px;border-radius:50%;position:relative;flex:none}
+  .st.progress{border:1.6px solid var(--status-in-progress)}
+  .st.progress::after{content:"";position:absolute;inset:2.2px;border-radius:50%;
+       background:conic-gradient(var(--status-in-progress) 0 50%,transparent 50% 100%)}
+  .m-meta .dv{color:var(--border-strong)}
+  .ldot{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .m-git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:6px}
+
+  /* ============ content: thread column + triangle rail ============ */
+  .content{display:flex;flex:1;align-items:stretch}
+  .col{padding:26px 40px 30px;flex:1;max-width:860px}
+  .sec-h{display:flex;align-items:baseline;gap:10px;font-size:11.5px;font-weight:600;
+         letter-spacing:.09em;color:var(--text-3);text-transform:uppercase}
+  .sec-h .n{font-family:var(--mono);font-weight:400;letter-spacing:0}
+  .sec-h .right{margin-left:auto;font-family:var(--ui);text-transform:none;letter-spacing:0;
+                font-weight:500;font-size:12.5px;color:var(--text-2)}
+
+  /* ============ the decision chip — pinned, owned by the team ============ */
+  .decision{margin-top:14px;border:1px solid var(--border-strong);border-left:3px solid var(--accent);
+            border-radius:var(--rad-control);background:var(--bg-elevated);padding:15px 18px 14px}
+  .d-top{display:flex;align-items:center;gap:9px}
+  .d-glyph{width:15px;height:15px;border-radius:50%;border:1.6px solid var(--accent);
+           position:relative;flex:none}
+  .d-glyph::after{content:"";position:absolute;inset:3.2px;border-radius:50%;background:var(--accent)}
+  .d-word{font-size:11.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+          color:var(--accent-strong)}
+  .d-date{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .d-say{font-size:16.5px;font-weight:650;letter-spacing:-.012em;line-height:1.35;margin-top:8px}
+  .d-git{display:flex;align-items:center;gap:14px;margin-top:9px}
+  .d-git .m{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .d-git .unfold{font-family:var(--mono);font-size:11px;color:var(--accent-strong)}
+  .d-revisit{margin-left:auto;display:inline-flex;align-items:center;height:22px;padding:0 9px;
+             border:1px solid var(--border-strong);border-radius:var(--rad-pill);
+             font-size:11.5px;color:var(--text-2);font-weight:500}
+
+  /* ============ the triangle rail — one anchor per role ============ */
+  .rail{width:330px;flex:none;margin-left:auto;border-left:1px solid var(--border);
+        padding:26px 34px 30px 30px}
+  .rail-sec{padding:16px 0 18px;border-bottom:1px solid var(--row-hairline)}
+  .rail-sec:first-child{padding-top:0}
+  .rail-sec:last-child{border-bottom:none}
+  .rail-lbl{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+            color:var(--text-3)}
+  .rail-say{font-size:13.5px;font-weight:600;margin-top:10px;display:flex;align-items:center;gap:8px}
+  .rail-say .ring{width:11px;height:11px;border-radius:50%;flex:none;border:2px solid var(--status-done)}
+  .rail-git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:5px;line-height:1.6}
+  .rail-git .link{color:var(--accent-strong)}
+
+  /* ============ the thread, collapsed to quiet ============ */
+  .thread-h{display:flex;align-items:center;gap:9px;margin-top:24px;padding-bottom:10px;
+            font-size:12.5px;color:var(--text-3)}
+  .thread-h b{color:var(--text-2);font-weight:600}
+  .cmt{display:flex;gap:13px;padding:16px 0;border-top:1px solid var(--row-hairline)}
+  .cmt .av{width:26px;height:26px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+           font-size:9.5px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none}
+  .quiet .av{background:#a79e92}
+  .cmt-main{flex:1;min-width:0}
+  .cmt-head{display:flex;align-items:baseline;gap:8px}
+  .cmt-head .who{font-size:13px;font-weight:600}
+  .cmt-head .role{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--text-3);
+                  text-transform:uppercase;border:1px solid var(--border);border-radius:4px;padding:1px 5px}
+  .cmt-head .ago{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-left:auto}
+  .cmt-body{font-size:13.5px;line-height:1.6;margin-top:6px;max-width:640px}
+  .quiet .cmt-body{color:var(--text-2)}
+  .cmt-git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:6px;line-height:1.6}
+
+  /* design artifact — inline wireframes */
+  .mocks{display:flex;gap:18px;margin-top:12px;align-items:flex-start}
+  .mock{display:flex;flex-direction:column;gap:6px}
+  .mock .cap{font-family:var(--mono);font-size:10.5px;color:var(--text-3);padding-left:2px}
+  .mock svg{display:block;border-radius:10px}
+
+  /* the decide moment, in the thread's own timeline */
+  .decided-here{display:flex;align-items:center;gap:12px;padding:14px 0;border-top:1px solid var(--row-hairline)}
+  .decided-here .rule{flex:1;height:1px;background:var(--border)}
+  .decided-here .lbl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--accent-strong);font-weight:600}
+  .decided-here .lbl .m{font-family:var(--mono);font-weight:400;color:var(--text-3);font-size:11px}
+  .dg-s{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--accent);position:relative;flex:none}
+  .dg-s::after{content:"";position:absolute;inset:2.4px;border-radius:50%;background:var(--accent)}
+
+  /* composer with the Decide affordance */
+  .composer{margin-top:4px;border:1px solid var(--border-strong);border-radius:var(--rad-control);
+            background:var(--bg-elevated);padding:13px 15px 11px}
+  .composer .hint{font-size:13.5px;color:var(--text-3)}
+  .comp-bar{display:flex;align-items:center;gap:13px;margin-top:16px;padding-top:10px;
+            border-top:1px solid var(--row-hairline)}
+  .comp-bar .t{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .comp-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .comp-note{font-size:11.5px;color:var(--text-3);margin-right:6px}
+  .btn.decide{color:var(--accent-strong);border-color:var(--accent-line)}
+  .btn.decide .dg-s{width:12px;height:12px}
+  .send-kbd{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-3)}
+
+  /* ============ band 3 — statusline ============ */
+  .statusline{margin-top:auto;height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab active">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <div class="crumb">
+      <span class="back">‹ Issues</span><span class="key">ENG-116</span>
+      <span class="m-actions">
+        <button class="btn">Follow</button>
+        <button class="btn primary">Mark Done <span class="kbd" style="border-color:rgba(255,255,255,.4);color:rgba(255,255,255,.85);background:transparent">⏎</span></button>
+      </span>
+    </div>
+    <h1 class="m-title">Apple Pay in the payment sheet</h1>
+    <div class="m-meta">
+      <span class="st-word"><span class="st progress"></span>In Progress</span>
+      <span class="dv">·</span><span>Cycle 2</span>
+      <span class="dv">·</span><span style="display:inline-flex;align-items:center;gap:6px"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+      <span class="dv">·</span><span>merged a day ago, every check green</span>
+    </div>
+    <div class="m-git">board in-progress · git merged 8f21c4a · PR #188 · 14/14 checks · drifted 22h</div>
+  </div>
+
+  <div class="content">
+  <div class="col">
+
+    <div class="sec-h">Comments <span class="n">5</span>
+      <span class="right">Open the change ↗</span>
+    </div>
+
+    <!-- the decision chip — pinned above the thread; the team's, no owner -->
+    <div class="decision">
+      <div class="d-top">
+        <span class="d-glyph"></span>
+        <span class="d-word">Decided</span>
+        <span class="d-date">aug 6 · cycle 2, day 3</span>
+      </div>
+      <div class="d-say">Ship without saved cards this cycle — revisit next.</div>
+      <div class="d-git">
+        <span class="m">from a thread of 5 · the team's call, no owner</span>
+        <span class="unfold">unfold ▾</span>
+        <span class="d-revisit">revisit · resurfaces at Cycle 3 planning</span>
+      </div>
+    </div>
+
+    <div class="thread-h"><b>The thread</b> · 5 comments · resolved, so it rests quiet</div>
+
+    <!-- 1 · Product asks -->
+    <div class="cmt quiet">
+      <span class="av">DA</span>
+      <div class="cmt-main">
+        <div class="cmt-head"><span class="who">Dana</span><span class="role">Product</span><span class="ago">3d ago</span></div>
+        <div class="cmt-body">Do we need saved cards in the sheet for launch? Support keeps flagging
+          card re-entry as checkout friction — but if Apple Pay covers most of those sessions,
+          maybe the sheet answers it without us building a vault.</div>
+        <div class="cmt-git">re-entry mentioned in 41 tickets this quarter · 71% of those sessions on iOS</div>
+      </div>
+    </div>
+
+    <!-- 2 · Design proposes, with wireframes -->
+    <div class="cmt quiet">
+      <span class="av" style="background:#8a6a52">MK</span>
+      <div class="cmt-main">
+        <div class="cmt-head"><span class="who">Maya</span><span class="role">Design</span><span class="ago">3d ago</span></div>
+        <div class="cmt-body">If Apple Pay sits first, the card form is the fallback, not the default —
+          the sheet reads in one glance. Saved cards would wedge a third band between them (B, dashed):
+          the sheet stops being one decision and becomes a list.</div>
+        <div class="mocks">
+          <div class="mock">
+            <svg width="150" height="252" viewBox="0 0 150 252">
+              <rect x="1" y="1" width="148" height="250" rx="16" fill="#f7f2ea" stroke="#dcd3c4" stroke-width="1.5"/>
+              <rect x="60" y="10" width="30" height="4" rx="2" fill="#dcd3c4"/>
+              <rect x="16" y="30" width="72" height="8" rx="3" fill="#c9bfae"/>
+              <rect x="16" y="52" width="118" height="30" rx="8" fill="#5c5348"/>
+              <rect x="60" y="65" width="30" height="5" rx="2.5" fill="#f1ebe3"/>
+              <line x1="16" y1="102" x2="58" y2="102" stroke="#dcd3c4" stroke-width="1.2"/>
+              <rect x="64" y="98" width="22" height="7" rx="3" fill="#dcd3c4"/>
+              <line x1="92" y1="102" x2="134" y2="102" stroke="#dcd3c4" stroke-width="1.2"/>
+              <rect x="16" y="118" width="118" height="24" rx="6" fill="#ece5d8"/>
+              <rect x="16" y="150" width="56" height="24" rx="6" fill="#ece5d8"/>
+              <rect x="78" y="150" width="56" height="24" rx="6" fill="#ece5d8"/>
+              <rect x="16" y="182" width="118" height="24" rx="6" fill="#ece5d8"/>
+              <rect x="16" y="216" width="118" height="22" rx="8" fill="#c9bfae"/>
+            </svg>
+            <span class="cap">A — two bands</span>
+          </div>
+          <div class="mock">
+            <svg width="150" height="252" viewBox="0 0 150 252">
+              <rect x="1" y="1" width="148" height="250" rx="16" fill="#f7f2ea" stroke="#dcd3c4" stroke-width="1.5"/>
+              <rect x="60" y="10" width="30" height="4" rx="2" fill="#dcd3c4"/>
+              <rect x="16" y="30" width="72" height="8" rx="3" fill="#c9bfae"/>
+              <rect x="16" y="48" width="118" height="26" rx="8" fill="#5c5348"/>
+              <rect x="61" y="59" width="28" height="5" rx="2.5" fill="#f1ebe3"/>
+              <rect x="16" y="84" width="118" height="48" rx="8" fill="none" stroke="#b9ae9c" stroke-width="1.4" stroke-dasharray="4 3"/>
+              <rect x="24" y="92" width="80" height="14" rx="4" fill="#ece5d8"/>
+              <rect x="24" y="110" width="80" height="14" rx="4" fill="#ece5d8"/>
+              <circle cx="120" cy="99" r="4" fill="#dcd3c4"/>
+              <circle cx="120" cy="117" r="4" fill="#dcd3c4"/>
+              <line x1="16" y1="146" x2="58" y2="146" stroke="#dcd3c4" stroke-width="1.2"/>
+              <rect x="64" y="142" width="22" height="7" rx="3" fill="#dcd3c4"/>
+              <line x1="92" y1="146" x2="134" y2="146" stroke="#dcd3c4" stroke-width="1.2"/>
+              <rect x="16" y="158" width="118" height="22" rx="6" fill="#ece5d8"/>
+              <rect x="16" y="186" width="56" height="22" rx="6" fill="#ece5d8"/>
+              <rect x="78" y="186" width="56" height="22" rx="6" fill="#ece5d8"/>
+              <rect x="16" y="216" width="118" height="22" rx="8" fill="#c9bfae"/>
+            </svg>
+            <span class="cap">B — + saved cards</span>
+          </div>
+        </div>
+        <div class="cmt-git">payment-sheet · 2 frames from the explorations file</div>
+      </div>
+    </div>
+
+    <!-- 3 · Eng flags the constraint, bifact style -->
+    <div class="cmt quiet">
+      <span class="av" style="background:#4f5c55">JR</span>
+      <div class="cmt-main">
+        <div class="cmt-head"><span class="who">Jon</span><span class="role">Eng</span><span class="ago">2d ago</span></div>
+        <div class="cmt-body">Saved cards aren't a sheet change, they're a vaulting change — new
+          storage, new compliance scope. That's two extra weeks before we type a line of UI.</div>
+        <div class="cmt-git">requires customer vault objects · new table + retention policy · SAQ-A → SAQ-A-EP</div>
+      </div>
+    </div>
+
+    <!-- 4 · Product converges -->
+    <div class="cmt quiet">
+      <span class="av">DA</span>
+      <div class="cmt-main">
+        <div class="cmt-head"><span class="who">Dana</span><span class="role">Product</span><span class="ago">2d ago</span></div>
+        <div class="cmt-body">Then let's not spend the cycle on it. Apple Pay alone answers the
+          friction data for most sessions — we ship A, watch the card-form drop-off, and bring
+          saved cards back with real numbers.</div>
+      </div>
+    </div>
+
+    <!-- 5 · Design closes -->
+    <div class="cmt quiet">
+      <span class="av" style="background:#8a6a52">MK</span>
+      <div class="cmt-main">
+        <div class="cmt-head"><span class="who">Maya</span><span class="role">Design</span><span class="ago">2d ago</span></div>
+        <div class="cmt-body">Agreed — the sheet stays two bands. Frame B is parked in the
+          explorations file for whenever we pick it back up.</div>
+      </div>
+    </div>
+
+    <div class="decided-here">
+      <span class="rule"></span>
+      <span class="lbl"><span class="dg-s"></span>Decided here <span class="m">aug 6 · pinned at the top</span></span>
+      <span class="rule"></span>
+    </div>
+
+    <div class="composer">
+      <div class="hint">Leave a comment…</div>
+      <div class="comp-bar">
+        <span class="t">B</span><span class="t">I</span><span class="t">S</span>
+        <span class="t">&lt;&gt;</span><span class="t">H2</span><span class="t">≡</span><span class="t">“”</span>
+        <div class="comp-right">
+          <span class="comp-note">a thread can end in one sentence</span>
+          <button class="btn decide"><span class="dg-s"></span>Decide</button>
+          <button class="btn primary">Comment</button>
+          <span class="send-kbd"><span class="kbd">⌘⏎</span>to send</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <aside class="rail">
+    <div class="rail-sec">
+      <div class="rail-lbl">Delivery</div>
+      <div class="rail-say"><span class="ring"></span>Built — not live yet</div>
+      <div class="rail-git">merged 8f21c4a · 14 checks green · no prod deploy since</div>
+    </div>
+    <div class="rail-sec">
+      <div class="rail-lbl">Design</div>
+      <div class="rail-say">Two frames live on this thread</div>
+      <div class="rail-git">payment-sheet A shipping · B parked in explorations</div>
+    </div>
+    <div class="rail-sec">
+      <div class="rail-lbl">The record</div>
+      <div class="rail-say">This is 1 of 11 team decisions</div>
+      <div class="rail-git">cycle 2 holds 4 so far<br><span class="link">open the record ↗</span></div>
+    </div>
+    <div class="rail-sec">
+      <div class="rail-lbl">Status</div>
+      <div class="rail-say"><span class="st progress" style="width:12px;height:12px"></span>In Progress</div>
+      <div class="rail-git">on the board since jul 29 · unchanged 9d</div>
+    </div>
+  </aside>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+</body>
+</html>

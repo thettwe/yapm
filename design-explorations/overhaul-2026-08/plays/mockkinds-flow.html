@@ -1,0 +1,385 @@
+<!doctype html>
+<!--
+  plays/mockkinds-flow — MOCKKINDS play, artifact 2 of 2.
+  THE PASTE/UPLOAD MOMENT on ENG-121: the description composer where a just-pasted
+  Figma URL is transforming into a design card — raw URL above, formed card below,
+  "attached as design · undo" microcopy — with the upload path beside it ("drop an
+  image — it becomes a design card"). Below, the issue's Design section holds one
+  artifact of each kind, and a quiet mono footnote names what the Figma connector
+  adds later (thumbnails, staleness) — BYO token, same shape as the GitHub connector.
+  Base: horizon three-band frame + plays/triangle-detail scaffold, Warm LIGHT tokens
+  verbatim. Extensions (from daylight): row hairline #efe9dd, statusline bg #f4efe5,
+  urgent-soft rgba(204,90,64,.08). Link-mark: neutral overlapping-shapes glyph.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — ENG-121 · Guest checkout without an account</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  /* ============ band 1 — global bar ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)} .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — masthead ============ */
+  .masthead{padding:17px 40px 15px;border-bottom:1px solid var(--border)}
+  .m-top{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .m-back{color:var(--text-3);font-size:12.5px}
+  .m-back b{color:var(--text-2);font-weight:500}
+  .m-id{font-family:var(--mono);font-size:12.5px;color:var(--text-3)}
+  .m-actions{margin-left:auto;display:flex;gap:8px}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;gap:6px;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .kbd-s{font-family:var(--mono);font-size:10px;color:var(--text-3);
+         border:1px solid var(--border-strong);border-radius:4px;padding:0 4px;background:rgba(255,255,255,.5)}
+  .btn.primary .kbd-s{color:rgba(255,255,255,.8);border-color:rgba(255,255,255,.4);background:transparent}
+  .masthead h1{font-size:29px;font-weight:700;letter-spacing:-.02em;line-height:1.12;max-width:760px}
+  .m-bi{margin-top:10px}
+  .m-bi .say{font-size:13.5px;color:var(--text-1);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .m-bi .say .st-word{display:inline-flex;align-items:center;gap:7px;font-weight:600}
+  .m-bi .say .dim{color:var(--text-2)}
+  .m-bi .say .dv{color:var(--border-strong)}
+  .m-bi .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:5px}
+  .st{width:14px;height:14px;border-radius:50%;position:relative;flex:none;display:inline-block}
+  .st.todo{border:1.6px solid var(--status-todo)}
+  .ldot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
+
+  /* ============ content ============ */
+  .doc{flex:1;padding:30px 40px 46px;max-width:1180px}
+  .sec-h{display:flex;align-items:baseline;font-size:11px;letter-spacing:.09em;color:var(--text-3);
+         font-weight:600;padding-bottom:9px;border-bottom:1px solid var(--border);margin-bottom:14px}
+  .sec-h .act{margin-left:auto;letter-spacing:0;font-size:12px;color:var(--text-2);font-weight:500}
+  .sec-h .act.m{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .prose{font-size:14.5px;line-height:1.65;color:var(--text-1);max-width:640px}
+  .prose p+p{margin-top:12px}
+
+  .moment{display:grid;grid-template-columns:minmax(0,640px) minmax(0,380px);gap:26px;
+          align-items:stretch;margin-top:16px}
+
+  /* the composer, mid-transform */
+  .composer{background:var(--bg-elevated);border:1px solid var(--border-strong);
+            border-radius:var(--rad-control);padding:14px 16px 11px;
+            box-shadow:0 0 0 3px rgba(189,88,55,.07)}
+  .composer .typed{font-size:14px;line-height:1.6;color:var(--text-1)}
+  .composer .caret{display:inline-block;width:1.5px;height:15px;background:var(--accent);
+                   vertical-align:-2px;margin-left:1px}
+  .pasted{display:flex;align-items:center;gap:10px;margin:10px 0 0;padding:7px 11px;
+          background:var(--bg-hover);border:1px solid var(--border);border-radius:6px}
+  .pasted .u{font-family:var(--mono);font-size:11.5px;color:var(--text-2);min-width:0;
+             white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pasted .tag{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-3);flex:none}
+  .becomes{display:flex;align-items:center;gap:8px;margin:8px 0;color:var(--text-3);
+           font-family:var(--mono);font-size:10.5px}
+  .becomes .ar{font-size:13px;color:var(--text-2)}
+
+  /* formed design card — link kind (same grammar as the specimen) */
+  .dcard{background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .dcard.fresh{border-color:var(--accent-line)}
+  .linkface{display:flex;gap:12px;padding:12px 14px 10px;align-items:flex-start}
+  .linkface .mark{flex:none;margin-top:2px}
+  .linkface .lf-body{min-width:0;flex:1}
+  .linkface .name{font-size:13px;font-weight:600}
+  .linkface .url{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:3px;
+                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nopreview{border-top:1px solid var(--row-hairline);margin:0 14px;padding:7px 0 9px;
+             font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .dcard .row2{display:flex;align-items:center;gap:8px;padding:0 14px 11px}
+  .dcard .row2 .sp{margin-left:auto}
+  .kchip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 10px;
+         border:1px solid var(--border);border-radius:var(--rad-pill);white-space:nowrap;flex:none;
+         background:rgba(255,255,255,.55);font-size:11.5px;font-weight:600;color:var(--text-1)}
+  .kchip .dot{width:7px;height:7px;border-radius:50%;background:var(--status-done)}
+  .kchip.crit .dot{background:transparent;border:1.6px solid var(--status-in-review);width:6px;height:6px}
+  .kchip.draft .dot{background:transparent;border:1.6px dashed var(--status-backlog);width:6px;height:6px}
+  .vtag{font-family:var(--mono);font-size:10.5px;color:var(--text-3);
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .openout{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;
+           color:var(--text-2);white-space:nowrap;flex:none}
+  .openout.loud{color:var(--accent-strong)}
+  .micro{margin-top:7px;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .micro .undo{color:var(--accent-strong);font-weight:500}
+  .composer .bar{display:flex;align-items:center;gap:10px;border-top:1px solid var(--row-hairline);
+                 padding-top:9px;margin-top:11px}
+  .composer .marks{display:flex;gap:12px;color:var(--text-3);font-family:var(--mono);font-size:11px}
+  .composer .send{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:12px}
+
+  /* the drop path */
+  .droppane{display:flex;flex-direction:column}
+  .drop{flex:1;border:1.5px dashed var(--border-strong);border-radius:10px;
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        gap:10px;padding:26px 20px;text-align:center;background:rgba(255,255,255,.35)}
+  .drop .d-say{font-size:13.5px;color:var(--text-1);font-weight:600;max-width:220px;line-height:1.45}
+  .drop .d-say b{color:var(--text-1)}
+  .drop .d-git{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .drop .same{margin-top:6px;font-size:12px;color:var(--text-2);max-width:230px;line-height:1.5}
+
+  /* design section — one of each kind */
+  .design-sec{margin-top:38px}
+  .dgrid{display:grid;grid-template-columns:minmax(0,510px) minmax(0,510px);gap:26px;
+         align-items:start}
+  .dcard .art{background:var(--statusline-bg);border-bottom:1px solid var(--row-hairline)}
+  .dcard .art svg{display:block;width:100%;height:auto}
+  .dcard .body{padding:11px 14px 12px}
+  .dcard .name2{font-size:13px;font-weight:600}
+  .dcard .fname{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:2px}
+  .dcard .body .row2{padding:0;margin-top:9px}
+
+  /* footnote — the connector, later */
+  .foot{margin-top:26px;padding-top:11px;border-top:1px solid var(--border);
+        font-family:var(--mono);font-size:10.5px;line-height:1.65;color:var(--text-3);max-width:1046px}
+  .foot .k{color:var(--text-2)}
+
+  /* ============ band 3 — statusline ============ */
+  .statusline{margin-top:auto;height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab active">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <div class="m-top">
+      <span class="m-back">‹ <b>Issues</b></span>
+      <span class="m-id">ENG-121</span>
+      <div class="m-actions">
+        <button class="btn">Follow</button>
+        <button class="btn primary">Start work&nbsp;<span class="kbd-s">⏎</span></button>
+      </div>
+    </div>
+    <h1>Guest checkout without an account</h1>
+    <div class="m-bi">
+      <div class="say">
+        <span class="st-word"><span class="st todo"></span>Todo</span>
+        <span class="dv">·</span><span class="dim">Cycle 2</span>
+        <span class="dv">·</span><span class="dim" style="display:inline-flex;align-items:center;gap:6px"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+        <span class="dv">·</span><span class="dim">design in crit Thursday, not linked to a change</span>
+      </div>
+      <div class="git">board todo · guest-checkout-v2 in crit Thu · 5 comments open · no branch yet</div>
+    </div>
+  </div>
+
+  <div class="doc">
+
+    <div class="sec-h">DESCRIPTION — EDITING
+      <span class="act m">a paste becomes a card · esc leaves the text alone</span></div>
+
+    <div class="prose">
+      <p>Let a shopper pay without creating an account: email and shipping collected in
+      one step, order lookup by email afterward. Account creation becomes an offer on
+      the confirmation screen, never a gate before it.</p>
+    </div>
+
+    <div class="moment">
+
+      <!-- the paste path -->
+      <div>
+        <div class="composer">
+          <div class="typed">Express path first — the mock covers the happy path and the
+            order-lookup fallback:<span class="caret"></span></div>
+
+          <div class="pasted">
+            <span class="u">https://www.figma.com/file/Rk7wNq5d/guest-checkout-express?node-id=12-408</span>
+            <span class="tag">pasted just now</span>
+          </div>
+
+          <div class="becomes"><span class="ar">↓</span>becomes</div>
+
+          <div class="dcard fresh">
+            <div class="linkface">
+              <span class="mark">
+                <svg width="26" height="26" viewBox="0 0 20 20">
+                  <rect x="2.5" y="2.5" width="10" height="10" rx="3" fill="none" stroke="#9a9186" stroke-width="1.6"/>
+                  <circle cx="13" cy="13" r="4.7" fill="#f6e6da" stroke="rgba(193,90,56,.55)" stroke-width="1.6"/>
+                </svg>
+              </span>
+              <span class="lf-body">
+                <span class="name" style="display:block">Guest checkout — express path</span>
+                <span class="url" style="display:block">figma.com/file/Rk7wNq5d/guest-checkout-express · v1</span>
+              </span>
+            </div>
+            <div class="nopreview">preview arrives with the Figma connector</div>
+            <div class="row2">
+              <span class="kchip draft"><span class="dot"></span>Draft — not in crit yet</span>
+              <span class="sp"></span>
+              <span class="openout loud">Open in Figma ↗</span>
+            </div>
+          </div>
+          <div class="micro">attached as design · <span class="undo">undo</span> keeps it as plain text</div>
+
+          <div class="bar">
+            <span class="marks">B&nbsp; I&nbsp; S&nbsp; &lt;&gt;&nbsp; H2&nbsp; ≡&nbsp; “”</span>
+            <span class="send"><button class="btn primary">Save</button><span class="kbd-s">⌘⏎</span> to save</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- the drop path -->
+      <div class="droppane">
+        <div class="drop">
+          <svg width="30" height="30" viewBox="0 0 20 20">
+            <rect x="2.5" y="3.5" width="15" height="13" rx="2.5" fill="#f4efe5" stroke="#9a9186" stroke-width="1.6"/>
+            <circle cx="7.2" cy="8" r="1.7" fill="#c8bfae"/>
+            <path d="M4.5 15 L9.5 10.5 L12 12.6 L15.5 9.5 V15.5 H4.5 Z" fill="#dcd3c4"/>
+          </svg>
+          <div class="d-say">drop an image —<br>it becomes a design card</div>
+          <div class="d-git">png · jpg · webp · a pasted screenshot counts</div>
+          <div class="same">Same card, same states — an upload just shows its own pixels.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- the issue's design section: one of each kind -->
+    <div class="design-sec">
+      <div class="sec-h">DESIGN
+        <span class="act m">2 artifacts · newest version carries the state</span></div>
+      <div class="dgrid">
+
+        <!-- upload kind — already in crit -->
+        <div class="dcard">
+          <span class="art">
+            <svg viewBox="0 0 510 200" xmlns="http://www.w3.org/2000/svg">
+              <rect width="510" height="200" fill="#f4efe5"/>
+              <rect x="147" y="16" width="216" height="184" rx="8" fill="#ffffff" stroke="#e7e0d4"/>
+              <rect x="167" y="32" width="88" height="8" rx="2" fill="#dcd3c4"/>
+              <rect x="167" y="52" width="176" height="18" rx="4" fill="#ffffff" stroke="#dcd3c4"/>
+              <rect x="175" y="58" width="52" height="5" rx="2" fill="#e7e0d4"/>
+              <rect x="167" y="78" width="84" height="18" rx="4" fill="#ffffff" stroke="#dcd3c4"/>
+              <rect x="259" y="78" width="84" height="18" rx="4" fill="#ffffff" stroke="#dcd3c4"/>
+              <rect x="175" y="84" width="36" height="5" rx="2" fill="#e7e0d4"/>
+              <rect x="267" y="84" width="30" height="5" rx="2" fill="#e7e0d4"/>
+              <rect x="167" y="106" width="9" height="9" rx="2" fill="#ffffff" stroke="#dcd3c4"/>
+              <rect x="182" y="108" width="96" height="5" rx="2" fill="#efe9dd"/>
+              <rect x="167" y="126" width="176" height="20" rx="5" fill="#f6e6da" stroke="rgba(193,90,56,.34)"/>
+              <rect x="229" y="133" width="52" height="6" rx="2" fill="rgba(193,90,56,.45)"/>
+              <rect x="167" y="156" width="120" height="5" rx="2" fill="#efe9dd"/>
+              <rect x="167" y="170" width="176" height="16" rx="5" fill="#ffffff" stroke="#dcd3c4"/>
+            </svg>
+          </span>
+          <div class="body">
+            <div class="name2">Guest checkout — one-step form</div>
+            <div class="fname">guest-checkout-v2.png · v2 · uploaded Mon</div>
+            <div class="row2">
+              <span class="kchip crit"><span class="dot"></span>In crit Thursday</span>
+              <span class="vtag">5 comments open</span>
+              <span class="sp"></span>
+              <span class="openout">open ↗</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- link kind — the one just attached -->
+        <div class="dcard">
+          <div class="linkface" style="padding-top:14px">
+            <span class="mark">
+              <svg width="26" height="26" viewBox="0 0 20 20">
+                <rect x="2.5" y="2.5" width="10" height="10" rx="3" fill="none" stroke="#9a9186" stroke-width="1.6"/>
+                <circle cx="13" cy="13" r="4.7" fill="#f6e6da" stroke="rgba(193,90,56,.55)" stroke-width="1.6"/>
+              </svg>
+            </span>
+            <span class="lf-body">
+              <span class="name" style="display:block">Guest checkout — express path</span>
+              <span class="url" style="display:block">figma.com/file/Rk7wNq5d/guest-checkout-express · v1 · linked just now</span>
+            </span>
+          </div>
+          <div class="nopreview">preview arrives with the Figma connector</div>
+          <div class="row2">
+            <span class="kchip draft"><span class="dot"></span>Draft — not in crit yet</span>
+            <span class="sp"></span>
+            <span class="openout loud">Open in Figma ↗</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="foot">
+        <span class="k">figma connector (later):</span> thumbnails on link cards · "mock updated
+        in Figma" staleness beside the version · BYO token, team-level, same shape as the
+        GitHub connector — until then a link card stays a truthful pointer
+      </div>
+    </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+</body>
+</html>

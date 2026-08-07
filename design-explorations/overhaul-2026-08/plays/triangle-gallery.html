@@ -1,0 +1,385 @@
+<!doctype html>
+<!--
+  plays/triangle-gallery — TRIANGLE play, artifact 2 of 2.
+  THE GALLERY LENS: the Issues masthead gains List | Board | Gallery. Gallery renders
+  the issues that carry design artifacts as visual cards — mock thumbnail (inline-SVG
+  wireframe), key, title, status arc, reality-track mini, and a design bifact (plain
+  design state / mono artifact line). Issues without designs collapse into one quiet
+  row. This is design crit ON tracked work — same issues, design-first projection.
+  Base: horizon/issue-list-deck.html (three-band frame, Warm LIGHT tokens verbatim).
+  Extensions (from daylight): row hairline #efe9dd, statusline bg #f4efe5,
+  urgent-soft rgba(204,90,64,.08). Wireframes use only these greys + accent-soft.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Issues · Gallery · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — page-owned masthead ============ */
+  .masthead{display:flex;align-items:center;padding:26px 40px 16px}
+  .masthead h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px;margin-left:10px}
+  .viewtog{display:flex;gap:2px;background:var(--bg-hover);border:1px solid var(--border);
+           border-radius:var(--rad-control);padding:2px;margin-left:22px}
+  .vt{padding:3px 11px;border-radius:5px;font-size:12px;color:var(--text-2)}
+  .vt.active{background:var(--bg-elevated);color:var(--text-1);font-weight:600}
+  .mast-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .filters{display:flex;align-items:center;gap:18px;padding:0 40px 14px;color:var(--text-2);font-size:12.5px}
+  .filters .f-ic{color:var(--text-3);font-size:12px}
+  .filters .right{margin-left:auto;color:var(--text-3)}
+  .filters .right b{color:var(--text-2);font-weight:500}
+
+  /* ============ the gallery — design crit on tracked work ============ */
+  .gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;
+           padding:4px 40px 20px;border-top:1px solid var(--row-hairline);padding-top:18px}
+  .card{background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;
+        overflow:hidden;display:flex;flex-direction:column}
+  .card.selected{border-color:var(--accent-line);box-shadow:inset 3px 0 0 var(--accent)}
+  .thumb{background:var(--statusline-bg);border-bottom:1px solid var(--row-hairline)}
+  .thumb svg{display:block;width:100%;height:auto}
+  .c-meta{padding:10px 13px 12px}
+  .c-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .c-top .id{font-family:var(--mono);font-size:11.5px;color:var(--text-3)}
+  .card.selected .c-top .id{color:var(--accent-strong)}
+  .c-top .track{margin-left:auto}
+  .c-title{font-size:13px;font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;
+           text-overflow:ellipsis;margin-bottom:7px}
+  .c-say{font-size:12px;color:var(--text-2)}
+  .c-say.urgent{color:var(--status-urgent);font-weight:600}
+  .c-git{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:2px;
+         white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* status arcs — same DNA as the list */
+  .st{width:13px;height:13px;border-radius:50%;position:relative;flex:none}
+  .st.backlog{border:1.6px dashed var(--status-backlog)}
+  .st.todo{border:1.6px solid var(--status-todo)}
+  .st.progress{border:1.6px solid var(--status-in-progress)}
+  .st.progress::after{content:"";position:absolute;inset:2.2px;border-radius:50%;
+       background:conic-gradient(var(--status-in-progress) 0 50%,transparent 50% 100%)}
+
+  /* reality-track mini — same glyphs, 64px */
+  .track{display:flex;align-items:center;width:64px;flex:none}
+  .tn{width:5px;height:5px;border-radius:50%;flex:none}
+  .tn.done{background:var(--status-done)}
+  .tn.rev-wait{background:transparent;border:1.4px solid var(--status-in-review);width:6px;height:6px}
+  .tn.open{background:var(--status-in-review)}
+  .tn.fail{background:var(--status-urgent);border-radius:1px}
+  .tn.empty{background:transparent;border:1.2px solid var(--border-strong)}
+  .tn.empty-urgent{background:transparent;border:1.4px solid var(--status-urgent)}
+  .tseg{height:1.5px;flex:1;background:var(--status-done)}
+  .tseg.rev{background:var(--status-in-review)}
+  .tseg.dotted{background:repeating-linear-gradient(90deg,var(--border-strong) 0 2px,transparent 2px 4px);height:1px}
+  .tbreak{color:var(--status-urgent);font-family:var(--mono);font-weight:500;font-size:9.5px;
+          padding:0 2px;letter-spacing:-.05em}
+
+  /* the quiet collapse — everything without a design stays one row */
+  .quiet{grid-column:span 2;border:1px dashed var(--border-strong);border-radius:10px;
+         display:flex;align-items:center;justify-content:center;gap:8px;
+         color:var(--text-3);font-size:12.5px;min-height:120px}
+  .quiet b{color:var(--text-2);font-weight:500}
+  .quiet .go{color:var(--text-2)}
+
+  /* ============ band 3 — statusline ============ */
+  .statusline{margin-top:auto;height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab active">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <h1>Issues</h1><span class="count">120</span>
+    <div class="viewtog"><span class="vt">List</span><span class="vt">Board</span><span class="vt active">Gallery</span></div>
+    <div class="mast-actions">
+      <button class="btn">Save view</button>
+      <button class="btn primary">+ New issue</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <span class="f-ic">≔</span>
+    <span>Status</span><span>Priority</span><span>Assignee</span><span>Delivery</span>
+    <span>Label</span><span>Cycle</span><span>Project</span>
+    <span class="right"><b>6</b> carry designs &nbsp;·&nbsp; Group <b>Status</b> &nbsp;·&nbsp; Sort <b>Priority</b></span>
+  </div>
+
+  <div class="gallery">
+
+    <!-- ENG-116 — the selected thread; design approved, done in git -->
+    <div class="card selected">
+      <div class="thumb">
+        <svg viewBox="0 0 320 168" xmlns="http://www.w3.org/2000/svg">
+          <rect width="320" height="168" fill="#f4efe5"/>
+          <rect x="98" y="14" width="124" height="154" rx="9" fill="#ffffff" stroke="#e7e0d4"/>
+          <rect x="150" y="20" width="20" height="3" rx="1.5" fill="#dcd3c4"/>
+          <rect x="112" y="30" width="32" height="6" rx="2" fill="#dcd3c4"/>
+          <circle cx="204" cy="33" r="4.5" fill="#efe9dd"/>
+          <rect x="112" y="44" width="96" height="17" rx="4" fill="#2b2620"/>
+          <rect x="145" y="50" width="30" height="5" rx="2.5" fill="#f4efe5" opacity=".92"/>
+          <rect x="112" y="68" width="96" height="1" fill="#efe9dd"/>
+          <rect x="112" y="77" width="15" height="10" rx="2" fill="#f6e6da" stroke="rgba(193,90,56,.34)"/>
+          <rect x="133" y="78" width="52" height="5" rx="2" fill="#e7e0d4"/>
+          <rect x="133" y="86" width="34" height="3" rx="1.5" fill="#efe9dd"/>
+          <rect x="112" y="99" width="30" height="5" rx="2" fill="#e7e0d4"/>
+          <rect x="184" y="99" width="24" height="5" rx="2" fill="#dcd3c4"/>
+          <rect x="112" y="114" width="96" height="16" rx="4" fill="#efe9dd"/>
+          <rect x="145" y="120" width="30" height="4" rx="2" fill="#c8bfae"/>
+        </svg>
+      </div>
+      <div class="c-meta">
+        <div class="c-top"><span class="st progress"></span><span class="id">ENG-116</span>
+          <span class="track">
+            <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tbreak">//</span><span class="tn empty-urgent"></span>
+          </span>
+        </div>
+        <div class="c-title">Apple Pay in the payment sheet</div>
+        <div class="c-say">Designed — approved in crit</div>
+        <div class="c-git">payment-sheet-v3 · crit Tue · merged, not live</div>
+      </div>
+    </div>
+
+    <!-- ENG-113 — refund modal; approved with notes -->
+    <div class="card">
+      <div class="thumb">
+        <svg viewBox="0 0 320 168" xmlns="http://www.w3.org/2000/svg">
+          <rect width="320" height="168" fill="#f4efe5"/>
+          <rect x="34" y="14" width="252" height="154" rx="8" fill="#e7e0d4"/>
+          <rect x="82" y="38" width="156" height="104" rx="8" fill="#ffffff" stroke="#e7e0d4"/>
+          <rect x="96" y="50" width="64" height="7" rx="2" fill="#dcd3c4"/>
+          <rect x="96" y="66" width="10" height="10" rx="2.5" fill="#f6e6da" stroke="rgba(193,90,56,.34)"/>
+          <rect x="112" y="68" width="72" height="5" rx="2" fill="#e7e0d4"/>
+          <rect x="200" y="68" width="22" height="5" rx="2" fill="#efe9dd"/>
+          <rect x="96" y="82" width="10" height="10" rx="2.5" fill="#ffffff" stroke="#dcd3c4"/>
+          <rect x="112" y="84" width="58" height="5" rx="2" fill="#e7e0d4"/>
+          <rect x="200" y="84" width="22" height="5" rx="2" fill="#efe9dd"/>
+          <rect x="96" y="100" width="126" height="1" fill="#efe9dd"/>
+          <rect x="130" y="112" width="42" height="16" rx="4" fill="#ffffff" stroke="#dcd3c4"/>
+          <rect x="180" y="112" width="42" height="16" rx="4" fill="#f6e6da" stroke="rgba(193,90,56,.34)"/>
+        </svg>
+      </div>
+      <div class="c-meta">
+        <div class="c-top"><span class="st progress"></span><span class="id">ENG-113</span>
+          <span class="track">
+            <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+          </span>
+        </div>
+        <div class="c-title">Refund flow for partial orders</div>
+        <div class="c-say">Approved with notes</div>
+        <div class="c-git">refund-flow-v2 · 2 comments to resolve</div>
+      </div>
+    </div>
+
+    <!-- ENG-121 — guest checkout form; in crit -->
+    <div class="card">
+      <div class="thumb">
+        <svg viewBox="0 0 320 168" xmlns="http://www.w3.org/2000/svg">
+          <rect width="320" height="168" fill="#f4efe5"/>
+          <rect x="52" y="14" width="216" height="154" rx="8" fill="#ffffff" stroke="#e7e0d4"/>
+          <rect x="72" y="30" width="88" height="8" rx="2" fill="#dcd3c4"/>
+          <rect x="72" y="50" width="176" height="18" rx="4" fill="#ffffff" stroke="#dcd3c4"/>
+          <rect x="80" y="56" width="52" height="5" rx="2" fill="#e7e0d4"/>
+          <rect x="72" y="76" width="84" height="18" rx="4" fill="#ffffff" stroke="#dcd3c4"/>
+          <rect x="164" y="76" width="84" height="18" rx="4" fill="#ffffff" stroke="#dcd3c4"/>
+          <rect x="80" y="82" width="36" height="5" rx="2" fill="#e7e0d4"/>
+          <rect x="172" y="82" width="30" height="5" rx="2" fill="#e7e0d4"/>
+          <rect x="72" y="104" width="9" height="9" rx="2" fill="#ffffff" stroke="#dcd3c4"/>
+          <rect x="87" y="106" width="96" height="5" rx="2" fill="#efe9dd"/>
+          <rect x="72" y="124" width="176" height="20" rx="5" fill="#f6e6da" stroke="rgba(193,90,56,.34)"/>
+          <rect x="134" y="131" width="52" height="6" rx="2" fill="rgba(193,90,56,.45)"/>
+        </svg>
+      </div>
+      <div class="c-meta">
+        <div class="c-top"><span class="st todo"></span><span class="id">ENG-121</span>
+          <span class="track">
+            <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span>
+          </span>
+        </div>
+        <div class="c-title">Guest checkout without an account</div>
+        <div class="c-say">In crit Thursday</div>
+        <div class="c-git">guest-checkout-v2 · 5 comments open</div>
+      </div>
+    </div>
+
+    <!-- ENG-115 — autocomplete field; approved, checks failing downstream -->
+    <div class="card">
+      <div class="thumb">
+        <svg viewBox="0 0 320 168" xmlns="http://www.w3.org/2000/svg">
+          <rect width="320" height="168" fill="#f4efe5"/>
+          <rect x="52" y="14" width="216" height="154" rx="8" fill="#ffffff" stroke="#e7e0d4"/>
+          <rect x="72" y="30" width="72" height="7" rx="2" fill="#dcd3c4"/>
+          <rect x="72" y="46" width="176" height="19" rx="4" fill="#ffffff" stroke="rgba(193,90,56,.5)" stroke-width="1.4"/>
+          <rect x="80" y="52" width="64" height="6" rx="2" fill="#e7e0d4"/>
+          <rect x="72" y="68" width="176" height="66" rx="5" fill="#ffffff" stroke="#e7e0d4"/>
+          <rect x="72" y="68" width="176" height="22" rx="5" fill="#f6e6da"/>
+          <rect x="84" y="76" width="92" height="5" rx="2" fill="rgba(193,90,56,.45)"/>
+          <rect x="84" y="98" width="108" height="5" rx="2" fill="#e7e0d4"/>
+          <rect x="84" y="118" width="84" height="5" rx="2" fill="#e7e0d4"/>
+          <rect x="72" y="146" width="120" height="4" rx="2" fill="#efe9dd"/>
+        </svg>
+      </div>
+      <div class="c-meta">
+        <div class="c-top"><span class="st todo"></span><span class="id">ENG-115</span>
+          <span class="track">
+            <span class="tn open"></span><span class="tseg rev"></span><span class="tn fail"></span><span class="tseg dotted"></span><span class="tn rev-wait"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+          </span>
+        </div>
+        <div class="c-title">Address autocomplete on shipping step</div>
+        <div class="c-say">Designed — approved</div>
+        <div class="c-git">autocomplete-v1 · crit Fri · checks failing</div>
+      </div>
+    </div>
+
+    <!-- ENG-4 — empty states; exploring -->
+    <div class="card">
+      <div class="thumb">
+        <svg viewBox="0 0 320 168" xmlns="http://www.w3.org/2000/svg">
+          <rect width="320" height="168" fill="#f4efe5"/>
+          <rect x="52" y="14" width="216" height="154" rx="8" fill="#ffffff" stroke="#e7e0d4"/>
+          <circle cx="160" cy="66" r="22" fill="#f6e6da"/>
+          <circle cx="160" cy="66" r="22" fill="none" stroke="rgba(193,90,56,.34)"/>
+          <rect x="118" y="100" width="84" height="7" rx="2" fill="#dcd3c4"/>
+          <rect x="104" y="114" width="112" height="5" rx="2" fill="#efe9dd"/>
+          <rect x="130" y="132" width="60" height="17" rx="5" fill="#ffffff" stroke="#dcd3c4"/>
+          <rect x="146" y="138" width="28" height="5" rx="2" fill="#e7e0d4"/>
+        </svg>
+      </div>
+      <div class="c-meta">
+        <div class="c-top"><span class="st todo"></span><span class="id">ENG-4</span></div>
+        <div class="c-title">Warmer empty states across the app</div>
+        <div class="c-say">Exploring — three directions</div>
+        <div class="c-git">empty-states-v1 · not in crit yet</div>
+      </div>
+    </div>
+
+    <!-- ENG-117 — saved cards; draft, extends the pack -->
+    <div class="card">
+      <div class="thumb">
+        <svg viewBox="0 0 320 168" xmlns="http://www.w3.org/2000/svg">
+          <rect width="320" height="168" fill="#f4efe5"/>
+          <rect x="52" y="14" width="216" height="154" rx="8" fill="#ffffff" stroke="#e7e0d4"/>
+          <rect x="72" y="28" width="76" height="7" rx="2" fill="#dcd3c4"/>
+          <rect x="72" y="46" width="176" height="26" rx="5" fill="#ffffff" stroke="#dcd3c4"/>
+          <rect x="80" y="52" width="22" height="14" rx="3" fill="#f6e6da" stroke="rgba(193,90,56,.34)"/>
+          <rect x="110" y="54" width="58" height="5" rx="2" fill="#e7e0d4"/>
+          <rect x="110" y="62" width="36" height="3.5" rx="1.5" fill="#efe9dd"/>
+          <rect x="72" y="78" width="176" height="26" rx="5" fill="#ffffff" stroke="#e7e0d4"/>
+          <rect x="80" y="84" width="22" height="14" rx="3" fill="#efe9dd"/>
+          <rect x="110" y="86" width="52" height="5" rx="2" fill="#e7e0d4"/>
+          <rect x="110" y="94" width="30" height="3.5" rx="1.5" fill="#efe9dd"/>
+          <rect x="72" y="110" width="176" height="26" rx="5" fill="#ffffff" stroke="#e7e0d4"/>
+          <rect x="80" y="116" width="22" height="14" rx="3" fill="#efe9dd"/>
+          <rect x="110" y="118" width="62" height="5" rx="2" fill="#e7e0d4"/>
+          <rect x="110" y="126" width="34" height="3.5" rx="1.5" fill="#efe9dd"/>
+          <rect x="72" y="146" width="64" height="12" rx="6" fill="#ffffff" stroke="#dcd3c4"/>
+        </svg>
+      </div>
+      <div class="c-meta">
+        <div class="c-top"><span class="st backlog"></span><span class="id">ENG-117</span></div>
+        <div class="c-title">Manage saved cards in settings</div>
+        <div class="c-say">Draft — not in crit yet</div>
+        <div class="c-git">saved-cards-v1 · added yesterday</div>
+      </div>
+    </div>
+
+    <!-- everything without a design stays quiet -->
+    <div class="quiet">
+      <span><b>14 more</b> in this view without designs</span>
+      <span class="go">List view →</span>
+    </div>
+
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+</body>
+</html>

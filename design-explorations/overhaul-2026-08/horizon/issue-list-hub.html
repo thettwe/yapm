@@ -1,0 +1,318 @@
+<!doctype html>
+<!--
+  horizon/issue-list-hub — the daylight list under the three-band frame. The global bar is
+  byte-identical to home-hub; the masthead is page-owned local nav (← Home, Issues 120,
+  List|Board sibling toggle, filters). The 244px reclaimed from the rail goes to the title
+  column and the reality tracks (132px → 184px).
+  Tokens: Warm LIGHT block verbatim + daylight extensions (row hairline #efe9dd,
+  statusline bg #f4efe5, urgent-soft rgba(204,90,64,.08)).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Issues · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  /* ============ BAND 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;background:var(--bg-sidebar);
+        border-bottom:1px solid var(--border);display:flex;align-items:center;
+        padding:0 20px;gap:0}
+  .gb-ws{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--text-2)}
+  .gb-logo{width:24px;height:24px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .gb-ws b{color:var(--text-1);font-weight:600}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-div{width:1px;height:18px;background:var(--border-strong);margin:0 16px}
+  .gb-home{font-size:13px;font-weight:600;color:var(--text-1);display:flex;align-items:center;gap:7px}
+  .gb-home .ic{color:var(--text-2);font-size:12px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .gb-search{display:flex;align-items:center;gap:8px;height:30px;width:250px;padding:0 10px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3);font-size:12.5px}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-search .kbd{margin-left:auto}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:28px;padding:0 11px;
+           border:1px solid var(--border);border-radius:var(--rad-pill);
+           background:rgba(255,255,255,.4);font-weight:600;font-size:12px;color:var(--status-urgent)}
+  .gb-attn .ad{width:7px;height:7px;border-radius:2px;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text-1)}
+  .gb-inbox .n{color:var(--text-2);font-weight:600;font-size:12px}
+  .avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+          font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ BAND 2 — page-owned masthead ============ */
+  .crumb-row{display:flex;align-items:center;padding:16px 28px 0;font-size:12px;color:var(--text-3)}
+  .crumb-row .back{font-weight:600;color:var(--text-2)}
+  .crumb-row .synced{margin-left:auto;display:flex;align-items:center;gap:6px}
+  .masthead{display:flex;align-items:center;padding:8px 28px 16px}
+  .masthead h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px;margin-left:10px}
+  .siblings{display:flex;margin-left:20px;border:1px solid var(--border-strong);
+            border-radius:var(--rad-control);overflow:hidden}
+  .siblings span{padding:5px 12px;font-size:12.5px;color:var(--text-2)}
+  .siblings .active{background:var(--accent-soft);color:var(--accent-strong);font-weight:600}
+  .siblings span+span{border-left:1px solid var(--border-strong)}
+  .mast-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .filters{display:flex;align-items:center;gap:18px;padding:0 28px 12px;color:var(--text-2);font-size:12.5px}
+  .filters .f-ic{color:var(--text-3);font-size:12px}
+  .filters .right{margin-left:auto;color:var(--text-3)}
+  .filters .right b{color:var(--text-2);font-weight:500}
+
+  /* ============ list (daylight, tracks widened) ============ */
+  .group-h{height:35px;display:flex;align-items:center;gap:9px;padding:0 28px;
+           background:var(--bg-hover);border-top:1px solid var(--row-hairline);
+           font-size:12.5px;font-weight:600}
+  .group-h .g-count{color:var(--text-3);font-weight:400}
+  .row{height:44px;display:flex;align-items:center;gap:12px;padding:0 28px 0 25px;
+       border-top:1px solid var(--row-hairline);position:relative;border-left:3px solid transparent}
+  .row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .row.selected{background:var(--bg-selected);border-left-color:var(--accent)}
+  .row .pri{width:14px;color:var(--text-3);display:flex;align-items:flex-end;gap:1px}
+  .row .id{font-family:var(--mono);font-size:12px;color:var(--text-3);width:62px}
+  .row.selected .id{color:var(--accent-strong)}
+  .row .title{font-size:13.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .spring{flex:1}
+  .row .label{display:flex;align-items:center;gap:5px;color:var(--text-2);font-size:12px;white-space:nowrap}
+  .ldot{width:7px;height:7px;border-radius:50%}
+  .row .when{font-family:var(--mono);font-size:11px;color:var(--text-3);width:32px;text-align:right}
+  .row .av{width:20px;height:20px;border-radius:50%;background:#5c5348;color:#f1ebe3;font-size:8px;
+           font-weight:600;display:flex;align-items:center;justify-content:center}
+  .row .av.none{background:transparent;border:none}
+
+  .pbar{display:inline-block;width:3px;border-radius:1px;background:var(--border-strong)}
+  .pbar.on{background:var(--text-2)}
+  .p-urgent{width:14px;height:14px;border-radius:3.5px;background:var(--status-urgent);color:#fff;
+            font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1}
+
+  .st{width:14px;height:14px;border-radius:50%;position:relative;flex:none}
+  .st.backlog{border:1.6px dashed var(--status-backlog)}
+  .st.todo{border:1.6px solid var(--status-todo)}
+  .st.progress{border:1.6px solid var(--status-in-progress)}
+  .st.progress::after{content:"";position:absolute;inset:2.4px;border-radius:50%;
+       background:conic-gradient(var(--status-in-progress) 0 50%,transparent 50% 100%)}
+
+  /* reality track — widened with the reclaimed rail width */
+  .track{display:flex;align-items:center;width:184px;flex:none}
+  .tn{width:7px;height:7px;border-radius:50%;flex:none}
+  .tn.done{background:var(--status-done)}
+  .tn.rev-wait{background:transparent;border:1.6px solid var(--status-in-review);width:8px;height:8px}
+  .tn.open{background:var(--status-in-review)}
+  .tn.fail{background:var(--status-urgent);border-radius:1.5px}
+  .tn.empty{background:transparent;border:1.4px solid var(--border-strong)}
+  .tn.empty-urgent{background:transparent;border:1.6px solid var(--status-urgent)}
+  .tseg{height:2px;flex:1;background:var(--status-done)}
+  .tseg.dotted{background:repeating-linear-gradient(90deg,var(--border-strong) 0 3px,transparent 3px 6px);height:1.5px}
+  .tbreak{color:var(--status-urgent);font-family:var(--mono);font-weight:500;font-size:11px;
+          padding:0 3px;letter-spacing:-.05em}
+  .t-age{font-family:var(--mono);font-size:11px;color:var(--text-3);width:26px;text-align:right;flex:none}
+  .phrase{font-size:12.5px;white-space:nowrap;flex:none}
+  .phrase.urgent{color:var(--status-urgent);font-weight:600}
+
+  .fold-hint{padding:14px 28px;color:var(--text-3);font-size:12px}
+
+  /* ============ BAND 3 — statusline ============ */
+  .statusline{margin-top:auto;height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 28px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <div class="gb-logo">A</div><b>Acme</b><span class="sep">/</span><span>Engineering</span><span class="chev">▾</span>
+    </div>
+    <div class="gb-div"></div>
+    <div class="gb-home"><span class="ic">⌂</span>Home</div>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span>Search or jump to…</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="ad"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="n">3</span></div>
+      <div class="avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="crumb-row"><span class="back">← Home</span>
+    <span class="synced"><span class="dot-g"></span>GitHub synced</span></div>
+
+  <div class="masthead">
+    <h1>Issues</h1><span class="count">120</span>
+    <div class="siblings"><span class="active">List</span><span>Board</span></div>
+    <div class="mast-actions">
+      <button class="btn">Save view</button>
+      <button class="btn primary">+ New issue</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <span class="f-ic">≔</span>
+    <span>Status</span><span>Priority</span><span>Assignee</span><span>Delivery</span>
+    <span>Label</span><span>Cycle</span><span>Project</span>
+    <span class="right">Group <b>Status</b> &nbsp;·&nbsp; Sort <b>Priority</b></span>
+  </div>
+
+  <!-- ============ Backlog ============ -->
+  <div class="group-h"><span class="st backlog"></span>Backlog <span class="g-count">3</span></div>
+
+  <div class="row">
+    <span class="p-urgent">!</span><span class="st backlog"></span>
+    <span class="id">ENG-120</span><span class="title">Migrate legacy coupon codes</span>
+    <span class="spring"></span>
+    <span class="label"><span class="ldot" style="background:var(--status-urgent)"></span>bug</span>
+    <span class="when">5m</span><span class="av">DA</span>
+  </div>
+  <div class="row">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar on" style="height:11px"></span></span>
+    <span class="st backlog"></span>
+    <span class="id">ENG-5</span><span class="title">Bulk-edit from the issue list</span>
+    <span class="spring"></span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+    <span class="when">23m</span><span class="av none"></span>
+  </div>
+  <div class="row">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar on" style="height:11px"></span></span>
+    <span class="st backlog"></span>
+    <span class="id">ENG-6</span><span class="title">Comment drafts lost on navigation</span>
+    <span class="spring"></span>
+    <span class="label"><span class="ldot" style="background:var(--status-urgent)"></span>bug</span>
+    <span class="when">23m</span><span class="av">DA</span>
+  </div>
+
+  <!-- ============ Todo ============ -->
+  <div class="group-h"><span class="st todo"></span>Todo <span class="g-count">4</span></div>
+
+  <div class="row">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar on" style="height:11px"></span></span>
+    <span class="st todo"></span>
+    <span class="id">ENG-2</span><span class="title">Saved views for shared filters</span>
+    <span class="spring"></span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+    <span class="when">23m</span><span class="av none"></span>
+  </div>
+  <div class="row">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st todo"></span>
+    <span class="id">ENG-121</span><span class="title">Guest checkout without an account</span>
+    <span class="spring"></span>
+    <span class="track">
+      <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span>
+    </span>
+    <span class="t-age">2d</span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+    <span class="when">2d</span><span class="av">DA</span>
+  </div>
+  <div class="row">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st todo"></span>
+    <span class="id">ENG-4</span><span class="title">Warmer empty states across the app</span>
+    <span class="spring"></span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-progress)"></span>chore</span>
+    <span class="label"><span class="ldot" style="background:var(--status-done)"></span>design</span>
+    <span class="when">23m</span><span class="av none"></span>
+  </div>
+  <div class="row">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st todo"></span>
+    <span class="id">ENG-115</span><span class="title">Address autocomplete on shipping step</span>
+    <span class="spring"></span>
+    <span class="track">
+      <span class="tn open"></span><span class="tseg" style="background:var(--status-in-review)"></span><span class="tn fail"></span><span class="tseg dotted"></span><span class="tn rev-wait"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+    </span>
+    <span class="t-age">16h</span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+    <span class="when">7h</span><span class="av none"></span>
+  </div>
+
+  <!-- ============ In Progress ============ -->
+  <div class="group-h"><span class="st progress"></span>In Progress <span class="g-count">4</span></div>
+
+  <div class="row">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st progress"></span>
+    <span class="id">ENG-1</span><span class="title">Focus lost after closing the palette</span>
+    <span class="spring"></span>
+    <span class="label"><span class="ldot" style="background:var(--status-urgent)"></span>bug</span>
+    <span class="when">2m</span><span class="av">DA</span>
+  </div>
+  <div class="row selected">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st progress"></span>
+    <span class="id">ENG-116</span><span class="title">Apple Pay in the payment sheet</span>
+    <span class="spring"></span>
+    <span class="phrase urgent">Done in git, not on the board</span>
+    <span class="track">
+      <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tbreak">//</span><span class="tn empty-urgent"></span>
+    </span>
+    <span class="t-age">1d</span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+    <span class="when">11h</span><span class="av none"></span>
+  </div>
+  <div class="row">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st progress"></span>
+    <span class="id">ENG-119</span><span class="title">Persist cart across sessions</span>
+    <span class="spring"></span>
+    <span class="track">
+      <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span>
+    </span>
+    <span class="t-age">4h</span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-progress)"></span>feature</span>
+    <span class="when">1d</span><span class="av">DA</span>
+  </div>
+  <div class="row">
+    <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+    <span class="st progress"></span>
+    <span class="id">ENG-113</span><span class="title">Refund flow for partial orders</span>
+    <span class="spring"></span>
+    <span class="track">
+      <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+    </span>
+    <span class="t-age">3d</span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+    <span class="when">15h</span><span class="av">DA</span>
+  </div>
+
+  <div class="fold-hint">↓ 109 more</div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+</body>
+</html>

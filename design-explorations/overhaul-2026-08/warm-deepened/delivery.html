@@ -1,0 +1,258 @@
+<!doctype html>
+<!--
+  warm-deepened / delivery — CONTROL direction.
+  Tokens: verbatim from globals.css Warm LIGHT block.
+  Extensions (derived, none new): trend glyphs are toned with existing status hues
+  (better = status-done, worse = status-urgent, neutral = text-3); the cadence strip
+  draws deploys with status-done / status-urgent / a hollow text-3 dot.
+  Tiles are de-carded into a flat ledger grid; all sparklines share one 6-cycle axis.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Delivery (warm-deepened)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2; --bg-selected:#f6e6da;
+    --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da; --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26; --status-in-review:#6a62c2;
+    --status-done:#3e8c63; --status-urgent:#cc5a40; --signal-sync:#3e8c63;
+    --ui:'Figtree',ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --topbar:52px; --rad-control:7px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--text-1);font-family:var(--ui);font-size:13.5px;-webkit-font-smoothing:antialiased}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+  .topbar{height:var(--topbar);display:flex;align-items:center;gap:18px;padding:0 16px;border-bottom:1px solid var(--border)}
+  .switcher{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13.5px;padding:5px 10px;border:1px solid var(--border);border-radius:var(--rad-control)}
+  .switcher svg{opacity:.55}
+  .views{display:flex;align-self:stretch;align-items:stretch;gap:2px}
+  .views a{display:flex;align-items:center;padding:0 11px;color:var(--text-2);text-decoration:none;font-size:13px;font-weight:500;position:relative}
+  .views a.active{color:var(--text-1)}
+  .views a.active::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--accent)}
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:16px;color:var(--text-2);font-size:13px}
+  .conn{display:flex;align-items:center;gap:7px}
+  .conn .dot{width:7px;height:7px;border-radius:50%;background:var(--signal-sync)}
+  .user{display:flex;align-items:center;gap:6px;font-weight:500;color:var(--text-1)}
+
+  .page{padding:0 24px 48px}
+  .head{display:flex;align-items:flex-start;padding:20px 0 0}
+  .head h1{font-size:17px;font-weight:600;letter-spacing:-.01em}
+  .head .sub{font-size:12px;color:var(--text-2);margin-top:2px}
+  .head .win{margin-left:auto;font-size:12px;color:var(--text-3);display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+  .head .win .sel{display:inline-flex;align-items:center;gap:6px;color:var(--text-2);font-weight:500;font-size:12.5px;padding-bottom:1px;border-bottom:1px solid var(--border-strong)}
+  .intro{font-size:12px;color:var(--text-2);line-height:1.55;max-width:760px;margin:12px 0 0}
+
+  /* cadence strip */
+  .cadence-wrap{display:flex;align-items:center;gap:26px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-top:16px;padding:10px 0}
+  .cadence-title{font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-3);width:96px;line-height:1.6}
+  .cadence .lane{font-family:var(--mono);font-size:9.5px;fill:var(--text-3)}
+  .cadence .mon{font-family:var(--mono);font-size:9px;fill:var(--text-3)}
+  .cadence .d-ok{fill:var(--status-done)}
+  .cadence .d-fail{fill:var(--status-urgent)}
+  .cadence .d-sup{fill:var(--bg);stroke:var(--text-3);stroke-width:1}
+  .cadence .d-stag{fill:var(--border-strong)}
+  .cadence-note{font-size:11px;color:var(--text-3);max-width:200px;line-height:1.5}
+  .cadence-note .mono{font-size:10.5px}
+
+  .sec-label{font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-3);margin:22px 0 0;padding-bottom:9px}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--border);border-left:1px solid var(--border)}
+  .tile{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:11px 14px 12px;min-height:104px}
+  .tile.empty{background:transparent}
+  .t-top{display:flex;align-items:flex-start;gap:8px}
+  .t-label{font-size:11.5px;font-weight:500;color:var(--text-2);flex:1;min-width:0}
+  .t-value{font-family:var(--mono);font-size:19px;line-height:1.15;font-variant-numeric:tabular-nums;margin-top:3px}
+  .t-delta{font-size:11px;color:var(--text-2);margin-top:5px}
+  .t-delta .g{font-weight:600}
+  .g.better{color:var(--status-done)} .g.worse{color:var(--status-urgent)} .g.neutral{color:var(--text-3)}
+  .t-cap{font-size:11px;line-height:1.45;color:var(--text-3);margin-top:5px}
+  .spark{flex:none}
+  .spark .guide{stroke:var(--border);stroke-width:1;opacity:.6}
+  .spark polyline{fill:none;stroke:var(--text-3);stroke-width:1.2}
+  .spark .end{fill:var(--accent)}
+
+  .foot{border-top:1px solid var(--border);margin-top:26px;padding:14px 0 0;max-width:860px}
+  .foot .f-label{font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px}
+  .foot p{font-size:12px;color:var(--text-2);line-height:1.6}
+  .foot strong{color:var(--text-1);font-weight:600}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="switcher">Delivery
+    <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 3.5l3-2.2 3 2.2M2 6.5l3 2.2 3-2.2"/></svg>
+  </div>
+  <nav class="views">
+    <a href="#">List</a><a href="#">Board</a><a href="#">Cycles</a><a href="#">Triage</a><a href="#">Retros</a><a class="active" href="#">Delivery</a><a href="#">Projects</a><a href="#">Roadmap</a>
+  </nav>
+  <div class="top-right">
+    <span class="conn"><span class="dot"></span>Connected</span>
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="8" cy="8" r="6.2"/><circle cx="6" cy="6.4" r=".9" fill="currentColor"/><circle cx="9.8" cy="5.8" r=".9" fill="currentColor"/><circle cx="10.6" cy="9.4" r=".9" fill="currentColor"/></svg>
+    <span class="user">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="5.4" r="2.7"/><path d="M2.8 13.6c.9-2.6 2.9-3.9 5.2-3.9s4.3 1.3 5.2 3.9"/></svg>
+      Demo Admin
+      <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 3.8l3 3 3-3"/></svg>
+    </span>
+  </div>
+</header>
+
+<div class="page">
+  <div class="head">
+    <div>
+      <h1>Delivery</h1>
+      <div class="sub">Last 6 completed cycles</div>
+    </div>
+    <div class="win">Window
+      <span class="sel">Last 6 cycles
+        <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 3.8l3 3 3-3"/></svg></span>
+    </div>
+  </div>
+  <p class="intro">Team-level trends from this team's own work, computed from cycles and linked pull requests. Never a per-person number. The cycle in progress is excluded — a half-finished cycle would read as a decline that is only the calendar.</p>
+
+  <div class="cadence-wrap">
+    <div class="cadence-title">Ship cadence</div>
+    <svg class="cadence" width="432" height="72" viewBox="0 0 432 72"><text x="0" y="27" class="lane">production</text><text x="0" y="55" class="lane">staging</text><circle cx="86" cy="24" r="2.3" class="d-ok"/><circle cx="99" cy="24" r="2.3" class="d-ok"/><circle cx="125" cy="24" r="2.3" class="d-ok"/><circle cx="138" cy="24" r="2.3" class="d-ok"/><circle cx="151" cy="24" r="2.3" class="d-ok"/><circle cx="164" cy="24" r="2.3" class="d-ok"/><circle cx="164" cy="17.6" r="2.3" class="d-ok"/><circle cx="164" cy="11.2" r="2.3" class="d-fail"/><circle cx="177" cy="24" r="2.3" class="d-ok"/><circle cx="190" cy="24" r="2.3" class="d-ok"/><circle cx="203" cy="24" r="2.3" class="d-ok"/><circle cx="203" cy="17.6" r="2.3" class="d-ok"/><circle cx="216" cy="24" r="2.3" class="d-ok"/><circle cx="229" cy="24" r="2.3" class="d-ok"/><circle cx="229" cy="17.6" r="2.3" class="d-ok"/><circle cx="242" cy="24" r="2.3" class="d-ok"/><circle cx="242" cy="17.6" r="2.3" class="d-ok"/><circle cx="255" cy="24" r="2.3" class="d-ok"/><circle cx="268" cy="24" r="2.3" class="d-ok"/><circle cx="268" cy="17.6" r="2.3" class="d-ok"/><circle cx="281" cy="24" r="2.3" class="d-ok"/><circle cx="281" cy="17.6" r="2.3" class="d-ok"/><circle cx="281" cy="11.2" r="2.3" class="d-ok"/><circle cx="294" cy="24" r="2.3" class="d-ok"/><circle cx="294" cy="17.6" r="2.3" class="d-ok"/><circle cx="307" cy="24" r="2.3" class="d-ok"/><circle cx="307" cy="17.6" r="2.3" class="d-ok"/><circle cx="307" cy="11.2" r="2.3" class="d-ok"/><circle cx="307" cy="4.799999999999997" r="2.3" class="d-fail"/><circle cx="320" cy="24" r="2.3" class="d-ok"/><circle cx="320" cy="17.6" r="2.3" class="d-ok"/><circle cx="333" cy="24" r="2.3" class="d-ok"/><circle cx="333" cy="17.6" r="2.3" class="d-ok"/><circle cx="333" cy="11.2" r="2.3" class="d-ok"/><circle cx="346" cy="24" r="2.3" class="d-ok"/><circle cx="346" cy="17.6" r="2.3" class="d-ok"/><circle cx="346" cy="11.2" r="2.3" class="d-ok"/><circle cx="359" cy="24" r="2.3" class="d-ok"/><circle cx="359" cy="17.6" r="2.3" class="d-ok"/><circle cx="359" cy="11.2" r="2.3" class="d-sup"/><circle cx="372" cy="24" r="2.3" class="d-ok"/><circle cx="372" cy="17.6" r="2.3" class="d-ok"/><circle cx="372" cy="11.2" r="2.3" class="d-ok"/><circle cx="385" cy="24" r="2.3" class="d-ok"/><circle cx="385" cy="17.6" r="2.3" class="d-ok"/><circle cx="385" cy="11.2" r="2.3" class="d-ok"/><circle cx="385" cy="4.799999999999997" r="2.3" class="d-sup"/><circle cx="398" cy="24" r="2.3" class="d-ok"/><circle cx="398" cy="17.6" r="2.3" class="d-ok"/><circle cx="398" cy="11.2" r="2.3" class="d-ok"/><circle cx="411" cy="24" r="2.3" class="d-ok"/><circle cx="411" cy="17.6" r="2.3" class="d-ok"/><circle cx="86" cy="52" r="2.3" class="d-stag"/><circle cx="86" cy="45.6" r="2.3" class="d-stag"/><circle cx="99" cy="52" r="2.3" class="d-stag"/><circle cx="112" cy="52" r="2.3" class="d-stag"/><circle cx="112" cy="45.6" r="2.3" class="d-stag"/><circle cx="125" cy="52" r="2.3" class="d-stag"/><circle cx="125" cy="45.6" r="2.3" class="d-stag"/><circle cx="138" cy="52" r="2.3" class="d-stag"/><circle cx="138" cy="45.6" r="2.3" class="d-stag"/><circle cx="151" cy="52" r="2.3" class="d-stag"/><circle cx="151" cy="45.6" r="2.3" class="d-stag"/><circle cx="164" cy="52" r="2.3" class="d-stag"/><circle cx="177" cy="52" r="2.3" class="d-stag"/><circle cx="177" cy="45.6" r="2.3" class="d-stag"/><circle cx="190" cy="52" r="2.3" class="d-stag"/><circle cx="190" cy="45.6" r="2.3" class="d-stag"/><circle cx="203" cy="52" r="2.3" class="d-stag"/><circle cx="216" cy="52" r="2.3" class="d-stag"/><circle cx="216" cy="45.6" r="2.3" class="d-stag"/><circle cx="229" cy="52" r="2.3" class="d-stag"/><circle cx="229" cy="45.6" r="2.3" class="d-stag"/><circle cx="242" cy="52" r="2.3" class="d-stag"/><circle cx="242" cy="45.6" r="2.3" class="d-stag"/><circle cx="255" cy="52" r="2.3" class="d-stag"/><circle cx="255" cy="45.6" r="2.3" class="d-stag"/><circle cx="268" cy="52" r="2.3" class="d-stag"/><circle cx="268" cy="45.6" r="2.3" class="d-stag"/><circle cx="281" cy="52" r="2.3" class="d-stag"/><circle cx="294" cy="52" r="2.3" class="d-stag"/><circle cx="294" cy="45.6" r="2.3" class="d-stag"/><circle cx="307" cy="52" r="2.3" class="d-stag"/><circle cx="307" cy="45.6" r="2.3" class="d-stag"/><circle cx="320" cy="52" r="2.3" class="d-stag"/><circle cx="320" cy="45.6" r="2.3" class="d-stag"/><circle cx="333" cy="52" r="2.3" class="d-stag"/><circle cx="333" cy="45.6" r="2.3" class="d-stag"/><circle cx="346" cy="52" r="2.3" class="d-stag"/><circle cx="359" cy="52" r="2.3" class="d-stag"/><circle cx="359" cy="45.6" r="2.3" class="d-stag"/><circle cx="372" cy="52" r="2.3" class="d-stag"/><circle cx="372" cy="45.6" r="2.3" class="d-stag"/><circle cx="385" cy="52" r="2.3" class="d-stag"/><circle cx="385" cy="45.6" r="2.3" class="d-stag"/><circle cx="398" cy="52" r="2.3" class="d-stag"/><circle cx="398" cy="45.6" r="2.3" class="d-stag"/><circle cx="411" cy="52" r="2.3" class="d-stag"/><circle cx="411" cy="45.6" r="2.3" class="d-stag"/><text x="82" y="68" class="mon">Feb</text><text x="134" y="68" class="mon">Mar</text><text x="186" y="68" class="mon">Apr</text><text x="238" y="68" class="mon">May</text><text x="290" y="68" class="mon">Jun</text><text x="342" y="68" class="mon">Jul</text><text x="394" y="68" class="mon">Aug</text></svg>
+    <div class="cadence-note"><span class="mono">48</span> production deploys since Feb — from ~1/wk to ~3/wk. Hollow = superseded, <span style="color:var(--status-urgent)">●</span> = failed.</div>
+  </div>
+
+  <div class="sec-label">Delivered</div>
+  <div class="grid">
+    <div class="tile">
+      <div class="t-top"><span class="t-label">Shipped</span>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20">
+          <line class="guide" x1="2" y1="2" x2="2" y2="18"/><line class="guide" x1="14" y1="2" x2="14" y2="18"/><line class="guide" x1="26" y1="2" x2="26" y2="18"/><line class="guide" x1="38" y1="2" x2="38" y2="18"/><line class="guide" x1="50" y1="2" x2="50" y2="18"/><line class="guide" x1="62" y1="2" x2="62" y2="18"/>
+          <polyline points="2,16.5 14,7.8 26,7.8 38,7.8 50,3.5 62,12.2"/><circle class="end" cx="62" cy="12.2" r="2"/>
+        </svg></div>
+      <div class="t-value">52</div>
+      <div class="t-delta"><span class="g better">↗</span> +8 vs. the previous 6 cycles</div>
+      <div class="t-cap">52 of 57 issues in scope shipped.</div>
+    </div>
+    <div class="tile">
+      <div class="t-top"><span class="t-label">Carried out</span>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20">
+          <line class="guide" x1="2" y1="2" x2="2" y2="18"/><line class="guide" x1="14" y1="2" x2="14" y2="18"/><line class="guide" x1="26" y1="2" x2="26" y2="18"/><line class="guide" x1="38" y1="2" x2="38" y2="18"/><line class="guide" x1="50" y1="2" x2="50" y2="18"/><line class="guide" x1="62" y1="2" x2="62" y2="18"/>
+          <polyline points="2,3.5 14,16.5 26,12.2 38,12.2 50,12.2 62,12.2"/><circle class="end" cx="62" cy="12.2" r="2"/>
+        </svg></div>
+      <div class="t-value">2</div>
+      <div class="t-delta"><span class="g better">↗</span> −1 vs. the previous 6 cycles</div>
+      <div class="t-cap">A carry within the window is not counted here.</div>
+    </div>
+    <div class="tile">
+      <div class="t-top"><span class="t-label">Carried in</span>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20">
+          <line class="guide" x1="2" y1="2" x2="2" y2="18"/><line class="guide" x1="14" y1="2" x2="14" y2="18"/><line class="guide" x1="26" y1="2" x2="26" y2="18"/><line class="guide" x1="38" y1="2" x2="38" y2="18"/><line class="guide" x1="50" y1="2" x2="50" y2="18"/><line class="guide" x1="62" y1="2" x2="62" y2="18"/>
+        </svg></div>
+      <div class="t-value">1</div>
+      <div class="t-delta"><span class="g neutral">→</span> −1 vs. the previous 6 cycles</div>
+      <div class="t-cap">Carried in from outside the window.</div>
+    </div>
+    <div class="tile">
+      <div class="t-top"><span class="t-label">Carried twice or more</span>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20">
+          <line class="guide" x1="2" y1="2" x2="2" y2="18"/><line class="guide" x1="14" y1="2" x2="14" y2="18"/><line class="guide" x1="26" y1="2" x2="26" y2="18"/><line class="guide" x1="38" y1="2" x2="38" y2="18"/><line class="guide" x1="50" y1="2" x2="50" y2="18"/><line class="guide" x1="62" y1="2" x2="62" y2="18"/>
+        </svg></div>
+      <div class="t-value">3</div>
+      <div class="t-delta"><span class="g worse">↘</span> +1 vs. the previous 6 cycles</div>
+      <div class="t-cap">Usually re-scoping rather than re-committing.</div>
+    </div>
+    <div class="tile">
+      <div class="t-top"><span class="t-label">Added mid-cycle</span>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20">
+          <line class="guide" x1="2" y1="2" x2="2" y2="18"/><line class="guide" x1="14" y1="2" x2="14" y2="18"/><line class="guide" x1="26" y1="2" x2="26" y2="18"/><line class="guide" x1="38" y1="2" x2="38" y2="18"/><line class="guide" x1="50" y1="2" x2="50" y2="18"/><line class="guide" x1="62" y1="2" x2="62" y2="18"/>
+          <polyline points="2,12.2 14,16.5 26,7.8 38,12.2 50,3.5 62,12.2"/><circle class="end" cx="62" cy="12.2" r="2"/>
+        </svg></div>
+      <div class="t-value">14</div>
+      <div class="t-delta"><span class="g worse">↘</span> +2 vs. the previous 6 cycles</div>
+      <div class="t-cap">Joined a cycle after it had started.</div>
+    </div>
+    <div class="tile">
+      <div class="t-top"><span class="t-label">Canceled</span>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20">
+          <line class="guide" x1="2" y1="2" x2="2" y2="18"/><line class="guide" x1="14" y1="2" x2="14" y2="18"/><line class="guide" x1="26" y1="2" x2="26" y2="18"/><line class="guide" x1="38" y1="2" x2="38" y2="18"/><line class="guide" x1="50" y1="2" x2="50" y2="18"/><line class="guide" x1="62" y1="2" x2="62" y2="18"/>
+        </svg></div>
+      <div class="t-value">3</div>
+      <div class="t-delta"><span class="g neutral">→</span> −2 vs. the previous 6 cycles</div>
+      <div class="t-cap">Canceled across the window.</div>
+    </div>
+    <div class="tile">
+      <div class="t-top"><span class="t-label">In scope</span>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20">
+          <line class="guide" x1="2" y1="2" x2="2" y2="18"/><line class="guide" x1="14" y1="2" x2="14" y2="18"/><line class="guide" x1="26" y1="2" x2="26" y2="18"/><line class="guide" x1="38" y1="2" x2="38" y2="18"/><line class="guide" x1="50" y1="2" x2="50" y2="18"/><line class="guide" x1="62" y1="2" x2="62" y2="18"/>
+        </svg></div>
+      <div class="t-value">57</div>
+      <div class="t-delta"><span class="g neutral">→</span> +5 vs. the previous 6 cycles</div>
+      <div class="t-cap">Distinct issues touched, carried work included.</div>
+    </div>
+    <div class="tile empty"></div><div class="tile empty"></div><div class="tile empty"></div>
+  </div>
+
+  <div class="sec-label">Flow</div>
+  <div class="grid">
+    <div class="tile">
+      <div class="t-top"><span class="t-label">PR cycle time</span>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20">
+          <line class="guide" x1="2" y1="2" x2="2" y2="18"/><line class="guide" x1="14" y1="2" x2="14" y2="18"/><line class="guide" x1="26" y1="2" x2="26" y2="18"/><line class="guide" x1="38" y1="2" x2="38" y2="18"/><line class="guide" x1="50" y1="2" x2="50" y2="18"/><line class="guide" x1="62" y1="2" x2="62" y2="18"/>
+          <polyline points="2,3.5 14,3.5 26,12.2 38,12.0 50,13.5 62,16.5"/><circle class="end" cx="62" cy="16.5" r="2"/>
+        </svg></div>
+      <div class="t-value">46h</div>
+      <div class="t-delta"><span class="g better">↗</span> −22h vs. the previous 6 cycles</div>
+      <div class="t-cap">Median from open to merge.</div>
+    </div>
+    <div class="tile">
+      <div class="t-top"><span class="t-label">Time to first review</span>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20">
+          <line class="guide" x1="2" y1="2" x2="2" y2="18"/><line class="guide" x1="14" y1="2" x2="14" y2="18"/><line class="guide" x1="26" y1="2" x2="26" y2="18"/><line class="guide" x1="38" y1="2" x2="38" y2="18"/><line class="guide" x1="50" y1="2" x2="50" y2="18"/><line class="guide" x1="62" y1="2" x2="62" y2="18"/>
+          <polyline points="2,4.1 14,5.2 26,3.5 38,13.4 50,5.7 62,16.5"/><circle class="end" cx="62" cy="16.5" r="2"/>
+        </svg></div>
+      <div class="t-value">15h</div>
+      <div class="t-delta"><span class="g better">↗</span> −9h vs. the previous 6 cycles</div>
+      <div class="t-cap">Median wait for a first review.</div>
+    </div>
+    <div class="tile">
+      <div class="t-top"><span class="t-label">Review rounds</span>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20">
+          <line class="guide" x1="2" y1="2" x2="2" y2="18"/><line class="guide" x1="14" y1="2" x2="14" y2="18"/><line class="guide" x1="26" y1="2" x2="26" y2="18"/><line class="guide" x1="38" y1="2" x2="38" y2="18"/><line class="guide" x1="50" y1="2" x2="50" y2="18"/><line class="guide" x1="62" y1="2" x2="62" y2="18"/>
+        </svg></div>
+      <div class="t-value">2</div>
+      <div class="t-delta"><span class="g neutral">·</span> no change</div>
+      <div class="t-cap">Median review rounds per pull request.</div>
+    </div>
+    <div class="tile">
+      <div class="t-top"><span class="t-label">No linked PR</span>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20">
+          <line class="guide" x1="2" y1="2" x2="2" y2="18"/><line class="guide" x1="14" y1="2" x2="14" y2="18"/><line class="guide" x1="26" y1="2" x2="26" y2="18"/><line class="guide" x1="38" y1="2" x2="38" y2="18"/><line class="guide" x1="50" y1="2" x2="50" y2="18"/><line class="guide" x1="62" y1="2" x2="62" y2="18"/>
+        </svg></div>
+      <div class="t-value">13</div>
+      <div class="t-delta"><span class="g better">↗</span> −1 vs. the previous 6 cycles</div>
+      <div class="t-cap">In scope with no linked pull request.</div>
+    </div>
+    <div class="tile">
+      <div class="t-top"><span class="t-label">CI failing</span>
+        <svg class="spark" width="64" height="20" viewBox="0 0 64 20">
+          <line class="guide" x1="2" y1="2" x2="2" y2="18"/><line class="guide" x1="14" y1="2" x2="14" y2="18"/><line class="guide" x1="26" y1="2" x2="26" y2="18"/><line class="guide" x1="38" y1="2" x2="38" y2="18"/><line class="guide" x1="50" y1="2" x2="50" y2="18"/><line class="guide" x1="62" y1="2" x2="62" y2="18"/>
+          <polyline points="2,13.9 14,13.9 26,3.5 38,13.9 50,10.3 62,16.5"/><circle class="end" cx="62" cy="16.5" r="2"/>
+        </svg></div>
+      <div class="t-value">26%</div>
+      <div class="t-delta"><span class="g better">↗</span> −14% vs. the previous 6 cycles</div>
+      <div class="t-cap">Shown next to speed so neither is traded for the other.</div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="f-label">What this doesn't show yet</div>
+    <p><strong>Lead time for changes</strong> is partial: PR cycle time is measured open to merge only. Commit to deploy is not measured.</p>
+    <p><strong>Deployment frequency</strong> is absent as a metric. The durable deploy history it needs is now recorded — the cadence strip above draws it; the metric lands in a later change.</p>
+    <p><strong>Change failure rate</strong> and <strong>time to restore</strong> are absent. Both need an incident record that yapm does not have yet.</p>
+  </div>
+</div>
+
+</body>
+</html>

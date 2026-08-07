@@ -1,0 +1,546 @@
+<!doctype html>
+<!--
+  plays/refs-specimen — REFS, round 7 (final). The reference system as a PRIMITIVE.
+  Thesis: in a work-graph product every fact IS a node reference. One chip grammar for all
+  seven entity kinds (kind glyph + mono key/name + state tint), one peek card, backlinks
+  written automatically, and every computed number a door to the set that produced it.
+  Frame: horizon three-band deck. Tokens: Warm LIGHT verbatim + daylight extensions
+  (row hairline #efe9dd, statusline bg #f4efe5, urgent-soft rgba(204,90,64,.08)).
+  All marks inline SVG on the 20-grid, stroke 1.6. Elevation only on the peek (a transient).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — References</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+  svg{display:block}
+
+  /* band 1 — global bar */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)} .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* band 2 — masthead */
+  .masthead{display:flex;align-items:baseline;padding:20px 40px 4px}
+  .masthead h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px;margin-left:10px}
+  .masthead .sub{color:var(--text-2);font-size:13px;margin-left:22px}
+  .masthead .spec{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+
+  .sheet{padding:6px 40px 26px}
+  .sec-h{display:flex;align-items:baseline;gap:10px;margin:16px 0 0;
+         border-top:1px solid var(--border);padding-top:12px}
+  .sec-h .t{font-size:11px;font-weight:700;letter-spacing:.09em;color:var(--text-2)}
+  .sec-h .c{font-size:12px;color:var(--text-3)}
+
+  /* ---------- the chip ---------- */
+  .chip{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 7px 0 6px;
+        border:1px solid var(--border-strong);border-radius:6px;background:rgba(255,255,255,.7);
+        font-family:var(--mono);font-size:11.5px;color:var(--text-1);white-space:nowrap;
+        vertical-align:-5px}
+  .chip.dvg{background:var(--urgent-soft);border-color:rgba(204,90,64,.4)}
+  .chip.focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 2px var(--accent-line)}
+  .chip .trim{color:var(--text-3)}
+  .c-prog{color:var(--status-in-progress)} .c-rev{color:var(--status-in-review)}
+  .c-done{color:var(--status-done)} .c-urgent{color:var(--status-urgent)}
+  .c-ink{color:var(--text-2)} .c-mut{color:var(--text-3)} .c-acc{color:var(--accent)}
+
+  /* anatomy row */
+  .anat{display:flex;gap:48px;margin-top:16px;align-items:flex-start}
+  .anat .bigwrap{padding-top:6px}
+  .chip.big{height:32px;padding:0 12px 0 10px;font-size:16px;border-radius:8px;gap:8px}
+  .anat .legend{display:grid;grid-template-columns:auto 1fr;column-gap:12px;row-gap:6px;
+                align-items:baseline;max-width:430px}
+  .anat .legend .l{font-family:var(--mono);font-size:10.5px;color:var(--text-2);white-space:nowrap}
+  .anat .legend .d{font-size:11.5px;color:var(--text-3);line-height:1.45}
+  .anat .rule{margin-left:auto;max-width:340px;font-size:11.5px;color:var(--text-3);line-height:1.5;
+              border-left:1px solid var(--border);padding-left:22px}
+  .anat .rule b{color:var(--text-2)}
+
+  /* seven kinds */
+  .kinds{display:grid;grid-template-columns:repeat(7,1fr);column-gap:20px;margin-top:18px}
+  .kind .nm{font-size:12px;font-weight:600;margin-top:8px}
+  .kind .why{font-size:10.5px;color:var(--text-3);line-height:1.4;margin-top:2px}
+
+  /* habitats */
+  .habitats{display:flex;gap:36px;margin-top:20px}
+  .hab{flex:1;min-width:0}
+  .hab .hl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--text-3);margin-bottom:8px}
+  .hab .sentence{font-size:13px;line-height:2;color:var(--text-1)}
+  .proprow{display:flex;align-items:center;min-height:30px;border-top:1px solid var(--row-hairline)}
+  .proprow:last-child{border-bottom:1px solid var(--row-hairline)}
+  .proprow .pl{width:76px;color:var(--text-3);font-size:12px}
+  .monoblock{font-family:var(--mono);font-size:11px;line-height:2.1;color:var(--text-2);
+             background:var(--bg-hover);border-radius:var(--rad-control);padding:10px 14px}
+
+  /* ---------- peek ---------- */
+  .peeks{display:flex;gap:30px;margin-top:16px;align-items:flex-start}
+  .pk-col{flex:1;min-width:0}
+  .pk-col .hl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--text-3);margin-bottom:10px}
+  .pk-states .st{font-size:13px;line-height:1.9}
+  .pk-states .cap{font-family:var(--mono);font-size:10px;color:var(--text-3);margin:3px 0 14px}
+  .peek{width:100%;max-width:312px;background:var(--bg-elevated);border:1px solid var(--border);
+        border-radius:12px;box-shadow:0 10px 26px rgba(43,38,32,.13);padding:13px 15px 6px;margin-top:9px}
+  .peek .ttl{font-size:14px;font-weight:650;letter-spacing:-.008em}
+  .peek .staterow{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);
+                  margin-top:5px;white-space:nowrap}
+  .peek .staterow b{color:var(--text-1);font-weight:600}
+  .peek .dvline{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;
+                color:var(--status-urgent);margin-top:4px}
+  .peek .track{margin:10px 0 2px}
+  .peek .bifact{margin-top:8px}
+  .peek .bifact .p{font-size:12.5px;font-weight:600}
+  .peek .bifact .p.ok{color:var(--text-1)}
+  .peek .bifact .m{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:3px;line-height:1.5}
+  .peek .foot{border-top:1px solid var(--row-hairline);margin-top:11px;padding:7px 0 6px;
+              display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-3)}
+  .peek .foot .kbd{font-size:9.5px}
+  .peek .foot .sp{margin:0 2px;color:var(--border-strong)}
+  .pk-anno{display:flex;gap:14px;align-items:flex-start}
+  .pk-anno .labels{padding-top:22px;display:flex;flex-direction:column;gap:0;
+                   border-left:1px dotted var(--border-strong);padding-left:12px}
+  .pk-anno .labels span{font-family:var(--mono);font-size:9.5px;color:var(--text-3);white-space:nowrap}
+  .decided{display:flex;align-items:center;gap:7px}
+  .decided .w{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--accent-strong)}
+  .decided .dt{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text-3)}
+  .peek .sent{font-size:13.5px;font-weight:650;line-height:1.45;margin-top:7px;letter-spacing:-.008em}
+  .peek .prov{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:6px}
+  .revisit{display:inline-flex;align-items:center;height:20px;padding:0 9px;margin-top:9px;
+           border:1px solid var(--border-strong);border-radius:var(--rad-pill);font-size:10.5px;color:var(--text-2)}
+  .thumb{width:132px;height:92px;background:var(--bg-hover);border-radius:8px;padding:10px 12px;margin-top:10px}
+  .thumb .card{width:100%;height:100%;background:#fff;border-radius:5px;
+               box-shadow:inset 0 0 0 1px var(--border);padding:7px 8px;display:flex;flex-direction:column;gap:4px}
+  .thumb .bar{height:5px;border-radius:2.5px;background:var(--bg-hover)}
+  .thumb .btn{height:11px;border-radius:3px;background:#3c362e}
+  .thumb .tag{width:22px;height:8px;border-radius:2px;background:var(--accent-soft)}
+  .connector{width:1px;height:9px;background:var(--border-strong);margin-left:20px}
+
+  /* ---------- bottom row: backlinks / numbers / autolink ---------- */
+  .botrow{display:flex;gap:40px;margin-top:16px;align-items:flex-start}
+  .bl{flex:1.35;min-width:0}
+  .bl-head{display:flex;align-items:baseline;gap:8px;padding-bottom:6px}
+  .bl-head .t{font-size:11px;font-weight:700;letter-spacing:.09em;color:var(--text-2)}
+  .bl-head .n{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .bl-row{display:flex;flex-direction:column;justify-content:center;min-height:44px;
+          padding:8px 0;border-top:1px solid var(--row-hairline)}
+  .bl-row:last-of-type{border-bottom:1px solid var(--row-hairline)}
+  .bl-row .r1{display:flex;align-items:center;gap:9px}
+  .bl-row .how{font-size:12.5px;color:var(--text-1)}
+  .bl-row .dt{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .bl-row .snip{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:4px;
+                padding-left:2px;line-height:1.5}
+  .bl-cap{font-size:11.5px;color:var(--text-3);margin-top:10px;line-height:1.5}
+  .bl-cap b{color:var(--text-2)}
+
+  .nums{flex:1;min-width:0}
+  .numrow{display:flex;align-items:center;gap:20px;min-height:48px;padding:7px 0;
+          border-top:1px solid var(--row-hairline)}
+  .numrow:first-of-type{border-top:0;padding-top:0}
+  .numrow .demo{min-width:168px}
+  .numrow .lbl{font-size:11.5px;color:var(--text-2);margin-bottom:2px}
+  .door{border-bottom:1px dotted var(--border-strong);padding-bottom:1px;cursor:default}
+  .door.hot{border-bottom-color:var(--accent);border-bottom-style:dotted}
+  .numrow .big{font-size:25px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+  .opens{font-family:var(--mono);font-size:10px;color:var(--accent-strong);line-height:1.5}
+  .num-rule{font-size:12.5px;font-weight:650;margin-top:12px;line-height:1.5}
+  .num-rule .m{display:block;font-weight:400;font-size:11.5px;color:var(--text-3);margin-top:3px}
+
+  .auto{flex:1.15;min-width:0}
+  .composer{background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--rad-control);
+            padding:12px 14px 10px}
+  .composer .line{font-size:13px;line-height:2}
+  .composer .stage{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;color:var(--text-3);
+                   margin-bottom:2px}
+  .composer .divd{height:1px;background:var(--row-hairline);margin:10px 0}
+  .caret{display:inline-block;width:1.5px;height:15px;background:var(--accent);vertical-align:-3px;margin-left:1px}
+  .plainref{color:var(--text-1)}
+  .auto .cap{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-top:9px;line-height:1.7}
+  .auto .cap2{font-size:11.5px;color:var(--text-3);margin-top:8px;line-height:1.5}
+  .auto .cap2 b{color:var(--text-2)}
+
+  /* band 3 — statusline */
+  .statusline{margin-top:auto;height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="g-progress" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 0 1 10 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-todo" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    </symbol>
+    <symbol id="g-div" viewBox="0 0 20 20">
+      <path d="M5.2 15.4 L9.1 4.6 M10.9 15.4 L14.8 4.6" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-merged" viewBox="0 0 20 20"><circle cx="10" cy="10" r="4.2" fill="currentColor"/></symbol>
+    <symbol id="g-cycles" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M10 1.4 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="5.5" cy="14.5" r="1.9" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-decision" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="10" cy="10" r="2.8" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-mock" viewBox="0 0 20 20">
+      <rect x="3.8" y="3.8" width="12.4" height="12.4" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M6.8 7.4 H13.2" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M6.8 11 H11" stroke="currentColor" stroke-opacity=".38" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-live" viewBox="0 0 20 20">
+      <circle cx="10" cy="8.2" r="3.4" fill="currentColor"/>
+      <path d="M4 15.2 H16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-retro" viewBox="0 0 20 20">
+      <path d="M14.5 4.7 A7 7 0 1 0 16.9 8.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M15.4 10.4 L16.9 8.6 L18.6 10.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="g-attention" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="2.7" fill="currentColor"/>
+      <path d="M10 3.6 A6.4 6.4 0 0 1 16.2 8.4 M10 16.4 A6.4 6.4 0 0 1 3.8 11.6"
+            fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-sync" viewBox="0 0 20 20">
+      <path d="M17 10 A7 7 0 0 0 6 4.5 M3 10 A7 7 0 0 0 14 15.5"
+            fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab active">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <h1>References</h1><span class="count">7 kinds · one grammar</span>
+    <span class="sub">every fact on screen is a doorway to the thing it is about</span>
+    <span class="spec">chip · peek · backlink · door</span>
+  </div>
+
+  <div class="sheet">
+
+    <!-- ============ A · THE CHIP GRAMMAR ============ -->
+    <div class="sec-h"><span class="t">THE CHIP GRAMMAR</span>
+      <span class="c">one anatomy for every kind of node — a glyph, a name in the second register, the state worn lightly</span></div>
+
+    <div class="anat">
+      <div class="bigwrap">
+        <span class="chip big dvg"><svg width="17" height="17" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><span>ENG-116</span><svg width="14" height="14" viewBox="0 0 20 20" class="c-urgent"><use href="#g-div"/></svg></span>
+      </div>
+      <div class="legend">
+        <span class="l">kind glyph</span><span class="d">which kind of node this is — the same mark it wears everywhere else</span>
+        <span class="l">key / name</span><span class="d">always the mono register: the register itself says “this is a node, not a word”</span>
+        <span class="l">state tint</span><span class="d">the glyph wears the node’s live state — here In Progress amber</span>
+        <span class="l">//</span><span class="d">appended only while ritual and reality disagree; leaves when they agree again</span>
+      </div>
+      <div class="rule"><b>The rule:</b> a reference is never typed twice. Cite a node once and its
+        chip stays live — state, tint and the // arrive on their own, everywhere the chip appears.</div>
+    </div>
+
+    <div class="kinds">
+      <div class="kind">
+        <span class="chip dvg"><svg width="13" height="13" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><span>ENG-116</span><svg width="11" height="11" viewBox="0 0 20 20" class="c-urgent"><use href="#g-div"/></svg></span>
+        <div class="nm">Issue</div>
+        <div class="why">status arc live; // while diverged</div>
+      </div>
+      <div class="kind">
+        <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-done"><use href="#g-merged"/></svg><span>#188</span></span>
+        <div class="nm">Change</div>
+        <div class="why">the dot fills when it merges</div>
+      </div>
+      <div class="kind">
+        <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-cycles"/></svg><span>Cycle 2</span></span>
+        <div class="nm">Cycle</div>
+        <div class="why">the running ring, today on it</div>
+      </div>
+      <div class="kind">
+        <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-acc"><use href="#g-decision"/></svg><span>Ship without saved cards<span class="trim">…</span></span></span>
+        <div class="nm">Decision</div>
+        <div class="why">a fact held inside a promise</div>
+      </div>
+      <div class="kind">
+        <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-rev"><use href="#g-mock"/></svg><span>payment-sheet-v3</span></span>
+        <div class="nm">Mock</div>
+        <div class="why">violet while in crit, ink once approved</div>
+      </div>
+      <div class="kind">
+        <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-done"><use href="#g-live"/></svg><span>Aug 4 release</span></span>
+        <div class="nm">Deploy</div>
+        <div class="why">standing on the ground it shipped to</div>
+      </div>
+      <div class="kind">
+        <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-retro"/></svg><span>Retro · Cycle 1</span></span>
+        <div class="nm">Retro</div>
+        <div class="why">the loop, read backwards</div>
+      </div>
+    </div>
+
+    <div class="habitats">
+      <div class="hab">
+        <div class="hl">IN A SENTENCE</div>
+        <p class="sentence"><span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-todo" style="color:var(--status-todo)"><use href="#g-todo"/></svg><span>ENG-121</span></span> reuses the fallback that
+          <span class="chip dvg"><svg width="13" height="13" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><span>ENG-116</span><svg width="11" height="11" viewBox="0 0 20 20" class="c-urgent"><use href="#g-div"/></svg></span> built —
+          hold review until it lands.</p>
+      </div>
+      <div class="hab">
+        <div class="hl">IN A PROPERTY ROW</div>
+        <div class="proprow"><span class="pl">Cycle</span>
+          <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-cycles"/></svg><span>Cycle 2</span></span></div>
+        <div class="proprow"><span class="pl">Decision</span>
+          <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-acc"><use href="#g-decision"/></svg><span>Ship without saved cards<span class="trim">…</span></span></span></div>
+      </div>
+      <div class="hab">
+        <div class="hl">IN RUNNING MONO — a derivation footnote</div>
+        <div class="monoblock">shipped = merged and live ·
+          <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-done"><use href="#g-live"/></svg><span>Aug 4 release</span></span> carried 3 changes ·
+          <span class="chip dvg"><svg width="13" height="13" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><span>ENG-116</span><svg width="11" height="11" viewBox="0 0 20 20" class="c-urgent"><use href="#g-div"/></svg></span> merged, rode none</div>
+      </div>
+    </div>
+
+    <!-- ============ B · THE PEEK ============ -->
+    <div class="sec-h"><span class="t">THE PEEK</span>
+      <span class="c">hover or focus answers “what is this?” without leaving — ⏎ commits to going</span></div>
+
+    <div class="peeks">
+      <div class="pk-col pk-states" style="flex:1.35">
+        <div class="hl">CHIP AT REST</div>
+        <p class="st">The sheet falls back without a layout jump —
+          <span class="chip dvg"><svg width="13" height="13" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><span>ENG-116</span><svg width="11" height="11" viewBox="0 0 20 20" class="c-urgent"><use href="#g-div"/></svg></span> ships it.</p>
+        <p class="cap">quiet — a bordered word, nothing asks for attention</p>
+        <div class="hl">CHIP FOCUSED — PEEK OPEN</div>
+        <p class="st" style="margin-bottom:0">The sheet falls back without a layout jump —
+          <span class="chip dvg focus"><svg width="13" height="13" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><span>ENG-116</span><svg width="11" height="11" viewBox="0 0 20 20" class="c-urgent"><use href="#g-div"/></svg></span> ships it.</p>
+        <div class="connector"></div>
+        <div class="pk-anno">
+          <div class="peek" style="margin-top:0">
+            <div class="ttl">Apple Pay in the payment sheet</div>
+            <div class="staterow"><svg width="13" height="13" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><b>In Progress</b><span>· Cycle 2 · feature</span></div>
+            <div class="dvline"><svg width="11" height="11" viewBox="0 0 20 20"><use href="#g-div"/></svg>Done in git, not on the board</div>
+            <div class="track"><svg width="220" height="16" viewBox="0 0 220 16">
+              <line x1="8" y1="8" x2="118" y2="8" stroke="var(--status-done)" stroke-width="1.6"/>
+              <circle cx="8" cy="8" r="3.2" fill="var(--status-done)"/>
+              <circle cx="63" cy="8" r="3.2" fill="var(--status-done)"/>
+              <circle cx="118" cy="8" r="3.2" fill="var(--status-done)"/>
+              <path d="M136 13 L141 3 M144 13 L149 3" stroke="var(--status-urgent)" stroke-width="1.6" stroke-linecap="round"/>
+              <circle cx="166" cy="8" r="3.4" fill="var(--bg-elevated)" stroke="var(--status-urgent)" stroke-width="1.6"/>
+            </svg></div>
+            <div class="bifact">
+              <div class="p">Built — not live yet</div>
+              <div class="m">merged 8f21c4a · 14/14 checks · no prod deploy since</div>
+            </div>
+            <div class="foot"><span class="kbd">⏎</span><span>open</span><span class="sp">·</span><span class="kbd">esc</span><span>stay</span></div>
+          </div>
+          <div class="labels">
+            <span style="margin-top:0">— title</span>
+            <span style="margin-top:16px">— state, in the app’s words</span>
+            <span style="margin-top:18px">— the track so far</span>
+            <span style="margin-top:20px">— one fact, both registers</span>
+            <span style="margin-top:26px">— leave, or go</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="pk-col">
+        <div class="hl">PEEK OF A DECISION</div>
+        <span class="chip focus"><svg width="13" height="13" viewBox="0 0 20 20" class="c-acc"><use href="#g-decision"/></svg><span>Ship without saved cards<span class="trim">…</span></span></span>
+        <div class="connector"></div>
+        <div class="peek" style="margin-top:0">
+          <div class="decided"><svg width="14" height="14" viewBox="0 0 20 20" class="c-acc"><use href="#g-decision"/></svg><span class="w">DECIDED</span><span class="dt">aug 6 · cycle 2, day 3</span></div>
+          <div class="sent">Ship without saved cards this cycle — revisit next.</div>
+          <div class="prov">from a thread of 5 on ENG-116 · the team’s call, no owner</div>
+          <div><span class="revisit">resurfaces at Cycle 3 planning</span></div>
+          <div class="foot"><span class="kbd">⏎</span><span>open the thread</span><span class="sp">·</span><span class="kbd">esc</span><span>stay</span></div>
+        </div>
+      </div>
+
+      <div class="pk-col">
+        <div class="hl">PEEK OF A MOCK — the thumbnail is the answer</div>
+        <span class="chip focus"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-mock"/></svg><span>payment-sheet-v3</span></span>
+        <div class="connector"></div>
+        <div class="peek" style="margin-top:0">
+          <div class="ttl">payment-sheet-v3</div>
+          <div class="thumb"><div class="card">
+            <div class="bar" style="width:38%"></div>
+            <div class="btn" style="width:82%"></div>
+            <div class="tag"></div>
+            <div class="bar" style="width:64%"></div>
+            <div class="bar" style="width:52%"></div>
+          </div></div>
+          <div class="bifact">
+            <div class="p ok">Approved in crit — built as merged</div>
+            <div class="m">v6 · crit Tue, 2 comments resolved · built in 8f21c4a</div>
+          </div>
+          <div class="foot"><span class="kbd">⏎</span><span>open full size</span><span class="sp">·</span><span class="kbd">esc</span><span>stay</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ C / D / E ============ -->
+    <div class="sec-h"><span class="t">BACKLINKS</span>
+      <span class="c">citing a node writes the return path — nothing is filed by hand</span>
+      <span class="c" style="margin-left:auto;font-family:var(--mono);font-size:10.5px">as it appears on issue ENG-116</span></div>
+
+    <div class="botrow">
+      <div class="bl">
+        <div class="bl-head"><span class="t">REFERENCED IN</span><span class="n">3</span></div>
+        <div class="bl-row">
+          <div class="r1">
+            <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-cycles"/></svg><span>Cycle 2 report</span></span>
+            <span class="how">counts it among the shipped</span><span class="dt">Tue</span>
+          </div>
+          <div class="snip">“…8 shipped so far; one — ENG-116 — is done in git, not on the board…”</div>
+        </div>
+        <div class="bl-row">
+          <div class="r1">
+            <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-acc"><use href="#g-decision"/></svg><span>Ship without saved cards<span class="trim">…</span></span></span>
+            <span class="how">weighed it in the team’s call</span><span class="dt">aug 6</span>
+          </div>
+          <div class="snip">“…if Apple Pay (ENG-116) covers most of those sessions, the sheet answers it…”</div>
+        </div>
+        <div class="bl-row">
+          <div class="r1">
+            <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-retro"/></svg><span>Retro · Cycle 1</span></span>
+            <span class="how">born here — converted from an action</span><span class="dt">jul 30</span>
+          </div>
+          <div class="snip">action → issue: “lead the sheet with the fastest payment method”</div>
+        </div>
+        <div class="bl-cap"><b>Three ways in, one block.</b> Cited by a report, weighed in a decision,
+          born from a retro — the issue knows all three without anyone maintaining a list.</div>
+      </div>
+
+      <div class="nums">
+        <div class="bl-head"><span class="t">NUMBERS ARE DOORWAYS</span></div>
+        <div class="numrow">
+          <div class="demo">
+            <div class="lbl">Shipped, 6 cycles</div>
+            <div class="big"><span class="door hot">52</span></div>
+          </div>
+          <div class="opens">opens: issues ·<br>last 6 cycles · shipped</div>
+        </div>
+        <div class="numrow">
+          <div class="demo">
+            <div class="lbl">The annunciator</div>
+            <span class="gb-attn" style="display:inline-flex;margin-top:2px;box-shadow:0 1.5px 0 0 var(--accent-line)"><svg width="12" height="12" viewBox="0 0 20 20"><use href="#g-attention"/></svg>1</span>
+          </div>
+          <div class="opens">opens: issues ·<br>needs attention</div>
+        </div>
+        <div class="numrow">
+          <div class="demo">
+            <div class="lbl">A flow-band segment</div>
+            <svg width="150" height="24" viewBox="0 0 150 24" style="margin-top:4px">
+              <rect x="1" y="4" width="62" height="16" rx="2" fill="var(--status-done)"/>
+              <rect x="0" y="3" width="64" height="18" rx="3" fill="none" stroke="var(--accent)" stroke-width="1.4"/>
+              <rect x="69" y="4" width="30" height="16" rx="2" fill="var(--status-in-progress)" opacity=".55"/>
+              <rect x="104" y="4.5" width="20" height="15" rx="2" fill="none" stroke="var(--border-strong)" stroke-width="1.2"/>
+            </svg>
+          </div>
+          <div class="opens">opens: issues ·<br>last cycle · shipped 8</div>
+        </div>
+        <div class="num-rule">Every computed number opens the set that produced it.
+          <span class="m">if yapm counted it, yapm can list it — a derivation never dead-ends.</span></div>
+      </div>
+
+      <div class="auto">
+        <div class="bl-head"><span class="t">AUTO-LINKING</span></div>
+        <div class="composer">
+          <div class="stage">AS TYPED</div>
+          <div class="line">Guest checkout should reuse the fallback we built for <span class="plainref">ENG-116</span><span class="caret"></span></div>
+          <div class="divd"></div>
+          <div class="stage">ON SPACE — the key became a doorway</div>
+          <div class="line">Guest checkout should reuse the fallback we built for
+            <span class="chip dvg"><svg width="13" height="13" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><span>ENG-116</span><svg width="11" height="11" viewBox="0 0 20 20" class="c-urgent"><use href="#g-div"/></svg></span> <span class="caret"></span></div>
+        </div>
+        <div class="cap">ENG-116 matched a live key · sealed on space · ⌫ once opens it back to text</div>
+        <div class="cap2"><b>Names match too</b> — payment-sheet-v3, Cycle 2, a decision’s first words —
+          quietly, after the word ends, never while you are still typing it.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><svg width="13" height="13" viewBox="0 0 20 20" style="color:var(--signal-sync)"><use href="#g-sync"/></svg>Synced</span>
+  </div>
+</div>
+</body>
+</html>

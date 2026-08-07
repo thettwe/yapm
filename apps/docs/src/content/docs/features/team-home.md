@@ -19,7 +19,7 @@ local data the issue list reads, so it renders instantly and is correct offline.
 2. **Needs attention** — the four exception classes, one number (below).
 3. **Since yesterday** — a literal trailing 24-hour window (below).
 4. **Yours** — your own in-flight work, and only yours (below).
-5. **Ready for you** — the active cycle's unassigned, unblocked, ready-to-start issues,
+5. **Ready for you** — the active cycle's unassigned, untriaged, ready-to-start issues,
    urgent first, each with a *why it's clear* phrase produced by a real predicate (urgent;
    carried in; added mid-cycle; committed at planning). No phrase exists without a predicate.
 6. **Ship cadence** — a weekly dot chart of the team's deployments: one dot per deploy that
@@ -47,8 +47,10 @@ optional band folds:
 - No deployment has ever reached production → no cadence chart (never a hollow one).
 - No active cycle → the hero degrades to the team name with a quiet line and a Cycles
   doorway, and every cycle-dependent band (day band, scope vitals, Shipped, Ready) folds.
-- You have nothing in flight → *Yours* renders a single warmth line with a doorway to the
-  ready work instead of an empty table.
+- You have nothing in flight → *Yours* renders a single warmth line instead of an empty
+  table — with a doorway to the ready work while the *Ready for you* band renders, and
+  standing alone on a fully quiet day when that band has folded too (a doorway never points
+  at a band that cannot render).
 
 ## The four exception classes
 

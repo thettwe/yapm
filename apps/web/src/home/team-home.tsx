@@ -260,7 +260,7 @@ function Hero({ model, teamId }: { model: TeamHomeModel; teamId: string }) {
               {cycle.statusWords.inReview} in review
             </span>
             {model.attention === null ? null : (
-              <span className="flex items-center gap-[9px] font-semibold text-status-urgent">
+              <span className="flex items-center gap-[9px] font-semibold text-status-urgent-ink">
                 <span aria-hidden="true" className="size-2 flex-none rounded-sm bg-status-urgent" />
                 <span data-testid="attention-count">{cycle.statusWords.needAttention}</span> need
                 attention
@@ -419,7 +419,7 @@ function AttentionBand({ attention, teamId }: { attention: TeamHomeAttention; te
           <ClassRow
             teamId={teamId}
             rows={attention.divergence.rows}
-            className="bg-urgent-soft font-normal text-status-urgent"
+            className="bg-urgent-soft font-normal text-status-urgent-ink"
             dot={
               <span aria-hidden="true" className="size-2 flex-none rounded-sm bg-status-urgent" />
             }
@@ -739,8 +739,10 @@ function YoursBand({
             <span aria-hidden="true" className="text-xs text-status-done">
               ✓
             </span>
+            {/* "nothing owed" is a claim, and `noReviewsOwed` is its predicate (§D5) — the clause
+                renders only when the model verified it. */}
             <span>
-              Nothing held, nothing owed
+              {yours.noReviewsOwed ? 'Nothing held, nothing owed' : 'Nothing held'}
               {runway === null
                 ? '.'
                 : ` — the runway has ${runway.count} clear ${runway.count === 1 ? 'start' : 'starts'} when you want one.`}
@@ -776,7 +778,7 @@ function YoursBand({
                   <span
                     className={cn(
                       'block text-[12.5px] font-semibold text-text-2',
-                      row.sayUrgent && 'text-status-urgent',
+                      row.sayUrgent && 'text-status-urgent-ink',
                     )}
                   >
                     {row.say}
@@ -859,7 +861,7 @@ function ReadyBand({ runway, teamId }: { runway: TeamHomeRunway; teamId: string 
             <span
               className={cn(
                 'whitespace-nowrap text-[12.5px] text-text-2',
-                row.urgent && 'font-semibold text-status-urgent',
+                row.urgent && 'font-semibold text-status-urgent-ink',
               )}
             >
               {row.phrase}

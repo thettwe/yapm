@@ -453,6 +453,25 @@ test('a quiet morning folds attention, since-yesterday and ready away and warms 
   expect(screen.getByText(/empty bands fold away/)).toBeInTheDocument()
 })
 
+test('the empty-YOURS warmth line drops the "nothing owed" claim while a review is owed', async () => {
+  // Empty YOURS, but a teammate's open unapproved PR means reviews ARE owed team-wide — the
+  // warmth line must not claim otherwise.
+  zero.issues = [
+    issue({
+      id: 'i-other-open',
+      number: 130,
+      title: 'Inventory sync retries',
+      status: 'in_review',
+      assigneeId: 'user-other',
+      issueLinks: [{ pullRequest: { state: 'open', openedAt: NOW - 2 * HOUR } }],
+    }),
+  ]
+  await mount()
+
+  expect(screen.getByText(/Nothing held\./)).toBeInTheDocument()
+  expect(screen.queryByText(/nothing owed/)).toBeNull()
+})
+
 test('with no active cycle the hero degrades to the team name and a Cycles doorway', async () => {
   zero.cycles = []
   await mount()

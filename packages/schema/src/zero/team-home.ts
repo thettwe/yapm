@@ -671,20 +671,24 @@ function buildSinceYesterday(
     for (const deploy of windowDeploys) {
       if (deploy.sha) bySha.set(`${deploy.repo} ${deploy.sha}`, deploy)
     }
-    const matched = new Set<TeamHomeDeploymentRow>()
+    // Matching is by repo+sha KEY, not row identity: two window deployments of the same commit
+    // both matched a done issue, so neither may fall back to the bare repo/environment line.
+    const matchedKeys = new Set<string>()
     const lines: { text: string; atMs: number }[] = []
     for (const { issue } of deliveries) {
       if (issue.status !== 'done') continue
       for (const pr of linkedPrs(issue)) {
         if (pr.state !== 'merged' || !pr.mergeCommitSha || !pr.repo) continue
-        const deploy = bySha.get(`${pr.repo} ${pr.mergeCommitSha}`)
+        const key = `${pr.repo} ${pr.mergeCommitSha}`
+        const deploy = bySha.get(key)
         if (!deploy || deploy.deployedAt == null) continue
-        matched.add(deploy)
+        matchedKeys.add(key)
         lines.push({ text: issue.title, atMs: deploy.deployedAt })
       }
     }
     for (const deploy of windowDeploys) {
-      if (matched.has(deploy) || deploy.deployedAt == null) continue
+      if (deploy.deployedAt == null) continue
+      if (deploy.sha && matchedKeys.has(`${deploy.repo} ${deploy.sha}`)) continue
       lines.push({
         text: deploy.environment ? `${deploy.repo} · ${deploy.environment}` : deploy.repo,
         atMs: deploy.deployedAt,
@@ -757,7 +761,9 @@ function buildYours(
   const rows: TeamHomeYoursRow[] = []
   const waitingAges: number[] = []
   for (const { issue, signal, divergence } of mine) {
-    if (signal?.pr === 'open') {
+    // Checks-before-waiting, mirroring buildAttention's class precedence: an open PR with red
+    // checks is the viewer's to fix, not a reviewer's to unblock, so it keeps its own row.
+    if (signal?.pr === 'open' && signal.ciHealth !== 'failing') {
       if (signal.reviewAgeMs !== null) waitingAges.push(signal.reviewAgeMs)
       continue
     }
@@ -915,13 +921,14 @@ function buildRunway(
 }
 
 // §D7 — UTC weekly deployment buckets, newest week last, retro ticks from closed retros.
-// Folds only when the team has no deployment rows at all.
+// Folds when no deployment carries a production timestamp — pending/failed rows alone must not
+// keep an all-zero chart alive.
 function buildCadence(
   deployments: readonly TeamHomeDeploymentRow[],
   retros: readonly TeamHomeRetroRow[],
   now: number,
 ): TeamHomeCadence | null {
-  if (deployments.length === 0) return null
+  if (!deployments.some((d) => d.deployedAt != null)) return null
   const currentWeekStart = utcWeekStart(now)
   const weeks: TeamHomeCadenceWeek[] = []
   let previousMonth: number | null = null

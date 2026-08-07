@@ -46,6 +46,7 @@
   --color-status-in-review: var(--status-in-review);
   --color-status-done: var(--status-done);
   --color-status-urgent: var(--status-urgent);
+  --color-status-urgent-ink: var(--status-urgent-ink);
   --color-signal-sync: var(--signal-sync);
 
   --color-row-hairline: var(--row-hairline);
@@ -126,6 +127,12 @@
   --status-in-review: #6a62c2;
   --status-done: #3e8c63;
   --status-urgent: #cc5a40;
+  /* Urgent TEXT ink: `--status-urgent` clears the 3:1 non-text bar for dots/ticks/borders but not
+     4.5:1 for body-size text in the light presets, so text-sized urgent occurrences carry this
+     darker ink instead — tuned >= 4.5:1 over both `--bg` and the `--urgent-soft` composite, and
+     asserted per preset in `styles/contrast.test.ts`. The darks alias it to `--status-urgent`,
+     which already passes there. */
+  --status-urgent-ink: #a4462b;
   --signal-sync: #3e8c63;
 
   /* Daylight extensions (team Home digest). Warm-light carries the mock's literal values; every
@@ -189,6 +196,7 @@
   --status-in-review: #3f9e7c;
   --status-done: #5b63d6;
   --status-urgent: #e2593f;
+  --status-urgent-ink: #ba3c26;
   --signal-sync: #3f9e7c;
 
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
@@ -244,7 +252,11 @@
   --status-in-progress: #c98a15;
   --status-in-review: #6d5fe0;
   --status-done: #2f9068;
-  --status-urgent: #d9741c;
+  /* Darkened from the original #d9741c: that orange measured 2.91:1 against its own
+     `--urgent-soft` wash — under even the 3:1 non-text bar the urgent dots and track borders
+     must meet on the divergence row. */
+  --status-urgent: #cc6b13;
+  --status-urgent-ink: #a1540a;
   --signal-sync: #2f9068;
 
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
@@ -304,6 +316,7 @@
   --status-in-review: #9089da;
   --status-done: #59a57b;
   --status-urgent: #df6a4e;
+  --status-urgent-ink: var(--status-urgent);
   --signal-sync: #5eb489;
 
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
@@ -345,6 +358,7 @@
   --status-in-review: #3f9e7c;
   --status-done: #6e79f0;
   --status-urgent: #e2593f;
+  --status-urgent-ink: var(--status-urgent);
   --signal-sync: #3f9e7c;
 
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
@@ -386,6 +400,7 @@
   --status-in-review: #9b8cf5;
   --status-done: #4fae83;
   --status-urgent: #f0872e;
+  --status-urgent-ink: var(--status-urgent);
   --signal-sync: #4fae83;
 
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);

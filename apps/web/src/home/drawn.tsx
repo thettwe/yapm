@@ -179,7 +179,7 @@ export function RealityTrack({ strip, broken = false, label, className }: Realit
         part.render === 'break' ? (
           <span
             key={part.id}
-            className="px-[3px] font-mono text-[11px] font-medium leading-none tracking-[-0.05em] text-status-urgent"
+            className="px-[3px] font-mono text-[11px] font-medium leading-none tracking-[-0.05em] text-status-urgent-ink"
           >
             {'//'}
           </span>

@@ -310,6 +310,41 @@ describe('buildTeamHome since yesterday (§D4)', () => {
     expect(overnight?.provenance).toBe('2 releases went live · production')
   })
 
+  it('never renders the repo fallback for a duplicate deployment of a matched commit', () => {
+    const shippedIssue = makeIssue({
+      status: 'done',
+      title: 'Order history search',
+      issueLinks: [
+        link({
+          state: 'merged',
+          openedAt: NOW - 2 * DAY,
+          mergedAt: NOW - 20 * HOUR,
+          repo: 'acme/shop',
+          mergeCommitSha: 'sha-1',
+        }),
+      ],
+    })
+    const model = buildTeamHome(
+      baseInput({
+        issues: [shippedIssue],
+        deployments: [
+          { repo: 'acme/shop', sha: 'sha-1', environment: 'staging', deployedAt: NOW - 12 * HOUR },
+          {
+            repo: 'acme/shop',
+            sha: 'sha-1',
+            environment: 'production',
+            deployedAt: NOW - 10 * HOUR,
+          },
+        ],
+      }),
+      NOW,
+      VIEWER,
+    )
+    const overnight = model.sinceYesterday?.overnight
+    expect(overnight?.deployCount).toBe(2)
+    expect(overnight?.lines.map((l) => l.text)).toEqual(['Order history search'])
+  })
+
   it("surfaces review outcomes on the viewer's issues inside the window only", () => {
     const mineReviewed = makeIssue({
       status: 'in_review',
@@ -432,6 +467,25 @@ describe('buildTeamHome yours (§D5)', () => {
     expect(model.yours.noReviewsOwed).toBe(false)
   })
 
+  it('keeps an open-PR row with failing checks as its own row — the fix is the viewer’s', () => {
+    const redOpen = makeIssue({
+      status: 'in_review',
+      assigneeId: VIEWER,
+      issueLinks: [
+        link({
+          state: 'open',
+          openedAt: NOW - 16 * HOUR,
+          ciChecks: [{ conclusion: 'failure', updatedAt: NOW - HOUR }],
+        }),
+      ],
+    })
+    const model = buildTeamHome(baseInput({ issues: [redOpen] }), NOW, VIEWER)
+    expect(model.yours.waitingOnOthers).toBeNull()
+    expect(model.yours.rows).toHaveLength(1)
+    expect(model.yours.rows[0]?.say).toBe('Checks failing — the fix is yours')
+    expect(model.yours.rows[0]?.sayUrgent).toBe(true)
+  })
+
   it('asserts no reviews owed ONLY when the whole team has zero open PRs awaiting review', () => {
     const teammateOpenPr = makeIssue({
       status: 'in_review',
@@ -521,7 +575,7 @@ describe('buildTeamHome cadence (§D7)', () => {
     )
   })
 
-  it('marks retro ticks from closed retros and folds only with no deployment rows at all', () => {
+  it('marks retro ticks from closed retros and folds without a production timestamp', () => {
     const model = buildTeamHome(
       baseInput({
         deployments: [{ repo: 'acme/shop', sha: 'a', deployedAt: NOW - HOUR }],
@@ -532,6 +586,21 @@ describe('buildTeamHome cadence (§D7)', () => {
     )
     expect(model.cadence?.weeks[CADENCE_WEEK_COUNT - 2]?.retro).toBe(true)
     expect(buildTeamHome(baseInput(), NOW, VIEWER).cadence).toBeNull()
+    // Pending/failed deploys carry no `deployedAt`; alone they must not render a hollow chart.
+    const pendingOnly = baseInput({
+      deployments: [
+        { repo: 'acme/shop', sha: 'pending', deployedAt: null },
+        { repo: 'acme/shop', sha: 'failed', deployedAt: undefined },
+      ],
+    })
+    expect(buildTeamHome(pendingOnly, NOW, VIEWER).cadence).toBeNull()
+    const oneLive = baseInput({
+      deployments: [
+        { repo: 'acme/shop', sha: 'pending', deployedAt: null },
+        { repo: 'acme/shop', sha: 'live', deployedAt: NOW - HOUR },
+      ],
+    })
+    expect(buildTeamHome(oneLive, NOW, VIEWER).cadence).not.toBeNull()
   })
 })
 

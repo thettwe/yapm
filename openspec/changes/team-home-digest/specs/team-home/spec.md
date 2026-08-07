@@ -29,7 +29,8 @@ optional band folds.
   in the last 24 hours, the viewer has no in-flight issues, and no unassigned ready work
   exists
 - **THEN** the attention, since-yesterday, and ready bands are absent entirely (not rendered
-  empty), YOURS renders its single warmth line with a Runway doorway, and the hero degrades
+  empty), YOURS renders its single warmth line standing alone — the Runway doorway renders
+  only while the READY FOR YOU band renders, and here it has folded — and the hero degrades
   to its quiet form
 
 #### Scenario: Composition is local-first
@@ -171,8 +172,10 @@ all, and SHALL fold otherwise — it never renders a claim the data cannot verif
 SHALL close with a mono derivation footnote ending "your work only — never compared", and
 every clause of the footnote SHALL be true of the rendered derivation.
 
-When the viewer has no in-flight issues, the band SHALL render a single warmth line with a
-doorway to the ready work instead of an empty list. The band SHALL never render another
+When the viewer has no in-flight issues, the band SHALL render a single warmth line instead
+of an empty list, with a doorway to the ready work only while the READY FOR YOU band
+renders; on a fully quiet day the READY band has folded, so the warmth line stands alone —
+a doorway SHALL NOT point at a band that cannot render. The band SHALL never render another
 person's work, name, or count.
 
 #### Scenario: In-flight rows with delivery reality
@@ -191,7 +194,8 @@ person's work, name, or count.
 #### Scenario: Empty YOURS is warmth, not apology
 
 - **WHEN** the viewer has no unfinished issue in the team
-- **THEN** the band renders one warmth line with a Runway doorway and no table
+- **THEN** the band renders one warmth line and no table — with a Runway doorway when the
+  READY FOR YOU band renders, and without one when that band has folded
 
 #### Scenario: The lens is personal, never comparative
 
@@ -290,10 +294,13 @@ existing control.
 
 ### Requirement: The digest is themed by tokens in every theme
 
-Every color and font on the digest SHALL resolve through theme tokens, including three
-daylight extensions (`--row-hairline`, `--statusline-bg`, `--urgent-soft`) defined in
-every theme variant (all themes, light and dark), and the page SHALL meet AA contrast in
-each. Drawn elements SHALL be static inline SVG with no motion.
+Every color and font on the digest SHALL resolve through theme tokens, including four
+daylight extensions (`--row-hairline`, `--statusline-bg`, `--urgent-soft`, and the urgent
+text ink `--status-urgent-ink`) defined in every theme variant (all themes, light and
+dark), and the page SHALL meet AA contrast in each: urgent-colored text carries the ink
+(AA 4.5:1 over the base surface and the urgent-soft wash), while urgent non-text glyphs
+keep `--status-urgent` at the 3:1 non-text bar. Drawn elements SHALL be static inline SVG
+with no motion.
 
 #### Scenario: Dark theme has no stray daylight
 

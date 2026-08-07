@@ -183,8 +183,9 @@ non-null `deployedAt`, newest week last, one dot per deployment (failed-state de
 never carry `deployedAt`, so every dot is a real release). Today caret at the right edge;
 month labels derived from the bucket starts; a dashed "retro" tick at each closed retro
 whose `closedAt` falls inside the window (labeled just `retro` — the mock's "smaller PRs"
-annotation text is retro content this change does not mine). Band folds when the team has
-no deployment rows at all. Onward: "Delivery ›" to the existing Delivery view.
+annotation text is retro content this change does not mine). Band folds when no deployment
+carries a production timestamp (`deployedAt`) — pending/failed rows alone must not keep an
+all-zero chart alive. Onward: "Delivery ›" to the existing Delivery view.
 
 ### D8 — SHIPPED THIS CYCLE: Live is the deploy fact, not a guess
 
@@ -358,3 +359,26 @@ Decisions made in the tests-and-docs pass:
   did not move. README gained the Home-digest entry at the end of "What works today"; ROADMAP
   gained row 29 with status "built, in review" — the row is honest about not being merged, and
   archiving flips it.
+
+Decisions made during the review fix pass:
+
+- **YOURS applies checks-before-waiting, mirroring §D2's class precedence**: a viewer row whose
+  open PR has failing checks keeps its own "Checks failing — the fix is yours" row instead of
+  collapsing into "waiting on others". The waiting collapse exists because the next move is a
+  reviewer's; red checks mean the next move is the viewer's, and the same rows must not be read
+  with the opposite precedence the attention band applies to them.
+- **Urgent text carries `--status-urgent-ink`**, a fourth daylight token: `--status-urgent`
+  clears the 3:1 non-text bar for the digest's dots/ticks/borders but not AA 4.5:1 for
+  body-size text in the light presets. Text-sized urgent occurrences (hero status word,
+  divergence class row, urgent say/phrase lines, the `//` break) use the ink, tuned per light
+  preset over both `--bg` and the `--urgent-soft` composite and aliased to `--status-urgent`
+  in the darks, all asserted in `styles/contrast.test.ts`. Editorial light's urgent orange was
+  additionally darkened (`#d9741c` → `#cc6b13`): it measured 2.91:1 against its own wash,
+  under even the non-text bar.
+- **The warmth line's "nothing owed" clause is gated on `yours.noReviewsOwed`** — the model
+  computes that predicate precisely so the claim is never rendered unverified, and the empty
+  branch now consumes it: "Nothing held, nothing owed — …" only when true, "Nothing held — …"
+  otherwise.
+- **OVERNIGHT matches deployments by repo+sha key, not row identity**, so two window
+  deployments of the same matched commit both count as matched and neither renders the bare
+  repo/environment fallback line.

@@ -33,7 +33,7 @@ API), `reference/` for TanStack Router + Tailwind 4.3, the two mocks
 - [x] 1.6 Yours model (§D5): viewer's unfinished rows ordered by `updatedAt` desc, bifact
       phrase dictionary keyed on (status, signal) predicates, waiting-on-others collapse,
       the team-level zero-open-reviews predicate for the reciprocal line, footnote text.
-- [x] 1.7 Runway model (§D6): unassigned/untriaged todo-or-backlog issues of the active
+- [x] 1.7 Runway model (§D6): unassigned, triaged todo-or-backlog issues of the active
       cycle, urgent-first ordering, predicate-keyed why-clear phrase dictionary.
 - [x] 1.8 Cadence + shipped models (§D7–§D8): `cadenceWeeks` UTC weekly buckets with month
       labels, today caret index, retro ticks from closed retros; shipped list with

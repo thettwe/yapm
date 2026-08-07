@@ -264,7 +264,7 @@ Pre-seeded scoping decisions (made at proposal time; refine only with evidence):
   (D10) — the smallest honest home that keeps every control reachable.
 - **All derivations live in `packages/schema`**; no metric with a per-person dimension;
   personal bands show only the signed-in user's own work.
-- **Visual language**: Warm token block + the three daylight extensions (D11); drawn
+- **Visual language**: Warm token block + the four daylight extensions (D11); drawn
   elements as small inline-SVG React components, app-local (D12), reusing existing
   status/priority/track components first.
 - **The attention number is a distinct-issue count over four disjoint classes** (D2),

@@ -19,7 +19,7 @@ local data the issue list reads, so it renders instantly and is correct offline.
 2. **Needs attention** — the four exception classes, one number (below).
 3. **Since yesterday** — a literal trailing 24-hour window (below).
 4. **Yours** — your own in-flight work, and only yours (below).
-5. **Ready for you** — the active cycle's unassigned, untriaged, ready-to-start issues,
+5. **Ready for you** — the active cycle's unassigned, triaged, ready-to-start issues,
    urgent first, each with a *why it's clear* phrase produced by a real predicate (urgent;
    carried in; added mid-cycle; committed at planning). No phrase exists without a predicate.
 6. **Ship cadence** — a weekly dot chart of the team's deployments: one dot per deploy that

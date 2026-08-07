@@ -205,7 +205,7 @@ person's work, name, or count.
 
 ### Requirement: READY FOR YOU is the Runway lane of derivable starts
 
-The READY FOR YOU band SHALL list the active cycle's unassigned, untriaged issues in a
+The READY FOR YOU band SHALL list the active cycle's unassigned, triaged issues in a
 ready-to-start status (todo/backlog), urgent first, each row carrying its priority glyph
 and a why-it's-clear phrase produced by a real predicate (urgent priority; carried in;
 added mid-cycle; committed at planning). No phrase SHALL exist without a predicate. Crit

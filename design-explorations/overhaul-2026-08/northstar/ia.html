@@ -1,0 +1,475 @@
+<!doctype html>
+<!--
+  northstar/ia — THE MAP. The one sheet allowed to explain; the other four point here.
+  The three-band frame annotated, the full destination tree, the more▾ menu drawn open,
+  the word-diet tiers, the one attention number, the peek and "how ·" patterns drawn once
+  each, and the provider-mark rule. Assembled from horizon NAV-deck, the daylight
+  dictionary, plays/refs (chip grammar, peeks), plays/mockkinds (two design-card kinds),
+  plays/handoff + mornings (lanes), plays/decisions (the Record).
+  Tokens: Warm LIGHT verbatim + daylight extensions. Inline SVG, elevation only on the
+  two drawn transients (menu, peek, how).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — The map · north star</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)} .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);position:relative}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  .content{max-width:1248px;margin:0 auto;width:100%;padding:0 64px}
+  .masthead{padding-top:30px;padding-bottom:6px}
+  .masthead h1{font-size:40px;font-weight:700;letter-spacing:-.028em}
+  .masthead .sub{margin-top:6px;font-size:13px;color:var(--text-2)}
+
+  .section{padding:38px 0 10px}
+  .rule-top{border-top:1px solid var(--row-hairline)}
+  .sec-kicker{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+  .sec-kicker .k{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--text-3)}
+  .headline{font-size:20px;font-weight:700;letter-spacing:-.015em;margin-bottom:14px}
+  .cols{display:flex;gap:48px;align-items:flex-start}
+  .exp{font-size:13px;line-height:1.65;color:var(--text-2);max-width:420px}
+  .exp b{color:var(--text-1)}
+  .exp p+p{margin-top:10px}
+  .law{margin-top:14px;padding:12px 16px;background:var(--bg-hover);border-radius:var(--rad-control);
+       font-size:12.5px;color:var(--text-1)}
+  .law .m{display:block;font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:5px}
+
+  /* the frame, annotated */
+  .minif{width:560px;flex:none;border:1px solid var(--border-strong);border-radius:10px;overflow:hidden;
+         background:var(--bg)}
+  .minif .b1{height:34px;border-bottom:1px solid var(--border);display:flex;align-items:center;
+             padding:0 12px;gap:10px;font-size:11px;color:var(--text-2)}
+  .minif .b1 .lg{width:14px;height:14px;border-radius:4px;background:var(--accent)}
+  .minif .b1 .t{color:var(--text-2)} .minif .b1 .t.on{color:var(--accent-strong);font-weight:600}
+  .minif .b1 .r{margin-left:auto;display:flex;gap:8px;align-items:center;color:var(--text-3)}
+  .minif .b1 .bdg{color:var(--status-urgent);font-weight:600;background:var(--urgent-soft);
+                  border-radius:10px;padding:1px 7px;font-size:10px}
+  .minif .b2{height:52px;border-bottom:1px solid var(--border);display:flex;align-items:center;
+             padding:0 14px;font-size:15px;font-weight:700;color:var(--text-1)}
+  .minif .b2 .sub{margin-left:10px;font-weight:400;font-size:11px;color:var(--text-3)}
+  .minif .body{height:120px;display:flex;align-items:center;justify-content:center;
+               color:var(--text-3);font-family:var(--mono);font-size:10.5px}
+  .minif .b3{height:26px;border-top:1px solid var(--border);background:var(--statusline-bg);
+             display:flex;align-items:center;padding:0 12px;font-size:10.5px;color:var(--text-2);gap:8px}
+  .minif .b3 .a{color:var(--status-urgent);font-weight:600}
+  .minif .b3 .r{margin-left:auto;color:var(--text-3)}
+  .ann{font-family:var(--mono);font-size:10.5px;color:var(--accent-strong);white-space:nowrap}
+  .frow{display:flex;align-items:center;gap:14px}
+  .frow + .frow{margin-top:0}
+  .fwrap{display:grid;grid-template-columns:560px 1fr;gap:14px 18px;align-items:center}
+
+  /* destination tree */
+  .tree{font-size:13px}
+  .tcol{display:flex;gap:0;align-items:flex-start}
+  .troot{width:190px;flex:none}
+  .tnode{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 11px;
+         border:1px solid var(--border-strong);border-radius:7px;background:rgba(255,255,255,.6);
+         font-weight:600;font-size:12.5px;white-space:nowrap}
+  .tnode.dim{border-style:dashed;font-weight:500;color:var(--text-2)}
+  .tnode .m{font-family:var(--mono);font-size:10px;color:var(--text-3);font-weight:400}
+  .trow{display:flex;align-items:flex-start;padding:9px 0;border-top:1px solid var(--row-hairline)}
+  .trow:last-child{border-bottom:1px solid var(--row-hairline)}
+  .tkids{flex:1;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding-top:2px}
+  .tk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text-1);
+      white-space:nowrap}
+  .tk .arm{width:16px;height:1px;background:var(--border-strong);display:inline-block}
+  .tk .m{font-family:var(--mono);font-size:10px;color:var(--text-3)}
+  .tk.artifact{color:var(--text-2)}
+  .tnote{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:6px;line-height:1.6}
+
+  /* the open more menu */
+  .menu{width:246px;background:var(--bg-elevated);border:1px solid var(--border);
+        border-radius:10px;box-shadow:0 10px 26px rgba(43,38,32,.14);padding:6px}
+  .menu .mi{display:flex;align-items:center;gap:9px;height:30px;padding:0 9px;border-radius:6px;
+            font-size:12.5px;white-space:nowrap}
+  .menu .mi:hover{background:var(--bg-hover)}
+  .menu .mi .g{color:var(--text-2);display:inline-flex}
+  .menu .mi .kbd{margin-left:auto;white-space:nowrap}
+  .menu .mi .sub{font-family:var(--mono);font-size:9.5px;color:var(--text-3);margin-left:5px;white-space:nowrap}
+
+  /* chips + peek + how */
+  .chip{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 7px 0 6px;
+        border:1px solid var(--border-strong);border-radius:6px;background:rgba(255,255,255,.7);
+        font-family:var(--mono);font-size:11.5px;color:var(--text-1);white-space:nowrap}
+  .chip.dvg{background:var(--urgent-soft);border-color:rgba(204,90,64,.4)}
+  .chip.focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 2px var(--accent-line)}
+  .c-prog{color:var(--status-in-progress)} .c-urgent{color:var(--status-urgent)}
+  .c-ink{color:var(--text-2)} .c-acc{color:var(--accent)} .c-done{color:var(--status-done)}
+  .prov{color:var(--text-3);display:inline-flex;vertical-align:-2px;margin-left:5px}
+  .door{border-bottom:1px dotted var(--border-strong);padding-bottom:1px}
+  .how{font-family:var(--mono);font-size:10px;color:var(--text-3)}
+  .peek{width:312px;background:var(--bg-elevated);border:1px solid var(--border);
+        border-radius:12px;box-shadow:0 10px 26px rgba(43,38,32,.14);padding:13px 15px 6px}
+  .peek .ttl{font-size:14px;font-weight:650;letter-spacing:-.008em}
+  .peek .staterow{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);
+                  margin-top:5px;white-space:nowrap}
+  .peek .staterow b{color:var(--text-1);font-weight:600}
+  .peek .dvline{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;
+                color:var(--status-urgent);margin-top:4px}
+  .peek .bifact{margin-top:8px}
+  .peek .bifact .p{font-size:12.5px;font-weight:600}
+  .peek .bifact .m{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:3px;line-height:1.5}
+  .peek .foot{border-top:1px solid var(--row-hairline);margin-top:11px;padding:7px 0 6px;
+              display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-3)}
+  .howpop{width:280px;background:var(--bg-elevated);border:1px solid var(--border);
+          border-radius:10px;box-shadow:0 10px 26px rgba(43,38,32,.14);padding:11px 14px}
+  .howpop .h{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--text-3);margin-bottom:6px}
+  .howpop .b{font-size:12.5px;line-height:1.55;color:var(--text-1)}
+  .howpop .m{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:6px}
+
+  /* word diet tiers */
+  .tiers{max-width:760px}
+  .tier{display:flex;gap:16px;padding:11px 0;border-top:1px solid var(--row-hairline);align-items:baseline}
+  .tier:last-child{border-bottom:1px solid var(--row-hairline)}
+  .tier .name{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--text-3);width:130px;flex:none}
+  .tier .rule{font-size:13px}
+  .tier .rule b{font-weight:600}
+
+  /* provenance table */
+  .provgrid{display:flex;gap:44px;align-items:flex-start}
+  .provcell{max-width:330px}
+  .provcell .h{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
+  .provcell .say{font-size:12.5px;color:var(--text-2);margin-top:5px;line-height:1.55}
+  .provcell .ex{margin-top:9px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .exlbl{font-family:var(--mono);font-size:10px;color:var(--text-3)}
+  .attn-ex{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:6px}
+  .attn-ex .m{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .sl-mini{display:inline-flex;align-items:center;height:24px;background:var(--statusline-bg);
+           border:1px solid var(--border);border-radius:5px;padding:0 10px;font-size:11px;color:var(--text-2);gap:7px}
+  .sl-mini .a{color:var(--status-urgent);font-weight:600}
+
+  /* ============ band 3 — statusline (identical on every page) ============ */
+  .statusline{margin-top:auto;height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="g-progress" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 0 1 10 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-done" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.6" fill="currentColor"/></symbol>
+    <symbol id="g-div" viewBox="0 0 20 20">
+      <path d="M5.2 15.4 L9.1 4.6 M10.9 15.4 L14.8 4.6" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-cycles" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M10 1.4 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="5.5" cy="14.5" r="1.9" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-decision" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="10" cy="10" r="2.8" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-retro" viewBox="0 0 20 20">
+      <path d="M14.5 4.7 A7 7 0 1 0 16.9 8.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M15.4 10.4 L16.9 8.6 L18.6 10.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="g-projects" viewBox="0 0 20 20">
+      <path d="M5 4 H4 V16 H5 M15 4 H16 V16 H15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="10" cy="10" r="2.2" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-roadmap" viewBox="0 0 20 20">
+      <path d="M3 10 H17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M6 7.4 V12.6 M11 7.4 V12.6 M15 8.4 V11.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="m-github" viewBox="0 0 16 16">
+      <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+    </symbol>
+    <symbol id="m-figma" viewBox="0 0 16 16">
+      <g fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+        <path d="M8 1.6 H5.5 a2.3 2.3 0 0 0 0 4.6 H8 Z"/>
+        <path d="M8 1.6 h2.5 a2.3 2.3 0 0 1 0 4.6 H8 Z"/>
+        <path d="M8 6.2 H5.5 a2.3 2.3 0 0 0 0 4.6 H8 Z"/>
+        <circle cx="10.5" cy="8.5" r="2.3"/>
+        <path d="M8 10.8 H5.5 a2.3 2.3 0 1 0 2.5 2.3 Z"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>4</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="content masthead">
+    <h1>The map</h1>
+    <p class="sub">Destinations few, doorways many. This sheet explains; the four pages it maps do not.</p>
+  </div>
+
+  <!-- ================= the frame ================= -->
+  <div class="content section">
+    <div class="sec-kicker"><span class="k">THE FRAME</span></div>
+    <h2 class="headline">Three bands. Two belong to the app, one to the page.</h2>
+    <div class="fwrap">
+      <div class="minif">
+        <div class="b1">
+          <span class="lg"></span><span>Acme / <b>Engineering</b></span>
+          <span class="t">Home</span><span class="t on">Issues</span><span class="t">Triage</span>
+          <span class="t">Cycles</span><span class="t">Delivery</span><span class="t">more ▾</span>
+          <span class="r"><span class="kbd">⌘K</span><span class="bdg">● 4</span><span>Inbox 3</span></span>
+        </div>
+        <div class="b2">Issues<span class="sub">List | Board | Gallery · filters · actions</span></div>
+        <div class="body">the work surface — rows, rails, tiles, charts</div>
+        <div class="b3"><span>Cycle 2, day 9 of 14</span><span>·</span><span>8 shipped</span><span>·</span>
+          <span class="a">4 need attention</span><span class="r">● Synced</span></div>
+      </div>
+      <div style="position:relative;height:234px;align-self:start">
+        <div class="ann" style="position:absolute;top:10px">band 1 — the deck: identical on every page, pixel for pixel</div>
+        <div class="ann" style="position:absolute;top:52px">band 2 — the masthead: the page owns it, adapts it</div>
+        <div class="ann" style="position:absolute;top:126px;color:var(--text-3)">the work surface — where the word diet holds</div>
+        <div class="ann" style="position:absolute;top:212px">band 3 — the statusline: the team's day, one line, every page</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= the word diet ================= -->
+  <div class="content section rule-top">
+    <div class="sec-kicker"><span class="k">THE WORD DIET</span></div>
+    <h2 class="headline">Three tiers of voice. A word lives where it earns rent.</h2>
+    <div class="tiers">
+      <div class="tier"><span class="name">CHROME</span>
+        <span class="rule"><b>Labels only.</b> Bands 1 &amp; 3, mastheads, nav — no sentences; the binding rule
+          ("team-level only — never a per-person number") appears once per app, on Delivery.</span></div>
+      <div class="tier"><span class="name">WORK SURFACES</span>
+        <span class="rule"><b>Dictionary phrases at rest.</b> Lists, queues, rails, tiles — derived numbers carry
+          <span class="how">how ·</span>, honesty collapses to one line + <span class="how">more ·</span>, mono sublines only on the detail.</span></div>
+      <div class="tier"><span class="name">DOCUMENTS</span>
+        <span class="rule"><b>Full editorial voice.</b> Home's cycle hero, the Cycle report, Wrapped, descriptions — this is where the writing lives.</span></div>
+    </div>
+  </div>
+
+  <!-- ================= destinations ================= -->
+  <div class="content section rule-top">
+    <div class="sec-kicker"><span class="k">DESTINATIONS</span></div>
+    <h2 class="headline">Six stops on the bar. Everything else is a doorway, a lens, or an artifact.</h2>
+    <div class="cols">
+      <div class="tree" style="flex:1">
+        <div class="trow">
+          <span class="troot"><span class="tnode">Home</span></span>
+          <span class="tkids">
+            <span class="tk"><span class="arm"></span>cycle hero <span class="m">the document</span></span>
+            <span class="tk"><span class="arm"></span>attention <span class="m">4 doorways</span></span>
+            <span class="tk"><span class="arm"></span>ready for you <span class="m">runway · crit · verify → Runway page</span></span>
+            <span class="tk"><span class="arm"></span>cadence mini <span class="m">→ Delivery</span></span>
+            <span class="tk"><span class="arm"></span>shipped list</span>
+          </span>
+        </div>
+        <div class="trow">
+          <span class="troot"><span class="tnode">Issues</span></span>
+          <span class="tkids">
+            <span class="tk"><span class="arm"></span>List <span class="m">lens</span></span>
+            <span class="tk">Board <span class="m">lens</span></span>
+            <span class="tk">Gallery <span class="m">lens</span></span>
+            <span class="tk"><span class="arm"></span>issue detail <span class="m">rail: idea → designed → built → live</span></span>
+          </span>
+        </div>
+        <div class="trow">
+          <span class="troot"><span class="tnode">Triage</span></span>
+          <span class="tkids"><span class="tk"><span class="arm"></span>the intake queue <span class="m">4 new today</span></span></span>
+        </div>
+        <div class="trow">
+          <span class="troot"><span class="tnode">Cycles</span></span>
+          <span class="tkids">
+            <span class="tk"><span class="arm"></span>cycle page</span>
+            <span class="tk artifact">↳ Cycle report <span class="m">artifact</span></span>
+            <span class="tk artifact">↳ Wrapped <span class="m">artifact</span></span>
+          </span>
+        </div>
+        <div class="trow">
+          <span class="troot"><span class="tnode">Delivery</span></span>
+          <span class="tkids"><span class="tk"><span class="arm"></span>the journalism cut <span class="m">timeline · strip · flow · rhythm</span></span></span>
+        </div>
+        <div class="trow">
+          <span class="troot"><span class="tnode dim">more ▾</span></span>
+          <span class="tkids">
+            <span class="tk"><span class="arm"></span>Retros</span>
+            <span class="tk">Projects</span>
+            <span class="tk">Roadmap</span>
+            <span class="tk">Decisions <span class="m">→ the Record — also reached from any decision chip</span></span>
+          </span>
+        </div>
+        <div class="tnote">transients, never destinations: the ⌘K palette · peeks · this menu ↘<br>
+          the Record and Runway are pages without bar seats — doorways reach them.</div>
+      </div>
+      <!-- the more menu, drawn open once -->
+      <div class="menu" style="flex:none">
+        <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-retro"/></svg></span>Retros<span class="kbd">g r</span></div>
+        <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-projects"/></svg></span>Projects<span class="kbd">g p</span></div>
+        <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-roadmap"/></svg></span>Roadmap<span class="kbd">g m</span></div>
+        <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-decision"/></svg></span>Decisions<span class="sub">the Record</span><span class="kbd">g d</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= one attention number ================= -->
+  <div class="content section rule-top">
+    <div class="sec-kicker"><span class="k">ONE ATTENTION NUMBER</span></div>
+    <h2 class="headline">4 — the four exception classes. The same 4 in the bar, the statusline, and Home.</h2>
+    <div class="attn-ex">
+      <span class="gb-attn" style="height:24px"><span class="d"></span>4</span>
+      <span class="sl-mini">… 3 deploys this week · <span class="a">4 need attention</span></span>
+      <span class="m">NEEDS ATTENTION 4 — done in git not on the board · waiting on review over a day ·
+        checks failing · new in triage</span>
+    </div>
+  </div>
+
+  <!-- ================= the two patterns, drawn once ================= -->
+  <div class="content section rule-top">
+    <div class="sec-kicker"><span class="k">TWO PATTERNS, DRAWN ONCE</span></div>
+    <h2 class="headline">The peek, and the <span class="how" style="font-size:16px">how ·</span></h2>
+    <div class="cols">
+      <div>
+        <p class="exp" style="margin-bottom:12px"><b>The peek.</b> Anything dotted opens something; a chip answers
+          “what is this?” without leaving. Hover or focus peeks; <b>⏎ goes; esc stays.</b>
+          At most one peek is ever open on a page.</p>
+        <div style="display:flex;gap:18px;align-items:flex-start">
+          <span class="chip dvg focus" style="margin-top:4px"><svg width="13" height="13" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><span>ENG-116</span><svg width="11" height="11" viewBox="0 0 20 20" class="c-urgent"><use href="#g-div"/></svg></span>
+          <div class="peek">
+            <div class="ttl">Apple Pay in the payment sheet</div>
+            <div class="staterow"><svg width="13" height="13" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><b>In Progress</b><span>· Cycle 2 · feature</span></div>
+            <div class="dvline"><svg width="11" height="11" viewBox="0 0 20 20"><use href="#g-div"/></svg>Done in git, not on the board</div>
+            <div class="bifact">
+              <div class="p">Built — not live yet</div>
+              <div class="m">merged 8f21c4a · 14/14 checks · no prod deploy since<span class="prov"><svg width="11" height="11" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></div>
+            </div>
+            <div class="foot"><span class="kbd">⏎</span><span>open</span><span style="color:var(--border-strong)">·</span><span class="kbd">esc</span><span>stay</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p class="exp" style="margin-bottom:12px"><b>The how.</b> A derived number never explains itself at rest —
+          it carries a mono <span class="how">how ·</span> instead. Open it, and the derivation appears; close it,
+          and the surface is quiet again. Facts stay; footnotes fold.</p>
+        <div style="display:flex;gap:18px;align-items:flex-start">
+          <span style="font-size:28px;font-weight:700;letter-spacing:-.02em"><span class="door" style="border-bottom-color:var(--accent)">46</span><span style="font-size:15px;color:var(--text-2);font-weight:600">h</span>
+            <span class="how" style="display:block;margin-top:7px">how ·</span></span>
+          <div class="howpop">
+            <div class="h">HOW · OPEN TO MERGED</div>
+            <div class="b">Median of the last 26 merged changes, opened → merged, drawn where it falls — not
+              quoted from a summary.</div>
+            <div class="m">linear scale · giants included · team-level only</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= provenance ================= -->
+  <div class="content section rule-top" style="padding-bottom:40px">
+    <div class="sec-kicker"><span class="k">PROVENANCE</span></div>
+    <h2 class="headline">Our glyphs carry meaning · brand marks carry provenance.</h2>
+    <div class="provgrid">
+      <div class="provcell">
+        <div class="h"><span class="prov" style="margin-left:0"><svg width="14" height="14" viewBox="0 0 16 16"><use href="#m-github"/></svg></span>GitHub — the source suffix</div>
+        <div class="say">Monochrome, 12–14px, currentColor, after the fact it sourced — never replacing a
+          status arc, never colored, never larger than the text.</div>
+        <div class="ex">
+          <span class="exlbl">change</span><span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-done"><use href="#g-done"/></svg><span>#188</span><span class="prov" style="margin-left:2px"><svg width="11" height="11" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+          <span class="exlbl">check</span><span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">14/14 checks passed<span class="prov"><svg width="11" height="11" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+          <span class="exlbl">deploy</span><span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">no prod deploy since<span class="prov"><svg width="11" height="11" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+        </div>
+      </div>
+      <div class="provcell">
+        <div class="h"><span class="prov" style="margin-left:0"><svg width="14" height="14" viewBox="0 0 16 16"><use href="#m-figma"/></svg></span>Figma — on links only</div>
+        <div class="say">A link-kind design card is a pointer, and wears its source's mark. The rail's design
+          node shows it only when the artifact is a Figma link.</div>
+        <div class="ex">
+          <span class="exlbl">link</span><span class="chip"><span class="prov" style="margin-left:0"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#m-figma"/></svg></span><span>payment-sheet-v2</span></span>
+        </div>
+      </div>
+      <div class="provcell">
+        <div class="h">Uploads — no mark</div>
+        <div class="say">An uploaded design is yapm-native: the card shows its own pixels and carries no brand.</div>
+        <div class="ex">
+          <span class="exlbl">upload</span><span class="chip"><svg width="12" height="12" viewBox="0 0 20 20" class="c-ink"><rect x="3" y="4.5" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5.5 13 L9 9.5 L11 11.3 L14.5 8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>payment-sheet-v3</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">4 need attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,539 @@
+<!doctype html>
+<!--
+  northstar/issue — THE canonical issue detail (ENG-116). Assembled: plays/bridge-detail
+  bifact grammar + plays/triangle-detail rail (design node in the chain) + plays/refs-applied
+  Referenced-in block + plays/mockkinds design-card kinds (v2 = Figma link, v3 = upload).
+  Corrections applied: word diet (bifact mono sublines live here, on the detail; no
+  explanation sentences; the description is the document), settled IA (same deck bar),
+  one attention number = 4, provider marks whispered — GitHub suffix on #188 / checks /
+  deploy facts, Figma mark only on the link-kind design artifact; the v3 upload carries none.
+  Tokens: Warm LIGHT verbatim + daylight extensions. Inline SVG, flat + hairlines.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — ENG-116 · Apple Pay in the payment sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  body.full .frame{height:auto;overflow:visible}
+  body.full .body-cols{overflow:visible}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ the bifact — one fact, two registers ============ */
+  .bi .say{font-size:13.5px;color:var(--text-1);line-height:1.4}
+  .bi .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:3px;line-height:1.5}
+  .prov{color:var(--text-3);display:inline-flex;vertical-align:-2px;margin-left:4px}
+
+  /* ============ band 2 — masthead ============ */
+  .masthead{padding:17px 40px 15px;border-bottom:1px solid var(--border)}
+  .m-top{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .m-back{color:var(--text-3);font-size:12.5px}
+  .m-back b{color:var(--text-2);font-weight:500}
+  .m-id{font-family:var(--mono);font-size:12.5px;color:var(--text-3)}
+  .chip-div{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;
+            border:1px solid var(--accent-line);border-radius:var(--rad-pill);
+            background:var(--urgent-soft);color:var(--status-urgent);font-size:12px;font-weight:600}
+  .m-actions{margin-left:auto;display:flex;gap:8px}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;gap:6px;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .kbd-s{font-family:var(--mono);font-size:10px;color:var(--text-3);
+         border:1px solid var(--border-strong);border-radius:4px;padding:0 4px;background:rgba(255,255,255,.5)}
+  .btn.primary .kbd-s{color:rgba(255,255,255,.8);border-color:rgba(255,255,255,.4);background:transparent}
+  .masthead h1{font-size:29px;font-weight:700;letter-spacing:-.02em;line-height:1.12;max-width:760px}
+  .m-bi{margin-top:10px}
+  .m-bi .say{font-size:13.5px;color:var(--text-1);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .m-bi .say .st-word{display:inline-flex;align-items:center;gap:7px;font-weight:600;color:var(--status-in-progress)}
+  .m-bi .say .st-word b{color:var(--text-1);font-weight:600}
+  .m-bi .say .dim{color:var(--text-2)}
+  .m-bi .say .dv{color:var(--border-strong)}
+  .m-bi .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:5px}
+  .ldot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
+
+  /* ============ content columns ============ */
+  .body-cols{flex:1;display:flex;min-height:0;overflow:auto}
+  .doc{flex:1;min-width:0;padding:30px 56px 56px 40px}
+  .doc section{max-width:640px}
+  .doc section+section{margin-top:34px}
+  .sec-h{display:flex;align-items:baseline;font-size:11px;letter-spacing:.09em;color:var(--text-3);
+         font-weight:600;padding-bottom:9px;border-bottom:1px solid var(--border);margin-bottom:14px}
+  .sec-h .act{margin-left:auto;letter-spacing:0;font-size:12px;color:var(--text-2);font-weight:500}
+  .sec-h .act.mono{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .prose{font-size:14.5px;line-height:1.65;color:var(--text-1)}
+  .prose p+p{margin-top:12px}
+
+  .act-row{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--row-hairline)}
+  .act-row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .act-row .a-d{width:7px;height:7px;border-radius:50%;background:var(--border-strong);flex:none;margin-top:5px}
+  .act-row .a-d.warm{background:var(--status-in-progress)}
+  .act-row .a-d.link{background:var(--status-in-review)}
+  .act-row .a-d.design{background:var(--status-done)}
+  .act-row .say{font-size:13px;color:var(--text-1)}
+  .act-row .say .ago{color:var(--text-3);margin-left:7px;font-size:12px}
+  .act-row .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:2px}
+
+  /* the diptych */
+  .diptych{display:flex;align-items:flex-start;gap:14px;margin-top:18px}
+  .dip{flex:1;min-width:0}
+  .dip .art{background:var(--statusline-bg);border:1px solid var(--border);border-radius:8px;
+            overflow:hidden;display:block}
+  .dip .art svg{display:block;width:100%;height:auto}
+  .dip .cap{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:6px;
+            display:flex;justify-content:space-between}
+  .dip .cap b{color:var(--text-2);font-weight:500}
+  .dip-arrow{color:var(--border-strong);font-size:15px;align-self:center;flex:none}
+  .dip-bi{margin-top:12px}
+
+  .composer{margin-top:16px;background:var(--bg-elevated);border:1px solid var(--border);
+            border-radius:var(--rad-control);padding:13px 16px 11px}
+  .composer .hint{color:var(--text-3);font-size:13.5px;min-height:36px}
+  .composer .bar{display:flex;align-items:center;gap:10px;border-top:1px solid var(--row-hairline);
+                 padding-top:9px;margin-top:5px}
+  .composer .marks{display:flex;gap:12px;color:var(--text-3);font-family:var(--mono);font-size:11px}
+  .composer .send{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:12px}
+
+  /* ============ right rail ============ */
+  .rail-col{width:396px;min-width:396px;border-left:1px solid var(--border);
+            padding:22px 40px 48px 36px}
+  .rail-h{font-size:11px;letter-spacing:.09em;color:var(--text-3);font-weight:600;
+          padding-bottom:9px;border-bottom:1px solid var(--border);display:flex}
+  .rail-h .chain{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.02em;
+          color:var(--text-3);font-weight:400}
+  .rail-lede{margin:12px 0 14px}
+  .rail-lede .say{font-size:15.5px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+  .rail-lede .say .ring{width:11px;height:11px;border-radius:50%;flex:none;
+          background:var(--bg);border:2.5px solid var(--status-done)}
+  .rail-lede .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:6px}
+
+  .metro{position:relative;margin-bottom:8px}
+  .stop{position:relative;padding:0 0 14px 30px}
+  .stop::before{content:"";position:absolute;left:5.5px;top:14px;bottom:-2px;width:2px;background:var(--status-done)}
+  .stop.last-line::before{display:none}
+  .stop .node{position:absolute;left:0;top:3px;width:13px;height:13px;border-radius:50%;
+              background:var(--status-done);border:2.5px solid var(--bg)}
+  .stop .node.idea{background:var(--bg);border:2.5px solid var(--status-done);width:12px;height:12px}
+  .stop .node.urgent-ring{background:var(--bg);border:2.5px solid var(--status-urgent)}
+  .stop .say{font-size:13.5px;font-weight:600;line-height:1.25}
+  .stop .say .ago{color:var(--text-3);font-weight:400;margin-left:7px;font-size:12.5px}
+  .stop .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:3px}
+  .stop.break::before{background:repeating-linear-gradient(180deg,var(--status-urgent) 0 4px,transparent 4px 8px);opacity:.65}
+  .break-mark{position:absolute;left:0;bottom:0;width:13px;text-align:center;
+              color:var(--status-urgent);font-family:var(--mono);font-weight:500;font-size:12px;
+              letter-spacing:-.08em;background:var(--bg);line-height:1;padding:2px 0}
+
+  /* the design node's payload — v3 upload shows its pixels; v2 link shows where it lives */
+  .mock{margin-top:8px;width:198px;background:var(--bg-elevated);border:1px solid var(--border);
+        border-radius:8px;overflow:hidden}
+  .mock svg{display:block;width:100%;height:auto}
+  .mock .m-cap{display:flex;align-items:center;border-top:1px solid var(--row-hairline);
+               padding:5px 9px;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .mock .m-cap .open{margin-left:auto;font-family:var(--ui);color:var(--text-2);font-size:11px}
+  .verline{margin-top:6px;width:198px;display:flex;align-items:center;gap:6px;
+           border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,.55);
+           padding:4px 9px;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .verline .open{margin-left:auto;font-family:var(--ui);color:var(--text-2);font-size:11px}
+
+  .callout{margin:4px 0 22px;border:1px solid var(--accent-line);background:var(--urgent-soft);
+           border-radius:10px;padding:13px 17px}
+  .callout .c-title{color:var(--status-urgent);font-weight:700;font-size:13px;margin-bottom:7px}
+  .callout .say{font-size:13px;line-height:1.55;color:var(--text-1)}
+  .callout .say b{font-weight:600}
+  .callout .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:7px}
+  .callout .c-ritual{margin-top:8px;color:var(--text-2);font-style:italic;font-size:12.5px}
+  .callout .c-actions{display:flex;gap:8px;margin-top:12px}
+
+  /* referenced in — the return paths */
+  .refs{border-top:1px solid var(--border);padding-top:16px;margin-bottom:20px}
+  .refs .kick{font-size:10.5px;font-weight:700;letter-spacing:.09em;color:var(--text-2)}
+  .refs .kick .n{font-family:var(--mono);font-weight:400;color:var(--text-3);margin-left:6px}
+  .chip{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 7px 0 6px;
+        border:1px solid var(--border-strong);border-radius:6px;background:rgba(255,255,255,.7);
+        font-family:var(--mono);font-size:11.5px;color:var(--text-1);white-space:nowrap}
+  .c-ink{color:var(--text-2)} .c-acc{color:var(--accent)}
+  .bl-row{display:flex;flex-direction:column;justify-content:center;padding:9px 0}
+  .bl-row + .bl-row{border-top:1px solid var(--row-hairline)}
+  .bl-row .r1{display:flex;align-items:center;gap:9px}
+  .bl-row .how{font-size:12.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bl-row .dt{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-3);white-space:nowrap}
+  .bl-row .snip{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:4px;line-height:1.5}
+
+  .props{border-top:1px solid var(--border);padding-top:18px}
+  .prop{display:flex;margin-bottom:14px;font-size:13px}
+  .prop .k{width:88px;color:var(--text-3);flex:none;padding-top:1px}
+  .prop .vwrap{min-width:0}
+  .prop .v{display:flex;align-items:center;gap:7px;font-weight:500}
+  .prop .git{font-family:var(--mono);font-size:11px;color:var(--text-3);font-weight:400;margin-top:3px}
+  .pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 10px;
+        border:1px solid var(--border);border-radius:var(--rad-pill);background:rgba(255,255,255,.55);font-size:12px}
+  .add{color:var(--text-3);font-size:12px}
+
+  /* ============ band 3 — statusline (identical on every page) ============ */
+  .statusline{height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="g-progress" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 0 1 10 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-cycles" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M10 1.4 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="5.5" cy="14.5" r="1.9" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-decision" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="10" cy="10" r="2.8" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-retro" viewBox="0 0 20 20">
+      <path d="M14.5 4.7 A7 7 0 1 0 16.9 8.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M15.4 10.4 L16.9 8.6 L18.6 10.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <!-- provenance, whispered -->
+    <symbol id="m-github" viewBox="0 0 16 16">
+      <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+    </symbol>
+    <symbol id="m-figma" viewBox="0 0 16 16">
+      <g fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round">
+        <path d="M8 1.6 H5.5 a2.3 2.3 0 0 0 0 4.6 H8 Z"/>
+        <path d="M8 1.6 h2.5 a2.3 2.3 0 0 1 0 4.6 H8 Z"/>
+        <path d="M8 6.2 H5.5 a2.3 2.3 0 0 0 0 4.6 H8 Z"/>
+        <circle cx="10.5" cy="8.5" r="2.3"/>
+        <path d="M8 10.8 H5.5 a2.3 2.3 0 1 0 2.5 2.3 Z"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab active">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>4</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <!-- band 2 — the masthead is a bifact -->
+  <div class="masthead">
+    <div class="m-top">
+      <span class="m-back">‹ <b>Issues</b></span>
+      <span class="m-id">ENG-116</span>
+      <span class="chip-div">Done in git, not on the board</span>
+      <div class="m-actions">
+        <button class="btn">Follow</button>
+        <button class="btn primary">Mark Done&nbsp;<span class="kbd-s">⏎</span></button>
+      </div>
+    </div>
+    <h1>Apple Pay in the payment sheet</h1>
+    <div class="m-bi">
+      <div class="say">
+        <span class="st-word"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg><b>In Progress</b></span>
+        <span class="dv">·</span><span class="dim">Cycle 2</span>
+        <span class="dv">·</span><span class="dim" style="display:inline-flex;align-items:center;gap:6px"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+        <span class="dv">·</span><span class="dim">designed, merged a day ago, every check green</span>
+      </div>
+      <div class="git">mock approved in crit Tue · git merged 8f21c4a · PR #188 · drifted 22h<span class="prov"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></div>
+    </div>
+  </div>
+
+  <div class="body-cols">
+    <div class="doc">
+      <section>
+        <div class="sec-h">DESCRIPTION<span class="act mono">edited 3d ago · 54 words</span></div>
+        <div class="prose">
+          <p>Offer Apple Pay as a payment option inside the checkout payment sheet, ahead of
+          manual card entry. When the device can't use it, the sheet falls back to the card
+          form without a layout jump.</p>
+          <p>Out of scope for this cycle: Google Pay, and saved-card reordering.</p>
+        </div>
+
+        <div class="diptych">
+          <figure class="dip">
+            <span class="art">
+              <svg viewBox="0 0 280 186" xmlns="http://www.w3.org/2000/svg">
+                <rect width="280" height="186" fill="#f4efe5"/>
+                <rect x="46" y="22" width="188" height="164" rx="10" fill="#ffffff" stroke="#e7e0d4"/>
+                <rect x="128" y="30" width="24" height="3" rx="1.5" fill="#dcd3c4"/>
+                <rect x="64" y="42" width="46" height="8" rx="2" fill="#dcd3c4"/>
+                <circle cx="216" cy="46" r="6" fill="#efe9dd"/>
+                <rect x="64" y="62" width="152" height="20" rx="5" fill="#ffffff" stroke="#dcd3c4"/>
+                <rect x="72" y="69" width="58" height="5" rx="2" fill="#e7e0d4"/>
+                <rect x="64" y="90" width="72" height="20" rx="5" fill="#ffffff" stroke="#dcd3c4"/>
+                <rect x="144" y="90" width="72" height="20" rx="5" fill="#ffffff" stroke="#dcd3c4"/>
+                <rect x="72" y="97" width="30" height="5" rx="2" fill="#e7e0d4"/>
+                <rect x="152" y="97" width="24" height="5" rx="2" fill="#e7e0d4"/>
+                <rect x="64" y="122" width="46" height="6" rx="2" fill="#e7e0d4"/>
+                <rect x="186" y="122" width="30" height="6" rx="2" fill="#dcd3c4"/>
+                <rect x="64" y="142" width="152" height="22" rx="6" fill="#efe9dd"/>
+                <rect x="118" y="150" width="44" height="6" rx="2" fill="#dcd3c4"/>
+              </svg>
+            </span>
+            <figcaption class="cap"><b>before</b><span>card form first</span></figcaption>
+          </figure>
+          <span class="dip-arrow">→</span>
+          <figure class="dip">
+            <span class="art">
+              <svg viewBox="0 0 280 186" xmlns="http://www.w3.org/2000/svg">
+                <rect width="280" height="186" fill="#f4efe5"/>
+                <rect x="46" y="22" width="188" height="164" rx="10" fill="#ffffff" stroke="#e7e0d4"/>
+                <rect x="128" y="30" width="24" height="3" rx="1.5" fill="#dcd3c4"/>
+                <rect x="64" y="42" width="46" height="8" rx="2" fill="#dcd3c4"/>
+                <circle cx="216" cy="46" r="6" fill="#efe9dd"/>
+                <rect x="64" y="60" width="152" height="24" rx="6" fill="#2b2620"/>
+                <rect x="118" y="69" width="44" height="7" rx="3.5" fill="#f4efe5" opacity=".92"/>
+                <rect x="64" y="94" width="152" height="1" fill="#efe9dd"/>
+                <rect x="64" y="106" width="22" height="14" rx="3" fill="#f6e6da" stroke="rgba(193,90,56,.34)"/>
+                <rect x="94" y="107" width="70" height="6" rx="2" fill="#e7e0d4"/>
+                <rect x="94" y="117" width="44" height="4" rx="2" fill="#efe9dd"/>
+                <rect x="64" y="134" width="46" height="6" rx="2" fill="#e7e0d4"/>
+                <rect x="186" y="134" width="30" height="6" rx="2" fill="#dcd3c4"/>
+                <rect x="64" y="152" width="152" height="22" rx="6" fill="#efe9dd"/>
+                <rect x="118" y="160" width="44" height="6" rx="2" fill="#dcd3c4"/>
+              </svg>
+            </span>
+            <figcaption class="cap"><b>after</b><span>payment-sheet-v3</span></figcaption>
+          </figure>
+        </div>
+        <div class="bi dip-bi">
+          <div class="say">The sheet leads with Apple Pay; the card form becomes the fallback.</div>
+          <div class="git">payment-sheet-v3 · approved in crit Tue · built as merged 8f21c4a</div>
+        </div>
+      </section>
+
+      <section>
+        <div class="sec-h">ACTIVITY</div>
+        <div class="act-row"><span class="a-d"></span>
+          <span><span class="say" style="display:block">Planned into Cycle 2<span class="ago">9d ago</span></span>
+          <span class="git" style="display:block">cycle-2 · Aug 4 – 18 · added at planning</span></span></div>
+        <div class="act-row"><span class="a-d design"></span>
+          <span><span class="say" style="display:block">Mock approved in crit<span class="ago">Tue</span></span>
+          <span class="git" style="display:block">payment-sheet-v3 · 2 comments, both resolved</span></span></div>
+        <div class="act-row"><span class="a-d warm"></span>
+          <span><span class="say" style="display:block">Work started<span class="ago">3d ago</span></span>
+          <span class="git" style="display:block">board todo → in-progress</span></span></div>
+        <div class="act-row"><span class="a-d link"></span>
+          <span><span class="say" style="display:block">Linked to a change<span class="ago">3d ago</span></span>
+          <span class="git" style="display:block">PR #188 matched by branch eng-116-apple-pay</span></span></div>
+      </section>
+
+      <section>
+        <div class="sec-h">COMMENTS<span class="act">Open the change ↗</span></div>
+        <div class="bi">
+          <div class="say">Quiet — the conversation moved to the crit, then the change. <span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">more ·</span></div>
+          <div class="git">0 on the issue · 2 on the mock · 11 on PR #188, resolved</div>
+        </div>
+        <div class="composer">
+          <div class="hint">Leave a comment…</div>
+          <div class="bar">
+            <span class="marks">B&nbsp; I&nbsp; S&nbsp; &lt;&gt;&nbsp; H2&nbsp; ≡&nbsp; “”</span>
+            <span class="send"><button class="btn primary">Comment</button><span class="kbd-s">⌘⏎</span> to send</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="rail-col">
+      <div class="rail-h">DELIVERY<span class="chain">idea → designed → built → live</span></div>
+
+      <div class="rail-lede">
+        <div class="say"><span class="ring"></span>Built — not live yet</div>
+        <div class="git">merged 8f21c4a · no prod deploy since<span class="prov"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></div>
+      </div>
+
+      <div class="metro">
+        <div class="stop">
+          <span class="node idea"></span>
+          <div class="say">Idea — planned into Cycle 2<span class="ago">9d ago</span></div>
+          <div class="git">spec 54 words · added at planning</div>
+        </div>
+        <div class="stop">
+          <span class="node"></span>
+          <div class="say">Designed — approved in crit<span class="ago">Tue</span></div>
+          <div class="git">payment-sheet-v3 · 2 comments · crit Tue</div>
+          <!-- v3, the approved upload: the card shows the image itself, no brand mark -->
+          <div class="mock">
+            <svg viewBox="0 0 204 128" xmlns="http://www.w3.org/2000/svg">
+              <rect width="204" height="128" fill="#f4efe5"/>
+              <rect x="10" y="14" width="184" height="114" rx="8" fill="#ffffff" stroke="#e7e0d4"/>
+              <rect x="90" y="20" width="24" height="3" rx="1.5" fill="#dcd3c4"/>
+              <rect x="26" y="30" width="40" height="7" rx="2" fill="#dcd3c4"/>
+              <circle cx="176" cy="33" r="5.5" fill="#efe9dd"/>
+              <rect x="26" y="46" width="152" height="20" rx="5" fill="#2b2620"/>
+              <rect x="80" y="53" width="44" height="6" rx="3" fill="#f4efe5" opacity=".92"/>
+              <rect x="26" y="74" width="152" height="1" fill="#efe9dd"/>
+              <rect x="26" y="84" width="20" height="13" rx="3" fill="#f6e6da" stroke="rgba(193,90,56,.34)"/>
+              <rect x="54" y="85" width="66" height="6" rx="2" fill="#e7e0d4"/>
+              <rect x="54" y="95" width="42" height="4" rx="2" fill="#efe9dd"/>
+              <rect x="26" y="110" width="40" height="6" rx="2" fill="#e7e0d4"/>
+              <rect x="148" y="110" width="30" height="6" rx="2" fill="#dcd3c4"/>
+            </svg>
+            <div class="m-cap"><span>payment-sheet-v3</span><span class="open">open ↗</span></div>
+          </div>
+          <!-- v2, superseded: a Figma link — the pointer wears its source's mark -->
+          <div class="verline"><span class="prov" style="margin-left:0"><svg width="13" height="13" viewBox="0 0 16 16"><use href="#m-figma"/></svg></span><span>payment-sheet-v2</span><span class="open">open ↗</span></div>
+        </div>
+        <div class="stop">
+          <span class="node"></span>
+          <div class="say">Change opened<span class="ago">3d ago</span></div>
+          <div class="git">PR #188 · apple-pay-payment-sheet → main<span class="prov"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></div>
+        </div>
+        <div class="stop">
+          <span class="node"></span>
+          <div class="say">Reviewed — approved<span class="ago">1d ago</span></div>
+          <div class="git">2 rounds · changes requested, then approved</div>
+        </div>
+        <div class="stop break">
+          <span class="node"></span>
+          <div class="say">Merged, checks green<span class="ago">1d ago</span></div>
+          <div class="git">8f21c4a on main · 14/14 checks passed<span class="prov"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></div>
+          <span class="break-mark">//</span>
+        </div>
+        <div class="stop last-line">
+          <span class="node urgent-ring"></span>
+          <div class="say" style="color:var(--status-urgent)">Not live yet</div>
+          <div class="git">no production release carries it</div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div class="c-title">Done in git, not on the board</div>
+        <div class="say">Status says <b>In Progress</b> — the change merged <b>1d ago</b>
+          with every check green.</div>
+        <div class="git">in-progress set 3d ago ≠ merge 8f21c4a, 22h ago</div>
+        <div class="c-ritual">The work moved, the ritual didn't.</div>
+        <div class="c-actions">
+          <button class="btn primary">Mark Done&nbsp;<span class="kbd-s">⏎</span></button>
+          <button class="btn">Keep as is&nbsp;<span class="kbd-s">esc</span></button>
+        </div>
+      </div>
+
+      <div class="refs">
+        <div class="kick">REFERENCED IN<span class="n">3</span></div>
+        <div style="margin-top:4px">
+          <div class="bl-row">
+            <div class="r1">
+              <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-cycles"/></svg><span>Cycle 2 report</span></span>
+              <span class="how">counts it among the shipped</span><span class="dt">Tue</span>
+            </div>
+            <div class="snip">“…one — ENG-116 — is done in git, not on the board…”</div>
+          </div>
+          <div class="bl-row">
+            <div class="r1">
+              <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-acc"><use href="#g-decision"/></svg><span>Ship without saved cards…</span></span>
+              <span class="how">weighed it</span><span class="dt">aug 6</span>
+            </div>
+            <div class="snip">“…if Apple Pay (ENG-116) covers most of those sessions…”</div>
+          </div>
+          <div class="bl-row">
+            <div class="r1">
+              <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-retro"/></svg><span>Retro · Cycle 1</span></span>
+              <span class="how">born from an action</span><span class="dt">jul 30</span>
+            </div>
+            <div class="snip">action → issue: “lead the sheet with the fastest payment method”</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="props">
+        <div class="prop"><span class="k">Status</span>
+          <span class="vwrap"><span class="v" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg><span style="color:var(--text-1)">In Progress</span></span>
+          <span class="git">on the board since Jul 29 · unchanged 9d</span></span></div>
+        <div class="prop"><span class="k">Design</span>
+          <span class="vwrap"><span class="v">payment-sheet-v3</span>
+          <span class="git">v3 upload, approved in crit · v2 figma link</span></span></div>
+        <div class="prop"><span class="k">Cycle</span>
+          <span class="vwrap"><span class="v">Cycle 2</span>
+          <span class="git">Aug 4 – 18 · day 9 of 14</span></span></div>
+        <div class="prop"><span class="k">Labels</span>
+          <span class="vwrap"><span class="v"><span class="pill"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span><span class="add">+ Add</span></span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">4 need attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+<script>if(location.hash==="#full")document.body.classList.add("full");</script>
+</body>
+</html>

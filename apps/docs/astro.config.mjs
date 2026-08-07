@@ -11,6 +11,7 @@ export default defineConfig({
         {
           label: 'Features',
           items: [
+            { label: 'Team Home', slug: 'features/team-home' },
             { label: 'Board', slug: 'features/board' },
             { label: 'Cycles', slug: 'features/cycles' },
             { label: 'Triage', slug: 'features/triage' },

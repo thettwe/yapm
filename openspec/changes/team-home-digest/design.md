@@ -340,3 +340,21 @@ Decisions made while building pass 2 (page + routes):
 - **Verification split per the build instructions**: lint, typecheck, the schema + web unit
   suites (including the new `team-home.test.tsx` falsifiable renders) ran locally and are green;
   `turbo build`, Playwright e2e and the compose smoke test run in CI on the already-open PR.
+
+Decisions made in the tests-and-docs pass:
+
+- **No new integration or e2e test** (task 5.3/5.4): the change adds no query, no mutator and no
+  permission surface (the query registry is byte-unchanged vs `main`), so the pg integration
+  suites have nothing new to scope and PROCESS.md §3's big-feature rule does not trigger. The
+  audit for tests whose subject moved found none — no unit/component test referenced
+  `team-detail.tsx` or `members-panel.tsx`, `auth.spec.ts`'s `members-list` testid lives on the
+  workspace home (`members-panel.tsx`, untouched), and the e2e team-page contract
+  ("Issues"/"Board" links) is carried by the digest's onward footer, so every existing suite
+  runs unmodified.
+- **Docs sidebar placement**: `Team Home` sits first in the Features group — it is the surface a
+  team lands on, and every other feature page is one of its doorways.
+- **A sweep for docs describing the team page as a members list found none to fix**: the only
+  members-list references in `apps/docs` are the workspace-home Members list (`sso.md`), which
+  did not move. README gained the Home-digest entry at the end of "What works today"; ROADMAP
+  gained row 29 with status "built, in review" — the row is honest about not being merged, and
+  archiving flips it.

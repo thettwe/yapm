@@ -108,21 +108,21 @@ API), `reference/` for TanStack Router + Tailwind 4.3, the two mocks
       band and the YOURS warmth line; the attention number is identical at every DOM
       occurrence; doorways have accessible names and hrefs; Live badge only with a
       matching deployment.
-- [ ] 5.3 Existing suites stay green untouched where behavior is untouched:
+- [x] 5.3 Existing suites stay green untouched where behavior is untouched:
       `issues.spec.ts`'s team-page "Issues" link path, `auth.spec.ts` members-list (on
       workspace home). Update only tests whose subject genuinely moved (team-detail
       component tests, if any, follow the members route).
-- [ ] 5.4 Gates: `pnpm turbo lint typecheck test build`; compose smoke test (sync reads
+- [x] 5.4 Gates: `pnpm turbo lint typecheck test build`; compose smoke test (sync reads
       touched); CI e2e green. Not a big feature under PROCESS.md §3 (signature UI only —
       no new synced entity, mutator, or permission surface): no new e2e spec; existing
       e2e must pass unmodified except where 5.3 says the subject moved.
 
 ## 6. Documentation
 
-- [ ] 6.1 New `apps/docs/src/content/docs/features/team-home.md`: what the digest shows,
+- [x] 6.1 New `apps/docs/src/content/docs/features/team-home.md`: what the digest shows,
       the four exception classes, the adaptive folding rules, the personal-lens boundary
       ("your work only — never compared"), where members management lives now.
-- [ ] 6.2 README feature list: the team Home digest line; ROADMAP: this change's row.
+- [x] 6.2 README feature list: the team Home digest line; ROADMAP: this change's row.
       Sweep for any doc describing the team page as a members list.
-- [ ] 6.3 `pnpm --filter @yapm/docs build` green; no env/config reference changes (none
+- [x] 6.3 `pnpm --filter @yapm/docs build` green; no env/config reference changes (none
       added).

@@ -148,7 +148,18 @@ image), with syntax colours drawn from your theme's tokens rather than a highlig
 plus a **Files** section on every issue listing everything attached to it, and a refusal that matters:
 a browser tab left open across an upgrade is shown its issue **read-only** with a "reload to edit"
 notice instead of silently saving back a description with the images and tables it could not
-understand quietly deleted.
+understand quietly deleted ·
+a team **Home digest** — the team's page is a morning read, not a members roster: the active
+cycle's vitals (day band, committed / landed / added scope, days left), a narrative that is the
+stored cycle digest when one exists and a deterministic two-sentence fallback over real counts
+when it doesn't (never filler, never a model call at page-open), **one attention number** over
+four disjoint exception classes (done in git but not on the board, checks failing, waiting on
+review over a day, new in triage) that agrees with itself everywhere it appears, what went live
+in the last 24 hours with provenance, **your own in-flight work and only yours** (the band ends
+"your work only — never compared"), the unassigned ready-to-start runway, a weekly ship-cadence
+chart, and Live / Built-not-live badges from the deploy fact — every band computed on your device
+from rows already synced, and every empty band folding away rather than apologizing, with members
+management intact behind a Members doorway.
 
 ## What's next
 

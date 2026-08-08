@@ -193,9 +193,15 @@ be discarded rather than linked.
 
 The frame SHALL provide one masthead component taking a title, an optional count, an
 optional lens-toggle slot, an optional filter/meta slot and an optional actions slot. Every
-page that presents a page header SHALL render it through that component, preserving the
-controls it offers today. A page whose own design owns band 2 entirely MAY decline to render
-a masthead; it SHALL NOT render a substitute header of its own.
+**work surface** — a page presenting a titled, counted, filtered or acted-upon collection —
+SHALL render its page header through that component, preserving the controls it offers
+today. A page whose own design owns band 2 entirely MAY decline to render a masthead; it
+SHALL NOT render a substitute header of its own.
+
+An **editorial reading surface** — a document in a reading column whose heading names a
+section and whose sub-line explains it — presents body content rather than a page header,
+and SHALL keep its own heading. What no page SHALL do, on either kind of surface, is
+hand-roll application chrome.
 
 Masthead content SHALL be labels only — no sentences. The one binding rule about metrics
 ("team-level only — never a per-person number") SHALL appear once in the application, on the
@@ -213,6 +219,14 @@ delivery surface.
 - **WHEN** a member uses the delivery window picker, the issue list's filters or the board's
   grouping control after the migration
 - **THEN** each behaves exactly as before, from the masthead
+
+#### Scenario: A reading surface keeps its document heading
+
+- **WHEN** the workspace overview, the settings surfaces or the product-digest reader is
+  rendered
+- **THEN** each presents its heading and explanatory line as body content in its reading
+  column, renders no masthead and no application header, and the deck and statusline are
+  unchanged
 
 #### Scenario: A page may own its band without hand-rolling chrome
 

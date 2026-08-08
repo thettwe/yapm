@@ -336,10 +336,16 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
   // ⌘K on the board still opens "Move to status…" for the focused card — it is registered with the
   // frame's one owner (§D6) instead of being a second window binding. `m` and `o` are surface
   // shortcuts and stay exactly as they were.
+  //
+  // "Move to status…" is about a FOCUSED CARD, so with none focused (or mid-drag, or for a viewer)
+  // this opener declines and the frame's palette answers instead. Swallowing ⌘K there would make
+  // the deck's advertised binding do nothing on the board, which is the exact lie §D6 exists to end.
   const openFromRegistry = useCallback(() => {
-    if (draggingRef.current || !canWrite) return
+    if (draggingRef.current || !canWrite) return false
     const cardId = focusedCardId()
-    if (cardId) setPaletteFor(cardId)
+    if (cardId === undefined) return false
+    setPaletteFor(cardId)
+    return true
   }, [canWrite])
   useCommandSource(
     'board',

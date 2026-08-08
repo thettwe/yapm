@@ -179,7 +179,10 @@ export function RetroCommandProvider({
   )
 
   // Registered with the frame's one ⌘K owner rather than binding a second listener (§D6).
-  const openFromRegistry = useCallback(() => start('root'), [start])
+  const openFromRegistry = useCallback(() => {
+    start('root')
+    return true
+  }, [start])
   useCommandSource(
     'retro',
     useMemo(() => ({ open: openFromRegistry }), [openFromRegistry]),

@@ -69,7 +69,8 @@ search, settings — belong to no team. There the frame degrades honestly:
 - the six stops stay, pointing at your **anchor team**: the last team you visited, or the first one
   you can see. No stop is marked current, because you are not on one of them.
 - the statusline says **nothing about a team**. No cycle, no shipped count, no deploys, no attention
-  badge — only the sync state.
+  badge — only the workspace's name and the sync state, which are the two things that are true
+  there.
 - a workspace with no teams at all drops the six stops entirely rather than offering doors onto
   nothing.
 
@@ -97,5 +98,8 @@ rich-text editor or an open dialog holds the keyboard — so `g` in the middle o
 
 `⌘K` opens whichever palette the surface you are on offers. On a surface with its own — the issue
 list, the board, a retro — that is the palette with that surface's actions in it. Everywhere else it
-is the frame's own: the six destinations, the inbox and search everything. It always opens
-something; that is the point of advertising it on every page.
+is the frame's own: the six destinations, the inbox, search everything, appearance, and — while sync
+is recovering — `Retry sync now`, so the one control that gets you writing again is never a long
+page's worth of `Tab` away. A surface palette that is about something you have not selected (the
+board's is about the focused card) hands the binding back rather than swallowing it, so `⌘K` always
+opens something: that is the point of advertising it on every page.

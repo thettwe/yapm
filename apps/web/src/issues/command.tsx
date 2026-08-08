@@ -196,7 +196,10 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
   // ⌘K is bound ONCE, by the frame's command registry (design app-frame §D6). This surface hands
   // over the opener it already had rather than adding a fifth window listener; everything else about
   // the palette — its pages, its cursor, its imperative API — is unchanged.
-  const openFromRegistry = useCallback(() => start('root', contextRef.current), [start])
+  const openFromRegistry = useCallback(() => {
+    start('root', contextRef.current)
+    return true
+  }, [start])
   useCommandSource(
     'issues',
     useMemo(() => ({ open: openFromRegistry }), [openFromRegistry]),

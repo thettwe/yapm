@@ -8,7 +8,7 @@ import {
   type TeamHomeIssueRow,
   type TeamHomeTriageRow,
 } from '@yapm/schema'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 
 // Which team the deck points at, and what band 3 is allowed to say about it.
 //
@@ -76,15 +76,42 @@ export function useAnchorTeam(routeTeamId: string | undefined): FrameTeam | null
   return anchor
 }
 
-// Ages tick at minute granularity — fine enough for the cycle day, coarse enough that the memoized
-// fold is not rebuilt per render. The same discipline `home/team-home.tsx` already applies.
+// Ages tick at minute granularity — fine enough for the cycle day and for "41m", coarse enough that
+// the memoized folds are not rebuilt per render.
+//
+// ONE ticker for the whole app, on the same reasoning as one attention derivation: the frame and the
+// Home digest fold the same age-sensitive rows, and two independent 60s timers would let the
+// statusline and the NEEDS ATTENTION band read a PR as 24h old and 23h old in the same second.
+let tickerNow = Date.now()
+let tickerHandle: ReturnType<typeof setInterval> | null = null
+const tickerSubscribers = new Set<() => void>()
+
+function subscribeToMinute(onChange: () => void): () => void {
+  tickerSubscribers.add(onChange)
+  if (tickerHandle === null) {
+    // A tab that has had no subscriber for a while left `tickerNow` behind; the first one back
+    // reads the clock rather than the last tick.
+    tickerNow = Date.now()
+    tickerHandle = setInterval(() => {
+      tickerNow = Date.now()
+      for (const notify of tickerSubscribers) notify()
+    }, 60_000)
+  }
+  return () => {
+    tickerSubscribers.delete(onChange)
+    if (tickerSubscribers.size === 0 && tickerHandle !== null) {
+      clearInterval(tickerHandle)
+      tickerHandle = null
+    }
+  }
+}
+
 export function useMinuteNow(): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000)
-    return () => clearInterval(id)
-  }, [])
-  return now
+  return useSyncExternalStore(
+    subscribeToMinute,
+    () => tickerNow,
+    () => tickerNow,
+  )
 }
 
 // Band 3's facts, from the five team-scoped queries the page mostly holds already. Zero de-dupes

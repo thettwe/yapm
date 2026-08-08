@@ -36,7 +36,9 @@ what makes it honest.
 
 Once retries have been going for a while, a keyboard-reachable **Retry now** button appears beside the
 state. It fires the next attempt immediately and resets the schedule; nobody has to wait out a
-back-off window, and nobody has to reload.
+back-off window, and nobody has to reload. The same control is offered as **Retry sync now** in the
+command palette (**⌘K**) while it is available, so reaching it never depends on how long the page you
+are on happens to be.
 
 If the app cannot reach the server *before* it knows who you are, the full-page loading state turns
 into **"Can’t reach the server — retrying"** with the same Retry button. Pressing it when an attempt

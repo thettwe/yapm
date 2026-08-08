@@ -68,6 +68,9 @@ focus a card and open the board's **Move to status…** palette:
 Then choose **Move to Backlog**, **Move to In Review**, and so on. The card moves to that
 column's status and is appended to the bottom of the column.
 
+With **no** card focused, **⌘K** is not about a card, so it opens the app's own palette — the
+destinations, the inbox, search everything — exactly as it does on every other page.
+
 ## Large columns
 
 A column stays a plain, simple list until it grows past roughly one hundred cards, at which

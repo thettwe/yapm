@@ -186,6 +186,16 @@ beforeEach(() => {
   zero.triage = []
   zero.deployments = []
   zero.notifications = []
+  Element.prototype.scrollIntoView = vi.fn()
+  // jsdom ships neither; `cmdk` observes its list and Base UI measures its popup.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
 })
 
 test('every authenticated route renders one deck, one statusline, and one attention number', async () => {
@@ -322,8 +332,48 @@ test('off-team the stops still point somewhere useful and the statusline claims 
   expect(screen.queryByTestId('statusline-deploys')).toBeNull()
   expect(screen.queryByTestId('statusline-attention')).toBeNull()
   expect(screen.queryByTestId('attention-badge')).toBeNull()
-  // The sync state is the one thing band 3 always knows.
+  // Saying nothing is not saying nothing at all: the workspace and the sync state are the two
+  // facts band 3 still has off-team, and §D3 has it state both.
+  expect(screen.getByTestId('statusline-workspace')).toHaveTextContent('Acme')
   expect(screen.getByTestId('connection-status')).toBeInTheDocument()
+})
+
+// On a team the deck's switcher names the workspace, and band 3 reports the team's day instead —
+// the workspace name would be the one fact in the line that is not about the team.
+test('with a team in context the statusline reports the team, not the workspace', async () => {
+  fourExceptions()
+  renderAt('/teams/team-1/issues')
+
+  expect(await screen.findByTestId('statusline-cycle')).toBeInTheDocument()
+  expect(screen.queryByTestId('statusline-workspace')).toBeNull()
+})
+
+// The one segment that used to read "1 need attention" — band 3 counts in English or it is not
+// labels, it is a template.
+test('the attention segment agrees with its own number at one', async () => {
+  zero.teams = [TEAM]
+  zero.triage = [{ id: 'triage-1', createdAt: NOW - HOUR }]
+  renderAt('/teams/team-1/issues')
+
+  expect(await screen.findByTestId('statusline-attention')).toHaveTextContent('1 needs attention')
+})
+
+// The always-present group is what makes ⌘K honest on a page that registers nothing of its own.
+// Appearance is in it because §D8 folded the theme controls into the account menu: a setting with
+// exactly one door is a setting the keyboard cannot reach.
+test('the frame’s own palette carries appearance alongside the destinations', async () => {
+  zero.teams = [TEAM]
+  renderAt('/inbox')
+  await screen.findByTestId('deck')
+
+  await act(async () => {
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+  })
+
+  const palette = await screen.findByTestId('frame-palette')
+  expect(within(palette).getByText('Appearance')).toBeInTheDocument()
+  expect(within(palette).getByText('Search everything')).toBeInTheDocument()
+  expect(within(palette).getByText('Go to inbox')).toBeInTheDocument()
 })
 
 // A workspace with no teams drops the six stops rather than offering doors onto nothing.

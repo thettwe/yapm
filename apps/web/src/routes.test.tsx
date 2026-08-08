@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router'
 import { render, screen } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
@@ -125,13 +127,16 @@ test('the delivery route is registered, narrows its window and is gated behind a
 //   user-menu   the user chip's menu
 //   deck-right  the deck's right cluster (⌘K, the attention badge, Inbox)
 //   doorway     reached from a row or control on a page that itself has a home
+//   dev-only    stripped from production builds; reachable from the account menu in dev
 //   open        unauthenticated, deliberately outside the frame
 const ROUTE_HOMES = {
   '/': 'switcher',
   '/inbox': 'deck-right',
   '/search': 'deck-right',
   '/digests': 'user-menu',
-  '/showcase': 'user-menu',
+  // Dev-only, and deliberately outside the frame: the app's chrome would fight the theme blocks
+  // the gallery renders. It is not a production destination, so it is not an authenticated one.
+  '/showcase': 'dev-only',
   '/settings/ai': 'user-menu',
   '/settings/connectors': 'user-menu',
   '/settings/sso': 'user-menu',
@@ -166,10 +171,37 @@ test('every registered route has an honest home in the frame', () => {
   expect(registered).toEqual(Object.keys(ROUTE_HOMES).sort())
 })
 
-test('only the two unauthenticated surfaces sit outside the frame', () => {
-  const open = Object.entries(ROUTE_HOMES)
-    .filter(([, home]) => home === 'open')
+// A route id maps to its file by TanStack's own flat-file convention: `/teams/$teamId/issues/` is
+// `teams.$teamId.issues.index.tsx`.
+function routeFile(id: string): string {
+  const path = id === '/' ? 'index' : id.replace(/^\//u, '').replace(/\/$/u, '/index')
+  return `routes/${path.replaceAll('/', '.')}.tsx`
+}
+
+// Where each route's frame actually lives. Almost always the route file; `/digests` is the one
+// exception and a named one — `PmDigestView` renders NOTHING when the reader has nothing to read,
+// so the frame sits inside it rather than around it, or an unaddressed reader would get a deck over
+// an empty page.
+const FRAME_FILE: Partial<Record<keyof typeof ROUTE_HOMES, string>> = {
+  '/digests': 'pm-digest/pm-digest-view.tsx',
+}
+
+// The table above says where a reader finds each route. This says whether the route is actually
+// IN the frame — the property the table only names. It fails on a new authenticated route that
+// forgets `AppFrame`, and on a frame-free surface that grows one.
+test('every route with a home in the frame renders inside it, and the frame-free ones do not', () => {
+  // `process.cwd()` is `apps/web` under vitest — `runtime-config.test.tsx`'s precedent.
+  const src = join(process.cwd(), 'src')
+
+  const framed = (Object.keys(ROUTE_HOMES) as (keyof typeof ROUTE_HOMES)[]).filter((id) =>
+    readFileSync(join(src, FRAME_FILE[id] ?? routeFile(id)), 'utf8').includes('<AppFrame'),
+  )
+
+  // Everything except the two signed-out surfaces and the dev-only gallery, whose three theme
+  // blocks the app's own chrome would fight.
+  const expected = Object.entries(ROUTE_HOMES)
+    .filter(([, home]) => home !== 'open' && home !== 'dev-only')
     .map(([id]) => id)
 
-  expect(open.sort()).toEqual(['/invite', '/login'])
+  expect(framed.sort()).toEqual(expected.sort())
 })

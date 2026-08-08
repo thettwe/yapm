@@ -6,9 +6,9 @@ import { useConnectionSummary } from '@/zero/connection'
 // Band 3 — the statusline: the team's day in one line, on every page, 32px on `--statusline-bg`,
 // `margin-top:auto` in the frame's `min-h-svh` column exactly as the mocks draw it.
 //
-// Labels only, never sentences (the word diet's CHROME tier). Each of the four segments folds on
-// its own when its fact is absent, and off-team every one of them folds — the deck may point at a
-// team, the statusline may only report one (design §D3).
+// Labels only, never sentences (the word diet's CHROME tier). Each of the four team segments folds
+// on its own when its fact is absent, and off-team every one of them folds, leaving the workspace
+// name — the deck may point at a team, the statusline may only report one (design §D3).
 
 function Divider() {
   return (
@@ -37,7 +37,16 @@ function Segments({ segments }: { segments: readonly Segment[] }) {
   )
 }
 
-export function Statusline({ frame }: { frame: TeamFrameModel | null }) {
+export function Statusline({
+  frame,
+  workspaceName,
+}: {
+  frame: TeamFrameModel | null
+  // Off-team the line still has one true thing to say about where the reader is (design §D3's
+  // second row): the workspace. It is stated only there — with a team in context the deck's
+  // switcher names the workspace and band 3 reports the team's day instead.
+  workspaceName: string | null
+}) {
   const connection = useConnectionSummary()
 
   return (
@@ -47,6 +56,13 @@ export function Statusline({ frame }: { frame: TeamFrameModel | null }) {
     >
       <Segments
         segments={[
+          {
+            id: 'workspace',
+            node:
+              frame !== null || workspaceName === null ? null : (
+                <span data-testid="statusline-workspace">{workspaceName}</span>
+              ),
+          },
           {
             id: 'cycle',
             node:
@@ -82,7 +98,8 @@ export function Statusline({ frame }: { frame: TeamFrameModel | null }) {
                   data-testid="statusline-attention"
                   className="font-semibold text-status-urgent-ink"
                 >
-                  <span data-testid="attention-count">{frame.attention.count}</span> need attention
+                  <span data-testid="attention-count">{frame.attention.count}</span>{' '}
+                  {frame.attention.count === 1 ? 'needs' : 'need'} attention
                 </span>
               ),
           },

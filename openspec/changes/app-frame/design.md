@@ -106,9 +106,11 @@ TeamFrameModel = {
 `TeamFrameModel` needs five of Home's seven queries (`teams`, `cycles`, `issues`, `triage`,
 `deployments`) — not `retros`, `notifications` or `digest`. Zero de-duplicates
 subscriptions, so on `/teams/$teamId` the frame and the digest share them; on the other team
-routes the frame adds `cycles`, `triage` and `deployments` to what the page already syncs.
-All five are already-synced team-scoped queries; nothing new is fetched and no interaction
-waits on the network.
+routes the frame adds `cycles`, `triage` and `deployments` to what the page already syncs —
+and, on the five that held no issue query at all (Triage, Projects, Roadmap, Members, the
+Retros list), `issues.byTeam` as well. That last one is a real cost paid on purpose;
+**DI-18** records why the two cheaper shapes are both worse. All five are already-synced
+team-scoped queries; nothing new is fetched and no interaction waits on the network.
 
 **Alternative rejected**: the frame calling `buildTeamHome` and projecting. That builds
 SINCE YESTERDAY, YOURS, RUNWAY, cadence and shipped rows on every page for four numbers.
@@ -404,11 +406,12 @@ destination the production router does not have. It renders behind `import.meta.
 
 ### Stage 2 — the migration that deletes the copy-paste (built)
 
-**DI-10 — DI-8 is superseded: every page now renders band 2 through `Masthead`.** Stage 1 left the
+**DI-10 — DI-8 is superseded: every WORK SURFACE now renders band 2 through `Masthead`.** Stage 1 left the
 component adopted on three surfaces and the rest on their own in-page headers. That split was the
-thing this change exists to end, so the remaining eight surfaces moved onto it — Cycles, Triage,
-Delivery, Projects, Roadmap, Retros, a retro, and the workspace Inbox. Each keeps every control it
-offered, relocated into a slot rather than removed:
+thing this change exists to end, so every remaining surface that presents a WORK SURFACE header moved
+onto it — Cycles, Triage, Delivery, Projects, Roadmap, Retros, a retro, and the workspace Inbox. Each
+keeps every control it offered, relocated into a slot rather than removed (the five editorial reading
+surfaces are outside that set, and DI-17 says why):
 
 | Surface | title · count | lens | meta | actions |
 |---|---|---|---|---|
@@ -476,3 +479,62 @@ mock's accent (`--accent-strong` on `--bg` is ~4.44:1 in editorial light — und
 underline and weight carry the state), and `g d` went to Delivery because Decisions folded away for
 want of an entity. A design reference that still shows the accent tab label without saying why the
 build did not copy it is how the same argument gets had again on the next page rebuild.
+
+### Stage 3 — the review pass
+
+**DI-17 — the masthead is band 2 for WORK SURFACES; five editorial surfaces keep a document
+heading.** `/`, `/digests`, `/settings/ai`, `/settings/connectors` and `/settings/sso` each render
+`<section aria-labelledby>` with an `<h1>` and an explanatory paragraph, in the frame's `default`
+measure — a centred `max-w-3xl` reading column. They stay as they are, for three reasons that all
+point the same way. A `Masthead` is drawn edge-to-edge with its own `px-5 py-3` and a bottom rule,
+which inside a padded column reads as a band floating in the middle of a page rather than the top of
+one. Their sub-line is a SENTENCE, and the word diet forbids sentences in band 2 — moving it into
+`meta` would import the thing the diet exists to keep out. And the heading is load-bearing markup:
+it names the section through `aria-labelledby`, and SSO focuses it after a registration, neither of
+which `Masthead`'s untargetable `<h1>` offers. What the change actually enforces — and what the
+guard tests — is the rule that matters: **no page hand-rolls application chrome.** A document
+heading inside a reading column is body content, not chrome. DI-10's sentence and the spec
+requirement are narrowed to say so rather than claiming a migration that did not happen.
+
+**DI-18 — the frame subscribes the team's issue graph on every team route, deliberately.** D2 said
+the frame "adds `cycles`, `triage` and `deployments` to what the page already syncs"; that is
+understated. Five team routes — Triage, Projects, Roadmap, Members and the Retros list — held no
+issue query before, and the frame adds `issues.byTeam` to them. The two cheaper shapes were both
+considered and both rejected. Taking the issue graph only where the page already holds it makes the
+attention count depend on the route: 7 on Issues and 3 on Projects, from the same team in the same
+second. That is precisely the lie the "absent, not zero" rule exists to prevent — a number the
+reader can compare across two pages and find disagreeing is worse than a query. Dropping the badge
+entirely on those five routes is honest but guts the promise the change is for, which is one number
+visible everywhere. A second, narrower attention query is the third shape: it would still need
+`withLinkedDelivery` (the expensive half — three of the four exception classes are derived from the
+linked PR, its checks and its reviews), so it would sync the same rows twice on the five routes that
+already hold the wide one. The cost is therefore paid on purpose, and the mitigation named in
+§Risks — memoizing `buildTeamFrame` by `teamId` at the provider — stands if a large team makes the
+fold visible. What did change here: the two `useMinuteNow` copies became one module-level ticker, so
+the frame and the Home digest fold the same rows against a byte-identical `now` instead of two
+timers a fraction of a second apart.
+
+**DI-19 — a surface palette may decline ⌘K rather than swallow it.** `CommandSource.open` widened to
+`() => boolean | void`; returning `false` means "not mine right now" and the registry keeps scanning,
+finally falling through to the frame's own palette. The board needed it: its palette is "Move to
+status…" for the FOCUSED CARD, so with nothing focused, mid-drag, or for a viewer, the old opener
+returned silently and ⌘K did nothing at all on `/teams/$teamId/board` — the exact failure D6 exists
+to end, reintroduced by the registration itself. The registry also declines to open when nothing is
+registered anywhere, so the shortcut stays inert on `/login` and `/invite` instead of opening an
+empty dialog reading "No results found." over a signed-out surface.
+
+**DI-20 — the palette carries appearance, and sync retry while it is offered.** The always-present
+group promised a theme entry and did not have one: appearance folded into the account menu (DI-5)
+and stopped there. The dialog's state moved up into `AppFrame`, so the menu item and the new
+`Appearance` command drive ONE dialog rather than two copies of the same boolean. `Retry sync now`
+joins the group only while `retryOffered` is true: band 3 is the last thing in the document, so the
+retry control that used to sit in the header now costs a keyboard-only reader every Tab stop on the
+page. A command is a route to it that does not depend on how long the page is.
+
+**DI-21 — band 2 on an issue states the issue, not the URL.** The masthead was printing the raw
+`$issueKey` segment, which is a bare number when the side panel's "open full view" handed the reader
+there, and the detail body then repeated the key immediately below it. The title is now derived from
+the matched row — `ENG-116 · Saved cards behind a flag`, per D7 — and the body's key header renders
+only in the side panel, where it is the panel's only chrome. Nothing is lost full-page: the reality
+strip below already announces the divergence with a label, and a pending (unsynced) issue number
+exists only in the panel, never at a URL.

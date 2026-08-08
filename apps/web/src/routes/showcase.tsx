@@ -295,7 +295,10 @@ function Showcase() {
 
   // The showcase registers its demo palette with the frame's one ⌘K owner rather than binding its
   // own listener (design app-frame §D6).
-  const openPalette = useCallback(() => setPaletteOpen((open) => !open), [])
+  const openPalette = useCallback(() => {
+    setPaletteOpen((open) => !open)
+    return true
+  }, [])
   useCommandSource(
     'showcase',
     useMemo(() => ({ open: openPalette }), [openPalette]),

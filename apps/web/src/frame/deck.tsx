@@ -54,6 +54,7 @@ export function Deck({
   anchor,
   routeTeam,
   attention,
+  onOpenAppearance,
   current: stop,
 }: {
   // Where the six stops point: the route's team, else the remembered one, else the first.
@@ -62,6 +63,9 @@ export function Deck({
   // team half and only this may carry a badge.
   routeTeam: FrameTeam | null
   attention: TeamHomeAttention | null
+  // The frame owns the appearance dialog, because the palette offers the same entry the account
+  // menu does and one dialog must answer both.
+  onOpenAppearance: () => void
   current?: DeckStop
 }) {
   const { data: session } = useSession()
@@ -82,6 +86,7 @@ export function Deck({
         <AttentionBadge attention={attention} teamId={routeTeam?.id ?? null} />
         <InboxBadge />
         <UserMenu
+          onOpenAppearance={onOpenAppearance}
           {...(session?.user.name ? { name: session.user.name } : {})}
           {...(session?.user.email ? { email: session.user.email } : {})}
         />

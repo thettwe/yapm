@@ -31,7 +31,8 @@ import {
 } from '@yapm/ui/components/reality-track'
 import { StatusGlyph } from '@yapm/ui/components/status-glyph'
 import { cn } from '@yapm/ui/lib/utils'
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useMemo } from 'react'
+import { useMinuteNow } from '@/frame/team-context'
 import { PRIORITY_TO_KIND, STATUS_TO_KIND } from '@/issues/model'
 import { useSyncSession } from '@/zero/provider'
 
@@ -40,17 +41,6 @@ import { useSyncSession } from '@/zero/provider'
 // every count, phrase and fold flag comes from `buildTeamHome` in @yapm/schema (design §D1), and
 // every band folds by the model's own null rather than a view-side guess. Doorways are real Links
 // in document order (§D13); nothing here waits on the network.
-
-// Ages tick at minute granularity: fine enough for "41m", coarse enough that the memoized model
-// is not rebuilt per render.
-function useMinuteNow(): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 60_000)
-    return () => clearInterval(id)
-  }, [])
-  return now
-}
 
 const DOORWAY =
   'outline-none transition-colors hover:bg-bg-hover focus-visible:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'

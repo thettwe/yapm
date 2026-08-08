@@ -28,7 +28,9 @@ import {
 //
 //   - `open`  — a surface with its own palette (issues, board, retros, the showcase) hands over the
 //               opener it already had. The most recently mounted one wins, because it is the one
-//               closest to what the reader is looking at.
+//               closest to what the reader is looking at. It may DECLINE by returning `false` —
+//               the board's ⌘K is about a focused card, and with none focused the binding belongs
+//               back to the frame rather than being swallowed.
 //   - `groups`— a surface with plain commands hands over rows; with no `open` registered anywhere,
 //               ⌘K opens THIS palette over the union of them.
 //
@@ -49,7 +51,9 @@ export interface FrameCommandGroup {
 }
 
 export interface CommandSource {
-  readonly open?: () => void
+  // `true` means the surface took the shortcut; `false` means "not mine right now" and the
+  // shortcut keeps scanning, finally falling through to the frame's own palette.
+  readonly open?: () => boolean
   readonly groups?: readonly FrameCommandGroup[]
 }
 
@@ -102,14 +106,16 @@ export function CommandRegistryProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const openPalette = useCallback(() => {
-    // The surface closest to what the reader is looking at mounted last, so it answers ⌘K.
+    // The surface closest to what the reader is looking at mounted last, so it answers ⌘K first —
+    // and a surface that declines hands the binding on rather than eating it.
     for (let index = sourcesRef.current.length - 1; index >= 0; index -= 1) {
       const surfaceOpen = sourcesRef.current[index]?.[1].open
-      if (surfaceOpen !== undefined) {
-        surfaceOpen()
-        return
-      }
+      if (surfaceOpen !== undefined && surfaceOpen() !== false) return
     }
+    // Nothing registered anywhere is not an empty palette: on the signed-out surfaces the frame is
+    // deliberately absent, and a dialog reading "No results found." is chrome claiming the shortcut
+    // did something.
+    if (sourcesRef.current.every(([, source]) => (source.groups ?? []).length === 0)) return
     setSearch('')
     setOpen(true)
   }, [])

@@ -70,7 +70,7 @@ beforeEach(() => {
 })
 
 test('the account menu opens and every entry an admin has is reachable', async () => {
-  mount(() => <UserMenu name="Ada" email="ada@example.test" />)
+  mount(() => <UserMenu name="Ada" email="ada@example.test" onOpenAppearance={() => {}} />)
 
   fireEvent.click(await screen.findByRole('button', { name: /account menu for ada/i }))
 
@@ -86,7 +86,7 @@ test('the account menu opens and every entry an admin has is reachable', async (
 
 test('a non-admin opens the same menu and finds only what they may do', async () => {
   membership.canManage = false
-  mount(() => <UserMenu name="Ada" email="ada@example.test" />)
+  mount(() => <UserMenu name="Ada" email="ada@example.test" onOpenAppearance={() => {}} />)
 
   fireEvent.click(await screen.findByRole('button', { name: /account menu for ada/i }))
 

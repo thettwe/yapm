@@ -160,8 +160,8 @@ behind your writes, on purpose — see [What "a few seconds" means](#what-a-few-
 
 With the connection down, the on-device group works exactly as it does online: it is a synchronous
 pass over rows already in memory. The server group is replaced by its offline line. It reads the
-**same** connection state the [connection pill](/self-hosting/sync-recovery/) shows, so search and
-the pill can never disagree about whether you are online.
+**same** connection state the [statusline](/features/app-frame/) shows, so search and the statusline
+can never disagree about whether you are online.
 
 A client still dialling on first load reads as *Searching…*, not *Offline* — being early is not the
 same as being disconnected.

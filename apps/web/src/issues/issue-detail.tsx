@@ -442,25 +442,28 @@ function IssueDetailBody({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex items-center gap-2 border-b border-border px-4 py-2.5">
-        <StatusGlyph status={STATUS_TO_KIND[issue.status]} />
-        <span
-          className="font-mono text-xs text-text-2"
-          data-pending={pending || undefined}
-          data-testid="detail-key"
-        >
-          {key}
-        </span>
-        {divergence ? (
+      {/* THE PANEL'S ONLY CHROME, and only the panel's. Full-page the frame's masthead already
+          states `ENG-116 · Saved cards behind a flag` and the reality strip below announces the
+          divergence with a label, so repeating the key here was band 2 said twice. */}
+      {onClose ? (
+        <header className="flex items-center gap-2 border-b border-border px-4 py-2.5">
+          <StatusGlyph status={STATUS_TO_KIND[issue.status]} />
           <span
-            role="img"
-            aria-label={DIVERGENCE_LABEL[divergence]}
-            className="font-mono text-[12px] font-medium leading-none tracking-[-0.08em] text-status-urgent-ink"
+            className="font-mono text-xs text-text-2"
+            data-pending={pending || undefined}
+            data-testid="detail-key"
           >
-            {'//'}
+            {key}
           </span>
-        ) : null}
-        {onClose ? (
+          {divergence ? (
+            <span
+              role="img"
+              aria-label={DIVERGENCE_LABEL[divergence]}
+              className="font-mono text-[12px] font-medium leading-none tracking-[-0.08em] text-status-urgent-ink"
+            >
+              {'//'}
+            </span>
+          ) : null}
           <span className="ml-auto flex items-center gap-1">
             {pending ? null : (
               <Button
@@ -481,8 +484,8 @@ function IssueDetailBody({
               <XIcon />
             </Button>
           </span>
-        ) : null}
-      </header>
+        </header>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-5 md:flex-row">
         <div className="flex min-w-0 flex-1 flex-col gap-5">

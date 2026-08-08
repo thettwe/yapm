@@ -224,9 +224,12 @@ test('the full page answers to the issue’s key, and to no other team’s', asy
   })
 
   // The same number under a key this team does not answer to is not this team's issue — the scan
-  // this replaced would have handed back exactly the row above.
-  const number = key.split('-')[1]
-  await page.goto(`${base}ZZZZ-${number}`)
+  // this replaced would have handed back exactly the row above. The foreign prefix is DERIVED from
+  // the real one rather than picked, because a team key is four random letters and a constant here
+  // would collide with it roughly once in half a million runs.
+  const [prefix, number] = key.split('-')
+  const foreign = prefix === 'ZZZZ' ? 'YYYY' : 'ZZZZ'
+  await page.goto(`${base}${foreign}-${number}`)
   await expect(page.getByText('This issue does not exist or is not visible to you.')).toBeVisible({
     timeout: 20_000,
   })

@@ -411,6 +411,92 @@ build the exact scope the page read. Exporting the projection lets the test writ
 `flowMeasures(scopeOfCycles(deliveryCyclesOf(window, issues))).prCycleTimeHours` and compare, rather
 than re-implementing the projection in the test and proving only that two copies agree.
 
+### `window-model.ts` is deleted rather than orphaned
+
+`buildTeamDeliveryFor` existed for exactly one caller, the shipped `delivery-view.tsx`, and
+`buildDeliveryPage` now does what it did (slice the completed cycles, bound the request, build the
+window and its predecessor) as one step of a larger derivation. Left in place it would have been a
+second entry point into the same arithmetic with no consumer but its own test — which is how two
+readings of one window start. `window-model.ts` and `window-model.test.ts` are both deleted; every
+claim they made (the ceiling, the exclusion of the cycle in progress, the null for a team with no
+completed cycle) is asserted in `metrics/page.test.ts` and in this change's view test. `rows.ts`
+stays: the retrospective's `seed-model.ts` still projects through it.
+
+### The stat mini draws the series, and only the series
+
+The mock draws four different minis: a share bar for Shipped, a trend line for Open to merged, a row
+of per-change ticks for Checks failing, and nothing for the fourth. Two of those are not derivable
+from what the reading publishes — the share bar needs a denominator the model does not carry beside
+the value, and the tick row is per-CHANGE where the reading's series is per-CYCLE. Rather than
+compute a second population inside a 64px drawing, every mini is drawn from the reading's own
+per-cycle series: a polyline for the three trend-shaped readings and per-cycle ticks for
+`ci_failing_rate`, each with a truthful `role="img"` label naming the cycles and their values, and
+**nothing at all** when fewer than two cycles have something to measure.
+
+### The delta pill's sense is a ground, not an ink
+
+The mock inks the pill green. `--status-done` as 11px TEXT is not an AA pair on any of the six
+grounds, and the precedent (app-frame DI-2, issue-list-daylight) is that the reader wins. The sense
+is carried by the pill's GROUND (a 10% `--status-done` wash, the `--urgent-soft` wash, or
+`--bg-hover`), the ink stays `--text-1`, and the direction and the sense are both stated in words in
+a visually-hidden span (`down 22h against the previous 6 cycles — better`). The new composite is
+measured in `contrast.test.ts` in every theme block.
+
+The same rule moved two more labels off the accent: the distribution's `median 46h` and the
+timeline's `today · day 9 of 14`. This file's own frame assertion already records that
+`--accent-strong` measures ~4.44 on `--bg` in editorial light. The RULE and the CARET keep the
+accent, because a line is non-text drawing and answers to 3:1.
+
+### The carryover ribbon's fill is scaffolding, and the contrast test says so
+
+A 15% wash of `--status-in-progress` cannot clear the 3:1 non-text bar and should not: the ribbon's
+fact is its COUNT, drawn on it in `--text-1` with a `--bg` halo, and restated in the chart's
+`role="img"` label. The ink is asserted at AA over both composites; the fill is recorded as a
+deliberate exemption with a lower bound, exactly as the reality track's empty station is — so a
+later change that darkens the ribbon has to argue with the right number.
+
+### Two chart labels the model publishes, and the drawing never composes
+
+Each of the four components takes its whole `role="img"` label as a prop rather than assembling one
+from its data. A drawing that composed its own label would be a second place where "what one mark
+represents" is decided, and the population it names is the model's fact, not the SVG's.
+
+### `provenance` is decided by the stat key, in the view
+
+The model publishes no provenance flag. Which of the four readings comes from a connector is a
+closed function of `DeliveryStatKey` (`pr_cycle_time` and `ci_failing_rate` do, the two
+cycle-derived ones do not), so the mapping is a `Record<DeliveryStatKey, boolean>` in
+`stat-tile.tsx`: exhaustive by the type, so a fifth reading cannot arrive without a decision, and it
+never travels as data that could disagree with the dictionary's own provenance rule.
+
+### Where the drawing deliberately differs from `delivery-full.png`
+
+- **Band 2 keeps the frame's register.** The mock's `Delivery` is a 40px editorial title; band 2
+  belongs to `app-frame` (PR #33) and is 15px on every surface in the product. Changing it here
+  would fork the frame for one page.
+- **The charts scale with the measure.** Each is a fixed `viewBox` at `w-full h-auto`, so at the
+  1120px measure they draw at the mock's geometry and narrower they shrink proportionally. The
+  alternative — a fixed intrinsic width with a horizontal scrollbar — puts a scroll region inside a
+  reading surface.
+- **The axis labels are the cycle's start and end**, not the mock's four interior dates: the model
+  publishes the span, and interpolating interior tick dates would be a second calendar.
+- **The mock's hollow rect above three of the six flow bars is not drawn.** It maps to nothing in
+  the data (it appears on cycles 2, 4 and 6 and matches neither their carries nor their adds), so it
+  would have been decoration.
+- **`0h` rather than `0` at the distribution's origin**, because the suffix is applied to every tick
+  by the same rule.
+
+### The assembled page was not read in a browser
+
+The four drawn components were rendered and read at 1440×900 in **all six theme blocks** through the
+`packages/ui` workbench, which is where the geometry and the token work live; two real defects came
+out of it (the crowd annotation overprinting the median label, and a story passing positions computed
+against the wrong axis). The ASSEMBLED page was not: it needs the three-container stack, and the
+instruction for this pass was explicitly not to start it. What stands behind the assembly instead is
+`delivery-view.test.tsx` — section order, the standfirst, every `how ·`, the peek's focus and escape
+behaviour, the honesty disclosure, the blank sections and the absence of any per-person string — plus
+the full Playwright suite in CI. Recorded rather than glossed: nobody has yet looked at this page.
+
 ### A flow band with nothing to flow still gets a sentence
 
 D11 says a section with no data does not render; a flow band with bars but no carries and no caps

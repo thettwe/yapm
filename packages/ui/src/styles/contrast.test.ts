@@ -487,4 +487,57 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     )
     expect(ratio).toBeGreaterThanOrEqual(AA_LARGE)
   })
+
+  // THE DELIVERY PAGE'S DRAWN FORMS (delivery-journalism §D12). Every one of them is drawn on the
+  // base surface, so `--bg` is the ground for all of it.
+  //
+  // The annotation ink on every chart — the callout headline, the retro mark, the crowd and outlier
+  // notes, the axis labels, the per-cycle labels — is `--text-1` or `--text-2` on `--bg`, which the
+  // first assertion in this block already holds at AA. What is NEW here is the three grounds this
+  // page paints that nothing else does: the delta pill's sense wash, the carryover ribbon, and the
+  // ribbon's own count drawn over it.
+  it('the delta pill ink meets AA on all three of its sense grounds (>= 4.5)', () => {
+    const bg = hex(t, '--bg')
+    const grounds = {
+      // `bg-status-done/10` — the only NEW composite the page introduces.
+      better: wash(hex(t, '--status-done'), bg, 0.1),
+      worse: wash(hex(t, '--status-urgent'), bg, 0.08),
+      neither: over(t['--bg-hover'] ?? '', bg),
+    }
+    for (const [sense, ground] of Object.entries(grounds)) {
+      expect(contrastRatio(hex(t, '--text-1'), ground), sense).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
+  // The carryover ribbon. Its INK — the count drawn on it, which is the fact — is `--text-1` over
+  // the ribbon's own 15% wash, painted with a `--bg` halo, so both composites must read. The FILL
+  // is deliberately below the non-text bar: it is a shape joining two bars whose meaning is stated
+  // in words on it and in the chart's `role="img"` label, exactly like the track's empty station.
+  // Recorded as a bound rather than left unasserted, so the exemption is visible and a later change
+  // that darkens the ribbon has to argue with the right number.
+  it('the carryover ribbon ink meets AA over the ribbon and its halo (>= 4.5)', () => {
+    const bg = hex(t, '--bg')
+    const ribbon = wash(hex(t, '--status-in-progress'), bg, 0.15)
+    for (const ground of [ribbon, bg]) {
+      expect(contrastRatio(hex(t, '--text-1'), ground)).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
+  it('records that the carryover ribbon fill is scaffolding, not a fact-carrying colour', () => {
+    const bg = hex(t, '--bg')
+    // The ribbon's outline is the stronger of its two paints and still sits under 3:1 — which is
+    // why the count is drawn ON it rather than left to the shape.
+    expect(contrastRatio(wash(hex(t, '--status-in-progress'), bg, 0.4), bg)).toBeGreaterThanOrEqual(
+      1.1,
+    )
+  })
+
+  // The two accent RULES on this page — the distribution's median line and the timeline's today
+  // caret — are non-text drawing (WCAG 1.4.11), so 3:1 on the base surface is the bar. Their
+  // LABELS carry `--text-1` rather than `--accent-strong`: this block's own frame assertion records
+  // that the accent ink measures ~4.44 on `--bg` in editorial light, and a median a sighted reader
+  // has to squint at is the same bug as one a screen reader cannot hear.
+  it('the median rule and the today caret are distinguishable on the page ground (>= 3.0)', () => {
+    expect(contrastRatio(hex(t, '--accent'), hex(t, '--bg'))).toBeGreaterThanOrEqual(AA_LARGE)
+  })
 })

@@ -340,6 +340,7 @@ export type {
   DeliveryMetricPlacement,
   DeliveryPageCycleRow,
   DeliveryPageDelta,
+  DeliveryPageDeploymentRow,
   DeliveryPageHonesty,
   DeliveryPageHow,
   DeliveryPageInput,

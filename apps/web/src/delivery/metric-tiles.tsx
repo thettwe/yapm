@@ -2,9 +2,15 @@ import type { DeliveryMetric, DeliverySection } from '@yapm/schema'
 import type { ReactNode } from 'react'
 import { formatSeedDelta, formatSeedValue, seedTrendTone, sparklineGeometry } from './metric-format'
 
-// One tile = one signal, rendered identically wherever it appears. The retro's cycle panel and the
-// team's rolling window are the same markup, the same classes and the same formatters — a metric
-// cannot look like one thing inside a retro and another on the team view.
+// One tile = one signal. ITS ONE REMAINING CONSUMER is the retrospective's data panel
+// (`retro/retro-seed-panel.tsx`) — the Delivery page's journalism cut draws a different object
+// (`delivery/stat-tile.tsx`, design §D8): a 28px number with a unit, a delta pill, a drawn mini and
+// a `how ·`, with no card, no border and no caption sentence. Generalising this component with a
+// variant would have put the retro's markup one careless default away from moving.
+//
+// It stays HERE rather than moving beside its consumer because what it renders is the
+// `DeliveryMetric` model that lives in `metrics/`, and `metric-format.ts` beside it is shared by
+// both tiles.
 //
 // There is no per-person anything to render here: `DeliveryMetric` has no identity dimension at any
 // depth, so the guarantee is a property of the model rather than of this file's restraint.

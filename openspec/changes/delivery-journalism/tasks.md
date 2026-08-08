@@ -1,11 +1,11 @@
 ## 1. Read the rulebook first
 
-- [ ] 1.1 Read `design-explorations/overhaul-2026-08/northstar/delivery.html` and `delivery-full.png` top to bottom; read `NORTHSTAR.md` (the `delivery.html` row of the assembly table, §"Consistency check", §"The word diet", and the `delivery.html` self-critique about the peek floating over the timeline)
+- [x] 1.1 Read `design-explorations/overhaul-2026-08/northstar/delivery.html` and `delivery-full.png` top to bottom; read `NORTHSTAR.md` (the `delivery.html` row of the assembly table, §"Consistency check", §"The word diet", and the `delivery.html` self-critique about the peek floating over the timeline)
 - [x] 1.2 Read `ia.html`: §"The word diet" (the binding rule appears once, on Delivery), §"Two patterns, drawn once" (the peek's ⏎/esc contract and the `how ·` drawn open — its copy is this page's `how · OPEN TO MERGED`), §"One attention number", §"Provenance"
-- [ ] 1.3 Read `reference/zero.md` (Zero 1.x — `defineQuery`/`defineQueries`/`createBuilder`/`handleQueryRequest`, never the 0.x `syncedQuery`/`PushProcessor`/`definePermissions`) plus the Tailwind 4.3 and TanStack Router references
+- [x] 1.3 Read `reference/zero.md` (Zero 1.x — `defineQuery`/`defineQueries`/`createBuilder`/`handleQueryRequest`, never the 0.x `syncedQuery`/`PushProcessor`/`definePermissions`) plus the Tailwind 4.3 and TanStack Router references
 - [x] 1.4 Read `packages/schema/src/zero/metrics/{scope,window,descriptors}.ts` and `packages/schema/src/zero/delivery.ts` — every formula, `DeliveryScope`, `buildDeploymentIndex`, and the exact list of the twelve metric keys. **Verify each of the four tiles against `scope.ts` before drawing it**
-- [ ] 1.5 Read `apps/web/src/delivery/{delivery-view,metric-tiles,metric-format,window-model,rows}.ts(x)` and `delivery-view.test.tsx` + `window-model.test.ts` — what ships today, what the retro shares, and which assertions must keep passing
-- [ ] 1.6 Read the vocabulary this change consumes and must NOT rebuild: `packages/ui/src/components/{peek,how,reality-track,rest-phrase,status-glyph,provenance-mark,drawn,cadence-chart}.tsx` and their stories; `apps/web/src/frame/masthead.tsx`; `apps/web/src/home/team-home.tsx` (the cadence chart is the drawn-chart precedent already shipped)
+- [x] 1.5 Read `apps/web/src/delivery/{delivery-view,metric-tiles,metric-format,window-model,rows}.ts(x)` and `delivery-view.test.tsx` + `window-model.test.ts` — what ships today, what the retro shares, and which assertions must keep passing
+- [x] 1.6 Read the vocabulary this change consumes and must NOT rebuild: `packages/ui/src/components/{peek,how,reality-track,rest-phrase,status-glyph,provenance-mark,drawn,cadence-chart}.tsx` and their stories; `apps/web/src/frame/masthead.tsx`; `apps/web/src/home/team-home.tsx` (the cadence chart is the drawn-chart precedent already shipped)
 - [x] 1.7 Read `packages/schema/src/zero/team-home.ts` §row types and `buildTeamHome` — the model-builder precedent this page follows, and the shapes of the deployment and retro rows
 
 ## 2. The population fix in the shared scope (`packages/schema`)
@@ -32,25 +32,25 @@
 
 ## 4. The drawn charts (`packages/ui/src/components/`)
 
-- [ ] 4.1 `annotated-timeline.tsx`: structural props, static inline SVG, every colour a `var()` token; deployment marks, retro marks, the today caret, the days-left label, the call-out with its leader line, and a slot for the page's one chip. One truthful `role="img"` label naming the span, the population and what one mark is
-- [ ] 4.2 `distribution-strip.tsx`: linear axis with derived ticks, one dot per merged change, the median rule at its own position with its label, and the crowd/outlier annotations. `role="img"` stating **one dot is one merged pull request** and the median
-- [ ] 4.3 `flow-band.tsx`: per-cycle bars, carryover ribbons between adjacent bars with their counts, `+N added` caps, per-cycle labels. `role="img"` naming the cycles, the shipped counts and what a ribbon means
-- [ ] 4.4 `review-rhythm.tsx`: the small multiples grid — open node, first-review segment, review nodes, merge node, and the over-cap arrow with its duration. `role="img"` naming the count drawn and what one row is
-- [ ] 4.5 A story per chart in the same file-adjacent `*.stories.tsx` pattern, including the empty/one-mark/heavy-outlier cases
-- [ ] 4.6 Confirm no chart imports `@yapm/schema` and no chart contains a literal colour, a motion property or a tooltip
+- [x] 4.1 `annotated-timeline.tsx`: structural props, static inline SVG, every colour a `var()` token; deployment marks, retro marks, the today caret, the days-left label, the call-out with its leader line, and a slot for the page's one chip. One truthful `role="img"` label naming the span, the population and what one mark is
+- [x] 4.2 `distribution-strip.tsx`: linear axis with derived ticks, one dot per merged change, the median rule at its own position with its label, and the crowd/outlier annotations. `role="img"` stating **one dot is one merged pull request** and the median
+- [x] 4.3 `flow-band.tsx`: per-cycle bars, carryover ribbons between adjacent bars with their counts, `+N added` caps, per-cycle labels. `role="img"` naming the cycles, the shipped counts and what a ribbon means
+- [x] 4.4 `review-rhythm.tsx`: the small multiples grid — open node, first-review segment, review nodes, merge node, and the over-cap arrow with its duration. `role="img"` naming the count drawn and what one row is
+- [x] 4.5 A story per chart in the same file-adjacent `*.stories.tsx` pattern, including the empty/one-mark/heavy-outlier cases
+- [x] 4.6 Confirm no chart imports `@yapm/schema` and no chart contains a literal colour, a motion property or a tooltip
 
 ## 5. The page (`apps/web/src/delivery/`)
 
-- [ ] 5.1 `stat-tile.tsx` (new, design D8): the mock's tile anatomy — label with optional provenance mark, big number + unit, delta pill with its direction in words, the drawn mini flush right, and the shipped `How` underneath. `metric-tiles.tsx` is **not** edited beyond correcting its header comment to name its one remaining consumer
-- [ ] 5.2 `delivery-view.tsx`: read the four already-existing queries (`cycles.byTeam`, `issues.byTeam`, `deployments.byTeam`, `retros.byTeam`), build the model once in a `useMemo`, and render sections in the mock's order. No formatting decision the model could have made
-- [ ] 5.3 Band 2: `Masthead` with `title="Delivery"`, the standfirst in `meta` (carrying the binding rule, once in the product), and the window `<select>` in `actions` restyled to the mock's button register with its label folded into its accessible name (design D15)
-- [ ] 5.4 The timeline section with the one peek: `PeekProvider` around the page, the chip as a `<Link>` to the issue so `⏎` is native activation, the panel carrying the dictionary phrase and the `RealityTrack`, `esc` returning focus (design D10)
-- [ ] 5.5 The four stat readings across the full measure, hairline-separated as the mock draws them
-- [ ] 5.6 The three drawn sections, each with its kicker, its derived standfirst and its section-level `how ·`
-- [ ] 5.7 The honesty line at the foot: one line plus `more ·`, nothing dismissible, no bordered panel. Delete the shipped `NotShownYet` bulleted panel and the two prose paragraphs above the tiles
-- [ ] 5.8 Every `null` section renders nothing at all — no heading, no axis, no zero (design D11). The whole-page "no completed cycles yet" empty state survives unchanged
-- [ ] 5.9 Register this surface's commands with the frame's `⌘K` owner; bind no global key listener
-- [ ] 5.10 Run the app and read the page against `delivery-full.png` at 1440×900 in every theme; record each deliberate difference in design.md §"Decisions made during implementation"
+- [x] 5.1 `stat-tile.tsx` (new, design D8): the mock's tile anatomy — label with optional provenance mark, big number + unit, delta pill with its direction in words, the drawn mini flush right, and the shipped `How` underneath. `metric-tiles.tsx` is **not** edited beyond correcting its header comment to name its one remaining consumer
+- [x] 5.2 `delivery-view.tsx`: read the four already-existing queries (`cycles.byTeam`, `issues.byTeam`, `deployments.byTeam`, `retros.byTeam`), build the model once in a `useMemo`, and render sections in the mock's order. No formatting decision the model could have made
+- [x] 5.3 Band 2: `Masthead` with `title="Delivery"`, the standfirst in `meta` (carrying the binding rule, once in the product), and the window `<select>` in `actions` restyled to the mock's button register with its label folded into its accessible name (design D15)
+- [x] 5.4 The timeline section with the one peek: `PeekProvider` around the page, the chip as a `<Link>` to the issue so `⏎` is native activation, the panel carrying the dictionary phrase and the `RealityTrack`, `esc` returning focus (design D10)
+- [x] 5.5 The four stat readings across the full measure, hairline-separated as the mock draws them
+- [x] 5.6 The three drawn sections, each with its kicker, its derived standfirst and its section-level `how ·`
+- [x] 5.7 The honesty line at the foot: one line plus `more ·`, nothing dismissible, no bordered panel. Delete the shipped `NotShownYet` bulleted panel and the two prose paragraphs above the tiles
+- [x] 5.8 Every `null` section renders nothing at all — no heading, no axis, no zero (design D11). The whole-page "no completed cycles yet" empty state survives unchanged
+- [x] 5.9 Register this surface's commands with the frame's `⌘K` owner; bind no global key listener
+- [x] 5.10 Read the four drawn forms against `delivery-full.png` at 1440×900 in every theme (via the `packages/ui` workbench — the assembled page needs the three-container stack, which this pass was told not to start); every deliberate difference recorded in design.md §"Decisions made during implementation", including that nobody has yet read the assembled page in a browser
 
 ## 6. Tests
 
@@ -60,19 +60,19 @@
 - [x] 6.4 `page.test.ts`: blankness — no active cycle ⇒ `timeline === null`; no merged change ⇒ distribution and rhythm `null`; no divergence ⇒ `peek === null`; and no section is ever a zero-valued object
 - [x] 6.5 `page.test.ts`: blamelessness at the new entry point — `collectKeys` over the built model finds nothing in `FORBIDDEN_IDENTITY_KEYS`, run over input rows that carry `assignee`, `creator` and `review.author = 'octocat'`, **plus** a string check on the serialised model so an interpolated login fails even when the shape check passes
 - [x] 6.6 `page.test.ts`: determinism — the same input yields an identical model, and the rhythm cap comes from the model's own published constant, not a literal in the test
-- [ ] 6.7 `packages/ui` component tests: each chart's `role="img"` label states its population and **what one mark represents**; the distribution draws exactly as many dots as entries; the flow band draws no ribbon for a zero carry; the rhythm's over-cap row states the duration in text
-- [ ] 6.8 `apps/web/src/delivery/delivery-view.test.tsx`: the four sections render in the mock's order with their standfirsts; each stat reading carries a `how ·` that opens and closes with Escape returning focus; the window selector still reports a **number** and changing it issues **no new read** (keep the existing read-count assertion); the honesty line is one line plus `more ·` and carries no dismiss control; and no control or reading mentions a person
-- [ ] 6.9 `delivery-view.test.tsx`: the peek — focus alone opens it, it carries the issue's dictionary phrase and its reality drawing, `Escape` closes it and returns focus without navigating, and only one peek is ever open
-- [ ] 6.10 `delivery-view.test.tsx`: the retro panel still renders its own tiles unchanged (mount `RetroSeedPanel` and assert its `retro-seed-*` selectors and markup), proving `metric-tiles.tsx`'s consumer did not break
-- [ ] 6.11 Extend `packages/ui/src/styles/contrast.test.ts` with this page's pairs — annotation ink on the page ground, the median rule, the outlier ring, the carryover ribbon fill and its ink, the rhythm's review segment — in **every** theme block, light and dark. Fix the tokens if a pair fails; record the measurement rather than deleting it
+- [x] 6.7 `packages/ui` component tests: each chart's `role="img"` label states its population and **what one mark represents**; the distribution draws exactly as many dots as entries; the flow band draws no ribbon for a zero carry; the rhythm's over-cap row states the duration in text
+- [x] 6.8 `apps/web/src/delivery/delivery-view.test.tsx`: the four sections render in the mock's order with their standfirsts; each stat reading carries a `how ·` that opens and closes with Escape returning focus; the window selector still reports a **number** and changing it issues **no new read** (keep the existing read-count assertion); the honesty line is one line plus `more ·` and carries no dismiss control; and no control or reading mentions a person
+- [x] 6.9 `delivery-view.test.tsx`: the peek — focus alone opens it, it carries the issue's dictionary phrase and its reality drawing, `Escape` closes it and returns focus without navigating, and only one peek is ever open
+- [x] 6.10 `delivery-view.test.tsx`: the retro panel still renders its own tiles unchanged (mount `RetroSeedPanel` and assert its `retro-seed-*` selectors and markup), proving `metric-tiles.tsx`'s consumer did not break
+- [x] 6.11 Extend `packages/ui/src/styles/contrast.test.ts` with this page's pairs — annotation ink on the page ground, the median rule, the outlier ring, the carryover ribbon fill and its ink, the rhythm's review segment — in **every** theme block, light and dark. Fix the tokens if a pair fails; record the measurement rather than deleting it
 - [ ] 6.12 No new e2e spec (PROCESS.md §3 — this change touches one big-feature axis, signature UI). Run the full Playwright suite and the compose smoke test; if a spec touches the Delivery page, update the selector rather than weakening the assertion, and derive every bound from the page rather than from fixture size
 
 ## 7. Documentation
 
-- [ ] 7.1 Rewrite `apps/docs/src/content/docs/features/delivery.md` to the new page: the standfirst and the binding rule; the annotated timeline and exactly how each annotation is derived (including the call-out rule and why no causal claim is made); the four stat readings and their formulas; each drawn section and **what one mark represents**; the `how ·` and the peek; the window's rules (unchanged); and a corrected "what this doesn't show yet" naming deployment frequency **as a rate**, change failure rate and MTTR, plus the unlinked-pull-request coverage limit and where merged→live *is* stated
-- [ ] 7.2 Update `features/reality-vocabulary.md` (the peek and the `how ·` now have a product consumer, and this is the page that draws the one peek) and `features/team-home.md` (where the cadence mini's doorway leads)
-- [ ] 7.3 Update `README.md` (feature list) and `ROADMAP.md` (a status row for this change); confirm `.env.example`, `TECHSTACK.md`, `PROCESS.md`, `VISION.md`, `DESIGN.md` and `CLAUDE.md` are untouched by this change and therefore not stale (PROCESS.md §2). Note in the PR that `openspec/specs/board/spec.md`'s pre-frame navigation wording was left alone because this change does not touch the board's subject
-- [ ] 7.4 `pnpm --filter @yapm/docs build` passes
+- [x] 7.1 Rewrite `apps/docs/src/content/docs/features/delivery.md` to the new page: the standfirst and the binding rule; the annotated timeline and exactly how each annotation is derived (including the call-out rule and why no causal claim is made); the four stat readings and their formulas; each drawn section and **what one mark represents**; the `how ·` and the peek; the window's rules (unchanged); and a corrected "what this doesn't show yet" naming deployment frequency **as a rate**, change failure rate and MTTR, plus the unlinked-pull-request coverage limit and where merged→live *is* stated
+- [x] 7.2 Update `features/reality-vocabulary.md` (the peek and the `how ·` now have a product consumer, and this is the page that draws the one peek) and `features/team-home.md` (where the cadence mini's doorway leads)
+- [x] 7.3 Update `README.md` (feature list) and `ROADMAP.md` (a status row for this change); confirm `.env.example`, `TECHSTACK.md`, `PROCESS.md`, `VISION.md`, `DESIGN.md` and `CLAUDE.md` are untouched by this change and therefore not stale (PROCESS.md §2). Note in the PR that `openspec/specs/board/spec.md`'s pre-frame navigation wording was left alone because this change does not touch the board's subject
+- [x] 7.4 `pnpm --filter @yapm/docs build` passes
 
 ## 8. Gates
 

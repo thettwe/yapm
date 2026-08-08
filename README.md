@@ -110,12 +110,19 @@ they came from — each reported as **shipped, canceled, still open or never tra
 from the live status of the issue it became and stripped of the assignee on both the action and that
 issue ·
 a team **Delivery view** at `/teams/<teamId>/delivery` that lifts those same flow numbers out of the
-one retro they were reachable from: PR cycle time, time to first review, review rounds, unlinked
-issues and the CI failing rate, over a rolling window of 3, 6 or 12 completed cycles, with the
-Delivered half populated from cycles alone on an instance with no connectors at all — computed in
-your browser from rows already synced (no aggregate query, no reporting endpoint, instant and
-correct offline), **team-level only** at every depth because the model it renders has nowhere to put
-a person, and carrying a permanent, non-dismissible list of the DORA keys it does *not* have ·
+one retro they were reachable from and reads them as a story rather than a dashboard: an **annotated
+timeline** of the cycle in progress (one dot per deployment that reached production, the release that
+went out, the retrospective that closed — every annotation derived, none hand-written, and no causal
+claim about any of it), four stat readings each carrying a quiet `how ·` that unfolds its own
+derivation, a **distribution** of open→merged where one dot is one merged change and the median is
+drawn where it falls, a **cycle-flow band** with carryover ribbons between the bars, and
+**review-rhythm** small multiples that name no reviewer at any depth — over a rolling window of 3, 6
+or 12 completed cycles, with the Delivered half populated from cycles alone on an instance with no
+connectors at all. Computed in your browser from rows already synced (no aggregate query, no
+reporting endpoint, instant and correct offline), **team-level only** at every depth because the
+model it renders has nowhere to put a person, and closing with one non-dismissible line naming what
+it genuinely cannot measure — change failure rate, time to restore, deployment frequency as a rate —
+plus the coverage limit that a change linked to no issue is invisible to it ·
 a keyboard-first **notification inbox** at
 `/inbox` with an unread badge, for
 assignments (including triage routing), comments on issues you're involved in, and product digests

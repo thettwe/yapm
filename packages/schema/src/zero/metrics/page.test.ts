@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { collectKeys, FORBIDDEN_IDENTITY_KEYS } from '../testing/blameless.js'
-import { DELIVERED_METRICS, FLOW_METRICS } from './descriptors.js'
+import { DELIVERED_METRICS, FLOW_METRICS, flowEmptyState } from './descriptors.js'
 import {
   BINDING_TEAM_LEVEL_RULE,
   buildDeliveryPage,
@@ -512,6 +512,25 @@ describe('buildDeliveryPage — one dot is one merged pull request', () => {
   it('does not render at all when the window holds no merged change', () => {
     const unlinked = ISSUES.map((row) => ({ ...row, issueLinks: undefined }))
     const model = built({ issues: unlinked })
+    expect(model.distribution).toBeNull()
+    expect(model.rhythm).toBeNull()
+  })
+})
+
+// Spec §"Degrades to the data that exists": a whole family missing because nothing has been fed in
+// is said ONCE, in the measurement scope's own words, rather than once per absent drawing.
+describe('buildDeliveryPage — the absent family', () => {
+  it('says nothing when the linked-change readings have something behind them', () => {
+    expect(built().flowAbsence).toBeNull()
+  })
+
+  it('states it once, in the shared empty state, when no change is linked at all', () => {
+    const unlinked = ISSUES.map((row) => ({ ...row, issueLinks: undefined }))
+    const model = built({ issues: unlinked })
+    expect(model.flowAbsence).toBe(
+      flowEmptyState({ kind: 'window', cycleCount: model.cycleCount }).detail,
+    )
+    // One statement, not one per absent drawing.
     expect(model.distribution).toBeNull()
     expect(model.rhythm).toBeNull()
   })

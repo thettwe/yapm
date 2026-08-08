@@ -347,6 +347,11 @@ export interface DeliveryPageModel {
   readonly standfirst: DeliveryPageStandfirst
   readonly timeline: DeliveryTimelineSection | null
   readonly stats: readonly DeliveryStatReading[]
+  // Said ONCE when a whole family of readings is missing because no connector has fed anything in —
+  // never once per absent drawing, and never instead of a section that does have data. It is the
+  // measurement scope's OWN empty-state sentence, so this page and the retrospective's panel name
+  // the same thing in the same words.
+  readonly flowAbsence: string | null
   readonly distribution: DeliveryDistributionSection | null
   readonly flow: DeliveryFlowSection | null
   readonly rhythm: DeliveryRhythmSection | null
@@ -520,6 +525,10 @@ export function buildDeliveryPage(input: DeliveryPageInput, now: number): Delive
     for (const metric of section.metrics) metrics.set(metric.key, metric)
   }
 
+  const flowSection = window.sections.find((section) => section.key === 'flow')
+  const flowAbsence =
+    flowSection?.state === 'empty' ? (flowSection.emptyState?.detail ?? null) : null
+
   const cycleCount = window.cycleCount
   const clause = windowClause(cycleCount)
   const activeCycle = ordered.find((cycle) => cycle.status === 'active') ?? null
@@ -545,6 +554,7 @@ export function buildDeliveryPage(input: DeliveryPageInput, now: number): Delive
     },
     timeline,
     stats,
+    flowAbsence,
     distribution,
     flow,
     rhythm,

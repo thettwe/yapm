@@ -146,6 +146,10 @@ tick standing alone**, with a dot beneath it. It is deliberately not a fourth ti
 A peek is transient, so it is the one kind of surface in yapm allowed to lift off the page with a
 shadow. Everything else stays flat.
 
+Among the product's own surfaces, the [Delivery view](/features/delivery/) is the one that draws a
+peek: the chip on its timeline is the issue that is done in git but not on the board, and the panel
+answers what it is in the dictionary's own words.
+
 ## The how
 
 A derived number never explains itself at rest. Beside it sits a quiet mono **`how ·`**. Open it —
@@ -154,6 +158,9 @@ tells you exactly how the number was computed and within what constraints. Close
 returns to quiet. Facts stay; footnotes fold.
 
 Escape closes it and returns focus to the affordance, and tabbing away closes it too.
+
+The [Delivery view](/features/delivery/) is where this pattern earns its keep: every derived number
+on that page carries a `how ·` and nothing else on it explains itself at rest.
 
 ## The provenance mark
 

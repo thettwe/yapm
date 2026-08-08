@@ -393,6 +393,41 @@ test('esc closes the route transient writing nothing, and hands focus back to th
   expect(document.activeElement).toBe(screen.getAllByTestId('triage-row')[0])
 })
 
+// A `routingId` that outlives the panel it opened is a latent trigger: the row it names can come
+// back under decision by a plain focus change and remount the transient — taking the keyboard with
+// no gesture behind it.
+test('an id whose row has left the decision cannot remount the transient later', () => {
+  seedQueue()
+  render(<TriageView teamId="team-1" />)
+
+  openRouteTransient()
+  fireEvent.focusIn(screen.getAllByTestId('triage-row')[2] as HTMLElement)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+  fireEvent.focusIn(screen.getAllByTestId('triage-row')[0] as HTMLElement)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+// The still-armed `R Route` key sits inside the decision panel the transient hangs off. A
+// pointer-down there counted as "outside" would be a close-then-reopen, and the draft the reader is
+// halfway through would vanish without a word.
+test('pointing at the armed Route key keeps the draft; the queue around it still dismisses', () => {
+  seedQueue()
+  render(<TriageView teamId="team-1" />)
+
+  const dialog = openRouteTransient()
+  fireEvent.change(within(dialog).getByLabelText('Project'), { target: { value: 'project-1' } })
+
+  fireEvent.pointerDown(screen.getByTestId('triage-route'))
+  fireEvent.click(screen.getByTestId('triage-route'))
+  expect(screen.getByRole('dialog', { name: 'Route ENG-125' })).toBe(dialog)
+  expect(within(dialog).getByLabelText('Project')).toHaveValue('project-1')
+
+  fireEvent.pointerDown(screen.getAllByTestId('triage-row')[1] as HTMLElement)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(harness.mutate).not.toHaveBeenCalled()
+})
+
 test('a viewer reads the facts and is offered no verdict and no transient', () => {
   seedQueue()
   harness.canWrite = false

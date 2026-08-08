@@ -302,11 +302,16 @@ Ambiguous: `routingId` was both "which issue is being routed" and "is the queue'
 live". Those are not the same claim — an issue can leave the inbox by a path this view never sees
 (another client, the palette, a rebase), and the id then outlives its row and latches the whole
 queue shut. Chosen: `routingOpen` is derived (`routingId` is the FOCUSED row's id), the effect
-reaps a `routingId` whose row is gone, and dismissal is document-level — `Escape` and a
-pointer-down outside both close, and `Escape` is handled ahead of the queue handler's early
-returns. The panel's own handler stops `Escape` before it reaches the document, so a keypress
-inside closes exactly once. `⌘K` and the `g …` chords are let through the transient's catch-all,
-because they are frame-owned and unqualified.
+reaps any `routingId` that is not the focused row's — not merely one whose row is gone, since an id
+whose row only slid off the decision is still a latent trigger that would remount the transient and
+take focus with no gesture behind it — and dismissal is document-level: `Escape` and a pointer-down
+outside both close, and `Escape` is handled ahead of the queue handler's early returns. The panel's
+own handler stops `Escape` before it reaches the document, so a keypress inside closes exactly
+once. "Outside" is the queue around the decision, not the transient's own box: the still-armed
+`R Route` key sits inside the owning decision panel, and closing on a pointer-down there would be a
+close-then-reopen that silently discards a half-finished draft. `⌘K` is let through the transient's
+catch-all because it is frame-owned and unqualified; the `g …` go-tos are not, because the frame
+suppresses that grammar while a dialog holds focus — which this transient does.
 
 ### B12 — The queue's keys stop at the row, and a click SELECTS
 

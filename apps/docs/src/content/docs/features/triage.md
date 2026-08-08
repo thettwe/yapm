@@ -105,8 +105,10 @@ routing writes, each showing the value it will write (`none` where nothing is se
 
 All five are applied in **one atomic write** that also clears the triage flag. `⏎` commits;
 `esc` closes the panel having written nothing and returns focus to the row it opened from —
-from anywhere, not only from inside the panel — as does a click outside it. The frame's own
-chords (`⌘K`, and the `g …` go-tos) keep working while it is open.
+from anywhere, not only from inside the panel — as does a click on the queue around the issue
+under decision. `⌘K` still opens [the command palette](/features/app-frame/) while the panel is
+open, but the `g …` go-to grammar is **suppressed** while the panel holds the keyboard, exactly as
+it is beside any other focused surface.
 
 **Project** is the one field whose scope is not the issue's team, and deliberately so:
 [projects are workspace-level](/features/projects/), so any team's issue can belong to any

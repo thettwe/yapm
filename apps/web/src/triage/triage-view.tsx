@@ -10,6 +10,7 @@ import { cn } from '@yapm/ui/lib/utils'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  type RefObject,
   useCallback,
   useEffect,
   useId,
@@ -206,9 +207,10 @@ export function TriageView({ teamId }: { teamId: string }) {
   useEffect(() => {
     const clamped = Math.min(focusIndex, Math.max(0, issues.length - 1))
     if (clamped !== focusIndex) setFocusIndex(clamped)
-    if (routingId !== null && !issues.some((candidate) => candidate.id === routingId)) {
-      setRoutingId(null)
-    }
+    // Reaped whenever the id is not the FOCUSED row's, not merely when the row is gone: an id
+    // whose row only slid off the decision is still a latent trigger, and would remount the
+    // transient and take focus the moment that row came back under decision.
+    if (routingId !== null && issues[clamped]?.id !== routingId) setRoutingId(null)
     const container = containerRef.current
     // A sync tick must never pull focus out of the open transient mid-edit; the transient hands
     // focus back to its row itself when it closes.
@@ -521,9 +523,11 @@ function DecisionPanel({
   const [attachments] = useQuery(queries.attachments.byIssue({ issueId: issue.id }))
   const chips = attachments as readonly AttachmentChipRow[]
   const declineTargetId = `${issue.id}-decline-target`
+  const decisionRef = useRef<HTMLDivElement>(null)
 
   return (
     <div
+      ref={decisionRef}
       data-testid="triage-decision"
       className="relative flex items-start gap-10 border-row-hairline border-y border-l-[3px] border-l-accent bg-bg-selected py-[17px] pr-10 pl-[34px]"
     >
@@ -628,6 +632,7 @@ function DecisionPanel({
           labelOptions={labelOptions}
           cycleOptions={cycleOptions}
           projectOptions={projectOptions}
+          ownerRef={decisionRef}
           onClose={onCloseRoute}
           onCommit={onCommitRoute}
         />
@@ -684,6 +689,7 @@ function RouteTransient({
   labelOptions,
   cycleOptions,
   projectOptions,
+  ownerRef,
   onClose,
   onCommit,
 }: {
@@ -693,6 +699,7 @@ function RouteTransient({
   labelOptions: readonly LabelOption[]
   cycleOptions: readonly Option[]
   projectOptions: readonly Option[]
+  ownerRef: RefObject<HTMLDivElement | null>
   onClose: () => void
   onCommit: (draft: RouteDraft) => Promise<string | undefined>
 }) {
@@ -723,7 +730,15 @@ function RouteTransient({
     }
     function onDocumentPointerDown(event: PointerEvent) {
       const target = event.target
-      if (target instanceof Node && panelRef.current?.contains(target) === true) return
+      if (!(target instanceof Node)) {
+        onClose()
+        return
+      }
+      // The owning decision panel counts as inside: the still-armed `R Route` key lives there, and
+      // a pointer-down that closed on it would be a close-then-reopen that discards the draft the
+      // reader is halfway through. Dismissal is a click on the queue around the decision, or `esc`.
+      if (panelRef.current?.contains(target) === true) return
+      if (ownerRef.current?.contains(target) === true) return
       onClose()
     }
     document.addEventListener('keydown', onDocumentKeyDown)
@@ -732,7 +747,7 @@ function RouteTransient({
       document.removeEventListener('keydown', onDocumentKeyDown)
       document.removeEventListener('pointerdown', onDocumentPointerDown)
     }
-  }, [onClose])
+  }, [onClose, ownerRef])
 
   const applied = issue.labels ?? []
   const appliedIds = new Set(applied.map((label) => label.id))
@@ -760,8 +775,9 @@ function RouteTransient({
       void commit()
       return
     }
-    // The frame's chords are not the queue's: `⌘K` and the `g …` go-tos are unqualified app-wide
-    // shortcuts and a transient that ate them would strand a reader inside it.
+    // `⌘K` is the frame's, not the queue's: it is an unqualified app-wide shortcut and a transient
+    // that ate it would strand a reader inside. The `g …` go-tos are NOT let through — the frame
+    // suppresses that grammar while a dialog holds focus, which this transient does.
     if (event.metaKey || event.ctrlKey) return
     // Every other key stays inside the transient: `a` in a select is a typeahead, not a verdict.
     event.stopPropagation()

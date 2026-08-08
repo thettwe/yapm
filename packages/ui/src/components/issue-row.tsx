@@ -43,6 +43,11 @@ function EmptyRealityTrack() {
   return <RealityTrack shape={buildRealityShape(null)} age={null} label="No delivery signal yet" />
 }
 
+// The mock's phrase column, wide enough for the longest entry in the shared dictionary's neutral
+// register at 12.5px. Reserved whether or not it is filled, so a row whose checks go red does not
+// shove its neighbours' tracks left.
+export const PHRASE_SLOT_WIDTH = 178
+
 export interface IssueRowProps extends Omit<ComponentProps<'div'>, 'children'> {
   issueKey: string
   title: string
@@ -56,6 +61,9 @@ export interface IssueRowProps extends Omit<ComponentProps<'div'>, 'children'> {
   // The row's one reality slot: the drawn track, at `REALITY_TRACK_WIDTH`. Divergence rides on
   // the track's `//` break, so there is no second flag slot to keep in step with it.
   realityTrack?: ReactNode
+  // The phrase at rest, from the shared dictionary's neutral register. Omitted or null means this
+  // row has nothing true to say and its slot renders genuinely blank — never a dash, never filler.
+  phrase?: ReactNode
 }
 
 function IssueRow({
@@ -69,6 +77,7 @@ function IssueRow({
   assignee,
   selected = false,
   realityTrack,
+  phrase,
   className,
   ...props
 }: IssueRowProps) {
@@ -80,15 +89,16 @@ function IssueRow({
       tabIndex={0}
       className={cn(
         'group/issue-row relative flex min-h-[var(--density-row)] w-full items-center gap-2.5 px-4 text-left outline-none transition-colors hover:bg-bg-hover focus-visible:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
-        selected && 'bg-accent-soft',
+        selected && 'bg-bg-selected',
         className,
       )}
       {...props}
     >
+      {/* Position as well as colour: the rail marks selection where hue alone would not (1.4.1). */}
       <span
         aria-hidden="true"
         className={cn(
-          'absolute top-0 left-0 h-full w-0.5 rounded-r-full bg-accent transition-opacity',
+          'absolute top-0 left-0 h-full w-[3px] rounded-r-full bg-accent transition-opacity',
           selected ? 'opacity-100' : 'opacity-0 group-focus-visible/issue-row:opacity-100',
         )}
       />
@@ -99,12 +109,28 @@ function IssueRow({
       <span className="flex w-5 shrink-0 justify-center">
         <StatusGlyph status={status} />
       </span>
-      <span className="w-[62px] shrink-0 truncate font-mono text-xs tabular-nums text-text-2">
+      <span
+        className={cn(
+          'w-[62px] shrink-0 truncate font-mono text-xs tabular-nums',
+          selected ? 'text-accent-strong' : 'text-text-2',
+        )}
+      >
         {issueKey}
       </span>
 
       <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium tracking-[-0.008em] text-text-1">
         {title}
+      </span>
+
+      {/* The title yields space, never the phrase: the phrase is the shorter string and the one
+          the reader came to the list for. Reserved unconditionally — an empty slot is what keeps
+          a populating signal from moving every track on the page. */}
+      <span
+        data-slot="issue-row-phrase"
+        style={{ width: `${PHRASE_SLOT_WIDTH}px` }}
+        className="hidden flex-none items-center justify-end gap-1.5 whitespace-nowrap text-[12.5px] lg:flex"
+      >
+        {phrase}
       </span>
 
       {realityTrack ?? <EmptyRealityTrack />}

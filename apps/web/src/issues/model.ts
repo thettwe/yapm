@@ -110,6 +110,9 @@ export interface IssueGroup {
   readonly label: string
   readonly status?: IssueStatus
   readonly priority?: IssuePriority
+  // The grouping's own mark, when the grouping has one that is data rather than a glyph: the
+  // label's colour, drawn as the header's dot.
+  readonly color?: string
   readonly issues: readonly IssueRowData[]
 }
 
@@ -287,7 +290,7 @@ function groupBy(issues: readonly IssueRowData[], options: GroupOptions): IssueG
   }
 
   // label: an issue appears under each of its labels, or under "No label".
-  const buckets = new Map<string, { label: string; issues: IssueRowData[] }>()
+  const buckets = new Map<string, { label: string; color?: string; issues: IssueRowData[] }>()
   for (const issue of issues) {
     const labels = issue.labels ?? []
     if (labels.length === 0) {
@@ -298,13 +301,18 @@ function groupBy(issues: readonly IssueRowData[], options: GroupOptions): IssueG
     }
     for (const label of labels) {
       const key = `label:${label.id}`
-      const bucket = buckets.get(key) ?? { label: label.name, issues: [] }
+      const bucket = buckets.get(key) ?? { label: label.name, color: label.color, issues: [] }
       bucket.issues.push(issue)
       buckets.set(key, bucket)
     }
   }
   return [...buckets.entries()]
-    .map(([key, value]) => ({ key, label: value.label, issues: value.issues }))
+    .map(([key, value]) => ({
+      key,
+      label: value.label,
+      issues: value.issues,
+      ...(value.color === undefined ? {} : { color: value.color }),
+    }))
     .sort((a, b) => {
       if (a.key === NO_LABEL) return 1
       if (b.key === NO_LABEL) return -1

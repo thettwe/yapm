@@ -5,12 +5,12 @@ TBD - created by archiving change team-delivery-view. Update Purpose after archi
 ## Requirements
 ### Requirement: A team-level delivery view over a rolling window of completed cycles
 
-Every team SHALL have a **Delivery** view at `/teams/{teamId}/delivery`, sitting beside the team's
-other views on the same switcher, showing the same Delivered and Flow metrics the retrospective's
-auto-seeded data panel shows — shipped, carried out, carried in, carried twice or more, added
-mid-cycle, canceled and total; and median PR cycle time, median time to first review, review rounds,
-issues with no linked pull request and CI failing rate — computed over a **rolling window of the
-team's most recently completed cycles** rather than over a single cycle.
+Every team SHALL have a **Delivery** view at `/teams/{teamId}/delivery`, reached from the application
+frame's Delivery destination on every team surface, showing the same Delivered and Flow metrics the
+retrospective's auto-seeded data panel shows — shipped, carried out, carried in, carried twice or
+more, added mid-cycle, canceled and total; and median PR cycle time, median time to first review,
+review rounds, issues with no linked pull request and CI failing rate — computed over a **rolling
+window of the team's most recently completed cycles** rather than over a single cycle.
 
 The window SHALL be measured in completed cycles, SHALL be selectable from a fixed set of sizes with
 6 as the default, and SHALL be bounded at 12 cycles. A cycle that has not completed SHALL be excluded
@@ -171,16 +171,16 @@ keys.
 
 ### Requirement: Keyboard-first and tokenized
 
-The Delivery view SHALL be reachable and fully operable with no pointer: reachable from every team
-surface's view switcher by keyboard, its window selector operable by keyboard, and its focus order
-visible. It SHALL be reachable from the command palette's navigation group. Every color, spacing and
-font value SHALL come from the design tokens, correct in all six theme blocks at AA contrast, and no
-information SHALL be carried by color or by a glyph alone — a trend's direction SHALL be stated in
-words.
+The Delivery view SHALL be reachable and fully operable with no pointer: reachable by keyboard from
+the application frame's Delivery destination — present on every team surface — or by its `g d`
+shortcut, its window selector operable by keyboard, and its focus order visible. It SHALL be
+reachable from the command palette's navigation group. Every color, spacing and font value SHALL come
+from the design tokens, correct in all six theme blocks at AA contrast, and no information SHALL be
+carried by color or by a glyph alone — a trend's direction SHALL be stated in words.
 
 #### Scenario: Reached and operated without a pointer
 
-- **WHEN** a member tabs from a team's issue list to the Delivery view's switcher entry, activates it, and changes the window size using only the keyboard
+- **WHEN** a member tabs from a team's issue list to the deck's Delivery destination, activates it, and changes the window size using only the keyboard
 - **THEN** the view opens, focus is visible at every step, the window changes, and no pointer is required at any point
 
 #### Scenario: The trend is legible without color

@@ -103,9 +103,11 @@ derived from the same rows (broken reality track with the `//` mark; tick-bar wi
 ticks and the failure age; the waiting ages; triage dots).
 
 The attention count SHALL be the sum of the four class counts (a distinct-issue count by
-construction) and SHALL be the single value rendered everywhere the number appears on the
-page. When the count is zero the band SHALL fold and the hero's "need attention" status
-word SHALL be absent.
+construction) and SHALL be the single value rendered everywhere the number appears — not
+only on this page, but anywhere in the application, including the frame's deck badge and its
+statusline. The digest SHALL consume that value from the shared derivation rather than
+computing its own, so the page and the frame cannot disagree. When the count is zero the
+band SHALL fold and the hero's "need attention" status word SHALL be absent.
 
 #### Scenario: The number agrees with itself
 
@@ -113,6 +115,12 @@ word SHALL be absent.
   open pull requests have waited over a day, and three issues sit in triage
 - **THEN** the band header, the hero status word, and every other occurrence of the
   attention number all render 7
+
+#### Scenario: The number agrees with the frame
+
+- **WHEN** the team home is open with that same set of exceptions
+- **THEN** the deck's attention badge and the statusline's attention segment also render 7,
+  from the same derivation
 
 #### Scenario: An issue in two classes counts once
 

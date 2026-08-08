@@ -72,7 +72,7 @@ Recovery SHALL NOT depend on a page reload. The client SHALL recover from every 
 
 Recovery attempts SHALL be spaced by exponential backoff with jitter and a bounded maximum delay, and the schedule SHALL reset once the connection is established. A persistent server-side fault SHALL therefore degrade to a calm, bounded retry — never an unbounded retry loop that saturates the CPU or the sync endpoints.
 
-The recovering state SHALL be visible on every authenticated surface, not silent: the connection indicator SHALL report that the client is reconnecting (distinguishing offline, expired sign-in, and sync error), SHALL announce the transition to assistive technology via a polite live region, SHALL offer a keyboard-operable control to retry immediately once the backoff delay has stretched, and SHALL take every color from theme tokens so it renders correctly in every shipped preset in both light and dark.
+The recovering state SHALL be visible on every authenticated surface, not silent: the connection indicator SHALL report that the client is reconnecting (distinguishing offline, expired sign-in, and sync error), SHALL announce the transition to assistive technology via a polite live region, SHALL offer a keyboard-operable control to retry immediately once the backoff delay has stretched, and SHALL take every color from theme tokens so it renders correctly in every shipped preset in both light and dark. That indicator SHALL live in the application frame's statusline, right-aligned, and SHALL be the **only** connection indicator in the application — the statusline is on every authenticated surface, so relocating it there widens the guarantee rather than narrowing it.
 
 A failure to reach the server SHALL never be presented as a sign-out: the client SHALL treat only an explicit unauthorized response as "no session", SHALL treat a thrown request error, timeout, server error, or unparseable response as "temporarily unavailable" and retry it, and SHALL bound every credential request with a timeout so a hung request can never leave the app in an indefinite loading state.
 
@@ -107,6 +107,11 @@ A failure to reach the server SHALL never be presented as a sign-out: the client
 
 - **WHEN** the client is reconnecting and the backoff delay has stretched
 - **THEN** the connection indicator announces the reconnecting state to assistive technology and exposes a retry control that is reachable and activatable with the keyboard alone, using only theme tokens for color
+
+#### Scenario: The indicator is in the statusline, and there is only one
+
+- **WHEN** an authenticated member visits any in-app surface, including the ones that previously drew their own header
+- **THEN** the connection indicator is present in the statusline, and no second connection indicator is rendered anywhere on the page
 
 #### Scenario: A failed credential request does not sign the user out
 

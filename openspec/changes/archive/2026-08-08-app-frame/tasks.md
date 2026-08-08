@@ -63,9 +63,9 @@
 
 ## 9. Gates
 
-- [ ] 9.1 `pnpm turbo lint typecheck test build`
-- [ ] 9.2 The compose smoke test
-- [ ] 9.3 The full Playwright e2e suite (CI is the gate of record; run locally once after the migration since this is cross-cutting chrome)
+- [x] 9.1 `pnpm turbo lint typecheck test build` — green locally and on CI run 31240432444
+- [x] 9.2 The compose smoke test — green on CI run 31240432444 (4m45s); Docker unavailable locally
+- [x] 9.3 The full Playwright e2e suite — green on CI run 31240432444 (21m36s, 90/90). CI was the gate of record; Docker unavailable locally
 - [x] 9.4 Walk every scenario in `openspec/changes/app-frame/specs/**` and confirm it is true — the three that had no assertion behind them now do (the badge's accessible name, search reachable without the palette, and no frame on an unauthenticated surface)
 
 ## 10. The red CI run on `8aa64de` — three tests that had baked their environment into a budget
@@ -76,4 +76,4 @@ None of the three was a product defect; see design DI-22/23/24 for the evidence 
 - [x] 10.2 `src/frame/team-context.test.ts` — the suite stubs storage away in `beforeEach` rather than assuming the runner's jsdom has none. Node ≥25 shadows jsdom's `localStorage`; CI's Node 24 does not, so the disabled-storage test was reading a store the previous line had really written. Both browser shapes (global absent, global throwing) are kept, and `team-context.ts` is untouched — design DI-23
 - [x] 10.3 `src/frame/app-frame.test.tsx` — a `beforeAll` loads each route the file renders, so no assertion races the one-shot `autoCodeSplitting` dynamic import; the file now passes with the async budget cut to 1ms. The same file also owns its `localStorage` per test, closing the order-dependence the frame's anchor write would otherwise create on CI — design DI-24
 - [x] 10.4 `src/test-setup.ts` + `vitest.config.ts` — `asyncUtilTimeout: 5_000` with matching `testTimeout`/`hookTimeout`, because the exposure is general to router-mounting suites (`routes.test.tsx` runs 113ms locally where CI is an order of magnitude slower) — design DI-24
-- [ ] 10.5 Re-run the two red checks on CI: "Lint, typecheck, test, build" and "Playwright e2e". Docker is unavailable on the machine that made these fixes, so the e2e suite could not be run locally — the Tab-walk helper was verified against a synthetic page in a real Chromium instead
+- [x] 10.5 Re-ran both formerly red checks on CI (run 31240432444, head da4d0a5): "Lint, typecheck, test, build" pass, "Playwright e2e" pass. All six checks green; merged as f57a61b

@@ -22,7 +22,14 @@ The bar carries six stops, and nothing else is a destination:
 **Home · Issues · Triage · Cycles · Delivery · more▾**
 
 `more▾` is a transient, not a seat. It holds Retros, Projects and Roadmap, each with its keyboard
-shortcut. Everything else in the product is reached as a **lens**, a **doorway** or a **setting**:
+shortcut.
+
+Below the deck's comfortable width the stops **fold into `more▾` from the right** — Delivery first,
+then Cycles, then Triage — where they reappear under a **Team** group with the same shortcuts. Home
+and Issues never fold, and the band never wraps to a second row: its 48px height is a rule, so at a
+narrow measure the bar carries fewer than six stops and the menu carries up to six items.
+
+Everything else in the product is reached as a **lens**, a **doorway** or a **setting**:
 
 | Surface | How you reach it |
 | --- | --- |

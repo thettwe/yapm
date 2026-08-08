@@ -285,7 +285,13 @@ Editors: VS Code needs the "TypeScript (Native Preview)" extension until built-i
 
 ### 1.8 Known-good tsconfigs under TS 7 (VERIFIED — `tsc --noEmit` exits 0)
 
-**Shared base — `tsconfig.base.json`:**
+> **Where these live in this repo.** There is **no root `tsconfig.base.json`**. The shared configs
+> are a workspace package — `packages/config/tsconfig/{base,node,vite}.json` — and every app extends
+> them **by package name**: `"extends": "@yapm/config/tsconfig/vite"`. Read the shipped files rather
+> than copying the paths below; the compiler options are otherwise as shown, plus
+> `noImplicitOverride`, `noFallthroughCasesInSwitch` and `lib: ["ES2024"]` in the base.
+
+**Shared base — `packages/config/tsconfig/base.json`:**
 
 ```json
 {
@@ -294,6 +300,7 @@ Editors: VS Code needs the "TypeScript (Native Preview)" extension until built-i
     "module": "esnext",
     "moduleResolution": "bundler",
     "target": "es2024",
+    "lib": ["ES2024"],
     "types": [],
     "moduleDetection": "force",
     "isolatedModules": true,
@@ -301,25 +308,26 @@ Editors: VS Code needs the "TypeScript (Native Preview)" extension until built-i
     "erasableSyntaxOnly": true,
     "skipLibCheck": true,
     "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
     "noEmit": true
   }
 }
 ```
 
-**Vite React SPA — `apps/web/tsconfig.json`:**
+**Vite React SPA — `apps/web/tsconfig.json`** (`jsx`, the DOM libs and the JSX runtime come from
+`@yapm/config/tsconfig/vite`):
 
 ```json
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "@yapm/config/tsconfig/vite",
   "compilerOptions": {
-    "jsx": "react-jsx",
-    "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "types": ["node", "vite/client"],
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["src", "vite.config.ts", "vitest.config.ts", "playwright.config.ts", "e2e"]
+  "include": ["src", "vite.config.ts", "vitest.config.ts"]
 }
 ```
 
@@ -331,7 +339,7 @@ Notes:
 - `types: ["node", "vite/client"]` is mandatory once your config files touch `process` / `node:*`.
 - Include the config files themselves in `include`, or they go unchecked.
 
-**Node server — `apps/server/tsconfig.json`:**
+**Node server — `apps/server/tsconfig.json`** (in this repo, `"extends": "@yapm/config/tsconfig/node"`):
 
 ```json
 {
@@ -563,24 +571,39 @@ Source: <https://turborepo.dev/docs/reference/configuration> — **note the doma
 ```json
 {
   "$schema": "https://turborepo.dev/schema.json",
-  "globalDependencies": ["tsconfig.base.json", "pnpm-lock.yaml"],
+  "globalDependencies": [
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "packages/config/tsconfig/*.json",
+    "packages/config/biome.base.json"
+  ],
   "globalEnv": ["NODE_ENV"],
   "ui": "stream",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "!**/*.test.*"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.test.*", "!e2e/**"],
       "outputs": ["dist/**"],
       "env": ["VITE_*"]
     },
     "typecheck": { "dependsOn": ["^build"], "outputs": [] },
-    "lint": { "outputs": [] },
+    "//#lint": { "outputs": [] },
     "test": { "dependsOn": ["^build"], "outputs": ["coverage/**"] },
     "e2e": { "dependsOn": ["^build"], "cache": false, "outputs": ["playwright-report/**"] },
     "dev": { "cache": false, "persistent": true }
   }
 }
 ```
+
+Two things in there are repo-specific and load-bearing:
+
+- **`globalDependencies` names the shared-config package**, not a root `tsconfig.base.json` — the
+  shared tsconfigs and the Biome base live in `packages/config` (§1.8), so those are the files that
+  must bust every cache.
+- **`"//#lint"` is a ROOT task**, not a per-package one. Linting is one Biome pass over the whole
+  repo (`biome ci .`) rather than a task each package re-declares — which is why
+  `pnpm turbo lint typecheck test build` from CLAUDE.md runs Biome exactly once. Declaring plain
+  `"lint"` instead would make turbo look for a `lint` script in every workspace and find none.
 
 Matching root scripts:
 
@@ -1121,28 +1144,58 @@ Shared theme across a monorepo (docs pattern — matches `packages/ui` owning th
 @import "../../../packages/ui/src/styles/globals.css";
 ```
 
-**VERIFIED end-to-end** `packages/ui/src/styles/globals.css`:
+**VERIFIED end-to-end**, and the shipped design system is a **three-layer** version of it. The
+minimal proof first:
 
 ```css
+/* packages/ui/src/styles/globals.css — the minimal shape */
 @import 'tailwindcss';
 @source '../../../../apps/web/src';
 
 @theme {
   --color-brand-500: oklch(0.62 0.19 259);
-  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
-  --radius-card: 0.75rem;
-}
-
-@layer base {
-  body {
-    @apply bg-white text-neutral-900;
-  }
 }
 ```
 
 with `apps/web/src/styles.css` being just `@import '@yapm/ui/globals.css';`. After `vite build`,
 `dist/assets/*.css` contained `--color-brand-500:oklch(62% .19 259)` and
 `.text-brand-500{color:var(--color-brand-500)}` — proving cross-package `@theme` + `@source` works.
+
+**What actually ships, and why it is not that.** yapm's tokens are *semantic* (`--bg-selected`,
+`--status-in-progress-ink`, `--row-hairline`) and are re-declared per theme block, so the utility
+layer has to alias onto them rather than hold values:
+
+```css
+/* 1. packages/config/tailwind/preset.css — a FOURTH workspace package holding raw defaults */
+@theme { --font-sans: …; --font-mono: …; }
+
+/* 2. packages/ui/src/styles/globals.css — the design system */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@yapm/config/tailwind/preset.css";   /* the indirection */
+
+@source "../";                                 /* packages/ui's own components */
+@source "../../../../apps/web/src";            /* and the app's */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {                                /* ~60 semantic aliases */
+  --color-bg-selected: var(--bg-selected);
+  --color-status-in-progress-ink: var(--status-in-progress-ink);
+  --font-mono: var(--type-mono);
+}
+
+/* 3. apps/web/src/styles.css */
+@import "@yapm/ui/globals.css";
+```
+
+**`@theme inline` is the load-bearing part, not a style preference.** Every alias above is
+`var(…)` pointing at a variable a theme block re-declares under `[data-theme]` / `.dark`. Under bare
+`@theme`, Tailwind emits the utility as `var(--color-bg-selected)` and resolves *that* — one more
+hop that freezes at the `:root` value, so switching preset or mode changes nothing. `@theme inline`
+bakes the referenced expression into the utility, so the utility follows the theme block. Two
+`@source` directives, because components live in **both** packages.
 
 **`@source` is required in a monorepo.** Tailwind v4 auto-detects sources relative to the CSS file; when
 the CSS lives in `packages/ui` but the classes live in `apps/web/src`, add
@@ -1357,6 +1410,49 @@ check catches it either.
 account menu's "Signed in as …" line is one). **Test rule: a menu test must OPEN the menu** —
 `apps/web/src/components/header-menus.test.tsx` does exactly that for the two header menus.
 
+### 6.7 cmdk 1.1.1 inside a Base UI dialog — the two-layer popup, and the one ⌘K owner
+
+The command palette is `cmdk`'s `Command` nested inside a Base UI `Dialog.Popup`
+(`packages/ui/src/components/command-palette.tsx`). Two things about that arrangement are worth
+copying rather than rediscovering.
+
+**1. The two layers signal their state differently, and only one of them signals at all.** The Base
+UI popup carries `data-open` → `data-closed` and, while its exit transition runs, `data-ending-style`
+(`TransitionStatusDataAttributes.endingStyle`, @base-ui/react 1.6) — so for ~150ms after a command
+runs, the popup is still in the DOM and still holds focus in cmdk's input. cmdk's own combobox
+input and listbox are **not** Base UI popups and carry no state attribute of their own. Any
+"who owns the keyboard right now?" helper therefore has to decide from the **outermost closing
+popup in the chain**: everything inside one is out of the picture, a still-open popup further out
+keeps the keyboard, and with nothing closing anywhere the nearest popup owns it. Get this wrong and
+a fast operator who runs a command and immediately presses the next key silently loses that
+keystroke. The shipped rule is `ownsKeyboard` in `apps/web/src/lib/keyboard.ts`; read it before
+writing a second one.
+
+**2. There is exactly ONE ⌘K owner, and surfaces register with it.** `apps/web/src/frame/command-registry.tsx`
+mounts above the frame (`routes/__root.tsx`) and owns the single keydown listener — because the deck
+advertises ⌘K on every page, and four independent `window.addEventListener` handlers is how that
+affordance stayed a lie on most of them. The contract:
+
+```ts
+useCommandSource(id, {
+  open?: () => boolean,              // a surface with its own palette hands over its opener
+  groups?: readonly FrameCommandGroup[],  // a surface with plain commands hands over rows
+})
+```
+
+- **Most recently mounted `open` wins** — it is closest to what the reader is looking at.
+- **A surface may DECLINE**: return `false` and the shortcut keeps scanning, finally falling through
+  to the frame's own palette. The board does this when no card is focused
+  (`apps/web/src/board/board.tsx`), because its palette is about a focused card.
+- With no `open` registered anywhere, ⌘K opens the frame's palette over the **union** of the
+  registered `groups`.
+- `open` and `groups` must be **stable references**; an unstable one re-registers every render.
+- Registration is **inert without a provider**, so a surface rendered in isolation (a unit test, the
+  showcase) does not throw for offering commands.
+
+Do not add a `window` keydown listener for ⌘K. That is the defect this registry exists to have
+fixed once.
+
 ---
 
 ## 7. Vitest 4.1 + Playwright 1.61
@@ -1399,7 +1495,7 @@ import { defineConfig, mergeConfig } from 'vitest/config'
 import viteConfig from './vite.config'
 
 export default mergeConfig(
-  viteConfig,
+  viteConfig({ command: 'serve', mode: 'test' }),
   defineConfig({
     test: {
       name: 'web',
@@ -1408,10 +1504,23 @@ export default mergeConfig(
       setupFiles: ['./src/test-setup.ts'],
       include: ['src/**/*.test.{ts,tsx}'],
       css: true,
+      testTimeout: 15_000,
+      hookTimeout: 30_000,
     },
   }),
 )
 ```
+
+> **`viteConfig` is CALLED, not passed.** `apps/web/vite.config.ts` exports
+> `defineConfig(({ command }) => ({…}))` — a **function**, not an object — because the dev-only
+> `/showcase` route is stripped from the production route tree via the router plugin's
+> `routeFileIgnorePattern` (`command === 'build' ? …`). `mergeConfig` on the function itself fails
+> at config load, so the test config supplies the env it wants: `{ command: 'serve', mode: 'test' }`.
+> If your `vite.config.ts` is still a plain object, pass it directly; check before copying either
+> form.
+>
+> The two timeouts are ceilings for a slow runner, not a target: the setup file has a 5s async
+> budget that Vitest's own 5s default would kill first.
 
 `apps/web/src/test-setup.ts`:
 

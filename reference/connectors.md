@@ -333,52 +333,24 @@ Verified enum sources: check-runs https://docs.github.com/en/rest/checks/runs ; 
 
 ---
 
-## 5. Connector interface sketch — **PROPOSAL (design input, not a fetched fact)**
+## 5. The connector interface — SHIPPED; read the source, keep the rationale
 
-Goal (ROADMAP #8): GitHub is the *first implementation* of a reusable framework; GitLab etc. slot in later. The interface must isolate the 3 provider-specific concerns — **auth/config**, **ingest(webhook)**, **reconcile()** — and funnel everything into one provider-neutral **work-graph mapping**.
+Goal (ROADMAP #8): GitHub is the *first implementation* of a reusable framework; GitLab etc. slot in later. The interface isolates the 3 provider-specific concerns — **auth/config**, **ingest(webhook)**, **reconcile()** — and funnels everything into one provider-neutral **work-graph mapping**.
 
-```ts
-// packages/schema (or packages/connectors) — provider-agnostic contract. PROPOSAL.
-export interface ConnectorDefinition<Config, Secrets> {
-  id: "github" | "gitlab";
-  displayName: string;
-
-  // --- auth / config ---
-  configSchema: z.ZodType<Config>;                    // non-secret settings (repo filters, etc.)
-  secretSchema: z.ZodType<Secrets>;                   // encrypted at rest (§6)
-  verifySignature(raw: Uint8Array, headers: Headers, secrets: Secrets): Promise<boolean>;
-
-  // --- ingest (webhook, sync-fast path) ---
-  //   called by the HTTP handler AFTER signature verify; returns the queue key + normalized envelope
-  parseDelivery(raw: string, headers: Headers): {
-    installationKey: string;                          // -> pg-boss singletonKey (per-install serialization)
-    eventType: string;
-    deliveryId: string;                               // idempotency
-    payload: unknown;
-  };
-
-  // --- ingest (worker, async path) ---
-  ingest(event: NormalizedEvent, ctx: ConnectorCtx): Promise<WorkGraphMutation[]>;
-
-  // --- reconcile (cron safety net + first-install backfill) ---
-  reconcile(installation: InstallationRecord, ctx: ConnectorCtx): Promise<WorkGraphMutation[]>;
-}
-
-// Provider-neutral output — the ONLY thing feature code sees. Maps 1:1 to work-graph edges.
-type WorkGraphMutation =
-  | { kind: "upsertPR"; externalId: string; state: "draft"|"open"|"approved"|"changes_requested"|"merged"|"closed"; url: string; headSha: string; linkedIssueRefs: string[] }
-  | { kind: "upsertCheck"; prExternalId: string; conclusion: "success"|"failure"|"neutral"|"pending"|"..."; }
-  | { kind: "upsertReview"; prExternalId: string; state: "approved"|"changes_requested"|"commented"; submittedAt: string }
-  | { kind: "upsertDeploy"; ref: string; environment: string; state: "queued"|"in_progress"|"success"|"failure"|"inactive" }
-  | { kind: "linkBranch"; branch: string; issueRef: string };
-
-interface ConnectorCtx {
-  client: unknown;             // GitHub: installation Octokit from app.getInstallationOctokit()
-  getEtag(resource: string): Promise<string | null>;
-  setEtag(resource: string, etag: string): Promise<void>;
-  log: Logger;
-}
-```
+> **The source of truth is the code, not a sketch here:**
+> `packages/schema/src/zero/connector-framework.ts` (`ConnectorDefinition`, `ConnectorContext`,
+> `NormalizedDelivery`, `InstallationRecord`, `ConnectorHeaders`, `ConnectorLogger`) and
+> `packages/schema/src/zero/work-graph.ts` (`WorkGraphMutation`). Three things a from-memory
+> version gets wrong: the mutation kinds are **`upsertPullRequest` / `upsertCiCheck` /
+> `upsertReview` / `upsertDeployment`** (not `upsertPR`/`upsertCheck`/`upsertDeploy`), there is
+> **no `linkBranch` variant**, and `ConnectorDefinition.id` is a plain `string` — a union of known
+> provider names would make the framework closed to the connectors it exists to admit.
+>
+> The shipped mutations also carry fields no sketch had room for, and the divergence logic depends
+> on them: **`mergeCommitSha`** (matched against `deployment.sha` — a deploy carrying `headSha`
+> deployed the *branch*, not the merge), **`openedAt`/`mergedAt`**, and the out-of-order guards
+> **`updatedAt`/`sourceUpdatedAt`**, which are the *source event's* modification time rather than
+> wall clock, so a redelivered older event is skipped instead of regressing fresher state.
 
 Why this shape:
 - **`parseDelivery` is intentionally split from `ingest`** so the HTTP handler can verify+enqueue in <10ms (§2.4) and the pg-boss worker does the heavy `ingest`. The `installationKey` it returns is the serialization key (§3.3).
@@ -431,14 +403,29 @@ Design points:
 
 ---
 
-## 7. Open items to resolve at implementation time (flagged UNVERIFIED)
+## 7. The decisions actually taken (the shipped GitHub connector)
 
-1. `pull_request_review` / `check_suite` / `push` exact **action enums & nested field paths** — verified event *existence* via `emitterEventNames`; confirm field names against live payloads or `@octokit/openapi-webhooks-types` before mapping.
-2. Whether octokit surfaces **304 as a thrown `RequestError` (status 304)** vs a normal response — catch-and-handle either way; confirm in a live conditional request.
-3. **PKCS#1 vs PKCS#8** private-key acceptance on Node 24 (auth-app handles PKCS#1; verify no runtime conversion needed).
-4. Exact **Hono wiring** for `@octokit/webhooks` `createWebMiddleware` vs manual raw-body HMAC — prototype both; raw-body capture is the risk.
+These were the open items; five of six are settled in the tree, and the file that settles each one
+is the thing to read.
+
+1. **Event action enums & nested field paths** — mapped and exercised by the shipped ingest path and
+   its tests (`apps/server/src/connectors/github/map.ts`).
+2. **304 as a thrown `RequestError` vs a normal response** — **both**, and both are handled:
+   `reconcile.ts` treats a thrown `status === 304` and a 304 response identically as "unchanged",
+   with pulls and deployments each carrying their own stored ETag so an unchanged PR list cannot
+   suppress a changed deployment list.
+3. **PKCS#1 vs PKCS#8** — no runtime conversion needed; the key goes straight into octokit's `App`
+   (`apps/server/src/connectors/github/app.ts`), which wraps `@octokit/auth-app`.
+4. **Hono wiring: `createWebMiddleware` vs manual raw-body HMAC** — decided in favour of **manual
+   verification**. `verify.ts` uses the `Webhooks` class directly to check `X-Hub-Signature-256`
+   (constant-time) over the **raw bytes**, and `routes.ts` captures the raw body before any parse —
+   re-serializing would break the HMAC — then enqueues and returns 202, mounted at
+   `GITHUB_WEBHOOK_PATH = '/api/github/webhooks'`. A disabled connector returns 404, so no route
+   surface leaks.
 5. Mergify per-org-stream details are cited from **TECHSTACK's own words**, not an external source.
-6. GitHub **secondary-limit point costs** for GraphQL specifically (the 900-points/min figure is documented for REST; GraphQL has its own node-based cost model — verify separately if GraphQL is used heavily).
+   Still unverified, still not load-bearing.
+6. GitHub **secondary-limit point costs** for GraphQL — untested here, because the shipped connector
+   uses a hand-written narrow REST client and no GraphQL. Verify separately if that ever changes.
 
 ## Source URLs (all fetched 2026-07-24)
 - Registering a GitHub App — https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app

@@ -1,20 +1,25 @@
 # Reference — `board-view`: keyboard-accessible Kanban DnD over Zero-synced issues
 
-> Prep reference for yapm change #4 `board-view` (kanban grouped by status). Everything here is
-> verified against npm metadata and installed `.d.ts` files (probe dir
-> `scratchpad/probe-dnd/`, installed 2026-07-24) or official docs. Anything I could not confirm is
-> marked **UNVERIFIED**. Prefer copying the quoted signatures over writing DnD code from memory.
+> Originally prep for yapm change #4 `board-view`; **the board has shipped**, so the sections marked
+> AS SHIPPED (§2.3, §2.4, §5) are the source of truth and the rest is library background verified
+> against npm metadata and installed `.d.ts` files (probe dir `scratchpad/probe-dnd/`, installed
+> 2026-07-24) or official docs. Anything I could not confirm is marked **UNVERIFIED**. Prefer
+> copying the quoted signatures over writing DnD code from memory.
+>
+> **What actually shipped.** Board is a **lens on Issues, not a destination**:
+> `apps/web/src/routes/teams.$teamId.board.tsx` renders `<AppFrame current="issues">` with
+> `<Masthead title="Issues" lens={<IssuesLens current="board" />}>`, so the deck's Issues stop stays
+> lit. Its palette does **not** bind its own `⌘K`: it registers with the frame's single global
+> command owner (`useCommandSource`, `apps/web/src/frame/command-registry.tsx`) and may hand the
+> shortcut back by returning `false` when no card is focused (`board.tsx`).
 >
 > Context anchors from the repo:
-> - `board-view` is roadmap change #4; issue-core (#3) **deliberately deferred** the ordering
->   column: "Manual drag-reordering / a `sort_order` column — belongs to board-view."
->   (`openspec/changes/archive/2026-07-24-issue-core/design.md:22`, `:96`, `proposal.md:43`).
 > - Statuses are a **fixed** enum `backlog | todo | in_progress | in_review | done | canceled`
 >   (issue-core D6) → the board's columns are fixed and known at build time.
 > - Stack constraints (TECHSTACK.md): React 19.2, Vite 8 (Rolldown), TS7 (`tsc --noEmit` only —
 >   no tool may import `typescript` programmatically), Zero 1.8 custom mutators, UUIDv7 client-minted
->   PKs, **100% AGPL-compatible deps**, sub-100ms interactions, keyboard-first, Zustand only for
->   ephemeral UI (Zero owns data state).
+>   PKs, **100% AGPL-compatible deps**, sub-100ms interactions, keyboard-first. (The board holds all
+>   ephemeral state in plain `useState`; `zustand` is imported nowhere in the repo.)
 
 ---
 
@@ -224,9 +229,11 @@ function Card({ issue }: { issue: Issue }) {
 >   rank without a lookup.
 > - `DragOverlay` renders the dragged card outside the transformed list — this is what lets you keep
 >   "CSS transforms over DOM reorder" and avoids janky reflows in big columns.
-> - `onDragOver` should only mutate **local/ephemeral** state (Zustand or `useState`) for the live
->   cross-column preview; the **authoritative write happens once in `onDragEnd`** (§2). Do not fire a
->   Zero mutator per `dragOver` frame.
+> - The shipped board wires **no `onDragOver` at all** — `DndContext` gets `onDragStart` and
+>   `onDragEnd` only (`apps/web/src/board/board.tsx`), because `closestCorners` plus the
+>   `DragOverlay` already carry the affordance and a live cross-column preview bought nothing worth
+>   the state. If you ever add one, it may mutate **local `useState` only**; the authoritative write
+>   happens once in `onDragEnd` (§2). Never fire a Zero mutator per `dragOver` frame.
 
 ---
 
@@ -283,79 +290,83 @@ Behaviour (from the doc-comment, verbatim excerpts):
 > (design assertion, not from a fetched doc — but this is the standard fractional-index footgun;
 > confirm in a migration test that JS `<` order == `ORDER BY rank COLLATE "C"`).
 
-### 2.3 The move mutator (fits Zero 1.8 custom-mutator API from `reference/zero.md`)
+### 2.3 The move mutator — AS SHIPPED
 
 Zero mutators are `defineMutator(validator, async ({tx, args, ctx}) => Promise<void>)`, run
-optimistically on the client then authoritatively on the server. Reads inside a mutator are **local**
-on the client (only sees synced rows) — so the client passes the neighbour ranks it already has;
-the server recomputes authoritatively from Postgres. Pattern:
+optimistically on the client then authoritatively on the server. The mutator takes a **finished**
+rank; it never mints one (`packages/schema/src/zero/mutators.ts`):
 
 ```ts
-// packages/schema/mutators.ts  (shared client+server — the yapm boundary rule)
-import { defineMutator, defineMutators } from '@rocicorp/zero';
-import { generateKeyBetween, BASE_62_DIGITS } from 'fractional-indexing';
-import { z } from 'zod';
+export const moveIssueArgs = z.object({
+  id: z.string().min(1),
+  status: issueStatusSchema,
+  rank: z.string().min(1).max(256).regex(/^[0-9A-Za-z]+$/u),
+  updatedAt: timestamp,
+})
 
-const rankBetween = (a: string | null, b: string | null) =>
-  generateKeyBetween(a, b, BASE_62_DIGITS);
-
-export const mutators = defineMutators({
-  issue: {
-    // Move a card to a target status at a position between prevId/nextId (either may be null).
-    move: defineMutator(
-      z.object({
-        id: z.string(),
-        toStatus: z.enum(['backlog','todo','in_progress','in_review','done','canceled']),
-        prevRank: z.string().nullable(),   // rank of the card that will be ABOVE it (or null)
-        nextRank: z.string().nullable(),   // rank of the card that will be BELOW it (or null)
-      }),
-      async ({ tx, args, ctx }) => {
-        // authz first (existence-check second) — the zbugs ordering rule from reference/zero.md
-        await assertCanEditIssue(tx, ctx, args.id);
-        const newRank = rankBetween(args.prevRank, args.nextRank);
-        await tx.mutate.issue.update({ id: args.id, status: args.toStatus, rank: newRank });
-      },
-    ),
-  },
-});
+// The board's single-write move: set the card's fractional `rank` (and `status` when it changed
+// columns) in one row update, never renumbering siblings.
+export const moveIssue = defineMutator(moveIssueArgs, async ({ tx, args, ctx }) => {
+  if (!canWrite(ctx)) throw notAuthorized(args.id)
+  await loadIssueForWrite(tx, ctx, args.id)   // authz first, existence second
+  await tx.mutate.issue.update({
+    id: args.id,
+    status: args.status,
+    rank: args.rank,
+    ...humanStatusStamp(ctx, args.updatedAt),
+    updatedAt: args.updatedAt,
+  })
+})
 ```
 
-Client call site (from `onDragEnd`): compute the two neighbours in the *destination* column from the
-already-synced ordered list, then:
+The call site mints the rank from the destination column's already-synced order, using
+`rankForSlot` / `appendRank` (`apps/web/src/board/model.ts`), which wrap `rankBetween`
+(`packages/schema/src/zero/rank.ts`):
 
 ```ts
-zero.mutate.issue.move({ id, toStatus, prevRank, nextRank });   // ONE write, optimistic + authoritative
+zero.mutate.issue.move({ id, status, rank: rankForSlot(finalOrder, index), updatedAt })
 ```
 
-> Why compute rank in the **mutator** and not before: Zero re-runs the mutator authoritatively on
-> the server against real Postgres. If two users drop into the same gap concurrently, both mint from
-> the same neighbours and could collide on identical keys. **Two mitigations:**
-> 1. Cheapest: keep `rank` non-unique and accept that a rare tie sorts by a stable tiebreaker
->    (`rank, id` — `id` is UUIDv7, monotonic). Ties self-heal on the next move.
-> 2. Stronger: on the server, re-read the actual neighbour rows inside the mutator
->    (`tx.location === 'server'` sees all data) and regenerate `rank` from live neighbours, so the
->    authoritative value reflects true current state. This is the robust path for a shared board.
+> **The rule, and it is broader than ids.** CLAUDE.md constraint #4 says primary keys are minted at
+> the mutator call site because a mutator **re-runs during rebase**. A fractional rank is in exactly
+> the same category, and for the same reason: recomputing it inside the mutator body from neighbours
+> that have since shifted makes the card jump between the optimistic run and the authoritative one.
+> **Nothing minted from mutable state — ids, fractional ranks, timestamps — is computed inside a
+> mutator body.** The retro-card rank (`mutators.ts`, `moveRetroCard`) reuses this verbatim.
 >
-> **UNVERIFIED**: exact server-side neighbour-requery ZQL for "the card currently just above rank X
-> in status S" — express with `builder.issue.where('status', S).where('rank','<',X).orderBy('rank','desc').limit(1)`
-> (ZQL shape per reference/zero.md; confirm operator support for `orderBy`/`limit` in 1.8 against the
-> installed `@rocicorp/zero` types before relying on it).
+> Concurrency is handled at the call site instead, under the tie policy the board chose: `rank` is
+> **non-unique**, two clients dropping into the same gap may mint identical keys, and `compareCards`
+> renders them adjacent under a stable `rank, id` tiebreaker (`id` is UUIDv7, monotonic).
+> `rankForSlot` carries the self-heal: when the two neighbours have collided or inverted it mints
+> strictly after the lower bound, so the next move restores a strict order. The server-side
+> neighbour-requery alternative was **considered and not taken** — it would put the mint back inside
+> the mutator body, which is the thing this rule forbids.
 
-### 2.4 Migration (the deferred column)
+### 2.4 Migration — AS SHIPPED
 
-issue-core explicitly left this out. `board-view` adds:
+issue-core explicitly left the ordering column out. `packages/schema/src/migrations/0005_board_rank.ts`
+adds it:
 
-```sql
--- Kysely migration in packages/schema
-ALTER TABLE issue ADD COLUMN rank text NOT NULL DEFAULT '';   -- backfill below, then drop default
-CREATE INDEX issue_status_rank_idx ON issue (status, rank COLLATE "C");
+```ts
+await db.schema.alterTable('issue').addColumn('rank', 'text').execute()   // NULLABLE
+
+await sql`
+  create index issue_team_status_rank_idx
+    on issue (team_id, status, rank collate "C")
+`.execute(db)
 ```
 
-Backfill: for each status group, order existing issues by the issue-core default sort
-(`priority desc, updated desc`) and assign ranks with **`generateNKeysBetween(null, null, count)`** —
-one batched pass mints evenly-spaced keys so the initial board matches the list's order. Mirror the
-`rank` column in the hand-written Kysely `DB` type **and** the hand-written Zero schema (both are
-drift-tested in CI per TECHSTACK.md).
+Two things to copy rather than re-derive. The index is **team-scoped** — `(team_id, status, rank)`,
+because every board query is a team's board, not the instance's. And the column is **nullable on
+purpose**: a null rank is the legal "created but never moved" state, not a backfill gap.
+`BoardCardData.rank` is `string | null` and `compareCards` sorts null-rank cards last, by creation
+time then id (`apps/web/src/board/model.ts`).
+
+Backfill: for each `(team, status)` group, order existing issues by the list's default sort
+(`priority desc, updated desc, id asc`) and assign ranks with **`initialRanks(count)`** — one
+batched pass over `generateNKeysBetween(null, null, count, BASE_62_DIGITS)`, so the initial board
+matches the list's order. Mirror the `rank` column in the hand-written Kysely `DB` type **and** the
+hand-written Zero schema (both are drift-tested in CI per TECHSTACK.md).
 
 ---
 
@@ -490,11 +501,12 @@ dnd-kit renders the hidden `aria-live` region and the instructions node for you 
   - Respect `prefers-reduced-motion`: disable the drop/settle animation (dnd-kit `transition`/
     `DragOverlay` dropAnimation) when set.
 
-- **Non-pointer equivalent (APG principle + pragmatic's whole thesis):** also wire a **"Move to
-  status…" command** (command palette entry + right-click / `⋯` menu on each card) that calls the
-  same `issue.move` mutator. Cheap because statuses are a fixed enum, and it's the most reliable
-  path for switch/voice users. If you later prefer this over spatial dragging, `pragmatic`'s
-  `DragHandleButton` + `announce()` is the drop-in for exactly this menu model.
+- **Non-pointer equivalent (APG principle + pragmatic's whole thesis):** a **"Move to status…"
+  command** calling the same `issue.move` mutator. Cheap because statuses are a fixed enum, and the
+  most reliable path for switch/voice users. **As shipped**, this is not a `⌘K` listener of the
+  board's own: the board registers an `open` with the frame's command registry and **declines** —
+  returns `false`, so the binding falls through to the global palette — when no card is focused
+  (`apps/web/src/board/board.tsx`). One global owner, per `app-frame`.
 
 ### 4.4 Focus management (the subtle part)
 
@@ -508,20 +520,25 @@ focus on `<body>` after a move.
 
 ---
 
-## 5. Open items to verify during implementation (don't ship on faith)
+## 5. Decisions taken — AS SHIPPED
 
-1. **dnd-kit 6.3.1 under React 19 `<StrictMode>`** — smoke-test double-invoke/ref behaviour; the
-   peer range predates 19. (UNVERIFIED at source; community says fine.)
-2. **JS string order == Postgres `ORDER BY rank COLLATE "C"`** — add a migration/CI test that seeds
-   `generateNKeysBetween` output and asserts DB order matches JS `.sort()`.
-3. **Concurrent drop into the same gap** — decide tie policy (`ORDER BY rank, id` tiebreaker) vs
-   server-side neighbour requery in the mutator; verify the ZQL `orderBy/limit/where('rank','<',x)`
-   shape against installed `@rocicorp/zero@1.8` types (reference/zero.md shows the builder pattern).
-4. **Virtualizer×sortable transform nesting** — prototype the nested-ref fix on a 1,000-card column
-   before committing to virtualization; confirm no scroll-lag on the Warm-theme card (44px rows).
-5. **`@dnd-kit/react` 1.0 watch** — if it GAs before board-view ships, re-evaluate: it's the
-   long-term API, React-19-native, and drops the `SortableContext` wrapper (but changes `useSortable`
-   to require `{id, index}` and removes `attributes/listeners/setActivatorNodeRef`). Not now (0.5.0 Beta).
+These were the four open items; each is settled in the tree, and the file that settles it is the
+thing to read rather than this list.
+
+1. **dnd-kit 6.3.1 under React 19 `<StrictMode>`** — fine. Shipped in `apps/web/src/board/board.tsx`.
+2. **JS string order == Postgres `ORDER BY rank COLLATE "C"`** — holds, and is asserted against live
+   Postgres in `packages/schema/src/db/rank-collation.test.ts`.
+3. **Concurrent drop into the same gap** — decided in favour of **tie policy #1**: non-unique `rank`,
+   a stable `rank, id` tiebreaker, and self-healing on the next move via `rankForSlot`'s
+   equal/inverted guard (`apps/web/src/board/model.ts`). The server-side neighbour requery was **not
+   taken** — it would put the mint back inside the mutator body (§2.3).
+4. **Virtualizer×sortable transform nesting** — solved by the outer-wrapper/inner-card split in
+   `apps/web/src/board/virtual-column.tsx`, and a column stays plain until it passes
+   `VIRTUALIZE_THRESHOLD = 100` cards (`model.ts`).
+
+Still a watch item, not a decision: **`@dnd-kit/react` 1.0** — the long-term API, React-19-native,
+drops the `SortableContext` wrapper (but changes `useSortable` to require `{id, index}` and removes
+`attributes/listeners/setActivatorNodeRef`). Not adopted; 0.5.0 Beta at the time of writing.
 
 ---
 

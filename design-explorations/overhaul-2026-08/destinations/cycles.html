@@ -1,0 +1,606 @@
+<!doctype html>
+<!--
+  destinations/cycles — THE CYCLE PAGE, drawn as A REGISTER, not a plan.
+  Frame: band 1 (48px deck) and band 3 (32px statusline) copied verbatim from
+  northstar/issues.html — only the active stop moved to Cycles. Statusline markup is
+  byte-identical to all five canonical files, sync word "Synced".
+  Tokens: the Warm LIGHT block from packages/ui/src/styles/globals.css verbatim + the three
+  daylight extensions.
+  AMBER: --status-in-progress: #b67500, --status-in-progress-ink: #935e00 — read fresh from
+  packages/ui/src/styles/globals.css [data-theme="warm"] AFTER commit 6a46113 (design-corrections)
+  landed and retuned the light presets: the old #ce8a26 measured 2.69 against --bg, under the 3:1
+  non-text bar. The northstar set predates that commit and still carries #ce8a26; all seven
+  destination mocks carry #b67500, so the destinations agree with the shipped tokens and with
+  each other. Urgent TEXT on a work surface uses --status-urgent-ink #a4462b; band 3 keeps
+  --status-urgent so its markup stays byte-identical to the canonical set.
+  Amber TEXT is inked --status-in-progress-ink (this file's earlier local --amber-ink #8d5e1a and
+  --amber-wash are gone; the wash is now color-mix'd off the token, so no non-token hex is drawn).
+  The done glyph carries a check inside its filled disc (the shipped correction), quiet rows
+  draw no ink in a reserved slot, and one attention number = 4.
+  Inline SVG only. No motion. Flat + hairlines; no elevation — this page draws no transient.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Cycles · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#b67500;
+    --status-in-progress-ink:#935e00;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --status-urgent-ink:#a4462b;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --elevation-transient:0 10px 26px rgba(43,38,32,.14);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — page-owned masthead ============ */
+  .content{max-width:1248px;margin:0 auto;width:100%;padding:0 64px}
+  .masthead{display:flex;align-items:center;padding-top:26px;padding-bottom:6px}
+  .masthead h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px;margin-left:10px}
+  .mast-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+
+  /* ============ bands ============ */
+  .band{margin-top:34px;border-top:1px solid var(--border);padding-top:22px}
+  .band-h{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+  .band-h .t{font-size:11px;letter-spacing:.09em;font-weight:700;color:var(--text-1)}
+  .band-h .n{font-family:var(--mono);font-size:12px;color:var(--text-3)}
+  .band-h .m{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .band-h .how{margin-left:auto}
+  .how{font-family:var(--mono);font-size:10px;color:var(--text-3);cursor:default}
+  .v-kick{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--text-3)}
+
+  /* ============ the register ============ */
+  .reg{display:grid;
+       grid-template-columns:16px 40px minmax(150px,1fr) 128px 202px 150px 224px;
+       align-items:center;gap:0 14px;height:44px;padding:0 12px 0 9px;
+       border-top:1px solid var(--row-hairline);border-left:3px solid transparent}
+  .reg:last-of-type{border-bottom:1px solid var(--row-hairline)}
+  .reg.now{background:var(--bg-selected);border-left-color:var(--accent)}
+  .reg .g{display:inline-flex}
+  .reg .key{font-family:var(--mono);font-size:12px;color:var(--text-3)}
+  .reg.now .key{color:var(--accent-strong)}
+  .reg .nm{font-size:13.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .reg .dates{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .reg .ledger{display:flex;align-items:center;gap:10px}
+  .reg .lnum{font-family:var(--mono);font-size:11px;color:var(--text-2);white-space:nowrap}
+  .reg .carry{font-size:12.5px;color:var(--text-2);white-space:nowrap;display:inline-flex;
+              align-items:center;gap:6px}
+  .reg .arts{display:flex;gap:7px;align-items:center;justify-content:flex-end}
+  .fold-hint{padding:14px 12px;color:var(--text-3);font-size:12px}
+
+  /* the scope ledger — the hero's scope band, at row scale */
+  .scope-band{display:flex;gap:2px;width:128px}
+  .sb{height:9px;flex:1;border-radius:2px}
+  .sb.landed{background:var(--status-done)}
+  .sb.open{background:transparent;border:1.3px solid var(--border-strong)}
+  .sb.added{background:transparent;border:1.3px solid var(--status-in-progress);position:relative}
+  .sb.added::after{content:"+";position:absolute;inset:0;display:flex;align-items:center;
+       justify-content:center;color:var(--status-in-progress-ink);font-size:8px;font-weight:700;line-height:1}
+
+  .chip{display:inline-flex;align-items:center;gap:6px;height:21px;padding:0 8px;
+        border:1px solid var(--border-strong);border-radius:6px;background:rgba(255,255,255,.7);
+        font-family:var(--mono);font-size:11px;color:var(--text-1);white-space:nowrap}
+  .chip .aff{color:var(--text-3)}
+  .c-ink{color:var(--text-2)}
+  .prov{color:var(--text-3);display:inline-flex;vertical-align:-2px;margin-left:4px}
+
+  /* ============ the carry chains ============ */
+  .cc{display:grid;grid-template-columns:16px 58px minmax(180px,1fr) 190px 316px 84px;
+      align-items:center;gap:0 14px;height:46px;padding:0 12px 0 9px;
+      border-top:1px solid var(--row-hairline);border-left:3px solid transparent}
+  .cc:last-of-type{border-bottom:1px solid var(--row-hairline)}
+  .cc.deep{background:color-mix(in srgb, var(--status-in-progress) 10%, transparent);border-left-color:var(--status-in-progress)}
+  .cc .key{font-family:var(--mono);font-size:12px;color:var(--text-3)}
+  .cc .ttl{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cc .phrase{font-size:12.5px;color:var(--text-2);white-space:nowrap;
+              display:inline-flex;align-items:center;gap:6px}
+  .cc .depth{font-family:var(--mono);font-size:11.5px;color:var(--text-2);text-align:right}
+  .cc.deep .depth{color:var(--status-in-progress-ink);font-weight:500}
+
+  /* ============ the report — the one document on this page ============ */
+  .lede{font-size:14.5px;line-height:1.65;color:var(--text-1);max-width:720px;margin-top:2px}
+  .lede b{font-weight:600}
+  .doc{display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:22px;max-width:960px}
+  .doc ul{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:12px}
+  .doc li{font-size:13px;line-height:1.55;color:var(--text-1)}
+  .doc li .ev{margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .doc li .maybe{font-size:11px;color:var(--text-3);margin-left:5px}
+  .framing{margin-top:24px;font-family:var(--mono);font-size:10.5px;color:var(--text-3);
+           line-height:1.6;max-width:720px}
+
+  .footnote{padding:26px 0 40px;font-size:12.5px;line-height:1.6;color:var(--text-2);max-width:660px}
+  .footnote b{color:var(--text-1)}
+  .footnote .more{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .rule-top{border-top:1px solid var(--row-hairline);margin-top:34px}
+
+  /* ============ band 3 — statusline (identical on every page) ============ */
+  .statusline{margin-top:auto;height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- a cycle's status is drawn on the issue-status grid: one loop, filled as far as it has run -->
+    <symbol id="c-upcoming" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-dasharray="2.6 3.4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="c-active" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 0 1 10 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <!-- done: the filled disc CARRYING A CHECK, knocked out in --bg (the shipped correction) -->
+    <symbol id="c-done" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7.6" fill="currentColor"/>
+      <path d="M6.3 10.3 8.9 12.9 13.7 7.3" fill="none" stroke="var(--bg)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="g-backlog" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-dasharray="2.6 3.4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-todo" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    </symbol>
+    <symbol id="g-review" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 1 1 3 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-cycles" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M10 1.4 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="5.5" cy="14.5" r="1.9" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-retro" viewBox="0 0 20 20">
+      <path d="M14.5 4.7 A7 7 0 1 0 16.9 8.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M15.4 10.4 L16.9 8.6 L18.6 10.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="m-github" viewBox="0 0 16 16">
+      <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab active">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>4</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="content masthead">
+    <h1>Cycles</h1><span class="count">16</span>
+    <div class="mast-actions">
+      <button class="btn">Complete cycle</button>
+      <button class="btn primary">+ New cycle</button>
+    </div>
+  </div>
+
+  <!-- ================= the register ================= -->
+  <div class="content">
+    <div class="band" style="border-top:none;padding-top:8px;margin-top:6px">
+      <div class="band-h"><span class="t">THE REGISTER</span><span class="n">16</span>
+        <span class="how">how ·</span></div>
+
+      <div class="reg">
+        <span class="g" style="color:var(--status-backlog)"><svg width="15" height="15" viewBox="0 0 20 20"><use href="#c-upcoming"/></svg></span>
+        <span class="key">C16</span>
+        <span class="nm">Cycle 4</span>
+        <span class="dates">Aug 27 – Sep 9</span>
+        <span class="ledger"></span>
+        <span class="carry"></span>
+        <span class="arts"></span>
+      </div>
+
+      <div class="reg">
+        <span class="g" style="color:var(--status-backlog)"><svg width="15" height="15" viewBox="0 0 20 20"><use href="#c-upcoming"/></svg></span>
+        <span class="key">C15</span>
+        <span class="nm">Cycle 3</span>
+        <span class="dates">Aug 13 – Aug 26</span>
+        <span class="ledger">
+          <span class="scope-band"><span class="sb open"></span><span class="sb open"></span><span class="sb open"></span><span class="sb open"></span><span class="sb open"></span></span>
+          <span class="lnum">0/5</span>
+        </span>
+        <span class="carry"></span>
+        <span class="arts"></span>
+      </div>
+
+      <div class="reg now">
+        <span class="g" style="color:var(--status-in-progress)"><svg width="15" height="15" viewBox="0 0 20 20"><use href="#c-active"/></svg></span>
+        <span class="key">C14</span>
+        <span class="nm">Cycle 2</span>
+        <span class="dates">Jul 30 – Aug 12</span>
+        <span class="ledger">
+          <span class="scope-band"><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb open"></span><span class="sb open"></span><span class="sb open"></span><span class="sb open"></span><span class="sb added"></span><span class="sb added"></span><span class="sb added"></span></span>
+          <span class="lnum">8/12</span>
+        </span>
+        <span class="carry"></span>
+        <span class="arts"></span>
+      </div>
+
+      <div class="reg">
+        <span class="g" style="color:var(--status-done)"><svg width="15" height="15" viewBox="0 0 20 20"><use href="#c-done"/></svg></span>
+        <span class="key">C13</span>
+        <span class="nm">Cycle 1</span>
+        <span class="dates">Jul 16 – Jul 29</span>
+        <span class="ledger">
+          <span class="scope-band"><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb open"></span><span class="sb open"></span><span class="sb added"></span><span class="sb added"></span></span>
+          <span class="lnum">8/10</span>
+        </span>
+        <span class="carry">3 carried forward</span>
+        <span class="arts">
+          <span class="chip"><svg width="12" height="12" viewBox="0 0 20 20" class="c-ink"><use href="#g-cycles"/></svg><span>Cycle report</span><span class="aff">·</span></span>
+          <span class="chip"><svg width="12" height="12" viewBox="0 0 20 20" class="c-ink"><use href="#g-retro"/></svg><span>Wrapped</span><span class="aff">·</span></span>
+        </span>
+      </div>
+
+      <div class="reg">
+        <span class="g" style="color:var(--status-done)"><svg width="15" height="15" viewBox="0 0 20 20"><use href="#c-done"/></svg></span>
+        <span class="key">C12</span>
+        <span class="nm">Search &amp; filters</span>
+        <span class="dates">Jul 2 – Jul 15</span>
+        <span class="ledger">
+          <span class="scope-band"><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb added"></span><span class="sb added"></span><span class="sb added"></span><span class="sb added"></span></span>
+          <span class="lnum">10 landed</span>
+        </span>
+        <span class="carry"></span>
+        <span class="arts">
+          <span class="chip"><svg width="12" height="12" viewBox="0 0 20 20" class="c-ink"><use href="#g-retro"/></svg><span>Wrapped</span><span class="aff">·</span></span>
+        </span>
+      </div>
+
+      <div class="reg">
+        <span class="g" style="color:var(--status-done)"><svg width="15" height="15" viewBox="0 0 20 20"><use href="#c-done"/></svg></span>
+        <span class="key">C11</span>
+        <span class="nm">Checkout repair</span>
+        <span class="dates">Jun 18 – Jul 1</span>
+        <span class="ledger">
+          <span class="scope-band"><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb added"></span><span class="sb added"></span></span>
+          <span class="lnum">9 landed</span>
+        </span>
+        <span class="carry"></span>
+        <span class="arts">
+          <span class="chip"><svg width="12" height="12" viewBox="0 0 20 20" class="c-ink"><use href="#g-cycles"/></svg><span>Cycle report</span><span class="aff">·</span></span>
+          <span class="chip"><svg width="12" height="12" viewBox="0 0 20 20" class="c-ink"><use href="#g-retro"/></svg><span>Wrapped</span><span class="aff">·</span></span>
+        </span>
+      </div>
+
+      <div class="reg">
+        <span class="g" style="color:var(--status-done)"><svg width="15" height="15" viewBox="0 0 20 20"><use href="#c-done"/></svg></span>
+        <span class="key">C10</span>
+        <span class="nm">Onboarding polish</span>
+        <span class="dates">Jun 4 – Jun 17</span>
+        <span class="ledger">
+          <span class="scope-band"><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb landed"></span><span class="sb added"></span><span class="sb added"></span><span class="sb added"></span></span>
+          <span class="lnum">9 landed</span>
+        </span>
+        <span class="carry"></span>
+        <span class="arts">
+          <span class="chip"><svg width="12" height="12" viewBox="0 0 20 20" class="c-ink"><use href="#g-cycles"/></svg><span>Cycle report</span><span class="aff">·</span></span>
+          <span class="chip"><svg width="12" height="12" viewBox="0 0 20 20" class="c-ink"><use href="#g-retro"/></svg><span>Wrapped</span><span class="aff">·</span></span>
+        </span>
+      </div>
+
+      <div class="fold-hint">↓ 9 more</div>
+    </div>
+  </div>
+
+  <!-- ================= the carry chains ================= -->
+  <div class="content">
+    <div class="band">
+      <div class="band-h"><span class="t">CARRIED IN</span><span class="n">3</span>
+        <span class="m">out of Cycle 1</span></div>
+
+      <div class="cc deep">
+        <span class="g" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#c-active"/></svg></span>
+        <span class="key">ENG-113</span>
+        <span class="ttl">Refund flow for partial orders</span>
+        <span class="phrase">In review — waiting 16h</span>
+        <span class="chain">
+          <svg width="316" height="34" viewBox="0 0 316 34" role="img" style="display:block;overflow:visible">
+            <line x1="62" y1="13" x2="98" y2="13" stroke="var(--border-strong)" stroke-width="1.5"
+                  stroke-dasharray="2.5 3.5" stroke-linecap="round"/>
+            <line x1="98" y1="13" x2="272" y2="13" stroke="var(--border-strong)" stroke-width="1.5"/>
+            <circle cx="98" cy="13" r="3.4" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5"/>
+            <circle cx="156" cy="13" r="3.4" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5"/>
+            <circle cx="214" cy="13" r="3.6" fill="var(--text-2)"/>
+            <circle cx="272" cy="13" r="4" fill="var(--accent)"/>
+            <text x="214" y="29" text-anchor="middle" font-size="9.5" style="font-family:var(--mono)" fill="var(--text-3)">Cycle 1</text>
+            <text x="272" y="29" text-anchor="middle" font-size="9.5" style="font-family:var(--mono)" fill="var(--accent-strong)">now</text>
+          </svg>
+        </span>
+        <span class="depth">carried 3×</span>
+      </div>
+
+      <div class="cc">
+        <span class="g" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>
+        <span class="key">ENG-115</span>
+        <span class="ttl">Address autocomplete on shipping step</span>
+        <span class="phrase">Checks failing<span class="prov"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+        <span class="chain">
+          <svg width="316" height="26" viewBox="0 0 316 26" role="img" style="display:block;overflow:visible">
+            <line x1="120" y1="13" x2="156" y2="13" stroke="var(--border-strong)" stroke-width="1.5"
+                  stroke-dasharray="2.5 3.5" stroke-linecap="round"/>
+            <line x1="156" y1="13" x2="272" y2="13" stroke="var(--border-strong)" stroke-width="1.5"/>
+            <circle cx="156" cy="13" r="3.4" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5"/>
+            <circle cx="214" cy="13" r="3.6" fill="var(--text-2)"/>
+            <circle cx="272" cy="13" r="4" fill="var(--accent)"/>
+          </svg>
+        </span>
+        <span class="depth">carried 2×</span>
+      </div>
+
+      <div class="cc">
+        <span class="g" style="color:var(--status-backlog)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-backlog"/></svg></span>
+        <span class="key">ENG-5</span>
+        <span class="ttl">Bulk-edit from the issue list</span>
+        <span class="phrase"></span>
+        <span class="chain">
+          <svg width="316" height="26" viewBox="0 0 316 26" role="img" style="display:block;overflow:visible">
+            <line x1="214" y1="13" x2="272" y2="13" stroke="var(--border-strong)" stroke-width="1.5"/>
+            <circle cx="214" cy="13" r="3.6" fill="var(--text-2)"/>
+            <circle cx="272" cy="13" r="4" fill="var(--accent)"/>
+          </svg>
+        </span>
+        <span class="depth">carried 1×</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= the report — the one document ================= -->
+  <div class="content">
+    <div class="band">
+      <div class="band-h"><span class="t">THE LAST REPORT</span><span class="n">Cycle 1</span>
+        <span class="m">Jul 16 – Jul 29</span></div>
+
+      <p class="lede">Cycle 1 finished <b>eight of the ten it started with</b>, took on two more
+        along the way, and let three go forward rather than pretend they were close. The checkout
+        work reached production the same week it merged; the refund path did not, and it has now
+        moved cycles three times.</p>
+
+      <div class="doc">
+        <div>
+          <div class="v-kick">SHIPPED</div>
+          <ul>
+            <li>Guest checkout, the coupon fix and the discount recalculation all reached
+              production inside the cycle.
+              <span class="ev">
+                <span class="chip">ENG-108</span>
+                <span class="chip">#172<span class="prov"><svg width="11" height="11" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+                <span class="chip">#175<span class="prov"><svg width="11" height="11" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+              </span>
+            </li>
+            <li>Saved views landed in search, and the list stopped losing its place on navigation.
+              <span class="ev">
+                <span class="chip">ENG-102</span>
+                <span class="chip">#169<span class="prov"><svg width="11" height="11" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+              </span>
+            </li>
+            <li>Four internal improvements.</li>
+          </ul>
+        </div>
+        <div>
+          <div class="v-kick">CARRIED · RISK</div>
+          <ul>
+            <li>The refund flow for partial orders did not land, and left the cycle for the third
+              time.
+              <span class="ev"><span class="chip">ENG-113</span></span>
+            </li>
+            <li>Two changes waited past 200 hours in review; both were single large pull requests.
+              <span class="ev">
+                <span class="chip">#161<span class="prov"><svg width="11" height="11" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+                <span class="chip">#158<span class="prov"><svg width="11" height="11" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+              </span>
+            </li>
+            <li>Address autocomplete has been failing checks since the day it opened.<span class="maybe">possible</span>
+              <span class="ev"><span class="chip">ENG-115</span></span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="framing">AI-generated · claude-sonnet-4-6 · Jul 29 · ~$0.04 estimated. Some items
+        may be imprecise — open any linked entity to verify.</p>
+    </div>
+  </div>
+
+  <div class="content rule-top">
+    <p class="footnote"><b>What this page won't guess:</b> a cycle keeps no status history, so
+      nothing here burns down. <span class="more">more ·</span></p>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">4 need attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+</body>
+</html>
+
+<!--
+  ============================================================================
+  (a) WHAT FOLDED, AND WHY
+  ============================================================================
+
+  1. THE BURNDOWN. There is no issue status-history table, so nothing records when an issue
+     became done. "Remaining scope over the days of the cycle" cannot be reconstructed from the
+     schema at any fidelity — only today's counts exist. The page therefore draws a LEDGER, not a
+     curve, and band 3's footnote says so once, in one sentence.
+
+  2. THE COMMITTED DENOMINATOR ON OLD CYCLES — the fold this page is actually built around.
+     `cycle.complete` re-points every unfinished issue to the successor and stamps
+     `rolled_over_from_cycle_id` with the cycle it left. That column is OVERWRITTEN on the next
+     rollover. So a cycle's carried set — and therefore its committed total — is reconstructible
+     only until one of those issues carries again. Consequence, drawn rather than explained:
+       · C14 (active) and C13 (last completed) show a full band with hollow remainder and a
+         `landed/committed` ratio, because their boundary is still intact.
+       · C12, C11, C10 show landed + added segments only, no hollow remainder, and read
+         `10 landed` rather than `10/12`. The register visibly stops claiming a denominator as
+         it looks further back.
+     `carryover_count` is monotone and survives, which is why DEPTH is drawable where ORIGIN is
+     not — see 3.
+
+  3. THE NAMED CARRY CHAIN. For the same reason, only the LAST hop of a carry chain has a named
+     origin. An issue carried three times knows it carried three times (`carryover_count = 3`) and
+     knows it left Cycle 1 (`rolled_over_from_cycle_id`), but the two cycles before that are gone.
+     The chain draws exactly that: a solid node for the named origin, an accent node for now,
+     hollow nodes for hops whose cycle the product cannot name, and a DOTTED LEAD-IN standing for
+     the part before the record begins. Nothing on the chain is inferred from cycle ordering.
+
+  4. PER-PERSON ANYTHING. No load column, no capacity, no velocity forecast, no "who carried it".
+     Capacity and velocity do not exist as facts; per-person aggregation is forbidden by the
+     product, not merely absent.
+
+  5. THE ACTIVE CYCLE'S ISSUE LIST. The shipped page lists the featured cycle's issues below the
+     progress bar. That list is Issues filtered by cycle — a lens the issue list already owns
+     (`cycles` spec, "Group and filter the issue list by cycle") — and Home's hero already answers
+     "how is this cycle going". Redrawing it here would make Cycles the third copy of a surface
+     that exists twice. What survives is the scope ledger (the progress indicator the spec asks
+     for) and the carried-in rows, which no other surface shows.
+
+  6. THE LEFT CYCLE RAIL. The shipped view puts a 256px sidebar of cycle buttons beside a detail
+     pane; that is a two-pane list of ~16 short rows, which is a register wearing a sidebar. It
+     became the register itself, full width, one row per cycle, active row selected.
+
+  7. LUCIDE ICONS. CircleDashedIcon / FlagIcon / MessagesSquareIcon / SparklesIcon are gone. Cycle
+     status is drawn on the issue-status grid — dashed ring, half arc, filled disc with a check —
+     because a cycle IS a loop filled as far as it has run. The report gets no sparkle: an
+     AI-written document is framed by its provenance line, not by a wand.
+
+  8. A SECOND ATTENTION NUMBER. A three-times-carried issue is not one of the four exception
+     classes, so it takes an amber wash, never urgent ink and never a badge. The only red on this
+     page is the deck's 4 and the statusline's 4.
+
+  9. THE ai_off DIGEST. C12's report slot draws NO INK rather than a "no digest" label. The
+     shipped panel writes a sentence there ("AI is off for this workspace…"); on a register that
+     sentence would repeat down the column. The reserved-but-empty slot says it, in the same
+     grammar as a quiet issue row with no linked change.
+
+  ============================================================================
+  (b) SELF-CRITIQUE
+  ============================================================================
+
+  The carry chain is the reason this page exists and it is also the weakest drawing on it. Three
+  rows of nearly identical dots, distinguished only by how far left they start, ask a reader to
+  learn a private notation — hollow means a hop we cannot name, solid means Cycle 1, accent means
+  now, dotted means before the record — from a single `Cycle 1 / now` annotation on the top row.
+  Delivery earns its annotated charts by writing a headline over each one; this band deliberately
+  refuses the sentence and pays for it, and a new member's first look will read three dashes and
+  a number, with `carried 3×` doing all the actual work the drawing was supposed to do. There is a
+  real risk the honest answer is that the chain should be one mono column and no graphic at all.
+  Two smaller faults sit behind it: the register's degradation from `8/10` to `10 landed` is
+  exactly right and completely invisible — it looks like inconsistent formatting until someone
+  explains the rollover, and no affordance on the row admits that something is missing; and the
+  page ends on a 130-word AI-written document that will, on a boring cycle, be the longest and
+  least interesting thing on the screen, with nothing here proving it degrades — the same standing
+  criticism `home.html` carries about its hero, inherited rather than answered.
+
+════════════════════════════════════════════════════════════════════════════════
+SET-RECONCILIATION PASS (2026-08-09) — applied across all seven destination mocks
+after they were drawn independently. Comparison actually run: every <header class="gbar">
+and every <div class="statusline"> block in northstar/*.html and destinations/*.html was
+extracted, whitespace-normalised and md5'd, with the active-stop class stripped. All
+destination decks now hash to 571eee83 — identical to northstar/issues.html modulo which
+stop is active. All statuslines hash to eb551c33, byte-identical to the canonical five.
+The band-1 and band-3 CSS blocks were hashed the same way and unified on delivery.html's
+variant (1e7593d5).
+  · This file: amber retuned to #b67500. The file-local --amber-ink (#8d5e1a) and --amber-wash
+    tokens are GONE — amber text now inks --status-in-progress-ink and the carry-depth wash is
+    color-mix'd off --status-in-progress, so the page draws no colour that is not a token value.
+    c-done's check replaced with the shipped path at 1.6. min-height:32px added to .statusline so
+    band 3's CSS matches the rest of the set.
+    Nothing was removed for inventing a fact: the burndown was already folded (and the footnote
+    says so), the carry chain draws only carryover_count, and there is no per-person number here.
+  · TOKENS. All seven now carry ONE token block, taken from packages/ui/src/styles/globals.css
+    [data-theme="warm"] at commit 6a46113: --status-in-progress #b67500 (was #ce8a26 in four
+    files), --status-in-progress-ink #935e00, --status-urgent-ink #a4462b and
+    --elevation-transient present everywhere, declared in the same order. The only hexes drawn
+    outside the token block are the avatar pair #5c5348/#f1ebe3, exactly as northstar/issues.html
+    draws them.
+  · DONE GLYPH. The check inside the filled disc is the shipped DONE_CHECK constant everywhere —
+    d="M6.3 10.3 8.9 12.9 13.7 7.3", stroke-width 1.6, stroke var(--bg). Three files had drifted
+    to hand-rolled paths at 1.7/1.8/1.9.
+  · URGENT INK. Urgent TEXT on a work surface uses --status-urgent-ink; band 3 keeps
+    --status-urgent so its markup stays byte-identical to the canonical set. That two-ink split
+    is deliberate and is the set's standing debt against the build, not a per-file choice.
+  · ONE ATTENTION NUMBER. 4 in the deck badge, 4 in the statusline, no second count anywhere.
+════════════════════════════════════════════════════════════════════════════════
+-->

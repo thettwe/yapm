@@ -1,0 +1,497 @@
+<!doctype html>
+<!--
+  destinations/triage — THE INTAKE QUEUE, drawn against the northstar rulebook.
+
+  Frame from northstar/issues.html: band 1 (48px deck) and band 3 (32px statusline) copied
+  markup-for-markup, active stop moved to Triage. Row anatomy is issues.html's row, so a
+  triage row and a list row line up column for column.
+
+  TOKENS: the Warm LIGHT block from packages/ui/src/styles/globals.css, read fresh at
+  commit 6a46113 ("quiet rows, the check on done, Synced, and a legible amber").
+  THE AMBER USED HERE IS #b67500, NOT the northstar set's #ce8a26 — design-corrections
+  retuned it because #ce8a26 measured 2.69 against --bg and 2.37 against the selected
+  row's tint, under the 3:1 non-text bar. Hue and chroma are held (OKLCH h 71); only
+  lightness moved. This file's one amber occurrence is ENG-128's `chore` label dot, drawn
+  on the plain --bg ground, so it is the retuned value that ships. Also carried, and newer
+  than the set: --status-in-progress-ink (#935e00), --status-urgent-ink (#a4462b) for
+  text-sized urgent ink, and --elevation-transient for the one open menu.
+
+  SHIPPED-AHEAD STATE drawn, per the build: quiet reality slots draw NO ink (reserved
+  measure, nothing inside), the done disc carries a --bg knockout check, band 3 says
+  "Synced".
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Triage · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#b67500;
+    --status-in-progress-ink:#935e00;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --status-urgent-ink:#a4462b;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --elevation-transient:0 10px 26px rgba(43,38,32,.14);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg-hover);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased;padding:26px 26px 40px}
+
+  /* the two states are two devices on one sheet; the label is sheet furniture, not chrome */
+  .state{max-width:1280px;margin:0 auto}
+  .state + .state{margin-top:34px}
+  .state-label{display:flex;align-items:baseline;gap:10px;padding:0 2px 9px;
+       font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--text-3)}
+  .state-label b{color:var(--text-2);font-weight:500}
+  .device{border:1px solid var(--border-strong);border-radius:12px;overflow:hidden;
+          background:var(--bg)}
+  .frame{display:flex;flex-direction:column;background:var(--bg)}
+  .frame.tall{min-height:592px}
+  .frame.short{min-height:352px}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — page-owned masthead ============ */
+  .masthead{display:flex;align-items:center;padding:26px 40px 16px}
+  .masthead h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px;margin-left:10px}
+  .mast-actions{margin-left:auto;display:flex;gap:14px;align-items:center;
+                font-family:var(--mono);font-size:11px;color:var(--text-3)}
+
+  /* ============ the queue ============ */
+  .row{height:44px;display:flex;align-items:center;gap:12px;padding:0 40px 0 37px;
+       border-top:1px solid var(--row-hairline);position:relative;border-left:3px solid transparent}
+  .row.last{border-bottom:1px solid var(--row-hairline)}
+  .row.selected{background:var(--bg-selected);border-left-color:var(--accent)}
+  .row .pri{width:14px;flex:none;display:flex;align-items:center;justify-content:center}
+  .row .id{font-family:var(--mono);font-size:12px;color:var(--text-3);width:62px}
+  .row.selected .id{color:var(--accent-strong)}
+  .row .title{font-size:13.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .spring{flex:1}
+  .row .label{display:flex;align-items:center;gap:5px;color:var(--text-2);font-size:12px;white-space:nowrap}
+  .ldot{width:7px;height:7px;border-radius:50%}
+  .row .when{font-family:var(--mono);font-size:11px;color:var(--text-3);width:32px;text-align:right}
+  .row .av{width:20px;height:20px;border-radius:50%;background:#5c5348;color:#f1ebe3;font-size:8px;
+           font-weight:600;display:flex;align-items:center;justify-content:center}
+  .st{width:14px;height:14px;flex:none;display:inline-block}
+  .st svg{display:block}
+
+  /* the reality slot: reserved measure, no ink — nothing here is linked to a change yet */
+  .track{display:flex;align-items:center;width:188px;flex:none}
+  .t-age{font-family:var(--mono);font-size:11px;color:var(--text-3);width:26px;text-align:right;flex:none}
+
+  /* ============ the unfolded decision ============ */
+  .open{position:relative;display:flex;align-items:flex-start;gap:40px;
+        background:var(--bg-selected);border-left:3px solid var(--accent);
+        border-top:1px solid var(--row-hairline);border-bottom:1px solid var(--row-hairline);
+        padding:17px 40px 17px 37px}
+  .open .words{flex:1;min-width:0;max-width:660px}
+  .open .body{font-size:14px;line-height:1.6;color:var(--text-1)}
+  .open .meta{margin-top:11px;display:flex;align-items:center;gap:10px;
+              font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .chip{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 7px 0 6px;
+        border:1px solid var(--border-strong);border-radius:6px;background:rgba(255,255,255,.7);
+        font-family:var(--mono);font-size:11.5px;color:var(--text-1);white-space:nowrap}
+  .c-ink{color:var(--text-2)}
+  /* the verdict rail: three keys, in the panel's own right column */
+  .rail{margin-left:auto;width:214px;flex:none;display:flex;flex-direction:column;gap:10px}
+  .act{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text-1)}
+  .act .kbd{font-size:10.5px;color:var(--text-2);background:rgba(255,255,255,.75)}
+  .act.armed .kbd{border-color:var(--accent);color:var(--accent-strong);
+                  box-shadow:0 0 0 2px var(--accent-line)}
+  .act .to{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10.5px;
+           font-weight:400;color:var(--text-3)}
+  .rail .hint{margin-top:3px;padding-top:10px;border-top:1px solid var(--border-strong);
+              display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3)}
+  .rail .hint .sp{color:var(--border-strong)}
+
+  /* the one transient: the route menu, drawn open under its key */
+  .menu{position:absolute;right:40px;top:100%;margin-top:-6px;width:258px;z-index:6;
+        background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;
+        box-shadow:var(--elevation-transient);padding:6px}
+  .menu .head{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--text-3);
+              padding:5px 9px 6px}
+  .menu .mi{display:flex;align-items:center;gap:9px;height:31px;padding:0 9px;border-radius:6px;
+            font-size:12.5px;color:var(--text-2);white-space:nowrap}
+  .menu .mi .g{width:14px;height:14px;flex:none;color:var(--text-3);display:inline-flex}
+  .menu .mi .v{margin-left:auto;color:var(--text-1);font-weight:600}
+  .menu .mi .v.none{color:var(--text-3);font-weight:400}
+  .menu .mi .av{width:16px;height:16px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+                font-size:7px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .menu .foot{border-top:1px solid var(--row-hairline);margin-top:5px;padding:7px 9px 3px;
+              display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-3)}
+  .menu .foot .sp{color:var(--border-strong)}
+
+  /* ============ the queue, empty ============ */
+  .clear{display:flex;align-items:center;gap:16px;padding:34px 40px 32px;
+         border-top:1px solid var(--row-hairline);border-bottom:1px solid var(--row-hairline)}
+  .clear .g{width:26px;height:26px;flex:none;color:var(--status-done)}
+  .clear .t{font-size:21px;font-weight:700;letter-spacing:-.018em}
+  .onward-foot{padding:20px 40px;display:flex;align-items:center;
+               font-size:12.5px;font-weight:600;color:var(--text-2)}
+  .onward-foot .c{color:var(--text-3);font-weight:400;margin-left:2px}
+  .onward-foot .div{color:var(--border-strong);margin:0 10px;font-weight:400}
+  .onward-foot .hint{margin-left:auto;color:var(--text-3);font-weight:400;
+                     display:flex;align-items:center;gap:7px}
+
+  /* ============ band 3 — statusline (identical on every page) ============ */
+  .statusline{margin-top:auto;height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- status is cycle position: one loop, filled as far as the work has run -->
+    <symbol id="g-backlog" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-dasharray="2.6 3.4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-todo" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    </symbol>
+    <!-- the shipped done disc: the check is a --bg knockout, the page showing through -->
+    <symbol id="g-done" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7.6" fill="currentColor"/>
+      <path d="M6.3 10.3 8.9 12.9 13.7 7.3" fill="none" stroke="var(--bg)" stroke-width="1.6"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <!-- the product's sixth status, on the same grid: where a decline lands -->
+    <symbol id="g-canceled" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M6.9 6.9 13.1 13.1M13.1 6.9 6.9 13.1" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <!-- ticks are weight; one tick standing alone is urgent -->
+    <symbol id="p-1" viewBox="0 0 14 14">
+      <path d="M4 9.6 V6.8 M7 9.6 V6.8 M10 9.6 V6.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-opacity=".35"/>
+      <path d="M4 9.6 V6.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="p-2" viewBox="0 0 14 14">
+      <path d="M10 9.6 V5.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-opacity=".35"/>
+      <path d="M4 9.6 V6.8 M7 9.6 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="p-urgent" viewBox="0 0 14 14">
+      <path d="M7 2.6 V8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+      <circle cx="7" cy="11.2" r="1.1" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-cycles" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M10 1.4 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="5.5" cy="14.5" r="1.9" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-projects" viewBox="0 0 20 20">
+      <path d="M5 4 H4 V16 H5 M15 4 H16 V16 H15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="10" cy="10" r="2.2" fill="currentColor"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ══════════════════ STATE 1 — four waiting ══════════════════ -->
+<section class="state">
+  <div class="state-label"><span>STATE 1 · THE QUEUE</span><b>four waiting · Cycle 2, day 9</b></div>
+  <div class="device">
+  <div class="frame tall">
+
+    <header class="gbar">
+      <div class="gb-ws">
+        <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+        <span class="team">Engineering</span><span class="chev">▾</span>
+      </div>
+      <nav class="gb-nav">
+        <span class="gb-tab">Home</span>
+        <span class="gb-tab">Issues</span>
+        <span class="gb-tab active">Triage</span>
+        <span class="gb-tab">Cycles</span>
+        <span class="gb-tab">Delivery</span>
+        <span class="gb-tab">more<span class="chev">▾</span></span>
+      </nav>
+      <div class="gb-right">
+        <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+        <div class="gb-attn"><span class="d"></span>4</div>
+        <div class="gb-inbox">Inbox<span class="count">3</span></div>
+        <div class="gb-avatar">DA</div>
+      </div>
+    </header>
+
+    <div class="masthead">
+      <h1>Triage</h1><span class="count">4</span>
+      <div class="mast-actions"><span>oldest first</span></div>
+    </div>
+
+    <!-- the head of the queue, unfolded: its own words, then the three verdicts -->
+    <div class="row selected">
+      <span class="pri" style="color:var(--status-urgent)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-urgent"/></svg></span>
+      <span class="st" style="color:var(--status-backlog)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-backlog"/></svg></span>
+      <span class="id">ENG-125</span><span class="title">Checkout hangs when two coupons are applied</span>
+      <span class="spring"></span>
+      <span class="track"></span><span class="t-age"></span>
+      <span class="label"><span class="ldot" style="background:var(--status-urgent)"></span>bug</span>
+      <span class="when">2d</span><span class="av">PR</span>
+    </div>
+
+    <div class="open">
+      <div class="words">
+        <p class="body">Two coupons on the same order and the page stops responding — the spinner
+          never resolves. A refresh clears it, and the second coupon was never applied.</p>
+        <div class="meta">
+          <span>Priya Raman · Aug 6, 9:12a</span>
+          <span class="chip"><svg width="12" height="12" viewBox="0 0 20 20" class="c-ink"><rect x="3" y="4.5" width="14" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5.5 13 L9 9.5 L11 11.3 L14.5 8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>checkout-hang.png</span></span>
+        </div>
+      </div>
+      <div class="rail">
+        <span class="act"><span class="kbd">A</span>Accept</span>
+        <span class="act armed"><span class="kbd">R</span>Route</span>
+        <span class="act"><span class="kbd">D</span>Decline<span class="to"><svg width="12" height="12" viewBox="0 0 20 20"><use href="#g-canceled"/></svg>canceled</span></span>
+        <span class="hint"><span class="kbd">⏎</span>Open<span class="sp">·</span><span class="kbd">J</span><span class="kbd">K</span>Move</span>
+      </div>
+
+      <!-- the one transient on this page -->
+      <div class="menu">
+        <div class="head">ROUTE · ENG-125</div>
+        <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>Status<span class="v">Todo</span></div>
+        <div class="mi"><span class="g"><span class="av">DA</span></span>Assignee<span class="v">Dana Asare</span></div>
+        <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-cycles"/></svg></span>Cycle<span class="v">Cycle 2</span></div>
+        <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-projects"/></svg></span>Project<span class="v none">none</span></div>
+        <div class="mi"><span class="g"><span class="ldot" style="background:var(--status-urgent);margin:0 auto"></span></span>Labels<span class="v">bug</span></div>
+        <div class="foot"><span class="kbd">⏎</span><span>route</span><span class="sp">·</span><span class="kbd">esc</span><span>stay</span></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-1"/></svg></span>
+      <span class="st" style="color:var(--status-backlog)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-backlog"/></svg></span>
+      <span class="id">ENG-126</span><span class="title">Export order history as CSV</span>
+      <span class="spring"></span>
+      <span class="track"></span><span class="t-age"></span>
+      <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+      <span class="when">1d</span><span class="av">MB</span>
+    </div>
+    <div class="row">
+      <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+      <span class="st" style="color:var(--status-backlog)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-backlog"/></svg></span>
+      <span class="id">ENG-127</span><span class="title">Apple Pay button missing on iPad</span>
+      <span class="spring"></span>
+      <span class="track"></span><span class="t-age"></span>
+      <span class="label"><span class="ldot" style="background:var(--status-urgent)"></span>bug</span>
+      <span class="when">6h</span><span class="av">DO</span>
+    </div>
+    <div class="row last">
+      <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-1"/></svg></span>
+      <span class="st" style="color:var(--status-backlog)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-backlog"/></svg></span>
+      <span class="id">ENG-128</span><span class="title">Rename “Saved cards” to “Payment methods”</span>
+      <span class="spring"></span>
+      <span class="track"></span><span class="t-age"></span>
+      <span class="label"><span class="ldot" style="background:var(--status-in-progress)"></span>chore</span>
+      <span class="when">41m</span><span class="av">PR</span>
+    </div>
+
+    <div class="statusline">
+      <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+      <span>8 shipped</span><span class="div">·</span>
+      <span>3 deploys this week</span><span class="div">·</span>
+      <span class="attn">4 need attention</span>
+      <span class="right"><span class="dot-g"></span>Synced</span>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!-- ══════════════════ STATE 2 — the queue, empty ══════════════════ -->
+<section class="state">
+  <div class="state-label"><span>STATE 2 · THE QUEUE, EMPTY</span><b>Cycle 2, day 12 — the same Friday morning home-digest-2-quiet draws</b></div>
+  <div class="device">
+  <div class="frame short">
+
+    <header class="gbar">
+      <div class="gb-ws">
+        <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+        <span class="team">Engineering</span><span class="chev">▾</span>
+      </div>
+      <nav class="gb-nav">
+        <span class="gb-tab">Home</span>
+        <span class="gb-tab">Issues</span>
+        <span class="gb-tab active">Triage</span>
+        <span class="gb-tab">Cycles</span>
+        <span class="gb-tab">Delivery</span>
+        <span class="gb-tab">more<span class="chev">▾</span></span>
+      </nav>
+      <div class="gb-right">
+        <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+        <div class="gb-inbox">Inbox<span class="count">1</span></div>
+        <div class="gb-avatar">DA</div>
+      </div>
+    </header>
+
+    <div class="masthead">
+      <h1>Triage</h1><span class="count">0</span>
+    </div>
+
+    <div class="clear">
+      <span class="g"><svg width="26" height="26" viewBox="0 0 20 20"><use href="#g-done"/></svg></span>
+      <span class="t">Nothing waiting.</span>
+    </div>
+
+    <div class="onward-foot">
+      <span>Issues<span class="c">›</span></span><span class="div">·</span>
+      <span>Cycles<span class="c">›</span></span><span class="div">·</span>
+      <span>Projects<span class="c">›</span></span>
+      <span class="hint"><span class="kbd">⌘K</span>goes anywhere</span>
+    </div>
+
+    <div class="statusline">
+      <span>Cycle 2, day 12 of 14</span><span class="div">·</span>
+      <span>10 shipped</span><span class="div">·</span>
+      <span>4 deploys this week</span>
+      <span class="right"><span class="dot-g"></span>Synced</span>
+    </div>
+  </div>
+  </div>
+</section>
+
+<!--
+════════════════════════════════════════════════════════════════════════════════
+WHAT FOLDED, AND WHY
+
+· "Engineering · Triage" in the masthead — the deck already carries the team, two
+  stops to the left. Band 2 says "Triage" and a mono count, nothing else. The word
+  the shipped page repeats is the exact word the deck owns.
+· The lucide InboxIcon beside the masthead title, and the lucide Check / Route / X
+  action buttons on every row — borrowed icons standing where the drawn vocabulary
+  should stand. The status arc, the priority tick and the sixth-status ring are
+  this product's own marks; the verdicts are now keys, not icon buttons.
+· "The triage inbox is empty. Incoming issues awaiting triage will appear here." —
+  a surface explaining itself in two sentences. Replaced by the done disc and two
+  words.
+· Queue age as an SLA, a target, a colour ramp, or an "overdue" mark — no SLA, no
+  queue-age target and no triage rota exist. The age column states created_at as a
+  plain mono number and makes no claim about it.
+· A triage owner / rota line, an auto-classified "suggested label", and a
+  "possible duplicate of ENG-116" hint on ENG-127. The first two have no entity at
+  all; the third has no issue-to-issue link table (issue_link is issue→pull_request
+  only), so the surface cannot say it even though a human eye sees it. Left undrawn
+  rather than faked.
+· A per-row "arrived from" source and any per-person triage throughput. No ingest
+  provenance is recorded on the issue, and the metrics rule is team-level only.
+· A "moved to triage at 14:02" line — there is no issue status-history table.
+· Delivery ink on every row. The reality slot is drawn as the build ships it:
+  reserved measure (188px + the 26px age child), nothing inside, no ink. Triage
+  rows have no linked change, so the slot stays silent and the columns still line
+  up with the Issues list.
+· "Oldest first" in state 2 — an order label over an empty list is noise.
+· The attention badge and the statusline's attention segment in state 2. That
+  frame is a different moment (day 12, Friday), the one home-digest-2-quiet.html
+  already established as attention 0; its band 1 and band 3 are copied from that
+  file rather than invented, so no second count appears anywhere. State 1 carries
+  the canonical 4 in the deck, the statusline and the masthead count — the same 4
+  home-digest-2 reports as "4 new in triage".
+
+DECISION MADE HERE, BEYOND THE SHIPPED MUTATOR
+The open route menu lists Status, Assignee, Cycle, Project and Labels.
+`issue.routeIssue` today writes status, assignee, cycle and labels — not project —
+though `issue.projectId` and the `project` table both exist. The row is drawn
+because the brief's data note says projects exist to route into; landing it means
+adding one field to the mutator, and that is a decision a reader deserves to find
+written down rather than discover as a dead control.
+
+SELF-CRITIQUE
+The weakest thing here is that the design only serves the head of the queue.
+Rows two through four are the same 44px sliver they were on the bare list, so
+this is fast for exactly one decision and no faster than before for the other
+three — and if the first item is the hard one, the drawing has optimised the
+case a person most wants to skip past. It also assumes triage is done in
+arrival order, which "oldest first" states but no user actually obeys. Second
+fault: the open menu still eats the label, age and reporter columns of the three
+rows beneath it, so at the moment you commit ENG-125 to Cycle 2 you cannot see
+what you are deferring it ahead of; a queue whose whole purpose is comparison
+should probably never occlude its own right-hand columns. Third: the
+reserved-but-blank reality slot spends 214px of every row holding space for a
+fact triage rows structurally never have — correct for cross-surface alignment,
+and indistinguishable from a layout bug on this page alone. Fourth: the empty
+state is honest to the point of thin. Two words, three doorways, and nothing
+that could say the clearing was *yours* or *recent*, because no triage event is
+recorded anywhere — which means the reward for emptying the queue is a page that
+looks exactly the same as a team that has never used Triage at all.
+════════════════════════════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════════════════════════════
+SET-RECONCILIATION PASS (2026-08-09) — applied across all seven destination mocks
+after they were drawn independently. Comparison actually run: every <header class="gbar">
+and every <div class="statusline"> block in northstar/*.html and destinations/*.html was
+extracted, whitespace-normalised and md5'd, with the active-stop class stripped. All
+destination decks now hash to 571eee83 — identical to northstar/issues.html modulo which
+stop is active. All statuslines hash to eb551c33, byte-identical to the canonical five.
+The band-1 and band-3 CSS blocks were hashed the same way and unified on delivery.html's
+variant (1e7593d5).
+  · This file: token block re-ordered to the set's shared order; the canceled glyph's path
+    normalised to the shipped form. Amber, the done check and both bands were already correct;
+    this file was the reference for the retuned amber. Nothing was removed for inventing a fact.
+  · STATE 2 keeps home-digest-2-quiet.html's deck and statusline — the one place in the set where
+    a frame carries no attention badge. It is not an invented second count: it is a canonical
+    northstar frame cited verbatim for a different day. Held, because the alternatives were to
+    put "day 9" under a label reading day 12, or to edit band 3, and both are worse.
+  · TOKENS. All seven now carry ONE token block, taken from packages/ui/src/styles/globals.css
+    [data-theme="warm"] at commit 6a46113: --status-in-progress #b67500 (was #ce8a26 in four
+    files), --status-in-progress-ink #935e00, --status-urgent-ink #a4462b and
+    --elevation-transient present everywhere, declared in the same order. The only hexes drawn
+    outside the token block are the avatar pair #5c5348/#f1ebe3, exactly as northstar/issues.html
+    draws them.
+  · DONE GLYPH. The check inside the filled disc is the shipped DONE_CHECK constant everywhere —
+    d="M6.3 10.3 8.9 12.9 13.7 7.3", stroke-width 1.6, stroke var(--bg). Three files had drifted
+    to hand-rolled paths at 1.7/1.8/1.9.
+  · URGENT INK. Urgent TEXT on a work surface uses --status-urgent-ink; band 3 keeps
+    --status-urgent so its markup stays byte-identical to the canonical set. That two-ink split
+    is deliberate and is the set's standing debt against the build, not a per-file choice.
+  · ONE ATTENTION NUMBER. 4 in the deck badge, 4 in the statusline, no second count anywhere.
+════════════════════════════════════════════════════════════════════════════════
+-->
+</body>
+</html>

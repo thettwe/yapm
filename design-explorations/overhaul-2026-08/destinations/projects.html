@@ -1,0 +1,739 @@
+<!doctype html>
+<!--
+  destinations/projects — PROJECTS, drawn twice: the index, and one project's page.
+  Reached from more▾ (g p); the deck's active stop is more▾, since Projects has no seat.
+
+  Band 1 (48px deck) and band 3 (32px statusline) are copied verbatim from northstar/issues.html,
+  modulo the active class moving to more▾. Nothing in either band was re-drawn.
+
+  AMBER: --status-in-progress: #b67500, --status-in-progress-ink: #935e00 — read fresh from
+  packages/ui/src/styles/globals.css [data-theme="warm"] AFTER commit 6a46113 (design-corrections)
+  landed and retuned the light presets: the old #ce8a26 measured 2.69 against --bg, under the 3:1
+  non-text bar. The northstar set predates that commit and still carries #ce8a26; all seven
+  destination mocks carry #b67500, so the destinations agree with the shipped tokens and with
+  each other. Urgent TEXT on a work surface uses --status-urgent-ink #a4462b; band 3 keeps
+  --status-urgent so its markup stays byte-identical to the canonical set.
+
+  Shipped-app state drawn: quiet rows lay down NO ink in a reserved slot; the done glyph is a
+  filled disc CARRYING A CHECK; band 3's sync word is "Synced".
+
+  FIXTURE: the nine projects are roadmap.html's nine, adopted verbatim — same names, statuses,
+  leads, target dates and done ratios. Both pages read the same workspace-scoped project table
+  at the same instant (Cycle 2, day 9), so they cannot disagree about what exists. See the
+  reconciliation note at the foot of this file for what that cost and what it bought.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Projects · Acme</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#b67500;
+    --status-in-progress-ink:#935e00;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --status-urgent-ink:#a4462b;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --elevation-transient:0 10px 26px rgba(43,38,32,.14);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+  /* two frames in one sheet: the frame is inset and sized by its content instead of the viewport */
+  .frame.inset{min-height:0;max-width:1280px;margin:0 auto 46px;border:1px solid var(--border-strong);
+               border-radius:12px;overflow:hidden;background:var(--bg);position:relative}
+  .sheet{padding:34px 20px 8px;max-width:1280px;margin:0 auto}
+  .fr-label{display:flex;align-items:baseline;gap:11px;margin:0 0 11px 3px}
+  .fr-label .k{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--accent-strong)}
+  .fr-label .n{font-size:12.5px;color:var(--text-2)}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* the more▾ menu, drawn open — the one transient on frame A */
+  .menu{position:absolute;top:55px;left:512px;z-index:8;width:238px;background:var(--bg-elevated);
+        border:1px solid var(--border);border-radius:10px;box-shadow:var(--elevation-transient);padding:6px}
+  .menu .mi{display:flex;align-items:center;gap:9px;height:30px;padding:0 9px;border-radius:6px;
+            font-size:12.5px;white-space:nowrap;color:var(--text-1)}
+  .menu .mi.on{background:var(--accent-soft);color:var(--accent-strong);font-weight:600}
+  .menu .mi .g{color:var(--text-2);display:inline-flex}
+  .menu .mi.on .g{color:var(--accent-strong)}
+  .menu .mi .kbd{margin-left:auto}
+
+  /* ============ band 2 — page-owned masthead ============ */
+  .masthead{display:flex;align-items:center;padding:26px 40px 14px}
+  .masthead h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px;margin-left:10px}
+  /* the scope is wider than the deck above it: dashed, workspace-marked */
+  .scope{display:inline-flex;align-items:center;gap:6px;height:23px;padding:0 10px 0 7px;
+         border:1px dashed var(--border-strong);border-radius:var(--rad-pill);
+         font-size:11.5px;color:var(--text-2);margin-left:16px;white-space:nowrap}
+  .scope .lg{width:14px;height:14px;border-radius:4px;background:var(--accent);color:var(--on-accent);
+             font-weight:700;font-size:8px;display:flex;align-items:center;justify-content:center}
+  .mast-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .filters{display:flex;align-items:center;gap:18px;padding:0 40px 12px;color:var(--text-2);font-size:12.5px}
+  .filters .f-ic{color:var(--text-3);font-size:12px}
+  .filters .right{margin-left:auto;color:var(--text-3)}
+  .filters .right b{color:var(--text-2);font-weight:500}
+
+  /* ============ the index list ============ */
+  .group-h{height:35px;display:flex;align-items:center;gap:9px;padding:0 40px;
+           background:var(--bg-hover);border-top:1px solid var(--row-hairline);
+           font-size:12.5px;font-weight:600}
+  .group-h .g-count{color:var(--text-3);font-weight:400}
+  .row{height:44px;display:flex;align-items:center;gap:12px;padding:0 40px 0 37px;
+       border-top:1px solid var(--row-hairline);position:relative;border-left:3px solid transparent}
+  .row:last-of-type{border-bottom:1px solid var(--row-hairline)}
+  .row.selected{background:var(--bg-selected);border-left-color:var(--accent)}
+  .st{width:14px;height:14px;flex:none;display:inline-block}
+  .st svg{display:block}
+  .row .pname{font-size:13.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .pname.quiet{color:var(--text-2)}
+  .row .spring{flex:1}
+  .row .id{font-family:var(--mono);font-size:12px;color:var(--text-3);width:62px}
+  .row .title{font-size:13.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .pri{width:14px;flex:none;display:flex;align-items:center;justify-content:center}
+  .row .label{display:flex;align-items:center;gap:5px;color:var(--text-2);font-size:12px;white-space:nowrap}
+  .ldot{width:7px;height:7px;border-radius:50%}
+  .row .when{font-family:var(--mono);font-size:11px;color:var(--text-3);width:32px;text-align:right}
+  .row .av{width:20px;height:20px;border-radius:50%;background:#5c5348;color:#f1ebe3;font-size:8px;
+           font-weight:600;display:flex;align-items:center;justify-content:center;flex:none}
+  .row .av.none{background:transparent;border:none}
+
+  /* teams a project's readable issues come from — a workspace project spans several */
+  .teams{width:132px;flex:none;font-family:var(--mono);font-size:11px;color:var(--text-3);
+         display:flex;align-items:center;gap:5px}
+  .teams b{color:var(--text-2);font-weight:500}
+  .teams .sep{color:var(--border-strong)}
+  /* progress: the share at Done. Never the accent — the accent is not a status. */
+  .prog{width:96px;height:4px;border-radius:2px;background:var(--row-hairline);flex:none;overflow:hidden}
+  .prog i{display:block;height:100%;background:var(--status-done);border-radius:2px}
+  .pcount{font-family:var(--mono);font-size:11px;color:var(--text-3);width:44px;text-align:right;flex:none}
+  .target{font-family:var(--mono);font-size:11px;color:var(--text-3);width:76px;text-align:right;flex:none}
+  .target.past{color:var(--status-urgent-ink);font-weight:500}
+  .phrase{font-size:12.5px;white-space:nowrap;flex:none;color:var(--text-2);
+          display:inline-flex;align-items:center;gap:6px}
+  .phrase.urgent{color:var(--status-urgent-ink);font-weight:600}
+  .phrase .prov{color:var(--text-3);display:inline-flex}
+
+  /* reality track — same vocabulary on every page. A row with no linked change draws no ink. */
+  .track{display:flex;align-items:center;width:188px;flex:none}
+  .tn{width:7px;height:7px;border-radius:50%;flex:none}
+  .tn.done{background:var(--status-done)}
+  .tn.rev-wait{background:transparent;border:1.6px solid var(--status-in-review);width:8px;height:8px}
+  .tn.open{background:var(--status-in-review)}
+  .tn.empty{background:transparent;border:1.4px solid var(--border-strong)}
+  .tn.empty-urgent{background:transparent;border:1.6px solid var(--status-urgent)}
+  .tseg{height:2px;flex:1;background:var(--status-done)}
+  .tseg.review{background:var(--status-in-review)}
+  .tseg.dotted{background:repeating-linear-gradient(90deg,var(--border-strong) 0 3px,transparent 3px 6px);height:1.5px}
+  .tbreak{color:var(--status-urgent-ink);font-family:var(--mono);font-weight:500;font-size:11px;
+          padding:0 3px;letter-spacing:-.05em}
+  .t-age{font-family:var(--mono);font-size:11px;color:var(--text-3);width:26px;text-align:right;flex:none}
+
+  .fold-hint{padding:14px 40px;color:var(--text-3);font-size:12px;border-top:1px solid var(--row-hairline)}
+  .footline{padding:16px 40px 26px;font-family:var(--mono);font-size:10.5px;color:var(--text-3);
+            display:flex;align-items:baseline;gap:14px}
+  .how{font-family:var(--mono);font-size:10px;color:var(--text-3);cursor:default}
+  .door{border-bottom:1px dotted var(--border-strong);padding-bottom:1px;cursor:default}
+
+  /* ============ the project page's reading ============ */
+  .crumb{padding:20px 40px 0;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .p-head{display:flex;align-items:center;gap:10px;padding:8px 40px 0}
+  .p-head h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .p-pill{display:inline-flex;align-items:center;gap:6px;height:21px;padding:0 9px 0 7px;
+          border-radius:var(--rad-pill);background:var(--bg-hover);font-size:11.5px;
+          font-weight:600;color:var(--text-2)}
+  .p-facts{display:flex;align-items:center;gap:22px;padding:9px 40px 0;font-size:12.5px;color:var(--text-2)}
+  .p-facts .k{color:var(--text-3);font-size:11px;font-family:var(--mono);letter-spacing:.06em;margin-right:6px}
+  .p-facts .m{font-family:var(--mono);font-size:11.5px;color:var(--text-2)}
+  .p-facts .av{width:20px;height:20px;border-radius:50%;background:#5c5348;color:#f1ebe3;font-size:8px;
+               font-weight:600;display:inline-flex;align-items:center;justify-content:center;margin-right:6px}
+
+  .reading{display:flex;gap:60px;align-items:flex-start;padding:22px 40px 0;margin-top:18px;
+           border-top:1px solid var(--row-hairline)}
+  .reading .col{padding-top:16px}
+  .band-h{display:flex;align-items:baseline;gap:10px}
+  .band-h .t{font-size:11px;letter-spacing:.09em;font-weight:700;color:var(--text-1)}
+  .band-h .n{font-family:var(--mono);font-size:12px;color:var(--text-3)}
+  .band-h .how{margin-left:auto}
+  .valrow{display:flex;align-items:baseline;gap:10px;margin-top:11px}
+  .valrow .num{font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1}
+  .valrow .of{font-size:15px;font-weight:600;color:var(--text-2)}
+  .delta{font-size:11px;font-weight:600;border-radius:var(--rad-pill);padding:2px 8px}
+  .delta.bad{color:var(--status-urgent-ink);background:var(--urgent-soft)}
+  .statebar{margin-top:14px}
+  .seglbl{display:flex;gap:20px;margin-top:9px;font-size:11.5px;color:var(--text-2);align-items:center}
+  .seglbl span{display:inline-flex;align-items:center;gap:6px}
+  .seglbl .c{font-family:var(--mono);color:var(--text-1);font-weight:500}
+
+  /* ============ band 3 — statusline (identical on every page) ============ */
+  .statusline{margin-top:auto;height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- status is cycle position: one loop, filled as far as the work has run.
+         A project's status is the same kind of fact, so it borrows the same family. -->
+    <symbol id="g-backlog" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-dasharray="2.6 3.4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-todo" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    </symbol>
+    <symbol id="g-progress" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 0 1 10 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-review" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 1 1 3 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <!-- shipped state: the filled disc carries a check, inked from a theme token -->
+    <symbol id="g-done" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7.6" fill="currentColor"/>
+      <path d="M6.3 10.3 8.9 12.9 13.7 7.3" fill="none" stroke="var(--bg)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="g-canceled" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M6.9 6.9 13.1 13.1M13.1 6.9 6.9 13.1" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <!-- ticks are weight; one tick standing alone is urgent -->
+    <symbol id="p-1" viewBox="0 0 14 14">
+      <path d="M4 9.6 V6.8 M7 9.6 V6.8 M10 9.6 V6.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-opacity=".35"/>
+      <path d="M4 9.6 V6.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="p-2" viewBox="0 0 14 14">
+      <path d="M10 9.6 V5.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-opacity=".35"/>
+      <path d="M4 9.6 V6.8 M7 9.6 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="p-3" viewBox="0 0 14 14">
+      <path d="M4 9.6 V6.8 M7 9.6 V4.4 M10 9.6 V2.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-retro" viewBox="0 0 20 20">
+      <path d="M14.5 4.7 A7 7 0 1 0 16.9 8.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M15.4 10.4 L16.9 8.6 L18.6 10.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="g-projects" viewBox="0 0 20 20">
+      <path d="M5 4 H4 V16 H5 M15 4 H16 V16 H15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="10" cy="10" r="2.2" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-roadmap" viewBox="0 0 20 20">
+      <path d="M3 10 H17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M6 7.4 V12.6 M11 7.4 V12.6 M15 8.4 V11.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <!-- provenance, whispered: the source's mark, never the meaning -->
+    <symbol id="m-github" viewBox="0 0 16 16">
+      <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ══════════════════════════ FRAME A — the index ══════════════════════════ -->
+<div class="sheet">
+  <div class="fr-label"><span class="k">FRAME A</span><span class="n">Projects — the index · g p</span></div>
+</div>
+
+<div class="frame inset">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab active">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>4</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <!-- the one transient on this frame: the menu Projects is reached through.
+       A sibling of the deck, never a child of it — band 1's markup stays untouched. -->
+  <div class="menu" id="more-menu">
+    <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-retro"/></svg></span>Retros<span class="kbd">g r</span></div>
+    <div class="mi on"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-projects"/></svg></span>Projects<span class="kbd">g p</span></div>
+    <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-roadmap"/></svg></span>Roadmap<span class="kbd">g m</span></div>
+  </div>
+
+  <div class="masthead">
+    <h1>Projects</h1><span class="count">9</span>
+    <span class="scope"><span class="lg">A</span>Acme workspace</span>
+    <div class="mast-actions">
+      <button class="btn primary">+ New project</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <span class="f-ic">≔</span>
+    <span>Status</span><span>Lead</span><span>Team</span><span>Target</span>
+    <span class="right">Group <b>Status</b> &nbsp;·&nbsp; Sort <b>Target</b></span>
+  </div>
+
+  <!-- ============ Active ============ -->
+  <div class="group-h"><span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>Active <span class="g-count">4</span></div>
+
+  <div class="row">
+    <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+    <span class="pname">Checkout rebuild</span>
+    <span class="spring"></span>
+    <span class="phrase urgent">Past target — 2 open</span>
+    <span class="teams"><b>ENG</b>11<span class="sep">·</span><b>DES</b>2</span>
+    <span class="prog"><i style="width:85%"></i></span><span class="pcount">11/13</span>
+    <span class="av">DA</span>
+    <span class="target past">Aug 1</span>
+  </div>
+  <div class="row">
+    <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+    <span class="pname">Payments v2</span>
+    <span class="spring"></span>
+    <span class="teams"><b>ENG</b>14</span>
+    <span class="prog"><i style="width:57%"></i></span><span class="pcount">8/14</span>
+    <span class="av">DA</span>
+    <span class="target">Aug 12</span>
+  </div>
+  <div class="row">
+    <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+    <span class="pname">Mobile web polish</span>
+    <span class="spring"></span>
+    <span class="teams"><b>ENG</b>6<span class="sep">·</span><b>DES</b>3</span>
+    <span class="prog"><i style="width:33%"></i></span><span class="pcount">3/9</span>
+    <span class="av">JK</span>
+    <span class="target">Aug 26</span>
+  </div>
+  <!-- no target date: the target slot keeps its measure and draws no ink. The roadmap holds
+       these rows aside under a group header; here status already owns the grouping, so an
+       undated project simply sorts last inside its own status. -->
+  <div class="row">
+    <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+    <span class="pname">Design system upgrade</span>
+    <span class="spring"></span>
+    <span class="teams"><b>DES</b>5<span class="sep">·</span><b>ENG</b>2</span>
+    <span class="prog"><i style="width:29%"></i></span><span class="pcount">2/7</span>
+    <span class="av">DA</span>
+    <span class="target"></span>
+  </div>
+
+  <!-- ============ Planned ============ -->
+  <div class="group-h"><span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>Planned <span class="g-count">4</span></div>
+
+  <div class="row">
+    <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>
+    <span class="pname">Search relevance</span>
+    <span class="spring"></span>
+    <span class="teams"><b>ENG</b>6</span>
+    <span class="prog"></span><span class="pcount">0/6</span>
+    <span class="av none"></span>
+    <span class="target">Sep 9</span>
+  </div>
+  <!-- no issues yet: the teams / progress / count slots reserve their measure and draw NO ink -->
+  <div class="row">
+    <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>
+    <span class="pname">Notifications overhaul</span>
+    <span class="spring"></span>
+    <span class="teams"></span>
+    <span class="prog" style="background:transparent"></span><span class="pcount"></span>
+    <span class="av">MR</span>
+    <span class="target">Oct 15</span>
+  </div>
+  <div class="row">
+    <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>
+    <span class="pname">Billing migration</span>
+    <span class="spring"></span>
+    <span class="teams"><b>ENG</b>4</span>
+    <span class="prog"></span><span class="pcount">0/4</span>
+    <span class="av">JK</span>
+    <span class="target">Nov 28</span>
+  </div>
+  <div class="row">
+    <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>
+    <span class="pname">Data retention</span>
+    <span class="spring"></span>
+    <span class="teams"><b>ENG</b>3</span>
+    <span class="prog"></span><span class="pcount">0/3</span>
+    <span class="av none"></span>
+    <span class="target"></span>
+  </div>
+
+  <!-- ============ Completed ============ -->
+  <div class="group-h"><span class="st" style="color:var(--status-done)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-done"/></svg></span>Completed <span class="g-count">1</span></div>
+
+  <div class="row">
+    <span class="st" style="color:var(--status-done)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-done"/></svg></span>
+    <span class="pname quiet">Onboarding revamp</span>
+    <span class="spring"></span>
+    <span class="teams"><b>ENG</b>9<span class="sep">·</span><b>DES</b>3</span>
+    <span class="prog"><i style="width:100%"></i></span><span class="pcount">12/12</span>
+    <span class="av">MR</span>
+    <span class="target">Aug 5</span>
+  </div>
+
+  <!-- No Cancelled group: none of the nine projects is cancelled. The header would be a
+       drawn container for zero rows. The `cancelled` spelling (project enum, migrations/0008)
+       is still the right one for a project and the `canceled` spelling (issue enum,
+       migrations/0004) is still the right one for an issue; nothing here reconciles them. -->
+
+  <div class="footline">
+    <span>workspace-scoped · counted over the issues in your teams</span>
+    <span class="how">how ·</span>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">4 need attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════ FRAME B — one project ══════════════════════════ -->
+<div class="sheet">
+  <div class="fr-label"><span class="k">FRAME B</span><span class="n">One project — a progress reading, past its target</span></div>
+</div>
+
+<div class="frame inset">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab active">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>4</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="crumb"><span class="door">Projects</span> ›</div>
+
+  <div class="p-head">
+    <span class="st" style="color:var(--status-in-progress)"><svg width="16" height="16" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+    <h1>Checkout rebuild</h1>
+    <span class="p-pill">Active</span>
+    <span class="scope" style="margin-left:6px"><span class="lg">A</span>Acme workspace</span>
+    <span style="margin-left:auto"><button class="btn">Edit</button></span>
+  </div>
+
+  <div class="p-facts">
+    <span><span class="k">LEAD</span><span class="av">DA</span>Dana Asare</span>
+    <span><span class="k">TEAMS</span><span class="m">ENG 11 · DES 2</span></span>
+  </div>
+
+  <div class="reading">
+    <div class="col" style="width:660px;flex:none;min-width:0">
+      <div class="band-h"><span class="t">ISSUES</span><span class="n">13</span><span class="how">how ·</span></div>
+      <div class="valrow"><span class="num">11</span><span class="of">/13 done</span></div>
+      <div class="statebar">
+        <svg width="620" height="8" viewBox="0 0 620 8" role="img" aria-label="11 done, 1 in progress, 1 todo" style="display:block;max-width:100%">
+          <rect x="0" y="0" width="517.8" height="8" rx="4" fill="var(--status-done)"/>
+          <rect x="521.8" y="0" width="47.1" height="8" rx="4" fill="var(--status-in-progress)"/>
+          <rect x="572.9" y="0" width="47.1" height="8" rx="4" fill="var(--status-todo)" fill-opacity=".45"/>
+        </svg>
+        <div class="seglbl">
+          <span><svg width="12" height="12" viewBox="0 0 20 20" style="color:var(--status-done)"><use href="#g-done"/></svg><span class="c">11</span>done</span>
+          <span><svg width="12" height="12" viewBox="0 0 20 20" style="color:var(--status-in-progress)"><use href="#g-progress"/></svg><span class="c">1</span>in progress</span>
+          <span><svg width="12" height="12" viewBox="0 0 20 20" style="color:var(--status-todo)"><use href="#g-todo"/></svg><span class="c">1</span>todo</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="col" style="width:440px;flex:none">
+      <div class="band-h"><span class="t">TARGET</span><span class="how">how ·</span></div>
+      <div class="valrow">
+        <span class="num"><span class="door">Aug 1</span></span>
+        <span class="delta bad">6 days past</span>
+      </div>
+      <!-- one day = 8px, the roadmap's scale: created Jun 24 at x=10, target Aug 1 at x=314,
+           today Aug 7 at x=362 — the same day the roadmap's caret stands on -->
+      <svg width="400" height="58" viewBox="0 0 400 58" role="img"
+           aria-label="Created Jun 24, target Aug 1, today Aug 7 — six days past target"
+           style="display:block;margin-top:12px;overflow:visible">
+        <line x1="10" y1="34" x2="314" y2="34" stroke="var(--border-strong)" stroke-width="1.5"/>
+        <line x1="314" y1="34" x2="362" y2="34" stroke="var(--status-urgent)" stroke-width="2.4"/>
+        <circle cx="10" cy="34" r="3.2" fill="var(--text-3)"/>
+        <line x1="314" y1="24" x2="314" y2="44" stroke="var(--text-2)" stroke-width="1.6" stroke-linecap="round"/>
+        <line x1="362" y1="27" x2="362" y2="41" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
+        <text x="6" y="19" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Jun 24 · created</text>
+        <text x="310" y="19" text-anchor="end" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Aug 1 · target</text>
+        <text x="368" y="52" text-anchor="end" font-size="10.5" font-weight="600" fill="var(--accent-strong)">today</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ============ its issues, grouped by status ============ -->
+  <div class="group-h" style="margin-top:26px"><span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>In Progress <span class="g-count">1</span></div>
+
+  <div class="row selected">
+    <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+    <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+    <span class="id">ENG-116</span><span class="title">Apple Pay in the payment sheet</span>
+    <span class="spring"></span>
+    <span class="phrase urgent">Done in git, not on the board</span>
+    <span class="track">
+      <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tbreak">//</span><span class="tn empty-urgent"></span>
+    </span>
+    <span class="t-age">1d</span>
+    <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+    <span class="when">11h</span><span class="av none"></span>
+  </div>
+
+  <div class="group-h"><span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>Todo <span class="g-count">1</span></div>
+
+  <!-- no linked change: the track slot keeps its measure and draws no ink at all -->
+  <div class="row">
+    <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-3"/></svg></span>
+    <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>
+    <span class="id">DES-44</span><span class="title">Payment sheet visual pass</span>
+    <span class="spring"></span>
+    <span class="track"></span>
+    <span class="t-age"></span>
+    <span class="label"><span class="ldot" style="background:var(--status-done)"></span>design</span>
+    <span class="when">3d</span><span class="av">MR</span>
+  </div>
+
+  <div class="fold-hint">↓ 11 done</div>
+
+  <div class="footline">
+    <span>workspace project · counted over the issues in your teams</span>
+    <span class="how">more ·</span>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">4 need attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+
+<!--
+═══════════════════════════════════════════════════════════════════════════════
+(a) WHAT FOLDED AWAY, AND WHY
+
+ 1. BURN-UP / BURNDOWN over the project's life. The obvious drawing for "is it going to
+    make it" needs to know WHEN each issue reached Done. There is no issue status-history
+    table — only the issue's current status and its updated_at. A curve drawn from that
+    would be a fabrication. Folded into a static state bar: what the issues are NOW.
+ 2. A PROJECT ACTIVITY TIMELINE ("moved to In Progress at 14:02", "scope grew Jul 12").
+    Same missing table; scope changes are not recorded at all.
+ 3. MILESTONES / phases inside the project. No entity: a project has ONE target_date.
+    Drawing two or three ticks on the target axis would invent structure.
+ 4. DEPENDENCIES — project→project or issue→issue. No link table of any kind exists
+    (no blocks / blocked-by / duplicates), so "blocked by Billing migration" cannot be drawn.
+ 5. A START DATE, and therefore a Gantt bar per project on the index. A project has
+    created_at and target_date; created_at is when somebody typed a name, not when work
+    began. A bar spanning the two would read as a plan the product never captured. The
+    index carries a target COLUMN instead, and only the project page draws an axis —
+    where created_at is labelled as exactly what it is.
+ 6. A PROJECT BRIEF / description. The entity is name, lead, status, target_date. There is
+    nothing to render, so the page never reserves room for prose it cannot fill.
+ 7. PER-PERSON ALLOCATION, "who is carrying this", capacity. Forbidden by the team-level
+    rule, and no allocation entity exists either way. The lead is a single named field and
+    appears once, as a fact, not a workload.
+ 8. PRODUCT-AREA or CHANGE-SIZE banding of a project's issues. Neither is a per-issue fact.
+ 9. REVIEW ROLLUPS ("3 waiting on review, 2 approved"). There is no review-requested event;
+    only the per-issue reality track's waiting age, which is drawn on the rows themselves.
+10. CHECK DURATIONS on the project page. ci_check has no start/finish times.
+11. "SPANS 4 TEAMS — 2 YOU CAN'T SEE." The team-scoped issue read means issues from teams
+    the reader isn't in never sync. The client cannot count them, and cannot even prove
+    they exist. So the team strip names only the teams whose issues arrived, and the mono
+    footline states the counting rule once per frame rather than implying completeness.
+12. A SECOND ATTENTION NUMBER. "1 project past target" is not one of the four exception
+    classes the deck badge and statusline carry, so no count for it appears anywhere. The
+    fact is drawn as one row phrase and one delta pill, and stays uncounted.
+13. THE SHIPPED MASTER-DETAIL RAIL. The shipped page puts a 256px project rail beside a
+    detail pane, which lists every project twice and squeezes the reading. Split into two
+    destinations instead — the index, and a project page worth a URL (the route already
+    carries ?open=). Also fixed from the shipped page: the lucide TargetIcon is gone (a
+    mono date is the fact), the progress bar is inked --status-done rather than the accent
+    (the accent is never a status), and the empty/loading sentences in the rail are gone.
+14. A CANCELLED GROUP HEADER OVER ZERO ROWS. None of the nine projects is cancelled, so the
+    group is not drawn. The header is not a legend for the status enum, it is a container for
+    rows; an empty one would assert a project this workspace does not have. The spelling split
+    stands untouched either way — a project is 'cancelled' (migrations/0008) and an issue is
+    'canceled' (migrations/0004), and this file now happens to draw neither.
+
+(b) SELF-CRITIQUE
+
+    The weakest thing here is that "Past target — 2 open" borrows the urgent register
+    without joining the attention count. Everywhere else in this set, terracotta text on a
+    row means the row is one of the 4 — done-in-git, waiting on review, checks failing,
+    new in triage. On the index it means something structurally different: a date passed.
+    A reader trained by four other surfaces will scan for a fifth item in the badge and not
+    find one, and I have no second urgent register to put it in. Worse, the fact itself is
+    softer than its ink: target_date is a field somebody typed once, and the schema keeps no
+    record of whether it was ever re-agreed, so a project abandoned by its own team cries
+    wolf in terracotta forever while a re-planned one goes quiet the moment the date is
+    edited — and the page cannot tell the two apart or show that an edit happened. Two
+    smaller faults: the reading band says 11/13 twice, once as a number and once as a bar,
+    which is the redundancy delivery.html spent a whole diet removing; and the open more▾
+    menu on frame A hangs over the Active group header — measured in Chromium at 1440×900 it
+    runs y=124–228 against a header at y=214–249, so it covers 14px of it and stops 21px
+    short of the first project row — which means the one frame that has to argue "this
+    destination is workspace-scoped" opens with its own doorway sitting on the first thing
+    it wants to say. (An earlier note claimed the menu also covered the first row. It does
+    not, and never did; the geometry is unchanged and the measurement above is the fact.)
+    A third fault arrives with the shared fixture. Checkout rebuild is 11 done of 13, so
+    frame B's issue list is TWO rows — one in progress, one todo — under a "↓ 11 done" fold.
+    The page's whole argument for splitting the shipped master-detail rail was that a project
+    deserves a page of its own, and the project chosen to prove it is nearly finished, so the
+    list that page exists to hold is almost empty. The moment is still the right one to draw
+    (a project past its date with two things left is exactly when someone opens this page),
+    but the drawing is now carried almost entirely by the two vitals, and a reader could
+    fairly ask what the rest of the page is for. Drawing a busier project instead would have
+    cost the overdue state, which is the only reading on this page the index cannot give you.
+═══════════════════════════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════════════════════════════
+SET-RECONCILIATION PASS (2026-08-09) — applied across all seven destination mocks
+after they were drawn independently. Comparison actually run: every <header class="gbar">
+and every <div class="statusline"> block in northstar/*.html and destinations/*.html was
+extracted, whitespace-normalised and md5'd, with the active-stop class stripped. All
+destination decks now hash to 571eee83 — identical to northstar/issues.html modulo which
+stop is active. All statuslines hash to eb551c33, byte-identical to the canonical five.
+The band-1 and band-3 CSS blocks were hashed the same way and unified on delivery.html's
+variant (1e7593d5).
+  · This file: amber retuned to #b67500 (+ ink token added); g-done's check replaced with the
+    shipped path at 1.6; .tbreak re-inked to --status-urgent-ink so the divergence break reads
+    the same here as on the board. Nothing was removed for inventing a fact: burn-up, activity
+    timeline, milestones, dependencies and per-person allocation were all already folded.
+  · TOKENS. All seven now carry ONE token block, taken from packages/ui/src/styles/globals.css
+    [data-theme="warm"] at commit 6a46113: --status-in-progress #b67500 (was #ce8a26 in four
+    files), --status-in-progress-ink #935e00, --status-urgent-ink #a4462b and
+    --elevation-transient present everywhere, declared in the same order. The only hexes drawn
+    outside the token block are the avatar pair #5c5348/#f1ebe3, exactly as northstar/issues.html
+    draws them.
+  · DONE GLYPH. The check inside the filled disc is the shipped DONE_CHECK constant everywhere —
+    d="M6.3 10.3 8.9 12.9 13.7 7.3", stroke-width 1.6, stroke var(--bg). Three files had drifted
+    to hand-rolled paths at 1.7/1.8/1.9.
+  · URGENT INK. Urgent TEXT on a work surface uses --status-urgent-ink; band 3 keeps
+    --status-urgent so its markup stays byte-identical to the canonical set. That two-ink split
+    is deliberate and is the set's standing debt against the build, not a per-file choice.
+  · ONE ATTENTION NUMBER. 4 in the deck badge, 4 in the statusline, no second count anywhere.
+
+FIXTURE-RECONCILIATION PASS (2026-08-09) — projects.html and roadmap.html
+Both files are workspace-scoped reads of the same project table at the same instant, and they
+named two disjoint sets of projects: six here (Checkout revamp, Address & shipping, Warmer
+empty states, Search rewrite, Billing v2, Legacy CSV import) against nine there, with zero
+names in common. THIS FILE'S FIXTURE WAS REPLACED WITH ROADMAP.HTML'S NINE. The roadmap's is
+the richer set and its best drawing depends on it — the two-row "No target date" group, the
+"Nothing scheduled" and "No issues yet" empty states, the lone Nov 28 mark at the far edge of
+the axis, and the "Target passed" row. Deleting three of its rows to match six would have
+thrown all of that away; inventing three more would have been inventing.
+
+  · WHAT WAS COPIED, not approximated: name, status, lead initials (or no lead), target date
+    and done/total, per project, read off roadmap.html row by row.
+        Checkout rebuild        active     DA    Aug 1    11/13   (past target)
+        Payments v2             active     DA    Aug 12    8/14
+        Mobile web polish       active     JK    Aug 26    3/9
+        Design system upgrade   active     DA    —         2/7
+        Search relevance        planned    —     Sep 9     0/6
+        Notifications overhaul  planned    MR    Oct 15    no issues yet
+        Billing migration       planned    JK    Nov 28    0/4
+        Data retention          planned    —     —         0/3
+        Onboarding revamp       completed  MR    Aug 5    12/12
+    Masthead 6 → 9. Group counts Active 4 · Planned 4 · Completed 1.
+  · WHAT THIS FILE STILL OWNS, because the roadmap does not store it: the team split
+    (ENG n · DES n, from issue.team_id — a real column the roadmap simply never reads), which
+    projects into which status group, and the sort inside a group. Splits were chosen to sum
+    to each project's issue total, so the two pages cannot disagree about a count.
+  · THE TWO OFF-BY-ONES CLOSED WITH IT. The delta pill read "7 days past" and the target strip
+    labelled today Aug 8; the roadmap's axis (one day = 8px, x = 10 + 8 × days since Jul 30)
+    puts the today caret at x=74, which is Aug 7 — day 9 of a cycle that started Jul 30, the
+    day band 3 states. The roadmap's own footnote already said "6 days late". Now: 6 days past,
+    today Aug 7, and frame B's strip redrawn on the roadmap's 8px/day scale.
+  · WHAT IT COST. The Cancelled group is gone, because none of the nine is cancelled; the
+    'cancelled' spelling therefore no longer appears in this file, and neither does 'canceled'.
+    Neither spelling was changed — one entity's rows simply stopped existing.
+  · ISSUE VOCABULARY. Frame B's rows are the set's existing keys and titles: ENG-116 "Apple Pay
+    in the payment sheet" (board, inbox) and DES-44 "Payment sheet visual pass" (this file
+    only). ENG-113, ENG-119 and ENG-121 were dropped from this page — not renamed — because
+    board.html draws all three as NOT done, and Checkout rebuild has room for exactly two
+    unfinished issues at 11/13. They keep their meanings everywhere they still appear.
+  · WHAT WENT WITH THEM. Three symbols in the defs are now unused on this page: p-1 (the lone
+    urgent priority tick, ENG-113's), m-github (the whispered provenance mark, ENG-119's
+    "Built — not live yet"), and g-canceled (the vanished Cancelled group). They are left in
+    the block because it is the set's shared glyph library, not this page's inventory — but
+    note that projects.html no longer demonstrates the provenance mark at all. board.html,
+    cycles.html and inbox.html still do, so the pattern survives in the set; it just stopped
+    being visible on the surface that most wants to explain where a fact came from.
+════════════════════════════════════════════════════════════════════════════════
+-->
+</body>
+</html>

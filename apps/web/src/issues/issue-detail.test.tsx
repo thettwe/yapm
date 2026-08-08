@@ -247,6 +247,9 @@ test('the callout confirms through the existing mutator', () => {
   expect(call?.mutator.mutatorName).toBe('issue.setStatus')
   expect(call?.args.status).toBe('done')
   expect(call?.args.id).toBe('issue-1')
+  // Confirming resolves the divergence and removes the callout under the reader's focus, so the
+  // same landing place catches it here as on dismissal.
+  expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Delivery' }))
 })
 
 test('⏎ inside the callout confirms, and nothing outside it is listened to', () => {
@@ -281,6 +284,11 @@ test('keep as is writes nothing, and the divergence it dismissed is still stated
 
   expect(screen.queryByTestId('divergence-callout')).toBeNull()
   expect(harness.mutate).not.toHaveBeenCalled()
+  // The element holding focus was just removed from the document. A keyboard reader may not be
+  // dropped to `<body>` in the middle of a keyboard-only flow, so focus lands on the section the
+  // callout was talking about.
+  expect(document.activeElement).not.toBe(document.body)
+  expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Delivery' }))
   // Nothing about the fact changed, so nothing that STATES the fact may disappear with the callout.
   expect(screen.getByTestId('divergence-pill')).toHaveTextContent('Done in git, not on the board')
   expect(document.querySelector('[data-slot="reality-rail-break"]')).not.toBeNull()

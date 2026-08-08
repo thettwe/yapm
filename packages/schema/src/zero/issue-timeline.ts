@@ -104,7 +104,12 @@ export interface IssueMergedMoment extends MomentBase {
   readonly repo: string | null
   readonly number: number | null
   readonly mergeCommitSha: string | null
+  // All four counts, because `total - passed` is NOT the failing count: a check that has not
+  // reported yet is neither passed nor failed, and a surface left to subtract would call every
+  // pending check a failure. `passed + failing + pending === total`.
   readonly checksPassed: number
+  readonly checksFailing: number
+  readonly checksPending: number
   readonly checksTotal: number
   readonly checksHealth: CiHealth | null
 }
@@ -200,6 +205,8 @@ const KIND_RANK: Record<IssueMomentKind, number> = {
 
 function checkCounts(checks: readonly { readonly conclusion: CiConclusion }[]): {
   passed: number
+  failing: number
+  pending: number
   total: number
   health: CiHealth | null
 } {
@@ -215,7 +222,7 @@ function checkCounts(checks: readonly { readonly conclusion: CiConclusion }[]): 
   const total = checks.length
   const health: CiHealth | null =
     total === 0 ? null : failing > 0 ? 'failing' : pending > 0 ? 'pending' : 'passing'
-  return { passed, total, health }
+  return { passed, failing, pending, total, health }
 }
 
 // Pure and ordered. O(links + reviews + checks + deployments) for one issue, so a page can memoize
@@ -304,6 +311,8 @@ export function buildIssueTimeline(
         number: pr.number ?? null,
         mergeCommitSha: pr.mergeCommitSha ?? null,
         checksPassed: counts.passed,
+        checksFailing: counts.failing,
+        checksPending: counts.pending,
         checksTotal: counts.total,
         checksHealth: counts.health,
       })

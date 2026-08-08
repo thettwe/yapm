@@ -26,6 +26,36 @@ export function ago(ageMs: number): string {
   return formatReviewAge(ageMs)
 }
 
+// The same age as a clause a sentence can end on. `formatReviewAge` answers "now" under a minute,
+// and every caller here suffixes " ago" — so a just-created issue read "now ago" until this
+// existed. Under a minute the whole clause is "just now"; above it, "3d ago".
+export function agoPhrase(ageMs: number): string {
+  const age = ago(ageMs)
+  return age === 'now' ? 'just now' : `${age} ago`
+}
+
+// THE ONE PULL REQUEST this issue's registers describe. `computeDeliverySignal` already picked it —
+// the newest-opened linked change — and says which one in `pullRequestId`; this narrows the moment
+// list to it so the mono line, the rail and the callout's evidence cannot describe a different
+// change from the one the plain line's phrase was computed over. Moments that belong to no pull
+// request (the idea, the planning) are the issue's own and always survive. A null id means the
+// producer carried no ids or there is no change at all, and nothing is narrowed.
+//
+// The activity feed is deliberately NOT narrowed: a feed reports everything that happened, and a
+// second linked change is one of the things that happened.
+export function momentsForChange(
+  moments: readonly IssueMoment[],
+  pullRequestId: string | null,
+): readonly IssueMoment[] {
+  if (pullRequestId === null) return moments
+  return moments.filter(
+    (moment) =>
+      moment.kind === 'created' ||
+      moment.kind === 'planned' ||
+      moment.pullRequestId === pullRequestId,
+  )
+}
+
 const REVIEW_WORD: Record<string, string> = {
   approved: 'approved',
   changes_requested: 'changes requested',
@@ -52,6 +82,11 @@ export function reviewSequence(reviews: readonly IssueReviewedMoment[]): string 
 
 // `14/14 checks passed` and nothing that implies a duration: `ci_check` stores only `updatedAt`,
 // so how long the checks took is not a fact yapm holds (design D2).
+//
+// The failing count is READ, never subtracted: a check that has not reported yet is neither passed
+// nor failed, and `total - passed` would announce every pending check as a failure. When some are
+// still reporting alongside a real failure, the line says both rather than folding one into the
+// other — "3 of 14 failing" beside four unreported checks is a different fact from "3 of 14".
 export function checksFact(merged: IssueMergedMoment): string | null {
   if (merged.checksTotal === 0) return null
   const checks = merged.checksTotal === 1 ? 'check' : 'checks'
@@ -59,7 +94,10 @@ export function checksFact(merged: IssueMergedMoment): string | null {
     return `${merged.checksPassed}/${merged.checksTotal} ${checks} passed`
   }
   if (merged.checksHealth === 'failing') {
-    return `${merged.checksTotal - merged.checksPassed} of ${merged.checksTotal} ${checks} failing`
+    const failing = `${merged.checksFailing} of ${merged.checksTotal} ${checks} failing`
+    return merged.checksPending === 0
+      ? failing
+      : `${failing}, ${merged.checksPending} still reporting`
   }
   return `${merged.checksPassed}/${merged.checksTotal} ${checks} reported`
 }
@@ -102,8 +140,8 @@ export function buildRailView(moments: readonly IssueMoment[], cycleName: string
       label: cycle === null ? 'Idea' : `Idea — planned into ${cycle}`,
       fact:
         joinFacts([
-          `created ${ago(created.ageMs)} ago`,
-          planned === null ? null : `added at planning ${ago(planned.ageMs)} ago`,
+          `created ${agoPhrase(created.ageMs)}`,
+          planned === null ? null : `added at planning ${agoPhrase(planned.ageMs)}`,
         ]) ?? undefined,
     })
   }
@@ -118,7 +156,7 @@ export function buildRailView(moments: readonly IssueMoment[], cycleName: string
       fact:
         joinFacts([
           opened.number === null ? opened.repo : `PR #${opened.number}`,
-          `opened ${ago(opened.ageMs)} ago`,
+          `opened ${agoPhrase(opened.ageMs)}`,
         ]) ?? undefined,
     })
   } else if (linked !== null) {
@@ -126,7 +164,7 @@ export function buildRailView(moments: readonly IssueMoment[], cycleName: string
       id: 'change-linked',
       node: 'open',
       label: 'Change linked',
-      fact: `linked ${ago(linked.ageMs)} ago`,
+      fact: `linked ${agoPhrase(linked.ageMs)}`,
     })
   }
 
@@ -143,7 +181,7 @@ export function buildRailView(moments: readonly IssueMoment[], cycleName: string
         joinFacts([
           `${latestReview.rounds} round${latestReview.rounds === 1 ? '' : 's'}`,
           reviewSequence(reviews),
-          `${ago(latestReview.ageMs)} ago`,
+          agoPhrase(latestReview.ageMs),
         ]) ?? undefined,
     })
   }
@@ -154,11 +192,8 @@ export function buildRailView(moments: readonly IssueMoment[], cycleName: string
       node: 'done',
       label: 'Merged',
       fact:
-        joinFacts([
-          shortSha(merged.mergeCommitSha),
-          checksFact(merged),
-          `${ago(merged.ageMs)} ago`,
-        ]) ?? undefined,
+        joinFacts([shortSha(merged.mergeCommitSha), checksFact(merged), agoPhrase(merged.ageMs)]) ??
+        undefined,
     })
   }
 
@@ -170,7 +205,7 @@ export function buildRailView(moments: readonly IssueMoment[], cycleName: string
       fact:
         joinFacts([
           deployed.environment === null ? 'deployed' : `deployed to ${deployed.environment}`,
-          `${ago(deployed.ageMs)} ago`,
+          agoPhrase(deployed.ageMs),
         ]) ?? undefined,
     })
   } else if (merged !== null) {
@@ -320,7 +355,7 @@ export function monoSubline(
         : `PR open ${ago(opened.ageMs)}`
       : `git merged ${shortSha(merged.mergeCommitSha) ?? 'no sha recorded'}`,
     number === null ? null : `PR #${number}`,
-    deployed === null ? null : `live ${ago(deployed.ageMs)} ago`,
+    deployed === null ? null : `live ${agoPhrase(deployed.ageMs)}`,
     // Drift is measured from the merge, because that is the moment the board stopped being true.
     divergence === 'status_behind_merge' && merged !== null ? `drifted ${ago(merged.ageMs)}` : null,
   ])

@@ -18,6 +18,12 @@ export type ReviewAgeSource = 'review' | 'pr-open'
 
 export interface DeliverySignal {
   readonly pr: PrState | null
+  // WHICH pull request `pr` describes: the newest-opened linked one, or null when the producer did
+  // not carry ids (or there is no pull request at all). A surface that draws a second register over
+  // the same issue — the detail's mono line, its rail — reads this rather than picking a "the" pull
+  // request by a rule of its own, because two selection rules over two linked changes is how one
+  // page ends up describing two changes as if they were one.
+  readonly pullRequestId: string | null
   readonly ciHealth: CiHealth | null
   readonly reviewAgeMs: number | null
   readonly reviewAgeFrom: ReviewAgeSource | null
@@ -49,6 +55,9 @@ export interface DeliveryStrip {
 // so every caller that predates the deploy axis keeps compiling and keeps its result.
 export interface LinkedEntities {
   readonly pullRequests?: readonly {
+    // Optional: a producer that has no row id (a summarised class, a fixture) still computes every
+    // other axis of the signal, and the id it cannot supply becomes a null `pullRequestId`.
+    readonly id?: string | null
     readonly state: PrState
     readonly openedAt: number
     // The earliest deployment that carried THIS pull request's merge commit, or null when none
@@ -187,6 +196,7 @@ export function computeDeliverySignal(
 
   return {
     pr,
+    pullRequestId: latestPr?.id ?? null,
     ciHealth: aggregateCiHealth(ciRuns),
     reviewAgeMs,
     reviewAgeFrom,
@@ -219,6 +229,7 @@ export function computeDivergence(
 // state + open time, its merge commit + repo (the deployment join's two keys), and its related
 // checks/reviews. Structural — the synced `.related` result satisfies it.
 export interface LinkedPullRequestRow {
+  readonly id?: string | null
   readonly state: PrState
   readonly openedAt: number
   readonly repo?: string | null
@@ -296,7 +307,12 @@ export function assembleLinkedEntities(
       : isDeploymentIndex(deployments)
         ? deployments
         : buildDeploymentIndex(deployments)
-  const pullRequests: { state: PrState; openedAt: number; deployedAt: number | null }[] = []
+  const pullRequests: {
+    id: string | null
+    state: PrState
+    openedAt: number
+    deployedAt: number | null
+  }[] = []
   const ciRuns: { health: CiHealth }[] = []
   const reviews: { state: ReviewState; submittedAt: number }[] = []
   const deployed: { deployedAt: number }[] = []
@@ -308,7 +324,7 @@ export function assembleLinkedEntities(
       index !== undefined && pr.state === 'merged' && pr.mergeCommitSha && pr.repo
         ? (index.get(deploymentKey(pr.repo, pr.mergeCommitSha)) ?? null)
         : null
-    pullRequests.push({ state: pr.state, openedAt: pr.openedAt, deployedAt })
+    pullRequests.push({ id: pr.id ?? null, state: pr.state, openedAt: pr.openedAt, deployedAt })
     for (const check of pr.ciChecks ?? []) {
       ciRuns.push({ health: ciHealthFromConclusion(check.conclusion) })
     }

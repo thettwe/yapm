@@ -34,6 +34,11 @@ facts behind that phrase: the merge commit, the change number, the drift. The Gi
 the mono line because those facts are sourced from a provider; yapm's own derivations (a divergence,
 a review age, a status position) never wear a brand mark.
 
+When an issue is linked to more than one change, both registers — and the rail, and the callout's
+evidence — describe the **same** one: the newest change opened, which is the change the phrase was
+computed over. An older merged change is still reported in the activity feed, where it belongs, and
+never lends its merge commit to a sentence about a newer one.
+
 Mono sublines live **only here**. Every other surface in yapm speaks in phrases; the detail is the
 one work surface where the second register earns its rent.
 
@@ -47,7 +52,7 @@ the list row's compact track uses, at full measure with a sentence and a mono fa
 | **Idea** | always | when the issue was created, and when it was planned into its cycle |
 | **Change opened** | a linked pull request exists | the change number and how long it has been open |
 | **Reviewed** | at least one review was submitted | the rounds, and how the exchange ended |
-| **Merged** | the change merged | the merge commit, and how many checks passed |
+| **Merged** | the change merged | the merge commit, and how the checks landed |
 | **Live** / **Not live yet** | the change merged | the deployment that carried the merge commit, or that none did |
 
 A station is drawn **only when a durable timestamp supports it**. A change nobody has reviewed has
@@ -81,7 +86,13 @@ it never prints a set-time nothing recorded.
   exactly where they were. There is no "acknowledged" state, and there should not be.
 
 Both are real buttons in the tab order. ⏎ and esc are answered inside the callout's own key scope —
-never on the document, because ⌘K and the app frame own that layer.
+never on the document, because ⌘K and the app frame own that layer. Either action removes the
+callout from under your cursor, so focus lands on the **Delivery** section above it rather than
+falling back to the top of the page.
+
+A check count is read, never subtracted: a check that has not reported yet is neither a pass nor a
+failure, so "1 of 14 failing, 2 still reporting" is three separate facts and the page states them
+as three.
 
 ### The activity feed
 

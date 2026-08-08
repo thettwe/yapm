@@ -19,6 +19,7 @@ const HOUR = 60 * 60 * 1000
 function signal(overrides: Partial<DeliverySignal> = {}): DeliverySignal {
   return {
     pr: null,
+    pullRequestId: null,
     ciHealth: null,
     reviewAgeMs: null,
     reviewAgeFrom: null,

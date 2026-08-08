@@ -49,8 +49,10 @@ import {
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  type RefObject,
   useCallback,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { useMembership } from '@/auth/use-membership'
@@ -72,10 +74,11 @@ import {
 } from '@/issues/model'
 import {
   type ActivityEntry,
-  ago,
+  agoPhrase,
   buildActivity,
   buildRailView,
   linkSourceWord,
+  momentsForChange,
   monoSubline,
   shortSha,
 } from '@/issues/timeline-view'
@@ -376,8 +379,12 @@ function KeyHint({ children, onAccent }: { children: string; onAccent?: boolean 
       aria-hidden="true"
       className={cn(
         'ml-1 rounded-[4px] border px-1 font-mono text-[10px] leading-[1.4]',
+        // No opacity on the ink. On the accent fill the readable pair is `--on-accent` over
+        // `--accent`, which `contrast.test.ts` pins at AA — an alpha modifier steps that one
+        // guaranteed pair down below it in five of the six theme blocks, and no token assertion
+        // can see an opacity class. The hint stays quiet through its size, not through its ink.
         onAccent
-          ? 'border-primary-foreground/40 text-primary-foreground/80'
+          ? 'border-primary-foreground/75 text-primary-foreground'
           : 'border-border-strong text-text-2',
       )}
     >
@@ -454,8 +461,26 @@ function IssueDetailBody({
     }
   }, [issue, issueLinks, deployments, cycle])
 
+  // The moments belonging to the change the delivery signal describes. The plain register's phrase
+  // was computed over ONE pull request; the mono register, the rail and the callout's evidence read
+  // the same one, so an issue with two linked changes cannot have its two registers describing two
+  // different changes as though they were one. The feed keeps the whole list.
+  const changeTimeline = useMemo(
+    () => momentsForChange(timeline, view.pullRequestId),
+    [timeline, view.pullRequestId],
+  )
+
   const [dismissed, setDismissed] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
+
+  // Where the keyboard lands when the callout unmounts under it. Both of its actions remove the
+  // element holding focus, and focus dropped to `<body>` is a keyboard reader losing their place in
+  // the one flow that is keyboard-only. The Delivery section is the deliberate landing: it is the
+  // thing the callout was talking about, and it survives both outcomes.
+  const deliveryRef = useRef<HTMLElement | null>(null)
+  const landOnDelivery = useCallback(() => {
+    deliveryRef.current?.focus()
+  }, [])
 
   const run = useCallback(async (write: ReturnType<typeof zero.mutate>) => {
     const failure = await runMutation(write)
@@ -620,20 +645,31 @@ function IssueDetailBody({
 
   const rail = (
     <>
-      <DeliveryRail timeline={timeline} divergence={divergence} cycleName={cycle?.name ?? null} />
+      <DeliveryRail
+        sectionRef={deliveryRef}
+        timeline={changeTimeline}
+        divergence={divergence}
+        cycleName={cycle?.name ?? null}
+      />
 
       {divergence !== null && !dismissed ? (
         <DivergenceCallout
           phrase={view.phrase}
           status={issue.status}
           divergence={divergence}
-          timeline={timeline}
+          timeline={changeTimeline}
           lastHumanStatusAt={issue.lastHumanStatusAt ?? null}
           updatedAt={issue.updatedAt}
           now={now}
           canWrite={canWrite}
-          onConfirm={() => setStatus('done')}
-          onDismiss={() => setDismissed(true)}
+          onConfirm={() => {
+            setStatus('done')
+            landOnDelivery()
+          }}
+          onDismiss={() => {
+            setDismissed(true)
+            landOnDelivery()
+          }}
         />
       ) : null}
 
@@ -842,7 +878,7 @@ function IssueDetailBody({
       phrase={view.phrase}
       cycleName={cycle?.name ?? (issue.cycleId ? currentCycleName : null)}
       labels={currentLabels}
-      timeline={timeline}
+      timeline={changeTimeline}
       divergence={divergence}
     />
   )
@@ -1063,10 +1099,12 @@ function DeliveryRail({
   timeline,
   divergence,
   cycleName,
+  sectionRef,
 }: {
   timeline: readonly IssueMoment[]
   divergence: DivergenceKind | null
   cycleName: string | null
+  sectionRef?: RefObject<HTMLElement | null>
 }) {
   const view = useMemo(() => buildRailView(timeline, cycleName), [timeline, cycleName])
   const shape = useMemo(
@@ -1074,7 +1112,14 @@ function DeliveryRail({
     [view.stations, divergence],
   )
   return (
-    <section aria-label="Delivery">
+    // `tabIndex={-1}` makes this a landing place, not a tab stop: the callout's actions send focus
+    // here as they unmount, and a reader tabbing through the page never has to pass through it.
+    <section
+      ref={sectionRef}
+      aria-label="Delivery"
+      tabIndex={-1}
+      className="rounded-control outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+    >
       <SectionHead
         title="Delivery"
         aside={
@@ -1119,15 +1164,15 @@ function divergenceEvidence({
   const opened = latestMoment(timeline, 'change_opened')
   const left =
     lastHumanStatusAt === null
-      ? `${DIVERGENCE_SLUG[status]} · issue updated ${ago(now - updatedAt)} ago`
-      : `${DIVERGENCE_SLUG[status]} set ${ago(now - lastHumanStatusAt)} ago`
+      ? `${DIVERGENCE_SLUG[status]} · issue updated ${agoPhrase(now - updatedAt)}`
+      : `${DIVERGENCE_SLUG[status]} set ${agoPhrase(now - lastHumanStatusAt)}`
   if (divergence === 'status_ahead_of_pr') return `${left} ≠ no open change`
   if (divergence === 'done_but_ci_failing') {
     const where = merged?.mergeCommitSha ?? opened?.headSha ?? null
     return `${left} ≠ checks failing${where === null ? '' : ` on ${shortSha(where)}`}`
   }
   if (merged === null) return left
-  return `${left} ≠ merge ${shortSha(merged.mergeCommitSha) ?? 'no sha recorded'}, ${ago(merged.ageMs)} ago`
+  return `${left} ≠ merge ${shortSha(merged.mergeCommitSha) ?? 'no sha recorded'}, ${agoPhrase(merged.ageMs)}`
 }
 
 function divergenceSentence(
@@ -1152,7 +1197,7 @@ function divergenceSentence(
         : merged.checksHealth === 'failing'
           ? ' with checks failing'
           : ' with checks still reporting'
-  return `Status says ${label} — the change merged ${ago(merged.ageMs)} ago${checks}.`
+  return `Status says ${label} — the change merged ${agoPhrase(merged.ageMs)}${checks}.`
 }
 
 // Two real buttons, both in the focus order. ⏎ and esc are handled INSIDE this callout's own key
@@ -1279,7 +1324,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
       <span className="min-w-0">
         <span className="block text-[13px] text-text-1">
           {entry.say}
-          <span className="ml-2 text-[12px] text-text-2">{ago(entry.ageMs)} ago</span>
+          <span className="ml-2 text-[12px] text-text-2">{agoPhrase(entry.ageMs)}</span>
         </span>
         {entry.fact === null ? null : (
           <span className="mt-0.5 block font-mono text-[11px] text-text-2">{entry.fact}</span>

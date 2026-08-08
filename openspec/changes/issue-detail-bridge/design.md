@@ -476,3 +476,45 @@ registered actually arrives.
 The e2e suite gains the address contract it never had — the panel's door, the key typed into the bar,
 and another team's key resolving to nothing. The key is READ OFF THE PAGE (the team key is generated
 per run), so no bound in it is a fixture value.
+
+### DI-21 — One pull request backs the issue, and the signal says which
+
+The plain register's phrase comes from `computeDeliverySignal`, which describes the **newest-opened**
+linked change. The mono line and the rail were reading the timeline directly and picking "the" pull
+request by their own rules — `latestMoment(…, 'merged')` for the sha, `latestMoment(…,
+'change_opened')` for the number. On an issue with one linked change those rules agree; on an issue
+with two (a merge and a later follow-up still open) they describe two different changes as though
+they were one, and the mono line lends an old merge commit to a sentence about a new change.
+
+`DeliverySignal` therefore carries `pullRequestId` — *which* change the rest of the signal is about —
+and `assembleLinkedEntities` carries the row id through to it. `apps/web` narrows the moment list to
+that change (`momentsForChange`) before phrasing the mono line, the rail and the callout's evidence.
+Deriving the same selection a second time in `timeline-view.ts` was the alternative and is the thing
+this change exists to prevent.
+
+The activity **feed** is deliberately not narrowed: a feed reports what happened, and a second linked
+change is one of the things that happened.
+
+### DI-22 — A pending check is not a failing check
+
+`checksFact` printed `checksTotal - checksPassed` as the failing count, which calls every check that
+has not reported yet a failure. `IssueMergedMoment` now carries all four counts — passed, failing,
+pending, total — from the `checkCounts` pass that already computed them, and the line states the
+pending ones separately ("1 of 14 checks failing, 2 still reporting") rather than folding them into
+the failure tally. Every fixture in the suite was uniformly green, which is why the arithmetic
+shipped; the mixed case is now a unit test on both sides of the seam.
+
+### DI-23 — The on-accent key hint carries no opacity
+
+The 10px `⏎` keycap inside Mark Done inked itself `text-primary-foreground/80` on the accent fill.
+That is the one pair `contrast.test.ts` pins at 4.5, stepped under AA in five of six theme blocks by
+a modifier no token assertion can see. The ink is solid now; the keycap stays quiet through its size.
+Its border is non-text drawing and remains an alpha, raised to 75% because 60% measures 2.46 in
+editorial light — and both halves are now measured in `contrast.test.ts` beside the callout's pair.
+
+### DI-24 — The callout hands focus somewhere deliberate
+
+Both callout actions unmount the element holding focus. Left alone that drops a keyboard reader to
+`<body>` at the exact moment the flow is keyboard-only. The `Delivery` section — the thing the
+callout was talking about, and the one that survives both outcomes — takes `tabIndex={-1}` and is
+focused by both handlers before the callout goes. It is a landing place, not a tab stop.

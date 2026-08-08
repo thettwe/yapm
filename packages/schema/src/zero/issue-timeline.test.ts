@@ -165,10 +165,42 @@ describe('buildIssueTimeline', () => {
         },
       ],
     }
-    expect(latestMoment(buildIssueTimeline(input, NOW), 'merged')).toMatchObject({
+    // All four counts, because a surface handed only `passed` and `total` subtracts — and
+    // `total - passed` here is 2, which would report the one unreported check as a second failure.
+    const merged = latestMoment(buildIssueTimeline(input, NOW), 'merged')
+    expect(merged).toMatchObject({
       checksPassed: 1,
+      checksFailing: 1,
+      checksPending: 1,
       checksTotal: 3,
       checksHealth: 'failing',
+    })
+    expect(
+      (merged?.checksPassed ?? 0) + (merged?.checksFailing ?? 0) + (merged?.checksPending ?? 0),
+    ).toBe(merged?.checksTotal)
+  })
+
+  it('separates pending from failing when only pending checks remain', () => {
+    const base = eng116()
+    const link = base.links?.[0]
+    if (link?.pullRequest === undefined || link.pullRequest === null) throw new Error('fixture')
+    const input: IssueTimelineInput = {
+      ...base,
+      links: [
+        {
+          ...link,
+          pullRequest: {
+            ...link.pullRequest,
+            ciChecks: [{ conclusion: 'success' }, { conclusion: 'pending' }],
+          },
+        },
+      ],
+    }
+    expect(latestMoment(buildIssueTimeline(input, NOW), 'merged')).toMatchObject({
+      checksPassed: 1,
+      checksFailing: 0,
+      checksPending: 1,
+      checksHealth: 'pending',
     })
   })
 

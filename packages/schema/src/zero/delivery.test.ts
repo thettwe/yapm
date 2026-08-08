@@ -171,7 +171,9 @@ describe('assembleLinkedEntities', () => {
       { pullRequest: null },
     ]
     const linked = assembleLinkedEntities(links)
-    expect(linked.pullRequests).toEqual([{ state: 'open', openedAt: 500, deployedAt: null }])
+    expect(linked.pullRequests).toEqual([
+      { id: null, state: 'open', openedAt: 500, deployedAt: null },
+    ])
     expect(linked.ciRuns).toEqual([{ health: 'failing' }, { health: 'passing' }])
     expect(linked.reviews).toEqual([{ state: 'approved', submittedAt: 600 }])
   })
@@ -196,11 +198,28 @@ describe('assembleLinkedEntities', () => {
     )
     expect(signal).toEqual({
       pr: 'approved',
+      pullRequestId: null,
       ciHealth: 'passing',
       reviewAgeMs: expect.any(Number),
       reviewAgeFrom: 'review',
       deployedAt: null,
     })
+  })
+
+  // WHICH pull request the signal's `pr` describes travels with it. A surface that draws a second
+  // register over the same issue reads this instead of picking a "the" pull request by a rule of
+  // its own — two selection rules over two linked changes is how one page describes two changes as
+  // if they were one.
+  it('names the pull request the signal describes: the newest-opened one', () => {
+    const signal = computeDeliverySignal(
+      issue,
+      assembleLinkedEntities([
+        { pullRequest: { id: 'pr-100', state: 'merged', openedAt: 100 } },
+        { pullRequest: { id: 'pr-200', state: 'open', openedAt: 200 } },
+      ]),
+    )
+    expect(signal?.pr).toBe('open')
+    expect(signal?.pullRequestId).toBe('pr-200')
   })
 })
 

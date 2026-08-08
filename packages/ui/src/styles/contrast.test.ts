@@ -278,6 +278,22 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     }
   })
 
+  // The keyboard hint INSIDE the primary action — the 10px `⏎` keycap on Mark Done, in the masthead
+  // and in the divergence callout. It sits on the accent fill, so its ink is the one pair the block
+  // below already pins at AA — and it shipped as `text-primary-foreground/80`, an alpha modifier
+  // that steps that guaranteed pair under AA in five of the six blocks while no token assertion can
+  // see it. The ink is solid now, and the keycap's BORDER — non-text drawing, so 3:1 (WCAG 1.4.11)
+  // rather than 4.5 — is the one part still carried by an alpha, pinned here at the 75% it is drawn
+  // at because 60% measures 2.46–3.36 and editorial light is under the bar there.
+  it('the on-accent key hint reads on the accent fill (>= 4.5 ink, >= 3.0 keycap border)', () => {
+    const fill = hex(t, '--accent')
+    const ink = hex(t, '--on-accent')
+    expect(contrastRatio(ink, fill), 'hint ink').toBeGreaterThanOrEqual(AA_NORMAL)
+    expect(contrastRatio(wash(ink, fill, 0.75), fill), 'hint border').toBeGreaterThanOrEqual(
+      AA_LARGE,
+    )
+  })
+
   // The reality track — the one vocabulary every surface draws delivery in — is drawn on exactly
   // five surfaces: a plain row, a hovered row, the SELECTED list row (`--bg-selected`,
   // `issue-row.tsx`), the SELECTED board card (`--accent-soft`, `board-card.tsx`) and the digest's

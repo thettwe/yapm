@@ -32,7 +32,8 @@ syncs, so it can never display a team, a count or a destination the caller may n
 
 - **WHEN** the application's source is inspected for a sticky application header outside the
   frame
-- **THEN** none exists — every page's header content is supplied to the frame's masthead
+- **THEN** none exists; no page hand-rolls application chrome, and every work surface's header
+  content is supplied to the frame's masthead
 
 #### Scenario: Unauthenticated surfaces have no frame
 

@@ -514,9 +514,13 @@ fold visible. What did change here: the two `useMinuteNow` copies became one mod
 the frame and the Home digest fold the same rows against a byte-identical `now` instead of two
 timers a fraction of a second apart.
 
-**DI-19 — a surface palette may decline ⌘K rather than swallow it.** `CommandSource.open` widened to
-`() => boolean | void`; returning `false` means "not mine right now" and the registry keeps scanning,
-finally falling through to the frame's own palette. The board needed it: its palette is "Move to
+**DI-19 — a surface palette may decline ⌘K rather than swallow it.** `CommandSource.open` is
+`() => boolean` — a source must decide explicitly, and `boolean | void` was rejected for it: the
+registry reads anything other than `false` as "consumed", so a `void`-returning opener would silently
+eat the shortcut, which is the exact failure the return value exists to end. Returning `false` means
+"not mine right now" and the registry keeps scanning, finally falling through to the frame's own
+palette; because the only way to decline is to say so, reading everything else as consumed is safe.
+The board needed it: its palette is "Move to
 status…" for the FOCUSED CARD, so with nothing focused, mid-drag, or for a viewer, the old opener
 returned silently and ⌘K did nothing at all on `/teams/$teamId/board` — the exact failure D6 exists
 to end, reintroduced by the registration itself. The registry also declines to open when nothing is

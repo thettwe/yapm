@@ -37,7 +37,7 @@
 
 - [x] 6.1 `apps/web/src/frame/masthead.tsx`: title + mono count, `lens` slot, `meta` slot, `actions` slot — `ia.html`'s band-2 anatomy and nothing else
 - [x] 6.2 Migrate the eleven `AppShell` importers to `AppFrame` and delete `app-shell.tsx`
-- [x] 6.3 Migrate the nine hand-rolled routes (`issues.index`, `issues.$issueKey`, `board`, `cycles`, `triage`, `delivery`, `projects`, `roadmap`, `retros.index`, `retros.$retroId`) onto `AppFrame` + `Masthead`, keeping every control they offer today working — all ten are on `AppFrame`, every hand-rolled chrome header is deleted, and every page's band 2 now renders through `Masthead` (plus `/inbox`, which the sticky-header grep also hit); see design DI-10 for the slot-by-slot table
+- [x] 6.3 Migrate the nine hand-rolled routes (`issues.index`, `issues.$issueKey`, `board`, `cycles`, `triage`, `delivery`, `projects`, `roadmap`, `retros.index`, `retros.$retroId`) onto `AppFrame` + `Masthead`, keeping every control they offer today working — all ten are on `AppFrame`, every hand-rolled chrome header is deleted, and every *work surface's* band 2 now renders through `Masthead` (plus `/inbox`, which the sticky-header grep also hit); the five editorial reading surfaces keep their own document heading as body content — see design DI-17 for why, and DI-10 for the slot-by-slot table
 - [x] 6.4 Move Board into the Issues masthead as a lens (`List | Board`, `aria-pressed`); delete `apps/web/src/board/view-switch.tsx` and its ten importers' usage; Gallery folds away
 - [x] 6.5 Add the repo guard: no `sticky top-0` application header outside `apps/web/src/frame/`
 

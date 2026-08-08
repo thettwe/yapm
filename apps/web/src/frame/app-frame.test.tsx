@@ -1,6 +1,7 @@
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
+import { RECOVERY_IDLE, SyncRecoveryContext, type SyncRecoveryValue } from '@/zero/recovery'
 
 // THE FALSIFIABLE CHECK for the app frame. It renders the REAL `/teams/$teamId/issues` route — one
 // of the ten that hand-rolled a sticky header of their own before this change — and asserts the
@@ -171,12 +172,14 @@ function fourExceptions() {
   zero.deployments = []
 }
 
-function renderAt(path: string) {
+function renderAt(path: string, recovery?: SyncRecoveryValue) {
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [path] }),
   })
-  return render(<RouterProvider router={router} />)
+  const app = <RouterProvider router={router} />
+  if (recovery === undefined) return render(app)
+  return render(<SyncRecoveryContext.Provider value={recovery}>{app}</SyncRecoveryContext.Provider>)
 }
 
 beforeEach(() => {
@@ -374,6 +377,36 @@ test('the frame’s own palette carries appearance alongside the destinations', 
   expect(within(palette).getByText('Appearance')).toBeInTheDocument()
   expect(within(palette).getByText('Search everything')).toBeInTheDocument()
   expect(within(palette).getByText('Go to inbox')).toBeInTheDocument()
+  // The retry is conditional on the offer, not always-present: with sync idle it is not a command.
+  expect(within(palette).queryByText('Retry sync now')).toBeNull()
+})
+
+// §DI-20 — band 3 is the LAST thing in the document, so the retry control that used to sit in the
+// header now costs a keyboard-only reader every Tab stop on the page. The palette is the route to it
+// whose length does not depend on the page's, and it is the whole mitigation, so it gets an
+// assertion: the command appears exactly while the offer stands, and selecting it retries.
+test('while sync offers a retry the palette carries it, and selecting it retries', async () => {
+  zero.teams = [TEAM]
+  const retryNow = vi.fn()
+  renderAt('/inbox', {
+    ...RECOVERY_IDLE,
+    phase: 'waiting',
+    attempt: 4,
+    delayMs: 16_000,
+    retryOffered: true,
+    retryNow,
+  })
+  await screen.findByTestId('deck')
+
+  await act(async () => {
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+  })
+
+  const palette = await screen.findByTestId('frame-palette')
+  await act(async () => {
+    fireEvent.click(within(palette).getByText('Retry sync now'))
+  })
+  expect(retryNow).toHaveBeenCalledTimes(1)
 })
 
 // A workspace with no teams drops the six stops rather than offering doors onto nothing.

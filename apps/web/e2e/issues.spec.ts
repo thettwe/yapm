@@ -213,7 +213,7 @@ test('status can be changed from the detail panel and persists', async ({ page }
 })
 
 // Task 8.2: the list must be correct in all three presets, light and dark. Setting the theme
-// cache before load forces the preset/mode; the grouped list and the reality-strip slot must
+// cache before load forces the preset/mode; the grouped list and the reality-track slot must
 // render from tokens with no hardcoded values in every combination.
 test('the grouped list renders in all three presets, light and dark', async ({ page }) => {
   await enterApp(page)

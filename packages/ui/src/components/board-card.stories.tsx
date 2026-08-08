@@ -1,10 +1,12 @@
 import { BoardCard } from './board-card'
-import { DivergenceFlag } from './issue-row'
+import { buildRealityShape, RealityTrack, realityTrackLabel } from './reality-track'
 import { PresetGrid } from './story-presets'
 
 export default {
   title: 'Board card',
 }
+
+const DIVERGED = { pr: 'merged', ci: 'passing', reviewAgeMs: 600_000, deployedAt: null } as const
 
 export function AllPresets() {
   return (
@@ -17,11 +19,17 @@ export function AllPresets() {
           status="in-progress"
           labels={[{ name: 'sync' }]}
           assignee={{ name: 'Ada Lovelace' }}
-          divergenceFlag={<DivergenceFlag />}
+          realityTrack={
+            <RealityTrack
+              width={86}
+              shape={buildRealityShape(DIVERGED, { divergence: 'status_behind_merge' })}
+              label={realityTrackLabel(DIVERGED, 'PR merged but this issue is not marked done')}
+            />
+          }
         />
         <BoardCard
           issueKey="ENG-138"
-          title="Row primitive reserves reality-strip slot"
+          title="Card reserves one reality-track slot"
           priority="high"
           status="in-review"
           labels={[{ name: 'graph' }]}

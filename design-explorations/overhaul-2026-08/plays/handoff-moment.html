@@ -1,0 +1,467 @@
+<!doctype html>
+<!--
+  plays/handoff-moment — HANDOFF play, artifact 1 of 2.
+  THE SEAM AS A DESIGNED MOMENT: issue detail at the instant design hands to
+  engineering. ENG-121 "Guest checkout" opens on a composed "Ready to build" block —
+  the approved mock (inline-SVG wireframe with numbered redline markers), three plain
+  acceptance notes authored by the designer, a decided/open split, and the page's ONE
+  terracotta action: "Start building ⏎" (flips status + assigns). Below, ghosted, the
+  second seam for contrast: "Built — ready to verify" (eng → PM). Rail carries the
+  triangle: why (PM) → what (design) → how (eng) → live.
+  Horizon three-band frame; Warm LIGHT tokens verbatim. Extensions (from daylight):
+  row hairline #efe9dd, statusline bg #f4efe5, urgent-soft rgba(204,90,64,.08).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — ENG-121 · Guest checkout without an account</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  body.full .frame{height:auto;overflow:visible}
+  body.full .body-cols{overflow:visible}
+
+  /* ============ band 1 — global bar ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — masthead ============ */
+  .masthead{padding:18px 40px 16px;border-bottom:1px solid var(--border)}
+  .m-top{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .m-back{color:var(--text-3);font-size:12.5px}
+  .m-back b{color:var(--text-2);font-weight:500}
+  .m-id{font-family:var(--mono);font-size:12.5px;color:var(--text-3)}
+  .chip-hand{display:inline-flex;align-items:center;gap:7px;height:24px;padding:0 10px;
+             border:1px solid var(--border-strong);border-radius:var(--rad-pill);
+             background:rgba(255,255,255,.6);color:var(--text-1);font-size:12px;font-weight:600}
+  .chip-hand .ring{width:9px;height:9px;border-radius:50%;background:var(--bg);
+                   border:2.2px solid var(--status-done)}
+  .m-actions{margin-left:auto;display:flex;gap:8px}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;gap:6px;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .kbd-s{font-family:var(--mono);font-size:10px;color:var(--text-3);
+         border:1px solid var(--border-strong);border-radius:4px;padding:0 4px;background:rgba(255,255,255,.5)}
+  .btn.primary .kbd-s{color:rgba(255,255,255,.85);border-color:rgba(255,255,255,.4);background:transparent}
+  .masthead h1{font-size:27px;font-weight:700;letter-spacing:-.02em;line-height:1.12;max-width:760px}
+  .m-bi{margin-top:10px}
+  .m-bi .say{font-size:13.5px;color:var(--text-1);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .m-bi .say .st-word{display:inline-flex;align-items:center;gap:7px;font-weight:600}
+  .m-bi .say .dim{color:var(--text-2)}
+  .m-bi .say .dv{color:var(--border-strong)}
+  .m-bi .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:5px}
+
+  .st{width:14px;height:14px;border-radius:50%;position:relative;flex:none;display:inline-block}
+  .st.todo{border:1.6px solid var(--status-todo)}
+  .ldot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
+
+  /* ============ content columns ============ */
+  .body-cols{flex:1;display:flex;min-height:0;overflow:auto}
+  .doc{flex:1;min-width:0;padding:18px 48px 56px 40px}
+
+  /* ============ the handoff block — the most designed moment ============ */
+  .hand{background:var(--bg-elevated);border:1px solid var(--border-strong);
+        border-radius:var(--rad-card);max-width:920px}
+  .hand-h{display:flex;align-items:center;gap:10px;padding:13px 22px 12px;
+          border-bottom:1px solid var(--row-hairline)}
+  .hand-h .ring{width:12px;height:12px;border-radius:50%;background:var(--bg-elevated);
+                border:2.6px solid var(--status-done);flex:none}
+  .hand-h .t{font-size:16px;font-weight:700;letter-spacing:-.01em}
+  .hand-h .meta{margin-left:auto;text-align:right}
+  .hand-h .meta .say{font-size:12.5px;color:var(--text-2)}
+  .hand-h .meta .git{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:2px}
+
+  .hand-grid{display:grid;grid-template-columns:236px 1fr;gap:0}
+  .mockcell{padding:16px 0 14px 22px;border-right:1px solid var(--row-hairline)}
+  .mock-cap{margin-top:9px;padding-right:20px}
+  .mock-cap .say{font-size:12.5px;font-weight:600}
+  .mock-cap .git{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:2px}
+  .notescell{padding:18px 22px 14px 24px;display:flex;flex-direction:column}
+
+  .mini-h{font-size:10.5px;letter-spacing:.09em;color:var(--text-3);font-weight:600;margin-bottom:9px}
+  .note{display:flex;gap:10px;align-items:flex-start;padding:5px 0}
+  .note .n{width:15px;height:15px;border-radius:50%;background:var(--text-2);color:#f6f2ea;
+           font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;
+           flex:none;margin-top:1px}
+  .note .say{font-size:13.5px;line-height:1.4}
+  .notes-git{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin:7px 0 0 25px}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:18px;
+         border-top:1px solid var(--row-hairline);padding-top:14px}
+  .d-item,.o-item{display:flex;gap:9px;align-items:flex-start;padding:4px 0;font-size:13px;line-height:1.4}
+  .d-item .d{width:7px;height:7px;border-radius:50%;background:var(--text-2);flex:none;margin-top:5px}
+  .o-item{color:var(--text-2)}
+  .o-item .d{width:7px;height:7px;border-radius:50%;background:transparent;
+             border:1.5px solid var(--border-strong);flex:none;margin-top:4px}
+  .o-item .who{color:var(--text-3);font-size:12px}
+
+  .hand-foot{display:flex;align-items:center;gap:14px;padding:12px 22px;
+             border-top:1px solid var(--row-hairline)}
+  .hand-foot .after{min-width:0}
+  .hand-foot .say{font-size:13px;color:var(--text-1)}
+  .hand-foot .git{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:2px}
+  .hand-foot .skip{margin-left:auto;color:var(--text-3);font-size:12.5px}
+
+  /* ============ the second seam, ghosted ============ */
+  .seam2-label{margin:18px 0 9px;font-size:10.5px;letter-spacing:.09em;color:var(--text-3);
+               font-weight:600;max-width:920px}
+  .seam2-label .lt{color:var(--text-3);font-weight:400;letter-spacing:0;font-size:12px;margin-left:8px}
+  .seam2{border:1px dashed var(--border-strong);border-radius:var(--rad-card);
+         max-width:920px;opacity:.62;background:rgba(255,255,255,.35)}
+  .seam2 .hand-h{border-bottom:1px solid var(--row-hairline)}
+  .seam2 .hand-h .ring{border-color:var(--status-in-review)}
+  .s2-grid{display:grid;grid-template-columns:1.3fr 1fr auto;gap:26px;padding:16px 22px 18px;align-items:start}
+  .s2-col .say{font-size:13px;line-height:1.45}
+  .s2-col .say+.say{margin-top:5px}
+  .s2-col .tick{color:var(--text-3);margin-right:7px}
+  .s2-col .git{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:6px}
+  .s2-actions{display:flex;flex-direction:column;gap:8px;align-items:stretch;padding-top:14px}
+
+  /* ============ description below the moment ============ */
+  .sec-h{display:flex;align-items:baseline;font-size:11px;letter-spacing:.09em;color:var(--text-3);
+         font-weight:600;padding-bottom:9px;border-bottom:1px solid var(--border);margin-bottom:14px}
+  .sec-h .act{margin-left:auto;letter-spacing:0;font-family:var(--mono);font-size:11px;font-weight:400}
+  .doc section{max-width:640px;margin-top:34px}
+  .prose{font-size:14.5px;line-height:1.65;color:var(--text-1)}
+  .prose p+p{margin-top:12px}
+
+  /* ============ right rail ============ */
+  .rail-col{width:384px;min-width:384px;border-left:1px solid var(--border);
+            padding:26px 40px 48px 34px}
+  .rail-h{font-size:11px;letter-spacing:.09em;color:var(--text-3);font-weight:600;
+          padding-bottom:9px;border-bottom:1px solid var(--border)}
+
+  /* the triangle strip: why -> what -> how -> live */
+  .tri{display:flex;align-items:flex-start;margin:16px 0 6px}
+  .tri .leg{flex:1;position:relative}
+  .tri .leg .lab{font-size:12px;font-weight:600;margin-top:9px}
+  .tri .leg .who{font-size:11px;color:var(--text-3)}
+  .tri .nodeline{display:flex;align-items:center}
+  .tri .tn{width:9px;height:9px;border-radius:50%;flex:none;background:var(--status-done)}
+  .tri .tn.open{background:var(--bg);border:1.8px solid var(--border-strong);width:10px;height:10px}
+  .tri .tseg{height:2px;flex:1;background:var(--status-done)}
+  .tri .tseg.dotted{background:repeating-linear-gradient(90deg,var(--border-strong) 0 3px,transparent 3px 6px);height:1.5px}
+  .tri-git{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-bottom:22px}
+
+  .why{margin:14px 0 24px}
+  .why .say{font-size:14.5px;line-height:1.5;font-weight:600;letter-spacing:-.005em}
+  .why .say2{font-size:13px;line-height:1.5;color:var(--text-2);margin-top:7px}
+  .why .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:8px}
+
+  .props{border-top:1px solid var(--border);padding-top:18px}
+  .prop{display:flex;margin-bottom:14px;font-size:13px}
+  .prop .k{width:88px;color:var(--text-3);flex:none;padding-top:1px}
+  .prop .vwrap{min-width:0}
+  .prop .v{display:flex;align-items:center;gap:7px;font-weight:500}
+  .prop .git{font-family:var(--mono);font-size:11px;color:var(--text-3);font-weight:400;margin-top:3px}
+  .pri{display:inline-flex;align-items:flex-end;gap:1.5px}
+  .pbar{display:inline-block;width:3px;border-radius:1px;background:var(--border-strong)}
+  .pbar.on{background:var(--text-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 10px;
+        border:1px solid var(--border);border-radius:var(--rad-pill);background:rgba(255,255,255,.55);font-size:12px}
+
+  /* ============ band 3 — statusline ============ */
+  .statusline{height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab active">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <!-- band 2 -->
+  <div class="masthead">
+    <div class="m-top">
+      <span class="m-back">‹ <b>Issues</b></span>
+      <span class="m-id">ENG-121</span>
+      <span class="chip-hand"><span class="ring"></span>Ready to build</span>
+      <div class="m-actions">
+        <button class="btn">Follow</button>
+      </div>
+    </div>
+    <h1>Guest checkout without an account</h1>
+    <div class="m-bi">
+      <div class="say">
+        <span class="st-word"><span class="st todo"></span>Todo</span>
+        <span class="dv">·</span><span class="dim">Cycle 2</span>
+        <span class="dv">·</span><span class="dim" style="display:inline-flex;align-items:center;gap:6px"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+        <span class="dv">·</span><span class="dim">design approved yesterday — waiting for a builder</span>
+      </div>
+      <div class="git">handoff design → engineering · mock v3 · 3 acceptance notes · waiting 18h</div>
+    </div>
+  </div>
+
+  <div class="body-cols">
+    <div class="doc">
+
+      <!-- ============ the moment ============ -->
+      <div class="hand">
+        <div class="hand-h">
+          <span class="ring"></span><span class="t">Ready to build</span>
+          <span class="meta">
+            <span class="say" style="display:block">Handed off by Design, yesterday</span>
+            <span class="git" style="display:block">mock v3 approved Aug 6 · notes travel with the work</span>
+          </span>
+        </div>
+
+        <div class="hand-grid">
+          <div class="mockcell">
+            <!-- the approved mock — inline SVG wireframe, phone-shaped -->
+            <svg width="170" height="261" viewBox="0 0 190 292" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="1" y="1" width="188" height="290" rx="16" fill="#fdfbf7" stroke="#dcd3c4" stroke-width="1.4"/>
+              <!-- status strip -->
+              <rect x="14" y="12" width="26" height="5" rx="2.5" fill="#e7e0d4"/>
+              <rect x="150" y="12" width="26" height="5" rx="2.5" fill="#e7e0d4"/>
+              <!-- header -->
+              <rect x="14" y="28" width="10" height="10" rx="2" fill="#dcd3c4"/>
+              <rect x="60" y="30" width="70" height="7" rx="3.5" fill="#cfc5b4"/>
+              <line x1="14" y1="48" x2="176" y2="48" stroke="#efe9dd" stroke-width="1"/>
+              <!-- order summary block -->
+              <rect x="14" y="58" width="162" height="34" rx="6" fill="#f0eae0"/>
+              <rect x="22" y="66" width="58" height="6" rx="3" fill="#dcd3c4"/>
+              <rect x="22" y="78" width="36" height="5" rx="2.5" fill="#e2dacb"/>
+              <rect x="140" y="70" width="28" height="8" rx="3" fill="#cfc5b4"/>
+              <!-- email field: marker 1 -->
+              <rect x="14" y="102" width="162" height="30" rx="6" fill="rgba(189,88,55,.10)" stroke="rgba(189,88,55,.35)" stroke-width="1.2"/>
+              <rect x="22" y="110" width="70" height="6" rx="3" fill="#c9a08c"/>
+              <rect x="22" y="121" width="44" height="4" rx="2" fill="#dfc9bc"/>
+              <!-- card fields -->
+              <rect x="14" y="140" width="162" height="26" rx="6" fill="#f0eae0"/>
+              <rect x="22" y="149" width="80" height="6" rx="3" fill="#dcd3c4"/>
+              <rect x="14" y="172" width="78" height="26" rx="6" fill="#f0eae0"/>
+              <rect x="98" y="172" width="78" height="26" rx="6" fill="#f0eae0"/>
+              <rect x="22" y="181" width="40" height="6" rx="3" fill="#dcd3c4"/>
+              <rect x="106" y="181" width="40" height="6" rx="3" fill="#dcd3c4"/>
+              <!-- pay button -->
+              <rect x="14" y="208" width="162" height="30" rx="8" fill="#cfc5b4"/>
+              <rect x="66" y="219" width="58" height="8" rx="4" fill="#fdfbf7"/>
+              <!-- nudge card, dashed: marker 2 -->
+              <rect x="14" y="248" width="162" height="32" rx="7" fill="none" stroke="#cfc5b4" stroke-width="1.2" stroke-dasharray="4 3"/>
+              <rect x="22" y="256" width="96" height="6" rx="3" fill="#dcd3c4"/>
+              <rect x="22" y="267" width="64" height="5" rx="2.5" fill="#e2dacb"/>
+              <rect x="132" y="258" width="36" height="12" rx="4" fill="#e7e0d4"/>
+              <!-- redline markers -->
+              <g font-family="Figtree,sans-serif" font-size="9.5" font-weight="700">
+                <circle cx="178" cy="109" r="8" fill="#6b6357"/>
+                <text x="178" y="112.5" text-anchor="middle" fill="#f6f2ea">1</text>
+                <circle cx="178" cy="128" r="8" fill="#6b6357"/>
+                <text x="178" y="131.5" text-anchor="middle" fill="#f6f2ea">3</text>
+                <circle cx="178" cy="264" r="8" fill="#6b6357"/>
+                <text x="178" y="267.5" text-anchor="middle" fill="#f6f2ea">2</text>
+              </g>
+            </svg>
+            <div class="mock-cap">
+              <div class="say">Checkout sheet — approved</div>
+              <div class="git">mock v3 · 2 earlier · full flow ↗</div>
+            </div>
+          </div>
+
+          <div class="notescell">
+            <div class="mini-h">ACCEPTANCE — WHAT “DONE” LOOKS LIKE</div>
+            <div class="note"><span class="n">1</span>
+              <span class="say">A guest can pay with just an email — no account, no password, ever.</span></div>
+            <div class="note"><span class="n">2</span>
+              <span class="say">The “save your details?” nudge appears after payment, never before.</span></div>
+            <div class="note"><span class="n">3</span>
+              <span class="say">An email we already know gets a quiet sign-in hint, not an error.</span></div>
+            <div class="notes-git">written by the designer with the mock · numbered on the frame</div>
+
+            <div class="split">
+              <div>
+                <div class="mini-h">DECIDED</div>
+                <div class="d-item"><span class="d"></span><span>Email is the only required field.</span></div>
+                <div class="d-item"><span class="d"></span><span>Guests get order updates by email — no order page yet.</span></div>
+              </div>
+              <div>
+                <div class="mini-h">STILL OPEN</div>
+                <div class="o-item"><span class="d"></span><span>Apple Pay for guests — follow-up issue, not this one. <span class="who">— PM</span></span></div>
+                <div class="o-item"><span class="d"></span><span>What the cart does if the email bounces. <span class="who">— builder’s call</span></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hand-foot">
+          <button class="btn primary">Start building&nbsp;<span class="kbd-s">⏎</span></button>
+          <span class="after">
+            <span class="say" style="display:block">Moves this to In Progress and assigns it to you.</span>
+            <span class="git" style="display:block">todo → in-progress · assignee ← you · the notes follow into your change</span>
+          </span>
+          <span class="skip">Not yours to take? Leave it for the queue.</span>
+        </div>
+      </div>
+
+      <!-- ============ the second seam, ghosted for contrast ============ -->
+      <div class="seam2-label">THE WAY BACK<span class="lt">how this returns to the team when the change merges — nothing to do yet</span></div>
+      <div class="seam2">
+        <div class="hand-h">
+          <span class="ring"></span><span class="t">Built — ready to verify</span>
+          <span class="meta">
+            <span class="say" style="display:block">Handed back by Engineering</span>
+            <span class="git" style="display:block">composes itself from the merged change + these notes</span>
+          </span>
+        </div>
+        <div class="s2-grid">
+          <div class="s2-col">
+            <div class="mini-h">WHAT TO CHECK</div>
+            <div class="say"><span class="tick">1</span>Pay as a guest with a fresh email.</div>
+            <div class="say"><span class="tick">2</span>Watch for the nudge — after payment only.</div>
+            <div class="say"><span class="tick">3</span>Try an email that already has an account.</div>
+            <div class="git">the acceptance notes, returned as a checklist</div>
+          </div>
+          <div class="s2-col">
+            <div class="mini-h">WHERE IT RUNS</div>
+            <div class="say">On staging, with a seeded test cart.</div>
+            <div class="git">preview: pay.acme.dev/eng-121 · card 4242…</div>
+          </div>
+          <div class="s2-actions">
+            <button class="btn">Verify ✓</button>
+            <button class="btn">Reopen</button>
+          </div>
+        </div>
+      </div>
+
+      <section>
+        <div class="sec-h">DESCRIPTION<span class="act">edited 2d ago · 48 words</span></div>
+        <div class="prose">
+          <p>Let a first-time buyer pay without creating an account. Email is the only thing
+          we ask for; the account offer comes after the receipt, as an invitation rather
+          than a gate.</p>
+          <p>Out of scope for this cycle: guest order history, Apple Pay for guests.</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- ============ rail: the triangle ============ -->
+    <div class="rail-col">
+      <div class="rail-h">FROM WHY TO LIVE</div>
+
+      <div class="tri">
+        <div class="leg">
+          <div class="nodeline"><span class="tn"></span><span class="tseg"></span></div>
+          <div class="lab">Why</div><div class="who">Product</div>
+        </div>
+        <div class="leg">
+          <div class="nodeline"><span class="tn"></span><span class="tseg dotted"></span></div>
+          <div class="lab">What</div><div class="who">Design</div>
+        </div>
+        <div class="leg">
+          <div class="nodeline"><span class="tn open"></span><span class="tseg dotted"></span></div>
+          <div class="lab">How</div><div class="who">Engineering</div>
+        </div>
+        <div class="leg" style="flex:0 0 30px">
+          <div class="nodeline"><span class="tn open"></span></div>
+          <div class="lab">Live</div><div class="who">&nbsp;</div>
+        </div>
+      </div>
+      <div class="tri-git">brief 9d · mock 1d · unclaimed</div>
+
+      <div class="rail-h">WHY THIS EXISTS</div>
+      <div class="why">
+        <div class="say">A third of first-time buyers leave at “Create an account.”</div>
+        <div class="say2">If a guest can pay in under a minute, we keep the sale — and earn
+        the right to ask for the account afterwards.</div>
+        <div class="git">from the Cycle 2 planning note · written by Product</div>
+      </div>
+
+      <div class="props">
+        <div class="prop"><span class="k">Status</span>
+          <span class="vwrap"><span class="v"><span class="st todo"></span>Todo</span>
+          <span class="git">Start building moves it · nothing manual</span></span></div>
+        <div class="prop"><span class="k">Priority</span>
+          <span class="vwrap"><span class="v"><span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>Medium</span></span></div>
+        <div class="prop"><span class="k">Assignee</span>
+          <span class="vwrap"><span class="v" style="color:var(--text-3);font-weight:400">Unassigned — yours if you take it</span></span></div>
+        <div class="prop"><span class="k">Cycle</span>
+          <span class="vwrap"><span class="v">Cycle 2</span>
+          <span class="git">Aug 4 – 18 · day 9 of 14</span></span></div>
+        <div class="prop"><span class="k">Labels</span>
+          <span class="vwrap"><span class="v"><span class="pill"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span><span class="pill"><span class="ldot" style="background:var(--status-done)"></span>design</span></span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+<script>if(location.hash==="#full")document.body.classList.add("full");</script>
+</body>
+</html>

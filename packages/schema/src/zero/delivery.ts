@@ -11,13 +11,36 @@ export type PrState = 'draft' | 'open' | 'approved' | 'merged' | 'closed'
 
 export type CiHealth = 'passing' | 'failing' | 'pending'
 
+// Which clock `reviewAgeMs` measures. There is no review-requested event, so the fallback to the
+// pull request's open time is not a review at all — and a surface that announced both as "reviewed
+// Nd ago" would be claiming a review that never happened. Null when there is no age to measure.
+export type ReviewAgeSource = 'review' | 'pr-open'
+
 export interface DeliverySignal {
   readonly pr: PrState | null
   readonly ciHealth: CiHealth | null
   readonly reviewAgeMs: number | null
+  readonly reviewAgeFrom: ReviewAgeSource | null
   // The moment this change first reached production: the earliest `deployedAt` among deployments
   // carrying a linked merged PR's merge commit. Null when nothing carried it — which includes the
   // batched-deploy case §D3 chose to over-report rather than guess at.
+  readonly deployedAt: number | null
+}
+
+// The four facts every reality drawing may show, and no others: PR state, CI health, review age,
+// and the deploy join. One shape for every surface — the list row's track, the team home's rows,
+// the issue detail's rail — so a second, incompatible strip type cannot be declared beside it.
+// Two limits ride along with it and are never papered over: `ci_check` carries no start/finish
+// time (only `updatedAt`), so a duration for a check run is not derivable; and there is no
+// review-requested event, so `reviewAgeMs` falls back to the PR's open time and nothing drawn
+// from it may claim a reviewer has been waiting.
+export interface DeliveryStrip {
+  readonly pr: PrState | null
+  readonly ci: CiHealth | null
+  readonly reviewAgeMs: number | null
+  // Optional so a surface that has no clock to report (a class row summarising N issues) may omit
+  // it; a drawing given an age but no source states the age neutrally rather than naming a review.
+  readonly reviewAgeFrom?: ReviewAgeSource | null
   readonly deployedAt: number | null
 }
 
@@ -135,6 +158,8 @@ export function computeDeliverySignal(
       : latestPr !== undefined
         ? now - latestPr.openedAt
         : null
+  const reviewAgeFrom: ReviewAgeSource | null =
+    latestReview !== undefined ? 'review' : latestPr !== undefined ? 'pr-open' : null
 
   // The deploy axis reads the newest MERGED pull request. A producer that keys deployments per pull
   // request (`assembleLinkedEntities`) always sets the field, so a `null` there means "this change
@@ -147,6 +172,7 @@ export function computeDeliverySignal(
     pr,
     ciHealth: aggregateCiHealth(ciRuns),
     reviewAgeMs,
+    reviewAgeFrom,
     deployedAt,
   }
 }

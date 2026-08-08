@@ -1,0 +1,212 @@
+<!doctype html>
+<!--
+  plays/bridge-wrapped — BRIDGE play, artifact 2 of 2.
+  CYCLE WRAPPED: the artifact yapm composes when a cycle closes, designed to be shared —
+  pasted in Slack, shown at all-hands. One calm column on warm paper: masthead, the
+  fourteen-day band, "We shipped 8" with the outcome list, the cadence sentence, the two
+  things we agreed to try next, and a colophon that makes blamelessness visible.
+  ZERO names. "We" language throughout. Warm LIGHT tokens verbatim; extensions:
+  row hairline #efe9dd, statusline bg #f4efe5. The bilingual seam carries over:
+  plain sentence first, mono detail beneath.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Cycle 2 · Wrapped</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5;
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg-sidebar);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+
+  /* the sheet — a composed artifact, so it may sit ON the desk surface */
+  .sheet{width:660px;margin:44px auto 56px;background:var(--bg);
+         border:1px solid var(--border);border-radius:var(--rad-card);
+         padding:52px 60px 40px}
+
+  /* masthead */
+  .eyebrow{display:flex;align-items:baseline}
+  .eyebrow .t{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;color:var(--accent-strong);font-weight:500}
+  .eyebrow .ws{margin-left:auto;font-size:12.5px;color:var(--text-3)}
+  .mast{display:flex;align-items:baseline;margin-top:14px}
+  .mast h1{font-size:46px;font-weight:700;letter-spacing:-.03em;line-height:1}
+  .mast .team{margin-left:14px;font-size:19px;font-weight:500;color:var(--text-2);letter-spacing:-.01em}
+  .mast .dates{margin-left:auto;text-align:right}
+  .mast .dates .d1{font-size:13.5px;color:var(--text-1);font-weight:600}
+  .mast .dates .d2{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:3px}
+
+  .day-band{display:flex;gap:5px;height:8px;margin-top:26px}
+  .day-band i{flex:1;height:6px;border-radius:2.5px;background:var(--accent-line)}
+  .day-band i:last-child{background:var(--accent);height:8px;margin-top:-1px}
+  .band-cap{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:9px}
+
+  /* section rhythm */
+  .band{margin-top:38px;border-top:1px solid var(--border);padding-top:24px}
+  .band-h{font-size:11px;letter-spacing:.09em;font-weight:700;color:var(--text-3)}
+
+  /* we shipped 8 */
+  .hero-line{font-size:27px;font-weight:700;letter-spacing:-.022em;line-height:1.2;margin-top:2px}
+  .hero-sub{margin-top:8px}
+  .hero-sub .say{font-size:13.5px;color:var(--text-2)}
+  .hero-sub .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:4px}
+  .ship{margin-top:18px}
+  .s-row{display:flex;align-items:center;gap:13px;height:34px;
+         border-top:1px solid var(--row-hairline);font-size:13.5px}
+  .s-row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .s-row .id{font-family:var(--mono);font-size:11.5px;color:var(--text-3);width:60px;flex:none}
+  .s-row .title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .s-row .spring{flex:1}
+  .badge{display:flex;align-items:center;gap:7px;font-size:12.5px;white-space:nowrap}
+  .badge .d{width:7px;height:7px;border-radius:50%;flex:none}
+  .badge.live{color:var(--status-done);font-weight:600}
+  .badge.live .d{background:var(--status-done)}
+  .badge.built{color:var(--text-2)}
+  .badge.built .d{background:transparent;border:1.5px solid var(--status-done)}
+
+  /* cadence */
+  .cad-wrap{display:flex;align-items:flex-end;gap:0;margin-top:16px}
+  .months{display:flex;color:var(--text-3);font-family:var(--mono);font-size:10.5px;margin-top:4px}
+  .cad-say{margin-top:14px}
+  .cad-say .say{font-size:14.5px;color:var(--text-1);line-height:1.5}
+  .cad-say .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:4px}
+
+  /* what we agreed to try next */
+  .try{margin-top:16px}
+  .t-row{display:flex;gap:14px;padding:13px 0}
+  .t-row+.t-row{border-top:1px solid var(--row-hairline)}
+  .t-num{font-family:var(--mono);font-size:12px;color:var(--accent-strong);width:18px;flex:none;padding-top:2px}
+  .t-row .say{font-size:14.5px;font-weight:600;letter-spacing:-.008em;line-height:1.4}
+  .t-row .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:4px;font-weight:400}
+
+  /* colophon */
+  .colophon{margin-top:38px;border-top:1px solid var(--border);padding-top:16px;
+            display:flex;align-items:center}
+  .colophon .vow{font-size:12px;color:var(--text-3)}
+  .made{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .made b{color:var(--accent);font-weight:500;letter-spacing:-.05em}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="eyebrow"><span class="t">CYCLE WRAPPED</span><span class="ws">Acme</span></div>
+  <div class="mast">
+    <h1>Cycle 2</h1><span class="team">Engineering</span>
+    <span class="dates"><span class="d1" style="display:block">Aug 4 – 18</span>
+    <span class="d2" style="display:block">fourteen days</span></span>
+  </div>
+
+  <div class="day-band" aria-hidden="true">
+    <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+  </div>
+  <div class="band-cap">closed on time · Tue Aug 18</div>
+
+  <div class="band">
+    <div class="band-h">WHAT WE SHIPPED</div>
+    <div class="hero-line">We shipped 8.</div>
+    <div class="hero-sub">
+      <div class="say">Six are live for customers. Two are built and waiting on a release.</div>
+      <div class="git">8 merged · 6 deployed · 2 awaiting deploy</div>
+    </div>
+    <div class="ship">
+      <div class="s-row"><span class="id">ENG-108</span><span class="title">Promo codes at checkout</span>
+        <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+      <div class="s-row"><span class="id">ENG-104</span><span class="title">Order confirmation emails</span>
+        <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+      <div class="s-row"><span class="id">ENG-102</span><span class="title">Saved addresses in the account page</span>
+        <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+      <div class="s-row"><span class="id">ENG-107</span><span class="title">Faster image loading on product pages</span>
+        <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+      <div class="s-row"><span class="id">ENG-112</span><span class="title">Order history search</span>
+        <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+      <div class="s-row"><span class="id">ENG-99</span><span class="title">Tax rounding on split shipments</span>
+        <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+      <div class="s-row"><span class="id">ENG-110</span><span class="title">Gift wrap option at checkout</span>
+        <span class="spring"></span><span class="badge built"><span class="d"></span>Built — not live yet</span></div>
+      <div class="s-row"><span class="id">ENG-114</span><span class="title">Cancel an order before it ships</span>
+        <span class="spring"></span><span class="badge built"><span class="d"></span>Built — not live yet</span></div>
+    </div>
+  </div>
+
+  <div class="band">
+    <div class="band-h">HOW OFTEN WE SHIP</div>
+    <div class="cad-wrap"><svg id="cad"></svg></div>
+    <div class="months" id="months"></div>
+    <div class="cad-say">
+      <div class="say">About 3 releases a week reach production now — it was 1 a week in February.</div>
+      <div class="git">last 12 weeks · every dot a production release</div>
+    </div>
+  </div>
+
+  <div class="band">
+    <div class="band-h">WHAT WE AGREED TO TRY NEXT</div>
+    <div class="try">
+      <div class="t-row"><span class="t-num">01</span>
+        <span><span class="say" style="display:block">We'll open smaller changes, so review starts the same day.</span>
+        <span class="git" style="display:block">open to merged ran 46h this cycle · aiming under 24h</span></span></div>
+      <div class="t-row"><span class="t-num">02</span>
+        <span><span class="say" style="display:block">We'll get checks green before asking each other for review.</span>
+        <span class="git" style="display:block">26% of changes hit a failing check · retro, Aug 18</span></span></div>
+    </div>
+  </div>
+
+  <div class="colophon">
+    <span class="vow">Team-level by design — no individual numbers, ever.</span>
+    <span class="made">made with yapm <b>//</b></span>
+  </div>
+
+</div>
+
+<script>
+const NS="http://www.w3.org/2000/svg";
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e}
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+/* last 12 weeks of the cadence pack (home-hub's data, verbatim) */
+const weeks=[2,2,2,3,2,2,3,3,2,3,3,4];
+const failed={5:1};
+const superseded={3:0,9:2};
+const slot=45,W=weeks.length*slot,dotR=3.6;
+(function(){
+  const s=document.getElementById("cad"),H=62;
+  s.setAttribute("width",W);s.setAttribute("height",H);
+  s.appendChild(el("line",{x1:0,x2:W,y1:H-6,y2:H-6,stroke:css("--row-hairline"),"stroke-width":1}));
+  weeks.forEach((n,wi)=>{
+    for(let j=0;j<n;j++){
+      const cx=wi*slot+slot/2,cy=H-11-j*11;
+      let fill=css("--status-done"),stroke="none";
+      if(failed[wi]===j){fill=css("--status-urgent")}
+      else if(superseded[wi]===j){fill=css("--bg");stroke=css("--status-done")}
+      const c=el("circle",{cx,cy,r:dotR,fill});
+      if(stroke!=="none"){c.setAttribute("stroke",stroke);c.setAttribute("stroke-width",1.4)}
+      s.appendChild(c);
+    }
+  });
+})();
+(function(){
+  const m=document.getElementById("months"),
+        spans=[["May",2],["Jun",4],["Jul",4],["Aug",2]];
+  spans.forEach(([n,w])=>{
+    const sp=document.createElement("span");
+    sp.textContent=n;sp.style.display="inline-block";sp.style.width=(w*slot)+"px";
+    m.appendChild(sp);
+  });
+})();
+</script>
+</body>
+</html>

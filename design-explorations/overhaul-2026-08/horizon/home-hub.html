@@ -1,0 +1,295 @@
+<!doctype html>
+<!--
+  horizon/home-hub — Team Home, the hub. Three-band frame: minimal global bar (Home is the
+  only named destination), the cycle hero as the page-owned masthead, daylight statusline.
+  Tokens: Warm LIGHT block from packages/ui/src/styles/globals.css, verbatim.
+  Extensions (from daylight): row hairline #efe9dd, statusline bg #f4efe5,
+  urgent-soft rgba(204,90,64,.08). No other new values.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Home · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+  /* ============ BAND 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;background:var(--bg-sidebar);
+        border-bottom:1px solid var(--border);display:flex;align-items:center;
+        padding:0 20px;gap:0}
+  .gb-ws{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--text-2)}
+  .gb-logo{width:24px;height:24px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .gb-ws b{color:var(--text-1);font-weight:600}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-div{width:1px;height:18px;background:var(--border-strong);margin:0 16px}
+  .gb-home{font-size:13px;font-weight:600;color:var(--text-1);display:flex;align-items:center;gap:7px}
+  .gb-home .ic{color:var(--text-2);font-size:12px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .gb-search{display:flex;align-items:center;gap:8px;height:30px;width:250px;padding:0 10px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3);font-size:12.5px}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-search .kbd{margin-left:auto}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:28px;padding:0 11px;
+           border:1px solid var(--border);border-radius:var(--rad-pill);
+           background:rgba(255,255,255,.4);font-weight:600;font-size:12px;color:var(--status-urgent)}
+  .gb-attn .ad{width:7px;height:7px;border-radius:2px;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text-1)}
+  .gb-inbox .n{color:var(--text-2);font-weight:600;font-size:12px}
+  .avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+          font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ BAND 2 + content ============ */
+  .scroll{flex:1;overflow:auto}
+  .content{max-width:960px;margin:0 auto;padding:46px 64px 72px}
+
+  /* hero — the cycle, promoted to masthead */
+  .hero .h-top{display:flex;align-items:baseline}
+  .hero h1{font-size:52px;font-weight:700;letter-spacing:-.032em;line-height:1}
+  .hero .h-ends{margin-left:auto;color:var(--text-3);font-size:13px}
+  .day-band{display:flex;align-items:center;gap:5px;height:12px;margin-top:22px}
+  .day-band i{flex:1;height:6px;border-radius:2.5px;background:var(--row-hairline)}
+  .day-band i.past{background:var(--accent-line)}
+  .day-band i.today{background:var(--accent);height:12px}
+  .h-day{margin-top:10px;color:var(--text-2);font-size:12.5px}
+  .h-words{margin-top:18px;display:flex;gap:26px;font-size:15px}
+  .h-word{display:flex;align-items:center;gap:9px;color:var(--text-1);font-weight:500}
+  .h-word .d{width:8px;height:8px;border-radius:50%;flex:none}
+  .h-word.attn{color:var(--status-urgent);font-weight:600}
+  .h-word.attn .d{border-radius:2px}
+
+  /* section bands — daylight delivery rhythm */
+  .band{margin-top:54px;border-top:1px solid var(--border);padding-top:26px}
+  .band-h{display:flex;align-items:baseline;gap:14px}
+  .band-h .t{font-size:11px;letter-spacing:.09em;font-weight:700;color:var(--text-1)}
+  .band-h .plain{color:var(--text-3);font-size:12.5px}
+  .band-h .onward{margin-left:auto;color:var(--text-2);font-size:12.5px;font-weight:600}
+  .band-h .onward .c{color:var(--text-3);font-weight:400;margin-left:3px}
+  .band-body{margin-top:20px}
+
+  /* needs attention — each row a doorway */
+  .a-row{display:flex;align-items:center;gap:12px;height:47px;
+         border-top:1px solid var(--row-hairline);font-size:13.5px}
+  .a-row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .a-row .d{width:8px;height:8px;border-radius:2px;flex:none}
+  .a-row .d.urgent{background:var(--status-urgent)}
+  .a-row .d.amber{background:var(--status-in-progress)}
+  .a-row .d.dim{background:transparent;border:1.5px solid var(--border-strong);border-radius:50%}
+  .a-row b{font-weight:600}
+  .a-row.urgent-txt{color:var(--status-urgent)}
+  .a-row .where{margin-left:auto;color:var(--text-3);font-size:12px}
+  .a-row .go{color:var(--text-3);font-size:13px;margin-left:10px}
+
+  /* ship cadence mini */
+  .lane{display:flex;align-items:flex-end;gap:14px}
+  .months{display:flex;color:var(--text-3);font-family:var(--mono);font-size:10.5px;margin-top:2px}
+  .cad-line{margin-top:14px;color:var(--text-2);font-size:12.5px}
+
+  /* what shipped */
+  .s-row{display:flex;align-items:center;gap:14px;height:40px;
+         border-top:1px solid var(--row-hairline);font-size:13.5px}
+  .s-row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .s-row .id{font-family:var(--mono);font-size:12px;color:var(--text-3);width:64px;flex:none}
+  .s-row .title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .s-row .spring{flex:1}
+  .s-row .badge{display:flex;align-items:center;gap:7px;font-size:12.5px;white-space:nowrap}
+  .badge .d{width:7px;height:7px;border-radius:50%;flex:none}
+  .badge.live{color:var(--status-done);font-weight:600}
+  .badge.live .d{background:var(--status-done)}
+  .badge.built{color:var(--text-2)}
+  .badge.built .d{background:transparent;border:1.5px solid var(--status-done)}
+
+  /* onward footer */
+  .onward-foot{margin-top:54px;border-top:1px solid var(--border);padding-top:22px;
+               display:flex;align-items:center;gap:8px;color:var(--text-2);font-size:13px;font-weight:600}
+  .onward-foot .c{color:var(--text-3);font-weight:400;margin-left:2px}
+  .onward-foot .div{color:var(--border-strong);margin:0 10px;font-weight:400}
+  .onward-foot .hint{margin-left:auto;color:var(--text-3);font-weight:400;font-size:12.5px;
+                     display:flex;align-items:center;gap:7px}
+
+  /* ============ BAND 3 — statusline (unchanged from daylight) ============ */
+  .statusline{height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 28px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <div class="gb-logo">A</div><b>Acme</b><span class="sep">/</span><span>Engineering</span><span class="chev">▾</span>
+    </div>
+    <div class="gb-div"></div>
+    <div class="gb-home"><span class="ic">⌂</span>Home</div>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span>Search or jump to…</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="ad"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="n">3</span></div>
+      <div class="avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="scroll">
+  <div class="content">
+
+    <!-- BAND 2 for Home is the cycle hero itself -->
+    <section class="hero">
+      <div class="h-top"><h1>Cycle 2</h1></div>
+      <div class="day-band" aria-hidden="true">
+        <i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="past"></i><i class="today"></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="h-day">Day 9 of 14 · ends Friday</div>
+      <div class="h-words">
+        <span class="h-word"><span class="d" style="background:var(--status-done)"></span>8 shipped</span>
+        <span class="h-word"><span class="d" style="background:var(--status-in-review)"></span>3 in review</span>
+        <span class="h-word attn"><span class="d" style="background:var(--status-urgent)"></span>1 needs attention</span>
+      </div>
+    </section>
+
+    <!-- needs attention — four doorways -->
+    <section class="band">
+      <div class="band-h"><span class="t">NEEDS ATTENTION</span>
+        <span class="plain">what would surprise you later, caught now</span></div>
+      <div class="band-body">
+        <div class="a-row urgent-txt"><span class="d urgent"></span>
+          <span><b>1</b> done in git, not on the board</span>
+          <span class="where">ENG-116 · the work moved, the ritual didn't</span><span class="go">›</span></div>
+        <div class="a-row"><span class="d amber"></span>
+          <span><b>2</b> waiting on review over a day</span>
+          <span class="where">Board</span><span class="go">›</span></div>
+        <div class="a-row"><span class="d urgent"></span>
+          <span>Checks failing on <b>1</b> change</span>
+          <span class="where">ENG-115</span><span class="go">›</span></div>
+        <div class="a-row"><span class="d dim"></span>
+          <span><b>4</b> new in triage</span>
+          <span class="where">Triage</span><span class="go">›</span></div>
+      </div>
+    </section>
+
+    <!-- ship cadence mini -->
+    <section class="band">
+      <div class="band-h"><span class="t">SHIP CADENCE</span>
+        <span class="plain">every dot is a release, last twelve weeks</span>
+        <span class="onward">Delivery in full<span class="c">›</span></span></div>
+      <div class="band-body">
+        <div class="lane"><svg id="cad"></svg></div>
+        <div class="months" id="months"></div>
+        <div class="cad-line">About 3 releases a week reach production now — it was 1 a week in February.</div>
+      </div>
+    </section>
+
+    <!-- what shipped this cycle -->
+    <section class="band">
+      <div class="band-h"><span class="t">WHAT SHIPPED THIS CYCLE</span>
+        <span class="plain">the 8 that went out — 6 live, 2 built and waiting</span></div>
+      <div class="band-body">
+        <div class="s-row"><span class="id">ENG-108</span><span class="title">Promo codes at checkout</span>
+          <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+        <div class="s-row"><span class="id">ENG-104</span><span class="title">Order confirmation emails</span>
+          <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+        <div class="s-row"><span class="id">ENG-102</span><span class="title">Saved addresses in the account page</span>
+          <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+        <div class="s-row"><span class="id">ENG-107</span><span class="title">Faster image loading on product pages</span>
+          <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+        <div class="s-row"><span class="id">ENG-112</span><span class="title">Order history search</span>
+          <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+        <div class="s-row"><span class="id">ENG-99</span><span class="title">Tax rounding on split shipments</span>
+          <span class="spring"></span><span class="badge live"><span class="d"></span>Live</span></div>
+        <div class="s-row"><span class="id">ENG-110</span><span class="title">Gift wrap option at checkout</span>
+          <span class="spring"></span><span class="badge built"><span class="d"></span>Built — not live yet</span></div>
+        <div class="s-row"><span class="id">ENG-114</span><span class="title">Cancel an order before it ships</span>
+          <span class="spring"></span><span class="badge built"><span class="d"></span>Built — not live yet</span></div>
+      </div>
+    </section>
+
+    <div class="onward-foot">
+      <span>Issues<span class="c">›</span></span><span class="div">·</span>
+      <span>Delivery in full<span class="c">›</span></span><span class="div">·</span>
+      <span>Retro<span class="c">›</span></span><span class="div">·</span>
+      <span>Roadmap<span class="c">›</span></span>
+      <span class="hint"><span class="kbd">⌘K</span>goes anywhere</span>
+    </div>
+
+  </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+
+<style>
+  body.full .frame{height:auto;overflow:visible}
+  body.full .scroll{overflow:visible}
+</style>
+<script>
+if(location.hash==="#full")document.body.classList.add("full");
+const NS="http://www.w3.org/2000/svg";
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e}
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* last 12 weeks of the delivery pack's cadence (indices 15..26) */
+const weeks=[2,2,2,3,2,2,3,3,2,3,3,4];
+const failed={5:1};            /* rel week: dot that failed */
+const superseded={3:0,9:2};
+const slot=34,W=weeks.length*slot,dotR=3.6;
+(function(){
+  const s=document.getElementById("cad"),H=62;
+  s.setAttribute("width",W);s.setAttribute("height",H);
+  s.appendChild(el("line",{x1:0,x2:W,y1:H-6,y2:H-6,stroke:css("--row-hairline"),"stroke-width":1}));
+  weeks.forEach((n,wi)=>{
+    for(let j=0;j<n;j++){
+      const cx=wi*slot+slot/2,cy=H-11-j*11;
+      let fill=css("--status-done"),stroke="none";
+      if(failed[wi]===j){fill=css("--status-urgent")}
+      else if(superseded[wi]===j){fill=css("--bg");stroke=css("--status-done")}
+      const c=el("circle",{cx,cy,r:dotR,fill});
+      if(stroke!=="none"){c.setAttribute("stroke",stroke);c.setAttribute("stroke-width",1.4)}
+      s.appendChild(c);
+    }
+  });
+})();
+(function(){
+  const m=document.getElementById("months"),
+        spans=[["May",2],["Jun",4],["Jul",4],["Aug",2]];
+  spans.forEach(([n,w])=>{
+    const sp=document.createElement("span");
+    sp.textContent=n;sp.style.display="inline-block";sp.style.width=(w*slot)+"px";
+    m.appendChild(sp);
+  });
+})();
+</script>
+</body>
+</html>

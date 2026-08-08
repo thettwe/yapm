@@ -1,0 +1,395 @@
+<!doctype html>
+<!--
+  daylight/issue-list-signals — A/B variant on daylight/issue-list. ONLY the sidebar
+  differs (width 244 -> 252). Everything else is byte-identical to issue-list.html.
+  Sidebar concept: LIVE SIGNALS — the nav is state, not taxonomy. NEEDS ATTENTION is
+  computed from the work graph; every view row carries its own live instrument at the
+  right edge; teams are collapsed marks with a single health dot.
+  Tokens: Warm LIGHT block from packages/ui/src/styles/globals.css, verbatim.
+  Extensions: row hairline #efe9dd; statusline bg #f4efe5; urgent-soft rgba(204,90,64,.08)
+  (all inherited from issue-list). Sidebar adds only: attention card bg rgba(255,255,255,.5)
+  (same derivation as the original search field) and low-opacity dims (.75/.8) of existing
+  status tones for quiet signals. No other new values.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Issues · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .app{display:flex;min-height:100vh}
+
+  /* ============ sidebar — live signals (state, not taxonomy) ============ */
+  .sidebar{width:252px;min-width:252px;background:var(--bg-sidebar);
+           border-right:1px solid var(--border);display:flex;flex-direction:column;
+           min-height:100vh;position:sticky;top:0;align-self:flex-start;height:100vh}
+  .ws{display:flex;align-items:center;gap:8px;padding:14px 14px 12px}
+  .ws-logo{width:24px;height:24px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+  .ws-name{font-weight:600;font-size:13px}
+  .ws-chev{color:var(--text-3);font-size:10px;margin-top:1px}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .ws .kbd,.sect .kbd{margin-left:auto}
+  .sect{display:flex;align-items:center;margin:16px 16px 6px;font-size:10.5px;
+        letter-spacing:.09em;color:var(--text-3);font-weight:600}
+  .sect .swatch{width:14px;height:14px;margin-right:7px}
+
+  /* needs attention — exceptions computed from the work graph, always present */
+  .attn{margin:0 10px;background:rgba(255,255,255,.5);border:1px solid var(--border);
+        border-radius:10px;padding:4px}
+  .attn-row{display:flex;align-items:center;gap:8px;min-height:27px;padding:1px 7px;
+            border-radius:6px;font-size:12.5px;color:var(--text-2);line-height:1.3}
+  .attn-row b{font-family:var(--mono);font-size:11.5px;font-weight:500;color:var(--text-1)}
+  .a-dot{width:6px;height:6px;border-radius:50%;flex:none}
+  .a-dot.urgent{background:var(--status-urgent)}
+  .a-dot.amber{background:var(--status-in-progress)}
+  .a-dot.dim{background:transparent;border:1.4px solid var(--status-backlog)}
+
+  /* views — each row carries its own live state at the right edge */
+  .view{display:flex;align-items:center;height:27px;padding:0 8px;margin:0 8px;border-radius:6px;
+        color:var(--text-1);font-size:13px;position:relative}
+  .view.active{background:var(--accent-soft);color:var(--accent-strong);font-weight:600}
+  .view.active::before{content:"";position:absolute;left:-8px;top:4px;bottom:4px;width:3px;
+        border-radius:2px;background:var(--accent)}
+  .v-sig{margin-left:auto;display:flex;align-items:center;gap:5px;
+         font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .v-sig.on{color:var(--text-2);font-weight:500}
+  .view.active .v-sig{color:var(--accent-strong);opacity:.85}
+  .bars{display:flex;align-items:flex-end;gap:2px;height:10px}
+  .bars i{width:3px;border-radius:1px;background:var(--status-backlog);opacity:.8}
+  .ddots,.pdots{display:flex;gap:3px;align-items:center}
+  .ddots i{width:5px;height:5px;border-radius:50%;background:var(--status-done);opacity:.75}
+  .pdots i{width:5px;height:5px;border-radius:50%}
+  .pdots i.ok{background:var(--status-done);opacity:.75}
+  .pdots i.risk{background:var(--status-in-progress)}
+  .rline{position:relative;width:18px;height:2px;border-radius:1px;background:var(--border-strong)}
+  .rline i{position:absolute;left:11px;top:-1.5px;width:5px;height:5px;border-radius:50%;
+           background:var(--status-backlog)}
+
+  /* teams — collapsed marks with a single health dot, not a tree */
+  .swatch{border-radius:4px;font-size:9.5px;font-weight:700;
+          display:flex;align-items:center;justify-content:center}
+  .sw-e{background:#e3d3c3;color:#7a5c3e}
+  .sw-d{background:#d9dbc9;color:#5c6b3e}
+  .sw-p{background:#cfdcd4;color:#3e6b55}
+  .team{display:flex;align-items:center;height:28px;padding:0 8px;margin:0 8px;border-radius:6px;
+        font-weight:500;font-size:12.5px;color:var(--text-2)}
+  .team .swatch{width:15px;height:15px;margin-right:8px}
+  .t-sig{margin-left:auto;width:6px;height:6px;border-radius:50%}
+  .t-sig.quiet{border:1.4px solid var(--border-strong)}
+  .t-sig.amber{background:var(--status-in-progress)}
+  .teams{margin-top:auto}
+  .side-foot{display:flex;align-items:center;gap:8px;padding:12px 14px;
+             border-top:1px solid var(--border)}
+  .avatar{width:22px;height:22px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+          font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+  .side-foot .nm{font-weight:600;font-size:12.5px}
+  .conn{margin-left:auto;display:flex;align-items:center;gap:5px;color:var(--text-3);font-size:11.5px}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+
+  /* ============ main column ============ */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:52px;display:flex;align-items:center;padding:0 24px;border-bottom:1px solid var(--border)}
+  .crumb{color:var(--text-2);font-size:12.5px}
+  .crumb b{color:var(--text-1);font-weight:500}
+  .crumb .sep{margin:0 7px;color:var(--text-3)}
+  .synced{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3);font-size:12px}
+
+  /* masthead breathes (correction 2): the frame around density is calm */
+  .masthead{display:flex;align-items:baseline;padding:30px 28px 22px}
+  .masthead h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px;margin-left:10px}
+  .mast-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .filters{display:flex;align-items:center;gap:18px;padding:0 28px 12px;color:var(--text-2);font-size:12.5px}
+  .filters .f-ic{color:var(--text-3);font-size:12px}
+  .filters .right{margin-left:auto;color:var(--text-3)}
+  .filters .right b{color:var(--text-2);font-weight:500}
+
+  /* ============ list ============ */
+  .group-h{height:35px;display:flex;align-items:center;gap:9px;padding:0 28px;
+           background:var(--bg-hover);border-top:1px solid var(--row-hairline);
+           font-size:12.5px;font-weight:600}
+  .group-h .g-count{color:var(--text-3);font-weight:400}
+  .row{height:44px;display:flex;align-items:center;gap:12px;padding:0 28px 0 25px;
+       border-top:1px solid var(--row-hairline);position:relative;border-left:3px solid transparent}
+  .row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .row.selected{background:var(--bg-selected);border-left-color:var(--accent)}
+  .row .pri{width:14px;color:var(--text-3);display:flex;align-items:flex-end;gap:1px}
+  .row .id{font-family:var(--mono);font-size:12px;color:var(--text-3);width:62px}
+  .row.selected .id{color:var(--accent-strong)}
+  .row .title{font-size:13.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row .spring{flex:1}
+  .row .label{display:flex;align-items:center;gap:5px;color:var(--text-2);font-size:12px;white-space:nowrap}
+  .ldot{width:7px;height:7px;border-radius:50%}
+  .row .when{font-family:var(--mono);font-size:11px;color:var(--text-3);width:32px;text-align:right}
+  .row .av{width:20px;height:20px;border-radius:50%;background:#5c5348;color:#f1ebe3;font-size:8px;
+           font-weight:600;display:flex;align-items:center;justify-content:center}
+  .row .av.none{background:transparent;border:none}
+
+  /* priority bars */
+  .pbar{display:inline-block;width:3px;border-radius:1px;background:var(--border-strong)}
+  .pbar.on{background:var(--text-2)}
+  .p-urgent{width:14px;height:14px;border-radius:3.5px;background:var(--status-urgent);color:#fff;
+            font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1}
+
+  /* status glyphs */
+  .st{width:14px;height:14px;border-radius:50%;position:relative;flex:none}
+  .st.backlog{border:1.6px dashed var(--status-backlog)}
+  .st.todo{border:1.6px solid var(--status-todo)}
+  .st.progress{border:1.6px solid var(--status-in-progress)}
+  .st.progress::after{content:"";position:absolute;inset:2.4px;border-radius:50%;
+       background:conic-gradient(var(--status-in-progress) 0 50%,transparent 50% 100%)}
+
+  /* ---- reality track: nodes + connecting line, no header row (correction 1) ---- */
+  .track{display:flex;align-items:center;width:132px;flex:none}
+  .tn{width:7px;height:7px;border-radius:50%;flex:none}
+  .tn.done{background:var(--status-done)}
+  .tn.rev-wait{background:transparent;border:1.6px solid var(--status-in-review);width:8px;height:8px}
+  .tn.open{background:var(--status-in-review)}
+  .tn.fail{background:var(--status-urgent);border-radius:1.5px}
+  .tn.empty{background:transparent;border:1.4px solid var(--border-strong)}
+  .tn.empty-urgent{background:transparent;border:1.6px solid var(--status-urgent)}
+  .tseg{height:2px;flex:1;background:var(--status-done)}
+  .tseg.dotted{background:repeating-linear-gradient(90deg,var(--border-strong) 0 3px,transparent 3px 6px);height:1.5px}
+  .tbreak{color:var(--status-urgent);font-family:var(--mono);font-weight:500;font-size:11px;
+          padding:0 3px;letter-spacing:-.05em}
+  .t-age{font-family:var(--mono);font-size:11px;color:var(--text-3);width:26px;text-align:right;flex:none}
+  .phrase{font-size:12.5px;white-space:nowrap;flex:none}
+  .phrase.urgent{color:var(--status-urgent);font-weight:600}
+
+  .fold-hint{padding:14px 28px;color:var(--text-3);font-size:12px}
+
+  /* ============ statusline — speaks human (correction 1) ============ */
+  .statusline{margin-top:auto;height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 28px;font-size:12px;color:var(--text-2)}
+  .statusline .seg{display:flex;align-items:center}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="ws">
+      <div class="ws-logo">A</div><div class="ws-name">Acme</div><div class="ws-chev">▾</div>
+      <span class="kbd">⌘K</span>
+    </div>
+
+    <div class="sect">NEEDS ATTENTION<span class="kbd">⇧A</span></div>
+    <div class="attn">
+      <div class="attn-row"><span class="a-dot urgent"></span><span><b>1</b> done in git, not on the board</span></div>
+      <div class="attn-row"><span class="a-dot amber"></span><span><b>2</b> waiting on review over a day</span></div>
+      <div class="attn-row"><span class="a-dot urgent"></span><span>Checks failing on <b>1</b> change</span></div>
+      <div class="attn-row"><span class="a-dot dim"></span><span><b>4</b> new in triage</span></div>
+    </div>
+
+    <div class="sect"><span class="swatch sw-e">E</span>ENGINEERING</div>
+    <nav>
+      <div class="view active"><span>List</span><span class="v-sig">120</span></div>
+      <div class="view"><span>Board</span><span class="v-sig"><span class="bars"><i style="height:4px"></i><i style="height:7px"></i><i style="height:9px"></i><i style="height:3px"></i></span></span></div>
+      <div class="view"><span>Cycles</span><span class="v-sig on"><svg width="14" height="14" viewBox="0 0 14 14" style="display:block"><circle cx="7" cy="7" r="5.5" fill="none" style="stroke:var(--border-strong)" stroke-width="2"/><circle cx="7" cy="7" r="5.5" fill="none" style="stroke:var(--text-2)" stroke-width="2" stroke-linecap="round" stroke-dasharray="22.2 34.6" transform="rotate(-90 7 7)"/></svg>9/14</span></div>
+      <div class="view"><span>Triage</span><span class="v-sig on">4</span></div>
+      <div class="view"><span>Retros</span><span class="v-sig on">1 open</span></div>
+      <div class="view"><span>Delivery</span><span class="v-sig"><span class="ddots"><i></i><i></i><i></i></span></span></div>
+      <div class="view"><span>Projects</span><span class="v-sig"><span class="pdots"><i class="ok"></i><i class="ok"></i><i class="risk"></i></span></span></div>
+      <div class="view"><span>Roadmap</span><span class="v-sig"><span class="rline"><i></i></span></span></div>
+    </nav>
+
+    <div class="sect">YOURS</div>
+    <div class="view"><span>Inbox</span><span class="v-sig on">3</span></div>
+    <div class="view"><span>My Issues</span><span class="v-sig">6</span></div>
+
+    <div class="teams">
+      <div class="sect">TEAMS</div>
+      <div class="team"><span class="swatch sw-d">D</span>Design<span class="t-sig quiet"></span></div>
+      <div class="team"><span class="swatch sw-p">P</span>Platform<span class="t-sig amber"></span></div>
+    </div>
+
+    <div class="side-foot">
+      <div class="avatar">DA</div><span class="nm">Demo Admin</span>
+      <span class="conn"><span class="dot-g"></span>Connected</span>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb"><b>Engineering</b><span class="sep">/</span>Issues</div>
+      <div class="synced"><span class="dot-g"></span>GitHub synced</div>
+    </div>
+
+    <div class="masthead">
+      <h1>Issues</h1><span class="count">120</span>
+      <div class="mast-actions">
+        <button class="btn">Save view</button>
+        <button class="btn primary">+ New issue</button>
+      </div>
+    </div>
+
+    <div class="filters">
+      <span class="f-ic">≔</span>
+      <span>Status</span><span>Priority</span><span>Assignee</span><span>Delivery</span>
+      <span>Label</span><span>Cycle</span><span>Project</span>
+      <span class="right">Group <b>Status</b> &nbsp;·&nbsp; Sort <b>Priority</b></span>
+    </div>
+
+    <!-- ============ Backlog ============ -->
+    <div class="group-h"><span class="st backlog"></span>Backlog <span class="g-count">3</span></div>
+
+    <div class="row">
+      <span class="p-urgent">!</span><span class="st backlog"></span>
+      <span class="id">ENG-120</span><span class="title">Migrate legacy coupon codes</span>
+      <span class="spring"></span>
+      <span class="label"><span class="ldot" style="background:var(--status-urgent)"></span>bug</span>
+      <span class="when">5m</span><span class="av">DA</span>
+    </div>
+    <div class="row">
+      <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar on" style="height:11px"></span></span>
+      <span class="st backlog"></span>
+      <span class="id">ENG-5</span><span class="title">Bulk-edit from the issue list</span>
+      <span class="spring"></span>
+      <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+      <span class="when">23m</span><span class="av none"></span>
+    </div>
+    <div class="row">
+      <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar on" style="height:11px"></span></span>
+      <span class="st backlog"></span>
+      <span class="id">ENG-6</span><span class="title">Comment drafts lost on navigation</span>
+      <span class="spring"></span>
+      <span class="label"><span class="ldot" style="background:var(--status-urgent)"></span>bug</span>
+      <span class="when">23m</span><span class="av">DA</span>
+    </div>
+
+    <!-- ============ Todo ============ -->
+    <div class="group-h"><span class="st todo"></span>Todo <span class="g-count">4</span></div>
+
+    <div class="row">
+      <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar on" style="height:11px"></span></span>
+      <span class="st todo"></span>
+      <span class="id">ENG-2</span><span class="title">Saved views for shared filters</span>
+      <span class="spring"></span>
+      <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+      <span class="when">23m</span><span class="av none"></span>
+    </div>
+    <div class="row">
+      <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+      <span class="st todo"></span>
+      <span class="id">ENG-121</span><span class="title">Guest checkout without an account</span>
+      <span class="spring"></span>
+      <span class="track">
+        <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span>
+      </span>
+      <span class="t-age">2d</span>
+      <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+      <span class="when">2d</span><span class="av">DA</span>
+    </div>
+    <div class="row">
+      <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+      <span class="st todo"></span>
+      <span class="id">ENG-4</span><span class="title">Warmer empty states across the app</span>
+      <span class="spring"></span>
+      <span class="label"><span class="ldot" style="background:var(--status-in-progress)"></span>chore</span>
+      <span class="label"><span class="ldot" style="background:var(--status-done)"></span>design</span>
+      <span class="when">23m</span><span class="av none"></span>
+    </div>
+    <div class="row">
+      <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+      <span class="st todo"></span>
+      <span class="id">ENG-115</span><span class="title">Address autocomplete on shipping step</span>
+      <span class="spring"></span>
+      <span class="track">
+        <span class="tn open"></span><span class="tseg" style="background:var(--status-in-review)"></span><span class="tn fail"></span><span class="tseg dotted"></span><span class="tn rev-wait"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+      </span>
+      <span class="t-age">16h</span>
+      <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+      <span class="when">7h</span><span class="av none"></span>
+    </div>
+
+    <!-- ============ In Progress ============ -->
+    <div class="group-h"><span class="st progress"></span>In Progress <span class="g-count">4</span></div>
+
+    <div class="row">
+      <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+      <span class="st progress"></span>
+      <span class="id">ENG-1</span><span class="title">Focus lost after closing the palette</span>
+      <span class="spring"></span>
+      <span class="label"><span class="ldot" style="background:var(--status-urgent)"></span>bug</span>
+      <span class="when">2m</span><span class="av">DA</span>
+    </div>
+    <div class="row selected">
+      <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+      <span class="st progress"></span>
+      <span class="id">ENG-116</span><span class="title">Apple Pay in the payment sheet</span>
+      <span class="spring"></span>
+      <span class="phrase urgent">Done in git, not on the board</span>
+      <span class="track">
+        <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tbreak">//</span><span class="tn empty-urgent"></span>
+      </span>
+      <span class="t-age">1d</span>
+      <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+      <span class="when">11h</span><span class="av none"></span>
+    </div>
+    <div class="row">
+      <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+      <span class="st progress"></span>
+      <span class="id">ENG-119</span><span class="title">Persist cart across sessions</span>
+      <span class="spring"></span>
+      <span class="track">
+        <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span>
+      </span>
+      <span class="t-age">4h</span>
+      <span class="label"><span class="ldot" style="background:var(--status-in-progress)"></span>feature</span>
+      <span class="when">1d</span><span class="av">DA</span>
+    </div>
+    <div class="row">
+      <span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>
+      <span class="st progress"></span>
+      <span class="id">ENG-113</span><span class="title">Refund flow for partial orders</span>
+      <span class="spring"></span>
+      <span class="track">
+        <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+      </span>
+      <span class="t-age">3d</span>
+      <span class="label"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+      <span class="when">15h</span><span class="av">DA</span>
+    </div>
+
+    <div class="fold-hint">↓ 109 more</div>
+
+    <div class="statusline">
+      <span class="seg">Cycle 2, day 9 of 14</span><span class="div">·</span>
+      <span class="seg">8 shipped</span><span class="div">·</span>
+      <span class="seg">3 deploys this week</span><span class="div">·</span>
+      <span class="seg attn">1 needs attention</span>
+      <span class="right"><span class="dot-g"></span>Synced</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

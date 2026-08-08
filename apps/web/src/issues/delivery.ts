@@ -2,6 +2,7 @@ import {
   assembleLinkedEntities,
   computeDeliverySignal,
   computeDivergence,
+  type DeliveryStrip,
   type DeploymentIndex,
   type DivergenceKind,
   type IssueLinkRow,
@@ -9,21 +10,20 @@ import {
   type LinkedEntities,
   type TeamDeploymentRow,
 } from '@yapm/schema'
-import type { RealityStripProps } from '@yapm/ui/components/issue-row'
 
 // A synced issue's `issueLinks -> pullRequest -> {ciChecks, reviews}` subtree structurally
 // satisfies the seam's `IssueLinkRow`; this narrows the loosely-typed Zero result to it.
 export type LinkedIssueRow = IssueLinkRow
 
 export interface DeliveryView {
-  // The reality-strip props, or null when the issue has no linked git entities (the quiet
+  // The four drawn facts, or null when the issue has no linked git entities (the quiet
   // "not linked" state). `pr`/`ci` are the seam's own string unions, passed straight through.
-  readonly strip: RealityStripProps | null
+  readonly strip: DeliveryStrip | null
   readonly divergence: DivergenceKind | null
 }
 
-// The human sentence the divergence flag announces — the one place status-vs-reality is named
-// for the reader. Keyed by the seam's `DivergenceKind`.
+// The human sentence the `//` break carries — the one place status-vs-reality is named for the
+// reader. Keyed by the seam's `DivergenceKind`.
 export const DIVERGENCE_LABEL: Record<DivergenceKind, string> = {
   status_behind_merge: 'PR merged but this issue is not marked done',
   status_ahead_of_pr: 'Marked in review, but no open PR backs it',
@@ -56,6 +56,7 @@ export function deliveryView(
       pr: signal.pr,
       ci: signal.ciHealth,
       reviewAgeMs: signal.reviewAgeMs,
+      reviewAgeFrom: signal.reviewAgeFrom,
       deployedAt: signal.deployedAt,
     },
     divergence,

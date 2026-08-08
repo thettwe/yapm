@@ -9,7 +9,7 @@ remember to drag the issue to In Review. It merged; someone has to remember to c
 
 It is **off by default, and you turn it on per team.** A team that leaves it off behaves exactly as
 it did before this feature existed — including its
-[divergence flags](/features/delivery-signals/#the-divergence-flag), which are what yapm does when
+[divergence breaks](/features/delivery-signals/#divergence), which are what yapm does when
 it is *not* allowed to correct a status.
 
 Automation depends on a connector, so it does nothing until you
@@ -30,12 +30,13 @@ than that is left to you.
 
 ## What never fires
 
-- **A draft pull request drives nothing.** The reality strip on the issue row already shows the
+- **A draft pull request drives nothing.** The reality track on the issue row already shows the
   draft PR the moment it exists; writing In Progress on top would state the same fact twice, and in
   a team that opens drafts at branch creation it would fire on nearly every issue.
 - **A pull request closed without merging drives nothing.** "Closed" can mean superseded by a better
   branch, abandoned, or opened against the wrong base — there is no target that is right more often
-  than it is wrong. The issue keeps the status it had, and its reality strip shows the closed PR.
+  than it is wrong. The issue keeps the status it had, and its reality track leaves the Change
+  station empty and states "PR closed" in the label it announces.
 - **Automation never moves an issue backward.** Backlog → Todo → In Progress → In Review → Done is a
   one-way ladder. A target at or below where the issue already sits is a no-op, so a Done issue that
   acquires a new pull request — a follow-up, a revert, a docs pass — stays Done.
@@ -99,18 +100,18 @@ That distinction is the whole rule, and it cuts both ways on purpose:
   the PR-opened moment never comes back.)
 - A webhook is dropped and reconciliation heals it two days late, for a PR that merged before you
   set that issue's status yesterday. The transition is **blocked**, because your write is newer than
-  the event. The divergence flag reports the disagreement instead, and you decide.
+  the event. The divergence break reports the disagreement instead, and you decide.
 
 yapm records only the *timestamp* of the last human status write on an issue — never who made it.
 There is no per-person automation record anywhere in the product.
 
-## How it relates to the divergence flag
+## How it relates to divergence
 
 They are one behaviour with a switch, not two features competing for the same job.
 
 | | What happens |
 |---|---|
-| **Automation off** | Nothing changes. The [divergence flag](/features/delivery-signals/#the-divergence-flag) fires exactly as it always has. |
+| **Automation off** | Nothing changes. The [divergence break](/features/delivery-signals/#divergence) fires exactly as it always has. |
 | **Automation on, transition fires** | Status and git now agree, so there is nothing left to diverge about and the flag stays quiet on its own. Nothing suppresses it — the disagreement it reports no longer exists. |
 | **Automation on, transition blocked** | The flag fires. A blocked transition is precisely the case where yapm is not confident enough to act but *is* confident the two disagree. |
 
@@ -118,7 +119,7 @@ Automation corrects what it is sure about and hands everything else to the flag.
 computation is unchanged by this feature, and no new kind of divergence was added.
 
 One honest wrinkle: if automation sets In Review when a PR opens and that PR is later converted back
-to a draft, the divergence flag will fire on a status automation itself wrote. That is correct — the
+to a draft, the divergence break will fire on a status automation itself wrote. That is correct — the
 disagreement is real — and it resolves the moment the PR is marked ready again.
 
 ## The caveat worth knowing
@@ -134,7 +135,7 @@ What limits the damage:
 - automation only moves work **forward**, so the worst case is an issue advanced too early — never
   work reverted, canceled, or deleted;
 - it is off unless you turned it on;
-- and the divergence flag now points *at* the mismatch rather than away from it.
+- and the divergence break now points *at* the mismatch rather than away from it.
 
 It is not eliminated. If your team recycles branch names, that is the thing to know before you
 enable this.
@@ -150,7 +151,7 @@ is announced, applies immediately with no round trip, and persists through sync.
 
 Members and viewers do not see the section and cannot write the setting; there is no member-visible
 indicator of whether automation is on, so ask a workspace admin if you need to know. What everyone
-does see is the result: the statuses themselves, and the divergence flag wherever status and git
+does see is the result: the statuses themselves, and the divergence break wherever status and git
 still disagree.
 
 ## Who performs the transition

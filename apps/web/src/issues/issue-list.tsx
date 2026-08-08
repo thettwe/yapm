@@ -20,10 +20,16 @@ import {
 } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { Input } from '@yapm/ui/components/input'
-import { DivergenceFlag, IssueRow, RealityStrip } from '@yapm/ui/components/issue-row'
+import { IssueRow } from '@yapm/ui/components/issue-row'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@yapm/ui/components/menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@yapm/ui/components/popover'
 import { PriorityMark } from '@yapm/ui/components/priority-mark'
+import {
+  buildRealityShape,
+  formatReviewAge,
+  RealityTrack,
+  realityTrackLabel,
+} from '@yapm/ui/components/reality-track'
 import { Select } from '@yapm/ui/components/select'
 import { StatusGlyph } from '@yapm/ui/components/status-glyph'
 import {
@@ -543,10 +549,20 @@ function IssueGroupSection({
             labels={(issue.labels ?? []).map((label) => ({ name: label.name, color: label.color }))}
             date={formatRelative(issue.updatedAt)}
             selected={selection.has(issue.id)}
-            {...(view.strip ? { realityStrip: <RealityStrip {...view.strip} /> } : {})}
-            {...(view.divergence
-              ? { divergenceFlag: <DivergenceFlag label={DIVERGENCE_LABEL[view.divergence]} /> }
-              : {})}
+            realityTrack={
+              <RealityTrack
+                shape={buildRealityShape(view.strip, { divergence: view.divergence })}
+                // `null`, never omitted: the row's age column is reserved whether or not this
+                // issue has an age to put in it, which is what keeps the list's alignment fixed.
+                age={
+                  view.strip?.reviewAgeMs == null ? null : formatReviewAge(view.strip.reviewAgeMs)
+                }
+                label={realityTrackLabel(
+                  view.strip,
+                  view.divergence ? DIVERGENCE_LABEL[view.divergence] : null,
+                )}
+              />
+            }
             {...(issue.assignee
               ? {
                   assignee: {

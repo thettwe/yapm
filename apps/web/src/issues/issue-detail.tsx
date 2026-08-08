@@ -4,6 +4,7 @@ import { Link } from '@tanstack/react-router'
 import {
   type CiHealth,
   ciHealthFromConclusion,
+  type DeliveryStrip,
   type DivergenceKind,
   ISSUE_PRIORITIES,
   ISSUE_STATUSES,
@@ -19,15 +20,17 @@ import { Avatar, AvatarFallback, AvatarImage } from '@yapm/ui/components/avatar'
 import { Button } from '@yapm/ui/components/button'
 import { CommentCard } from '@yapm/ui/components/comment'
 import { DetailField, DetailSection, PropertyButton } from '@yapm/ui/components/detail-field'
-import {
-  DivergenceFlag,
-  formatReviewAge,
-  RealityStrip,
-  RealityStripPlaceholder,
-  type RealityStripProps,
-} from '@yapm/ui/components/issue-row'
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@yapm/ui/components/menu'
 import { PriorityMark } from '@yapm/ui/components/priority-mark'
+import {
+  buildRealityShape,
+  ciNodeKind,
+  ciPhrase,
+  formatReviewAge,
+  RealityTrack,
+  realityTrackLabel,
+  TrackNodeMark,
+} from '@yapm/ui/components/reality-track'
 import {
   isRichTextEmpty,
   type MentionCandidate,
@@ -40,8 +43,6 @@ import { StatusGlyph } from '@yapm/ui/components/status-glyph'
 import {
   CheckIcon,
   ExternalLinkIcon,
-  LoaderIcon,
-  type LucideIcon,
   RefreshCwIcon,
   TagIcon,
   UserIcon,
@@ -450,7 +451,15 @@ function IssueDetailBody({
         >
           {key}
         </span>
-        {divergence ? <DivergenceFlag label={DIVERGENCE_LABEL[divergence]} /> : null}
+        {divergence ? (
+          <span
+            role="img"
+            aria-label={DIVERGENCE_LABEL[divergence]}
+            className="font-mono text-[12px] font-medium leading-none tracking-[-0.08em] text-status-urgent-ink"
+          >
+            {'//'}
+          </span>
+        ) : null}
         {onClose ? (
           <span className="ml-auto flex items-center gap-1">
             {pending ? null : (
@@ -739,24 +748,6 @@ function IssueDetailBody({
   )
 }
 
-// A distinct glyph per CI state (check / x / spinner) so passing vs failing vs pending reads
-// without relying on hue (WCAG 1.4.1); the tone token reinforces the shape.
-const CI_HEALTH_GLYPH: Record<CiHealth, { icon: LucideIcon; tone: string; label: string }> = {
-  passing: { icon: CheckIcon, tone: 'text-signal-sync', label: 'CI passing' },
-  failing: { icon: XIcon, tone: 'text-status-urgent', label: 'CI failing' },
-  pending: { icon: LoaderIcon, tone: 'text-status-in-progress', label: 'CI running' },
-}
-
-function CiHealthMark({ health }: { health: CiHealth }) {
-  const glyph = CI_HEALTH_GLYPH[health]
-  const HealthIcon = glyph.icon
-  return (
-    <span className="inline-flex items-center gap-1 text-text-3">
-      <HealthIcon className={`size-3.5 ${glyph.tone}`} role="img" aria-label={glyph.label} />
-    </span>
-  )
-}
-
 function aggregateHealth(checks: readonly CiCheckRow[]): CiHealth | null {
   if (checks.length === 0) return null
   const healths = checks.map((check) => ciHealthFromConclusion(check.conclusion as never))
@@ -771,7 +762,7 @@ function DeliveryDetail({
   links,
   deployments,
 }: {
-  strip: RealityStripProps | null
+  strip: DeliveryStrip | null
   divergence: DivergenceKind | null
   links: readonly IssueLinkDetailRow[]
   deployments: readonly DeploymentRow[]
@@ -783,7 +774,7 @@ function DeliveryDetail({
   if (strip === null && prs.length === 0) {
     return (
       <span className="flex items-center gap-2 text-[13px] text-text-3">
-        <RealityStripPlaceholder />
+        <RealityTrack shape={buildRealityShape(null)} label="No delivery signal yet" />
         Not linked
       </span>
     )
@@ -793,10 +784,14 @@ function DeliveryDetail({
     <div className="flex flex-col gap-2">
       {strip ? (
         <div className="flex items-center gap-2">
-          <RealityStrip {...strip} />
+          {/* The sentence is visible text right beside the track here, so the track's label
+              does not repeat it — a screen reader announces the divergence once. */}
+          <RealityTrack
+            shape={buildRealityShape(strip, { divergence })}
+            label={realityTrackLabel(strip)}
+          />
           {divergence ? (
-            <span className="flex items-center gap-1 text-[12px] text-status-urgent">
-              <DivergenceFlag label={DIVERGENCE_LABEL[divergence]} decorative />
+            <span className="text-[12px] text-status-urgent-ink">
               {DIVERGENCE_LABEL[divergence]}
             </span>
           ) : null}
@@ -827,7 +822,7 @@ function DeliveryDetail({
                   {pr.repo}#{pr.number}
                 </span>
               )}
-              {health ? <CiHealthMark health={health} /> : null}
+              {health ? <TrackNodeMark kind={ciNodeKind(health)} label={ciPhrase(health)} /> : null}
               {latestReview ? (
                 <span className="text-text-3">
                   {latestReview.state === 'approved'

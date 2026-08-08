@@ -28,7 +28,7 @@ local data the issue list reads, so it renders instantly and is correct offline.
    [Delivery view](/features/delivery/).
 7. **Shipped this cycle** — the cycle's done issues, each badged **Live** when a deployment
    carried its merged pull request's merge commit to production, else **Built — not live**.
-   The badge is the same exact merge-commit join the issue row's reality strip uses — never
+   The badge is the same exact merge-commit join the issue row's reality track uses — never
    inferred from status alone.
 
 The page ends with a mono **footline** that names the composition rules actually applied to
@@ -59,7 +59,7 @@ precedence, so the count is a distinct-issue count by construction:
 
 | Class | Derived from | Drawn evidence |
 |---|---|---|
-| Done in git — not on the board | The work-graph divergence flag (`status_behind_merge`) | The broken reality track with the `//` mark |
+| Done in git — not on the board | The work-graph divergence (`status_behind_merge`) | The broken reality track with the `//` mark |
 | Checks failing | Rolled-up CI health on the linked pull request | The tick-bar, with the failure age |
 | Waiting on review over a day | An open, unapproved linked PR whose review age exceeds 24h | The waiting ages |
 | New in triage | The team's [triage inbox](/features/triage/) | One dot per waiting issue |

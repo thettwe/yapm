@@ -1,0 +1,360 @@
+<!doctype html>
+<!--
+  plays/refs-applied — REFS applied: the connected screen tour. The daylight/charts Delivery
+  cut where every number, key and cycle name is visibly a doorway: dotted-ink underline at
+  rest, accent + a mono "opens:" line on hover, chips peek on hover/focus. Two peeks drawn
+  open (the ENG-116 timeline chip, the 52 hero), plus the ENG-116 right rail gaining its
+  "Referenced in" block — the return path. Tokens: Warm LIGHT verbatim + daylight extensions.
+  Elevation only on the two peeks (transients). All drawn things inline SVG.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Delivery · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)} .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px;
+           box-shadow:0 1.5px 0 0 var(--accent-line)}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  .statusline{margin-top:auto;height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+
+  .content{max-width:1248px;margin:0 auto;width:100%;padding:0 64px}
+  .masthead{padding-top:30px}
+  .mast-top{display:flex;align-items:flex-start}
+  .masthead h1{font-size:40px;font-weight:700;letter-spacing:-.028em}
+  .masthead .sub{margin-top:6px;font-size:13px;color:var(--text-2)}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;gap:6px;font-family:var(--ui);margin-left:auto}
+  .btn .chev{color:var(--text-3);font-size:9px}
+  .mast-chart{margin-top:8px;position:relative}
+
+  /* doors */
+  .door{border-bottom:1px dotted var(--border-strong);padding-bottom:1px;cursor:default}
+  .door.hot{border-bottom-color:var(--accent)}
+  .opens{font-family:var(--mono);font-size:10px;color:var(--accent-strong);margin-top:5px}
+
+  /* chips */
+  .chip{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 7px 0 6px;
+        border:1px solid var(--border-strong);border-radius:6px;background:rgba(255,255,255,.7);
+        font-family:var(--mono);font-size:11.5px;color:var(--text-1);white-space:nowrap;
+        vertical-align:-5px}
+  .chip.dvg{background:var(--urgent-soft);border-color:rgba(204,90,64,.4)}
+  .chip.focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 2px var(--accent-line)}
+  .c-prog{color:var(--status-in-progress)} .c-done{color:var(--status-done)}
+  .c-ink{color:var(--text-2)} .c-acc{color:var(--accent)} .c-urgent{color:var(--status-urgent)}
+
+  /* peeks */
+  .peek{width:312px;background:var(--bg-elevated);border:1px solid var(--border);
+        border-radius:12px;box-shadow:0 10px 26px rgba(43,38,32,.14);padding:13px 15px 6px}
+  .peek .ttl{font-size:14px;font-weight:650;letter-spacing:-.008em}
+  .peek .staterow{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);
+                  margin-top:5px;white-space:nowrap}
+  .peek .staterow b{color:var(--text-1);font-weight:600}
+  .peek .dvline{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;
+                color:var(--status-urgent);margin-top:4px}
+  .peek .track{margin:10px 0 2px}
+  .peek .bifact{margin-top:8px}
+  .peek .bifact .p{font-size:12.5px;font-weight:600}
+  .peek .bifact .m{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:3px;line-height:1.5}
+  .peek .foot{border-top:1px solid var(--row-hairline);margin-top:11px;padding:7px 0 6px;
+              display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-3)}
+  .peek .foot .kbd{font-size:9.5px}
+  .peek .foot .sp{margin:0 2px;color:var(--border-strong)}
+  .peek .sethead{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:3px}
+  .sp-row{display:flex;align-items:center;gap:9px;min-height:31px;border-top:1px solid var(--row-hairline);
+          font-size:12.5px}
+  .sp-row:first-of-type{margin-top:9px}
+  .sp-row .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sp-row .r{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text-3);white-space:nowrap}
+  .sp-more{font-family:var(--mono);font-size:10.5px;color:var(--text-3);padding:8px 0 2px;
+           border-top:1px solid var(--row-hairline)}
+
+  .statrow{display:flex;gap:0;border-top:1px solid var(--row-hairline);border-bottom:1px solid var(--row-hairline);
+           margin-top:26px}
+  .stat{flex:1;padding:16px 0 12px;position:relative}
+  .stat + .stat{border-left:1px solid var(--row-hairline);padding-left:30px}
+  .stat .lbl{font-size:12px;color:var(--text-2);margin-bottom:6px}
+  .stat .valrow{display:flex;align-items:center;gap:10px}
+  .stat .num{font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1}
+  .stat .num .unit{font-size:15px;font-weight:600;color:var(--text-2)}
+  .stat .delta{font-size:11px;font-weight:600;border-radius:var(--rad-pill);padding:2px 7px}
+  .delta.good{color:var(--status-done);background:rgba(62,140,99,.1)}
+  .stat .valrow svg{margin-left:auto;margin-right:26px}
+  .setpeek{position:absolute;left:0;top:calc(100% + 8px);z-index:6}
+
+  .section{padding:44px 0 8px}
+  .sec-kicker{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+  .sec-kicker .k{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--text-3)}
+  .headline{font-size:20px;font-weight:700;letter-spacing:-.015em;margin-bottom:4px}
+  .headline .urgent{color:var(--status-urgent)}
+  .legend{margin-top:12px;font-size:12px;line-height:1.5;color:var(--text-2);max-width:760px}
+  .rule-top{border-top:1px solid var(--row-hairline)}
+
+  /* the other end — issue rail cut */
+  .otherend{display:flex;gap:56px;padding:40px 0 46px;align-items:flex-start}
+  .oe-left{flex:1;max-width:520px}
+  .oe-left .headline{margin-top:6px}
+  .oe-left p{font-size:13px;line-height:1.65;color:var(--text-2);margin-top:12px;max-width:440px}
+  .oe-left p b{color:var(--text-1)}
+  .oe-left .law{margin-top:18px;padding:12px 16px;background:var(--bg-hover);border-radius:var(--rad-control);
+                font-size:12.5px;color:var(--text-1);max-width:440px}
+  .oe-left .law .m{display:block;font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:5px}
+  .railcut{width:472px;flex-shrink:0}
+  .railcut .cap{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-bottom:8px}
+  .rail{border:1px solid var(--border);border-radius:8px;background:var(--bg);padding:18px 22px 14px}
+  .rail .kick{font-size:10.5px;font-weight:700;letter-spacing:.09em;color:var(--text-2)}
+  .rail .kick .n{font-family:var(--mono);font-weight:400;color:var(--text-3);margin-left:6px}
+  .rail .bifact{margin-top:10px}
+  .rail .bifact .p{font-size:13.5px;font-weight:650;display:flex;align-items:center;gap:7px}
+  .rail .bifact .m{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:4px;line-height:1.55}
+  .rail .hr{height:1px;background:var(--row-hairline);margin:15px 0 12px}
+  .bl-row{display:flex;flex-direction:column;justify-content:center;min-height:44px;padding:8px 0}
+  .bl-row + .bl-row{border-top:1px solid var(--row-hairline)}
+  .bl-row .r1{display:flex;align-items:center;gap:9px}
+  .bl-row .how{font-size:12.5px;color:var(--text-1)}
+  .bl-row .dt{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .bl-row .snip{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:4px;line-height:1.5}
+  .rail .strow{display:flex;align-items:center;gap:7px;font-size:12.5px}
+  .rail .strow b{font-weight:600}
+  .rail .strow .m{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="g-progress" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 0 1 10 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-done" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.6" fill="currentColor"/></symbol>
+    <symbol id="g-div" viewBox="0 0 20 20">
+      <path d="M5.2 15.4 L9.1 4.6 M10.9 15.4 L14.8 4.6" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-cycles" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M10 1.4 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="5.5" cy="14.5" r="1.9" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-decision" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="10" cy="10" r="2.8" fill="currentColor"/>
+    </symbol>
+    <symbol id="g-retro" viewBox="0 0 20 20">
+      <path d="M14.5 4.7 A7 7 0 1 0 16.9 8.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M15.4 10.4 L16.9 8.6 L18.6 10.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab active">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="content masthead">
+    <div class="mast-top">
+      <div>
+        <h1>Delivery</h1>
+        <p class="sub"><span class="door">Cycle 2</span> · last 6 completed cycles · team-level only — never a per-person number.</p>
+      </div>
+      <button class="btn">Last 6 cycles <span class="chev">▾</span></button>
+    </div>
+    <div class="mast-chart">
+      <svg width="1120" height="178" viewBox="0 0 1120 178" role="img" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible"><rect x="10" y="106" width="1100" height="10" rx="5" fill="var(--row-hairline)"/><rect x="10" y="106" width="676.9230769230769" height="10" rx="5" fill="var(--accent-soft)"/><line x1="10" y1="120" x2="10" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="94.6" y1="120" x2="94.6" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="179.2" y1="120" x2="179.2" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="263.8" y1="120" x2="263.8" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="348.5" y1="120" x2="348.5" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="433.1" y1="120" x2="433.1" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="517.7" y1="120" x2="517.7" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="602.3" y1="120" x2="602.3" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="686.9" y1="120" x2="686.9" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="771.5" y1="120" x2="771.5" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="856.2" y1="120" x2="856.2" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="940.8" y1="120" x2="940.8" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="1025.4" y1="120" x2="1025.4" y2="124" stroke="var(--border)" stroke-width="1"/><line x1="1110" y1="120" x2="1110" y2="124" stroke="var(--border)" stroke-width="1"/><text x="179.2" y="136" text-anchor="middle" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Aug 1</text><text x="433.1" y="136" text-anchor="middle" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Aug 4</text><text x="940.8" y="136" text-anchor="middle" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Aug 10</text><text x="1110" y="136" text-anchor="end" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Aug 12</text><circle cx="10" cy="111" r="4.5" fill="var(--status-done)" stroke="var(--bg)" stroke-width="2"/><circle cx="94.6" cy="111" r="4.5" fill="var(--status-done)" stroke="var(--bg)" stroke-width="2"/><circle cx="179.2" cy="111" r="4.5" fill="var(--status-done)" stroke="var(--bg)" stroke-width="2"/><circle cx="179.2" cy="98" r="4.5" fill="var(--status-done)" stroke="var(--bg)" stroke-width="2"/><circle cx="263.8" cy="111" r="4.5" fill="var(--status-done)" stroke="var(--bg)" stroke-width="2"/><circle cx="433.1" cy="111" r="4.5" fill="var(--status-done)" stroke="var(--bg)" stroke-width="2"/><circle cx="517.7" cy="111" r="4.5" fill="var(--status-done)" stroke="var(--bg)" stroke-width="2"/><circle cx="602.3" cy="111" r="4.5" fill="var(--status-done)" stroke="var(--bg)" stroke-width="2"/><circle cx="602.3" cy="111" r="4.5" fill="var(--bg)" stroke="var(--status-urgent)" stroke-width="1.8"/><line x1="686.9" y1="98" x2="686.9" y2="124" stroke="var(--accent)" stroke-width="2"/><text x="686.9" y="136" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--accent-strong)">today · day 9 of 14</text><path d="M 433.1 102 L 433.1 42" fill="none" stroke="var(--border-strong)" stroke-width="1"/><circle cx="433.1" cy="102" r="1.5" fill="var(--border-strong)"/><text x="427.1" y="26" text-anchor="end" font-size="12" font-weight="600" fill="var(--text-1)">The checkout release went out here</text><text x="427.1" y="40" text-anchor="end" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Aug 4 · first of 3 this week</text><path d="M 602.3 104 L 602.3 66 L 610.3 66" fill="none" stroke="var(--border-strong)" stroke-width="1"/><path d="M 10 120 L 10 144" fill="none" stroke="var(--border-strong)" stroke-width="1"/><text x="18" y="154" font-size="12" font-weight="600" fill="var(--text-1)">Retro agreed: smaller PRs<tspan font-weight="400" fill="var(--text-2)"> — the dots have been denser since</tspan></text><text x="18" y="169" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Jul 30 · cycle start</text></svg>
+      <span class="chip dvg focus" style="position:absolute;left:614px;top:55px"><svg width="13" height="13" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><span>ENG-116</span><svg width="11" height="11" viewBox="0 0 20 20" class="c-urgent"><use href="#g-div"/></svg></span>
+      <div class="peek" style="position:absolute;left:734px;top:-34px;z-index:6">
+        <div class="ttl">Apple Pay in the payment sheet</div>
+        <div class="staterow"><svg width="13" height="13" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><b>In Progress</b><span>· Cycle 2 · feature</span></div>
+        <div class="dvline"><svg width="11" height="11" viewBox="0 0 20 20"><use href="#g-div"/></svg>Done in git, not on the board</div>
+        <div class="track"><svg width="220" height="16" viewBox="0 0 220 16">
+          <line x1="8" y1="8" x2="118" y2="8" stroke="var(--status-done)" stroke-width="1.6"/>
+          <circle cx="8" cy="8" r="3.2" fill="var(--status-done)"/>
+          <circle cx="63" cy="8" r="3.2" fill="var(--status-done)"/>
+          <circle cx="118" cy="8" r="3.2" fill="var(--status-done)"/>
+          <path d="M136 13 L141 3 M144 13 L149 3" stroke="var(--status-urgent)" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="166" cy="8" r="3.4" fill="var(--bg-elevated)" stroke="var(--status-urgent)" stroke-width="1.6"/>
+        </svg></div>
+        <div class="bifact">
+          <div class="p">Built — not live yet</div>
+          <div class="m">merged 8f21c4a · 14/14 checks · no prod deploy since</div>
+        </div>
+        <div class="foot"><span class="kbd">⏎</span><span>open</span><span class="sp">·</span><span class="kbd">esc</span><span>stay</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="statrow">
+      <div class="stat">
+        <div class="lbl">Shipped, 6 cycles</div>
+        <div class="valrow"><span class="num"><span class="door hot">52</span></span><span class="delta good">▲ 8</span><svg width="64" height="18" viewBox="0 0 64 18" style="display:block;overflow:visible"><rect x="2" y="6" width="54.7" height="6" rx="3" fill="var(--status-done)"/><rect x="58.7" y="6.5" width="2.8" height="5" rx="2.5" fill="none" stroke="var(--border-strong)" stroke-width="1"/></svg></div>
+        <div class="opens">opens: issues · last 6 cycles · shipped</div>
+        <div class="setpeek peek">
+          <div class="ttl">Shipped, last 6 cycles</div>
+          <div class="sethead">52 issues · merged and live · newest first</div>
+          <div class="sp-row"><span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-done"><use href="#g-done"/></svg><span>ENG-113</span></span><span class="t">Refund flow for partial orders</span><span class="r">live 3d</span></div>
+          <div class="sp-row"><span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-done"><use href="#g-done"/></svg><span>ENG-102</span></span><span class="t">Card form autofocus</span><span class="r">live 4d</span></div>
+          <div class="sp-row"><span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-done"><use href="#g-done"/></svg><span>ENG-96</span></span><span class="t">Coupon codes at checkout</span><span class="r">live 6d</span></div>
+          <div class="sp-more">↓ 49 more</div>
+          <div class="foot" style="margin-top:0;border-top:0;padding-top:2px"><span class="kbd">⏎</span><span>open as a filtered list</span><span class="sp">·</span><span class="kbd">esc</span><span>stay</span></div>
+        </div>
+      </div>
+      <div class="stat">
+        <div class="lbl">Open to merged</div>
+        <div class="valrow"><span class="num"><span class="door">46</span><span class="unit">h</span></span><span class="delta good">▼ 22h</span><svg width="64" height="18" viewBox="0 0 64 18" style="display:block;overflow:visible"><path d="M 3 5.9 L 14.6 4.4 L 26.2 8.8 L 37.8 10.2 L 49.4 12.1 L 61 13.6" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="61" cy="13.6" r="2.6" fill="var(--accent)" stroke="var(--bg)" stroke-width="1.2"/></svg></div>
+      </div>
+      <div class="stat">
+        <div class="lbl">Checks failing</div>
+        <div class="valrow"><span class="num"><span class="door">26</span><span class="unit">%</span></span><span class="delta good">▼ 14%</span><svg width="64" height="18" viewBox="0 0 64 18" style="display:block;overflow:visible"><line x1="4" y1="6" x2="4" y2="14" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round"/><line x1="8.3" y1="6" x2="8.3" y2="14" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round"/><line x1="12.6" y1="6" x2="12.6" y2="14" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round"/><line x1="16.9" y1="4" x2="16.9" y2="14" stroke="var(--status-urgent)" stroke-width="2" stroke-linecap="round"/><line x1="21.2" y1="6" x2="21.2" y2="14" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round"/><line x1="25.5" y1="6" x2="25.5" y2="14" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round"/><line x1="29.8" y1="6" x2="29.8" y2="14" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round"/><line x1="34.1" y1="4" x2="34.1" y2="14" stroke="var(--status-urgent)" stroke-width="2" stroke-linecap="round"/><line x1="38.4" y1="4" x2="38.4" y2="14" stroke="var(--status-urgent)" stroke-width="2" stroke-linecap="round"/><line x1="42.7" y1="6" x2="42.7" y2="14" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round"/><line x1="47" y1="6" x2="47" y2="14" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round"/><line x1="51.3" y1="6" x2="51.3" y2="14" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round"/><line x1="55.6" y1="4" x2="55.6" y2="14" stroke="var(--status-urgent)" stroke-width="2" stroke-linecap="round"/><line x1="59.9" y1="6" x2="59.9" y2="14" stroke="var(--border-strong)" stroke-width="2" stroke-linecap="round"/></svg></div>
+      </div>
+      <div class="stat">
+        <div class="lbl">Not linked to a change</div>
+        <div class="valrow"><span class="num"><span class="door">13</span></span><span class="delta good">▼ 1</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="content section">
+    <div class="sec-kicker"><span class="k">OPEN TO MERGED</span></div>
+    <h2 class="headline">Half of the last 26 changes merged inside 46 hours — <span class="urgent door">two waited past 200</span>.</h2>
+    <svg width="1120" height="152" viewBox="0 0 1120 152" role="img" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible"><line x1="14" y1="128" x2="1106" y2="128" stroke="var(--border)" stroke-width="1"/><line x1="14" y1="128" x2="14" y2="132" stroke="var(--border)" stroke-width="1"/><text x="14" y="145" text-anchor="middle" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">0</text><line x1="230" y1="128" x2="230" y2="132" stroke="var(--border)" stroke-width="1"/><text x="230" y="145" text-anchor="middle" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">48h</text><line x1="446" y1="128" x2="446" y2="132" stroke="var(--border)" stroke-width="1"/><text x="446" y="145" text-anchor="middle" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">96h</text><line x1="662" y1="128" x2="662" y2="132" stroke="var(--border)" stroke-width="1"/><text x="662" y="145" text-anchor="middle" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">144h</text><line x1="878" y1="128" x2="878" y2="132" stroke="var(--border)" stroke-width="1"/><text x="878" y="145" text-anchor="middle" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">192h</text><line x1="1094" y1="128" x2="1094" y2="132" stroke="var(--border)" stroke-width="1"/><text x="1094" y="145" text-anchor="middle" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">240h</text><line x1="221" y1="58" x2="221" y2="128" stroke="var(--accent)" stroke-width="1.6"/><text x="221" y="48" text-anchor="middle" font-size="11" font-weight="600" fill="var(--accent-strong)">half merge inside 46h</text><circle cx="23" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="32" cy="106" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="36.5" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="45.5" cy="106" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="54.5" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="63.5" cy="106" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="72.5" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="86" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="99.5" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="113" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="135.5" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="162.5" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="198.5" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="243.5" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="261.5" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="284" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="311" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="342.5" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="383" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="419" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="468.5" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="540.5" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="635" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="734" cy="118" r="5" fill="var(--text-2)" stroke="var(--bg)" stroke-width="2"/><circle cx="950" cy="118" r="5" fill="var(--bg)" stroke="var(--status-urgent)" stroke-width="1.8"/><circle cx="1076" cy="118" r="5" fill="var(--bg)" stroke="var(--status-urgent)" stroke-width="1.8"/><path d="M 950 106 L 950 80 L 1076 80 L 1076 106" fill="none" stroke="var(--border-strong)" stroke-width="1"/><text x="1013" y="56" text-anchor="middle" font-size="12" font-weight="600" fill="var(--text-1)">two waited 200h+</text><text x="1013" y="70" text-anchor="middle" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">both were single giant PRs</text></svg>
+    <p class="legend">One dot per merged change, open → merged, linear scale. Every dot is a doorway too —
+      hover names the change, ⏎ opens it. The two hollow dots were single giant PRs; the retro already named the fix.</p>
+  </div>
+
+  <div class="content rule-top">
+    <div class="otherend">
+      <div class="oe-left">
+        <div class="sec-kicker" style="margin-bottom:0"><span class="k">THE OTHER END OF THE DOORWAY</span></div>
+        <h2 class="headline">Pick any fact on this page — the thing it is about is one ⏎ away. And it knows the way back.</h2>
+        <p>The count of <b>52</b> opened the list; the list opened <b>ENG-116</b>; and ENG-116 carries
+          its own return paths — the report that cites it, the decision that weighed it, the retro
+          action it was born from. The graph is walkable in both directions, from any fact.</p>
+        <div class="law">Anything dotted opens something. Chips peek on hover; ⏎ goes; esc stays.
+          <span class="m">no link is typed twice · backlinks write themselves · a number is never a dead end</span></div>
+      </div>
+      <div class="railcut">
+        <div class="cap">the right rail of issue ENG-116 — gaining its return paths</div>
+        <div class="rail">
+          <div class="kick">DELIVERY</div>
+          <div class="bifact">
+            <div class="p"><svg width="14" height="14" viewBox="0 0 20 20" style="color:var(--status-done)"><circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>Built — not live yet</div>
+            <div class="m">merged 8f21c4a · 14 checks green · no prod deploy since</div>
+          </div>
+          <div class="hr"></div>
+          <div class="kick">REFERENCED IN<span class="n">3</span></div>
+          <div style="margin-top:4px">
+            <div class="bl-row">
+              <div class="r1">
+                <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-cycles"/></svg><span>Cycle 2 report</span></span>
+                <span class="how">counts it among the shipped</span><span class="dt">Tue</span>
+              </div>
+              <div class="snip">“…8 shipped so far; one — ENG-116 — is done in git, not on the board…”</div>
+            </div>
+            <div class="bl-row">
+              <div class="r1">
+                <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-acc"><use href="#g-decision"/></svg><span>Ship without saved cards…</span></span>
+                <span class="how">weighed it</span><span class="dt">aug 6</span>
+              </div>
+              <div class="snip">“…if Apple Pay (ENG-116) covers most of those sessions…”</div>
+            </div>
+            <div class="bl-row">
+              <div class="r1">
+                <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" class="c-ink"><use href="#g-retro"/></svg><span>Retro · Cycle 1</span></span>
+                <span class="how">born here — from an action</span><span class="dt">jul 30</span>
+              </div>
+              <div class="snip">action → issue: “lead the sheet with the fastest payment method”</div>
+            </div>
+          </div>
+          <div class="hr"></div>
+          <div class="strow"><svg width="13" height="13" viewBox="0 0 20 20" class="c-prog"><use href="#g-progress"/></svg><b>In Progress</b><span class="m">on the board since Jul 29 · unchanged 9d</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span><span class="door">8 shipped</span></span><span class="div">·</span>
+    <span><span class="door">3 deploys this week</span></span><span class="div">·</span>
+    <span class="attn"><span class="door" style="border-bottom-color:rgba(204,90,64,.5)">1 needs attention</span></span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+</body>
+</html>

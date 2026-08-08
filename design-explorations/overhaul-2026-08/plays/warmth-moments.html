@@ -1,0 +1,305 @@
+<!doctype html>
+<!--
+  plays/warmth-moments — WARMTH play 1/2: the moments gallery.
+  Six states every tracker leaves unstyled, designed as identity, shown as framed
+  specimen vignettes on one sheet. Micro-illustration language: 1.6px round-cap
+  strokes, same DNA as the status glyphs and reality tracks. Never a mascot.
+  Tokens: Warm LIGHT verbatim + daylight extensions (row hairline #efe9dd,
+  statusline bg #f4efe5, urgent-soft rgba(204,90,64,.08)). No motion. No icon fonts.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — warmth / the moments</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+
+  .sheet{padding:40px 48px 40px;max-width:1440px}
+  .sheet-head{display:flex;align-items:baseline;gap:18px;margin-bottom:8px}
+  .sheet-head h1{font-size:30px;font-weight:700;letter-spacing:-.022em}
+  .sheet-head .tag{font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+                   color:var(--accent-strong);text-transform:uppercase}
+  .sheet-sub{color:var(--text-2);font-size:13.5px;max-width:720px;line-height:1.5}
+  .sheet-sub b{font-weight:600;color:var(--text-1)}
+
+  .grid{margin-top:22px;display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+
+  .vig{display:flex;flex-direction:column}
+  .vig .frame{position:relative;height:290px;background:var(--bg);
+              border:1px solid var(--border-strong);border-radius:10px;overflow:hidden}
+  .vig .cap{display:flex;gap:10px;align-items:baseline;padding:9px 4px 0}
+  .vig .cap .ix{font-family:var(--mono);font-size:11px;color:var(--accent-strong);font-weight:600}
+  .vig .cap .name{font-size:12.5px;font-weight:600;white-space:nowrap}
+  .vig .cap .why{font-size:12px;color:var(--text-3)}
+
+  /* shared drawn-mark language */
+  .mark{display:block}
+  .mark path,.mark circle,.mark line,.mark rect{fill:none;stroke:var(--text-3);
+        stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  .mark .warm{stroke:var(--accent)}
+  .mark .soft{stroke:var(--border-strong)}
+
+  /* --- a · nothing needs you --- */
+  .calm{height:100%;display:flex;flex-direction:column;align-items:center;
+        justify-content:center;text-align:center;padding:0 44px}
+  .calm h2{font-size:19px;font-weight:650;letter-spacing:-.01em;margin-top:16px}
+  .calm p{color:var(--text-2);font-size:13px;line-height:1.55;margin-top:6px}
+  .calm .meta{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:14px}
+
+  /* --- b · first run --- */
+  .firstrun{height:100%;display:flex;flex-direction:column;align-items:center;
+            justify-content:center;text-align:center;padding:0 40px}
+  .firstrun h2{font-size:19px;font-weight:650;letter-spacing:-.01em;margin-top:14px}
+  .firstrun p{color:var(--text-2);font-size:13px;line-height:1.55;margin-top:6px;max-width:320px}
+  .fr-actions{display:flex;align-items:center;gap:10px;margin-top:16px}
+  .btn{height:30px;padding:0 13px;border-radius:var(--rad-control);font-size:12.5px;
+       font-weight:600;display:inline-flex;align-items:center;font-family:var(--ui);
+       background:var(--accent);border:1px solid var(--accent);color:var(--on-accent)}
+  .fr-or{color:var(--text-3);font-size:12px}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 5px;
+       background:rgba(255,255,255,.5)}
+
+  /* --- c · sync lost --- */
+  .offline{height:100%;display:flex;flex-direction:column}
+  .off-body{flex:1;display:flex;flex-direction:column;align-items:center;
+            justify-content:center;text-align:center;padding:0 44px}
+  .off-body h2{font-size:16px;font-weight:650;margin-top:14px}
+  .off-body p{color:var(--text-2);font-size:12.5px;line-height:1.55;margin-top:6px}
+  .off-line{height:30px;background:var(--statusline-bg);border-top:1px solid var(--border);
+            display:flex;align-items:center;padding:0 14px;font-size:11.5px;color:var(--text-2)}
+  .off-line .d{width:6px;height:6px;border-radius:50%;background:var(--status-in-progress);
+               margin-right:6px}
+  .off-line .right{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+
+  /* --- d · no results --- */
+  .search{height:100%;display:flex;flex-direction:column;padding:22px 26px 0}
+  .s-box{display:flex;align-items:center;gap:8px;height:34px;padding:0 11px;
+         background:var(--bg-elevated);border:1px solid var(--border-strong);
+         border-radius:var(--rad-control);font-size:13px}
+  .s-box .q{color:var(--text-1)}
+  .s-box .caret{width:1px;height:15px;background:var(--accent)}
+  .s-empty{flex:1;display:flex;flex-direction:column;align-items:center;
+           justify-content:center;text-align:center;padding:0 26px 12px}
+  .s-empty p{color:var(--text-2);font-size:12.5px;line-height:1.55;margin-top:10px}
+  .s-empty .didyou{margin-top:10px;font-size:12.5px}
+  .s-empty .didyou a{color:var(--accent-strong);font-weight:600;text-decoration:none;
+                     border-bottom:1px solid var(--accent-line)}
+
+  /* --- e · the LIVE stamp --- */
+  .stampv{height:100%;display:flex;align-items:center;justify-content:center;padding:0 30px}
+  .done-card{position:relative;width:100%;max-width:342px;background:var(--bg-elevated);
+             border:1px solid var(--border);border-radius:10px;padding:16px 18px 14px}
+  .dc-top{display:flex;align-items:center;gap:9px}
+  .dc-id{font-family:var(--mono);font-size:11.5px;color:var(--text-3)}
+  .dc-title{font-size:14.5px;font-weight:600;margin-top:7px}
+  .dc-sub{margin-top:7px;font-size:12px;color:var(--text-2)}
+  .dc-mono{margin-top:9px;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .st-done{width:14px;height:14px;border-radius:50%;border:1.6px solid var(--status-done);
+           position:relative;flex:none}
+  .st-done::after{content:"";position:absolute;inset:2.4px;border-radius:50%;background:var(--status-done)}
+  .stamp{position:absolute;right:-16px;top:-13px;transform:rotate(-8deg)}
+
+  /* --- f · end-of-cycle toast --- */
+  .toastv{height:100%;position:relative;background:var(--bg)}
+  .toast-dim{position:absolute;inset:0;
+             background:repeating-linear-gradient(0deg,var(--row-hairline) 0 1px,transparent 1px 44px);
+             opacity:.7}
+  .ghost{position:absolute;left:16px;height:8px;border-radius:4px;background:var(--bg-hover)}
+  .toast{position:absolute;right:16px;bottom:18px;width:304px;background:var(--bg-elevated);
+         border:1px solid var(--border);border-radius:var(--rad-card);
+         box-shadow:0 12px 32px rgba(60,45,30,.14),0 2px 6px rgba(60,45,30,.06);
+         padding:15px 16px 13px}
+  .toast h3{font-size:14.5px;font-weight:650;display:flex;align-items:center;gap:8px}
+  .toast p{margin-top:5px;font-size:12.5px;color:var(--text-2);line-height:1.5}
+  .toast .row{display:flex;align-items:center;gap:10px;margin-top:11px}
+  .toast .go{height:27px;padding:0 11px;border-radius:var(--rad-control);font-size:12px;
+             font-weight:600;background:var(--accent);color:var(--on-accent);
+             display:inline-flex;align-items:center;border:1px solid var(--accent)}
+  .toast .later{font-size:12px;color:var(--text-3)}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="sheet-head">
+    <span class="tag">warmth · play 5</span>
+    <h1>The moments</h1>
+  </div>
+  <p class="sheet-sub">Six states every tracker leaves unstyled, designed as identity. One drawn
+    language throughout — <b>1.6px round-cap strokes, the same DNA as the status glyphs</b> —
+    plain words a PM can cold-read, and one piece of print-shop warmth used exactly once.</p>
+
+  <div class="grid">
+
+    <!-- a · nothing needs you -->
+    <div class="vig">
+      <div class="frame"><div class="calm">
+        <svg class="mark" width="96" height="44" viewBox="0 0 96 44">
+          <line class="soft" x1="4" y1="36" x2="92" y2="36"/>
+          <circle class="warm" cx="48" cy="24" r="9"/>
+          <line class="warm" x1="48" y1="8" x2="48" y2="4"/>
+          <line class="warm" x1="63" y1="13" x2="66" y2="10"/>
+          <line class="warm" x1="33" y1="13" x2="30" y2="10"/>
+          <line x1="14" y1="41" x2="26" y2="41"/>
+          <line x1="70" y1="41" x2="82" y2="41"/>
+        </svg>
+        <h2>Nothing needs you</h2>
+        <p>Triage is clear and no change is waiting on anyone.
+           The board is telling the truth — enjoy the quiet.</p>
+        <span class="meta">checked just now · watching on its own</span>
+      </div></div>
+      <div class="cap"><span class="ix">a</span><span class="name">Nothing needs you</span>
+        <span class="why">an empty queue is a result, not an absence</span></div>
+    </div>
+
+    <!-- b · first run -->
+    <div class="vig">
+      <div class="frame"><div class="firstrun">
+        <svg class="mark" width="64" height="52" viewBox="0 0 64 52">
+          <line x1="32" y1="48" x2="32" y2="22"/>
+          <path d="M32 30 C 24 28, 18 22, 17 13 C 26 14, 31 20, 32 28"/>
+          <path class="warm" d="M32 24 C 40 22, 46 16, 47 7 C 38 8, 33 14, 32 22"/>
+          <line class="soft" x1="14" y1="48" x2="50" y2="48"/>
+        </svg>
+        <h2>Start the graph</h2>
+        <p>Issues, changes and deploys will connect themselves around
+           what you write here. One line is enough.</p>
+        <div class="fr-actions">
+          <span class="btn">+ New issue</span>
+          <span class="fr-or">or press</span><span class="kbd">C</span>
+        </div>
+      </div></div>
+      <div class="cap"><span class="ix">b</span><span class="name">First run</span>
+        <span class="why">a welcome, not a blank table</span></div>
+    </div>
+
+    <!-- c · sync lost -->
+    <div class="vig">
+      <div class="frame"><div class="offline">
+        <div class="off-body">
+          <svg class="mark" width="92" height="26" viewBox="0 0 92 26">
+            <circle class="warm" cx="10" cy="13" r="4" style="fill:var(--accent);stroke:none"/>
+            <line x1="18" y1="13" x2="34" y2="13"/>
+            <line class="soft" x1="40" y1="13" x2="44" y2="13"/>
+            <line class="soft" x1="50" y1="13" x2="54" y2="13"/>
+            <line class="soft" x1="60" y1="13" x2="64" y2="13"/>
+            <circle cx="78" cy="13" r="4"/>
+          </svg>
+          <h2>Working offline</h2>
+          <p>The connection dropped. Everything you do is saved on this
+             machine and syncs itself the moment it returns.
+             Keep working — nothing is lost.</p>
+        </div>
+        <div class="off-line"><span class="d"></span>Offline — changes saved here
+          <span class="right">last synced 2m ago</span></div>
+      </div></div>
+      <div class="cap"><span class="ix">c</span><span class="name">Sync lost</span>
+        <span class="why">local-first, said in plain words</span></div>
+    </div>
+
+    <!-- d · no results -->
+    <div class="vig">
+      <div class="frame"><div class="search">
+        <div class="s-box">
+          <svg class="mark" width="14" height="14" viewBox="0 0 14 14">
+            <circle cx="6" cy="6" r="4.4"/><line x1="9.6" y1="9.6" x2="12.6" y2="12.6"/>
+          </svg>
+          <span class="q">refnud flow</span><span class="caret"></span>
+        </div>
+        <div class="s-empty">
+          <svg class="mark" width="52" height="42" viewBox="0 0 52 42">
+            <circle cx="22" cy="18" r="13"/>
+            <line x1="32" y1="28" x2="42" y2="38"/>
+            <line class="soft" x1="17" y1="18" x2="27" y2="18"/>
+          </svg>
+          <p>Nothing matches <b style="color:var(--text-1)">“refnud flow”</b>.
+             Search reads titles, ids and comments — fewer words usually win.</p>
+          <span class="didyou">Did you mean <a href="#">refund</a>?</span>
+        </div>
+      </div></div>
+      <div class="cap"><span class="ix">d</span><span class="name">No results</span>
+        <span class="why">a suggestion, not a shrug</span></div>
+    </div>
+
+    <!-- e · the LIVE stamp -->
+    <div class="vig">
+      <div class="frame"><div class="stampv">
+        <div class="done-card">
+          <svg class="stamp" width="104" height="46" viewBox="0 0 104 46">
+            <path d="M7 9 C 30 6.4, 74 6.8, 97 8.2 C 99.5 8.4, 100.6 10, 100.4 12.5
+                     C 100 22, 100.2 30, 99.6 36.4 C 99.4 38.8, 98 40.2, 95.4 40.1
+                     C 70 39.4, 32 40.4, 8.8 39.6 C 6.2 39.5, 4.8 38, 4.9 35.4
+                     C 5.1 27, 4.6 19, 5.4 11.6 C 5.6 9.8, 6 9.1, 7 9 Z"
+                  fill="none" stroke="var(--accent)" stroke-width="2.6" opacity=".85"/>
+            <path d="M10.5 12.4 C 32 10.6, 72 10.8, 94.4 11.8 M 94.8 36.5 C 70 37.4, 34 36.7, 10.2 36.6"
+                  fill="none" stroke="var(--accent)" stroke-width="1" opacity=".38"/>
+            <text x="49" y="30" text-anchor="middle" fill="var(--accent)" opacity=".88"
+                  font-family="Figtree,sans-serif" font-weight="800" font-size="17"
+                  letter-spacing="5">LIVE</text>
+          </svg>
+          <div class="dc-top">
+            <span class="st-done"></span>
+            <span class="dc-id">ENG-119</span>
+          </div>
+          <div class="dc-title">Persist cart across sessions</div>
+          <div class="dc-sub">Live — reached production this morning.</div>
+          <div class="dc-mono">PR #186 · 8f21c4a → main · deploy 412</div>
+        </div>
+      </div></div>
+      <div class="cap"><span class="ix">e</span><span class="name">The ink stamp</span>
+        <span class="why">used once — the moment work reaches production</span></div>
+    </div>
+
+    <!-- f · end-of-cycle toast -->
+    <div class="vig">
+      <div class="frame"><div class="toastv">
+        <div class="toast-dim"></div>
+        <span class="ghost" style="top:18px;width:180px"></span>
+        <span class="ghost" style="top:62px;width:230px"></span>
+        <span class="ghost" style="top:106px;width:150px"></span>
+        <span class="ghost" style="top:150px;width:205px"></span>
+        <span class="ghost" style="top:194px;width:120px"></span>
+        <div class="toast">
+          <h3>
+            <svg class="mark" width="18" height="18" viewBox="0 0 18 18">
+              <line class="warm" x1="4" y1="15" x2="4" y2="3"/>
+              <path class="warm" d="M4 3 C 8 5.4, 10 1.6, 14 4 L 14 9 C 10 6.6, 8 10.4, 4 8"/>
+            </svg>
+            Cycle 2 is done
+          </h3>
+          <p>8 shipped, 6 live, 2 built and waiting. The retro room is
+             set up whenever the team is ready.</p>
+          <div class="row">
+            <span class="go">Open the retro</span>
+            <span class="later">Later — it keeps</span>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap"><span class="ix">f</span><span class="name">End of cycle</span>
+        <span class="why">a small ceremony, then out of the way</span></div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

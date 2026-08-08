@@ -53,6 +53,12 @@
   --color-statusline-bg: var(--statusline-bg);
   --color-urgent-soft: var(--urgent-soft);
 
+  /* The only elevation in this language. Transients — the peek, the how, the menu — are the sole
+     surfaces allowed to lift off the page, so there is exactly one shadow token and each preset
+     states its own ink: a light theme's shadow is its own warm/cool black, and a dark theme needs
+     a deeper one than a light-theme value would give it. */
+  --shadow-elevated: var(--elevation-transient);
+
   --radius-control: var(--rad-control);
   --radius-pill: var(--rad-pill);
   --radius-card: var(--rad-card);
@@ -141,6 +147,7 @@
   --row-hairline: #efe9dd;
   --statusline-bg: #f4efe5;
   --urgent-soft: rgba(204, 90, 64, 0.08);
+  --elevation-transient: 0 10px 26px rgba(43, 38, 32, 0.14);
 
   /* Syntax colours. Each is one of this preset's own hues — the in-review violet, the done green,
      the in-progress amber, the accent, the text ramp — with its lightness moved until it clears
@@ -193,7 +200,10 @@
   --status-backlog: #6b7078;
   --status-todo: #8a8f97;
   --status-in-progress: #e0a63c;
-  --status-in-review: #3f9e7c;
+  /* Darkened from #3f9e7c: the reality track's `open` and `rev-wait` nodes are drawn in this hue on
+     the selected row's `--accent-soft` wash, where the original measured 2.88 — under the 3:1
+     non-text bar. Asserted per preset in `styles/contrast.test.ts`. */
+  --status-in-review: #398e70;
   --status-done: #5b63d6;
   --status-urgent: #e2593f;
   --status-urgent-ink: #ba3c26;
@@ -202,6 +212,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --elevation-transient: 0 10px 26px rgba(23, 24, 26, 0.12);
 
   --code-keyword: #5860d5;
   --code-string: #307a5f;
@@ -262,6 +273,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --elevation-transient: 0 10px 26px rgba(20, 19, 15, 0.13);
 
   --code-keyword: #6253de;
   --code-string: #277756;
@@ -316,12 +328,15 @@
   --status-in-review: #9089da;
   --status-done: #59a57b;
   --status-urgent: #df6a4e;
-  --status-urgent-ink: var(--status-urgent);
+  /* The one dark preset that cannot alias the ink to the glyph hue: the `//` break is text-sized and
+     is drawn on the selected row's `--accent-soft` wash, where `--status-urgent` measures 4.35. */
+  --status-urgent-ink: #e2765c;
   --signal-sync: #5eb489;
 
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --elevation-transient: 0 10px 26px rgba(0, 0, 0, 0.52);
 
   --code-keyword: #9089da;
   --code-string: #59a57b;
@@ -364,6 +379,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --elevation-transient: 0 10px 26px rgba(0, 0, 0, 0.6);
 
   --code-keyword: #6e79f0;
   --code-string: #3f9e7c;
@@ -406,6 +422,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --elevation-transient: 0 10px 26px rgba(0, 0, 0, 0.58);
 
   --code-keyword: #9b8cf5;
   --code-string: #4fae83;

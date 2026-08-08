@@ -228,12 +228,14 @@ export {
 export type {
   CiHealth,
   DeliverySignal,
+  DeliveryStrip,
   DeploymentIndex,
   DivergenceKind,
   IssueLinkRow,
   LinkedEntities,
   LinkedPullRequestRow,
   PrState,
+  ReviewAgeSource,
   TeamDeploymentRow,
 } from './zero/delivery.js'
 export {
@@ -738,7 +740,6 @@ export type {
   TeamHomeShipped,
   TeamHomeShippedRow,
   TeamHomeSinceYesterday,
-  TeamHomeStrip,
   TeamHomeTeamRow,
   TeamHomeTriageRow,
   TeamHomeYours,

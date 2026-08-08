@@ -1,0 +1,355 @@
+<!doctype html>
+<!--
+  plays/bridge-detail — BRIDGE play, artifact 1 of 2.
+  BILINGUAL DESIGN, formalized: every fact appears in two registers, paired, never toggled.
+  The "bifact" component: plain sentence (Figtree, text-1) a PM reads; directly beneath,
+  the mono detail line (11px, text-3) an engineer trusts. Applied to the masthead, the
+  delivery rail headline, every metro stop, the divergence callout, the properties, and
+  the comments header. Horizon three-band frame; Warm LIGHT tokens verbatim.
+  Extensions (from daylight): row hairline #efe9dd, statusline bg #f4efe5,
+  urgent-soft rgba(204,90,64,.08). No other new values.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — ENG-116 · Apple Pay in the payment sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  body.full .frame{height:auto;overflow:visible}
+  body.full .body-cols{overflow:visible}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ the bifact — one fact, two registers, never toggled ============ */
+  .bi .say{font-size:13.5px;color:var(--text-1);line-height:1.4}
+  .bi .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:3px;line-height:1.5}
+
+  /* ============ band 2 — page-owned masthead ============ */
+  .masthead{padding:20px 40px 18px;border-bottom:1px solid var(--border)}
+  .m-top{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .m-back{color:var(--text-3);font-size:12.5px}
+  .m-back b{color:var(--text-2);font-weight:500}
+  .m-id{font-family:var(--mono);font-size:12.5px;color:var(--text-3)}
+  .chip-div{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;
+            border:1px solid var(--accent-line);border-radius:var(--rad-pill);
+            background:var(--urgent-soft);color:var(--status-urgent);font-size:12px;font-weight:600}
+  .m-actions{margin-left:auto;display:flex;gap:8px}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;gap:6px;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .kbd-s{font-family:var(--mono);font-size:10px;color:var(--text-3);
+         border:1px solid var(--border-strong);border-radius:4px;padding:0 4px;background:rgba(255,255,255,.5)}
+  .btn.primary .kbd-s{color:rgba(255,255,255,.8);border-color:rgba(255,255,255,.4);background:transparent}
+  .masthead h1{font-size:29px;font-weight:700;letter-spacing:-.02em;line-height:1.12;max-width:760px}
+  .m-bi{margin-top:12px}
+  .m-bi .say{font-size:13.5px;color:var(--text-1);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .m-bi .say .st-word{display:inline-flex;align-items:center;gap:7px;font-weight:600}
+  .m-bi .say .dim{color:var(--text-2)}
+  .m-bi .say .dv{color:var(--border-strong)}
+  .m-bi .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:5px}
+
+  .st{width:14px;height:14px;border-radius:50%;position:relative;flex:none;display:inline-block}
+  .st.progress{border:1.6px solid var(--status-in-progress)}
+  .st.progress::after{content:"";position:absolute;inset:2.4px;border-radius:50%;
+       background:conic-gradient(var(--status-in-progress) 0 50%,transparent 50% 100%)}
+  .ldot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
+
+  /* ============ content columns ============ */
+  .body-cols{flex:1;display:flex;min-height:0;overflow:auto}
+  .doc{flex:1;min-width:0;padding:30px 56px 56px 40px}
+  .doc section{max-width:620px}
+  .doc section+section{margin-top:36px}
+
+  /* activity — every entry a bifact */
+  .act-row{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--row-hairline)}
+  .act-row:last-child{border-bottom:1px solid var(--row-hairline)}
+  .act-row .a-d{width:7px;height:7px;border-radius:50%;background:var(--border-strong);flex:none;margin-top:5px}
+  .act-row .a-d.warm{background:var(--status-in-progress)}
+  .act-row .a-d.link{background:var(--status-in-review)}
+  .act-row .say{font-size:13px;color:var(--text-1)}
+  .act-row .say .ago{color:var(--text-3);margin-left:7px;font-size:12px}
+  .act-row .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:2px}
+  .sec-h{display:flex;align-items:baseline;font-size:11px;letter-spacing:.09em;color:var(--text-3);
+         font-weight:600;padding-bottom:9px;border-bottom:1px solid var(--border);margin-bottom:14px}
+  .sec-h .act{margin-left:auto;letter-spacing:0;font-size:12px;color:var(--text-2);font-weight:500}
+  .prose{font-size:14.5px;line-height:1.65;color:var(--text-1)}
+  .prose p+p{margin-top:12px}
+  .composer{margin-top:16px;background:var(--bg-elevated);border:1px solid var(--border);
+            border-radius:var(--rad-control);padding:13px 16px 11px}
+  .composer .hint{color:var(--text-3);font-size:13.5px;min-height:36px}
+  .composer .bar{display:flex;align-items:center;gap:10px;border-top:1px solid var(--row-hairline);
+                 padding-top:9px;margin-top:5px}
+  .composer .marks{display:flex;gap:12px;color:var(--text-3);font-family:var(--mono);font-size:11px}
+  .composer .send{margin-left:auto;display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:12px}
+
+  /* ============ right rail ============ */
+  .rail-col{width:396px;min-width:396px;border-left:1px solid var(--border);
+            padding:34px 40px 48px 36px}
+  .rail-h{font-size:11px;letter-spacing:.09em;color:var(--text-3);font-weight:600;
+          padding-bottom:9px;border-bottom:1px solid var(--border)}
+  .rail-lede{margin:14px 0 18px}
+  .rail-lede .say{font-size:15.5px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+  .rail-lede .say .ring{width:11px;height:11px;border-radius:50%;flex:none;
+          background:var(--bg);border:2.5px solid var(--status-done)}
+  .rail-lede .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:6px}
+
+  .metro{position:relative;margin-bottom:8px}
+  .stop{position:relative;padding:0 0 19px 30px}
+  .stop::before{content:"";position:absolute;left:5.5px;top:14px;bottom:-2px;width:2px;background:var(--status-done)}
+  .stop.last-line::before{display:none}
+  .stop .node{position:absolute;left:0;top:3px;width:13px;height:13px;border-radius:50%;
+              background:var(--status-done);border:2.5px solid var(--bg)}
+  .stop .node.urgent-ring{background:var(--bg);border:2.5px solid var(--status-urgent)}
+  .stop .say{font-size:13.5px;font-weight:600;line-height:1.25}
+  .stop .say .ago{color:var(--text-3);font-weight:400;margin-left:7px;font-size:12.5px}
+  .stop .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:3px}
+  .stop.break::before{background:repeating-linear-gradient(180deg,var(--status-urgent) 0 4px,transparent 4px 8px);opacity:.65}
+  .break-mark{position:absolute;left:0;bottom:0;width:13px;text-align:center;
+              color:var(--status-urgent);font-family:var(--mono);font-weight:500;font-size:12px;
+              letter-spacing:-.08em;background:var(--bg);line-height:1;padding:2px 0}
+
+  .callout{margin:4px 0 24px;border:1px solid var(--accent-line);background:var(--urgent-soft);
+           border-radius:10px;padding:14px 17px}
+  .callout .c-title{color:var(--status-urgent);font-weight:700;font-size:13px;margin-bottom:7px}
+  .callout .say{font-size:13px;line-height:1.55;color:var(--text-1)}
+  .callout .say b{font-weight:600}
+  .callout .git{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-top:7px}
+  .callout .c-ritual{margin-top:8px;color:var(--text-2);font-style:italic;font-size:12.5px}
+  .callout .c-actions{display:flex;gap:8px;margin-top:13px}
+
+  .props{border-top:1px solid var(--border);padding-top:20px}
+  .prop{display:flex;margin-bottom:15px;font-size:13px}
+  .prop .k{width:88px;color:var(--text-3);flex:none;padding-top:1px}
+  .prop .vwrap{min-width:0}
+  .prop .v{display:flex;align-items:center;gap:7px;font-weight:500}
+  .prop .git{font-family:var(--mono);font-size:11px;color:var(--text-3);font-weight:400;margin-top:3px}
+  .pri{display:inline-flex;align-items:flex-end;gap:1.5px}
+  .pbar{display:inline-block;width:3px;border-radius:1px;background:var(--border-strong)}
+  .pbar.on{background:var(--text-2)}
+  .pill{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 10px;
+        border:1px solid var(--border);border-radius:var(--rad-pill);background:rgba(255,255,255,.55);font-size:12px}
+  .add{color:var(--text-3);font-size:12px}
+
+  /* ============ band 3 — statusline ============ */
+  .statusline{height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab active">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <!-- band 2 — the masthead itself is a bifact -->
+  <div class="masthead">
+    <div class="m-top">
+      <span class="m-back">‹ <b>Issues</b></span>
+      <span class="m-id">ENG-116</span>
+      <span class="chip-div">Done in git, not on the board</span>
+      <div class="m-actions">
+        <button class="btn">Follow</button>
+        <button class="btn primary">Mark Done&nbsp;<span class="kbd-s">⏎</span></button>
+      </div>
+    </div>
+    <h1>Apple Pay in the payment sheet</h1>
+    <div class="m-bi">
+      <div class="say">
+        <span class="st-word"><span class="st progress"></span>In Progress</span>
+        <span class="dv">·</span><span class="dim">Cycle 2</span>
+        <span class="dv">·</span><span class="dim" style="display:inline-flex;align-items:center;gap:6px"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span>
+        <span class="dv">·</span><span class="dim">merged a day ago, every check green</span>
+      </div>
+      <div class="git">board in-progress · git merged 8f21c4a · PR #188 · 14/14 checks · drifted 22h</div>
+    </div>
+  </div>
+
+  <div class="body-cols">
+    <div class="doc">
+      <section>
+        <div class="sec-h">DESCRIPTION<span class="act" style="font-family:var(--mono);font-size:11px;color:var(--text-3)">edited 3d ago · 54 words</span></div>
+        <div class="prose">
+          <p>Offer Apple Pay as a payment option inside the checkout payment sheet, ahead of
+          manual card entry. When the device can't use it, the sheet falls back to the card
+          form without a layout jump.</p>
+          <p>Out of scope for this cycle: Google Pay, and saved-card reordering.</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="sec-h">ACTIVITY</div>
+        <div class="act-row"><span class="a-d"></span>
+          <span><span class="say" style="display:block">Planned into Cycle 2<span class="ago">9d ago</span></span>
+          <span class="git" style="display:block">cycle-2 · Aug 4 – 18 · added at planning</span></span></div>
+        <div class="act-row"><span class="a-d warm"></span>
+          <span><span class="say" style="display:block">Work started<span class="ago">3d ago</span></span>
+          <span class="git" style="display:block">board todo → in-progress</span></span></div>
+        <div class="act-row"><span class="a-d link"></span>
+          <span><span class="say" style="display:block">Linked to a change<span class="ago">3d ago</span></span>
+          <span class="git" style="display:block">PR #188 matched by branch eng-116-apple-pay</span></span></div>
+      </section>
+
+      <section>
+        <div class="sec-h">COMMENTS<span class="act">Open the change ↗</span></div>
+        <div class="bi">
+          <div class="say">Quiet here — the conversation moved to the change.</div>
+          <div class="git">0 comments on the issue · 11 on PR #188, resolved before merge</div>
+        </div>
+        <div class="composer">
+          <div class="hint">Leave a comment…</div>
+          <div class="bar">
+            <span class="marks">B&nbsp; I&nbsp; S&nbsp; &lt;&gt;&nbsp; H2&nbsp; ≡&nbsp; “”</span>
+            <span class="send"><button class="btn primary">Comment</button><span class="kbd-s">⌘⏎</span> to send</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="rail-col">
+      <div class="rail-h">DELIVERY</div>
+
+      <!-- the headline bifact: the exact pair from the phrase dictionary -->
+      <div class="rail-lede">
+        <div class="say"><span class="ring"></span>Built — not live yet</div>
+        <div class="git">merged 8f21c4a · 14 checks green · no prod deploy since</div>
+      </div>
+
+      <div class="metro">
+        <div class="stop">
+          <span class="node"></span>
+          <div class="say">Change opened<span class="ago">3d ago</span></div>
+          <div class="git">PR #188 · apple-pay-payment-sheet → main</div>
+        </div>
+        <div class="stop">
+          <span class="node"></span>
+          <div class="say">Reviewed — approved<span class="ago">1d ago</span></div>
+          <div class="git">2 rounds · changes requested, then approved</div>
+        </div>
+        <div class="stop break">
+          <span class="node"></span>
+          <div class="say">Merged, checks green<span class="ago">1d ago</span></div>
+          <div class="git">8f21c4a on main · 14/14 checks passed</div>
+          <span class="break-mark">//</span>
+        </div>
+        <div class="stop last-line">
+          <span class="node urgent-ring"></span>
+          <div class="say" style="color:var(--status-urgent)">Not live yet</div>
+          <div class="git">no production release carries it</div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div class="c-title">Done in git, not on the board</div>
+        <div class="say">Status says <b>In Progress</b> — the change merged <b>1d ago</b>
+          with every check green.</div>
+        <div class="git">in-progress set 3d ago ≠ merge 8f21c4a, 22h ago</div>
+        <div class="c-ritual">The work moved, the ritual didn't.</div>
+        <div class="c-actions">
+          <button class="btn primary">Mark Done&nbsp;<span class="kbd-s">⏎</span></button>
+          <button class="btn">Keep as is&nbsp;<span class="kbd-s">esc</span></button>
+        </div>
+      </div>
+
+      <div class="props">
+        <div class="prop"><span class="k">Status</span>
+          <span class="vwrap"><span class="v"><span class="st progress"></span>In Progress</span>
+          <span class="git">on the board since Jul 29 · unchanged 9d</span></span></div>
+        <div class="prop"><span class="k">Priority</span>
+          <span class="vwrap"><span class="v"><span class="pri"><span class="pbar on" style="height:5px"></span><span class="pbar on" style="height:8px"></span><span class="pbar" style="height:11px"></span></span>Medium</span>
+          <span class="git">set at triage · unchanged</span></span></div>
+        <div class="prop"><span class="k">Assignee</span>
+          <span class="vwrap"><span class="v" style="color:var(--text-3);font-weight:400">Unassigned</span></span></div>
+        <div class="prop"><span class="k">Cycle</span>
+          <span class="vwrap"><span class="v">Cycle 2</span>
+          <span class="git">Aug 4 – 18 · day 9 of 14</span></span></div>
+        <div class="prop"><span class="k">Labels</span>
+          <span class="vwrap"><span class="v"><span class="pill"><span class="ldot" style="background:var(--status-in-review)"></span>feature</span><span class="add">+ Add</span></span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+<script>if(location.hash==="#full")document.body.classList.add("full");</script>
+</body>
+</html>

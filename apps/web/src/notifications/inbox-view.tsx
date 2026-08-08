@@ -2,7 +2,7 @@ import { useZero } from '@rocicorp/zero/react'
 import { useNavigate } from '@tanstack/react-router'
 import { mutators } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
-import { formatReviewAge } from '@yapm/ui/components/issue-row'
+import { formatReviewAge } from '@yapm/ui/components/reality-track'
 import { BellIcon } from 'lucide-react'
 import {
   type KeyboardEvent as ReactKeyboardEvent,

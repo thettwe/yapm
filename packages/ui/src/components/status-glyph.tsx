@@ -12,20 +12,31 @@ const STATUS = {
 
 export type StatusKind = keyof typeof STATUS
 
-function Pie({ fraction }: { fraction: number }) {
+// Status is CYCLE POSITION: one loop, filled as far as the work has run. Drawn on the northstar's
+// 20-grid with 1.6px round-capped strokes — dashed ring, open ring, half arc, three-quarter arc,
+// filled disc. `done` is a plain disc: fill, not hue, is what separates it from `in-review`, so
+// 1.4.1 holds without a check mark inside it.
+const RING = { cx: 10, cy: 10, r: 7 } as const
+const STROKE = 1.6
+const GHOST_OPACITY = 0.28
+const HALF_ARC = 'M10 3 A7 7 0 0 1 10 17'
+const THREE_QUARTER_ARC = 'M10 3 A7 7 0 1 1 3 10'
+
+function Ring({ opacity, dashed = false }: { opacity?: number; dashed?: boolean }) {
   return (
     <circle
-      cx="7"
-      cy="7"
-      r="3"
+      {...RING}
       fill="none"
       stroke="currentColor"
-      strokeWidth="6"
-      pathLength={100}
-      strokeDasharray={`${fraction * 100} 100`}
-      transform="rotate(-90 7 7)"
+      strokeWidth={STROKE}
+      {...(opacity === undefined ? {} : { strokeOpacity: opacity })}
+      {...(dashed ? { strokeDasharray: '2.6 3.4', strokeLinecap: 'round' as const } : {})}
     />
   )
+}
+
+function Arc({ d }: { d: string }) {
+  return <path d={d} fill="none" stroke="currentColor" strokeWidth={STROKE} strokeLinecap="round" />
 }
 
 function StatusGlyph({
@@ -36,50 +47,22 @@ function StatusGlyph({
   const { label, color } = STATUS[status]
   return (
     <svg
-      viewBox="0 0 14 14"
+      viewBox="0 0 20 20"
       role="img"
       aria-label={label}
       className={cn('size-3.5 shrink-0', color, className)}
       {...props}
     >
       <title>{label}</title>
-      {status === 'backlog' ? (
-        <circle
-          cx="7"
-          cy="7"
-          r="6"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeDasharray="2.2 2.2"
-        />
-      ) : (
-        <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      )}
-      {status === 'in-progress' ? <Pie fraction={0.4} /> : null}
-      {status === 'in-review' ? <Pie fraction={0.7} /> : null}
-      {status === 'canceled' ? (
-        <path
-          d="M4.8 4.8 9.2 9.2M9.2 4.8 4.8 9.2"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      ) : null}
-      {status === 'done' ? (
-        <>
-          <circle cx="7" cy="7" r="6" fill="currentColor" />
-          <path
-            d="M4.4 7.1 6.2 8.9 9.7 5.2"
-            fill="none"
-            stroke="var(--bg)"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </>
-      ) : null}
+      {status === 'backlog' ? <Ring dashed /> : null}
+      {status === 'todo' || status === 'canceled' ? <Ring /> : null}
+      {status === 'in-progress' || status === 'in-review' ? <Ring opacity={GHOST_OPACITY} /> : null}
+      {status === 'in-progress' ? <Arc d={HALF_ARC} /> : null}
+      {status === 'in-review' ? <Arc d={THREE_QUARTER_ARC} /> : null}
+      {/* The product's sixth status; the northstar's set is five, so it is redrawn on the same
+          grid and stroke rather than borrowed from another family. */}
+      {status === 'canceled' ? <Arc d="M6.9 6.9 13.1 13.1M13.1 6.9 6.9 13.1" /> : null}
+      {status === 'done' ? <circle cx="10" cy="10" r="7.6" fill="currentColor" /> : null}
     </svg>
   )
 }

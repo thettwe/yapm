@@ -53,3 +53,9 @@ design-explorations/**/*.png
 # except the built review screenshots (committed for human visual review)
 !design-explorations/built/*.png
 !design-explorations/built/**/*.png
+
+# Playwright MCP scratch output
+.playwright-mcp/
+
+# Throwaway preview harnesses (author-marked; never committed)
+**/zz-*.pg.test.ts

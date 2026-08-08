@@ -1,0 +1,289 @@
+<!doctype html>
+<!--
+  plays/decisions-record — memory for the triangle, part 2: THE RECORD.
+  A team page listing decisions across cycles — institutional memory as a first-class
+  surface. Each decision is a chip-row: plain sentence, issue key, area label, date;
+  grouped by cycle; one row unfolded to show the why-line and the thread it came from.
+  Standfirst: "Why did we do it this way? — answered here, six weeks from now."
+  Decisions belong to the team — no owner column exists.
+  Horizon three-band frame; Warm LIGHT tokens verbatim. Extensions (from daylight):
+  row hairline #efe9dd, statusline bg #f4efe5, urgent-soft rgba(204,90,64,.08).
+  Assumes: decision entity + area labels from yapm's change areas (see PLAY-decisions.md).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Decisions · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#ce8a26;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  /* ============ band 1 — global bar ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)} .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — masthead ============ */
+  .masthead{padding:28px 40px 8px;display:flex;align-items:flex-start}
+  .m-left h1{font-size:34px;font-weight:700;letter-spacing:-.025em;display:flex;align-items:baseline;gap:12px}
+  .m-left h1 .count{font-family:var(--mono);color:var(--text-3);font-size:14px;font-weight:400}
+  .standfirst{margin-top:8px;font-size:15px;color:var(--text-2);max-width:560px;line-height:1.5}
+  .m-right{margin-left:auto;display:flex;gap:8px;align-items:center;padding-top:8px}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;gap:7px;font-family:var(--ui)}
+  .search-row{display:flex;align-items:center;gap:14px;padding:18px 40px 14px}
+  .d-search{display:flex;align-items:center;gap:9px;height:34px;width:420px;padding:0 12px;
+            background:rgba(255,255,255,.6);border:1px solid var(--border-strong);
+            border-radius:var(--rad-control);color:var(--text-3);font-size:13.5px}
+  .d-search .kbd{margin-left:auto}
+  .scope{display:flex;align-items:center;gap:16px;color:var(--text-2);font-size:12.5px}
+  .scope .on{color:var(--text-1);font-weight:600}
+  .scope .right{color:var(--text-3)}
+
+  /* ============ groups + chip-rows ============ */
+  .group-h{height:35px;display:flex;align-items:center;gap:9px;padding:0 40px;
+           background:var(--bg-hover);border-top:1px solid var(--row-hairline);
+           font-size:12.5px;font-weight:600}
+  .group-h .g-count{color:var(--text-3);font-weight:400}
+  .group-h .g-when{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3);font-weight:400}
+
+  .drow{min-height:44px;display:flex;align-items:center;gap:12px;padding:0 40px 0 37px;
+        border-top:1px solid var(--row-hairline);border-left:3px solid transparent}
+  .drow:last-of-type{border-bottom:1px solid var(--row-hairline)}
+  .dg{width:14px;height:14px;border-radius:50%;border:1.6px solid var(--accent);position:relative;flex:none}
+  .dg::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--accent)}
+  /* one glyph for every decision, whatever its age — the record does not fade */
+  .drow .say{font-size:13.5px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .drow .spring{flex:1}
+  .drow .area{display:flex;align-items:center;gap:5px;color:var(--text-2);font-size:12px;white-space:nowrap}
+  .ldot{width:7px;height:7px;border-radius:50%}
+  .drow .revisit{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 8px;
+                 border:1px solid var(--border-strong);border-radius:var(--rad-pill);
+                 font-size:11px;color:var(--text-2);white-space:nowrap}
+  .drow .key{font-family:var(--mono);font-size:12px;color:var(--text-3);width:62px;text-align:left}
+  .drow .date{font-family:var(--mono);font-size:11px;color:var(--text-3);width:44px;text-align:right}
+
+  /* the unfolded row — the record answers "why" without leaving the page */
+  .drow.open{display:block;background:var(--bg-selected);border-left-color:var(--accent);
+             padding:13px 40px 14px 37px}
+  .open-top{display:flex;align-items:center;gap:12px}
+  .open-top .say{font-size:14px;font-weight:650;white-space:normal}
+  .open-why{margin:8px 0 0 26px;font-size:13px;line-height:1.55;color:var(--text-2);max-width:660px}
+  .open-why b{color:var(--text-1);font-weight:600}
+  .open-git{margin:8px 0 0 26px;font-family:var(--mono);font-size:11px;color:var(--text-3);
+            display:flex;align-items:center;gap:14px}
+  .open-git .link{color:var(--accent-strong)}
+
+  .fold-hint{padding:12px 40px;color:var(--text-3);font-size:12px}
+
+  /* ============ band 3 — statusline ============ */
+  .statusline{margin-top:auto;height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab active">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>1</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <div class="m-left">
+      <h1>Decisions <span class="count">11</span></h1>
+      <p class="standfirst">Why did we do it this way? — answered here, six weeks from now.
+         Every entry came out of a thread; every one belongs to the team.</p>
+    </div>
+    <div class="m-right">
+      <button class="btn">All cycles ▾</button>
+    </div>
+  </div>
+
+  <div class="search-row">
+    <div class="d-search"><span>⌕</span><span>Search decisions — try “saved cards”</span><span class="kbd">/</span></div>
+    <div class="scope">
+      <span class="on">Everything</span><span>Revisits due</span><span>By area</span>
+    </div>
+  </div>
+
+  <!-- ============ Cycle 2 ============ -->
+  <div class="group-h">Decided in Cycle 2 <span class="g-count">4</span>
+    <span class="g-when">aug 4 – 18 · day 9 of 14</span></div>
+
+  <div class="drow open">
+    <div class="open-top">
+      <span class="dg"></span>
+      <span class="say">Ship without saved cards this cycle — revisit next.</span>
+      <span class="spring"></span>
+      <span class="revisit">resurfaces at Cycle 3 planning</span>
+      <span class="key">ENG-116</span><span class="date">aug 6</span>
+    </div>
+    <div class="open-why"><b>Why:</b> saved cards mean vaulting — a compliance-scope change, not a
+      sheet change — and Apple Pay already answers the re-entry friction for most sessions.
+      Ship two bands, watch card-form drop-off, return with numbers.</div>
+    <div class="open-git">
+      <span>from a thread of 5 · design frame parked in explorations</span>
+      <span class="link">open the thread ↗</span>
+    </div>
+  </div>
+
+  <div class="drow">
+    <span class="dg"></span>
+    <span class="say">The account nudge comes after payment, never before it.</span>
+    <span class="spring"></span>
+    <span class="area"><span class="ldot" style="background:var(--status-in-review)"></span>checkout</span>
+    <span class="key">ENG-121</span><span class="date">aug 5</span>
+  </div>
+  <div class="drow">
+    <span class="dg"></span>
+    <span class="say">Partial refunds return to the original payment method only.</span>
+    <span class="spring"></span>
+    <span class="area"><span class="ldot" style="background:var(--status-done)"></span>refunds</span>
+    <span class="key">ENG-113</span><span class="date">aug 11</span>
+  </div>
+  <div class="drow">
+    <span class="dg"></span>
+    <span class="say">Autocomplete assists the address form — it never blocks typing.</span>
+    <span class="spring"></span>
+    <span class="area"><span class="ldot" style="background:var(--status-in-progress)"></span>shipping</span>
+    <span class="key">ENG-115</span><span class="date">aug 12</span>
+  </div>
+
+  <!-- ============ Cycle 1 ============ -->
+  <div class="group-h">Decided in Cycle 1 <span class="g-count">5</span>
+    <span class="g-when">jul 21 – aug 3</span></div>
+
+  <div class="drow">
+    <span class="dg"></span>
+    <span class="say">Checkout is a sheet, not a page — the cart stays visible behind it.</span>
+    <span class="spring"></span>
+    <span class="area"><span class="ldot" style="background:var(--status-in-review)"></span>checkout</span>
+    <span class="key">ENG-98</span><span class="date">jul 24</span>
+  </div>
+  <div class="drow">
+    <span class="dg"></span>
+    <span class="say">EU storefronts show tax-included prices; US shows tax at review.</span>
+    <span class="spring"></span>
+    <span class="area"><span class="ldot" style="background:var(--status-in-progress)"></span>pricing</span>
+    <span class="key">ENG-87</span><span class="date">jul 26</span>
+  </div>
+  <div class="drow">
+    <span class="dg"></span>
+    <span class="say">One retry on a failed payment, then a human path — no silent loops.</span>
+    <span class="spring"></span>
+    <span class="area"><span class="ldot" style="background:var(--status-urgent)"></span>payments</span>
+    <span class="key">ENG-102</span><span class="date">jul 29</span>
+  </div>
+  <div class="drow">
+    <span class="dg"></span>
+    <span class="say">Coupon codes live in the order summary, not the payment step.</span>
+    <span class="spring"></span>
+    <span class="area"><span class="ldot" style="background:var(--status-in-review)"></span>checkout</span>
+    <span class="key">ENG-96</span><span class="date">jul 31</span>
+  </div>
+  <div class="drow">
+    <span class="dg"></span>
+    <span class="say">A refund request opens a conversation, not a form.</span>
+    <span class="spring"></span>
+    <span class="area"><span class="ldot" style="background:var(--status-done)"></span>refunds</span>
+    <span class="key">ENG-91</span><span class="date">aug 2</span>
+  </div>
+
+  <!-- ============ Before cycles ============ -->
+  <div class="group-h">Before cycles <span class="g-count">2</span>
+    <span class="g-when">jun – jul</span></div>
+
+  <div class="drow">
+    <span class="dg"></span>
+    <span class="say">We build on the platform payment sheet before any custom UI.</span>
+    <span class="spring"></span>
+    <span class="area"><span class="ldot" style="background:var(--status-urgent)"></span>payments</span>
+    <span class="key">ENG-12</span><span class="date">jun 30</span>
+  </div>
+  <div class="drow">
+    <span class="dg"></span>
+    <span class="say">Empty states say what will appear, not what is missing.</span>
+    <span class="spring"></span>
+    <span class="area"><span class="ldot" style="background:var(--status-done)"></span>design</span>
+    <span class="key">ENG-31</span><span class="date">jul 8</span>
+  </div>
+
+  <div class="fold-hint">Decisions never expire — they get revisited. 1 revisit due at Cycle 3 planning.</div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">1 needs attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+</body>
+</html>

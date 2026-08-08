@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test'
 import { findCycle, findIssue, openDb, seedCycleDigest, seedLinkedPr } from './db'
-import { ADMIN, ensureAccount } from './support'
+import { ADMIN, ensureAccount, stop } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -40,7 +40,7 @@ async function openTeam(page: Page): Promise<void> {
   const teamLink = page.getByRole('link', { name: new RegExp(teamName) })
   await expect(teamLink).toBeVisible({ timeout: 20_000 })
   await teamLink.click()
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await stop(page, 'Issues').click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
 }
 
@@ -56,7 +56,7 @@ async function createIssue(page: Page, title: string): Promise<void> {
 }
 
 async function openCycles(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'Cycles' }).click()
+  await stop(page, 'Cycles').click()
   await expect(page.getByRole('button', { name: 'New cycle' })).toBeVisible({ timeout: 20_000 })
 }
 
@@ -76,7 +76,7 @@ async function assignIssueToCycle(
   issueTitle: string,
   cycleName: string,
 ): Promise<void> {
-  await page.getByRole('link', { name: 'List' }).click()
+  await stop(page, 'Issues').click()
   await page.locator(ROW).filter({ hasText: issueTitle }).click()
   await page.getByRole('button', { name: /^Cycle:/ }).click()
   await page.getByRole('menuitem', { name: new RegExp(cycleName) }).click()

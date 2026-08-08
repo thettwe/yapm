@@ -10,7 +10,7 @@ import {
   seedPmDigest,
 } from './db'
 import { readReplica } from './replica'
-import { ADMIN, ensureAccount, signIn, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, signIn, stop, uniqueEmail } from './support'
 
 // THE DISCLOSURE BOUNDARY IN A REAL BROWSER, and the two properties here are properties of the
 // ASSEMBLED stack rather than of any one module, which is why they are e2e at all:
@@ -99,13 +99,13 @@ async function createTeam(page: Page): Promise<{ name: string; key: string }> {
   const link = page.getByRole('link', { name: new RegExp(name) })
   await expect(link).toBeVisible({ timeout: 20_000 })
   await link.click()
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await stop(page, 'Issues').click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
   return { name, key }
 }
 
 async function openCycles(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'Cycles' }).click()
+  await stop(page, 'Cycles').click()
   await expect(page.getByRole('button', { name: 'New cycle' })).toBeVisible({ timeout: 20_000 })
 }
 
@@ -123,7 +123,7 @@ async function createCycle(page: Page, name: string): Promise<void> {
 async function openCyclePanel(page: Page, teamName: string, cycleName: string): Promise<void> {
   await page.goto('/')
   await page.getByRole('link', { name: new RegExp(teamName) }).click()
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await stop(page, 'Issues').click()
   await openCycles(page)
   await page.getByRole('button', { name: new RegExp(cycleName) }).click()
 }
@@ -135,6 +135,17 @@ async function openCyclePanel(page: Page, teamName: string, cycleName: string): 
 // and the caller is the only one who knows which team it means. A helper that resolved a test id
 // itself would either explode on strict mode or, worse, quietly settle for `.first()` — a control
 // in some other team's row, in the fixture workspace every spec shares.
+// The way into `/digests` folded into the account menu with the three-band frame (app-frame §D8),
+// so the entry has to be OPENED before it can be found — or its absence asserted. Asserting against
+// a closed menu would pass for the wrong reason.
+async function accountMenuDigestsEntry(page: Page): Promise<Locator> {
+  const chip = page.getByRole('button', { name: /account menu for/iu })
+  await expect(chip).toBeVisible({ timeout: 30_000 })
+  await chip.click()
+  await expect(page.getByRole('menuitem', { name: 'Appearance' })).toBeVisible({ timeout: 20_000 })
+  return page.getByTestId('pm-digests-entry')
+}
+
 async function press(control: Locator, key = 'Enter'): Promise<void> {
   await expect(control).toBeVisible({ timeout: 20_000 })
   await control.focus()
@@ -241,7 +252,8 @@ test('with the default policy the PM reader surface does not exist, and only the
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })
-  await expect(page.getByTestId('pm-digests-entry')).toHaveCount(0)
+  await expect(await accountMenuDigestsEntry(page)).toHaveCount(0)
+  await page.keyboard.press('Escape')
 
   // And the route itself draws nothing. Not an empty state, which would announce that something
   // exists and is being withheld: the surface is absent.
@@ -362,7 +374,8 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     })
 
     // Before the policy names them: no entry, no surface, nothing in the replica.
-    await expect(readerPage.getByTestId('pm-digests-entry')).toHaveCount(0)
+    await expect(await accountMenuDigestsEntry(readerPage)).toHaveCount(0)
+    await readerPage.keyboard.press('Escape')
     await expectPmDigestIds(readerPage, [])
 
     const readerId = await (async () => {
@@ -440,7 +453,8 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     await expect(readerPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
       timeout: 30_000,
     })
-    await expect(readerPage.getByTestId('pm-digests-entry')).toHaveCount(0)
+    await expect(await accountMenuDigestsEntry(readerPage)).toHaveCount(0)
+    await readerPage.keyboard.press('Escape')
     await expectPmDigestIds(readerPage, [])
 
     await readerPage.goto('/digests')
@@ -482,8 +496,9 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     // AND NOW, AND ONLY NOW, THE READER READS IT — and only now does the shell offer a way in.
     await readerPage.goto('/')
     await readerPage.reload()
-    await expect(readerPage.getByTestId('pm-digests-entry')).toBeVisible({ timeout: 30_000 })
-    await press(readerPage.getByTestId('pm-digests-entry'))
+    const entry = await accountMenuDigestsEntry(readerPage)
+    await expect(entry).toBeVisible({ timeout: 30_000 })
+    await press(entry)
     await expect(readerPage).toHaveURL(/\/digests$/u)
     await expect(readerPage.getByRole('heading', { name: 'Product digests' })).toBeVisible({
       timeout: 30_000,
@@ -626,7 +641,8 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
       })
       // No way in, and no surface behind it: a retracted digest returns this reader to the state
       // they were in before anything was ever released.
-      await expect(afterPage.getByTestId('pm-digests-entry')).toHaveCount(0)
+      await expect(await accountMenuDigestsEntry(afterPage)).toHaveCount(0)
+      await afterPage.keyboard.press('Escape')
       await expectPmDigestIds(afterPage, [])
       await afterPage.goto('/digests')
       await expect(afterPage.getByRole('heading', { name: 'Product digests' })).toHaveCount(0)

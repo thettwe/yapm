@@ -131,7 +131,7 @@ And from the command palette (`⌘K` / `Ctrl+K`), under **Notifications**:
 
 ### The unread badge
 
-The application-shell header carries a bell, with a count pill on it when anything is unread. Its
+[The deck](/features/app-frame/) carries a bell, with a count pill on it when anything is unread. Its
 accessible name is the whole sentence — `Inbox, 3 unread` — so a screen reader announces the number
 once rather than reading a bare pill. Past 99 it reads `99+`. It is a real link: it is in the tab
 order, `Enter` follows it, and middle-click opens it in a tab.
@@ -139,13 +139,8 @@ order, `Enter` follows it, and middle-click opens it in a tab.
 The badge and the inbox read **one** shared subscription, so the count is the same number the list
 is showing, always, with no second query.
 
-:::note
-The badge currently renders on the surfaces that use the application shell — the home screen, the
-inbox itself, the team overview, and the settings screens. The team work surfaces (issue list,
-board, cycles, projects, roadmap, retros, triage) compose their own header and do not show it yet.
-From those, `⌘K → Go to inbox` reaches the inbox by keyboard. Hoisting the shell header across every
-route is a separate change.
-:::
+The badge renders on **every** authenticated surface, because every one of them sits in the same
+deck. No page composes its own header any more.
 
 ## Email
 
@@ -178,7 +173,7 @@ an evidence label or a publisher's name.
 
 ### Your preference
 
-Open **Appearance settings** (the palette icon in the header) and set **Email notifications**:
+Open **Appearance** from the account menu in the deck and set **Email notifications**:
 
 | Setting | What is emailed |
 |---|---|

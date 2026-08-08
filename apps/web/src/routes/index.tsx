@@ -2,12 +2,12 @@ import { useQuery } from '@rocicorp/zero/react'
 import { createFileRoute } from '@tanstack/react-router'
 import { queries } from '@yapm/schema'
 import { useMembership } from '@/auth/use-membership'
-import { AppShell } from '@/components/app-shell'
 import { Authenticated } from '@/components/authenticated'
 import { InvitesPanel } from '@/components/invites-panel'
 import { MembersPanel } from '@/components/members-panel'
 import { TeamsPanel } from '@/components/teams-panel'
 import { WorkspaceName } from '@/components/workspace-name'
+import { AppFrame } from '@/frame/app-frame'
 import { useConnectionSummary } from '@/zero/connection'
 
 export const Route = createFileRoute('/')({ component: Home })
@@ -15,9 +15,9 @@ export const Route = createFileRoute('/')({ component: Home })
 function Home() {
   return (
     <Authenticated>
-      <AppShell current="Workspace">
+      <AppFrame>
         <Overview />
-      </AppShell>
+      </AppFrame>
     </Authenticated>
   )
 }

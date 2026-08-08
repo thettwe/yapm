@@ -52,6 +52,7 @@ import {
   rankForSlot,
   shouldVirtualize,
 } from '@/board/model'
+import { useCommandSource } from '@/frame/command-registry'
 import {
   type IssueRowData,
   isPendingNumber,
@@ -107,6 +108,13 @@ function toCardData(issue: {
         }
       : null,
   }
+}
+
+// Read from `document.activeElement` rather than a held reference, so a shortcut can never fire
+// against a card that has since gone.
+function focusedCardId(): string | undefined {
+  return (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-card-id]')
+    ?.dataset.cardId
 }
 
 export function Board({ teamId }: { teamId: string }) {
@@ -309,20 +317,14 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
     function onKeyDown(event: KeyboardEvent) {
       if (draggingRef.current) return
       if (ownsKeyboard(event.target)) return
-      const cardEl = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>(
-        '[data-card-id]',
-      )
-      const cardId = cardEl?.dataset.cardId
+      const cardId = focusedCardId()
       if (!cardId) return
       if (event.key.toLowerCase() === 'o') {
         event.preventDefault()
         openCard(cardId)
         return
       }
-      const openMove =
-        event.key.toLowerCase() === 'm' ||
-        ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k')
-      if (openMove && canWrite) {
+      if (event.key.toLowerCase() === 'm' && canWrite) {
         event.preventDefault()
         setPaletteFor(cardId)
       }
@@ -330,6 +332,25 @@ function BoardBody({ teamId, teamKey, teamName, cards }: BoardBodyProps) {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [canWrite, openCard])
+
+  // ⌘K on the board still opens "Move to status…" for the focused card — it is registered with the
+  // frame's one owner (§D6) instead of being a second window binding. `m` and `o` are surface
+  // shortcuts and stay exactly as they were.
+  //
+  // "Move to status…" is about a FOCUSED CARD, so with none focused (or mid-drag, or for a viewer)
+  // this opener declines and the frame's palette answers instead. Swallowing ⌘K there would make
+  // the deck's advertised binding do nothing on the board, which is the exact lie §D6 exists to end.
+  const openFromRegistry = useCallback(() => {
+    if (draggingRef.current || !canWrite) return false
+    const cardId = focusedCardId()
+    if (cardId === undefined) return false
+    setPaletteFor(cardId)
+    return true
+  }, [canWrite])
+  useCommandSource(
+    'board',
+    useMemo(() => ({ open: openFromRegistry }), [openFromRegistry]),
+  )
 
   const activeCard = activeId ? cardById.get(activeId) : undefined
 

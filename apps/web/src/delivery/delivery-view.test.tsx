@@ -175,5 +175,9 @@ test('exposes no per-person control or reading', () => {
   for (const control of controls) {
     expect(control.textContent ?? '').not.toMatch(/person|member|assignee|author|reviewer|who/i)
   }
-  expect(document.body.textContent ?? '').toContain('Never a per-person number')
+  // The binding rule moved into the masthead's sub-line with the frame (`delivery.html` §masthead),
+  // where it is said once in the whole app rather than once per surface that might tempt it.
+  expect(
+    within(screen.getByTestId('masthead')).getByText(/never a per-person number/),
+  ).toBeVisible()
 })

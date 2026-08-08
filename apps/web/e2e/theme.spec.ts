@@ -7,6 +7,16 @@ async function expectInApp(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
 }
 
+// Appearance lives in the account menu now (app-frame §D8). Reached with no pointer: focus the
+// chip, Enter to open, then the entry.
+async function openAppearance(page: Page): Promise<void> {
+  const chip = page.getByRole('button', { name: /account menu for/i })
+  await chip.focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('menuitem', { name: 'Appearance' }).click()
+  await expect(page.getByLabel('Theme')).toBeVisible({ timeout: 20_000 })
+}
+
 function rootTheme(page: Page): Promise<{ theme: string | null; dark: boolean; accent: string }> {
   return page.evaluate(() => {
     const root = document.documentElement
@@ -61,10 +71,9 @@ test.describe('theme preference', () => {
     await ensureAccount(page, ADMIN)
     await expectInApp(page)
 
-    // Open the appearance popover from the keyboard.
-    const trigger = page.getByRole('button', { name: 'Appearance settings' })
-    await trigger.focus()
-    await page.keyboard.press('Enter')
+    // Open the appearance dialog from the keyboard. It folded into the account menu with the rest
+    // of the settings when the three-band frame landed: appearance is a setting, not a destination.
+    await openAppearance(page)
 
     // Preset change.
     const themeSelect = page.getByLabel('Theme')
@@ -107,9 +116,7 @@ test.describe('theme preference', () => {
     await expect.poll(async () => (await rootTheme(page)).accent).toBe('#22aa55')
 
     // And so does the email preference, read straight back off the synced row.
-    const triggerAgain = page.getByRole('button', { name: 'Appearance settings' })
-    await triggerAgain.focus()
-    await page.keyboard.press('Enter')
+    await openAppearance(page)
     await expect(page.getByLabel('Email notifications')).toHaveValue('none')
   })
 })

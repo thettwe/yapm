@@ -158,3 +158,25 @@ test('a clean schema source produces no violation at all', () => {
 test('a word merely ENDING in an import keyword is not a specifier', () => {
   assert.deepEqual(messages(SCHEMA_FILE, "const reimport = fakerequire('react')\n"), [])
 })
+
+// Rule 6 — the app frame owns bands 1 and 3. Ten routes each hand-rolled a sticky app header
+// before the frame landed, and each copy silently dropped search, digests and the inbox.
+test('rule 6: a sticky page-top header outside the frame is a violation', () => {
+  const header =
+    'export function Page() {\n  return <header className="sticky top-0 z-10 flex" />\n}\n'
+
+  assert.equal(messages('apps/web/src/routes/teams.$teamId.board.tsx', header).length, 1)
+  assert.match(
+    messages('apps/web/src/routes/teams.$teamId.board.tsx', header)[0],
+    /no page hand-rolls chrome/,
+  )
+  // The frame itself is where that markup belongs, and a test may render one to assert about it.
+  assert.deepEqual(messages('apps/web/src/frame/deck.tsx', header), [])
+  assert.deepEqual(messages('apps/web/src/issues/issue-list.test.tsx', header), [])
+  // A surface's own furniture is not chrome: a sticky group heading inside a scrolling list and a
+  // sticky month ruler inside a timeline both stay legal.
+  const heading = 'return <h2 className="sticky top-0 z-10 border-b" >{label}</h2>\n'
+  assert.deepEqual(messages('apps/web/src/notifications/inbox-view.tsx', heading), [])
+  const ruler = 'return <div className="sticky top-0 z-10 flex border-b" />\n'
+  assert.deepEqual(messages('apps/web/src/projects/roadmap-view.tsx', ruler), [])
+})

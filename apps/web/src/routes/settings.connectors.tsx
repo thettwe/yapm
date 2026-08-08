@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { AppShell } from '@/components/app-shell'
 import { Authenticated } from '@/components/authenticated'
+import { AppFrame } from '@/frame/app-frame'
 import { ConnectorsView } from '@/settings/connectors-view'
 
 export const Route = createFileRoute('/settings/connectors')({ component: ConnectorsPage })
@@ -8,9 +8,9 @@ export const Route = createFileRoute('/settings/connectors')({ component: Connec
 function ConnectorsPage() {
   return (
     <Authenticated>
-      <AppShell current="Settings">
+      <AppFrame>
         <ConnectorsView />
-      </AppShell>
+      </AppFrame>
     </Authenticated>
   )
 }

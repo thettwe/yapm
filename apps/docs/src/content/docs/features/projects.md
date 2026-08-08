@@ -11,8 +11,7 @@ date**, and a **computed progress** (the share of its issues that are **Done**).
 cross-team overview at a glance.
 
 Open **Projects** at `/teams/<teamId>/projects` and **Roadmap** at `/teams/<teamId>/roadmap`,
-or use the **Projects** and **Roadmap** tabs in the team header next to **List**, **Board**,
-**Cycles**, and **Triage**.
+or take them from the **more▾** menu in [the deck](/features/app-frame/) — `g p` and `g m`.
 
 ## Projects are workspace-level
 

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { AppShell } from '@/components/app-shell'
 import { Authenticated } from '@/components/authenticated'
+import { AppFrame } from '@/frame/app-frame'
 import { InboxView } from '@/notifications/inbox-view'
 
 export const Route = createFileRoute('/inbox')({ component: InboxPage })
@@ -10,9 +10,9 @@ export const Route = createFileRoute('/inbox')({ component: InboxPage })
 function InboxPage() {
   return (
     <Authenticated>
-      <AppShell current="Inbox">
+      <AppFrame>
         <InboxView />
-      </AppShell>
+      </AppFrame>
     </Authenticated>
   )
 }

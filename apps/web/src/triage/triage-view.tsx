@@ -24,6 +24,7 @@ import {
 } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import { cycleKey } from '@/cycles/model'
+import { Masthead } from '@/frame/masthead'
 import {
   type IssueRowData,
   issueKey,
@@ -200,88 +201,97 @@ export function TriageView({ teamId }: { teamId: string }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-bg">
-      <header className="flex items-center gap-2 border-b border-border px-4 py-2.5">
-        <InboxIcon aria-hidden="true" className="size-4 text-text-3" />
-        <h1 className="text-sm font-semibold tracking-tight text-text-1">{team.name} · Triage</h1>
-        <span className="ml-1 font-mono text-xs text-text-3">{issues.length}</span>
-        {error !== undefined ? (
-          <span className="ml-2 text-xs text-status-urgent" role="alert">
-            {error}
+    <>
+      <Masthead
+        title={
+          <span className="flex items-center gap-2">
+            <InboxIcon aria-hidden="true" className="size-4 text-text-3" />
+            {team.name} · Triage
           </span>
-        ) : null}
-      </header>
-
-      <section
-        ref={containerRef}
-        className="flex-1 overflow-y-auto pb-10 outline-none"
-        onKeyDown={onKeyDown}
-        aria-label={`${team.name} triage inbox`}
-      >
-        {issues.length === 0 ? (
-          <p className="p-8 text-center text-sm text-text-3" role="status">
-            {inboxResult.type === 'complete'
-              ? 'The triage inbox is empty. Incoming issues awaiting triage will appear here.'
-              : 'Loading inbox…'}
-          </p>
-        ) : (
-          issues.map((issue, index) => (
-            <TriageRow
-              key={issue.id}
-              index={index}
-              issue={issue}
-              teamKey={teamKey}
-              focused={index === focusIndex}
-              canWrite={canWrite}
-              onFocusRow={setFocusIndex}
-              onOpen={() => onOpenIssue(issue)}
-              onAccept={() => accept(issue.id)}
-              onDecline={() => decline(issue.id)}
-              onRoute={() => setRoutingId(issue.id)}
-            />
-          ))
-        )}
-      </section>
-
-      {routing && canWrite ? (
-        <RouteDialog
-          issue={routing}
-          members={members}
-          labelOptions={labels.map((label) => ({
-            id: label.id,
-            name: label.name,
-            color: label.color,
-          }))}
-          cycleOptions={cycles.map((cycle) => ({
-            id: cycle.id,
-            name: cycle.name,
-            number: cycle.number ?? null,
-          }))}
-          onClose={() => setRoutingId(null)}
-          onSubmit={async (target) => {
-            const failure = await runMutation(
-              zero.mutate(
-                mutators.issue.routeIssue({
-                  id: routing.id,
-                  ...(target.status === undefined ? {} : { status: target.status }),
-                  ...(target.assigneeId === undefined ? {} : { assigneeId: target.assigneeId }),
-                  ...(target.cycleId === undefined ? {} : { cycleId: target.cycleId }),
-                  ...(target.labelIds.length > 0 ? { addLabelIds: [...target.labelIds] } : {}),
-                  updatedAt: Date.now(),
-                }),
+        }
+        count={issues.length}
+        {...(error === undefined
+          ? {}
+          : {
+              meta: (
+                <span className="text-xs text-status-urgent" role="alert">
+                  {error}
+                </span>
               ),
-            )
-            if (failure !== undefined) {
-              setError(failure)
-              return failure
-            }
-            setError(undefined)
-            setRoutingId(null)
-            return undefined
-          }}
-        />
-      ) : null}
-    </div>
+            })}
+      />
+      <div className="flex min-h-0 flex-1 flex-col bg-bg">
+        <section
+          ref={containerRef}
+          className="flex-1 overflow-y-auto pb-10 outline-none"
+          onKeyDown={onKeyDown}
+          aria-label={`${team.name} triage inbox`}
+        >
+          {issues.length === 0 ? (
+            <p className="p-8 text-center text-sm text-text-3" role="status">
+              {inboxResult.type === 'complete'
+                ? 'The triage inbox is empty. Incoming issues awaiting triage will appear here.'
+                : 'Loading inbox…'}
+            </p>
+          ) : (
+            issues.map((issue, index) => (
+              <TriageRow
+                key={issue.id}
+                index={index}
+                issue={issue}
+                teamKey={teamKey}
+                focused={index === focusIndex}
+                canWrite={canWrite}
+                onFocusRow={setFocusIndex}
+                onOpen={() => onOpenIssue(issue)}
+                onAccept={() => accept(issue.id)}
+                onDecline={() => decline(issue.id)}
+                onRoute={() => setRoutingId(issue.id)}
+              />
+            ))
+          )}
+        </section>
+
+        {routing && canWrite ? (
+          <RouteDialog
+            issue={routing}
+            members={members}
+            labelOptions={labels.map((label) => ({
+              id: label.id,
+              name: label.name,
+              color: label.color,
+            }))}
+            cycleOptions={cycles.map((cycle) => ({
+              id: cycle.id,
+              name: cycle.name,
+              number: cycle.number ?? null,
+            }))}
+            onClose={() => setRoutingId(null)}
+            onSubmit={async (target) => {
+              const failure = await runMutation(
+                zero.mutate(
+                  mutators.issue.routeIssue({
+                    id: routing.id,
+                    ...(target.status === undefined ? {} : { status: target.status }),
+                    ...(target.assigneeId === undefined ? {} : { assigneeId: target.assigneeId }),
+                    ...(target.cycleId === undefined ? {} : { cycleId: target.cycleId }),
+                    ...(target.labelIds.length > 0 ? { addLabelIds: [...target.labelIds] } : {}),
+                    updatedAt: Date.now(),
+                  }),
+                ),
+              )
+              if (failure !== undefined) {
+                setError(failure)
+                return failure
+              }
+              setError(undefined)
+              setRoutingId(null)
+              return undefined
+            }}
+          />
+        ) : null}
+      </div>
+    </>
   )
 }
 

@@ -19,6 +19,7 @@ import { cn } from '@yapm/ui/lib/utils'
 import { ArrowLeftIcon, ArrowRightIcon, TimerIcon, TimerOffIcon, UserIcon } from 'lucide-react'
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
+import { Masthead } from '@/frame/masthead'
 import { ownsKeyboard } from '@/lib/keyboard'
 import { useRetroApi } from '@/retro/api'
 import {
@@ -574,26 +575,31 @@ function RetroSurface({
   const remaining = remainingVotes(retro.votesPerParticipant, votes)
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex flex-col gap-3 border-b border-border px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-base font-semibold tracking-tight text-text-1">{retro.title}</h1>
-          <FormatControl
-            format={retro.format}
-            canConfigure={configurable}
-            onChange={(next) => void api.setFormat(next)}
-          />
-          <AnonymityControl
-            anonymous={retro.isAnonymous}
-            canConfigure={configurable}
-            onToggle={(next) => void api.setAnonymous(next)}
-          />
-          <BudgetControl
-            budget={retro.votesPerParticipant}
-            canConfigure={configurable}
-            onChange={(next) => void api.setVoteBudget(next)}
-          />
-          <div className="ml-auto flex items-center gap-2">
+    <>
+      <Masthead
+        className="border-b-0 pb-0"
+        title={retro.title}
+        meta={
+          <>
+            <FormatControl
+              format={retro.format}
+              canConfigure={configurable}
+              onChange={(next) => void api.setFormat(next)}
+            />
+            <AnonymityControl
+              anonymous={retro.isAnonymous}
+              canConfigure={configurable}
+              onToggle={(next) => void api.setAnonymous(next)}
+            />
+            <BudgetControl
+              budget={retro.votesPerParticipant}
+              canConfigure={configurable}
+              onChange={(next) => void api.setVoteBudget(next)}
+            />
+          </>
+        }
+        actions={
+          <>
             <PresenceStrip presence={live} />
             <TimerControl
               seconds={seconds}
@@ -610,9 +616,12 @@ function RetroSurface({
               onClaim={() => void api.claimFacilitator()}
               onHandOff={() => command.openFacilitator()}
             />
-          </div>
-        </div>
+          </>
+        }
+      />
 
+      {/* The phase machine is the retro's own furniture, not band 2: it moves the session on. */}
+      <div className="flex flex-col gap-3 border-b border-border px-5 pb-3 pt-2">
         <PhaseStepper
           phase={retro.phase}
           canFacilitate={canFacilitate}
@@ -636,7 +645,7 @@ function RetroSurface({
             </Button>
           </div>
         ) : null}
-      </header>
+      </div>
 
       <RetroSeedPanel
         seed={seed}
@@ -717,7 +726,7 @@ function RetroSurface({
           onOpenIssue={openIssue}
         />
       </div>
-    </div>
+    </>
   )
 }
 

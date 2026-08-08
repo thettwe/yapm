@@ -1,0 +1,79 @@
+## 1. Read the rulebook first
+
+- [x] 1.1 Read `design-explorations/overhaul-2026-08/northstar/ia.html` (render `ia-full.png`) — §"The frame" and §"Destinations" — plus `NORTHSTAR.md`
+- [x] 1.2 Diff the shared `<header class="gbar">` and `.statusline` markup across `home-digest-2.html`, `issues.html`, `issue.html`, `delivery.html`, `ia.html`; note the deck/statusline CSS (48px / 32px, `--statusline-bg`, the 2px accent underline)
+- [x] 1.3 Read `reference/zero.md` (Zero 1.x names), the TanStack Router and Tailwind 4.3 references; read `packages/schema/src/zero/team-home.ts` (`buildAttention`, `buildCadence`, `TeamHomeAttention`) and `apps/web/src/home/team-home.tsx` for the tone precedent
+- [x] 1.4 Inventory the shared vocabulary already in `packages/ui/src/components/` (`drawn.tsx`, `reality-track.tsx`, `peek.tsx`, `how.tsx`, `provenance-mark.tsx`, `status-glyph.tsx`, `priority-mark.tsx`) — the frame draws nothing new
+
+## 2. The shared derivation (`packages/schema`)
+
+- [x] 2.1 Extract `buildTeamFrame(input, now): TeamFrameModel` in `packages/schema/src/zero/team-home.ts` — team identity, `attention` from the existing `buildAttention`, the active cycle's title/`dayIndex`/`dayCount`, the in-cycle shipped count, and `buildCadence`'s current-week deploy count; every field null-able so a segment can fold
+- [x] 2.2 Refactor `buildTeamHome` to call `buildTeamFrame` first and build its bands on that result, so `TeamHomeModel.attention` IS `TeamFrameModel.attention` — one `buildAttention` call site in the repo
+- [x] 2.3 Export `buildTeamFrame` and `TeamFrameModel` from `packages/schema/src/index.ts`; confirm no new table, query, mutator or migration was added
+
+## 3. Band 1 — the deck
+
+- [x] 3.1 `apps/web/src/frame/team-context.ts`: the anchor-team resolver — team in the route, else the remembered `yapm.frame.team` validated against the synced team list, else the first team, else none; guarded `localStorage` read/write on the `apps/web/src/theme/theme.ts` pattern
+- [x] 3.2 `apps/web/src/frame/deck.tsx`: 48px band — workspace mark + org `/` team + chevron (the existing `Switcher` reworked as the chevron's menu), the six stops in a `<nav aria-label="Destinations">` with `aria-current="page"`, accent text + 2px accent underline on the active stop
+- [x] 3.3 The `more▾` transient on Base UI `Menu` (the `Switcher` precedent): Retros `g r`, Projects `g p`, Roadmap `g m`, with kbd hints; keyboard-reachable, Escape closes and returns focus; Decisions folds away entirely
+- [x] 3.4 The right cluster: the ⌘K pill as a real `<Link to="/search">` (keeping `data-testid="search-entry"`), the attention badge (absent at zero, accessible name states what it counts), `InboxBadge`, the user chip
+- [x] 3.5 Fold `ThemeControls`, the settings routes, `/showcase` and the conditional `PmDigestsEntry` into the user menu — preserving `PmDigestsEntry`'s audience-then-content gate verbatim so an unnamed reader still constructs no query
+- [x] 3.6 Collapse behaviour below the deck's comfortable width: stops fold into `more▾` from the right; the band never wraps to a second row
+
+## 4. Band 3 — the statusline
+
+- [x] 4.1 `apps/web/src/frame/statusline.tsx`: 32px, `--statusline-bg`, `margin-top:auto`; the four team segments, each folding individually; labels only, no sentences
+- [x] 4.2 Move the connection indicator into the statusline's right cluster — same `ConnectionSummary`, dot, `role="status" aria-live="polite"`, `sr-only` detail, `RetryButton` + `fallbackRef`; keep `data-testid="connection-status"`, `data-connection`, `data-recovery`
+- [x] 4.3 Delete `apps/web/src/components/connection-status.tsx` and every import of it; assert no second indicator can render
+
+## 5. The frame, and the palette owner
+
+- [x] 5.1 `apps/web/src/frame/app-frame.tsx`: deck + `<main>` + statusline in a `min-h-svh` flex column, with the `measure` prop (`default` | `wide` | `full`) replacing `AppShell`'s `wide`
+- [x] 5.2 `apps/web/src/frame/go-to.ts`: the `g`-prefix shortcuts (`h i t c d r p m`), suppressed while a text input, `contenteditable` or an open dialog holds focus
+- [x] 5.3 `apps/web/src/frame/command-registry.tsx`: the single ⌘K owner mounted in `routes/__root.tsx` — one `keydown` listener, one palette instance, `useCommandSource(id, source)` registration, plus the always-present group (six destinations, Inbox, search everything, theme)
+- [x] 5.4 Convert `issues/command.tsx`, `board/board.tsx`, `retro/retro-command.tsx` and `routes/showcase.tsx` from their own ⌘K listeners to registration; their imperative APIs and every non-⌘K surface shortcut stay exactly as they are
+
+## 6. Band 2 — the masthead, and the migration
+
+- [x] 6.1 `apps/web/src/frame/masthead.tsx`: title + mono count, `lens` slot, `meta` slot, `actions` slot — `ia.html`'s band-2 anatomy and nothing else
+- [x] 6.2 Migrate the eleven `AppShell` importers to `AppFrame` and delete `app-shell.tsx`
+- [x] 6.3 Migrate the nine hand-rolled routes (`issues.index`, `issues.$issueKey`, `board`, `cycles`, `triage`, `delivery`, `projects`, `roadmap`, `retros.index`, `retros.$retroId`) onto `AppFrame` + `Masthead`, keeping every control they offer today working — all ten are on `AppFrame`, every hand-rolled chrome header is deleted, and every *work surface's* band 2 now renders through `Masthead` (plus `/inbox`, which the sticky-header grep also hit); the five editorial reading surfaces keep their own document heading as body content — see design DI-17 for why, and DI-10 for the slot-by-slot table
+- [x] 6.4 Move Board into the Issues masthead as a lens (`List | Board`, `aria-pressed`); delete `apps/web/src/board/view-switch.tsx` and its ten importers' usage; Gallery folds away
+- [x] 6.5 Add the repo guard: no `sticky top-0` application header outside `apps/web/src/frame/`
+
+## 7. Tests
+
+- [x] 7.1 `packages/schema` unit: `buildTeamFrame` and `buildTeamHome` return the identical attention count across a table of inputs, including the two-classes-one-issue case and the zero case; a test that fails if a second `buildAttention` call site appears — the table now runs five inputs (four classes with one issue in two, zero, one issue in two classes alone, no active cycle, no deployments) and asserts the expected count as well as the agreement, so a derivation that returned the same wrong number in both places still fails
+- [x] 7.2 `apps/web` component: **the falsifiable check** — rendering any authenticated route yields exactly one deck, exactly one statusline, and every element reporting an attention count reports the same value; zero renders no badge and no attention segment
+- [x] 7.3 `apps/web` component: the deck's six stops (enumerated in order, `more▾` a button and never current), `aria-current` on the right stop per route, Board-as-lens keeping Issues current while the lens carries `aria-pressed`, `more▾` open/Escape/focus-return, the `g`-prefix shortcuts including the typing-suppression case, and the right cluster's three doorways (search link, badge accessible name, inbox)
+- [x] 7.4 `apps/web` component: off-team degradation — stops point at the anchor team with nothing current, the statusline states no team fact, a stale anchor falls back, an empty workspace drops the stops; plus `frame/team-context.test.ts` for the resolver itself (route wins, remembered, stale id discarded, route id not in the synced list, empty workspace, storage round-trip and a browser that refuses storage)
+- [x] 7.5 `apps/web` component: one palette owner — the shortcut opens a palette on a surface that registers nothing; a surface's commands appear only while mounted; every command reachable before is reachable after
+- [x] 7.6 `apps/web/src/routes.test.tsx`: the route inventory — every registered route is reachable from the frame or is one of the two unauthenticated surfaces; the login case also asserts the unauthenticated surfaces render no deck and no statusline
+- [x] 7.7 Extend `packages/ui/src/styles/contrast.test.ts` with the frame's token pairs (active stop on `--bg`, statusline text on `--statusline-bg`, attention ink on `--urgent-soft`) in all six theme blocks
+- [x] 7.8 Update the Playwright specs the frame moves: the fifteen `connection-status` waits (indicator relocated, testid preserved) and `retro-ai.spec.ts`'s `navigation { name: 'Issue views' }` → `navigation { name: 'Destinations' }` with `aria-current`. Update to match the new frame; never weaken an assertion
+
+## 8. Documentation
+
+- [x] 8.1 New `apps/docs/src/content/docs/features/app-frame.md`: the three bands, the six destinations, the one-attention-number rule, the keyboard grammar (`⌘K`, `g`-prefix, `more▾`), and honest degradation off-team
+- [x] 8.2 Update `features/team-home.md` (the attention number is now app-wide), `features/board.md` (Board is a lens, not a peer view), `features/notifications.md` (the badge is in the deck, on every surface), `features/search.md` (the ⌘K pill and the palette owner), `features/{cycles,triage,projects,delivery}.md` (stops and `more▾`, not tabs or a switcher), and `self-hosting/sync-recovery.md` (the sync state lives at the right-hand end of the statusline, and there is exactly one indicator)
+- [x] 8.3 Update `README.md` and `ROADMAP.md` where they describe navigation or the app shell; add the change's ROADMAP row/status
+- [x] 8.4 `pnpm --filter @yapm/docs build` passes; no stale root doc left behind (PROCESS.md §2) — `.env.example` is unchanged and still matches the Zod schema (this change adds no variable; `config/env-example.test.ts` holds it)
+- [x] 8.5 Correct the design reference: `northstar/NORTHSTAR.md` records what shipped and the two forced divergences (the active stop's ink, and `g d` going to Delivery once Decisions folded away) — design DI-16
+- [x] 8.6 MODIFIED deltas for the two archived specs that described the deleted view switcher — `specs/triage/` and `specs/delivery-metrics/` — reproduced in full with only the reachability clause reworded (design DI-15)
+
+## 9. Gates
+
+- [ ] 9.1 `pnpm turbo lint typecheck test build`
+- [ ] 9.2 The compose smoke test
+- [ ] 9.3 The full Playwright e2e suite (CI is the gate of record; run locally once after the migration since this is cross-cutting chrome)
+- [x] 9.4 Walk every scenario in `openspec/changes/app-frame/specs/**` and confirm it is true — the three that had no assertion behind them now do (the badge's accessible name, search reachable without the palette, and no frame on an unauthenticated surface)
+
+## 10. The red CI run on `8aa64de` — three tests that had baked their environment into a budget
+
+None of the three was a product defect; see design DI-22/23/24 for the evidence behind each.
+
+- [x] 10.1 `e2e/reconnect.spec.ts` — bound `retryFromTheKeyboard`'s Tab walk by the page's own tab ring instead of a hard-coded 150. The retry is stop 166 of 166 on `/` and the ring grows with every spec that creates a team, so any constant rots; `auto-status.spec.ts`'s `tabTo` already bounds its walk this way. The count includes the tab stops a selector cannot see (Chromium makes an overflow container with no focusable descendant a stop of its own — measured, and enough on its own to have reproduced the original red). The `toBeFocused()` assertion is unchanged, and was re-verified in a real Chromium to still fail for a `tabindex="-1"` retry, one under an `inert` ancestor, and a hidden one — design DI-22
+- [x] 10.2 `src/frame/team-context.test.ts` — the suite stubs storage away in `beforeEach` rather than assuming the runner's jsdom has none. Node ≥25 shadows jsdom's `localStorage`; CI's Node 24 does not, so the disabled-storage test was reading a store the previous line had really written. Both browser shapes (global absent, global throwing) are kept, and `team-context.ts` is untouched — design DI-23
+- [x] 10.3 `src/frame/app-frame.test.tsx` — a `beforeAll` loads each route the file renders, so no assertion races the one-shot `autoCodeSplitting` dynamic import; the file now passes with the async budget cut to 1ms. The same file also owns its `localStorage` per test, closing the order-dependence the frame's anchor write would otherwise create on CI — design DI-24
+- [x] 10.4 `src/test-setup.ts` + `vitest.config.ts` — `asyncUtilTimeout: 5_000` with matching `testTimeout`/`hookTimeout`, because the exposure is general to router-mounting suites (`routes.test.tsx` runs 113ms locally where CI is an order of magnitude slower) — design DI-24
+- [ ] 10.5 Re-run the two red checks on CI: "Lint, typecheck, test, build" and "Playwright e2e". Docker is unavailable on the machine that made these fixes, so the e2e suite could not be run locally — the Tab-walk helper was verified against a synthetic page in a real Chromium instead

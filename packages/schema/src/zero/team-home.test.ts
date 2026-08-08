@@ -1,6 +1,8 @@
+import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import type { IssuePriority, IssueStatus } from './context.js'
 import {
+  buildTeamFrame,
   buildTeamHome,
   CADENCE_WEEK_COUNT,
   formatHomeAge,
@@ -718,5 +720,155 @@ describe('formatHomeAge', () => {
     expect(formatHomeAge(9 * HOUR)).toBe('9h')
     expect(formatHomeAge(31 * HOUR)).toBe('31h')
     expect(formatHomeAge(3 * DAY)).toBe('3d')
+  })
+})
+
+// The app frame renders bands 1 and 3 on every authenticated page from THIS model, and the Home
+// digest builds its bands on the same result. The invariant these cases hold: the deck badge, the
+// statusline segment and Home's NEEDS ATTENTION are one number because they are one object.
+describe('buildTeamFrame (app-frame §D2)', () => {
+  it('reports the same attention count the digest reports, from the same object', () => {
+    const input = attentionFixture()
+    const frame = buildTeamFrame(input, NOW)
+    const home = buildTeamHome(input, NOW, VIEWER)
+
+    expect(frame.attention?.count).toBe(7)
+    expect(frame.attention?.count).toBe(home.attention?.count)
+    expect(home.hero.cycle?.statusWords.needAttention).toBe(frame.attention?.count)
+    // Two calls cannot share an object, but they must agree in every class, not just the total —
+    // and inside one `buildTeamHome` the digest holds the frame's own object rather than a copy.
+    expect(home.attention).toStrictEqual(frame.attention)
+  })
+
+  it('carries the team identity, the active cycle, the shipped count and this week’s deploys', () => {
+    const input = baseInput({
+      issues: [
+        makeIssue({ status: 'done' }),
+        makeIssue({ status: 'done' }),
+        makeIssue({ status: 'in_progress' }),
+      ],
+      deployments: [
+        { repo: 'acme/shop', sha: 'a', deployedAt: NOW - 2 * HOUR },
+        { repo: 'acme/shop', sha: 'b', deployedAt: NOW - DAY },
+        { repo: 'acme/shop', sha: 'c', deployedAt: NOW - 30 * DAY },
+      ],
+    })
+    const frame = buildTeamFrame(input, NOW)
+    const home = buildTeamHome(input, NOW, VIEWER)
+
+    expect(frame.teamId).toBe('team-1')
+    expect(frame.teamName).toBe('Engineering')
+    expect(frame.teamKey).toBe('ENG')
+    expect(frame.cycle).toEqual({ title: 'Cycle 2', dayIndex: 9, dayCount: 14 })
+    expect(frame.shipped).toBe(2)
+    expect(frame.shipped).toBe(home.hero.cycle?.statusWords.shipped)
+    expect(frame.cycle?.dayIndex).toBe(home.hero.cycle?.dayIndex)
+    expect(frame.cycle?.dayCount).toBe(home.hero.cycle?.dayCount)
+    expect(frame.cycle?.title).toBe(home.hero.cycle?.title)
+    // The current UTC week only: the deploy 30 days back belongs to an older bucket.
+    expect(frame.deploysThisWeek).toBe(home.cadence?.weeks[home.cadence.todayIndex]?.deploys)
+    expect(frame.deploysThisWeek).toBe(2)
+  })
+
+  it('folds every segment it has no fact for, and reports absence as null rather than zero', () => {
+    const frame = buildTeamFrame({ team, cycles: [], issues: [], triage: [], deployments: [] }, NOW)
+    expect(frame.attention).toBeNull()
+    expect(frame.cycle).toBeNull()
+    expect(frame.shipped).toBeNull()
+    expect(frame.deploysThisWeek).toBeNull()
+  })
+
+  it('ignores a completed cycle: only an active one is the team’s day', () => {
+    const frame = buildTeamFrame(
+      baseInput({
+        cycles: [{ ...activeCycle, status: 'completed' as const }],
+        issues: [makeIssue({ status: 'done' })],
+      }),
+      NOW,
+    )
+    expect(frame.cycle).toBeNull()
+    expect(frame.shipped).toBeNull()
+  })
+
+  // The table. One agreeing case proves the wiring; these prove it survives the shapes that would
+  // most plausibly break it — an issue in two classes, an empty team, a team between cycles, a team
+  // that has never deployed. Each asserts the expected count too, so a derivation that quietly
+  // returned the same wrong number in both places still fails.
+  const AGREEMENT: readonly { name: string; input: () => TeamHomeInput; count: number | null }[] = [
+    { name: 'four classes, one issue matching two', input: attentionFixture, count: 7 },
+    { name: 'nothing needing attention', input: () => baseInput(), count: null },
+    {
+      name: 'one issue in two classes, counted once',
+      input: () =>
+        baseInput({
+          issues: [
+            makeIssue({
+              status: 'in_review',
+              issueLinks: [
+                link({
+                  state: 'open',
+                  openedAt: NOW - 30 * HOUR,
+                  ciChecks: [{ conclusion: 'failure', updatedAt: NOW - 20 * 60 * 1000 }],
+                }),
+              ],
+            }),
+          ],
+        }),
+      count: 1,
+    },
+    {
+      name: 'no active cycle, exceptions still counted',
+      input: () =>
+        baseInput({
+          cycles: [],
+          issues: [
+            makeIssue({
+              status: 'in_review',
+              cycleId: null,
+              issueLinks: [link({ state: 'open', openedAt: NOW - 40 * HOUR })],
+            }),
+          ],
+          triage: [{ id: 'triage-1', createdAt: NOW - HOUR }],
+        }),
+      count: 2,
+    },
+    {
+      name: 'no deployments at all',
+      input: () =>
+        baseInput({
+          deployments: [],
+          triage: [
+            { id: 'triage-1', createdAt: NOW - HOUR },
+            { id: 'triage-2', createdAt: NOW - 2 * HOUR },
+          ],
+        }),
+      count: 2,
+    },
+  ]
+
+  it.each(AGREEMENT)('$name: the frame and the digest report one number', ({ input, count }) => {
+    const built = input()
+    const frame = buildTeamFrame(built, NOW)
+    const home = buildTeamHome(built, NOW, VIEWER)
+
+    expect(frame.attention?.count ?? null).toBe(count)
+    expect(home.attention?.count ?? null).toBe(count)
+    expect(home.attention).toStrictEqual(frame.attention)
+    // Home's hero restates the count in words; off-cycle it has no hero to restate it in, and an
+    // absent restatement is not a disagreement.
+    if (home.hero.cycle !== null && home.hero.cycle !== undefined) {
+      expect(home.hero.cycle.statusWords.needAttention).toBe(count ?? 0)
+    }
+  })
+})
+
+// The rule the whole change rests on, asserted against the source rather than a behaviour: a
+// SECOND attention derivation cannot be introduced without this failing. One definition, one call.
+describe('one attention derivation', () => {
+  it('has exactly one buildAttention call site in the module that defines it', async () => {
+    const source = await readFile(new URL('./team-home.ts', import.meta.url), 'utf8')
+    const occurrences = source.match(/\bbuildAttention\s*\(/gu) ?? []
+    expect(occurrences).toHaveLength(2)
+    expect(source).toContain('function buildAttention(')
   })
 })

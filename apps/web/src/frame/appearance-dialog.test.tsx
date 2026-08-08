@@ -24,7 +24,7 @@ vi.mock('@rocicorp/zero/react', () => ({
 }))
 
 import { ThemeProvider } from '@/theme/provider'
-import { ThemeControls } from './theme-controls'
+import { AppearanceDialog } from './appearance-dialog'
 
 function calls(): Record<string, unknown>[] {
   return zero.mutate.mock.calls.map((call) => call[0].args)
@@ -33,12 +33,9 @@ function calls(): Record<string, unknown>[] {
 async function openPopover() {
   render(
     <ThemeProvider>
-      <ThemeControls />
+      <AppearanceDialog open onOpenChange={() => {}} />
     </ThemeProvider>,
   )
-  const trigger = screen.getByRole('button', { name: 'Appearance settings' })
-  trigger.focus()
-  fireEvent.click(trigger)
   return await screen.findByTestId('email-notifications')
 }
 

@@ -5,7 +5,7 @@ description: The team's flow and delivery metrics over a rolling window of compl
 
 The **Delivery view** answers *"did we ship faster and safer lately, and what is blocking review?"*
 for a team, over a rolling window rather than inside a single retrospective. It lives at
-`/teams/<teamId>/delivery` and sits on the same view switcher, between Retros and Projects.
+`/teams/<teamId>/delivery` and is one of the six stops in [the deck](/features/app-frame/) — `g d`.
 
 These are the same metrics the [retro's data panel](/features/retrospectives/) shows — the same
 formulas, the same tiles, the same trend sparkline. The only difference is scope: a retro reads one

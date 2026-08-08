@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
-import { AppShell } from '@/components/app-shell'
 import { Authenticated } from '@/components/authenticated'
+import { AppFrame } from '@/frame/app-frame'
 import { useDebouncedValue } from '@/lib/debounce'
 import { SearchView } from '@/search/search-view'
 
@@ -21,9 +21,9 @@ export const Route = createFileRoute('/search')({
 function SearchPage() {
   return (
     <Authenticated>
-      <AppShell current="Search">
+      <AppFrame>
         <SearchQuery />
-      </AppShell>
+      </AppFrame>
     </Authenticated>
   )
 }

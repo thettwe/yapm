@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { RetroReactionValue } from '@yapm/schema'
 import { useState } from 'react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { CommandRegistryProvider } from '@/frame/command-registry'
 import type { RetroApi } from '@/retro/api'
 import type { RetroRowData } from '@/retro/model'
 import { type RetroAiFocus, RetroCommandProvider, useRetroCommand } from '@/retro/retro-command'
@@ -103,24 +104,28 @@ function mount(
 ) {
   const retroApi = api()
   render(
-    <RetroCommandProvider
-      retro={{ ...RETRO, phase: options.phase ?? 'vote' }}
-      columns={[]}
-      cards={[]}
-      groups={[]}
-      votes={[]}
-      actions={[]}
-      members={[]}
-      canWrite
-      facilitator
-      api={retroApi}
-      seed={null}
-      onNewCard={() => {}}
-      onNewAction={() => {}}
-      onSeedCard={() => {}}
-    >
-      {options.focused === false ? null : <ProposalRow verdict={options.verdict ?? null} />}
-    </RetroCommandProvider>,
+    // ⌘K is bound once, by the frame's registry; this palette registers with it (§D6), so the
+    // provider has to be here for the keystroke below to reach anything.
+    <CommandRegistryProvider>
+      <RetroCommandProvider
+        retro={{ ...RETRO, phase: options.phase ?? 'vote' }}
+        columns={[]}
+        cards={[]}
+        groups={[]}
+        votes={[]}
+        actions={[]}
+        members={[]}
+        canWrite
+        facilitator
+        api={retroApi}
+        seed={null}
+        onNewCard={() => {}}
+        onNewAction={() => {}}
+        onSeedCard={() => {}}
+      >
+        {options.focused === false ? null : <ProposalRow verdict={options.verdict ?? null} />}
+      </RetroCommandProvider>
+    </CommandRegistryProvider>,
   )
   return retroApi
 }

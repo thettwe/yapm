@@ -62,7 +62,8 @@ import {
 } from '@yapm/ui/components/tooltip'
 import { deriveAccent } from '@yapm/ui/lib/color'
 import { ArrowRightIcon, CircleDotIcon, GitPullRequestIcon, UserIcon } from 'lucide-react'
-import { type CSSProperties, useEffect, useState } from 'react'
+import { type CSSProperties, useCallback, useMemo, useState } from 'react'
+import { useCommandSource } from '@/frame/command-registry'
 
 export const Route = createFileRoute('/showcase')({ component: Showcase })
 
@@ -292,16 +293,16 @@ function Showcase() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [accent, setAccent] = useState<string | null>(null)
 
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        setPaletteOpen((open) => !open)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+  // The showcase registers its demo palette with the frame's one ⌘K owner rather than binding its
+  // own listener (design app-frame §D6).
+  const openPalette = useCallback(() => {
+    setPaletteOpen((open) => !open)
+    return true
   }, [])
+  useCommandSource(
+    'showcase',
+    useMemo(() => ({ open: openPalette }), [openPalette]),
+  )
 
   return (
     <div

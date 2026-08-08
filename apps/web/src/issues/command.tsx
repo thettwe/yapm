@@ -51,6 +51,7 @@ import {
   useState,
 } from 'react'
 import { useMembership } from '@/auth/use-membership'
+import { useCommandSource } from '@/frame/command-registry'
 import { type IssueRowData, STATUS_LABEL, STATUS_TO_KIND } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
 import { useSearchCursor } from '@/search/cursor'
@@ -192,16 +193,17 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
     [start],
   )
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        start('root', contextRef.current)
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+  // ⌘K is bound ONCE, by the frame's command registry (design app-frame §D6). This surface hands
+  // over the opener it already had rather than adding a fifth window listener; everything else about
+  // the palette — its pages, its cursor, its imperative API — is unchanged.
+  const openFromRegistry = useCallback(() => {
+    start('root', contextRef.current)
+    return true
   }, [start])
+  useCommandSource(
+    'issues',
+    useMemo(() => ({ open: openFromRegistry }), [openFromRegistry]),
+  )
 
   const close = useCallback(() => {
     setOpen(false)

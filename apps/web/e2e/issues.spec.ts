@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -43,7 +43,7 @@ async function openTeamIssues(page: Page): Promise<string> {
   await teamLink.click()
 
   // The team-detail "Issues" link must reach the standalone issue list, not re-render detail.
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await stop(page, 'Issues').click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
   await expect(
     page.getByRole('heading', { name: new RegExp(`${teamName} · Issues`) }),
@@ -298,7 +298,7 @@ test('a viewer reads issues but cannot write across list, detail, and palette', 
     const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
     await teamCard.getByRole('button', { name: 'Join this team' }).click()
     await vp.getByRole('link', { name: new RegExp(teamName) }).click()
-    await vp.getByRole('link', { name: 'Issues' }).click()
+    await stop(vp, 'Issues').click()
 
     // List: the viewer reads the admin's issue.
     await expect(row(vp, issueTitle)).toBeVisible({ timeout: 20_000 })

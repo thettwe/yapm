@@ -715,6 +715,9 @@ export type {
   AttentionChecksRow,
   AttentionDivergenceRow,
   DayBandSegment,
+  TeamFrameCycle,
+  TeamFrameInput,
+  TeamFrameModel,
   TeamHomeAttention,
   TeamHomeCadence,
   TeamHomeCadenceWeek,
@@ -746,6 +749,7 @@ export type {
   TeamHomeYoursRow,
 } from './zero/team-home.js'
 export {
+  buildTeamFrame,
   buildTeamHome,
   CADENCE_WEEK_COUNT,
   formatHomeAge,

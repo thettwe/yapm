@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { Masthead } from '@/frame/masthead'
 import { runMutation } from '@/lib/mutation'
 import {
   formatUnreadCount,
@@ -164,66 +165,74 @@ export function InboxView() {
   )
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-bg">
-      <header className="flex items-center gap-2 border-b border-border px-4 py-2.5">
-        <BellIcon aria-hidden="true" className="size-4 text-text-3" />
-        <h1 className="text-sm font-semibold tracking-tight text-text-1">Inbox</h1>
-        <span className="ml-1 font-mono text-xs text-text-3" data-testid="inbox-unread-count">
-          {formatUnreadCount(unread)}
-        </span>
-        {error !== undefined ? (
-          <span className="ml-2 text-xs text-status-urgent" role="alert">
-            {error}
+    <>
+      <Masthead
+        title={
+          <span className="flex items-center gap-2">
+            <BellIcon aria-hidden="true" className="size-4 text-text-3" />
+            Inbox
           </span>
-        ) : null}
-        <div className="flex-1" />
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={unread === 0}
-          data-testid="inbox-mark-all-read"
-          onClick={markAllRead}
+        }
+        count={formatUnreadCount(unread)}
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={unread === 0}
+            data-testid="inbox-mark-all-read"
+            onClick={markAllRead}
+          >
+            Mark all read
+          </Button>
+        }
+        {...(error === undefined
+          ? {}
+          : {
+              meta: (
+                <span className="text-xs text-status-urgent" role="alert">
+                  {error}
+                </span>
+              ),
+            })}
+      />
+      <div className="flex min-h-0 flex-1 flex-col bg-bg">
+        <section
+          ref={containerRef}
+          className="flex-1 overflow-y-auto pb-10 outline-none"
+          onKeyDown={onKeyDown}
+          aria-label="Notifications"
         >
-          Mark all read
-        </Button>
-      </header>
-
-      <section
-        ref={containerRef}
-        className="flex-1 overflow-y-auto pb-10 outline-none"
-        onKeyDown={onKeyDown}
-        aria-label="Notifications"
-      >
-        {rows.length === 0 ? (
-          <p className="p-8 text-center text-sm text-text-3" role="status">
-            {loaded
-              ? "You're all caught up. Assignments, comments on issues you're involved in, and digests shared with you land here."
-              : 'Loading notifications…'}
-          </p>
-        ) : (
-          groups.map((group) => (
-            <div key={group.key}>
-              <h2 className="sticky top-0 z-10 border-b border-border bg-bg px-4 py-1.5 font-ui text-[11.5px] font-medium tracking-wide text-text-2">
-                {group.label}
-              </h2>
-              {group.rows.map((row) => {
-                const position = indexById.get(row.id) ?? 0
-                return (
-                  <InboxRow
-                    key={row.id}
-                    index={position}
-                    row={row}
-                    focused={position === focusIndex}
-                    onFocusRow={setFocusedId}
-                    onOpen={() => open(row)}
-                  />
-                )
-              })}
-            </div>
-          ))
-        )}
-      </section>
-    </div>
+          {rows.length === 0 ? (
+            <p className="p-8 text-center text-sm text-text-3" role="status">
+              {loaded
+                ? "You're all caught up. Assignments, comments on issues you're involved in, and digests shared with you land here."
+                : 'Loading notifications…'}
+            </p>
+          ) : (
+            groups.map((group) => (
+              <div key={group.key}>
+                <h2 className="sticky top-0 z-10 border-b border-border bg-bg px-4 py-1.5 font-ui text-[11.5px] font-medium tracking-wide text-text-2">
+                  {group.label}
+                </h2>
+                {group.rows.map((row) => {
+                  const position = indexById.get(row.id) ?? 0
+                  return (
+                    <InboxRow
+                      key={row.id}
+                      index={position}
+                      row={row}
+                      focused={position === focusIndex}
+                      onFocusRow={setFocusedId}
+                      onOpen={() => open(row)}
+                    />
+                  )
+                })}
+              </div>
+            ))
+          )}
+        </section>
+      </div>
+    </>
   )
 }
 

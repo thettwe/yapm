@@ -48,6 +48,7 @@ vi.mock('@/zero/connection', async (importOriginal) => ({
   useConnectionSummary: () => CONNECTED,
 }))
 
+import { CommandRegistryProvider } from '@/frame/command-registry'
 import { CommandProvider, useCommand } from '@/issues/command'
 
 const TEAM: CorpusTeamRow = { id: 'team-1', name: 'Platform', key: 'ENG', updatedAt: 1 }
@@ -131,11 +132,16 @@ function Opener() {
   )
 }
 
+// Mounted through the registry, because ⌘K is bound ONCE in the product and this palette registers
+// with that owner rather than listening for itself (design app-frame §D6). The keystroke below
+// therefore proves the registration too.
 function tree() {
   return (
-    <CommandProvider teamId="team-1" issues={[]}>
-      <Opener />
-    </CommandProvider>
+    <CommandRegistryProvider>
+      <CommandProvider teamId="team-1" issues={[]}>
+        <Opener />
+      </CommandProvider>
+    </CommandRegistryProvider>
   )
 }
 
@@ -436,9 +442,11 @@ test('the command primitive reports empty from mounted items, not from its own s
     'labels.byTeam': [{ id: 'l-1', name: 'flaky', color: '#f00' }],
   }
   render(
-    <CommandProvider teamId="team-1" issues={[]}>
-      <Opener />
-    </CommandProvider>,
+    <CommandRegistryProvider>
+      <CommandProvider teamId="team-1" issues={[]}>
+        <Opener />
+      </CommandProvider>
+    </CommandRegistryProvider>,
   )
   act(() => {
     fireEvent.click(screen.getByText('open label page'))
@@ -518,9 +526,11 @@ test('a sub-page reopens on its own first row', async () => {
     ],
   }
   render(
-    <CommandProvider teamId="team-1" issues={[]}>
-      <Opener />
-    </CommandProvider>,
+    <CommandRegistryProvider>
+      <CommandProvider teamId="team-1" issues={[]}>
+        <Opener />
+      </CommandProvider>
+    </CommandRegistryProvider>,
   )
   act(() => {
     fireEvent.click(screen.getByText('open label page'))

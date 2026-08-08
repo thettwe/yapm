@@ -29,6 +29,7 @@ import {
   partitionCycles,
 } from '@/cycles/model'
 import { PmDigestShareCard } from '@/cycles/pm-digest-card'
+import { Masthead } from '@/frame/masthead'
 import { type IssueRowData, issueKey, PRIORITY_TO_KIND, STATUS_TO_KIND } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
 import { openRetroArgs } from '@/retro/model'
@@ -123,54 +124,53 @@ export function CyclesView({ teamId }: { teamId: string }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <aside
-        className="flex w-64 flex-col gap-4 overflow-y-auto border-r border-border p-3"
-        aria-label="Cycles"
-      >
-        <div className="flex items-center justify-between">
-          <h1 className="text-sm font-semibold tracking-tight text-text-1">Cycles</h1>
-          <NewCycleButton teamId={teamId} />
-        </div>
-        <CycleGroup
-          label={CYCLE_STATUS_LABEL.active}
-          cycles={active}
-          selectedId={selected?.id}
-          onSelect={setSelectedId}
-        />
-        <CycleGroup
-          label={CYCLE_STATUS_LABEL.upcoming}
-          cycles={upcoming}
-          selectedId={selected?.id}
-          onSelect={setSelectedId}
-        />
-        <CycleGroup
-          label={CYCLE_STATUS_LABEL.completed}
-          cycles={completed}
-          selectedId={selected?.id}
-          onSelect={setSelectedId}
-        />
-      </aside>
-
-      <section className="flex min-w-0 flex-1 flex-col overflow-y-auto" aria-label="Cycle detail">
-        {selected ? (
-          <CyclePanel
-            teamId={teamId}
-            teamKey={teamKey}
-            cycle={selected}
-            cycles={cycles}
-            issues={selectedIssues}
-            rawIssues={selectedRawIssues}
-            onOpenIssue={onOpenIssue}
-            onOpenIssueId={onOpenIssueId}
+    <>
+      <Masthead title="Cycles" count={cycles.length} actions={<NewCycleButton teamId={teamId} />} />
+      <div className="flex min-h-0 flex-1">
+        <aside
+          className="flex w-64 flex-col gap-4 overflow-y-auto border-r border-border p-3"
+          aria-label="Cycles"
+        >
+          <CycleGroup
+            label={CYCLE_STATUS_LABEL.active}
+            cycles={active}
+            selectedId={selected?.id}
+            onSelect={setSelectedId}
           />
-        ) : (
-          <p className="p-8 text-center text-sm text-text-3" role="status">
-            No cycles yet. Create one to start planning a time-boxed iteration.
-          </p>
-        )}
-      </section>
-    </div>
+          <CycleGroup
+            label={CYCLE_STATUS_LABEL.upcoming}
+            cycles={upcoming}
+            selectedId={selected?.id}
+            onSelect={setSelectedId}
+          />
+          <CycleGroup
+            label={CYCLE_STATUS_LABEL.completed}
+            cycles={completed}
+            selectedId={selected?.id}
+            onSelect={setSelectedId}
+          />
+        </aside>
+
+        <section className="flex min-w-0 flex-1 flex-col overflow-y-auto" aria-label="Cycle detail">
+          {selected ? (
+            <CyclePanel
+              teamId={teamId}
+              teamKey={teamKey}
+              cycle={selected}
+              cycles={cycles}
+              issues={selectedIssues}
+              rawIssues={selectedRawIssues}
+              onOpenIssue={onOpenIssue}
+              onOpenIssueId={onOpenIssueId}
+            />
+          ) : (
+            <p className="p-8 text-center text-sm text-text-3" role="status">
+              No cycles yet. Create one to start planning a time-boxed iteration.
+            </p>
+          )}
+        </section>
+      </div>
+    </>
   )
 }
 

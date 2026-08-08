@@ -51,6 +51,7 @@ import {
 } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import { cycleKey } from '@/cycles/model'
+import { Masthead } from '@/frame/masthead'
 import { CommandProvider, useCommand } from '@/issues/command'
 import {
   DIVERGENCE_LABEL,
@@ -121,7 +122,17 @@ interface TeamMemberOption {
   name: string
 }
 
-export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId?: string }) {
+export function IssueList({
+  teamId,
+  openIssueId,
+  lens,
+}: {
+  teamId: string
+  openIssueId?: string
+  // Band 2's lens slot, owned by the route: List | Board. Board is a lens on Issues, not a peer
+  // destination, so the toggle lives in the masthead and the bar keeps ONE current stop.
+  lens?: ReactNode
+}) {
   const navigate = useNavigate()
   const [teams] = useQuery(queries.teams.all())
   const [issuesRaw, issuesResult] = useQuery(queries.issues.byTeam({ teamId }))
@@ -222,6 +233,7 @@ export function IssueList({ teamId, openIssueId }: { teamId: string; openIssueId
         projectOptions={projects.map((project) => ({ id: project.id, name: project.name }))}
         openIssueId={openIssueId}
         onOpenIssue={onOpenIssue}
+        {...(lens === undefined ? {} : { lens })}
       />
     </CommandProvider>
   )
@@ -249,6 +261,7 @@ interface IssueListBodyProps {
   projectOptions: readonly ProjectOption[]
   openIssueId?: string
   onOpenIssue: (issue: IssueRowData) => void
+  lens?: ReactNode
 }
 
 function IssueListBody({
@@ -262,6 +275,7 @@ function IssueListBody({
   projectOptions,
   openIssueId,
   onOpenIssue,
+  lens,
 }: IssueListBodyProps) {
   const command = useCommand()
   const [savedViews] = useQuery(queries.savedViews.byTeam({ teamId }))
@@ -440,6 +454,7 @@ function IssueListBody({
       <Toolbar
         team={team}
         count={ordered.length}
+        {...(lens === undefined ? {} : { lens })}
         filter={filter}
         setFilter={setFilter}
         grouping={grouping}
@@ -590,6 +605,7 @@ function IssueGroupSection({
 interface ToolbarProps {
   team: { name: string }
   count: number
+  lens?: ReactNode
   filter: IssueFilter
   setFilter: (next: IssueFilter) => void
   grouping: ListGrouping
@@ -618,6 +634,7 @@ interface ToolbarProps {
 
 function Toolbar({
   team,
+  lens,
   count,
   filter,
   setFilter,
@@ -641,12 +658,17 @@ function Toolbar({
   const patch = (next: Partial<IssueFilter>) => setFilter({ ...filter, ...next })
 
   return (
-    <header className="flex flex-col gap-2 border-b border-border px-4 py-2.5">
-      <div className="flex items-center gap-2">
-        <StatusGlyph status="in-progress" aria-hidden="true" />
-        <h1 className="text-sm font-semibold tracking-tight text-text-1">{team.name} · Issues</h1>
-        <span className="ml-1 font-mono text-xs text-text-3">{count}</span>
-        <div className="ml-auto flex items-center gap-2">
+    <Masthead
+      title={
+        <span className="flex items-center gap-2">
+          <StatusGlyph status="in-progress" aria-hidden="true" />
+          {team.name} · Issues
+        </span>
+      }
+      count={count}
+      {...(lens === undefined ? {} : { lens })}
+      actions={
+        <>
           <SavedViewControls
             teamId={teamId}
             filter={filter}
@@ -659,176 +681,180 @@ function Toolbar({
             <PlusIcon />
             New issue
           </Button>
-        </div>
-      </div>
+        </>
+      }
+      meta={
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex items-center">
+            <SearchIcon
+              aria-hidden="true"
+              className="pointer-events-none absolute left-2.5 size-3.5 text-text-3"
+            />
+            <Input
+              aria-label="Search issues"
+              placeholder="Search…"
+              value={filter.text ?? ''}
+              onChange={(event) => patch({ text: event.target.value || undefined })}
+              className="h-7 w-48 pl-8 text-sm"
+            />
+          </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex items-center">
-          <SearchIcon
-            aria-hidden="true"
-            className="pointer-events-none absolute left-2.5 size-3.5 text-text-3"
-          />
-          <Input
-            aria-label="Search issues"
-            placeholder="Search…"
-            value={filter.text ?? ''}
-            onChange={(event) => patch({ text: event.target.value || undefined })}
-            className="h-7 w-48 pl-8 text-sm"
-          />
-        </div>
-
-        <FilterMenu
-          label="Status"
-          options={ISSUE_STATUSES.map((status) => ({
-            value: status,
-            label: STATUS_LABEL[status],
-            icon: <StatusGlyph status={STATUS_TO_KIND[status]} />,
-          }))}
-          selected={(filter.status ?? []) as readonly string[]}
-          onToggle={(value) =>
-            patch({
-              status: toggle(
-                filter.status as readonly IssueStatus[] | undefined,
-                value as IssueStatus,
-              ),
-            })
-          }
-        />
-        <FilterMenu
-          label="Priority"
-          options={ISSUE_PRIORITIES.map((priority) => ({
-            value: priority,
-            label: PRIORITY_LABEL[priority],
-            icon: <PriorityMark priority={PRIORITY_TO_KIND[priority]} />,
-          }))}
-          selected={(filter.priority ?? []) as readonly string[]}
-          onToggle={(value) =>
-            patch({
-              priority: toggle(
-                filter.priority as readonly IssuePriority[] | undefined,
-                value as IssuePriority,
-              ),
-            })
-          }
-        />
-        <FilterMenu
-          label="Assignee"
-          options={[
-            { value: UNASSIGNED, label: 'Unassigned' },
-            ...memberOptions.map((member) => ({ value: member.id, label: member.name })),
-          ]}
-          selected={(filter.assigneeIds ?? []).map((id) => id ?? UNASSIGNED)}
-          onToggle={(value) => {
-            const real = value === UNASSIGNED ? null : value
-            patch({ assigneeIds: toggle(filter.assigneeIds, real) })
-          }}
-        />
-        <FilterMenu
-          label="Delivery"
-          options={DELIVERY_PREDICATES.map((predicate) => ({
-            value: predicate,
-            label: DELIVERY_LABEL[predicate],
-          }))}
-          selected={(filter.delivery ?? []) as readonly string[]}
-          onToggle={(value) =>
-            patch({
-              delivery: toggle(
-                filter.delivery as readonly DeliveryPredicate[] | undefined,
-                value as DeliveryPredicate,
-              ),
-            })
-          }
-        />
-        {labelOptions.length > 0 ? (
           <FilterMenu
-            label="Label"
-            options={labelOptions.map((label) => ({
-              value: label.id,
-              label: label.name,
-              icon: (
-                <span className="size-2.5 rounded-full" style={{ backgroundColor: label.color }} />
-              ),
+            label="Status"
+            options={ISSUE_STATUSES.map((status) => ({
+              value: status,
+              label: STATUS_LABEL[status],
+              icon: <StatusGlyph status={STATUS_TO_KIND[status]} />,
             }))}
-            selected={filter.labelIds ?? []}
-            onToggle={(value) => patch({ labelIds: toggle(filter.labelIds, value) })}
-          />
-        ) : null}
-        {cycleOptions.length > 0 ? (
-          <FilterMenu
-            label="Cycle"
-            options={[
-              { value: NO_CYCLE, label: 'No cycle' },
-              ...cycleOptions.map((cycle) => ({
-                value: cycle.id,
-                label: `${cycle.name} · ${cycleKey(cycle)}`,
-              })),
-            ]}
-            selected={(cycleFilter ?? []).map((id) => id ?? NO_CYCLE)}
-            onToggle={(value) => {
-              const real = value === NO_CYCLE ? null : value
-              setCycleFilter(toggle(cycleFilter, real))
-            }}
-          />
-        ) : null}
-        {projectOptions.length > 0 ? (
-          <FilterMenu
-            label="Project"
-            options={[
-              { value: NO_PROJECT, label: 'No project' },
-              ...projectOptions.map((project) => ({ value: project.id, label: project.name })),
-            ]}
-            selected={(projectFilter ?? []).map((id) => id ?? NO_PROJECT)}
-            onToggle={(value) => {
-              const real = value === NO_PROJECT ? null : value
-              setProjectFilter(toggle(projectFilter, real))
-            }}
-          />
-        ) : null}
-
-        <div className="ml-auto flex items-center gap-2">
-          <span className="flex items-center gap-1.5 text-xs text-text-3">
-            Group
-            <Select
-              aria-label="Group by"
-              value={grouping}
-              onChange={(event) => setGrouping(event.target.value as ListGrouping)}
-              className="h-7 w-32"
-            >
-              {(Object.keys(GROUPING_LABEL) as ListGrouping[]).map((value) => (
-                <option key={value} value={value}>
-                  {GROUPING_LABEL[value]}
-                </option>
-              ))}
-            </Select>
-          </span>
-          <span className="flex items-center gap-1.5 text-xs text-text-3">
-            Sort
-            <Select
-              aria-label="Sort by"
-              value={sort.key}
-              onChange={(event) => setSort({ ...sort, key: event.target.value as IssueSortKey })}
-              className="h-7 w-32"
-            >
-              {(Object.keys(SORT_LABEL) as IssueSortKey[]).map((value) => (
-                <option key={value} value={value}>
-                  {SORT_LABEL[value]}
-                </option>
-              ))}
-            </Select>
-          </span>
-          <Button
-            size="icon-sm"
-            variant="outline"
-            aria-label={`Sort ${sort.direction === 'asc' ? 'ascending' : 'descending'}`}
-            onClick={() =>
-              setSort({ ...sort, direction: sort.direction === 'asc' ? 'desc' : 'asc' })
+            selected={(filter.status ?? []) as readonly string[]}
+            onToggle={(value) =>
+              patch({
+                status: toggle(
+                  filter.status as readonly IssueStatus[] | undefined,
+                  value as IssueStatus,
+                ),
+              })
             }
-          >
-            <ChevronDownIcon className={sort.direction === 'asc' ? 'rotate-180' : ''} />
-          </Button>
+          />
+          <FilterMenu
+            label="Priority"
+            options={ISSUE_PRIORITIES.map((priority) => ({
+              value: priority,
+              label: PRIORITY_LABEL[priority],
+              icon: <PriorityMark priority={PRIORITY_TO_KIND[priority]} />,
+            }))}
+            selected={(filter.priority ?? []) as readonly string[]}
+            onToggle={(value) =>
+              patch({
+                priority: toggle(
+                  filter.priority as readonly IssuePriority[] | undefined,
+                  value as IssuePriority,
+                ),
+              })
+            }
+          />
+          <FilterMenu
+            label="Assignee"
+            options={[
+              { value: UNASSIGNED, label: 'Unassigned' },
+              ...memberOptions.map((member) => ({ value: member.id, label: member.name })),
+            ]}
+            selected={(filter.assigneeIds ?? []).map((id) => id ?? UNASSIGNED)}
+            onToggle={(value) => {
+              const real = value === UNASSIGNED ? null : value
+              patch({ assigneeIds: toggle(filter.assigneeIds, real) })
+            }}
+          />
+          <FilterMenu
+            label="Delivery"
+            options={DELIVERY_PREDICATES.map((predicate) => ({
+              value: predicate,
+              label: DELIVERY_LABEL[predicate],
+            }))}
+            selected={(filter.delivery ?? []) as readonly string[]}
+            onToggle={(value) =>
+              patch({
+                delivery: toggle(
+                  filter.delivery as readonly DeliveryPredicate[] | undefined,
+                  value as DeliveryPredicate,
+                ),
+              })
+            }
+          />
+          {labelOptions.length > 0 ? (
+            <FilterMenu
+              label="Label"
+              options={labelOptions.map((label) => ({
+                value: label.id,
+                label: label.name,
+                icon: (
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{ backgroundColor: label.color }}
+                  />
+                ),
+              }))}
+              selected={filter.labelIds ?? []}
+              onToggle={(value) => patch({ labelIds: toggle(filter.labelIds, value) })}
+            />
+          ) : null}
+          {cycleOptions.length > 0 ? (
+            <FilterMenu
+              label="Cycle"
+              options={[
+                { value: NO_CYCLE, label: 'No cycle' },
+                ...cycleOptions.map((cycle) => ({
+                  value: cycle.id,
+                  label: `${cycle.name} · ${cycleKey(cycle)}`,
+                })),
+              ]}
+              selected={(cycleFilter ?? []).map((id) => id ?? NO_CYCLE)}
+              onToggle={(value) => {
+                const real = value === NO_CYCLE ? null : value
+                setCycleFilter(toggle(cycleFilter, real))
+              }}
+            />
+          ) : null}
+          {projectOptions.length > 0 ? (
+            <FilterMenu
+              label="Project"
+              options={[
+                { value: NO_PROJECT, label: 'No project' },
+                ...projectOptions.map((project) => ({ value: project.id, label: project.name })),
+              ]}
+              selected={(projectFilter ?? []).map((id) => id ?? NO_PROJECT)}
+              onToggle={(value) => {
+                const real = value === NO_PROJECT ? null : value
+                setProjectFilter(toggle(projectFilter, real))
+              }}
+            />
+          ) : null}
+
+          <div className="ml-auto flex items-center gap-2">
+            <span className="flex items-center gap-1.5 text-xs text-text-3">
+              Group
+              <Select
+                aria-label="Group by"
+                value={grouping}
+                onChange={(event) => setGrouping(event.target.value as ListGrouping)}
+                className="h-7 w-32"
+              >
+                {(Object.keys(GROUPING_LABEL) as ListGrouping[]).map((value) => (
+                  <option key={value} value={value}>
+                    {GROUPING_LABEL[value]}
+                  </option>
+                ))}
+              </Select>
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-text-3">
+              Sort
+              <Select
+                aria-label="Sort by"
+                value={sort.key}
+                onChange={(event) => setSort({ ...sort, key: event.target.value as IssueSortKey })}
+                className="h-7 w-32"
+              >
+                {(Object.keys(SORT_LABEL) as IssueSortKey[]).map((value) => (
+                  <option key={value} value={value}>
+                    {SORT_LABEL[value]}
+                  </option>
+                ))}
+              </Select>
+            </span>
+            <Button
+              size="icon-sm"
+              variant="outline"
+              aria-label={`Sort ${sort.direction === 'asc' ? 'ascending' : 'descending'}`}
+              onClick={() =>
+                setSort({ ...sort, direction: sort.direction === 'asc' ? 'desc' : 'asc' })
+              }
+            >
+              <ChevronDownIcon className={sort.direction === 'asc' ? 'rotate-180' : ''} />
+            </Button>
+          </div>
         </div>
-      </div>
-    </header>
+      }
+    />
   )
 }
 

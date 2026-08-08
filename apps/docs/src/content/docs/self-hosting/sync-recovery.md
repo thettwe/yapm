@@ -15,11 +15,13 @@ not stop.
 
 ## What people see
 
-The connection pill sits in the app header on every signed-in screen. It is a polite live region,
-so a screen reader announces each transition, and it takes every colour from your active theme
-tokens — it is legible in all three presets, light and dark.
+The sync state sits at the right-hand end of the [statusline](/features/app-frame/) — band 3 of the
+app frame — on every signed-in screen, and nowhere else: there is exactly one connection indicator
+in the product. It is a polite live region, so a screen reader announces each transition, and it
+takes every colour from your active theme tokens — it is legible in all three presets, light and
+dark.
 
-| Pill | Meaning | Reads | Writes |
+| Label | Meaning | Reads | Writes |
 |---|---|---|---|
 | **Connected** | Synced. | ✅ | ✅ |
 | **Connecting** | First connection of the session. | ✅ | queued |
@@ -29,12 +31,14 @@ tokens — it is legible in all three presets, light and dark.
 | **Sync error — retrying** | `zero-cache` returned a protocol error; recovery is running. | ✅ | ❌ |
 
 Reads never stop: everything already synced keeps rendering and navigating. Writes are refused
-while disconnected rather than silently queued and lost — that is Zero's model, and the pill is
+while disconnected rather than silently queued and lost — that is Zero's model, and the statusline is
 what makes it honest.
 
-Once retries have been going for a while, a keyboard-reachable **Retry now** button appears in the
-pill. It fires the next attempt immediately and resets the schedule; nobody has to wait out a
-back-off window, and nobody has to reload.
+Once retries have been going for a while, a keyboard-reachable **Retry now** button appears beside the
+state. It fires the next attempt immediately and resets the schedule; nobody has to wait out a
+back-off window, and nobody has to reload. The same control is offered as **Retry sync now** in the
+command palette (**⌘K**) while it is available, so reaching it never depends on how long the page you
+are on happens to be.
 
 If the app cannot reach the server *before* it knows who you are, the full-page loading state turns
 into **"Can’t reach the server — retrying"** with the same Retry button. Pressing it when an attempt
@@ -143,4 +147,4 @@ Work down this list; each step rules out one layer.
 
 If all seven check out and a tab is still cycling, capture
 `docker compose --env-file .env -f docker/docker-compose.yml logs zero-cache` around the failure and
-open an issue — include the pill label people saw, which is the client's half of the story.
+open an issue — include the sync label people saw, which is the client's half of the story.

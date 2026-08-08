@@ -7,7 +7,7 @@ import {
   seedRetroAiDraft,
 } from './db'
 import { readReplica } from './replica'
-import { ADMIN, ensureAccount } from './support'
+import { ADMIN, ensureAccount, stop } from './support'
 
 // The first two cases need no provider key, which is why they are e2e rather than mocks: the two
 // states an operator actually ships with are "no team opted in" and "opted in, nothing configured",
@@ -56,7 +56,7 @@ async function openTeam(page: Page, teamKey: string): Promise<void> {
   const link = page.getByRole('link', { name: new RegExp(teamKey) })
   await expect(link).toBeVisible({ timeout: 20_000 })
   await link.click()
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await stop(page, 'Issues').click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
 }
 
@@ -98,13 +98,17 @@ async function createCycle(page: Page, name: string, startOffset: number, endOff
 // A retro hangs off a completed cycle, and completing one opens its retro through the same mutator
 // the scheduler uses.
 async function completedCycleWithRetro(page: Page): Promise<void> {
-  // The Cycles link lives in the team view switch. Assert the switch is mounted first so a caller
-  // that arrived from somewhere without one fails here, named and in seconds, instead of waiting
-  // out the whole test timeout on a link that is never going to appear.
-  await expect(page.getByRole('navigation', { name: 'Issue views' })).toBeVisible({
-    timeout: 20_000,
-  })
-  await page.getByRole('link', { name: 'Cycles' }).click()
+  // The Cycles link is a stop on the deck. Assert the destinations nav is mounted first, and that
+  // it marks exactly one current page, so a caller that arrived from somewhere without the frame
+  // fails here, named and in seconds, instead of waiting out the whole test timeout.
+  const destinations = page.getByRole('navigation', { name: 'Destinations' })
+  await expect(destinations).toBeVisible({ timeout: 20_000 })
+  await expect(destinations.locator('[aria-current="page"]')).toHaveCount(1)
+  await destinations.getByRole('link', { name: 'Cycles' }).click()
+  await expect(destinations.getByRole('link', { name: 'Cycles' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
   await expect(page.getByRole('button', { name: 'New cycle' })).toBeVisible({ timeout: 20_000 })
   const first = unique('AI retro sprint')
   const second = unique('AI next sprint')

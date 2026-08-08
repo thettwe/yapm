@@ -102,6 +102,17 @@ function wash(value: string, surface: string, alpha: number): string {
   return `#${channel(0)}${channel(1)}${channel(2)}`
 }
 
+// `color-mix(in oklch, var(--a), var(--b) nn%)`, as five of the six presets define
+// `--statusline-bg`. Mixed in sRGB rather than oklch for the same reason `wash` is: an
+// approximation of the composite is enough to catch a token edit that breaks AA.
+function mix(value: string, tokens: Record<string, string>): string | null {
+  const m = value.match(
+    /^color-mix\(in oklch,\s*var\((--[\w-]+)\),\s*var\((--[\w-]+)\)\s*([\d.]+)%\s*\)$/,
+  )
+  if (m?.[1] === undefined || m[2] === undefined || m[3] === undefined) return null
+  return wash(hex(tokens, m[2]), hex(tokens, m[1]), Number(m[3]) / 100)
+}
+
 describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   const surfaces = ['--bg', '--bg-elevated', '--bg-sidebar'] as const
 
@@ -344,6 +355,42 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   // Kept as a lower bound only, so a token edit that RAISES `--text-3` to AA does not fail here.
   it('records that the peek derivation line is deliberately quieter than AA on the elevated surface', () => {
     expect(contrastRatio(hex(t, '--text-3'), hex(t, '--bg-elevated'))).toBeGreaterThanOrEqual(2.5)
+  })
+
+  // THE APP FRAME (app-frame §D1). Band 3 paints `--statusline-bg` on every page and carries
+  // `--text-2` labels, a `--text-3` sync line and the `--status-urgent-ink` attention segment; band
+  // 1's active stop is `--accent-strong` on `--bg`, and its attention badge is `--status-urgent-ink`
+  // on the `--urgent-soft` wash. Chrome the reader sees on every surface, so it holds in all six.
+  it('the frame bands hold their contrast in every theme', () => {
+    const declared = t['--statusline-bg'] ?? ''
+    const statusline = mix(declared, t) ?? over(declared, hex(t, '--bg'))
+    for (const ink of ['--text-1', '--text-2'] as const) {
+      expect(contrastRatio(hex(t, ink), statusline), ink).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+    expect(
+      contrastRatio(hex(t, '--status-urgent-ink'), statusline),
+      'statusline attention',
+    ).toBeGreaterThanOrEqual(AA_NORMAL)
+    // The sync line is `--text-3`, the same deliberate exemption the peek derivation records: it is
+    // a quiet fact restated by the dot's colour, and it may never stop reading as text.
+    expect(contrastRatio(hex(t, '--text-3'), statusline)).toBeGreaterThanOrEqual(2.5)
+
+    // The active stop's INK is `--text-1`, not the accent: `--accent-strong` on `--bg` lands at
+    // ~4.44 in editorial light, and a current-page marker a sighted reader has to squint at is the
+    // same bug the mention typeahead already recorded. The accent carries the 2px underline
+    // instead, which is a non-text indicator and so answers to 3:1 (WCAG 1.4.11).
+    expect(contrastRatio(hex(t, '--text-1'), hex(t, '--bg')), 'active stop').toBeGreaterThanOrEqual(
+      AA_NORMAL,
+    )
+    expect(
+      contrastRatio(hex(t, '--accent'), hex(t, '--bg')),
+      'active stop underline',
+    ).toBeGreaterThanOrEqual(AA_LARGE)
+    const badge = wash(hex(t, '--status-urgent'), hex(t, '--bg'), 0.08)
+    expect(
+      contrastRatio(hex(t, '--status-urgent-ink'), badge),
+      'attention badge',
+    ).toBeGreaterThanOrEqual(AA_NORMAL)
   })
 
   it('on-accent text on the accent fill meets AA (>= 4.5)', () => {

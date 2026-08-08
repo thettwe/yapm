@@ -32,8 +32,15 @@ vi.mock('@/zero/provider', () => ({
 
 // The shell is the workspace chrome and reads its own queries; stubbing it keeps the call count in
 // this file a measurement of the DISCLOSURE query alone.
-vi.mock('@/components/app-shell', () => ({
-  AppShell: ({ children }: { children: ReactNode }) => <div data-testid="shell">{children}</div>,
+vi.mock('@/frame/app-frame', () => ({
+  AppFrame: ({ children }: { children: ReactNode }) => <div data-testid="shell">{children}</div>,
+}))
+
+// The entry now sits in the account menu, so it renders a `MenuLinkItem`. Base UI's menu parts read
+// their popup off context; stubbing the part keeps this file about the DISCLOSURE gate rather than
+// about menu mechanics, which `header-menus.test.tsx` owns.
+vi.mock('@yapm/ui/components/menu', () => ({
+  MenuLinkItem: ({ render: item, ...rest }: { render: ReactNode }) => <div {...rest}>{item}</div>,
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -44,7 +51,7 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }))
 
-import { PmDigestsEntry } from './digests-entry'
+import { PmDigestsMenuEntry } from './digests-entry'
 import { PmDigestsGate } from './digests-gate'
 import { pmEvidenceLabels, pmSubjectLine, sharedReadersLabel } from './model'
 
@@ -163,18 +170,18 @@ test('a named reader with nothing released yet gets no surface either', () => {
 
 // The way in has to answer the same question the surface does, or the shell offers a door onto an
 // empty room — which is itself a disclosure that a channel exists.
-test('the shell entry appears only for a named reader with something released', () => {
-  const { rerender } = render(<PmDigestsEntry />)
+test('the account-menu entry appears only for a named reader with something released', () => {
+  const { rerender } = render(<PmDigestsMenuEntry />)
   expect(screen.queryByTestId('pm-digests-entry')).toBeNull()
   expect(zero.calls).toBe(0)
 
   sync.audience = ['team-platform']
   zero.rows = []
-  rerender(<PmDigestsEntry />)
+  rerender(<PmDigestsMenuEntry />)
   expect(screen.queryByTestId('pm-digests-entry')).toBeNull()
 
   zero.rows = [ROW]
-  rerender(<PmDigestsEntry />)
+  rerender(<PmDigestsMenuEntry />)
   expect(screen.getByTestId('pm-digests-entry')).toBeInTheDocument()
 })
 

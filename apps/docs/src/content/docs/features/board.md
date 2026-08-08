@@ -3,10 +3,11 @@ title: Board
 description: A keyboard-first kanban of your team's issues, grouped into the six fixed status columns.
 ---
 
-The board is a kanban view of a team's issues, grouped into columns by status. It is a peer
-view to the issue list — both show the same team-scoped issues, and a change made in one
-shows up in the other without a reload. Open it at `/teams/<teamId>/board`, or use the
-**List ↔ Board** toggle in the team header.
+The board is a kanban view of a team's issues, grouped into columns by status. It is a **lens
+on Issues, not a destination of its own** — both show the same team-scoped issues, and a change
+made in one shows up in the other without a reload. Open it at `/teams/<teamId>/board`, or use
+the **List | Board** lens in the Issues masthead. The **Issues** stop in
+[the deck](/features/app-frame/) stays current either way.
 
 ## The six columns
 
@@ -66,6 +67,9 @@ focus a card and open the board's **Move to status…** palette:
 
 Then choose **Move to Backlog**, **Move to In Review**, and so on. The card moves to that
 column's status and is appended to the bottom of the column.
+
+With **no** card focused, **⌘K** is not about a card, so it opens the app's own palette — the
+destinations, the inbox, search everything — exactly as it does on every other page.
 
 ## Large columns
 

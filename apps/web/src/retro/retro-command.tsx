@@ -42,11 +42,11 @@ import {
   type ReactNode,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react'
+import { useCommandSource } from '@/frame/command-registry'
 import type { RetroApi } from '@/retro/api'
 import {
   appendRank,
@@ -178,16 +178,15 @@ export function RetroCommandProvider({
     [start],
   )
 
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        start('root')
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+  // Registered with the frame's one ⌘K owner rather than binding a second listener (§D6).
+  const openFromRegistry = useCallback(() => {
+    start('root')
+    return true
   }, [start])
+  useCommandSource(
+    'retro',
+    useMemo(() => ({ open: openFromRegistry }), [openFromRegistry]),
+  )
 
   const close = useCallback(() => setOpen(false), [])
 

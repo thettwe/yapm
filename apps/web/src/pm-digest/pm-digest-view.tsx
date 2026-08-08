@@ -2,7 +2,7 @@ import { useQuery } from '@rocicorp/zero/react'
 import { queries, type StoredPmDigestContent } from '@yapm/schema'
 import { MegaphoneIcon } from 'lucide-react'
 import { useMemo } from 'react'
-import { AppShell } from '@/components/app-shell'
+import { AppFrame } from '@/frame/app-frame'
 import { type PmDigestRowData, pmDigestFraming, readablePmDigests } from '@/pm-digest/model'
 import { PmDigestNarrative } from '@/pm-digest/narrative'
 
@@ -25,7 +25,7 @@ export function PmDigestView() {
   if (digests.length === 0) return null
 
   return (
-    <AppShell current="Product digests">
+    <AppFrame>
       <section aria-labelledby="pm-digests-heading" className="flex flex-col gap-5">
         <header className="flex flex-col gap-1">
           <h1
@@ -46,7 +46,7 @@ export function PmDigestView() {
           ))}
         </ul>
       </section>
-    </AppShell>
+    </AppFrame>
   )
 }
 

@@ -8,7 +8,7 @@ deliberately **not a seventh status**: yapm's six statuses (Backlog, Todo, In Pr
 Review, Done, Canceled) are fixed and non-configurable. Instead, triage is an **orthogonal
 flag** on an issue — an issue awaiting triage still has a normal status; it is just held out
 of the list and board until someone sorts it. Open the inbox at `/teams/<teamId>/triage`, or
-use the **Triage** tab in the team header next to **List**, **Board**, and **Cycles**.
+take the **Triage** stop in [the deck](/features/app-frame/) — `g t`.
 
 ## How an issue enters triage
 

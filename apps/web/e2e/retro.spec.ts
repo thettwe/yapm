@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test'
 import { readReplica, replicaHolds } from './replica'
-import { ADMIN, ensureAccount, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const DRAFT = '[data-testid="retro-draft"]'
@@ -41,7 +41,7 @@ async function openTeam(page: Page): Promise<string> {
   const teamLink = page.getByRole('link', { name: new RegExp(teamName) })
   await expect(teamLink).toBeVisible({ timeout: 20_000 })
   await teamLink.click()
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await stop(page, 'Issues').click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
   return teamName
 }
@@ -60,7 +60,7 @@ async function createCycle(page: Page, name: string, startOffset: number, endOff
 // A retro hangs off a completed cycle, so every scenario needs one: two cycles, then complete
 // the first — which also opens its retrospective through the same mutator the scheduler uses.
 async function completedCycleWithRetro(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'Cycles' }).click()
+  await stop(page, 'Cycles').click()
   await expect(page.getByRole('button', { name: 'New cycle' })).toBeVisible({ timeout: 20_000 })
   const first = unique('Retro sprint')
   const second = unique('Next sprint')

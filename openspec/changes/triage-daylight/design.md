@@ -245,3 +245,53 @@ verbatim.
 
 `Loading inbox…` → `Loading…`, `This team no longer exists.` → `No such team.` — the word diet's
 CHROME tier. `oldest first` is absent over an empty queue, per the mock.
+
+### B8 — The panel's mono facts moved off `--text-3`; the token did not move
+
+Ambiguous: the mock inks both mono lines on the decision panel — the `<reporter> · <created-at>`
+line, Decline's landing status, the transient's `ROUTE · ENG-125` kicker and its `none` values — in
+`--text-3`, and `DESTINATIONS.md` §4 already names that token as the destinations' weakest ink
+while stating that *retuning it is a product change, not a mock change*.
+
+Measured on the panel's own ground (`--bg-selected` over `--bg`) across all six theme blocks,
+`--text-3` lands at **2.43–3.33**: under AA everywhere, and under the 3:1 non-text bar in four of
+the six. Chosen: **the ink moves, the token does not.** Every fact the panel states is `--text-2`,
+which is the same trade the reality rail's mono fact line already made (`contrast.test.ts`,
+"the // break ink and the mono fact line"), and the precedent from `issue-list-daylight` DI-2 — if
+a pair misses AA the ink changes and the mock loses, not the reader. `--text-3` survives on this
+page only where the frame already uses it: `oldest first`, `Loading…`, `⌘K goes anywhere`, and the
+two aria-hidden glyphs beside the transient's own word labels.
+
+Four new assertions in `contrast.test.ts`, in every theme block: the panel's ink on its tint, the
+ARMED keycap's `--accent-strong` ink and `--accent` border on the cap (4.55–6.65 and 4.55–5.83 —
+the pair that could have failed and did not), the resting cap recorded as scaffolding *below* 3:1
+so the claim can be falsified rather than assumed, and the empty queue's done disc on the page
+ground.
+
+### B9 — The e2e route test proves the project landed on the Projects view, not in the transient
+
+Ambiguous: how to assert the new field "landed" without weakening anything. A read-back of the
+transient's own select would only prove the transient remembers what was typed into it. Chosen:
+the route test creates a project before the issue reaches the inbox, routes into it, and then
+asserts the issue appears under that project on the Projects destination — the same
+`project-issue-row` assertion `projects.spec.ts` uses for the palette path. The existing status
+assertion is kept as it was, so the test gained a claim and lost none.
+
+The masthead assertion moved from `/Triage/` to `{ name: 'Triage', exact: true }` in both the
+member and the viewer flow: the loose regex passed against the shipped `Engineering · Triage`, so
+leaving it would have left the word-diet fix untested at the e2e tier. The three `triage-*` test
+ids are byte-identical, which is why the viewer's four read-only assertions are unchanged.
+
+### B10 — No pg case: the field adds no unproven Postgres surface
+
+Two pg suites reference `routeIssue`. `mutators.carryover.pg.test.ts` only names it in a comment;
+`mutators.notification.pg.test.ts` genuinely drives it, but its subject is the notification fan-out
+and a project-placement case there would sit in a file whose subject it is not — which is how a
+suite stops being maintained.
+
+Everything the new branch touches at the Postgres level is already driven against real Postgres by
+`issue.setProject`: the `zql.project.where('id', …)` existence read and the `issue.project_id`
+write, exercised in `queries.anonymity.pg.test.ts`. The field adds no permission path —
+`canWrite` → `loadIssueForWrite` ordering is untouched and the project is existence-checked only —
+so the pg tier gains nothing it does not already hold, and no new pg file was invented to satisfy a
+tier count.

@@ -40,22 +40,22 @@
 - [x] 5.1 `packages/schema` unit (`mutators.triage.test.ts`) — **the falsifiable check, part one**: `routeIssue` with `projectId` sets `project_id` and clears `needs_triage` in one write; a project that exists in the workspace but belongs to another team's issues is accepted (no cross-team rejection); an unknown project id is rejected and nothing is written; `projectId: null` clears the project; omitting the field leaves `project_id` untouched
 - [x] 5.2 `packages/schema` unit: a viewer's `routeIssue` with a `projectId` is still rejected before existence is revealed — the new field does not open a path around `canWrite`
 - [x] 5.3 `apps/web` component (`apps/web/src/triage/triage-view.test.tsx`) — **the falsifiable check, part two**: the masthead reads `Triage` plus the mono count and does **not** contain the team's name; the head of the queue is unfolded and its panel shows the issue's description text, a mono line naming the reporter and the created-at, and an attachment chip; each of the three verdicts is a named button rendering its key
-- [ ] 5.4 `apps/web` component: moving the keyboard selection moves the unfolded panel, and the verdict fired by `a` acts on the newly unfolded issue — the panel and the keys can never name different issues
-- [ ] 5.5 `apps/web` component: the row anatomy matches the list's — the reality slot renders reserved and empty, the age column states `created_at` (not `updated_at`), the trailing avatar announces the reporter, and no control is rendered outside the row
-- [ ] 5.6 `apps/web` component: the empty state renders the done mark and `Nothing waiting.` with `role="status"` **only** when the query result is complete; an incomplete result says `Loading…`; neither renders an explanatory sentence, and `oldest first` is absent over an empty queue
-- [ ] 5.7 `apps/web` component: the route transient lists exactly the five fields routing writes, commits one mutation with all five on `⏎`, writes nothing on `esc`, and returns focus to the row it opened from; a viewer gets no transient at all
-- [ ] 5.8 Extend `packages/ui/src/styles/contrast.test.ts` with this page's pairs in **every** theme block, light and dark: the decision panel's ink on its tinted ground, the keycap ink and keycap border on that ground, the armed keycap's accent treatment, and the empty state's done disc against the page ground
-- [ ] 5.9 Update `apps/web/e2e/triage.spec.ts` selectors where the surface moved — the masthead heading, and the route transient's role and name in the route and viewer tests. The three `triage-*` test ids are preserved so the viewer's read-only assertions hold verbatim. Extend the route test to set a project and assert it landed. **Never weaken an assertion to make a gate pass**
-- [ ] 5.10 Re-run any e2e failure once before investigating: the known multi-context flake (`projects.spec.ts:188`, `:246`, `pm-digest.spec.ts:306`, signature `browserContext.close: Protocol error`) is tracked separately and is not this change's to fix. Any OTHER failure is
-- [ ] 5.11 Confirm no test hard-codes a budget encoding e2e fixture size, and no test's premise is what a given Node runtime provides (CI is Node 24; dev machines here run 26)
+- [x] 5.4 `apps/web` component: moving the keyboard selection moves the unfolded panel, and the verdict fired by `a` acts on the newly unfolded issue — the panel and the keys can never name different issues
+- [x] 5.5 `apps/web` component: the row anatomy matches the list's — the reality slot renders reserved and empty, the age column states `created_at` (not `updated_at`), the trailing avatar announces the reporter, and no control is rendered outside the row
+- [x] 5.6 `apps/web` component: the empty state renders the done mark and `Nothing waiting.` with `role="status"` **only** when the query result is complete; an incomplete result says `Loading…`; neither renders an explanatory sentence, and `oldest first` is absent over an empty queue
+- [x] 5.7 `apps/web` component: the route transient lists exactly the five fields routing writes, commits one mutation with all five on `⏎`, writes nothing on `esc`, and returns focus to the row it opened from; a viewer gets no transient at all
+- [x] 5.8 Extend `packages/ui/src/styles/contrast.test.ts` with this page's pairs in **every** theme block, light and dark: the decision panel's ink on its tinted ground, the keycap ink and keycap border on that ground, the armed keycap's accent treatment, and the empty state's done disc against the page ground
+- [x] 5.9 Update `apps/web/e2e/triage.spec.ts` selectors where the surface moved — the masthead heading, and the route transient's role and name in the route and viewer tests. The three `triage-*` test ids are preserved so the viewer's read-only assertions hold verbatim. Extend the route test to set a project and assert it landed. **Never weaken an assertion to make a gate pass**
+- [x] 5.10 Re-run any e2e failure once before investigating: the known multi-context flake (`projects.spec.ts:188`, `:246`, `pm-digest.spec.ts:306`, signature `browserContext.close: Protocol error`) is tracked separately and is not this change's to fix. Any OTHER failure is
+- [x] 5.11 Confirm no test hard-codes a budget encoding e2e fixture size, and no test's premise is what a given Node runtime provides (CI is Node 24; dev machines here run 26)
 
 ## 6. Documentation
 
-- [ ] 6.1 Update `apps/docs/src/content/docs/features/triage.md`: the row anatomy left to right and why the reality slot is blank, the decision panel's three facts, the three verdicts and their keys, what routing writes (**now including project**), the empty state, and the complete keyboard model
-- [ ] 6.2 Update `features/projects.md` if it enumerates what writes `project_id` — routing is now a second path
-- [ ] 6.3 Update `README.md` and `ROADMAP.md` (the change's status row); confirm `.env.example`, `TECHSTACK.md`, `VISION.md`, `DESIGN.md` and the `reference/` pages are untouched by this change and therefore not stale (PROCESS.md §2)
-- [ ] 6.4 `pnpm --filter @yapm/docs build` passes
-- [ ] 6.5 Record every decision taken during the build in `design.md` under "## Decisions made during implementation" — including anything that had to diverge from `triage.html` and why
+- [x] 6.1 Update `apps/docs/src/content/docs/features/triage.md`: the row anatomy left to right and why the reality slot is blank, the decision panel's three facts, the three verdicts and their keys, what routing writes (**now including project**), the empty state, and the complete keyboard model
+- [x] 6.2 Update `features/projects.md` if it enumerates what writes `project_id` — routing is now a second path
+- [x] 6.3 Update `README.md` and `ROADMAP.md` (the change's status row); confirm `.env.example`, `TECHSTACK.md`, `VISION.md`, `DESIGN.md` and the `reference/` pages are untouched by this change and therefore not stale (PROCESS.md §2)
+- [x] 6.4 `pnpm --filter @yapm/docs build` passes
+- [x] 6.5 Record every decision taken during the build in `design.md` under "## Decisions made during implementation" — including anything that had to diverge from `triage.html` and why
 
 ## 7. Gates
 

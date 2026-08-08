@@ -1,14 +1,17 @@
-import { render, screen, within } from '@testing-library/react'
-import { beforeAll, expect, test, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { beforeAll, beforeEach, expect, test, vi } from 'vitest'
 
 // What only a rendered Triage can prove: that band 2 says the page's own name and not the team's,
 // that the head of the queue carries a decision panel made of the issue's own facts, that the
-// three verdicts are words with keys rather than borrowed icons, and that an inbox which has not
-// finished syncing never announces an all-clear.
+// panel and the verdict keys can never name different issues, that a triage row is the issue
+// list's row with its reality slot reserved and silent, that the route transient writes exactly
+// the five facts it lists, and that an inbox which has not finished syncing never announces an
+// all-clear.
 
 const harness = vi.hoisted(() => ({
   rows: {} as Record<string, readonly unknown[]>,
   incomplete: new Set<string>(),
+  canWrite: true,
   navigate: vi.fn(),
   mutate: vi.fn((_mutation: unknown) => ({
     client: Promise.resolve({ type: 'ok' }),
@@ -36,9 +39,9 @@ vi.mock('@/auth/use-membership', () => ({
   useMembership: () => ({
     userId: 'user-1',
     memberId: 'member-1',
-    role: 'member',
+    role: harness.canWrite ? 'member' : 'viewer',
     isMember: true,
-    canWrite: true,
+    canWrite: harness.canWrite,
     canManage: false,
   }),
 }))
@@ -88,7 +91,10 @@ function seedQueue() {
   harness.rows = {
     'teams.all': [TEAM],
     'users.all': [{ id: 'user-1', name: 'Dana Asare' }],
-    'labels.byTeam': [{ id: 'label-1', name: 'bug', color: '#cc5a40' }],
+    'labels.byTeam': [
+      { id: 'label-1', name: 'bug', color: '#cc5a40' },
+      { id: 'label-2', name: 'regression', color: '#3b6ea5' },
+    ],
     'cycles.byTeam': [{ id: 'cycle-1', name: 'Cycle 2', number: 2 }],
     'projects.all': [{ id: 'project-1', name: 'Checkout revamp' }],
     'attachments.byIssue': [{ id: 'att-1', filename: 'checkout-hang.png' }],
@@ -127,6 +133,20 @@ function seedQueue() {
     ],
   }
   harness.incomplete = new Set()
+  harness.canWrite = true
+}
+
+beforeEach(() => {
+  harness.mutate.mockClear()
+})
+
+interface Mutation {
+  readonly mutator: { readonly mutatorName: string }
+  readonly args: Record<string, unknown>
+}
+
+function lastMutation(): Mutation | undefined {
+  return harness.mutate.mock.calls.at(-1)?.[0] as Mutation | undefined
 }
 
 test('band 2 states the page, the count, and never repeats the team the deck already carries', () => {
@@ -183,6 +203,7 @@ test('an empty inbox says two words, and only once the result is complete', () =
   const view = render(<TriageView teamId="team-1" />)
 
   const cleared = screen.getByRole('status')
+  expect(within(cleared).getByTitle('Done')).toBeInTheDocument()
   expect(within(cleared).getByText('Nothing waiting.')).toBeInTheDocument()
   // Two words and three doorways: the only full stop on the cleared page is the one in them.
   expect(cleared.textContent?.match(/\./g) ?? []).toHaveLength(1)
@@ -193,4 +214,114 @@ test('an empty inbox says two words, and only once the result is complete', () =
   render(<TriageView teamId="team-1" />)
   expect(screen.getByRole('status')).toHaveTextContent('Loading…')
   expect(screen.queryByText('Nothing waiting.')).not.toBeInTheDocument()
+})
+
+test('the panel follows the decision, and the verdict acts on the issue the panel names', () => {
+  seedQueue()
+  render(<TriageView teamId="team-1" />)
+
+  const rows = screen.getAllByTestId('triage-row')
+  fireEvent.keyDown(rows[0] as HTMLElement, { key: 'j' })
+
+  const panel = screen.getByTestId('triage-decision')
+  expect(screen.getAllByTestId('triage-decision')).toHaveLength(1)
+  expect(rows[1]?.nextElementSibling).toBe(panel)
+  expect(within(panel).getByTestId('triage-provenance')).toHaveTextContent('Marcus Bell')
+
+  // The keys act on the row the panel is attached to, never on the head it arrived at.
+  fireEvent.keyDown(rows[1] as HTMLElement, { key: 'a' })
+  expect(lastMutation()?.mutator.mutatorName).toBe('issue.acceptTriage')
+  expect(lastMutation()?.args.id).toBe('issue-2')
+})
+
+test('a triage row is the issue list’s row: reality slot reserved and silent, age from created_at', () => {
+  seedQueue()
+  render(<TriageView teamId="team-1" />)
+
+  for (const row of screen.getAllByTestId('triage-row')) {
+    expect(row).toHaveAttribute('data-slot', 'issue-row')
+
+    // Reserved measure, no ink, nothing announced — a triage issue has no linked change.
+    const track = row.querySelector('[data-slot="reality-track"]')
+    expect(track).not.toBeNull()
+    expect(track).toHaveAttribute('data-quiet', 'true')
+    expect(track).toHaveAttribute('aria-hidden', 'true')
+    expect(track?.textContent).toBe('')
+
+    expect(row.querySelector('[data-slot="issue-row-phrase"]')?.textContent).toBe('')
+
+    // Every control lives in the panel below the row, never bolted onto the row's anatomy.
+    expect(within(row).queryAllByRole('button')).toHaveLength(0)
+  }
+
+  const head = screen.getAllByTestId('triage-row')[0] as HTMLElement
+  // Arrival time, not the last edit: the head was created two days ago and touched just now.
+  expect(within(head).getByText('2d')).toBeInTheDocument()
+  expect(within(head).queryByText('now')).not.toBeInTheDocument()
+  expect(within(head).getByLabelText('Reported by Priya Raman')).toBeInTheDocument()
+})
+
+function openRouteTransient(): HTMLElement {
+  fireEvent.click(screen.getByTestId('triage-route'))
+  return screen.getByRole('dialog', { name: 'Route ENG-125' })
+}
+
+test('the route transient writes exactly the five facts it lists, in one mutation', async () => {
+  seedQueue()
+  render(<TriageView teamId="team-1" />)
+
+  const dialog = openRouteTransient()
+  for (const field of ['Status', 'Assignee', 'Cycle', 'Project']) {
+    expect(within(dialog).getByLabelText(field), field).toBeInTheDocument()
+  }
+  expect(within(dialog).getByText('Labels')).toBeInTheDocument()
+
+  fireEvent.change(within(dialog).getByLabelText('Status'), { target: { value: 'todo' } })
+  fireEvent.change(within(dialog).getByLabelText('Assignee'), { target: { value: 'user-1' } })
+  fireEvent.change(within(dialog).getByLabelText('Cycle'), { target: { value: 'cycle-1' } })
+  fireEvent.change(within(dialog).getByLabelText('Project'), { target: { value: 'project-1' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'regression' }))
+
+  fireEvent.keyDown(dialog, { key: 'Enter' })
+  await waitFor(() => expect(harness.mutate).toHaveBeenCalledTimes(1))
+
+  const call = lastMutation()
+  expect(call?.mutator.mutatorName).toBe('issue.routeIssue')
+  expect(call?.args.id).toBe('issue-1')
+  expect(call?.args.status).toBe('todo')
+  expect(call?.args.assigneeId).toBe('user-1')
+  expect(call?.args.cycleId).toBe('cycle-1')
+  expect(call?.args.projectId).toBe('project-1')
+  expect(call?.args.addLabelIds).toEqual(['label-2'])
+
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+})
+
+test('esc closes the route transient writing nothing, and hands focus back to the row', () => {
+  seedQueue()
+  render(<TriageView teamId="team-1" />)
+
+  const dialog = openRouteTransient()
+  fireEvent.change(within(dialog).getByLabelText('Project'), { target: { value: 'project-1' } })
+  fireEvent.keyDown(dialog, { key: 'Escape' })
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(harness.mutate).not.toHaveBeenCalled()
+  expect(document.activeElement).toBe(screen.getAllByTestId('triage-row')[0])
+})
+
+test('a viewer reads the facts and is offered no verdict and no transient', () => {
+  seedQueue()
+  harness.canWrite = false
+  render(<TriageView teamId="team-1" />)
+
+  const panel = screen.getByTestId('triage-decision')
+  expect(within(panel).getByTestId('triage-provenance')).toHaveTextContent('Priya Raman')
+  for (const testId of ['triage-accept', 'triage-route', 'triage-decline']) {
+    expect(screen.queryByTestId(testId), testId).not.toBeInTheDocument()
+  }
+
+  fireEvent.keyDown(screen.getAllByTestId('triage-row')[0] as HTMLElement, { key: 'r' })
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(harness.mutate).not.toHaveBeenCalled()
 })

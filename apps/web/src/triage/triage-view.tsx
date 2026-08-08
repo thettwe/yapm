@@ -476,9 +476,12 @@ function DecisionPanel({
             className="text-sm leading-relaxed text-text-1"
           />
         )}
+        {/* Every mono fact this panel states is `--text-2`, not the quieter `--text-3` the mock
+            draws: on the panel's tint that ink measures 2.43–3.33 across the six theme blocks,
+            which is under the bar a 10.5px fact may sit at. `contrast.test.ts` holds the number. */}
         <div
           data-testid="triage-provenance"
-          className="mt-[11px] flex flex-wrap items-center gap-2.5 font-mono text-[10.5px] text-text-3"
+          className="mt-[11px] flex flex-wrap items-center gap-2.5 font-mono text-[10.5px] text-text-2"
         >
           <span>
             {issue.reporter ?? 'Unknown reporter'} · {formatStamp(issue.createdAt)}
@@ -526,7 +529,7 @@ function DecisionPanel({
               trailing={
                 <span
                   id={declineTargetId}
-                  className="inline-flex items-center gap-1 font-mono text-[10.5px] font-normal text-text-3"
+                  className="inline-flex items-center gap-1 font-mono text-[10.5px] font-normal text-text-2"
                 >
                   <StatusGlyph status="canceled" className="size-3" aria-hidden="true" />
                   canceled
@@ -535,7 +538,7 @@ function DecisionPanel({
             />
           </>
         ) : null}
-        <span className="mt-[3px] flex items-center gap-1.5 border-border-strong border-t pt-2.5 text-xs text-text-3">
+        <span className="mt-[3px] flex items-center gap-1.5 border-border-strong border-t pt-2.5 text-xs text-text-2">
           <Key>⏎</Key>Open
           <span aria-hidden="true" className="text-border-strong">
             ·
@@ -680,7 +683,7 @@ function RouteTransient({
       onKeyDown={onKeyDown}
       className="absolute top-[calc(100%-6px)] right-10 z-50 w-[300px] rounded-[10px] border border-border bg-bg-elevated p-1.5 font-ui shadow-elevated outline-none"
     >
-      <div className="px-2 pt-1 pb-1.5 font-mono text-[10px] tracking-[0.08em] text-text-3">
+      <div className="px-2 pt-1 pb-1.5 font-mono text-[10px] tracking-[0.08em] text-text-2">
         ROUTE · {issueKeyText}
       </div>
 
@@ -772,7 +775,7 @@ function RouteTransient({
           <span
             className={cn(
               'ml-auto truncate font-medium',
-              labelValue.length === 0 ? 'font-normal text-text-3' : 'text-text-1',
+              labelValue.length === 0 ? 'font-normal text-text-2' : 'text-text-1',
             )}
           >
             {labelValue.length === 0 ? 'none' : labelValue.join(', ')}
@@ -815,7 +818,7 @@ function RouteTransient({
         </p>
       )}
 
-      <div className="mt-1 flex items-center gap-2 border-row-hairline border-t px-2 pt-2 pb-0.5 text-[11px] text-text-3">
+      <div className="mt-1 flex items-center gap-2 border-row-hairline border-t px-2 pt-2 pb-0.5 text-[11px] text-text-2">
         <button
           type="button"
           data-testid="route-submit"

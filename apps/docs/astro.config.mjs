@@ -14,6 +14,7 @@ export default defineConfig({
             { label: 'The app frame', slug: 'features/app-frame' },
             { label: 'Team Home', slug: 'features/team-home' },
             { label: 'The issue list', slug: 'features/issue-list' },
+            { label: 'The issue detail', slug: 'features/issue-detail' },
             { label: 'Board', slug: 'features/board' },
             { label: 'Cycles', slug: 'features/cycles' },
             { label: 'Triage', slug: 'features/triage' },

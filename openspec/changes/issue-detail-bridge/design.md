@@ -327,3 +327,118 @@ list is complete AND either the segment is malformed or the by-key query returne
 The new row is `data-testid="masthead-kicker"`, in the same style as `masthead-count`, and it is
 absent from the DOM entirely when no kicker is passed. Every existing caller's rendered output is
 byte-unchanged, which `masthead.test.tsx` asserts directly rather than by inspection.
+
+### DI-8 — The masthead is rendered by the DETAIL, not by the route
+
+D5 says band 2 is the page's. On this page band 2 *is* the issue: breadcrumb, key, the divergence
+pill, the two-register subline, Follow and the primary action all read the **same**
+`computeDeliverySignal` and the same timeline the rail reads. The route holds only `(teamId,
+number)` and a synced row; it has neither the team's deployments nor the issue's cycle, so a masthead
+built there would have to recompute the signal from a second set of queries — which is exactly the
+"one page, two derivations" failure D1 exists to prevent.
+
+So `IssueDetail` renders the shared `Masthead` itself when `layout === 'page'`, and the route keeps
+it only for the two address-resolution states (loading, not-found) where there is nothing but the
+segment to say. Exactly one masthead renders in every state, and it is the same component.
+
+The editable title goes in the masthead's `title` slot rather than staying in the document column:
+the mock draws the title once, and a page that drew it in band 2 *and* at the top of the document
+would be the same words twice. `TitleField` therefore takes `as: 'heading' | 'inline'` — the panel
+has no band 2, so it renders its own `<h1>`; the page's field sits inside the masthead's.
+
+### DI-9 — `buildRailShape` joins `buildRealityShape` in the vocabulary
+
+The rail needed two things the vocabulary kept private: which connector a station's node earns
+(`segmentInto`) and which segment the `//` falls on (`breakIndex`). Deriving either in `apps/web`
+would have been a second copy of the grammar with the first one's name on it — and the break index in
+particular is a rule (`status_ahead_of_pr` → first segment, `done_but_ci_failing` → the CI segment,
+`status_behind_merge` → last) that must stay identical between a dense row and a rail or the two
+drawings of one divergence disagree.
+
+`packages/ui/src/components/reality-track.tsx` gains one exported pure function,
+`buildRailShape(stations, { divergence })`, and `buildRealityShape` is refactored to share its
+`applyBreak` helper so there is one implementation of the break, not two. Nothing new is DRAWN: the
+rail component, its node kinds, its `//` and its knockout contract are PR #32's, unchanged.
+
+### DI-10 — The rail has no lede, because the phrase is already said once
+
+`issue.html` draws a lede above the rail ("Built — not live yet · merged 8f21c4a · no prod deploy
+since") *and* a status sentence in the masthead. With one shared dictionary those two collapse into
+the same string, and drawing it twice on one page is the duplication the dictionary exists to end.
+The phrase lives in the subline, where the two registers are; the rail's header states the chain and
+its stations state the evidence. The mock's ritual line ("The work moved, the ritual didn't.") is cut
+for the same reason `ia.html`'s word diet cuts explanation sentences from work surfaces.
+
+### DI-11 — The rail's header chain is DERIVED, never written down
+
+D3 fixed the header at `idea → built → live`. That is right for the mock's issue and wrong for an
+issue with no linked change, where it would promise two stations that are not drawn. The chain is
+therefore computed from what was drawn: `idea` always, `built` once a change is linked or opened,
+`live` once one merged. An unlinked issue's rail reads `idea` and promises nothing else.
+
+### DI-12 — Only one divergence has an honest board-side repair
+
+The callout offers **Mark Done** for `status_behind_merge` only. `done_but_ci_failing` is not
+repaired by a status — the checks are red whatever the board says — and `status_ahead_of_pr` needs a
+change, not a click. Both still draw the callout, the sentence and the mono evidence; they just offer
+the dismissal alone rather than a button that would write a lie. A viewer is offered the dismissal
+only, in every case.
+
+### DI-13 — `⏎` on a button means what the browser already means by it
+
+No document-level listener exists on this page: the frame owns that layer, and a second global
+keydown handler is how ⌘K's ownership was lost before `app-frame`. The `⏎` hint therefore documents
+two real bindings and no third: the browser activates a focused button on Enter, and the callout's
+own `onKeyDown` answers Enter from anywhere inside its subtree that is not already a button (which
+would fire twice). Escape is handled the same way, including from a button, because nothing else
+consumes it there. `issue-detail.test.tsx` asserts the negative directly: the same key pressed on
+`document.body` writes nothing.
+
+### DI-14 — "Referenced in" stays, and it is the door to the change
+
+The Open Question asked whether the block should fold when the only referents are the linked pull
+requests the rail already draws. It does not, for one concrete reason: removing the `Delivery`
+property (D10) removed the page's only **link out to GitHub**, and losing an outbound door is a
+regression. "Referenced in" carries what the rail deliberately does not — how yapm knows the change
+belongs to this issue (`matched by branch` / `referenced in the change body`), the change's lifecycle
+state, and the href. With no links it folds away entirely: no header, no empty state, and no new
+query was added to manufacture one.
+
+### DI-15 — Follow moves to band 2 on the page, and stays in Properties in the panel
+
+The mock puts Follow in band 2. `FollowControl` is mounted **once** per rendered surface, never
+twice: on the full page it is a masthead action, and the properties block's `Updates` field renders
+only in the panel, which has no band 2 of its own. Two mounts would give the reader two identical
+controls over one subscription. The capability, its hint, its error state and its retry are identical
+either way, and it stays available to viewers — a viewer can be mentioned, so a viewer is
+auto-subscribed and must be able to stop.
+
+### DI-16 — The phrasing layer is separate from the derivation, and lives in `apps/web`
+
+`buildIssueTimeline` decides what is true and emits no strings beyond its enum kinds (D1).
+`apps/web/src/issues/timeline-view.ts` turns those moments into this surface's words — station
+labels, fact lines, feed entries and the mono subline. It is pure and unit-testable, it holds the
+`ia.html` rule that the mono register lives on the detail only, and it keeps `issue-detail.tsx` a
+component file rather than a component file with a dictionary inside it. Nothing there reads a row:
+if a sentence cannot be built from a moment, the moment did not happen and the sentence is not said.
+
+### DI-17 — Contrast: the callout's body inks are the new pair
+
+`contrast.test.ts` already held `--status-urgent-ink` over the `--urgent-soft` composite (the digest's
+divergence row). What this change adds to that ground is `--text-1` (the callout's sentence) and
+`--text-2` (its mono evidence line) — asserted at AA normal in all six theme blocks, and passing in
+every one with no token edit needed. The mono subline and the rail's fact lines are `--text-2` on
+`--bg`, which the block's first assertion already holds; a second assertion over the same pair is how
+one of the two quietly stops being maintained, so the reasoning is recorded beside the new one
+instead.
+
+### DI-18 — What the e2e suite had to change, and what it must not
+
+`connectors.spec.ts` asserted the panel showed `DIVERGENCE_LABEL` ("PR merged but this issue is not
+marked done") — a string the removed `Delivery` property rendered. The fact did not go away; it is
+now stated in the shared dictionary's words. The assertion was **strengthened rather than relaxed**:
+the pill's exact dictionary text, the rail, the `//` break, the "Not live yet" station and both
+halves of the two-register subline naming the same merge commit. A new spec drives the whole bridge
+from the keyboard on the full page — breadcrumb, key, pill, chain, evidence, then ⏎ on the callout —
+and asserts that marking done removes the pill, the callout AND the break, because all three state
+one fact that stopped being true. No bound anywhere is a hard-coded fixture size.

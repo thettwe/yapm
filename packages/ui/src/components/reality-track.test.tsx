@@ -12,6 +12,7 @@ import { expect, test } from 'vitest'
 import type { DayBandSegment, ScopeBlockKind } from './drawn'
 import { IssueRow } from './issue-row'
 import {
+  buildRailShape,
   buildRealityShape,
   type CiHealth,
   type DeliveryStrip,
@@ -203,6 +204,36 @@ test('the label distinguishes a reviewed change from one nobody has looked at', 
     expect(label).not.toContain('waiting')
     expect(label).not.toContain('awaiting')
   }
+})
+
+// The rail's shape comes from the SAME grammar the track's does — a surface names its stations and
+// this decides their connectors and where the `//` falls. A surface deriving that for itself would
+// be a second vocabulary with the first one's name on it.
+test('a rail of any length breaks in the same grammar the four-station track does', () => {
+  const stations = [
+    { id: 'idea', node: 'done' as const },
+    { id: 'opened', node: 'done' as const },
+    { id: 'reviewed', node: 'done' as const },
+    { id: 'merged', node: 'done' as const },
+    { id: 'live', node: 'empty' as const },
+  ]
+
+  const behind = buildRailShape(stations, { divergence: 'status_behind_merge' })
+  expect(behind.segments).toHaveLength(stations.length - 1)
+  expect(behind.segments.at(-1)).toBe('broken')
+  // The station reality has not reached wears the urgent ring, so the break reads as a stop.
+  expect(behind.stations.at(-1)?.node).toBe('empty-urgent')
+  // Labels and facts pass through untouched — the shape decides drawing, never words.
+  expect(
+    buildRailShape([{ id: 'idea', node: 'done', label: 'Idea', fact: 'created 9d ago' }]),
+  ).toEqual({
+    stations: [{ id: 'idea', node: 'done', label: 'Idea', fact: 'created 9d ago' }],
+    segments: [],
+  })
+
+  const ahead = buildRailShape(stations, { divergence: 'status_ahead_of_pr' })
+  expect(ahead.segments[0]).toBe('broken')
+  expect(buildRailShape(stations).segments).not.toContain('broken')
 })
 
 test('the vertical rail reads its stations rather than summarising them', () => {

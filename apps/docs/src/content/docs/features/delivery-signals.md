@@ -140,9 +140,16 @@ divergence and review-age phrases carry none: yapm derived them.
 
 ## Issue detail
 
-Opening an issue shows the same track plus the full linked context: each linked pull request with
-its state and a link out to GitHub, its CI health, its latest review, and any deployment recorded
-for that repository — and, where the two disagree, the `//` break with the specific reason it fired.
+Opening an issue draws these same facts at full measure, on
+[the issue detail's delivery rail](/features/issue-detail/): a station per moment, each with the
+evidence under it, and — where the board and git disagree — the `//` break plus a callout offering
+the one repair the board can honestly make.
+
+The **deploy join** is stated on the rail's last station, and it is the join described above and no
+other: same repository, a merged pull request's merge commit against a deployment's commit, earliest
+success. A change whose merge commit nothing carried draws **Not live yet** rather than an empty
+station, and the mono subline says the same thing in the engineer's register. There is no head-commit
+fallback anywhere: a deployment carrying the branch's head shipped the branch, not the merge.
 
 ## Permissions
 

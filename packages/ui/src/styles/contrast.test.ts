@@ -262,6 +262,22 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     }
   })
 
+  // The issue detail's divergence callout: a tinted card on `--urgent-soft` carrying a title in
+  // `--status-urgent-ink`, a sentence in `--text-1` and a MONO evidence line in `--text-2` at 11px.
+  // The urgent ink over that wash is already pinned above; what is new here is the two body inks,
+  // which the digest never put on the urgent ground. The divergence pill in band 2 sits on the same
+  // wash and carries the same dictionary text, so one assertion holds both.
+  //
+  // The mono subline and the rail's fact lines are `--text-2` on `--bg` at 11px, which the first
+  // assertion in this block already holds at AA normal — recorded here rather than duplicated,
+  // because two assertions over one pair is how one of them quietly stops being maintained.
+  it('the divergence callout ink meets AA on its tinted ground (>= 4.5)', () => {
+    const ground = wash(hex(t, '--status-urgent'), hex(t, '--bg'), 0.08)
+    for (const ink of ['--text-1', '--text-2', '--status-urgent-ink'] as const) {
+      expect(contrastRatio(hex(t, ink), ground), ink).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
   // The reality track — the one vocabulary every surface draws delivery in — is drawn on exactly
   // five surfaces: a plain row, a hovered row, the SELECTED list row (`--bg-selected`,
   // `issue-row.tsx`), the SELECTED board card (`--accent-soft`, `board-card.tsx`) and the digest's

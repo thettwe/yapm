@@ -80,6 +80,41 @@ export interface BuildRealityShapeOptions {
   readonly divergence?: DivergenceKind | null
 }
 
+// Apply the break, and give the station it stops in front of the urgent ring. Shared by both
+// shapes so a rail and a track over the same divergence break in the same grammar.
+function applyBreak(
+  nodes: TrackNodeKind[],
+  segments: TrackSegmentKind[],
+  divergence: DivergenceKind | null,
+): void {
+  if (divergence === null || segments.length === 0) return
+  const at = breakIndex(divergence, segments.length)
+  segments[at] = 'broken'
+  const after = nodes[at + 1]
+  if (after === 'empty') nodes[at + 1] = 'empty-urgent'
+}
+
+// The VERTICAL rail's shape, over stations a surface names for itself. The horizontal track is
+// always the same four facts, so `buildRealityShape` can own its stations; a rail draws one station
+// per moment that actually happened, and how many there are is a property of the issue. What stays
+// here is the grammar — which connector a station's node earns, and where the `//` falls — because
+// a surface deriving that for itself is how a second vocabulary starts.
+export function buildRailShape(
+  stations: readonly TrackStation[],
+  options: BuildRealityShapeOptions = {},
+): TrackShape {
+  const nodes = stations.map((station) => station.node)
+  const segments: TrackSegmentKind[] = nodes.slice(1).map((node) => segmentInto(node))
+  applyBreak(nodes, segments, options.divergence ?? null)
+  return {
+    stations: stations.map((station, index) => ({
+      ...station,
+      node: nodes[index] as TrackNodeKind,
+    })),
+    segments,
+  }
+}
+
 // The horizontal track's four stations — change, checks, review, live — over the four facts in
 // `DeliveryStrip` and no others.
 export function buildRealityShape(
@@ -93,15 +128,9 @@ export function buildRealityShape(
     strip?.deployedAt != null ? 'done' : 'empty',
   ]
   const segments: TrackSegmentKind[] = nodes.slice(1).map((node) => segmentInto(node))
-  const divergence = options.divergence ?? null
-  if (divergence !== null && segments.length > 0) {
-    const at = breakIndex(divergence, segments.length)
-    segments[at] = 'broken'
-    // The station the break lands in front of is the one reality has not reached; it wears the
-    // urgent ring so the break reads as a stop, not a gap.
-    const after = nodes[at + 1]
-    if (after === 'empty') nodes[at + 1] = 'empty-urgent'
-  }
+  // The station the break lands in front of is the one reality has not reached; it wears the
+  // urgent ring so the break reads as a stop, not a gap.
+  applyBreak(nodes, segments, options.divergence ?? null)
   const ids = ['change', 'checks', 'review', 'live'] as const
   return {
     stations: nodes.map((node, index) => ({ id: ids[index] as string, node })),

@@ -393,6 +393,44 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     ).toBeGreaterThanOrEqual(AA_NORMAL)
   })
 
+  // The issue row's phrase at rest, on all three grounds a row is drawn on: the plain surface, the
+  // hover/focus wash, and the SELECTED row's tint. The urgent register is the one that had never
+  // been measured against `--bg-selected`; precedent (app-frame DI-2) is that if a pair misses AA
+  // the ink changes and the mock loses, not the reader.
+  it('the phrase at rest meets AA on every ground a row is drawn on (>= 4.5)', () => {
+    const base = hex(t, '--bg')
+    const grounds = {
+      bg: base,
+      hover: over(t['--bg-hover'] ?? '', base),
+      selected: over(t['--bg-selected'] ?? '', base),
+    }
+    for (const [name, ground] of Object.entries(grounds)) {
+      for (const ink of ['--text-2', '--status-urgent-ink'] as const) {
+        expect(contrastRatio(hex(t, ink), ground), `${ink} on ${name}`).toBeGreaterThanOrEqual(
+          AA_NORMAL,
+        )
+      }
+      // The row's mono key, which takes the accent ink under selection, and the title beside it.
+      expect(
+        contrastRatio(hex(t, '--text-1'), ground),
+        `--text-1 on ${name}`,
+      ).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+    // Records why the selected row's mono key is `--text-1` and not the mock's accent: on the
+    // selected tint `--accent-strong` measures 3.84–4.38 in two presets, so the accent could not
+    // carry text there. The rail and the tint carry the state instead. A bound, not an equality,
+    // so a token edit that FIXES the pair does not fail this file.
+    expect(
+      contrastRatio(hex(t, '--accent-strong'), grounds.selected),
+      'selected row key, were it accent-inked',
+    ).toBeGreaterThanOrEqual(AA_LARGE)
+    // The selection rail is a non-text indicator against the row's own tinted ground (1.4.11).
+    expect(
+      contrastRatio(hex(t, '--accent'), grounds.selected),
+      'selection rail',
+    ).toBeGreaterThanOrEqual(AA_LARGE)
+  })
+
   it('on-accent text on the accent fill meets AA (>= 4.5)', () => {
     expect(contrastRatio(hex(t, '--on-accent'), hex(t, '--accent'))).toBeGreaterThanOrEqual(
       AA_NORMAL,

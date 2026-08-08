@@ -111,8 +111,11 @@ function IssueRow({
       </span>
       <span
         className={cn(
+          // The mock inks the selected key with the accent; `--accent-strong` measures 3.84–4.38
+          // on `--bg-selected` in two presets, so the ink steps up to `--text-1` instead and the
+          // rail plus the tint carry the state. `contrast.test.ts` holds the measurement.
           'w-[62px] shrink-0 truncate font-mono text-xs tabular-nums',
-          selected ? 'text-accent-strong' : 'text-text-2',
+          selected ? 'text-text-1' : 'text-text-2',
         )}
       >
         {issueKey}

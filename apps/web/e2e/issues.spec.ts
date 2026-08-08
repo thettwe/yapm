@@ -45,9 +45,10 @@ async function openTeamIssues(page: Page): Promise<string> {
   // The team-detail "Issues" link must reach the standalone issue list, not re-render detail.
   await stop(page, 'Issues').click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
-  await expect(
-    page.getByRole('heading', { name: new RegExp(`${teamName} · Issues`) }),
-  ).toBeVisible()
+  // The masthead reads `Issues`; the deck one band above already states the team, and Board's
+  // masthead has read `Issues` since the frame landed. The team name is asserted on the deck.
+  await expect(page.getByRole('heading', { name: 'Issues', exact: true })).toBeVisible()
+  await expect(page.getByTestId('deck').getByText(teamName).first()).toBeVisible()
   return teamName
 }
 

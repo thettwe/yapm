@@ -1439,6 +1439,10 @@ function TitleField({
           event.currentTarget.blur()
         }
       }}
+      // `w-full` alone resolves against the masthead's auto-width `<h1>`, whose own width comes
+      // from this input — circular, so the browser falls back to the ~20-character default and
+      // clips the title. `size` gives the intrinsic width the cycle needs to settle on.
+      size={Math.max(24, draft.length + 1)}
       className="w-full rounded-control bg-transparent text-lg font-semibold tracking-tight text-text-1 outline-none focus-visible:ring-2 focus-visible:ring-accent"
     />
   )

@@ -6,6 +6,7 @@ import { useId, useMemo } from 'react'
 import { MetricSection } from '@/delivery/metric-tiles'
 import type { SeedCycleRow, SeedIssueRow } from '@/delivery/rows'
 import { buildTeamDeliveryFor } from '@/delivery/window-model'
+import { Masthead } from '@/frame/masthead'
 
 // The team's delivery metrics, out of the one retro they were reachable from. Same formulas, same
 // tiles, wider scope: a rolling window of completed cycles rather than a single one.
@@ -55,71 +56,79 @@ export function DeliveryView({ teamId, size, onSizeChange }: DeliveryViewProps) 
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-      <header className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-0.5">
-          <h1 className="text-sm font-semibold tracking-tight text-text-1">Delivery</h1>
-          <p className="text-[11.5px] text-text-2" data-testid="delivery-window-label">
-            {delivery === null ? 'No completed cycles yet' : delivery.label}
+    <>
+      <Masthead
+        title="Delivery"
+        actions={
+          <div className="flex items-center gap-2">
+            <Label htmlFor={sizeId} className="text-[11px] text-text-3">
+              Window
+            </Label>
+            <Select
+              id={sizeId}
+              value={String(size)}
+              data-testid="delivery-window-size"
+              className="h-7 w-40"
+              onChange={(event) => onSizeChange(Number(event.target.value) as DeliveryWindowSize)}
+            >
+              {DELIVERY_WINDOW_SIZES.map((option) => (
+                <option key={option} value={option}>
+                  Last {option} cycles
+                </option>
+              ))}
+            </Select>
+          </div>
+        }
+        // The binding rule, once in the whole app (`delivery.html` §masthead): this is the only page
+        // that could tempt a per-person reading, so it is the only page that says the rule.
+        meta={
+          <p className="text-[11.5px] text-text-2">
+            <span data-testid="delivery-window-label">
+              {delivery === null ? 'No completed cycles yet' : delivery.label}
+            </span>
+            {' · team-level only — never a per-person number.'}
           </p>
-        </div>
-        <div className="ml-auto flex flex-col gap-1">
-          <Label htmlFor={sizeId} className="text-[11px] text-text-3">
-            Window
-          </Label>
-          <Select
-            id={sizeId}
-            value={String(size)}
-            data-testid="delivery-window-size"
-            className="h-7 w-40"
-            onChange={(event) => onSizeChange(Number(event.target.value) as DeliveryWindowSize)}
+        }
+      />
+
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+        <p className="max-w-3xl text-[11.5px] leading-relaxed text-text-2">
+          Computed from this team's own cycles and their linked pull requests. The cycle in progress
+          is excluded — a half-finished cycle would read as a decline that is only the calendar.
+        </p>
+
+        {delivery === null ? (
+          <div
+            className="max-w-3xl rounded-card border border-dashed border-border px-3 py-2.5"
+            data-testid="delivery-empty"
           >
-            {DELIVERY_WINDOW_SIZES.map((option) => (
-              <option key={option} value={option}>
-                Last {option} cycles
-              </option>
+            <p className="text-xs font-medium text-text-2">No completed cycles yet</p>
+            <p className="mt-0.5 text-[11.5px] leading-relaxed text-text-3">
+              These metrics are measured over completed cycles. Complete a cycle and this fills in
+              from the team's own work — no connector required for the Delivered numbers.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {delivery.sections.map((section) => (
+              <MetricSection
+                key={section.key}
+                section={section}
+                sectionTestId="delivery-section"
+                emptyTestId="delivery-empty-section"
+                testId="delivery-widget"
+                sparklineTestId="delivery-sparkline"
+                noTrendTestId="delivery-no-trend"
+                headingLevel={2}
+                deltaBasis={`the previous ${delivery.cycleCount} cycles`}
+              />
             ))}
-          </Select>
-        </div>
-      </header>
+          </div>
+        )}
 
-      <p className="max-w-3xl text-[11.5px] leading-relaxed text-text-2">
-        Team-level trends from this team's own work, computed from cycles and linked pull requests.
-        Never a per-person number. The cycle in progress is excluded — a half-finished cycle would
-        read as a decline that is only the calendar.
-      </p>
-
-      {delivery === null ? (
-        <div
-          className="max-w-3xl rounded-card border border-dashed border-border px-3 py-2.5"
-          data-testid="delivery-empty"
-        >
-          <p className="text-xs font-medium text-text-2">No completed cycles yet</p>
-          <p className="mt-0.5 text-[11.5px] leading-relaxed text-text-3">
-            These metrics are measured over completed cycles. Complete a cycle and this fills in
-            from the team's own work — no connector required for the Delivered numbers.
-          </p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {delivery.sections.map((section) => (
-            <MetricSection
-              key={section.key}
-              section={section}
-              sectionTestId="delivery-section"
-              emptyTestId="delivery-empty-section"
-              testId="delivery-widget"
-              sparklineTestId="delivery-sparkline"
-              noTrendTestId="delivery-no-trend"
-              headingLevel={2}
-              deltaBasis={`the previous ${delivery.cycleCount} cycles`}
-            />
-          ))}
-        </div>
-      )}
-
-      <NotShownYet />
-    </div>
+        <NotShownYet />
+      </div>
+    </>
   )
 }
 

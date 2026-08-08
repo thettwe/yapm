@@ -64,8 +64,10 @@ precedence, so the count is a distinct-issue count by construction:
 | Waiting on review over a day | An open, unapproved linked PR whose review age exceeds 24h | The waiting ages |
 | New in triage | The team's [triage inbox](/features/triage/) | One dot per waiting issue |
 
-One number is one number: the band header, the hero's "need attention" status word, and
-every other occurrence of the count render the same value. Each class row is a doorway to
+One number is one number, and it is now **app-wide**: the band header, the hero's "need
+attention" status word, [the deck's attention badge and the statusline's `N need
+attention` segment](/features/app-frame/) all render the same value, from this one
+derivation. There is exactly one place in the codebase that computes it. Each class row is a doorway to
 the surface where the exception is fixed — the issue itself when the class holds exactly
 one, the board or triage view when it holds several.
 

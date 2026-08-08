@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { Masthead } from '@/frame/masthead'
 import {
   formatTargetDate,
   PROJECT_STATUS_LABEL,
@@ -125,86 +126,87 @@ export function RoadmapView({ teamId }: { teamId: string }) {
 
   if (projects.length === 0) {
     return (
-      <p className="p-8 text-center text-sm text-text-3" role="status">
-        {projectsResult.type === 'complete'
-          ? 'No projects yet. Create a project to see it on the roadmap.'
-          : 'Loading roadmap…'}
-      </p>
+      <>
+        <Masthead title="Roadmap" count={0} />
+        <p className="p-8 text-center text-sm text-text-3" role="status">
+          {projectsResult.type === 'complete'
+            ? 'No projects yet. Create a project to see it on the roadmap.'
+            : 'Loading roadmap…'}
+        </p>
+      </>
     )
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
-        <h1 className="text-sm font-semibold tracking-tight text-text-1">Roadmap</h1>
-        <span className="font-mono text-xs text-text-3">{projects.length}</span>
-      </div>
-
-      <section
-        ref={containerRef}
-        className="flex-1 outline-none"
-        onKeyDown={onKeyDown}
-        aria-label="Project roadmap timeline"
-      >
-        {/* Month ruler */}
-        <div className="sticky top-0 z-10 flex border-b border-border bg-bg/95 backdrop-blur">
-          <div className="w-56 shrink-0 border-r border-border px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-            Project
-          </div>
-          <div className="relative h-8 flex-1">
-            {timeline.months.map((month) => (
-              <span
-                key={month.ts}
-                className="absolute top-2 -translate-x-1/2 whitespace-nowrap font-mono text-[11px] text-text-3"
-                style={{ left: `${month.leftPercent}%` }}
-              >
-                {month.label}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {timeline.scheduled.map((marker, index) => (
-          <RoadmapRow
-            key={marker.project.id}
-            index={index}
-            project={marker.project}
-            leftPercent={marker.leftPercent}
-            nowPercent={timeline.nowPercent}
-            progress={progressById.get(marker.project.id) ?? 0}
-            focused={index === focusIndex}
-            months={timeline.months}
-            onFocus={() => setFocusIndex(index)}
-            onOpen={() => openProject(marker.project)}
-          />
-        ))}
-
-        {timeline.unscheduled.length > 0 ? (
-          <div className="border-t border-border">
-            <div className="bg-bg-sidebar/60 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-              No target date
+    <>
+      <Masthead title="Roadmap" count={projects.length} />
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+        <section
+          ref={containerRef}
+          className="flex-1 outline-none"
+          onKeyDown={onKeyDown}
+          aria-label="Project roadmap timeline"
+        >
+          {/* Month ruler */}
+          <div className="sticky top-0 z-10 flex border-b border-border bg-bg/95 backdrop-blur">
+            <div className="w-56 shrink-0 border-r border-border px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+              Project
             </div>
-            {timeline.unscheduled.map((project, offset) => {
-              const index = timeline.scheduled.length + offset
-              return (
-                <RoadmapRow
-                  key={project.id}
-                  index={index}
-                  project={project}
-                  leftPercent={null}
-                  nowPercent={timeline.nowPercent}
-                  progress={progressById.get(project.id) ?? 0}
-                  focused={index === focusIndex}
-                  months={timeline.months}
-                  onFocus={() => setFocusIndex(index)}
-                  onOpen={() => openProject(project)}
-                />
-              )
-            })}
+            <div className="relative h-8 flex-1">
+              {timeline.months.map((month) => (
+                <span
+                  key={month.ts}
+                  className="absolute top-2 -translate-x-1/2 whitespace-nowrap font-mono text-[11px] text-text-3"
+                  style={{ left: `${month.leftPercent}%` }}
+                >
+                  {month.label}
+                </span>
+              ))}
+            </div>
           </div>
-        ) : null}
-      </section>
-    </div>
+
+          {timeline.scheduled.map((marker, index) => (
+            <RoadmapRow
+              key={marker.project.id}
+              index={index}
+              project={marker.project}
+              leftPercent={marker.leftPercent}
+              nowPercent={timeline.nowPercent}
+              progress={progressById.get(marker.project.id) ?? 0}
+              focused={index === focusIndex}
+              months={timeline.months}
+              onFocus={() => setFocusIndex(index)}
+              onOpen={() => openProject(marker.project)}
+            />
+          ))}
+
+          {timeline.unscheduled.length > 0 ? (
+            <div className="border-t border-border">
+              <div className="bg-bg-sidebar/60 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+                No target date
+              </div>
+              {timeline.unscheduled.map((project, offset) => {
+                const index = timeline.scheduled.length + offset
+                return (
+                  <RoadmapRow
+                    key={project.id}
+                    index={index}
+                    project={project}
+                    leftPercent={null}
+                    nowPercent={timeline.nowPercent}
+                    progress={progressById.get(project.id) ?? 0}
+                    focused={index === focusIndex}
+                    months={timeline.months}
+                    onFocus={() => setFocusIndex(index)}
+                    onOpen={() => openProject(project)}
+                  />
+                )
+              })}
+            </div>
+          ) : null}
+        </section>
+      </div>
+    </>
   )
 }
 

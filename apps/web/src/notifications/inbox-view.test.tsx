@@ -197,7 +197,8 @@ test('mark all read is disabled with nothing unread', async () => {
   await show([row({ subjectId: 'issue-1', readAt: 9_000 })])
 
   expect(screen.getByTestId('inbox-mark-all-read')).toBeDisabled()
-  expect(screen.getByTestId('inbox-unread-count')).toHaveTextContent('0')
+  // The unread reading is the masthead's count slot now — same capped number, one band-2 anatomy.
+  expect(screen.getByTestId('masthead-count')).toHaveTextContent('0')
 })
 
 test('mark all read calls the shared mutator once', async () => {

@@ -148,13 +148,15 @@ async function interceptSyncSocket(page: Page): Promise<SyncSocket> {
 // The escape hatch the recovery spec is actually about: by this point the backoff has
 // stretched to tens of seconds, so a token request arriving within a second of pressing
 // Enter can only have come from the button. Reached by Tab alone — the pill lives in the
-// header, and nothing here may need a pointer.
+// statusline now (band 3, at the end of the document rather than the start of it), and nothing
+// here may need a pointer. That move is why the stop budget is generous: every focusable on the
+// page comes first.
 async function retryFromTheKeyboard(page: Page): Promise<void> {
   const retry = page.getByTestId('connection-retry')
   await expect(retry).toBeVisible()
 
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
-  for (let stop = 0; stop < 40; stop += 1) {
+  for (let stop = 0; stop < 150; stop += 1) {
     if (await retry.evaluate((node) => node === document.activeElement)) break
     await page.keyboard.press('Tab')
   }

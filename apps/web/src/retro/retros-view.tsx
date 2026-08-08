@@ -13,6 +13,7 @@ import { MessagesSquareIcon, PlusIcon } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import { CYCLE_STATUS_LABEL, type CycleRowData, formatCycleRange } from '@/cycles/model'
+import { Masthead } from '@/frame/masthead'
 import { runMutation } from '@/lib/mutation'
 import { openRetroArgs, PHASE_LABEL, RETRO_FORMAT_LABEL } from '@/retro/model'
 
@@ -108,84 +109,88 @@ export function RetrosView({ teamId }: { teamId: string }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-      <header className="flex items-center gap-2">
-        <h1 className="text-sm font-semibold tracking-tight text-text-1">Retrospectives</h1>
-        <span className="font-mono text-xs text-text-3">{retros.length}</span>
-      </header>
-
-      {error !== undefined ? (
-        <p className="text-xs text-status-urgent" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      {retros.length === 0 ? (
-        <p className="text-sm text-text-3" role="status">
-          No retrospectives yet. One opens automatically when a cycle completes.
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-1.5">
-          {retros.map((retro) => {
-            const cycle = cycles.find((candidate) => candidate.id === retro.cycleId)
-            return (
-              <li key={retro.id}>
-                <Link
-                  to="/teams/$teamId/retros/$retroId"
-                  params={{ teamId, retroId: retro.id }}
-                  data-testid="retro-link"
-                  className={cn(
-                    'flex items-center gap-2 rounded-card border border-border bg-bg-elevated px-3 py-2.5 outline-none transition-colors hover:border-border-strong focus-visible:ring-2 focus-visible:ring-accent',
-                  )}
-                >
-                  <MessagesSquareIcon className="size-3.5 text-text-3" />
-                  <span className="text-[13.5px] font-medium text-text-1">{retro.title}</span>
-                  <span className="rounded-full bg-bg-sidebar px-2 py-0.5 text-[11px] font-medium text-text-2">
-                    {PHASE_LABEL[retro.phase]}
-                  </span>
-                  <span className="text-[11.5px] text-text-3">
-                    {RETRO_FORMAT_LABEL[retro.format]}
-                  </span>
-                  {cycle ? (
-                    <span className="ml-auto font-mono text-[11px] text-text-3">
-                      {formatCycleRange(cycle.startDate, cycle.endDate)}
+    <>
+      <Masthead
+        title="Retrospectives"
+        count={retros.length}
+        {...(error === undefined
+          ? {}
+          : {
+              meta: (
+                <p className="text-xs text-status-urgent" role="alert">
+                  {error}
+                </p>
+              ),
+            })}
+      />
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+        {retros.length === 0 ? (
+          <p className="text-sm text-text-3" role="status">
+            No retrospectives yet. One opens automatically when a cycle completes.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {retros.map((retro) => {
+              const cycle = cycles.find((candidate) => candidate.id === retro.cycleId)
+              return (
+                <li key={retro.id}>
+                  <Link
+                    to="/teams/$teamId/retros/$retroId"
+                    params={{ teamId, retroId: retro.id }}
+                    data-testid="retro-link"
+                    className={cn(
+                      'flex items-center gap-2 rounded-card border border-border bg-bg-elevated px-3 py-2.5 outline-none transition-colors hover:border-border-strong focus-visible:ring-2 focus-visible:ring-accent',
+                    )}
+                  >
+                    <MessagesSquareIcon className="size-3.5 text-text-3" />
+                    <span className="text-[13.5px] font-medium text-text-1">{retro.title}</span>
+                    <span className="rounded-full bg-bg-sidebar px-2 py-0.5 text-[11px] font-medium text-text-2">
+                      {PHASE_LABEL[retro.phase]}
                     </span>
-                  ) : null}
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+                    <span className="text-[11.5px] text-text-3">
+                      {RETRO_FORMAT_LABEL[retro.format]}
+                    </span>
+                    {cycle ? (
+                      <span className="ml-auto font-mono text-[11px] text-text-3">
+                        {formatCycleRange(cycle.startDate, cycle.endDate)}
+                      </span>
+                    ) : null}
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        )}
 
-      {canWrite && withoutRetro.length > 0 ? (
-        <section className="flex flex-col gap-1.5" aria-label="Cycles without a retrospective">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-3">
-            {CYCLE_STATUS_LABEL.completed} without a retrospective
-          </h2>
-          {withoutRetro.map((cycle) => (
-            <div
-              key={cycle.id}
-              className="flex items-center gap-2 rounded-card border border-dashed border-border px-3 py-2"
-            >
-              <span className="text-[13px] text-text-2">{cycle.name}</span>
-              <span className="font-mono text-[11px] text-text-3">
-                {formatCycleRange(cycle.startDate, cycle.endDate)}
-              </span>
-              <Button
-                size="xs"
-                variant="outline"
-                className="ml-auto"
-                data-testid="retro-open-for-cycle"
-                onClick={() => void open(cycle)}
+        {canWrite && withoutRetro.length > 0 ? (
+          <section className="flex flex-col gap-1.5" aria-label="Cycles without a retrospective">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-3">
+              {CYCLE_STATUS_LABEL.completed} without a retrospective
+            </h2>
+            {withoutRetro.map((cycle) => (
+              <div
+                key={cycle.id}
+                className="flex items-center gap-2 rounded-card border border-dashed border-border px-3 py-2"
               >
-                <PlusIcon />
-                Open a retrospective
-              </Button>
-            </div>
-          ))}
-        </section>
-      ) : null}
-    </div>
+                <span className="text-[13px] text-text-2">{cycle.name}</span>
+                <span className="font-mono text-[11px] text-text-3">
+                  {formatCycleRange(cycle.startDate, cycle.endDate)}
+                </span>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="ml-auto"
+                  data-testid="retro-open-for-cycle"
+                  onClick={() => void open(cycle)}
+                >
+                  <PlusIcon />
+                  Open a retrospective
+                </Button>
+              </div>
+            ))}
+          </section>
+        ) : null}
+      </div>
+    </>
   )
 }

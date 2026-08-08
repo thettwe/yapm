@@ -16,7 +16,9 @@ export function Masthead({
   className,
 }: {
   title: ReactNode
-  count?: number
+  // A string count is the already-capped reading a surface publishes ("99+"), not a second
+  // formatting of the same number.
+  count?: number | string
   lens?: ReactNode
   meta?: ReactNode
   actions?: ReactNode
@@ -39,7 +41,7 @@ export function Masthead({
           <div className="ml-auto flex items-center gap-2">{actions}</div>
         )}
       </div>
-      {meta === undefined ? null : <div className="flex items-center gap-2">{meta}</div>}
+      {meta === undefined ? null : <div className="flex flex-wrap items-center gap-2">{meta}</div>}
     </div>
   )
 }

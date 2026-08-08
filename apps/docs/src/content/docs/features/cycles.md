@@ -6,8 +6,8 @@ description: Time-boxed iterations for a team, with automatic rollover of unfini
 A cycle is a time-boxed iteration for a team — a sprint by another name. Each cycle has a
 name, a per-team number, a start and end date, and a status (**Upcoming**, **Active**, or
 **Completed**). Issues can belong to a cycle, and the Cycles view shows the current cycle,
-its issues, and its progress. Open it at `/teams/<teamId>/cycles`, or use the **Cycles** tab
-in the team header next to **List** and **Board**.
+its issues, and its progress. Open it at `/teams/<teamId>/cycles`, or take the **Cycles** stop in
+[the deck](/features/app-frame/).
 
 ## The Cycles view
 

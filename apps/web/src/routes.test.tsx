@@ -108,3 +108,63 @@ test('the delivery route is registered, narrows its window and is gated behind a
     router.matchRoutes('/teams/$teamId/delivery', { window: 999 } as never).at(-1)?.search,
   ).toEqual({ window: 6 })
 })
+
+// The route inventory (design §D8). Losing a route is a regression, and the way a route gets lost
+// is not deletion — it is a page that no surface points at any more. Every registered route names
+// the ONE place in the frame a reader reaches it from; a new route with no home fails this test,
+// which is the only moment anyone is guaranteed to be thinking about where it belongs.
+//
+//   stop        one of the deck's six bar stops
+//   more        the `more▾` transient
+//   switcher    the workspace/team chevron's menu
+//   user-menu   the user chip's menu
+//   deck-right  the deck's right cluster (⌘K, the attention badge, Inbox)
+//   doorway     reached from a row or control on a page that itself has a home
+//   open        unauthenticated, deliberately outside the frame
+const ROUTE_HOMES = {
+  '/': 'switcher',
+  '/inbox': 'deck-right',
+  '/search': 'deck-right',
+  '/digests': 'user-menu',
+  '/showcase': 'user-menu',
+  '/settings/ai': 'user-menu',
+  '/settings/connectors': 'user-menu',
+  '/settings/sso': 'user-menu',
+  '/teams/$teamId/': 'stop',
+  '/teams/$teamId/issues/': 'stop',
+  '/teams/$teamId/triage': 'stop',
+  '/teams/$teamId/cycles': 'stop',
+  '/teams/$teamId/delivery': 'stop',
+  '/teams/$teamId/retros/': 'more',
+  '/teams/$teamId/projects': 'more',
+  '/teams/$teamId/roadmap': 'more',
+  // Board is a LENS in the Issues masthead, not a destination — which is why the Issues stop stays
+  // current on it and `ViewSwitch`'s eight-item pill nav is gone.
+  '/teams/$teamId/board': 'doorway',
+  '/teams/$teamId/issues/$issueKey': 'doorway',
+  '/teams/$teamId/retros/$retroId': 'doorway',
+  '/teams/$teamId/members': 'switcher',
+  '/login': 'open',
+  '/invite': 'open',
+} as const
+
+test('every registered route has an honest home in the frame', () => {
+  const router = createRouter({ routeTree, history: createMemoryHistory() })
+
+  const registered = Object.keys(router.routesById)
+    .filter((id) => id !== '__root__')
+    // The router registers both the layout id and its index child for a nested route; the index is
+    // the one a reader lands on, and the bare prefix is not separately reachable.
+    .filter((id) => !Object.keys(router.routesById).includes(`${id}/`))
+    .sort()
+
+  expect(registered).toEqual(Object.keys(ROUTE_HOMES).sort())
+})
+
+test('only the two unauthenticated surfaces sit outside the frame', () => {
+  const open = Object.entries(ROUTE_HOMES)
+    .filter(([, home]) => home === 'open')
+    .map(([id]) => id)
+
+  expect(open.sort()).toEqual(['/invite', '/login'])
+})

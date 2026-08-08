@@ -37,7 +37,7 @@
 
 - [x] 6.1 `apps/web/src/frame/masthead.tsx`: title + mono count, `lens` slot, `meta` slot, `actions` slot — `ia.html`'s band-2 anatomy and nothing else
 - [x] 6.2 Migrate the eleven `AppShell` importers to `AppFrame` and delete `app-shell.tsx`
-- [~] 6.3 Migrate the nine hand-rolled routes (`issues.index`, `issues.$issueKey`, `board`, `cycles`, `triage`, `delivery`, `projects`, `roadmap`, `retros.index`, `retros.$retroId`) onto `AppFrame` + `Masthead`, keeping every control they offer today working — all ten are on `AppFrame` and every hand-rolled chrome header is deleted; `Masthead` is adopted on `board`, `issues.$issueKey` and the Issues toolbar, and the remaining pages' existing in-page band-2 headers move onto the component in their own rebuilds (design DI-8)
+- [x] 6.3 Migrate the nine hand-rolled routes (`issues.index`, `issues.$issueKey`, `board`, `cycles`, `triage`, `delivery`, `projects`, `roadmap`, `retros.index`, `retros.$retroId`) onto `AppFrame` + `Masthead`, keeping every control they offer today working — all ten are on `AppFrame`, every hand-rolled chrome header is deleted, and every page's band 2 now renders through `Masthead` (plus `/inbox`, which the sticky-header grep also hit); see design DI-10 for the slot-by-slot table
 - [x] 6.4 Move Board into the Issues masthead as a lens (`List | Board`, `aria-pressed`); delete `apps/web/src/board/view-switch.tsx` and its ten importers' usage; Gallery folds away
 - [x] 6.5 Add the repo guard: no `sticky top-0` application header outside `apps/web/src/frame/`
 
@@ -48,16 +48,16 @@
 - [x] 7.3 `apps/web` component: the deck's six stops, `aria-current` on the right stop per route, Board-as-lens keeping Issues current, `more▾` open/Escape/focus-return, and the `g`-prefix shortcuts including the typing-suppression case
 - [x] 7.4 `apps/web` component: off-team degradation — stops point at the anchor team with nothing current, the statusline states no team fact, a stale anchor falls back, an empty workspace drops the stops
 - [x] 7.5 `apps/web` component: one palette owner — the shortcut opens a palette on a surface that registers nothing; a surface's commands appear only while mounted; every command reachable before is reachable after
-- [ ] 7.6 `apps/web/src/routes.test.tsx`: the route inventory — every registered route is reachable from the frame or is one of the two unauthenticated surfaces
+- [x] 7.6 `apps/web/src/routes.test.tsx`: the route inventory — every registered route is reachable from the frame or is one of the two unauthenticated surfaces
 - [x] 7.7 Extend `packages/ui/src/styles/contrast.test.ts` with the frame's token pairs (active stop on `--bg`, statusline text on `--statusline-bg`, attention ink on `--urgent-soft`) in all six theme blocks
 - [x] 7.8 Update the Playwright specs the frame moves: the fifteen `connection-status` waits (indicator relocated, testid preserved) and `retro-ai.spec.ts`'s `navigation { name: 'Issue views' }` → `navigation { name: 'Destinations' }` with `aria-current`. Update to match the new frame; never weaken an assertion
 
 ## 8. Documentation
 
 - [x] 8.1 New `apps/docs/src/content/docs/features/app-frame.md`: the three bands, the six destinations, the one-attention-number rule, the keyboard grammar (`⌘K`, `g`-prefix, `more▾`), and honest degradation off-team
-- [ ] 8.2 Update `features/team-home.md` (the attention number is now app-wide), `features/board.md` (Board is a lens, not a peer view), `features/notifications.md` (the badge is in the deck, on every surface), `features/search.md` (the ⌘K pill and the palette owner)
-- [ ] 8.3 Update `README.md` and `ROADMAP.md` where they describe navigation or the app shell; add the change's ROADMAP row/status
-- [ ] 8.4 `pnpm --filter @yapm/docs build` passes; no stale root doc left behind (PROCESS.md §2)
+- [x] 8.2 Update `features/team-home.md` (the attention number is now app-wide), `features/board.md` (Board is a lens, not a peer view), `features/notifications.md` (the badge is in the deck, on every surface), `features/search.md` (the ⌘K pill and the palette owner)
+- [x] 8.3 Update `README.md` and `ROADMAP.md` where they describe navigation or the app shell; add the change's ROADMAP row/status
+- [x] 8.4 `pnpm --filter @yapm/docs build` passes; no stale root doc left behind (PROCESS.md §2)
 
 ## 9. Gates
 

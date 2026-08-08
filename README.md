@@ -159,7 +159,14 @@ in the last 24 hours with provenance, **your own in-flight work and only yours**
 "your work only — never compared"), the unassigned ready-to-start runway, a weekly ship-cadence
 chart, and Live / Built-not-live badges from the deploy fact — every band computed on your device
 from rows already synced, and every empty band folding away rather than apologizing, with members
-management intact behind a Members doorway.
+management intact behind a Members doorway ·
+**one frame around every page** — three bands: a 48px deck that never adapts to the page (workspace ·
+team · six destinations — Home, Issues, Triage, Cycles, Delivery, `more▾` — plus the `⌘K` pill, the
+attention badge, your inbox and you), the page's own masthead, and a 32px statusline that states the
+team's day and the sync state. Board is a **lens** on Issues, not a rival destination; `⌘K` has a
+single owner that every surface's palette registers with; and the attention count in the deck, in the
+statusline and on Team Home is **one derivation**, absent rather than zeroed when there is nothing to
+attend to.
 
 ## What's next
 

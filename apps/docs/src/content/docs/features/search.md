@@ -41,11 +41,15 @@ There is exactly **one** keyboard shortcut, and it is the one you already use.
 | Surface | How you get there | What it searches |
 |---|---|---|
 | **Command palette** | `⌘K` / `Ctrl+K` | The **currently open team**, in both groups |
-| **`/search?q=`** | The search icon in the app header, or `Search everything for "…" →` in the palette | **Every team you can read** |
+| **`/search?q=`** | The **⌘K pill** in [the deck](/features/app-frame/), or `Search everything for "…" →` in the palette | **Every team you can read** |
 
-Two doors, one binding. The header icon is in the tab order on the home, inbox and settings screens;
-the team screens build their own header and reach `/search` through the palette's escalation row,
-which is where the palette lives.
+Two doors, one binding. The pill is a real link in the tab order on **every** authenticated page —
+the deck is the same on all of them — and the palette's escalation row carries a query you have
+already started typing to the same route.
+
+`⌘K` itself has **one owner**: a single global binding in the frame. A surface with its own palette
+— the issue list, the board, a retro — registers its commands with that owner while it is mounted
+rather than binding the key again, so the pill never advertises something that does nothing.
 
 The palette stays the action launcher it has always been — `New issue`, `Go to inbox`, the triage
 and label pages — and adds results below the actions, capped at about five per group. When you want
@@ -75,7 +79,7 @@ one binding.
 On `/search`, typing a single printable character anywhere on the page moves the caret into the
 query field — unless another field, a dialog or a list already owns the keyboard, in which case it
 does nothing. It is not a shortcut; it is what makes the route usable after `Tab` has taken focus
-to the header.
+to the deck.
 
 The result list is a listbox with a labelled group per heading, so the seam is conveyed structurally
 rather than only visually. One **polite** live region announces the counts for the whole surface —

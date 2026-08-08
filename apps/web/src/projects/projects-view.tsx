@@ -18,6 +18,7 @@ import { cn } from '@yapm/ui/lib/utils'
 import { PlusIcon, TargetIcon } from 'lucide-react'
 import { type FormEvent, useCallback, useId, useMemo, useRef, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
+import { Masthead } from '@/frame/masthead'
 import { type IssueRowData, issueKey, PRIORITY_TO_KIND, STATUS_TO_KIND } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
 import {
@@ -115,72 +116,80 @@ export function ProjectsView({ openProjectId }: { openProjectId?: string }) {
   )
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <aside
-        className="flex w-64 flex-col gap-2 overflow-y-auto border-r border-border p-3"
-        aria-label="Projects"
-      >
-        <div className="flex items-center justify-between">
-          <h1 className="text-sm font-semibold tracking-tight text-text-1">Projects</h1>
-          {teams[0] ? <NewProjectButton workspaceId={teams[0].workspaceId} users={users} /> : null}
-        </div>
-        {projects.length === 0 ? (
-          <p className="px-1 py-4 text-xs text-text-3" role="status">
-            {projectsResult.type === 'complete'
-              ? 'No projects yet. Create one to plan across teams.'
-              : 'Loading projects…'}
-          </p>
-        ) : (
-          projects.map((project) => {
-            const progress = projectProgress(issuesByProject.get(project.id) ?? [])
-            return (
-              <button
-                key={project.id}
-                type="button"
-                aria-current={project.id === selected?.id ? 'true' : undefined}
-                onClick={() => setSelectedId(project.id)}
-                data-testid="project-rail-item"
-                className={cn(
-                  'flex flex-col items-start gap-1 rounded-control px-2 py-1.5 text-left transition-colors',
-                  project.id === selected?.id
-                    ? 'bg-bg-elevated text-text-1 shadow-sm'
-                    : 'text-text-2 hover:bg-bg-sidebar',
-                )}
-              >
-                <span className="flex items-center gap-1.5 text-sm font-medium">
-                  <span
-                    className={cn('size-2 rounded-full', PROJECT_STATUS_DOT[project.status])}
-                    aria-hidden="true"
-                  />
-                  {project.name}
-                </span>
-                <span className="flex w-full items-center gap-2 pl-3.5 font-mono text-[11px] text-text-3">
-                  <span>{formatTargetDate(project.targetDate)}</span>
-                  <span className="ml-auto">{progress.percent}%</span>
-                </span>
-              </button>
-            )
-          })
-        )}
-      </aside>
+    <>
+      <Masthead
+        title="Projects"
+        count={projects.length}
+        {...(teams[0]
+          ? { actions: <NewProjectButton workspaceId={teams[0].workspaceId} users={users} /> }
+          : {})}
+      />
+      <div className="flex min-h-0 flex-1">
+        <aside
+          className="flex w-64 flex-col gap-2 overflow-y-auto border-r border-border p-3"
+          aria-label="Projects"
+        >
+          {projects.length === 0 ? (
+            <p className="px-1 py-4 text-xs text-text-3" role="status">
+              {projectsResult.type === 'complete'
+                ? 'No projects yet. Create one to plan across teams.'
+                : 'Loading projects…'}
+            </p>
+          ) : (
+            projects.map((project) => {
+              const progress = projectProgress(issuesByProject.get(project.id) ?? [])
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  aria-current={project.id === selected?.id ? 'true' : undefined}
+                  onClick={() => setSelectedId(project.id)}
+                  data-testid="project-rail-item"
+                  className={cn(
+                    'flex flex-col items-start gap-1 rounded-control px-2 py-1.5 text-left transition-colors',
+                    project.id === selected?.id
+                      ? 'bg-bg-elevated text-text-1 shadow-sm'
+                      : 'text-text-2 hover:bg-bg-sidebar',
+                  )}
+                >
+                  <span className="flex items-center gap-1.5 text-sm font-medium">
+                    <span
+                      className={cn('size-2 rounded-full', PROJECT_STATUS_DOT[project.status])}
+                      aria-hidden="true"
+                    />
+                    {project.name}
+                  </span>
+                  <span className="flex w-full items-center gap-2 pl-3.5 font-mono text-[11px] text-text-3">
+                    <span>{formatTargetDate(project.targetDate)}</span>
+                    <span className="ml-auto">{progress.percent}%</span>
+                  </span>
+                </button>
+              )
+            })
+          )}
+        </aside>
 
-      <section className="flex min-w-0 flex-1 flex-col overflow-y-auto" aria-label="Project detail">
-        {selected ? (
-          <ProjectPanel
-            project={selected}
-            issues={issuesByProject.get(selected.id) ?? []}
-            leadName={userName(selected.leadId)}
-            users={users}
-            teamKeyFor={teamKeyFor}
-            onOpenIssue={onOpenIssue}
-          />
-        ) : (
-          <p className="p-8 text-center text-sm text-text-3" role="status">
-            No project selected.
-          </p>
-        )}
-      </section>
-    </div>
+        <section
+          className="flex min-w-0 flex-1 flex-col overflow-y-auto"
+          aria-label="Project detail"
+        >
+          {selected ? (
+            <ProjectPanel
+              project={selected}
+              issues={issuesByProject.get(selected.id) ?? []}
+              leadName={userName(selected.leadId)}
+              users={users}
+              teamKeyFor={teamKeyFor}
+              onOpenIssue={onOpenIssue}
+            />
+          ) : (
+            <p className="p-8 text-center text-sm text-text-3" role="status">
+              No project selected.
+            </p>
+          )}
+        </section>
+      </div>
+    </>
   )
 }
 

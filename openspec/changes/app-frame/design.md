@@ -401,3 +401,58 @@ enforced now is the one that matters: **no page hand-rolls chrome**, by guard.
 production builds (`routeFileIgnorePattern`), so a typed `<Link to="/showcase">` would point at a
 destination the production router does not have. It renders behind `import.meta.env.DEV` as an
 `<a href>`.
+
+### Stage 2 — the migration that deletes the copy-paste (built)
+
+**DI-10 — DI-8 is superseded: every page now renders band 2 through `Masthead`.** Stage 1 left the
+component adopted on three surfaces and the rest on their own in-page headers. That split was the
+thing this change exists to end, so the remaining eight surfaces moved onto it — Cycles, Triage,
+Delivery, Projects, Roadmap, Retros, a retro, and the workspace Inbox. Each keeps every control it
+offered, relocated into a slot rather than removed:
+
+| Surface | title · count | lens | meta | actions |
+|---|---|---|---|---|
+| Issues | `{team} · Issues` · shown rows | `List \| Board` | filter bar, saved views | new issue |
+| Board | `Issues` | `List \| Board` | — | — |
+| An issue | the issue key | — | — | back to issues |
+| Cycles | `Cycles` · cycle count | — | — | new cycle |
+| Triage | `{team} · Triage` · waiting | — | the write error, when there is one | — |
+| Delivery | `Delivery` | — | window label + the binding rule | the window picker |
+| Projects | `Projects` · project count | — | — | new project |
+| Roadmap | `Roadmap` · project count | — | — | — |
+| Retros | `Retrospectives` · retro count | — | the write error, when there is one | — |
+| A retro | the retro title | — | format · anonymity · vote budget | presence · timer · facilitator |
+| Inbox | `Inbox` · unread (capped) | — | the write error, when there is one | mark all read |
+
+Two consequences worth naming. The **cycles and projects rails lost their `<h1>`** — the noun and
+its action were inside a 256px sidebar, which is not where band 2 lives; the rail keeps its
+`aria-label`, so its landmark name is unchanged. And **Roadmap now renders its masthead in the empty
+case too**, where before the page was a bare sentence with no title at all.
+
+**DI-11 — the retro's phase machine is furniture, not band 2.** The retro's header carried five
+distinct things. Title, the three configuration controls and the three session controls are band 2
+and moved into the masthead's slots; the phase stepper, its hint and the vote-budget reading are the
+retro *operating* rather than describing itself, so they render in a strip below the masthead, which
+drops its own bottom rule (`border-b-0`) so the two read as one block.
+
+**DI-12 — `Masthead`'s `count` accepts a string.** The inbox publishes an already-capped unread
+reading (`99+`, from `formatUnreadCount`). Widening the prop was cheaper and more honest than
+reformatting the same number in two places or letting the masthead render `137` where the badge
+beside it says `99+`.
+
+**DI-13 — Delivery's "Cycle N" door is deferred to the delivery rebuild.** `delivery.html`'s
+masthead sub-line is `Cycle 2 · last 6 completed cycles · team-level only — never a per-person
+number`. The window label and the binding rule ship now. The **door does not**: no such affordance
+exists on the page today, and a TanStack `Link` inside `DeliveryView` makes the component require
+router context, which would have turned six synchronous unit tests into router-mounted async ones —
+including `expect(zero.reads).toBe(perRender * 2)`, whose whole value is that it counts renders
+exactly. Change D owns the annotated timeline this door hangs off. The rule sentence itself moved out
+of the body paragraph and into the sub-line, so it is still said exactly once on the page.
+
+**DI-14 — the route inventory is a set-equality test, not a crawl.** `routes.test.tsx` asserts that
+the registered route ids (from the real `routeTree.gen`, minus the layout ids their index children
+shadow) are exactly the keys of a table naming each route's one home: bar stop, `more▾`, the
+switcher, the account menu, the deck's right cluster, a doorway, or unauthenticated. A crawl would
+prove reachability but would go green on a route reachable only from a page nobody can reach; the
+table forces whoever registers a route to name where a reader finds it, at the one moment they are
+certainly thinking about it.

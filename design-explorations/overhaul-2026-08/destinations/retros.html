@@ -1,0 +1,664 @@
+<!doctype html>
+<!--
+  destinations/retros — THE RETRO ROOM (vote phase) + THE RETROS INDEX.
+  Reached from more▾ (g r). Built on the settled frame: band 1 and band 3 are lifted verbatim
+  from northstar/issues.html. Starts from plays/warmth-retro: the tabletop, the phase stepper in
+  the cycle day-band language, the terracotta dot-votes and the anonymity guarantee written on the
+  surface all survive; note rotation and dog-ears do not (PLAY-warmth filed both as sketch).
+
+  TOKENS — Warm LIGHT block from packages/ui/src/styles/globals.css, read fresh, verbatim, plus
+  the daylight extensions. THE AMBER USED HERE IS --status-in-progress: #b67500 — the RETUNED
+  value, not the northstar set's #ce8a26. openspec/changes/design-corrections landed while this
+  file was being drawn: the old amber measured 2.69 against --bg, under the 3:1 non-text bar, and
+  the token split, so --status-in-progress-ink: #935e00 is carried here too even though nothing on
+  this surface draws amber text. Two more corrections from that change are drawn, because the
+  shipped app is ahead of the mocks here: `done` is a filled disc carrying a check knocked out in
+  --bg on the shipped path (M6.3 10.3 8.9 12.9 13.7 7.3, the shared 1.6 stroke), and a slot with
+  no fact draws no ink at all — here, a card with no votes. Band 3's urgent text stays on
+  --status-urgent, byte-identical to the canonical five; --status-urgent-ink is declared but
+  unused, exactly as in the set.
+
+  Inline SVG only. No motion, no iframes, no external images. Flat + hairlines; NO elevation
+  anywhere in this file — no peek and no menu is open, and delivery.html owns the set's one peek.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Retro · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#b67500;
+    --status-in-progress-ink:#935e00;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --status-urgent-ink:#a4462b;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --elevation-transient:0 10px 26px rgba(43,38,32,.14);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+  .frame.short{min-height:0}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — page-owned masthead ============ */
+  .masthead{display:flex;align-items:center;padding:22px 40px 12px}
+  .masthead h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .masthead .cyc{font-size:14px;color:var(--text-2);margin-left:11px}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px;margin-left:10px}
+  .mast-right{margin-left:auto;display:flex;align-items:center;gap:18px}
+  .here{display:flex;align-items:center;gap:7px}
+  .here .av{width:20px;height:20px;border-radius:50%;background:#5c5348;color:#f1ebe3;font-size:8px;
+            font-weight:600;display:flex;align-items:center;justify-content:center;
+            outline:1.5px solid var(--bg)}
+  .here .avs{display:flex;flex-direction:row;align-items:center}
+  .here .avs .av+.av{margin-left:-5px}
+  .here .n{font-size:12.5px;color:var(--text-2)}
+  .clock{display:flex;align-items:center;gap:6px;color:var(--text-2)}
+  .clock .t{font-family:var(--mono);font-size:14px;color:var(--text-1);letter-spacing:-.01em}
+  .whoruns{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--text-2)}
+  .whoruns .av{width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--on-accent);
+               font-size:8px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ the phase stepper — the cycle day-band language ============ */
+  .stepper{display:flex;align-items:flex-start;gap:24px;padding:0 40px 14px;
+           border-bottom:1px solid var(--border)}
+  .steps{display:flex;gap:6px;flex:none}
+  .step{width:80px}
+  .step .band{height:8px;border-radius:2.5px;background:var(--bg-hover);border:1px solid var(--border)}
+  .step.done .band{background:var(--accent-soft);border-color:transparent}
+  .step.now .band{background:var(--accent);border-color:transparent}
+  .step .nm{margin-top:6px;font-size:11.5px;color:var(--text-3)}
+  .step.done .nm{color:var(--text-2)}
+  .step.now .nm{color:var(--accent-strong);font-weight:650}
+  .step .tm{font-family:var(--mono);font-size:10px;color:var(--text-3);margin-top:1px}
+  .movekeys{display:flex;align-items:center;gap:4px;flex:none;padding-top:1px}
+  .say{padding-top:0}
+  .say .l1{font-size:13px;font-weight:600}
+  .say .l2{display:flex;align-items:center;gap:8px;margin-top:3px;font-family:var(--mono);
+           font-size:11px;color:var(--text-2)}
+  .budget{display:flex;align-items:center;gap:5px}
+  .vd{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+  .vd.spent{background:transparent;border:1.4px solid var(--border-strong)}
+  .anon{margin-left:auto;display:flex;align-items:center;gap:8px;padding-top:2px;flex:none}
+  .anon .txt{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .anon svg{display:block}
+
+  /* ============ the tabletop ============ */
+  .room{flex:1;display:flex;flex-direction:column;background:var(--bg-sidebar);
+        border-bottom:1px solid var(--border);padding:20px 40px 10px}
+  .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
+  .col-h{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .col-h .cd{width:7px;height:7px;border-radius:50%;flex:none}
+  .col-h .cn{font-size:13px;font-weight:650}
+  .col-h .cc{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .stack{display:flex;flex-direction:column;gap:12px}
+
+  /* a paper note: flat, square-ish, one hairline of thickness at the foot.
+     No rotation, no dog-ear — PLAY-warmth filed both as "one illustration away from greeting-card". */
+  .note{background:var(--bg-elevated);border:1px solid var(--border);
+        border-bottom:2px solid var(--border-strong);border-radius:3px;
+        padding:11px 12px 10px;display:flex;flex-direction:column;gap:8px}
+  .note .body{display:flex;align-items:flex-start;gap:9px}
+  .note .rail{width:4px;height:14px;border-radius:2px;flex:none;margin-top:2px}
+  .note .txt{font-size:13.5px;line-height:1.5;letter-spacing:-.008em}
+  /* the vote slot: reserved measure, and NO INK when the tally is zero */
+  .pips{display:flex;align-items:center;gap:6px;height:12px;padding-left:13px}
+  .pips .dots{display:flex;align-items:center;gap:3px}
+  .pips .p{width:6px;height:6px;border-radius:50%;background:var(--border-strong)}
+  .pips .p.mine{background:var(--accent)}
+  .pips .n{font-family:var(--mono);font-size:11px;color:var(--text-2)}
+
+  /* a facilitator-made group. During vote it is settled — and it is the VOTE TARGET,
+     so its cards carry no pips of their own. */
+  .group{border:1.5px dashed var(--accent-line);border-radius:7px;padding:11px 9px 9px;
+         position:relative}
+  .group .gh{display:flex;align-items:center;gap:8px;margin-bottom:9px;padding:0 3px}
+  .group .gl{font-size:11.5px;font-weight:650;color:var(--accent-strong)}
+  .group .gc{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+  .group .gh .pips{margin-left:auto;padding-left:0}
+  .group .stack{gap:8px}
+
+  .room-foot{margin-top:auto;padding-top:14px;text-align:center;font-size:12px;color:var(--text-3)}
+
+  /* ============ the seeded data panel, collapsed ============ */
+  .seedbar{display:flex;align-items:center;gap:10px;padding:9px 40px;
+           border-bottom:1px solid var(--border);font-size:12.5px;color:var(--text-2)}
+  .seedbar .chev{color:var(--text-3);font-size:9px}
+  .door{border-bottom:1px dotted var(--border-strong);padding-bottom:1px;color:var(--text-1)}
+  .seedbar .m{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-left:auto}
+
+  /* ============ the AI draft — subordinate, on plain ground, never a card ============ */
+  .draftband{padding:13px 40px 15px}
+  .draft-h{display:flex;align-items:center;gap:10px}
+  .draft-h .dt{font-size:13px;font-weight:650}
+  .draft-h .un{font-size:12px;color:var(--text-2)}
+  .draft-h .m{font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-left:auto}
+  .props{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+  .prop{display:flex;align-items:center;gap:11px;border:1px solid var(--border);
+        border-radius:var(--rad-control);padding:8px 11px}
+  .cat{font-family:var(--mono);font-size:10px;color:var(--text-3);border:1px solid var(--border);
+       border-radius:4px;padding:1px 6px;flex:none;width:88px;text-align:center}
+  .prop .sum{font-size:12.5px;color:var(--text-1)}
+  .ev{display:flex;align-items:center;gap:7px;margin-left:auto;flex:none}
+  .chip{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 7px;
+        border:1px solid var(--border-strong);border-radius:6px;background:rgba(255,255,255,.7);
+        font-family:var(--mono);font-size:11.5px;color:var(--text-1);white-space:nowrap}
+  .chip .lbl{color:var(--text-3)}
+  .prov{color:var(--text-3);display:inline-flex}
+  .how{font-family:var(--mono);font-size:10px;color:var(--text-3);white-space:nowrap}
+  .react{display:flex;align-items:center;gap:5px;flex:none}
+  .rx{width:24px;height:21px;border:1px solid var(--border-strong);border-radius:5px;
+      display:inline-flex;align-items:center;justify-content:center;color:var(--text-3);
+      background:rgba(255,255,255,.7)}
+  .rx.on{border-color:var(--accent);color:var(--accent-strong);background:var(--accent-soft)}
+  .draft-foot{margin-top:9px;font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+
+  /* ============ the index ============ */
+  .idx{padding:0 40px 18px}
+  .irow{display:flex;align-items:center;gap:12px;height:46px;padding:0 12px;
+        border:1px solid var(--border);border-left:3px solid var(--accent);
+        border-radius:var(--rad-control);background:var(--bg-elevated)}
+  .irow .ti{font-size:13.5px;font-weight:600}
+  .irow .ph{font-size:11.5px;font-weight:600;color:var(--accent-strong);
+            background:var(--accent-soft);border-radius:var(--rad-pill);padding:2px 9px}
+  .irow .fmt{font-size:12px;color:var(--text-2)}
+  .irow .when{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3)}
+  .idx-quiet{padding:14px 12px 0;font-size:12.5px;color:var(--text-2)}
+  .idx-quiet .m{display:block;font-family:var(--mono);font-size:10.5px;color:var(--text-3);margin-top:5px}
+
+  /* mock scaffolding only — the label between the two drawn frames */
+  .sheetmark{padding:26px 20px 10px;border-top:1px solid var(--border-strong)}
+  .sheetmark .k{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--text-3)}
+
+  /* ============ band 3 — statusline (identical on every page) ============ */
+  .statusline{margin-top:auto;height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- status is cycle position: one loop, filled as far as the work has run -->
+    <symbol id="g-progress" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 0 1 10 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <!-- done: the filled disc, with the check knocked out in --bg (design-corrections D4) -->
+    <symbol id="g-done" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7.6" fill="currentColor"/>
+      <path d="M6.3 10.3 8.9 12.9 13.7 7.3" fill="none" stroke="var(--bg)" stroke-width="1.6"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <!-- the retro mark, from ia.html's more▾ menu -->
+    <symbol id="g-retro" viewBox="0 0 20 20">
+      <path d="M14.5 4.7 A7 7 0 1 0 16.9 8.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M15.4 10.4 L16.9 8.6 L18.6 10.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <!-- anonymity: a figure whose shoulders are not drawn in -->
+    <symbol id="g-anon" viewBox="0 0 20 20">
+      <circle cx="10" cy="6.8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M3.6 16.8 C 4.6 13.1, 15.4 13.1, 16.4 16.8" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round" stroke-dasharray="2.4 3.2"/>
+    </symbol>
+    <!-- the draft mark: our own, on the 20-grid, round caps like every other glyph -->
+    <symbol id="g-draft" viewBox="0 0 20 20">
+      <path d="M8 3.4 V8.4 M5 5.4 L11 8.6 M11 5.4 L5 8.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M14.4 11.2 V15.4 M12.6 12.4 L16.2 14.2 M16.2 12.4 L12.6 14.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-opacity=".55"/>
+    </symbol>
+    <symbol id="g-clock" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M10 6 V10.2 L12.8 11.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="g-agree" viewBox="0 0 20 20">
+      <path d="M4.6 10.6 L8.4 14.2 L15.4 6.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="g-disagree" viewBox="0 0 20 20">
+      <path d="M5.6 5.6 L14.4 14.4 M14.4 5.6 L5.6 14.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+    </symbol>
+    <!-- provenance, whispered: the source's mark, never the meaning -->
+    <symbol id="m-github" viewBox="0 0 16 16">
+      <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="sheetmark"><span class="k">THE ROOM · vote</span></div>
+
+<!-- ==================================================================== FRAME 1 — THE ROOM -->
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>4</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <h1>Retro</h1><span class="cyc">Cycle 1</span>
+    <div class="mast-right">
+      <div class="here">
+        <span class="avs">
+          <span class="av">DA</span><span class="av">RK</span><span class="av">MS</span><span class="av">JO</span>
+        </span>
+        <span class="n">6 here</span>
+      </div>
+      <div class="clock">
+        <svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-clock"/></svg>
+        <span class="t">4:32</span>
+      </div>
+      <div class="whoruns"><span class="av">DA</span>You · facilitator</div>
+    </div>
+  </div>
+
+  <div class="stepper">
+    <div class="steps">
+      <div class="step done"><div class="band"></div><div class="nm">Brainstorm</div></div>
+      <div class="step done"><div class="band"></div><div class="nm">Group</div></div>
+      <div class="step now"><div class="band"></div><div class="nm">Vote</div><div class="tm">now</div></div>
+      <div class="step"><div class="band"></div><div class="nm">Discuss</div></div>
+      <div class="step"><div class="band"></div><div class="nm">Actions</div></div>
+      <div class="step"><div class="band"></div><div class="nm">Closed</div></div>
+    </div>
+    <div class="movekeys"><span class="kbd">[</span><span class="kbd">]</span></div>
+    <div class="say">
+      <div class="l1">Spend your dots on what the team should talk about.</div>
+      <div class="l2">
+        <span class="budget"><span class="vd"></span><span class="vd"></span><span class="vd spent"></span><span class="vd spent"></span><span class="vd spent"></span></span>
+        2/5 dots left
+      </div>
+    </div>
+    <div class="anon">
+      <svg width="16" height="16" viewBox="0 0 20 20" style="color:var(--text-3)"><use href="#g-anon"/></svg>
+      <span class="txt">cards are anonymous by design — there is no author column</span>
+    </div>
+  </div>
+
+  <div class="room">
+    <div class="cols">
+
+      <!-- went well -->
+      <div>
+        <div class="col-h"><span class="cd" style="background:var(--status-done)"></span>
+          <span class="cn">Went well</span><span class="cc">4</span></div>
+        <div class="stack">
+          <div class="note">
+            <div class="body"><span class="rail" style="background:var(--status-done)"></span>
+              <span class="txt">Shipping every day felt calm. Nothing to babysit over the weekend.</span></div>
+            <div class="pips"><span class="dots"><span class="p mine"></span><span class="p"></span></span><span class="n">2</span></div>
+          </div>
+          <div class="note">
+            <div class="body"><span class="rail" style="background:var(--status-done)"></span>
+              <span class="txt">Pairing on Apple Pay meant one branch and half the review wait.</span></div>
+            <div class="pips"><span class="dots"><span class="p"></span></span><span class="n">1</span></div>
+          </div>
+          <div class="note">
+            <div class="body"><span class="rail" style="background:var(--status-done)"></span>
+              <span class="txt">We cut refund scope early instead of late.</span></div>
+            <div class="pips"></div>
+          </div>
+          <div class="note">
+            <div class="body"><span class="rail" style="background:var(--status-done)"></span>
+              <span class="txt">Deploy notes wrote themselves from the merge queue.</span></div>
+            <div class="pips"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- didn't go well -->
+      <div>
+        <div class="col-h"><span class="cd" style="background:var(--status-urgent)"></span>
+          <span class="cn">Didn’t go well</span><span class="cc">4</span></div>
+        <div class="stack">
+          <div class="group">
+            <div class="gh">
+              <span class="gl">Waiting on review</span><span class="gc">2 cards</span>
+              <span class="pips"><span class="dots"><span class="p mine"></span><span class="p"></span><span class="p"></span><span class="p"></span><span class="p"></span></span><span class="n">5</span></span>
+            </div>
+            <div class="stack">
+              <div class="note">
+                <div class="body"><span class="rail" style="background:var(--status-urgent)"></span>
+                  <span class="txt">Twice this cycle a change sat a full day because it was nobody’s turn.</span></div>
+              </div>
+              <div class="note">
+                <div class="body"><span class="rail" style="background:var(--status-urgent)"></span>
+                  <span class="txt">Review pings land in chat and drown by lunch.</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="note">
+            <div class="body"><span class="rail" style="background:var(--status-urgent)"></span>
+              <span class="txt">The flaky payment suite made every merge a coin flip.</span></div>
+            <div class="pips"><span class="dots"><span class="p mine"></span><span class="p"></span><span class="p"></span></span><span class="n">3</span></div>
+          </div>
+          <div class="note">
+            <div class="body"><span class="rail" style="background:var(--status-urgent)"></span>
+              <span class="txt">The board said in progress on work that was already live.</span></div>
+            <div class="pips"><span class="dots"><span class="p"></span><span class="p"></span></span><span class="n">2</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- action items -->
+      <div>
+        <div class="col-h"><span class="cd" style="background:var(--accent)"></span>
+          <span class="cn">Action items</span><span class="cc">3</span></div>
+        <div class="stack">
+          <div class="note">
+            <div class="body"><span class="rail" style="background:var(--accent)"></span>
+              <span class="txt">A rotating review hour — one person on point each day.</span></div>
+            <div class="pips"><span class="dots"><span class="p"></span><span class="p"></span></span><span class="n">2</span></div>
+          </div>
+          <div class="note">
+            <div class="body"><span class="rail" style="background:var(--accent)"></span>
+              <span class="txt">Quarantine the payment suite until it earns trust back.</span></div>
+            <div class="pips"><span class="dots"><span class="p"></span></span><span class="n">1</span></div>
+          </div>
+          <div class="note">
+            <div class="body"><span class="rail" style="background:var(--accent)"></span>
+              <span class="txt">Let the board follow the merge, not the other way round.</span></div>
+            <div class="pips"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="room-foot">Writing closed when the cards were revealed · dots close when the clock runs out</div>
+  </div>
+
+  <!-- the auto-seeded data panel, collapsed for the vote: it is read-only from here on -->
+  <div class="seedbar">
+    <span class="chev">▸</span><span class="door">Cycle 1 data</span>
+    <span style="color:var(--text-3)">Delivered · Flow</span>
+    <span class="m">seeding a card closed with brainstorm</span>
+  </div>
+
+  <!-- the AI draft — its own buckets, its own section, never the format's columns -->
+  <div class="draftband">
+    <div class="draft-h">
+      <svg width="15" height="15" viewBox="0 0 20 20" style="color:var(--text-2)"><use href="#g-draft"/></svg>
+      <span class="dt">AI draft</span>
+      <span class="un">AI-drafted, not agreed</span>
+      <span class="m">reads the work graph only — never a card</span>
+    </div>
+    <div class="props">
+      <div class="prop">
+        <span class="cat">Wins</span>
+        <span class="sum">Every issue that shipped carried a linked change.</span>
+        <span class="ev">
+          <span class="chip"><span class="lbl">No linked PR</span>0<span class="prov"><svg width="11" height="11" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+        </span>
+        <span class="react">
+          <span class="rx"><svg width="12" height="12" viewBox="0 0 20 20"><use href="#g-agree"/></svg></span>
+          <span class="rx"><svg width="11" height="11" viewBox="0 0 20 20"><use href="#g-disagree"/></svg></span>
+        </span>
+      </div>
+      <div class="prop">
+        <span class="cat">Losses</span>
+        <span class="sum">Time to first review nearly doubled in the second week.</span>
+        <span class="ev">
+          <span class="how">how ·</span>
+          <span class="chip"><span class="lbl">Time to first review</span>19h<span class="prov"><svg width="11" height="11" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+          <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" style="color:var(--status-in-progress)"><use href="#g-progress"/></svg>ENG-104</span>
+        </span>
+        <span class="react">
+          <span class="rx on"><svg width="12" height="12" viewBox="0 0 20 20"><use href="#g-agree"/></svg></span>
+          <span class="rx"><svg width="11" height="11" viewBox="0 0 20 20"><use href="#g-disagree"/></svg></span>
+        </span>
+      </div>
+      <div class="prop">
+        <span class="cat">Improvements</span>
+        <span class="sum">Most failing checks trace to one payment test suite.</span>
+        <span class="ev">
+          <span class="chip"><span class="lbl">CI failing</span>26%<span class="prov"><svg width="11" height="11" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></span>
+          <span class="chip"><svg width="13" height="13" viewBox="0 0 20 20" style="color:var(--status-done)"><use href="#g-done"/></svg>ENG-92</span>
+        </span>
+        <span class="react">
+          <span class="rx"><svg width="12" height="12" viewBox="0 0 20 20"><use href="#g-agree"/></svg></span>
+          <span class="rx"><svg width="11" height="11" viewBox="0 0 20 20"><use href="#g-disagree"/></svg></span>
+        </span>
+      </div>
+    </div>
+    <div class="draft-foot">your own reaction only · verdicts stamp at Discuss</div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">4 need attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+
+<div class="sheetmark"><span class="k">THE INDEX · g r</span></div>
+
+<!-- =================================================================== FRAME 2 — THE INDEX -->
+<div class="frame short">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>4</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <h1>Retros</h1><span class="count">1</span>
+  </div>
+
+  <div class="idx">
+    <div class="irow">
+      <svg width="14" height="14" viewBox="0 0 20 20" style="color:var(--text-3)"><use href="#g-retro"/></svg>
+      <span class="ti">Cycle 1 retro</span>
+      <span class="ph">Vote</span>
+      <span class="fmt">Went well / Didn’t / Actions</span>
+      <span class="when">Jul 16 – Jul 29</span>
+    </div>
+    <div class="idx-quiet">
+      A retro opens when a cycle closes.
+      <span class="m">cycle 2 closes in 5 days</span>
+    </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">4 need attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+
+<!--
+================================================================================================
+(a) WHAT FOLDED, AND WHY
+
+1.  THE ACTION RAIL. `retro_action` exists (body, assignee, target cycle, optional issue link) and
+    the shipped surface draws it as a right-hand rail on every phase. It is gone here because
+    `phase.ts` allows the `action` write only in `discuss` and `actions`. A rail that cannot be
+    written to during vote is chrome promising what the phase refuses — the same argument that
+    folded Decisions out of the shipped more▾ menu (NORTHSTAR.md, PR #33). It returns at Discuss.
+
+2.  FOLLOW-UPS, AND THE PRIOR CYCLE'S AGREED IMPROVEMENTS. `retro_ai_proposal` has four stored
+    categories; only three are drawn. The set's whole cast is on Cycle 2, day 9, so Cycle 1 is the
+    only completed cycle and this is the team's first retro. `retro-ai-draft` §"a proposal claiming
+    the follow-up category without citing one of the prior retro's agreed actions SHALL be dropped"
+    and §"A team's first retro shows nothing" both make the absence mandatory, not stylistic.
+
+3.  THE INDEX HAS ONE ROW, for the same arithmetic. The set's cast is on Cycle 2, day 9 (delivery.html
+    puts that cycle at Jul 30 – Aug 12), so Cycle 1 — Jul 16 to Jul 29 — is the only completed cycle,
+    and it holds the only retro a team can have here. `RetrosView`'s second section ("completed
+    without a retrospective") folds with it: Cycle 2 is still running, so no cycle is owed one.
+    Ghost rows would have drawn a list this team cannot have. No "+ New retro" button either — a
+    retro is opened for a completed cycle, and there isn't one.
+
+    ONE COLLISION I COULD NOT RESOLVE, stated rather than hidden: delivery.html annotates Jul 30
+    with "Retro agreed: smaller PRs", which puts a CLOSED retro at the Cycle 1 boundary. This file
+    draws that same Cycle 1 retro live, in vote, on day 9 — a team running its retro late. Both
+    cannot be true at once. The alternatives were worse: a Cycle 2 retro is unreachable (the index
+    only opens one for a completed cycle), and moving band 3 to the retro's own day would break the
+    byte-identical statusline the set is checked on. The maintainer's call, not the mock's.
+
+4.  PER-COLUMN PARTICIPATION, CARD AUTHORS, "who voted", AND ANY SENTIMENT READ. No entity backs
+    any of them, and two are refused on purpose: the card→author binding is absent from the Zero
+    schema entirely, and `retro_vote` syncs only to its own voter. The pips draw the synced
+    `retro_vote_tally` for everyone plus the caller's own rows in accent — which is exactly the
+    split the schema hands the client, and nothing more.
+
+5.  A PHASE HISTORY. The stepper's spent phases carry NO durations — plays/warmth-retro drew
+    "12 min" and "7 min" under Brainstorm and Group, and nothing backs them: `retro` holds one
+    `timer_ends_at` / `timer_duration_s` pair for the running clock, and there is no per-phase
+    transition log anywhere (the same absence as the issue status history). The spent phases are
+    told by the filled band alone. The masthead's 4:32 is the live timer, which is real.
+
+6.  THE SEED PANEL'S NUMBERS, collapsed to a door. `retro_seed` is computed live and is real, but
+    Delivered/Flow open with ten figures, and the vote phase's one question is where the dots go.
+    Collapsed is a shipped state (`seedOpen`), not an invention. The strip also states that the
+    "add a card from this widget" path is shut, because `draft` is brainstorm-only.
+
+7.  THE PLAY'S PAPER GRAMMAR, half kept. Note rotation and the dog-ear corner are gone — PLAY-warmth
+    filed both as "one illustration away from greeting-card". What survives is a flat note: square-ish
+    3px radius against the app's 7/15px, and one 2px hairline of thickness at the foot. No shadow
+    anywhere in this file; there is no transient open, so nothing has earned elevation.
+
+8.  THE ACTIVE DECK STOP. No stop carries the active class, because `deck.tsx` states the rule
+    outright: more▾ is a transient and never takes `aria-current`; the destination marks the item
+    inside the menu, and the menu is closed here.
+
+    Corrections to the shipped page, in the other direction: the masthead no longer repeats the
+    team name (band 1 owns it), the format pill is gone (the three column headings already say it),
+    "Anonymous" as a bare pill is gone in favour of the guarantee that says WHY it is true, and the
+    lucide MessagesSquare / Sparkles / Timer icons are replaced by drawn marks on the 20-unit grid.
+
+(b) SELF-CRITIQUE
+
+    The weakest thing here is the AI draft band, and it is weak in a way the vote phase makes hard
+    to hide. Three proposals at 40px each occupy nearly the height of a whole board column while
+    carrying nothing the room can act on yet — no verdict, no action path, only a private tick that
+    nobody else can see. It sits at the bottom of a page whose live business is above it, so the
+    likely truth is that during vote nobody looks at it at all, and I have spent a fifth of the
+    surface proving the AI is subordinate rather than making it useful. A stronger answer might have
+    been the reaction controls alone on a single collapsed line during vote, unfolding at Discuss
+    when the verdict gives them a job — but that hides content the ratification spec wants readable
+    while the reacting window is open, so I left it drawn and am naming the cost instead.
+
+    Two smaller faults. The tabletop is only 11 cards and it still carries ~100px of open felt below
+    the shortest column at 1440×900 — the exact fault plays/warmth-retro filed against itself, which
+    I have inherited rather than fixed. Fewer cards is evasion, not an answer: the play worried about
+    15 cards on a 13" screen and I answered by drawing 11 on a 15". The group box also makes the
+    middle column the tall one, so the three will run ragged the moment a second group forms. And the index frame is one
+    row. It is the honest row, but a list surface judged on one row is barely judged: the sort order,
+    the closed-retro treatment, the year boundary and what twenty rows feel like are all undrawn.
+    It is also the frame a user meets FIRST out of the more▾ menu, so the sparsest drawing in the
+    file is the one doing the most first-impression work.
+================================================================================================
+
+════════════════════════════════════════════════════════════════════════════════
+SET-RECONCILIATION PASS (2026-08-09) — applied across all seven destination mocks
+after they were drawn independently. Comparison actually run: every <header class="gbar">
+and every <div class="statusline"> block in northstar/*.html and destinations/*.html was
+extracted, whitespace-normalised and md5'd, with the active-stop class stripped. All
+destination decks now hash to 571eee83 — identical to northstar/issues.html modulo which
+stop is active. All statuslines hash to eb551c33, byte-identical to the canonical five.
+The band-1 and band-3 CSS blocks were hashed the same way and unified on delivery.html's
+variant (1e7593d5).
+  · This file: --elevation-transient added to the token block for uniformity (still unused —
+    nothing on this surface is elevated). Amber, the done check and both bands were already
+    correct; this file was the reference for the retuned amber. Nothing was removed for
+    inventing a fact.
+  · TOKENS. All seven now carry ONE token block, taken from packages/ui/src/styles/globals.css
+    [data-theme="warm"] at commit 6a46113: --status-in-progress #b67500 (was #ce8a26 in four
+    files), --status-in-progress-ink #935e00, --status-urgent-ink #a4462b and
+    --elevation-transient present everywhere, declared in the same order. The only hexes drawn
+    outside the token block are the avatar pair #5c5348/#f1ebe3, exactly as northstar/issues.html
+    draws them.
+  · DONE GLYPH. The check inside the filled disc is the shipped DONE_CHECK constant everywhere —
+    d="M6.3 10.3 8.9 12.9 13.7 7.3", stroke-width 1.6, stroke var(--bg). Three files had drifted
+    to hand-rolled paths at 1.7/1.8/1.9.
+  · URGENT INK. Urgent TEXT on a work surface uses --status-urgent-ink; band 3 keeps
+    --status-urgent so its markup stays byte-identical to the canonical set. That two-ink split
+    is deliberate and is the set's standing debt against the build, not a per-file choice.
+  · ONE ATTENTION NUMBER. 4 in the deck badge, 4 in the statusline, no second count anywhere.
+════════════════════════════════════════════════════════════════════════════════
+-->
+</body>
+</html>

@@ -8,6 +8,7 @@ import {
   DIGESTS_BY_CYCLE_QUERY_NAME,
   DIGESTS_BY_TEAM_QUERY_NAME,
   INVITES_ALL_QUERY_NAME,
+  ISSUE_BY_KEY_QUERY_NAME,
   ISSUE_DETAIL_QUERY_NAME,
   ISSUES_BY_TEAM_QUERY_NAME,
   ISSUES_MINE_QUERY_NAME,
@@ -80,6 +81,7 @@ describe('the synced query registry', () => {
       [ISSUES_BY_TEAM_QUERY_NAME, queries.issues.byTeam],
       [ISSUES_MINE_QUERY_NAME, queries.issues.mine],
       [ISSUE_DETAIL_QUERY_NAME, queries.issues.detail],
+      [ISSUE_BY_KEY_QUERY_NAME, queries.issues.byKey],
       [CYCLES_BY_TEAM_QUERY_NAME, queries.cycles.byTeam],
       [PROJECTS_ALL_QUERY_NAME, queries.projects.all],
       [PROJECT_GET_QUERY_NAME, queries.projects.get],
@@ -236,6 +238,36 @@ describe('team-scoped work-data queries', () => {
         DENY_ALL_WHERE,
       )
     }
+  })
+
+  it('scopes issues.byKey exactly as issues.byTeam does', () => {
+    const args = { teamId: TEAM_ID, number: 116 }
+    for (const ctx of [MEMBER, VIEWER]) {
+      const where = astOfArgs(queries.issues.byKey, args, ctx).where
+      expect(where).not.toEqual(DENY_ALL_WHERE)
+      expect(JSON.stringify(where)).toContain(ctx.userID)
+    }
+    const adminWhere = astOfArgs(queries.issues.byKey, args, ADMIN).where
+    expect(adminWhere).not.toEqual(DENY_ALL_WHERE)
+    expect(JSON.stringify(adminWhere)).not.toContain(ADMIN.userID)
+    for (const ctx of [NON_MEMBER, undefined]) {
+      expect(astOfArgs(queries.issues.byKey, args, ctx).where).toEqual(DENY_ALL_WHERE)
+    }
+  })
+
+  it('holds a triage row out of issues.byKey, so a guessed number cannot reach one', () => {
+    const where = JSON.stringify(
+      astOfArgs(queries.issues.byKey, { teamId: TEAM_ID, number: 116 }, MEMBER).where,
+    )
+    expect(where).toContain('needsTriage')
+    expect(where).toMatch(/needsTriage[\s\S]*false/)
+    expect(where).not.toMatch(/needsTriage[\s\S]*true/)
+  })
+
+  it('never widens issues.byKey beyond the caller memberships given a foreign teamId arg', () => {
+    const where = astOfArgs(queries.issues.byKey, { teamId: TEAM_ID, number: 1 }, MEMBER).where
+    expect(JSON.stringify(where)).toContain(MEMBER.userID)
+    expect(JSON.stringify(where)).not.toContain(NON_MEMBER.userID)
   })
 
   it('never widens beyond the caller memberships even given a foreign teamId arg', () => {
@@ -524,6 +556,7 @@ describe('subscriptions.mine is self-scoped, per-issue, with no admin bypass', (
       retroId: ISSUE_ID,
       cycleId: ISSUE_ID,
       teamId: TEAM_ID,
+      number: 116,
     }
     const readers: string[] = []
 

@@ -19,6 +19,7 @@ const HOUR = 60 * 60 * 1000
 function signal(overrides: Partial<DeliverySignal> = {}): DeliverySignal {
   return {
     pr: null,
+    pullRequestId: null,
     ciHealth: null,
     reviewAgeMs: null,
     reviewAgeFrom: null,
@@ -183,6 +184,18 @@ describe('classifyRestPhrase reads only the real predicates', () => {
     )
     expect(unreviewed.text).toBe('In review — waiting 16h')
     expect(returned.text).toBe('In review — reviewed 16h ago')
+  })
+
+  // The one clause in the dictionary that ends in " ago", over the one age `formatReviewAge`
+  // answers as a word rather than a number.
+  it('says "just now" for a review under a minute rather than "now ago"', () => {
+    const returned = restPhrase('review_returned', 'neutral', { reviewAgeMs: 20_000 })
+    expect(returned.text).toBe('In review — reviewed just now')
+    expect(returned.text).not.toMatch(/now ago/)
+    // A minute later it is a measured age again.
+    expect(restPhrase('review_returned', 'neutral', { reviewAgeMs: 90_000 }).text).toBe(
+      'In review — reviewed 1m ago',
+    )
   })
 
   it('falls back to the human status when git has nothing to say', () => {

@@ -63,6 +63,13 @@ as a rail**: the same stations, top to bottom, each with a sentence and a mono l
 under it. It is one shape on two axes, not two vocabularies — so a break in a dense row and a break
 in a rail mean exactly the same thing.
 
+The rail's consumer is [the issue detail](/features/issue-detail/), and it differs from the dense
+track in one way: a row's track always draws the same four facts, while a rail draws **one station
+per moment that actually happened**. A change nobody has reviewed has no Reviewed station, not an
+empty one, and the rail's header names only the chain it drew. Which connector each station earns,
+and which segment the `//` falls on, still come from this one vocabulary — the surface names its
+stations, and the vocabulary decides how they are drawn.
+
 ## The `//` break
 
 Where the board and git disagree, the track does not continue: it **breaks**, with a mono `//` at

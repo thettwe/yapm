@@ -1,6 +1,6 @@
 import type { IssueSortKey } from '@yapm/schema'
 import { describe, expect, it } from 'vitest'
-import { buildGroups, DEFAULT_SORT, type IssueRowData } from './model'
+import { buildGroups, DEFAULT_SORT, type IssueRowData, parseIssueKey } from './model'
 
 const issue = (over: Partial<IssueRowData> & { id: string }): IssueRowData => ({
   number: 1,
@@ -195,5 +195,34 @@ describe('buildGroups — the six sort keys', () => {
       sort: { key, direction: 'desc' },
     })
     expect(ordered.map((i) => i.id)).toEqual([...expected].reverse())
+  })
+})
+
+describe('parseIssueKey', () => {
+  it('accepts this team key, case-insensitively', () => {
+    expect(parseIssueKey('ENG-116', 'ENG')).toBe(116)
+    expect(parseIssueKey('eng-116', 'ENG')).toBe(116)
+    expect(parseIssueKey('Eng-116', 'eng')).toBe(116)
+  })
+
+  it('accepts the bare number the side panel link emits', () => {
+    expect(parseIssueKey('116', 'ENG')).toBe(116)
+    expect(parseIssueKey('116', undefined)).toBe(116)
+  })
+
+  it('refuses another team key rather than answering with a shared number', () => {
+    expect(parseIssueKey('OPS-116', 'ENG')).toBeNull()
+  })
+
+  it('refuses anything that is not one of the two spellings', () => {
+    for (const segment of ['', 'ENG', 'ENG-', '-116', 'ENG-116-2', 'ENG 116', '11a', 'ENG-1.5']) {
+      expect(parseIssueKey(segment, 'ENG')).toBeNull()
+    }
+  })
+
+  it('is undecided, not wrong, while the team key is still syncing', () => {
+    expect(parseIssueKey('ENG-116', undefined)).toBeUndefined()
+    // A malformed segment needs no team key to be refused.
+    expect(parseIssueKey('nonsense', undefined)).toBeNull()
   })
 })

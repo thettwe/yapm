@@ -262,6 +262,38 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     }
   })
 
+  // The issue detail's divergence callout: a tinted card on `--urgent-soft` carrying a title in
+  // `--status-urgent-ink`, a sentence in `--text-1` and a MONO evidence line in `--text-2` at 11px.
+  // The urgent ink over that wash is already pinned above; what is new here is the two body inks,
+  // which the digest never put on the urgent ground. The divergence pill in band 2 sits on the same
+  // wash and carries the same dictionary text, so one assertion holds both.
+  //
+  // The mono subline and the rail's fact lines are `--text-2` on `--bg` at 11px, which the first
+  // assertion in this block already holds at AA normal — recorded here rather than duplicated,
+  // because two assertions over one pair is how one of them quietly stops being maintained.
+  it('the divergence callout ink meets AA on its tinted ground (>= 4.5)', () => {
+    const ground = wash(hex(t, '--status-urgent'), hex(t, '--bg'), 0.08)
+    for (const ink of ['--text-1', '--text-2', '--status-urgent-ink'] as const) {
+      expect(contrastRatio(hex(t, ink), ground), ink).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
+  // The keyboard hint INSIDE the primary action — the 10px `⏎` keycap on Mark Done, in the masthead
+  // and in the divergence callout. It sits on the accent fill, so its ink is the one pair the block
+  // below already pins at AA — and it shipped as `text-primary-foreground/80`, an alpha modifier
+  // that steps that guaranteed pair under AA in five of the six blocks while no token assertion can
+  // see it. The ink is solid now, and the keycap's BORDER — non-text drawing, so 3:1 (WCAG 1.4.11)
+  // rather than 4.5 — is the one part still carried by an alpha, pinned here at the 75% it is drawn
+  // at because 60% measures 2.46–3.36 and editorial light is under the bar there.
+  it('the on-accent key hint reads on the accent fill (>= 4.5 ink, >= 3.0 keycap border)', () => {
+    const fill = hex(t, '--accent')
+    const ink = hex(t, '--on-accent')
+    expect(contrastRatio(ink, fill), 'hint ink').toBeGreaterThanOrEqual(AA_NORMAL)
+    expect(contrastRatio(wash(ink, fill, 0.75), fill), 'hint border').toBeGreaterThanOrEqual(
+      AA_LARGE,
+    )
+  })
+
   // The reality track — the one vocabulary every surface draws delivery in — is drawn on exactly
   // five surfaces: a plain row, a hovered row, the SELECTED list row (`--bg-selected`,
   // `issue-row.tsx`), the SELECTED board card (`--accent-soft`, `board-card.tsx`) and the digest's

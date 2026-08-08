@@ -71,6 +71,9 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
   let authorDraftIds: string[]
   let projectId: string
   let deliveryIssueId: string
+  // The number the server assigned, read back rather than assumed: `issues.byKey` is addressed by
+  // `(teamId, number)`, which is the pair a URL spells.
+  let deliveryIssueNumber: number
 
   async function apply<T>(
     run: (tx: ReturnType<typeof createPgServerTransaction>) => Promise<T>,
@@ -270,6 +273,10 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
         ctx: B,
       }),
     )
+    const numbered = await sql<{ number: number }>`
+      select number from issue where id = ${issueId}
+    `.execute(database.db)
+    deliveryIssueNumber = numbered.rows[0]?.number ?? 1
     await apply((tx) =>
       mutators.issue.setCycle.fn({
         tx,
@@ -551,6 +558,11 @@ describe.skipIf(DATABASE_URL === undefined)('the retro anonymity boundary', () =
       'issues.byTeam': { teamId },
       'issues.mine': undefined,
       'issues.detail': { id: deliveryIssueId },
+      // The deep-link resolver, swept by the same walk: it is the one query addressed by a pair a
+      // person can TYPE, so if it ever reached past the caller's teams it would do so from the
+      // address bar. Its own scoping proof lives in `queries.issue-by-key.pg.test.ts`; this entry is
+      // what makes covered == registry hold.
+      'issues.byKey': { teamId, number: deliveryIssueNumber },
       'cycles.byTeam': { teamId },
       'projects.all': undefined,
       'projects.get': { id: projectId },

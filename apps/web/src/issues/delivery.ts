@@ -25,6 +25,9 @@ export interface DeliveryView {
   // What the row says at rest, from the shared dictionary's neutral register. Derived from the
   // SAME signal the track is drawn from — one `computeDeliverySignal` per row, never two.
   readonly phrase: RestPhrase
+  // WHICH linked change the phrase and the strip above describe. Passed through so a surface that
+  // draws a second register over the same issue narrows to that change instead of picking its own.
+  readonly pullRequestId: string | null
 }
 
 // The human sentence the `//` break carries — the one place status-vs-reality is named for the
@@ -56,9 +59,10 @@ export function deliveryView(
   const signal = computeDeliverySignal(issue, linked)
   const divergence = computeDivergence(issue.status, signal)
   const phrase = sayRestPhrase(issue.status, signal, divergence, 'neutral')
-  if (signal === null) return { strip: null, divergence, phrase }
+  if (signal === null) return { strip: null, divergence, phrase, pullRequestId: null }
   return {
     phrase,
+    pullRequestId: signal.pullRequestId,
     strip: {
       pr: signal.pr,
       ci: signal.ciHealth,

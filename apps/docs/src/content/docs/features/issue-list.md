@@ -151,3 +151,11 @@ Every interaction here is operable without a pointer.
 The palette is owned by the app frame, not by this page — see [Search](/features/search/). The list
 registers its commands with it rather than listening for the shortcut itself, so the same keystroke
 means the same thing on every screen.
+
+## Opening an issue
+
+`Enter` opens the focused issue in a side panel, and the URL carries it (`?open=…`) so a reload
+lands you back on it. The panel and the full page are **one implementation** of
+[the issue detail](/features/issue-detail/): the same description, files, activity, comments,
+delivery rail, divergence callout and properties, stacked at the panel's narrower measure instead of
+placed in two columns. Nothing is available on one and missing from the other.

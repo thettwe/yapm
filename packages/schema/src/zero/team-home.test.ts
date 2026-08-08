@@ -789,6 +789,77 @@ describe('buildTeamFrame (app-frame §D2)', () => {
     expect(frame.cycle).toBeNull()
     expect(frame.shipped).toBeNull()
   })
+
+  // The table. One agreeing case proves the wiring; these prove it survives the shapes that would
+  // most plausibly break it — an issue in two classes, an empty team, a team between cycles, a team
+  // that has never deployed. Each asserts the expected count too, so a derivation that quietly
+  // returned the same wrong number in both places still fails.
+  const AGREEMENT: readonly { name: string; input: () => TeamHomeInput; count: number | null }[] = [
+    { name: 'four classes, one issue matching two', input: attentionFixture, count: 7 },
+    { name: 'nothing needing attention', input: () => baseInput(), count: null },
+    {
+      name: 'one issue in two classes, counted once',
+      input: () =>
+        baseInput({
+          issues: [
+            makeIssue({
+              status: 'in_review',
+              issueLinks: [
+                link({
+                  state: 'open',
+                  openedAt: NOW - 30 * HOUR,
+                  ciChecks: [{ conclusion: 'failure', updatedAt: NOW - 20 * 60 * 1000 }],
+                }),
+              ],
+            }),
+          ],
+        }),
+      count: 1,
+    },
+    {
+      name: 'no active cycle, exceptions still counted',
+      input: () =>
+        baseInput({
+          cycles: [],
+          issues: [
+            makeIssue({
+              status: 'in_review',
+              cycleId: null,
+              issueLinks: [link({ state: 'open', openedAt: NOW - 40 * HOUR })],
+            }),
+          ],
+          triage: [{ id: 'triage-1', createdAt: NOW - HOUR }],
+        }),
+      count: 2,
+    },
+    {
+      name: 'no deployments at all',
+      input: () =>
+        baseInput({
+          deployments: [],
+          triage: [
+            { id: 'triage-1', createdAt: NOW - HOUR },
+            { id: 'triage-2', createdAt: NOW - 2 * HOUR },
+          ],
+        }),
+      count: 2,
+    },
+  ]
+
+  it.each(AGREEMENT)('$name: the frame and the digest report one number', ({ input, count }) => {
+    const built = input()
+    const frame = buildTeamFrame(built, NOW)
+    const home = buildTeamHome(built, NOW, VIEWER)
+
+    expect(frame.attention?.count ?? null).toBe(count)
+    expect(home.attention?.count ?? null).toBe(count)
+    expect(home.attention).toStrictEqual(frame.attention)
+    // Home's hero restates the count in words; off-cycle it has no hero to restate it in, and an
+    // absent restatement is not a disagreement.
+    if (home.hero.cycle !== null && home.hero.cycle !== undefined) {
+      expect(home.hero.cycle.statusWords.needAttention).toBe(count ?? 0)
+    }
+  })
 })
 
 // The rule the whole change rests on, asserted against the source rather than a behaviour: a

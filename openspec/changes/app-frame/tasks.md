@@ -43,25 +43,27 @@
 
 ## 7. Tests
 
-- [x] 7.1 `packages/schema` unit: `buildTeamFrame` and `buildTeamHome` return the identical attention count across a table of inputs, including the two-classes-one-issue case and the zero case; a test that fails if a second `buildAttention` call site appears
+- [x] 7.1 `packages/schema` unit: `buildTeamFrame` and `buildTeamHome` return the identical attention count across a table of inputs, including the two-classes-one-issue case and the zero case; a test that fails if a second `buildAttention` call site appears — the table now runs five inputs (four classes with one issue in two, zero, one issue in two classes alone, no active cycle, no deployments) and asserts the expected count as well as the agreement, so a derivation that returned the same wrong number in both places still fails
 - [x] 7.2 `apps/web` component: **the falsifiable check** — rendering any authenticated route yields exactly one deck, exactly one statusline, and every element reporting an attention count reports the same value; zero renders no badge and no attention segment
-- [x] 7.3 `apps/web` component: the deck's six stops, `aria-current` on the right stop per route, Board-as-lens keeping Issues current, `more▾` open/Escape/focus-return, and the `g`-prefix shortcuts including the typing-suppression case
-- [x] 7.4 `apps/web` component: off-team degradation — stops point at the anchor team with nothing current, the statusline states no team fact, a stale anchor falls back, an empty workspace drops the stops
+- [x] 7.3 `apps/web` component: the deck's six stops (enumerated in order, `more▾` a button and never current), `aria-current` on the right stop per route, Board-as-lens keeping Issues current while the lens carries `aria-pressed`, `more▾` open/Escape/focus-return, the `g`-prefix shortcuts including the typing-suppression case, and the right cluster's three doorways (search link, badge accessible name, inbox)
+- [x] 7.4 `apps/web` component: off-team degradation — stops point at the anchor team with nothing current, the statusline states no team fact, a stale anchor falls back, an empty workspace drops the stops; plus `frame/team-context.test.ts` for the resolver itself (route wins, remembered, stale id discarded, route id not in the synced list, empty workspace, storage round-trip and a browser that refuses storage)
 - [x] 7.5 `apps/web` component: one palette owner — the shortcut opens a palette on a surface that registers nothing; a surface's commands appear only while mounted; every command reachable before is reachable after
-- [x] 7.6 `apps/web/src/routes.test.tsx`: the route inventory — every registered route is reachable from the frame or is one of the two unauthenticated surfaces
+- [x] 7.6 `apps/web/src/routes.test.tsx`: the route inventory — every registered route is reachable from the frame or is one of the two unauthenticated surfaces; the login case also asserts the unauthenticated surfaces render no deck and no statusline
 - [x] 7.7 Extend `packages/ui/src/styles/contrast.test.ts` with the frame's token pairs (active stop on `--bg`, statusline text on `--statusline-bg`, attention ink on `--urgent-soft`) in all six theme blocks
 - [x] 7.8 Update the Playwright specs the frame moves: the fifteen `connection-status` waits (indicator relocated, testid preserved) and `retro-ai.spec.ts`'s `navigation { name: 'Issue views' }` → `navigation { name: 'Destinations' }` with `aria-current`. Update to match the new frame; never weaken an assertion
 
 ## 8. Documentation
 
 - [x] 8.1 New `apps/docs/src/content/docs/features/app-frame.md`: the three bands, the six destinations, the one-attention-number rule, the keyboard grammar (`⌘K`, `g`-prefix, `more▾`), and honest degradation off-team
-- [x] 8.2 Update `features/team-home.md` (the attention number is now app-wide), `features/board.md` (Board is a lens, not a peer view), `features/notifications.md` (the badge is in the deck, on every surface), `features/search.md` (the ⌘K pill and the palette owner)
+- [x] 8.2 Update `features/team-home.md` (the attention number is now app-wide), `features/board.md` (Board is a lens, not a peer view), `features/notifications.md` (the badge is in the deck, on every surface), `features/search.md` (the ⌘K pill and the palette owner), `features/{cycles,triage,projects,delivery}.md` (stops and `more▾`, not tabs or a switcher), and `self-hosting/sync-recovery.md` (the sync state lives at the right-hand end of the statusline, and there is exactly one indicator)
 - [x] 8.3 Update `README.md` and `ROADMAP.md` where they describe navigation or the app shell; add the change's ROADMAP row/status
-- [x] 8.4 `pnpm --filter @yapm/docs build` passes; no stale root doc left behind (PROCESS.md §2)
+- [x] 8.4 `pnpm --filter @yapm/docs build` passes; no stale root doc left behind (PROCESS.md §2) — `.env.example` is unchanged and still matches the Zod schema (this change adds no variable; `config/env-example.test.ts` holds it)
+- [x] 8.5 Correct the design reference: `northstar/NORTHSTAR.md` records what shipped and the two forced divergences (the active stop's ink, and `g d` going to Delivery once Decisions folded away) — design DI-16
+- [x] 8.6 MODIFIED deltas for the two archived specs that described the deleted view switcher — `specs/triage/` and `specs/delivery-metrics/` — reproduced in full with only the reachability clause reworded (design DI-15)
 
 ## 9. Gates
 
 - [ ] 9.1 `pnpm turbo lint typecheck test build`
 - [ ] 9.2 The compose smoke test
 - [ ] 9.3 The full Playwright e2e suite (CI is the gate of record; run locally once after the migration since this is cross-cutting chrome)
-- [ ] 9.4 Walk every scenario in `openspec/changes/app-frame/specs/**` and confirm it is true
+- [x] 9.4 Walk every scenario in `openspec/changes/app-frame/specs/**` and confirm it is true — the three that had no assertion behind them now do (the badge's accessible name, search reachable without the palette, and no frame on an unauthenticated surface)

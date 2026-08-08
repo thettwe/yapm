@@ -456,3 +456,23 @@ switcher, the account menu, the deck's right cluster, a doorway, or unauthentica
 prove reachability but would go green on a route reachable only from a page nobody can reach; the
 table forces whoever registers a route to name where a reader finds it, at the one moment they are
 certainly thinking about it.
+
+**DI-15 — two archived specs described a switcher this change deletes, so they get MODIFIED
+deltas.** `openspec/specs/triage/spec.md` said the Triage view is "peer to List, Board, and Cycles
+via the view switch", and `openspec/specs/delivery-metrics/spec.md` said Delivery sits "beside the
+team's other views on the same switcher" and is reached from "every team surface's view switcher".
+`ViewSwitch` is gone; leaving those sentences in the living behaviour would archive a lie about
+navigation into the one place the repo says is trustworthy. Both requirements are reproduced in
+full under `## MODIFIED Requirements` in this change's `specs/`, with only the reachability clause
+reworded (the frame's destination and its `g` shortcut) and the triage requirement gaining a
+scenario for it. No metric definition, window rule or scenario outcome is touched — this is a
+navigation correction, not a behaviour change, and everything else is copied verbatim so the
+archive replaces like with like.
+
+**DI-16 — NORTHSTAR.md records the two places the build had to diverge from the mock.** Following
+the precedent of the shipped-token note (`42c7c4f`), the northstar README now carries what shipped
+in this change and why two details could not: the active stop's ink is `--text-1` rather than the
+mock's accent (`--accent-strong` on `--bg` is ~4.44:1 in editorial light — under AA, so the
+underline and weight carry the state), and `g d` went to Delivery because Decisions folded away for
+want of an entity. A design reference that still shows the accent tab label without saying why the
+build did not copy it is how the same argument gets had again on the next page rebuild.

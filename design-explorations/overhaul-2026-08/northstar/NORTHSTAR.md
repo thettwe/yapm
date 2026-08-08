@@ -51,6 +51,26 @@ honesty behind "more ·", "opens:" lists behind door affordances.
 - PNGs re-rendered from final HTML (Playwright, 1440×900 viewport + full-page) after the
   last edit pass, so every screenshot matches its file.
 
+### What the build kept, and the two places it had to diverge (PR #33)
+
+The frame shipped from these files: 48px deck, 32px statusline on `--statusline-bg`, the six
+stops with `more▾` as a transient, and the one attention number enforced by a single
+`buildTeamFrame` derivation the Home digest consumes rather than recomputes. Two divergences,
+both forced by facts the mock did not have to hold:
+
+- **The active stop's ink is `--text-1`, not the accent.** `--accent-strong` on `--bg` measures
+  ~4.44:1 in editorial light — under AA for normal text — so the mock's accent-coloured tab label
+  could not ship in every theme. The 2px accent underline and semibold weight carry the state
+  instead, and `contrast.test.ts` holds the pair in all six blocks.
+- **Decisions (`g d`) folded away and `g d` went to Delivery.** The mock draws Decisions in the
+  open `more▾` menu; no entity backs it, and a disabled row is chrome promising what the product
+  cannot keep. The free shortcut went to the destination that exists.
+
+One thing the mock could not decide, and the build had to: `ia.html` assumes team context
+("Acme / Engineering"), while yapm is one workspace of many teams and six routes are
+workspace-level. The deck stays present off-team and its stops point at an anchor team, but band 3
+says only what is true — see `openspec/changes/app-frame/design.md` §D3.
+
 ## Candidate: home-digest (2026-08-07, not yet canonical)
 
 `home-digest.html/.png/-full.png` — Home as the logged-in user's digest. home.html is

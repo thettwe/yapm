@@ -50,6 +50,11 @@ test('the login route presents the sign-in surface to unauthenticated users', as
   expect(await screen.findByRole('heading', { name: /sign in to yapm/i })).toBeInTheDocument()
   expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
   expect(screen.getByTestId('login-submit')).toBeInTheDocument()
+
+  // The frame is for people who are in. A deck naming a workspace, or a statusline reporting a
+  // team's day, to somebody who has not signed in would be chrome asserting facts it cannot have.
+  expect(screen.queryByTestId('deck')).toBeNull()
+  expect(screen.queryByTestId('statusline')).toBeNull()
 })
 
 // `/search` carries its query in the URL so a search is shareable and the back button behaves.

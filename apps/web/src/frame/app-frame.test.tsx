@@ -85,6 +85,9 @@ vi.mock('@/issues/issue-detail', () => ({
   IssueDetail: () => null,
   IssueDetailPanel: () => null,
 }))
+vi.mock('@/board/board', () => ({
+  Board: () => <div data-testid="board" />,
+}))
 
 import { routeTree } from '@/routeTree.gen'
 
@@ -206,6 +209,86 @@ test('every authenticated route renders one deck, one statusline, and one attent
     .getAllByRole('link')
     .filter((link) => link.getAttribute('aria-current') === 'page')
   expect(currents).toHaveLength(1)
+})
+
+// The six destinations of §"Destinations", in the northstar's order. Below the deck's comfortable
+// width the last three fold into `more▾` by CSS alone — jsdom applies no stylesheet, so what this
+// asserts is the full set the band offers, which is the thing a new route would quietly change.
+test('the deck offers the six destinations and nothing else', async () => {
+  zero.teams = [TEAM]
+  renderAt('/teams/team-1/issues')
+
+  const nav = await screen.findByRole('navigation', { name: 'Destinations' })
+  expect(
+    within(nav)
+      .getAllByRole('link')
+      .map((link) => link.textContent),
+  ).toEqual(['Home', 'Issues', 'Triage', 'Cycles', 'Delivery'])
+  // The sixth is `more▾`: a transient, so a button rather than a link, and never current.
+  const more = within(nav).getByRole('button')
+  expect(more).toHaveTextContent('more')
+  expect(more).not.toHaveAttribute('aria-current')
+})
+
+// The right cluster's three doorways — the ones the nine hand-rolled headers silently dropped, so
+// that search, digests and the inbox were invisible on exactly the surfaces being overhauled.
+test('the deck’s right cluster carries search, the attention badge and the inbox on every page', async () => {
+  fourExceptions()
+  renderAt('/teams/team-1/issues')
+
+  const deck = await screen.findByTestId('deck')
+  // Search is a real link, so it is in the tab order and reachable with no pointer and no palette.
+  expect(within(deck).getByTestId('search-entry')).toHaveAttribute('href', '/search')
+  expect(within(deck).getByTestId('inbox-badge')).toBeInTheDocument()
+  // The badge says what its number counts, rather than leaving a bare digit to a screen reader.
+  expect(within(deck).getByTestId('attention-badge')).toHaveAccessibleName(
+    '4 issues need attention',
+  )
+})
+
+// Board is a LENS on Issues, not a seventh stop. The bar may not claim two current pages, so the
+// route keeps Issues current and the toggle carries which lens is on.
+test('on Board the Issues stop stays current and the lens says which one is on', async () => {
+  zero.teams = [TEAM]
+  renderAt('/teams/team-1/board')
+
+  expect(await screen.findByTestId('board')).toBeInTheDocument()
+  const nav = screen.getByRole('navigation', { name: 'Destinations' })
+  expect(within(nav).getByRole('link', { name: 'Issues' })).toHaveAttribute('aria-current', 'page')
+  expect(
+    within(nav)
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('aria-current') === 'page'),
+  ).toHaveLength(1)
+
+  const masthead = screen.getByTestId('masthead')
+  expect(within(masthead).getByRole('link', { name: 'Board' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  expect(within(masthead).getByRole('link', { name: 'List' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
+})
+
+// A remembered team the caller has since lost access to would otherwise leave six stops pointing at
+// a 404. The anchor is re-validated against the synced list on every read, not trusted once.
+test('a stale remembered team is dropped and the stops fall back to one that exists', async () => {
+  zero.teams = [TEAM]
+  vi.stubGlobal('localStorage', {
+    getItem: () => 'team-gone',
+    setItem: () => {},
+  })
+
+  renderAt('/inbox')
+
+  const nav = await screen.findByRole('navigation', { name: 'Destinations' })
+  expect(within(nav).getByRole('link', { name: 'Issues' })).toHaveAttribute(
+    'href',
+    '/teams/team-1/issues',
+  )
+  vi.unstubAllGlobals()
 })
 
 test('at zero the badge and the attention segment are absent, not zeroed', async () => {

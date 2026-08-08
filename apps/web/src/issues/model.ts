@@ -334,6 +334,20 @@ export function isPendingNumber(issue: { number?: number | null }): boolean {
   return issue.number == null
 }
 
+// One measure for every row's age column. Triage states `created_at` where the list states
+// `updated_at`; a second implementation would let the two columns drift out of the same register.
+export function formatRelative(ts: number): string {
+  const diff = Date.now() - ts
+  const min = Math.floor(diff / 60_000)
+  if (min < 1) return 'now'
+  if (min < 60) return `${min}m`
+  const hours = Math.floor(min / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d`
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 // The inverse of `issueKey`, and the only thing a URL segment is allowed to mean. Two accepted
 // spellings and no third: `<TEAMKEY>-<number>` matched case-insensitively against THIS team's key
 // (an address bar loses case, and `eng-116` is the same issue as `ENG-116`), or a bare `<number>`,

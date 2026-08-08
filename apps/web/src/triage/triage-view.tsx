@@ -1,20 +1,16 @@
 import { useQuery, useZero } from '@rocicorp/zero/react'
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { ISSUE_STATUSES, type IssueStatus, mutators, queries } from '@yapm/schema'
-import { Button } from '@yapm/ui/components/button'
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@yapm/ui/components/dialog'
+import { Avatar, AvatarFallback } from '@yapm/ui/components/avatar'
 import { IssueRow } from '@yapm/ui/components/issue-row'
-import { Label } from '@yapm/ui/components/label'
+import { RichTextRenderer, type RichTextValue } from '@yapm/ui/components/rich-text'
 import { Select } from '@yapm/ui/components/select'
-import { CheckIcon, InboxIcon, RouteIcon, XIcon } from 'lucide-react'
+import { StatusGlyph } from '@yapm/ui/components/status-glyph'
+import { cn } from '@yapm/ui/lib/utils'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type RefObject,
   useCallback,
   useEffect,
   useId,
@@ -25,7 +21,10 @@ import {
 import { useMembership } from '@/auth/use-membership'
 import { cycleKey } from '@/cycles/model'
 import { Masthead } from '@/frame/masthead'
+import { attachmentSrc } from '@/issues/attachments/upload'
+import { mentionNamesFor } from '@/issues/mentionables'
 import {
+  formatRelative,
   type IssueRowData,
   issueKey,
   PRIORITY_TO_KIND,
@@ -34,21 +33,117 @@ import {
 } from '@/issues/model'
 import { runMutation } from '@/lib/mutation'
 
-interface RouteTarget {
-  status?: IssueStatus
-  assigneeId?: string | null
-  cycleId?: string | null
-  labelIds: readonly string[]
+interface TriageIssue extends IssueRowData {
+  readonly description: RichTextValue | null
+  readonly reporter: string | null
+}
+
+interface AttachmentChipRow {
+  readonly id: string
+  readonly filename: string
+}
+
+interface RouteDraft {
+  readonly status: IssueStatus
+  readonly assigneeId: string
+  readonly cycleId: string
+  readonly projectId: string
+  readonly labelIds: ReadonlySet<string>
+}
+
+interface Option {
+  readonly id: string
+  readonly name: string
+}
+
+interface LabelOption extends Option {
+  readonly color: string
+}
+
+// The arrival stamp, stated once — the queue's age column is a plain relative number and the
+// panel is the only place the surface names the moment itself.
+export function formatStamp(ts: number): string {
+  return new Date(ts).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function Key({ children, armed = false }: { children: ReactNode; armed?: boolean }) {
+  return (
+    <kbd
+      className={cn(
+        'rounded border border-border-strong bg-bg-elevated px-1 py-px font-mono text-[10px] text-text-2',
+        armed && 'border-accent text-accent-strong ring-2 ring-accent-line',
+      )}
+    >
+      {children}
+    </kbd>
+  )
+}
+
+function CyclesGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="size-3.5 text-text-3">
+      <circle cx="10" cy="10" r="6.4" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M10 1.4 V4.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="5.5" cy="14.5" r="1.9" fill="currentColor" />
+    </svg>
+  )
+}
+
+function ProjectsGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="size-3.5 text-text-3">
+      <path
+        d="M5 4 H4 V16 H5 M15 4 H16 V16 H15"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <circle cx="10" cy="10" r="2.2" fill="currentColor" />
+    </svg>
+  )
+}
+
+function UploadGlyph() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="size-3 shrink-0 text-text-2">
+      <rect
+        x="3"
+        y="4.5"
+        width="14"
+        height="11"
+        rx="2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M5.5 13 L9 9.5 L11 11.3 L14.5 8.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
 }
 
 export function TriageView({ teamId }: { teamId: string }) {
   const navigate = useNavigate()
   const zero = useZero()
-  const { canWrite } = useMembership()
+  const { canWrite, userId } = useMembership()
   const [teams] = useQuery(queries.teams.all())
   const [users] = useQuery(queries.users.all())
+  const [workspaceMembers] = useQuery(queries.members.all())
   const [labels] = useQuery(queries.labels.byTeam({ teamId }))
   const [cycles] = useQuery(queries.cycles.byTeam({ teamId }))
+  const [projects] = useQuery(queries.projects.all())
   const [inboxRaw, inboxResult] = useQuery(queries.triage.inbox({ teamId }))
 
   const [focusIndex, setFocusIndex] = useState(0)
@@ -59,7 +154,7 @@ export function TriageView({ teamId }: { teamId: string }) {
   const team = teams.find((candidate) => candidate.id === teamId)
   const teamKey = team?.key ?? ''
 
-  const members = useMemo(() => {
+  const members = useMemo<Option[]>(() => {
     const memberships = (team?.members ?? []) as readonly { userId: string }[]
     return memberships.map((membership) => {
       const user = users.find((candidate) => candidate.id === membership.userId)
@@ -67,23 +162,36 @@ export function TriageView({ teamId }: { teamId: string }) {
     })
   }, [team, users])
 
-  const issues = useMemo<IssueRowData[]>(
+  const issues = useMemo<TriageIssue[]>(
     () =>
-      inboxRaw.map((issue) => ({
-        id: issue.id,
-        number: issue.number ?? null,
-        title: issue.title,
-        status: issue.status,
-        priority: issue.priority,
-        assigneeId: issue.assigneeId ?? null,
-        cycleId: issue.cycleId ?? null,
-        updatedAt: issue.updatedAt,
-        createdAt: issue.createdAt,
-        labels: (
-          (issue.labels ?? []) as readonly { id: string; name: string; color: string }[]
-        ).map((label) => ({ id: label.id, name: label.name, color: label.color })),
-      })),
+      inboxRaw.map((issue) => {
+        const creator = issue.creator as { name?: string | null; email?: string | null } | undefined
+        return {
+          id: issue.id,
+          number: issue.number ?? null,
+          title: issue.title,
+          status: issue.status,
+          priority: issue.priority,
+          assigneeId: issue.assigneeId ?? null,
+          cycleId: issue.cycleId ?? null,
+          projectId: issue.projectId ?? null,
+          updatedAt: issue.updatedAt,
+          createdAt: issue.createdAt,
+          description: (issue.description as RichTextValue | null) ?? null,
+          reporter: creator?.name ?? creator?.email ?? null,
+          labels: (
+            (issue.labels ?? []) as readonly { id: string; name: string; color: string }[]
+          ).map((label) => ({ id: label.id, name: label.name, color: label.color })),
+        }
+      }),
     [inboxRaw],
+  )
+
+  // Scoped to the people who can read the issue under decision, not to the whole roster: the same
+  // map `issue-detail` builds, so one description reads the same on both surfaces.
+  const mentionNames = useMemo(
+    () => mentionNamesFor({ teamMembers: members, workspaceMembers, users, selfId: userId }),
+    [members, workspaceMembers, users, userId],
   )
 
   const focusRow = useCallback((index: number) => {
@@ -91,19 +199,33 @@ export function TriageView({ teamId }: { teamId: string }) {
     el?.focus()
   }, [])
 
+  // Whether the transient is ACTUALLY open, never the raw id: an issue can leave the inbox by a
+  // path this view never sees (another client, the palette, a rebase), and an id that outlives its
+  // row would leave the whole queue latched shut.
+  const routingOpen = routingId !== null && issues[focusIndex]?.id === routingId
+
   useEffect(() => {
     const clamped = Math.min(focusIndex, Math.max(0, issues.length - 1))
     if (clamped !== focusIndex) setFocusIndex(clamped)
+    // Reaped whenever the id is not the FOCUSED row's, not merely when the row is gone: an id
+    // whose row only slid off the decision is still a latent trigger, and would remount the
+    // transient and take focus the moment that row came back under decision.
+    if (routingId !== null && issues[clamped]?.id !== routingId) setRoutingId(null)
     const container = containerRef.current
-    if (!container || issues.length === 0) return
+    // A sync tick must never pull focus out of the open transient mid-edit; the transient hands
+    // focus back to its row itself when it closes.
+    if (!container || issues.length === 0 || routingOpen) return
     const active = document.activeElement
     if (active === document.body || container.contains(active)) {
       focusRow(clamped)
     }
-  }, [issues, focusIndex, focusRow])
+  }, [issues, focusIndex, routingId, routingOpen, focusRow])
 
+  // The panel and the verdict keys must always name the same issue, so moving focus closes an
+  // open transient rather than leaving it addressed to the row that just lost the decision.
   const move = useCallback(
     (delta: number) => {
+      setRoutingId(null)
       setFocusIndex((prev) => {
         const next = Math.max(0, Math.min(issues.length - 1, prev + delta))
         focusRow(next)
@@ -115,8 +237,7 @@ export function TriageView({ teamId }: { teamId: string }) {
 
   const run = useCallback(async (write: ReturnType<typeof zero.mutate>) => {
     const failure = await runMutation(write)
-    if (failure !== undefined) setError(failure)
-    else setError(undefined)
+    setError(failure)
   }, [])
 
   const accept = useCallback(
@@ -138,9 +259,40 @@ export function TriageView({ teamId }: { teamId: string }) {
     [navigate, teamId],
   )
 
+  const closeRoute = useCallback(() => {
+    setRoutingId(null)
+    focusRow(focusIndex)
+  }, [focusIndex, focusRow])
+
+  // A pointer must be able to bring any row under decision, not just the head: on this surface a
+  // plain click SELECTS, and opening the issue is `⏎` or the panel's own Open control.
+  const select = useCallback(
+    (index: number) => {
+      setRoutingId(null)
+      setFocusIndex(index)
+      focusRow(index)
+    },
+    [focusRow],
+  )
+
   const onKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>) => {
-      if (issues.length === 0) return
+      // Dismissal never depends on where focus ended up: a transient a stranded reader cannot
+      // close is worse than one that closes a little eagerly.
+      if (event.key === 'Escape') {
+        if (!routingOpen) return
+        event.preventDefault()
+        event.stopPropagation()
+        closeRoute()
+        return
+      }
+      // The queue owns only the keys pressed ON a row. Everything the decision panel contains —
+      // the attachment link, the verdict buttons, the transient's controls — keeps its own keys,
+      // which is why `Enter` on a chip must not be swallowed into a navigation.
+      if (!(event.target instanceof HTMLElement) || event.target.dataset.slot !== 'issue-row') {
+        return
+      }
+      if (issues.length === 0 || routingOpen) return
       const current = issues[focusIndex]
       switch (event.key) {
         case 'j':
@@ -185,348 +337,706 @@ export function TriageView({ teamId }: { teamId: string }) {
           break
       }
     },
-    [issues, focusIndex, move, onOpenIssue, canWrite, accept, decline],
+    [issues, focusIndex, routingOpen, closeRoute, move, onOpenIssue, canWrite, accept, decline],
   )
 
-  const routing = issues.find((issue) => issue.id === routingId) ?? null
+  const commitRoute = useCallback(
+    async (issue: TriageIssue, draft: RouteDraft): Promise<string | undefined> => {
+      const failure = await runMutation(
+        zero.mutate(
+          mutators.issue.routeIssue({
+            id: issue.id,
+            status: draft.status,
+            assigneeId: draft.assigneeId === '' ? null : draft.assigneeId,
+            cycleId: draft.cycleId === '' ? null : draft.cycleId,
+            projectId: draft.projectId === '' ? null : draft.projectId,
+            addLabelIds: [...draft.labelIds],
+            updatedAt: Date.now(),
+          }),
+        ),
+      )
+      setError(failure)
+      if (failure === undefined) closeRoute()
+      return failure
+    },
+    [zero, closeRoute],
+  )
 
   if (!team) {
     return (
       <p className="p-6 text-sm text-text-3" role="status">
-        {teams.length > 0 || inboxResult.type === 'complete'
-          ? 'This team no longer exists.'
-          : 'Loading team…'}
+        {teams.length > 0 || inboxResult.type === 'complete' ? 'No such team.' : 'Loading…'}
       </p>
     )
   }
 
+  const labelOptions: LabelOption[] = labels.map((label) => ({
+    id: label.id,
+    name: label.name,
+    color: label.color,
+  }))
+  const cycleOptions: Option[] = cycles.map((cycle) => ({
+    id: cycle.id,
+    name: `${cycle.name} · ${cycleKey({ number: cycle.number ?? null })}`,
+  }))
+  const projectOptions: Option[] = projects.map((project) => ({
+    id: project.id,
+    name: project.name,
+  }))
+
   return (
     <>
       <Masthead
-        title={
-          <span className="flex items-center gap-2">
-            <InboxIcon aria-hidden="true" className="size-4 text-text-3" />
-            {team.name} · Triage
-          </span>
-        }
-        count={issues.length}
+        title="Triage"
+        // The same `triage.inbox` rows `team-home.ts`'s `buildAttention` counts: one derivation,
+        // so the masthead, the deck badge, the statusline and Team Home cannot disagree. An
+        // unfinished sync has no count to state — `0` beside `Loading…` is the page contradicting
+        // itself in the same band.
+        {...(inboxResult.type === 'complete' ? { count: issues.length } : {})}
+        {...(issues.length === 0
+          ? {}
+          : { actions: <span className="font-mono text-[11px] text-text-3">oldest first</span> })}
         {...(error === undefined
           ? {}
           : {
               meta: (
-                <span className="text-xs text-status-urgent" role="alert">
+                <span className="text-xs text-status-urgent-ink" role="alert">
                   {error}
                 </span>
               ),
             })}
       />
       <div className="flex min-h-0 flex-1 flex-col bg-bg">
+        {/* ONE live region, mounted before its contents ever change. A `role="status"` node that is
+            INSERTED with its message already inside it is not reliably spoken, and the transition
+            this page most needs announced — still syncing, then cleared — is exactly that swap. */}
+        <p className="sr-only" role="status" aria-live="polite" data-testid="triage-announcement">
+          {inboxResult.type === 'complete'
+            ? issues.length === 0
+              ? 'Nothing waiting.'
+              : `${issues.length} waiting`
+            : 'Loading…'}
+        </p>
         <section
           ref={containerRef}
           className="flex-1 overflow-y-auto pb-10 outline-none"
           onKeyDown={onKeyDown}
-          aria-label={`${team.name} triage inbox`}
+          aria-label="Triage inbox"
         >
           {issues.length === 0 ? (
-            <p className="p-8 text-center text-sm text-text-3" role="status">
-              {inboxResult.type === 'complete'
-                ? 'The triage inbox is empty. Incoming issues awaiting triage will appear here.'
-                : 'Loading inbox…'}
-            </p>
+            inboxResult.type === 'complete' ? (
+              <EmptyQueue teamId={teamId} />
+            ) : (
+              <p className="p-8 text-sm text-text-3">Loading…</p>
+            )
           ) : (
             issues.map((issue, index) => (
-              <TriageRow
-                key={issue.id}
-                index={index}
-                issue={issue}
-                teamKey={teamKey}
-                focused={index === focusIndex}
-                canWrite={canWrite}
-                onFocusRow={setFocusIndex}
-                onOpen={() => onOpenIssue(issue)}
-                onAccept={() => accept(issue.id)}
-                onDecline={() => decline(issue.id)}
-                onRoute={() => setRoutingId(issue.id)}
-              />
+              <div key={issue.id}>
+                <IssueRow
+                  data-index={index}
+                  data-issue-id={issue.id}
+                  data-testid="triage-row"
+                  tabIndex={index === focusIndex ? 0 : -1}
+                  issueKey={issueKey(teamKey, issue)}
+                  title={issue.title}
+                  status={STATUS_TO_KIND[issue.status]}
+                  priority={PRIORITY_TO_KIND[issue.priority]}
+                  labels={(issue.labels ?? []).map((label) => ({
+                    name: label.name,
+                    color: label.color,
+                  }))}
+                  date={formatRelative(issue.createdAt)}
+                  selected={index === focusIndex}
+                  {...(issue.reporter === null
+                    ? {}
+                    : {
+                        assignee: { name: issue.reporter },
+                        assigneeLabel: `Reported by ${issue.reporter}`,
+                      })}
+                  onFocus={() => setFocusIndex(index)}
+                  onClick={() => select(index)}
+                />
+                {index === focusIndex ? (
+                  <DecisionPanel
+                    key={issue.id}
+                    issue={issue}
+                    issueKeyText={issueKey(teamKey, issue)}
+                    canWrite={canWrite}
+                    routing={routingOpen}
+                    mentionNames={mentionNames}
+                    members={members}
+                    labelOptions={labelOptions}
+                    cycleOptions={cycleOptions}
+                    projectOptions={projectOptions}
+                    onOpen={() => onOpenIssue(issue)}
+                    onAccept={() => accept(issue.id)}
+                    onDecline={() => decline(issue.id)}
+                    onOpenRoute={() => setRoutingId(issue.id)}
+                    onCloseRoute={closeRoute}
+                    onCommitRoute={(draft) => commitRoute(issue, draft)}
+                  />
+                ) : null}
+              </div>
             ))
           )}
         </section>
-
-        {routing && canWrite ? (
-          <RouteDialog
-            issue={routing}
-            members={members}
-            labelOptions={labels.map((label) => ({
-              id: label.id,
-              name: label.name,
-              color: label.color,
-            }))}
-            cycleOptions={cycles.map((cycle) => ({
-              id: cycle.id,
-              name: cycle.name,
-              number: cycle.number ?? null,
-            }))}
-            onClose={() => setRoutingId(null)}
-            onSubmit={async (target) => {
-              const failure = await runMutation(
-                zero.mutate(
-                  mutators.issue.routeIssue({
-                    id: routing.id,
-                    ...(target.status === undefined ? {} : { status: target.status }),
-                    ...(target.assigneeId === undefined ? {} : { assigneeId: target.assigneeId }),
-                    ...(target.cycleId === undefined ? {} : { cycleId: target.cycleId }),
-                    ...(target.labelIds.length > 0 ? { addLabelIds: [...target.labelIds] } : {}),
-                    updatedAt: Date.now(),
-                  }),
-                ),
-              )
-              if (failure !== undefined) {
-                setError(failure)
-                return failure
-              }
-              setError(undefined)
-              setRoutingId(null)
-              return undefined
-            }}
-          />
-        ) : null}
       </div>
     </>
   )
 }
 
-function TriageRow({
-  index,
+// The panel is mounted for exactly the issue under decision, so its attachment query is one
+// unconditional hook over one issue's already-synced rows.
+function DecisionPanel({
   issue,
-  teamKey,
-  focused,
+  issueKeyText,
   canWrite,
-  onFocusRow,
+  routing,
+  mentionNames,
+  members,
+  labelOptions,
+  cycleOptions,
+  projectOptions,
   onOpen,
   onAccept,
   onDecline,
-  onRoute,
+  onOpenRoute,
+  onCloseRoute,
+  onCommitRoute,
 }: {
-  index: number
-  issue: IssueRowData
-  teamKey: string
-  focused: boolean
+  issue: TriageIssue
+  issueKeyText: string
   canWrite: boolean
-  onFocusRow: (index: number) => void
+  routing: boolean
+  mentionNames: ReadonlyMap<string, string>
+  members: readonly Option[]
+  labelOptions: readonly LabelOption[]
+  cycleOptions: readonly Option[]
+  projectOptions: readonly Option[]
   onOpen: () => void
   onAccept: () => void
   onDecline: () => void
-  onRoute: () => void
+  onOpenRoute: () => void
+  onCloseRoute: () => void
+  onCommitRoute: (draft: RouteDraft) => Promise<string | undefined>
 }) {
+  const [attachments] = useQuery(queries.attachments.byIssue({ issueId: issue.id }))
+  const chips = attachments as readonly AttachmentChipRow[]
+  const declineTargetId = `${issue.id}-decline-target`
+  const decisionRef = useRef<HTMLDivElement>(null)
+
   return (
-    <div className="group flex items-center gap-1 border-b border-border pr-3">
-      <div className="min-w-0 flex-1">
-        <IssueRow
-          data-index={index}
-          data-issue-id={issue.id}
-          data-testid="triage-row"
-          tabIndex={focused ? 0 : -1}
-          issueKey={issueKey(teamKey, issue)}
-          title={issue.title}
-          status={STATUS_TO_KIND[issue.status]}
-          priority={PRIORITY_TO_KIND[issue.priority]}
-          labels={(issue.labels ?? []).map((label) => ({ name: label.name, color: label.color }))}
-          onFocus={() => onFocusRow(index)}
-          onClick={onOpen}
-        />
-      </div>
-      {canWrite ? (
-        <div className="flex shrink-0 items-center gap-1">
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Accept"
-            data-testid="triage-accept"
-            onClick={onAccept}
-          >
-            <CheckIcon />
-          </Button>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Route"
-            data-testid="triage-route"
-            onClick={onRoute}
-          >
-            <RouteIcon />
-          </Button>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Decline"
-            data-testid="triage-decline"
-            onClick={onDecline}
-          >
-            <XIcon />
-          </Button>
+    <div
+      ref={decisionRef}
+      data-testid="triage-decision"
+      className="relative flex items-start gap-10 border-row-hairline border-y border-l-[3px] border-l-accent bg-bg-selected py-[17px] pr-10 pl-[34px]"
+    >
+      <div className="min-w-0 max-w-[660px] flex-1">
+        {issue.description === null ? null : (
+          <RichTextRenderer
+            value={issue.description}
+            resolveAttachmentSrc={attachmentSrc}
+            mentionNames={mentionNames}
+            className="text-sm leading-relaxed text-text-1"
+          />
+        )}
+        {/* Every mono fact this panel states is `--text-2`, not the quieter `--text-3` the mock
+            draws: on the panel's tint that ink measures 2.43–3.33 across the six theme blocks,
+            which is under the bar a 10.5px fact may sit at. `contrast.test.ts` holds the number. */}
+        <div
+          data-testid="triage-provenance"
+          className="mt-[11px] flex flex-wrap items-center gap-2.5 font-mono text-[10.5px] text-text-2"
+        >
+          <span>
+            {issue.reporter ?? 'Unknown reporter'} · {formatStamp(issue.createdAt)}
+          </span>
+          {chips.map((chip) => (
+            <a
+              key={chip.id}
+              href={attachmentSrc(chip.id, 'full')}
+              download={chip.filename}
+              data-testid="triage-attachment"
+              className="flex items-center gap-1.5 rounded-control border border-border-strong bg-bg-elevated px-1.5 py-0.5 font-mono text-[11.5px] text-text-1 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <UploadGlyph />
+              {chip.filename}
+            </a>
+          ))}
         </div>
+      </div>
+
+      <div className="ml-auto flex w-[214px] flex-none flex-col gap-2.5">
+        {canWrite ? (
+          <>
+            <VerdictKey
+              testId="triage-accept"
+              shortcut="a"
+              word="Accept"
+              cap="A"
+              onClick={onAccept}
+            />
+            <VerdictKey
+              testId="triage-route"
+              shortcut="r"
+              word="Route"
+              cap="R"
+              armed={routing}
+              onClick={onOpenRoute}
+            />
+            <VerdictKey
+              testId="triage-decline"
+              shortcut="d"
+              word="Decline"
+              cap="D"
+              describedBy={declineTargetId}
+              onClick={onDecline}
+              trailing={
+                <span
+                  id={declineTargetId}
+                  className="inline-flex items-center gap-1 font-mono text-[10.5px] font-normal text-text-2"
+                >
+                  <StatusGlyph status="canceled" className="size-3" aria-hidden="true" />
+                  canceled
+                </span>
+              }
+            />
+          </>
+        ) : null}
+        {/* The movement hint, drawn as the mock draws it — but Open is a real control, because a
+            pointer-only reader has no other way off this page into the issue itself. */}
+        <span className="mt-[3px] flex items-center gap-1.5 border-border-strong border-t pt-2.5 text-xs text-text-2">
+          <button
+            type="button"
+            data-testid="triage-open"
+            aria-label="Open issue"
+            aria-keyshortcuts="Enter"
+            onClick={onOpen}
+            className="flex items-center gap-1.5 rounded-control outline-none hover:text-accent-strong focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <Key>⏎</Key>
+            <span aria-hidden="true">Open</span>
+          </button>
+          <span aria-hidden="true" className="text-border-strong">
+            ·
+          </span>
+          <Key>J</Key>
+          <Key>K</Key>Move
+        </span>
+      </div>
+
+      {routing && canWrite ? (
+        <RouteTransient
+          issue={issue}
+          issueKeyText={issueKeyText}
+          members={members}
+          labelOptions={labelOptions}
+          cycleOptions={cycleOptions}
+          projectOptions={projectOptions}
+          ownerRef={decisionRef}
+          onClose={onCloseRoute}
+          onCommit={onCommitRoute}
+        />
       ) : null}
     </div>
   )
 }
 
-function RouteDialog({
+// A verdict is a word with a key, never an icon: `aria-label` holds the word alone so the button's
+// name is what it does, `aria-keyshortcuts` carries the key the drawn cap shows, and Decline's
+// landing status is a description rather than part of the name.
+function VerdictKey({
+  testId,
+  shortcut,
+  word,
+  cap,
+  armed = false,
+  describedBy,
+  trailing,
+  onClick,
+}: {
+  testId: string
+  shortcut: string
+  word: string
+  cap: string
+  armed?: boolean
+  describedBy?: string
+  trailing?: ReactNode
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      aria-label={word}
+      aria-keyshortcuts={shortcut}
+      {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-control text-left text-[13px] font-semibold text-text-1 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <Key armed={armed}>{cap}</Key>
+      <span aria-hidden="true">{word}</span>
+      {trailing}
+    </button>
+  )
+}
+
+// The page's one transient. It edits five values and commits them in ONE write, which is why it is
+// a labelled panel rather than a menu: a menu's items fire on activation.
+function RouteTransient({
   issue,
+  issueKeyText,
   members,
   labelOptions,
   cycleOptions,
+  projectOptions,
+  ownerRef,
   onClose,
-  onSubmit,
+  onCommit,
 }: {
-  issue: IssueRowData
-  members: readonly { id: string; name: string }[]
-  labelOptions: readonly { id: string; name: string; color: string }[]
-  cycleOptions: readonly { id: string; name: string; number: number | null }[]
+  issue: TriageIssue
+  issueKeyText: string
+  members: readonly Option[]
+  labelOptions: readonly LabelOption[]
+  cycleOptions: readonly Option[]
+  projectOptions: readonly Option[]
+  ownerRef: RefObject<HTMLDivElement | null>
   onClose: () => void
-  onSubmit: (target: RouteTarget) => Promise<string | undefined>
+  onCommit: (draft: RouteDraft) => Promise<string | undefined>
 }) {
-  const statusId = useId()
-  const assigneeId = useId()
-  const cycleId = useId()
+  const panelRef = useRef<HTMLDivElement>(null)
+  const statusFieldId = useId()
+  const assigneeFieldId = useId()
+  const cycleFieldId = useId()
+  const projectFieldId = useId()
   const [status, setStatus] = useState<IssueStatus>(issue.status)
-  const [assignee, setAssignee] = useState<string>(issue.assigneeId ?? '')
-  const [cycle, setCycle] = useState<string>(issue.cycleId ?? '')
-  const [selectedLabels, setSelectedLabels] = useState<ReadonlySet<string>>(() => new Set())
+  const [assigneeId, setAssigneeId] = useState(issue.assigneeId ?? '')
+  const [cycleId, setCycleId] = useState(issue.cycleId ?? '')
+  const [projectId, setProjectId] = useState(issue.projectId ?? '')
+  const [labelIds, setLabelIds] = useState<ReadonlySet<string>>(() => new Set<string>())
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | undefined>(undefined)
+  const [failure, setFailure] = useState<string | undefined>(undefined)
 
-  // Routing is add-only (routeIssue has no removal path), so labels already on the issue are
-  // shown as read-only chips and only not-yet-applied labels are toggleable.
-  const appliedIds = new Set((issue.labels ?? []).map((label) => label.id))
-  const appliedLabels = issue.labels ?? []
-  const addableLabels = labelOptions.filter((label) => !appliedIds.has(label.id))
+  useEffect(() => {
+    panelRef.current?.focus()
+  }, [])
 
-  const toggleLabel = (id: string) =>
-    setSelectedLabels((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  // The transient is non-modal, so focus can legitimately end up outside it — and a panel that can
+  // only be dismissed from inside itself is a panel a reader can get stranded beside. Both routes
+  // out are therefore document-level; the panel's own handler stops `Escape` before it reaches
+  // here, so a keypress inside closes exactly once.
+  useEffect(() => {
+    function onDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    function onDocumentPointerDown(event: PointerEvent) {
+      const target = event.target
+      if (!(target instanceof Node)) {
+        onClose()
+        return
+      }
+      // The owning decision panel counts as inside: the still-armed `R Route` key lives there, and
+      // a pointer-down that closed on it would be a close-then-reopen that discards the draft the
+      // reader is halfway through. Dismissal is a click on the queue around the decision, or `esc`.
+      if (panelRef.current?.contains(target) === true) return
+      if (ownerRef.current?.contains(target) === true) return
+      onClose()
+    }
+    document.addEventListener('keydown', onDocumentKeyDown)
+    document.addEventListener('pointerdown', onDocumentPointerDown)
+    return () => {
+      document.removeEventListener('keydown', onDocumentKeyDown)
+      document.removeEventListener('pointerdown', onDocumentPointerDown)
+    }
+  }, [onClose, ownerRef])
 
-  async function submit() {
+  const applied = issue.labels ?? []
+  const appliedIds = new Set(applied.map((label) => label.id))
+  const addable = labelOptions.filter((label) => !appliedIds.has(label.id))
+
+  const draft: RouteDraft = { status, assigneeId, cycleId, projectId, labelIds }
+
+  async function commit() {
     if (busy) return
     setBusy(true)
-    const failure = await onSubmit({
-      status,
-      assigneeId: assignee === '' ? null : assignee,
-      cycleId: cycle === '' ? null : cycle,
-      labelIds: [...selectedLabels],
-    })
+    setFailure(await onCommit(draft))
     setBusy(false)
-    if (failure !== undefined) setError(failure)
   }
 
+  function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      onClose()
+      return
+    }
+    if (event.key === 'Enter' && !(event.target instanceof HTMLButtonElement)) {
+      event.preventDefault()
+      event.stopPropagation()
+      void commit()
+      return
+    }
+    // `⌘K` is the frame's, not the queue's: it is an unqualified app-wide shortcut and a transient
+    // that ate it would strand a reader inside. The `g …` go-tos are NOT let through — the frame
+    // suppresses that grammar while a dialog holds focus, which this transient does.
+    if (event.metaKey || event.ctrlKey) return
+    // Every other key stays inside the transient: `a` in a select is a typeahead, not a verdict.
+    event.stopPropagation()
+  }
+
+  const labelValue = [...applied.map((label) => label.name), ...namesFor(labelOptions, labelIds)]
+
   return (
-    <Dialog open onOpenChange={(next) => (next ? undefined : onClose())}>
-      <DialogContent initialFocus>
-        <DialogTitle>Route issue</DialogTitle>
-        <DialogDescription>
-          Accept this issue into the team's work, setting its status, assignee, cycle, and labels.
-        </DialogDescription>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={statusId}>Status</Label>
-            <Select
-              id={statusId}
-              value={status}
-              onChange={(event) => setStatus(event.target.value as IssueStatus)}
-            >
-              {ISSUE_STATUSES.map((value) => (
-                <option key={value} value={value}>
-                  {STATUS_LABEL[value]}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={assigneeId}>Assignee</Label>
-            <Select
-              id={assigneeId}
-              value={assignee}
-              onChange={(event) => setAssignee(event.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {members.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={cycleId}>Cycle</Label>
-            <Select id={cycleId} value={cycle} onChange={(event) => setCycle(event.target.value)}>
-              <option value="">No cycle</option>
-              {cycleOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name} · {cycleKey(option)}
-                </option>
-              ))}
-            </Select>
-          </div>
-          {appliedLabels.length > 0 || addableLabels.length > 0 ? (
-            <fieldset className="flex flex-col gap-1.5">
-              <legend className="text-sm font-medium text-text-2">Labels</legend>
-              <div className="flex flex-wrap gap-2">
-                {appliedLabels.map((label) => (
-                  <span
-                    key={label.id}
-                    aria-disabled="true"
-                    title="Already applied"
-                    className="flex items-center gap-1.5 rounded-control border border-accent px-2 py-1 text-xs text-text-1"
-                  >
-                    <span
-                      className="size-2.5 rounded-full"
-                      style={{ backgroundColor: label.color }}
-                    />
-                    {label.name}
-                    <CheckIcon className="size-3" />
-                  </span>
-                ))}
-                {addableLabels.map((label) => (
-                  <button
-                    key={label.id}
-                    type="button"
-                    aria-pressed={selectedLabels.has(label.id)}
-                    onClick={() => toggleLabel(label.id)}
-                    className="flex items-center gap-1.5 rounded-control border border-border px-2 py-1 text-xs text-text-2 aria-pressed:border-accent aria-pressed:text-text-1"
-                  >
-                    <span
-                      className="size-2.5 rounded-full"
-                      style={{ backgroundColor: label.color }}
-                    />
-                    {label.name}
-                    {selectedLabels.has(label.id) ? <CheckIcon className="size-3" /> : null}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-          ) : null}
-          {error !== undefined ? (
-            <p className="text-xs text-status-urgent" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <div className="flex justify-end gap-2">
-            <DialogClose render={<Button type="button" variant="ghost" />}>Cancel</DialogClose>
-            <Button
-              type="button"
-              size="sm"
-              disabled={busy}
-              data-testid="route-submit"
-              onClick={() => void submit()}
-            >
-              Route issue
-            </Button>
-          </div>
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label={`Route ${issueKeyText}`}
+      data-testid="triage-route-panel"
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
+      className="absolute top-[calc(100%-6px)] right-10 z-50 w-[300px] rounded-[10px] border border-border bg-bg-elevated p-1.5 font-ui shadow-elevated outline-none"
+    >
+      <div className="px-2 pt-1 pb-1.5 font-mono text-[10px] tracking-[0.08em] text-text-2">
+        ROUTE · {issueKeyText}
+      </div>
+
+      <RouteField
+        controlId={statusFieldId}
+        label="Status"
+        glyph={<StatusGlyph status={STATUS_TO_KIND[status]} />}
+      >
+        <Select
+          id={statusFieldId}
+          className="h-7 text-[12px]"
+          value={status}
+          onChange={(event) => setStatus(event.target.value as IssueStatus)}
+        >
+          {ISSUE_STATUSES.map((value) => (
+            <option key={value} value={value}>
+              {STATUS_LABEL[value]}
+            </option>
+          ))}
+        </Select>
+      </RouteField>
+
+      <RouteField
+        controlId={assigneeFieldId}
+        label="Assignee"
+        glyph={
+          assigneeId === '' ? null : (
+            <Avatar size="xs">
+              <AvatarFallback aria-hidden="true">
+                {(nameFor(members, assigneeId) ?? '?').slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+          )
+        }
+      >
+        <Select
+          id={assigneeFieldId}
+          className="h-7 text-[12px]"
+          value={assigneeId}
+          onChange={(event) => setAssigneeId(event.target.value)}
+        >
+          <option value="">none</option>
+          {members.map((member) => (
+            <option key={member.id} value={member.id}>
+              {member.name}
+            </option>
+          ))}
+        </Select>
+      </RouteField>
+
+      <RouteField controlId={cycleFieldId} label="Cycle" glyph={<CyclesGlyph />}>
+        <Select
+          id={cycleFieldId}
+          className="h-7 text-[12px]"
+          value={cycleId}
+          onChange={(event) => setCycleId(event.target.value)}
+        >
+          <option value="">none</option>
+          {cycleOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </Select>
+      </RouteField>
+
+      <RouteField controlId={projectFieldId} label="Project" glyph={<ProjectsGlyph />}>
+        <Select
+          id={projectFieldId}
+          className="h-7 text-[12px]"
+          value={projectId}
+          onChange={(event) => setProjectId(event.target.value)}
+        >
+          <option value="">none</option>
+          {projectOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </Select>
+      </RouteField>
+
+      <div className="px-2 py-1.5">
+        <div className="flex items-center gap-2 text-[12.5px] text-text-2">
+          <span className="flex w-3.5 justify-center">
+            <span aria-hidden="true" className="size-2 rounded-full bg-text-3" />
+          </span>
+          <span>Labels</span>
+          <span
+            className={cn(
+              'ml-auto truncate font-medium',
+              labelValue.length === 0 ? 'font-normal text-text-2' : 'text-text-1',
+            )}
+          >
+            {labelValue.length === 0 ? 'none' : labelValue.join(', ')}
+          </span>
         </div>
-      </DialogContent>
-    </Dialog>
+        {/* Routing only ADDS labels — `routeIssue` has no removal path — so what is already on the
+            issue is stated, and only the not-yet-applied ones are offered. */}
+        {addable.length === 0 ? null : (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {addable.map((label) => (
+              <button
+                key={label.id}
+                type="button"
+                aria-pressed={labelIds.has(label.id)}
+                onClick={() =>
+                  setLabelIds((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(label.id)) next.delete(label.id)
+                    else next.add(label.id)
+                    return next
+                  })
+                }
+                className="flex items-center gap-1.5 rounded-control border border-border px-1.5 py-0.5 text-[11.5px] text-text-2 outline-none aria-pressed:border-accent aria-pressed:text-text-1 focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <span
+                  aria-hidden="true"
+                  className="size-2 rounded-full"
+                  style={{ backgroundColor: label.color }}
+                />
+                {label.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {failure === undefined ? null : (
+        <p className="px-2 pb-1 text-[11px] text-status-urgent-ink" role="alert">
+          {failure}
+        </p>
+      )}
+
+      <div className="mt-1 flex items-center gap-2 border-row-hairline border-t px-2 pt-2 pb-0.5 text-[11px] text-text-2">
+        <button
+          type="button"
+          data-testid="route-submit"
+          aria-label="Route issue"
+          disabled={busy}
+          onClick={() => void commit()}
+          className="flex items-center gap-1.5 rounded-control text-text-2 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <Key>⏎</Key>
+          <span aria-hidden="true">route</span>
+        </button>
+        <span aria-hidden="true" className="text-border-strong">
+          ·
+        </span>
+        <button
+          type="button"
+          aria-label="Close without routing"
+          onClick={onClose}
+          className="flex items-center gap-1.5 rounded-control text-text-2 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <Key>esc</Key>
+          <span aria-hidden="true">stay</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function RouteField({
+  controlId,
+  label,
+  glyph,
+  children,
+}: {
+  controlId: string
+  label: string
+  glyph: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div className="flex items-center gap-2 px-2 py-1 text-[12.5px] text-text-2">
+      <span className="flex w-3.5 justify-center">{glyph}</span>
+      <label htmlFor={controlId}>{label}</label>
+      <span className="ml-auto w-[150px]">{children}</span>
+    </div>
+  )
+}
+
+function nameFor(options: readonly Option[], id: string): string | undefined {
+  return options.find((option) => option.id === id)?.name
+}
+
+function namesFor(options: readonly Option[], ids: ReadonlySet<string>): string[] {
+  return options.filter((option) => ids.has(option.id)).map((option) => option.name)
+}
+
+// The mock's second frame: the done disc, two words, and three doorways. Nothing here explains
+// what triage is, and nothing claims the clearing was recent — no triage event is recorded.
+function EmptyQueue({ teamId }: { teamId: string }) {
+  const divider = (
+    <span aria-hidden="true" className="mx-2.5 font-normal text-border-strong">
+      ·
+    </span>
+  )
+  return (
+    <div data-testid="triage-cleared">
+      <div className="flex items-center gap-4 border-row-hairline border-y px-10 pt-[34px] pb-8">
+        <StatusGlyph status="done" aria-hidden="true" className="size-[26px] text-status-done" />
+        <span className="font-heading text-[21px] font-bold tracking-[-0.018em] text-text-1">
+          Nothing waiting.
+        </span>
+      </div>
+      <div className="flex items-center px-10 py-5 text-[12.5px] font-semibold text-text-2">
+        <Doorway to="/teams/$teamId/issues" teamId={teamId} label="Issues" />
+        {divider}
+        <Doorway to="/teams/$teamId/cycles" teamId={teamId} label="Cycles" />
+        {divider}
+        <Doorway to="/teams/$teamId/projects" teamId={teamId} label="Projects" />
+        <span className="ml-auto flex items-center gap-[7px] font-normal text-text-3">
+          <Key>⌘K</Key>
+          goes anywhere
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function Doorway({
+  to,
+  teamId,
+  label,
+}: {
+  to: '/teams/$teamId/issues' | '/teams/$teamId/cycles' | '/teams/$teamId/projects'
+  teamId: string
+  label: string
+}) {
+  return (
+    <Link
+      to={to}
+      params={{ teamId }}
+      className="rounded-control outline-none hover:text-accent-strong focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      {label}
+      <span aria-hidden="true" className="ml-0.5 font-normal text-text-3">
+        ›
+      </span>
+    </Link>
   )
 }

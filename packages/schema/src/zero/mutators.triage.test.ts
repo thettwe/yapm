@@ -235,4 +235,87 @@ describe('issue.routeIssue', () => {
     expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
     expect(calls).toHaveLength(0)
   })
+
+  it('omits projectId entirely when the field is not sent', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id, teamId: TEAM_ID }, membershipRow(MEMBER.userID)])
+    await mutators.issue.routeIssue.fn({
+      tx,
+      args: { id, status: 'todo', updatedAt: 12 },
+      ctx: MEMBER,
+    })
+    expect(calls.find((call) => call.verb === 'update')?.value).not.toHaveProperty('projectId')
+  })
+
+  it('sets the project and clears the triage flag in one write', async () => {
+    const id = newId()
+    const projectId = newId()
+    const { tx, calls } = fakeTx([
+      { id, teamId: TEAM_ID },
+      membershipRow(MEMBER.userID),
+      { id: projectId, name: 'Checkout revamp' },
+    ])
+    await mutators.issue.routeIssue.fn({ tx, args: { id, projectId, updatedAt: 12 }, ctx: MEMBER })
+    expect(calls).toEqual([
+      {
+        table: 'issue',
+        verb: 'update',
+        value: { id, needsTriage: false, projectId, updatedAt: 12 },
+      },
+    ])
+  })
+
+  // A project spans teams, so the check is existence and nothing else — a project whose other
+  // issues live in another team is a legitimate routing target, unlike a cycle or a label.
+  it('accepts a workspace project regardless of which team its other issues sit in', async () => {
+    const id = newId()
+    const projectId = newId()
+    const { tx, calls } = fakeTx([
+      { id, teamId: TEAM_ID },
+      membershipRow(MEMBER.userID),
+      { id: projectId, teamId: OTHER_TEAM_ID },
+    ])
+    await mutators.issue.routeIssue.fn({ tx, args: { id, projectId, updatedAt: 12 }, ctx: MEMBER })
+    expect(calls.find((call) => call.verb === 'update')?.value).toMatchObject({ projectId })
+  })
+
+  it('rejects an unknown project and writes nothing', async () => {
+    const id = newId()
+    const projectId = newId()
+    const { tx, calls } = fakeTx([{ id, teamId: TEAM_ID }, membershipRow(MEMBER.userID), undefined])
+    const error = await capture(
+      mutators.issue.routeIssue.fn({ tx, args: { id, projectId, updatedAt: 12 }, ctx: MEMBER }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.crossTeam)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('clears the project when projectId is null', async () => {
+    const id = newId()
+    const { tx, calls } = fakeTx([{ id, teamId: TEAM_ID }, membershipRow(MEMBER.userID)])
+    await mutators.issue.routeIssue.fn({
+      tx,
+      args: { id, projectId: null, updatedAt: 12 },
+      ctx: MEMBER,
+    })
+    expect(calls).toEqual([
+      {
+        table: 'issue',
+        verb: 'update',
+        value: { id, needsTriage: false, projectId: null, updatedAt: 12 },
+      },
+    ])
+  })
+
+  it('rejects a viewer routing a project before the project is looked up', async () => {
+    const id = newId()
+    const projectId = newId()
+    const { tx, calls, runQueue } = fakeTx([{ id, teamId: TEAM_ID }, { id: projectId }])
+    const error = await capture(
+      mutators.issue.routeIssue.fn({ tx, args: { id, projectId, updatedAt: 12 }, ctx: VIEWER }),
+    )
+    expect(mutationErrorCode(error)).toBe(MutationErrorCode.notAuthorized)
+    expect(calls).toHaveLength(0)
+    expect(runQueue).toHaveLength(2)
+  })
 })

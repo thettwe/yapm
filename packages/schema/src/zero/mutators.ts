@@ -1290,12 +1290,14 @@ export const routeIssueArgs = z.object({
   status: issueStatusSchema.optional(),
   assigneeId: z.string().min(1).nullable().optional(),
   cycleId: z.string().min(1).nullable().optional(),
+  projectId: z.string().min(1).nullable().optional(),
   addLabelIds: z.array(z.string().min(1)).optional(),
   updatedAt: timestamp,
 })
 
 // Route is accept-with-routing: clear the flag and, in one atomic write, apply a status, an
-// assignee, a cycle, and/or labels — each validated to the issue's team (cross-team rejected).
+// assignee, a cycle, a project, and/or labels — the team-scoped ones validated to the issue's
+// team (cross-team rejected).
 // Team reassignment is deliberately not routable (it collides with the per-team number and the
 // team-scoped sync scope); that is reserved for the connectors work.
 export const routeIssue = defineMutator(routeIssueArgs, async ({ tx, args, ctx }) => {
@@ -1316,6 +1318,18 @@ export const routeIssue = defineMutator(routeIssueArgs, async ({ tx, args, ctx }
         MutationErrorCode.crossTeam,
         args.id,
       )
+    }
+  }
+
+  // A project is workspace-level and spans teams, so routing checks only that it EXISTS — the
+  // cross-team rejection the cycle and label branches run above would be wrong here. Same rule
+  // `issue.setProject` enforces; the issue's own team-scoped gate is `loadIssueForWrite`.
+  if (args.projectId != null) {
+    const project = (await tx.run(zql.project.where('id', args.projectId).one())) as
+      | ProjectRow
+      | undefined
+    if (!project) {
+      throw new MutationError('Project not found', MutationErrorCode.crossTeam, args.id)
     }
   }
 
@@ -1342,6 +1356,7 @@ export const routeIssue = defineMutator(routeIssueArgs, async ({ tx, args, ctx }
     ...(args.cycleId === undefined
       ? {}
       : { cycleId: args.cycleId, cycleAssignedAt: args.cycleId === null ? null : args.updatedAt }),
+    ...(args.projectId === undefined ? {} : { projectId: args.projectId }),
     updatedAt: args.updatedAt,
   })
 

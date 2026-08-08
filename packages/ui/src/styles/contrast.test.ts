@@ -681,4 +681,71 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
       expect(contrastRatio(knockout, hex(t, ink)), ink).toBeGreaterThanOrEqual(AA_LARGE)
     }
   })
+
+  // THE TRIAGE DECISION PANEL (triage-daylight §D3). The head of the queue unfolds onto
+  // `--bg-selected` — the same tint the selected row carries — and states three things on it: the
+  // issue's description, a mono `<reporter> · <created-at>` line, and the verdict rail's words.
+  // Every one of them is `--text-1` or `--text-2`, and that is a decision this assertion is the
+  // reason for: the mock draws both mono lines in `--text-3`, which measures 2.43–3.33 on that
+  // tint — under AA everywhere and under the NON-text bar in four of the six blocks. The panel's
+  // facts stepped up to `--text-2` instead, which is the same trade the reality rail's mono fact
+  // line already made.
+  it('the decision panel’s ink meets AA on its tinted ground (>= 4.5)', () => {
+    const panel = over(t['--bg-selected'] ?? '', hex(t, '--bg'))
+    for (const ink of ['--text-1', '--text-2'] as const) {
+      expect(contrastRatio(hex(t, ink), panel), ink).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
+  // The verdict keycap, at rest and ARMED. A cap is an elevated chip drawn on the panel's tint: its
+  // letter is `--text-2` on `--bg-elevated`, which the peek block above already pins, so what is
+  // measured here is the pair no other surface has — the ARMED cap the open route transient lights,
+  // whose ink steps to `--accent-strong` and whose border steps to `--accent`. The ink answers to
+  // AA at 10px, the border to the 3:1 non-text bar (WCAG 1.4.11). Pinned because "arm the key with
+  // the accent" is the obvious edit and `--accent-strong` is the token that has already failed on
+  // two other grounds in this file.
+  it('the armed verdict keycap reads on its chip (>= 4.5 ink, >= 3.0 border)', () => {
+    const cap = hex(t, '--bg-elevated')
+    expect(contrastRatio(hex(t, '--accent-strong'), cap), 'armed ink').toBeGreaterThanOrEqual(
+      AA_NORMAL,
+    )
+    expect(contrastRatio(hex(t, '--accent'), cap), 'armed border').toBeGreaterThanOrEqual(AA_LARGE)
+  })
+
+  // The cap at rest is scaffolding, and this records it as the bound that can FAIL rather than
+  // leaving it unmeasured: neither its fill nor its `--border-strong` outline separates from the
+  // panel's tint by 3:1 (1.01–1.48), which is exactly why the KEY is carried by the letter inside
+  // the cap and by `aria-keyshortcuts`, never by the chip being visible. The day a token edit lifts
+  // this pair over the bar is the day the cap is loud enough to argue about on its own terms.
+  it('records that the resting keycap chip is scaffolding, not the carrier of the key', () => {
+    const panel = over(t['--bg-selected'] ?? '', hex(t, '--bg'))
+    const cap = hex(t, '--bg-elevated')
+    expect(contrastRatio(cap, panel), 'cap fill').toBeLessThan(AA_LARGE)
+    expect(contrastRatio(over(t['--border-strong'] ?? '', cap), panel), 'cap border').toBeLessThan(
+      AA_LARGE,
+    )
+  })
+
+  // The empty queue's done disc — 26px, the only mark on a cleared page, drawn on `--bg`. The hue
+  // is pinned above as a chart mark and a track node; what is new is that here it carries the whole
+  // state on its own beside two words, with no row, no track and no legend around it, so a preset
+  // that let it fade would leave the page saying `Nothing waiting.` in a void.
+  it('the empty queue’s done disc is distinguishable on the page ground (>= 3.0)', () => {
+    expect(contrastRatio(hex(t, '--status-done'), hex(t, '--bg'))).toBeGreaterThanOrEqual(AA_LARGE)
+  })
+
+  // Triage states a refused write in two places — the masthead's meta line on `--bg` at 12px, and
+  // the route transient's failure line on `--bg-elevated` at 11px — and both are TEXT, so both
+  // answer to AA normal. That is the whole reason the palette splits `--status-urgent-ink` off
+  // `--status-urgent`: the mark hue is tuned to read as a MARK, and inking a sentence with it
+  // misses 4.5:1 in every light preset. A failure message the reader cannot read is the one
+  // message on this page that must never be lost.
+  it('the triage failure lines meet AA on both grounds they are drawn on (>= 4.5)', () => {
+    for (const ground of ['--bg', '--bg-elevated'] as const) {
+      expect(
+        contrastRatio(hex(t, '--status-urgent-ink'), hex(t, ground)),
+        ground,
+      ).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
 })

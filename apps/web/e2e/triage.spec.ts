@@ -1,9 +1,10 @@
 import { expect, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, goToMore, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
 const TRIAGE_ROW = '[data-testid="triage-row"]'
+const PROJECT_ISSUE_ROW = '[data-testid="project-issue-row"]'
 const PRESETS = ['warm', 'focused', 'editorial'] as const
 const MODES = ['light', 'dark'] as const
 
@@ -71,9 +72,24 @@ async function sendToTriage(page: Page, title: string): Promise<void> {
   await expect(page.locator(ROW).filter({ hasText: title })).toHaveCount(0, { timeout: 20_000 })
 }
 
+// Band 2 states the page's own name and nothing else: the team it belongs to is two stops to the
+// left in the deck, so the heading is `Triage`, exactly, and not `<team> · Triage`.
 async function openTriage(page: Page): Promise<void> {
   await stop(page, 'Triage').click()
-  await expect(page.getByRole('heading', { name: /Triage/ })).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('heading', { name: 'Triage', exact: true })).toBeVisible({
+    timeout: 20_000,
+  })
+}
+
+async function createProject(page: Page, name: string): Promise<void> {
+  await goToMore(page, 'Projects')
+  await expect(page.getByRole('button', { name: 'New project' })).toBeVisible({ timeout: 20_000 })
+  await page.getByTestId('new-project').click()
+  await page.getByLabel('Project name').fill(name)
+  await page.getByRole('button', { name: 'Create project' }).click()
+  await expect(page.getByTestId('project-rail-item').filter({ hasText: name })).toBeVisible({
+    timeout: 20_000,
+  })
 }
 
 test('flag an issue into triage, then accept it back into the list with the keyboard', async ({
@@ -126,24 +142,34 @@ test('decline a triage issue cancels it and clears the inbox', async ({ page }) 
   await expect(canceled.locator(ROW).filter({ hasText: title })).toBeVisible({ timeout: 20_000 })
 })
 
-test('route a triage issue applies fields and clears the inbox', async ({ page }) => {
+test('route a triage issue applies fields, places it in a project, and clears the inbox', async ({
+  page,
+}) => {
   await enterApp(page)
   await openTeam(page)
 
   const title = unique('Route me')
   await createIssue(page, title)
+  // Routing is the second path that writes `issue.project_id`, so the transient needs somewhere to
+  // put the issue: a project exists before the issue reaches the inbox.
+  const projectName = unique('Route target')
+  await createProject(page, projectName)
+  await stop(page, 'Issues').click()
   await sendToTriage(page, title)
 
   await openTriage(page)
   const inboxRow = page.locator(TRIAGE_ROW).filter({ hasText: title })
   await expect(inboxRow).toBeVisible({ timeout: 20_000 })
 
-  // Keyboard-open the route dialog, pick a status, and submit.
+  // Keyboard-open the route transient, set two of the five facts it lists, and commit them in one
+  // write. The transient is the page's one transient: a labelled panel that names the issue it
+  // will write, addressed by role and name rather than by test id.
   await inboxRow.focus()
   await page.keyboard.press('r')
-  const dialog = page.getByRole('dialog', { name: 'Route issue' })
+  const dialog = page.getByRole('dialog', { name: /^Route [A-Z]+-/ })
   await expect(dialog).toBeVisible({ timeout: 20_000 })
   await dialog.getByLabel('Status').selectOption('todo')
+  await dialog.getByLabel('Project').selectOption({ label: projectName })
   await dialog.getByTestId('route-submit').click()
   await expect(page.locator(TRIAGE_ROW).filter({ hasText: title })).toHaveCount(0, {
     timeout: 20_000,
@@ -153,6 +179,13 @@ test('route a triage issue applies fields and clears the inbox', async ({ page }
   await stop(page, 'Issues').click()
   const todo = page.getByRole('region', { name: 'Todo', exact: true })
   await expect(todo.locator(ROW).filter({ hasText: title })).toBeVisible({ timeout: 20_000 })
+
+  // …and in the project the same single write placed it in.
+  await goToMore(page, 'Projects')
+  await page.getByTestId('project-rail-item').filter({ hasText: projectName }).click()
+  await expect(page.locator(PROJECT_ISSUE_ROW).filter({ hasText: title })).toBeVisible({
+    timeout: 20_000,
+  })
 })
 
 test('the Triage view is correct across every preset in light and dark', async ({ page }) => {
@@ -234,7 +267,9 @@ test('a viewer sees a read-only triage inbox', async ({ page, browser }) => {
     await vp.getByRole('link', { name: new RegExp(teamName) }).click()
     await stop(vp, 'Issues').click()
     await stop(vp, 'Triage').click()
-    await expect(vp.getByRole('heading', { name: /Triage/ })).toBeVisible({ timeout: 20_000 })
+    await expect(vp.getByRole('heading', { name: 'Triage', exact: true })).toBeVisible({
+      timeout: 20_000,
+    })
 
     // The viewer reads the inbox row, but every triage action is absent.
     const inboxRow = vp.locator(TRIAGE_ROW).filter({ hasText: title })
@@ -248,7 +283,7 @@ test('a viewer sees a read-only triage inbox', async ({ page, browser }) => {
     await vp.keyboard.press('a')
     await vp.keyboard.press('d')
     await vp.keyboard.press('r')
-    await expect(vp.getByRole('dialog', { name: 'Route issue' })).toHaveCount(0)
+    await expect(vp.getByRole('dialog', { name: /^Route [A-Z]+-/ })).toHaveCount(0)
     await expect(vp.locator(TRIAGE_ROW).filter({ hasText: title })).toBeVisible()
   } finally {
     await context.close()

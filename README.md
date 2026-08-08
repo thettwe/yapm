@@ -103,8 +103,10 @@ rather than apologizing. Members management is intact behind a Members doorway.
   whose ⏎ takes the one repair the board can honestly make.
 - A kanban board.
 - Time-boxed **cycles** with a progress view and automatic rollover of unfinished work.
-- A keyboard-first **triage inbox** for incoming issues — accept / decline / route, and it works
-  **without a seventh status**.
+- A keyboard-first **triage inbox** for incoming issues: one queue with no fold, the issue under
+  decision unfolded in place with its own words, and three verdicts as keys — accept, decline, or
+  route (status, assignee, cycle, project and labels in one write). All of it **without a seventh
+  status**.
 - Lightweight, workspace-level projects with computed progress, and a keyboard-first roadmap
   timeline across teams.
 

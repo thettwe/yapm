@@ -48,6 +48,12 @@ or press **P** — and choose **Move to project**, then pick a project (or **No 
 clear it). Any team's issue can join any project; the action respects your write permission on
 that issue and is hidden for viewers.
 
+**Routing an incoming issue is the second path.** The [triage](/features/triage/) inbox's
+**Route** panel lists a **Project** row alongside status, assignee, cycle and labels, and writes
+all five — plus clearing the triage flag — in one atomic action. It applies the same rule as
+**Move to project**: the project need only exist in the workspace, because a project spans
+teams, while the assignee, cycle and labels must belong to the issue's own team.
+
 ## The roadmap timeline
 
 The roadmap places each project with a target date on a month axis, earliest to latest, with a

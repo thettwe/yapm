@@ -219,6 +219,51 @@ export function AllPresets() {
   )
 }
 
+// The Triage register of the same row: no linked change, so the reality slot is reserved and
+// silent; no phrase; the age is `created_at`; and the trailing avatar holds the REPORTER, which is
+// why it announces a different relation from the same drawing.
+export function TriageRegister() {
+  return (
+    <PresetGrid>
+      <div className="overflow-hidden rounded-card border border-border bg-bg">
+        <div className="divide-y divide-border">
+          <IssueRow
+            issueKey="ENG-125"
+            title="Checkout hangs when two coupons are applied"
+            priority="urgent"
+            status="backlog"
+            labels={[{ name: 'bug', tone: 'urgent' }]}
+            date="2d"
+            selected
+            assignee={{ name: 'Priya Raman' }}
+            assigneeLabel="Reported by Priya Raman"
+          />
+          <IssueRow
+            issueKey="ENG-126"
+            title="Export order history as CSV"
+            priority="low"
+            status="backlog"
+            labels={[{ name: 'feature', tone: 'in-review' }]}
+            date="1d"
+            assignee={{ name: 'Marcus Bell' }}
+            assigneeLabel="Reported by Marcus Bell"
+          />
+          <IssueRow
+            issueKey="ENG-128"
+            title="Rename “Saved cards” to “Payment methods”"
+            priority="low"
+            status="backlog"
+            labels={[{ name: 'chore', tone: 'in-progress' }]}
+            date="41m"
+            assignee={{ name: 'Dana Okoro' }}
+            assigneeLabel="Reported by Dana Okoro"
+          />
+        </div>
+      </div>
+    </PresetGrid>
+  )
+}
+
 // The mock's four phrase cases, a quiet row, and the selected divergent row that carries its
 // phrase AND its broken track at once. Every string comes from the shared dictionary — a story
 // that typed its own would be the second vocabulary the dictionary exists to prevent.

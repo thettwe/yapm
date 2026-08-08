@@ -37,10 +37,10 @@ function initials(name: string): string {
     .join('')
 }
 
-// The unlinked row still draws the track — four empty stations at the same reserved measure — so
-// populating a signal can never shift a row's alignment.
+// The unlinked row still draws the track — four empty stations and an empty age column at the same
+// reserved measure — so populating a signal can never shift a row's alignment.
 function EmptyRealityTrack() {
-  return <RealityTrack shape={buildRealityShape(null)} label="No delivery signal yet" />
+  return <RealityTrack shape={buildRealityShape(null)} age={null} label="No delivery signal yet" />
 }
 
 export interface IssueRowProps extends Omit<ComponentProps<'div'>, 'children'> {

@@ -47,6 +47,7 @@ import { PRIORITY, type PriorityKind, PriorityMark } from '@yapm/ui/components/p
 import { ProvenanceMark } from '@yapm/ui/components/provenance-mark'
 import {
   buildRealityShape,
+  formatReviewAge,
   RealityTrack,
   realityTrackLabel,
   type TrackShape,
@@ -124,11 +125,18 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 // The two ends of the vocabulary, drawn on the same row: reality ran ahead of the board (the
 // `//` break), and a change that is merged, green and live.
-const DIVERGED = { pr: 'merged', ci: 'passing', reviewAgeMs: 86_400_000, deployedAt: null } as const
+const DIVERGED = {
+  pr: 'merged',
+  ci: 'passing',
+  reviewAgeMs: 86_400_000,
+  reviewAgeFrom: 'review',
+  deployedAt: null,
+} as const
 const SHIPPED = {
   pr: 'merged',
   ci: 'passing',
   reviewAgeMs: 3_600_000,
+  reviewAgeFrom: 'review',
   deployedAt: 1_759_000_000_000,
 } as const
 
@@ -153,6 +161,7 @@ function IssueListMockup() {
           realityTrack={
             <RealityTrack
               shape={buildRealityShape(DIVERGED, { divergence: 'status_behind_merge' })}
+              age={formatReviewAge(DIVERGED.reviewAgeMs)}
               label={realityTrackLabel(DIVERGED, 'PR merged but this issue is not marked done')}
             />
           }
@@ -193,7 +202,11 @@ function IssueListMockup() {
           date="5d"
           assignee={{ name: 'Ada Lovelace' }}
           realityTrack={
-            <RealityTrack shape={buildRealityShape(SHIPPED)} label={realityTrackLabel(SHIPPED)} />
+            <RealityTrack
+              shape={buildRealityShape(SHIPPED)}
+              age={formatReviewAge(SHIPPED.reviewAgeMs)}
+              label={realityTrackLabel(SHIPPED)}
+            />
           }
         />
         <IssueRow

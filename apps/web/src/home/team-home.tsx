@@ -24,7 +24,11 @@ import {
 import { CadenceChart } from '@yapm/ui/components/cadence-chart'
 import { DayBand, ScopeBand, TickBar, TriageDots } from '@yapm/ui/components/drawn'
 import { PriorityMark } from '@yapm/ui/components/priority-mark'
-import { buildRealityShape, RealityTrack } from '@yapm/ui/components/reality-track'
+import {
+  buildRealityShape,
+  RealityTrack,
+  realityTrackLabel,
+} from '@yapm/ui/components/reality-track'
 import { StatusGlyph } from '@yapm/ui/components/status-glyph'
 import { cn } from '@yapm/ui/lib/utils'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
@@ -445,7 +449,7 @@ function AttentionBand({ attention, teamId }: { attention: TeamHomeAttention; te
                 shape={buildRealityShape(DIVERGED_CLASS_STRIP, {
                   divergence: 'status_behind_merge',
                 })}
-                label="Reality ran ahead of the board"
+                label={realityTrackLabel(DIVERGED_CLASS_STRIP, 'Reality ran ahead of the board')}
               />
             }
           />
@@ -787,9 +791,12 @@ function YoursBand({
                 </span>
                 <span className="truncate">{row.title}</span>
                 <span className="flex-1" />
+                {/* The facts, named — not a static string that names none of them. The divergence
+                    sentence is omitted because `row.say` states it in visible text beside this,
+                    and a screen reader should hear it once. */}
                 <RealityTrack
                   shape={buildRealityShape(row.strip, { divergence: row.divergence })}
-                  label={`Delivery reality for ${row.issueKey}`}
+                  label={realityTrackLabel(row.strip)}
                 />
                 <span className="flex-none text-right">
                   <span

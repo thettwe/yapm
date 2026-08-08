@@ -26,6 +26,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@yapm/ui/components/pop
 import { PriorityMark } from '@yapm/ui/components/priority-mark'
 import {
   buildRealityShape,
+  formatReviewAge,
   RealityTrack,
   realityTrackLabel,
 } from '@yapm/ui/components/reality-track'
@@ -551,6 +552,11 @@ function IssueGroupSection({
             realityTrack={
               <RealityTrack
                 shape={buildRealityShape(view.strip, { divergence: view.divergence })}
+                // `null`, never omitted: the row's age column is reserved whether or not this
+                // issue has an age to put in it, which is what keeps the list's alignment fixed.
+                age={
+                  view.strip?.reviewAgeMs == null ? null : formatReviewAge(view.strip.reviewAgeMs)
+                }
                 label={realityTrackLabel(
                   view.strip,
                   view.divergence ? DIVERGENCE_LABEL[view.divergence] : null,

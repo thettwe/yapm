@@ -141,7 +141,9 @@ test('a deployment carrying the merge commit lights the deploy glyph, and Delive
   const shippedTrack = row(page, shipped).locator('[data-slot="reality-track"]')
   await expect(shippedTrack).toHaveAttribute('aria-label', /Deployed/, { timeout: 30_000 })
   const waitingTrack = row(page, waiting).locator('[data-slot="reality-track"]')
-  await expect(waitingTrack).toBeVisible({ timeout: 30_000 })
+  // Presence alone would pass on the EMPTY track too, which is drawn before any signal arrives —
+  // so the wait is on the label naming this change's merge, and only then is "Deployed" refuted.
+  await expect(waitingTrack).toHaveAttribute('aria-label', /PR merged/, { timeout: 30_000 })
   await expect(waitingTrack).not.toHaveAttribute('aria-label', /Deployed/)
 
   // Apply Delivery -> "Merged, not deployed" with the keyboard alone; only the unshipped row
@@ -170,7 +172,13 @@ test('the reality track renders in all three presets, light and dark', async ({ 
   }
 
   const target = row(page, title)
-  await expect(target.locator('[data-slot="reality-track"]')).toBeVisible({ timeout: 30_000 })
+  // The label, not mere presence: the unlinked row draws a track too, so `toBeVisible` would pass
+  // before the seeded PR ever synced and the preset loop would then prove nothing about it.
+  await expect(target.locator('[data-slot="reality-track"]')).toHaveAttribute(
+    'aria-label',
+    /PR merged/,
+    { timeout: 30_000 },
+  )
 
   for (const preset of ['warm', 'focused', 'editorial'] as const) {
     for (const mode of ['light', 'dark'] as const) {
@@ -185,9 +193,13 @@ test('the reality track renders in all three presets, light and dark', async ({ 
       )
       await page.reload()
       await expect(page.locator('html')).toHaveAttribute('data-theme', preset)
-      await expect(row(page, title).locator('[data-slot="reality-track"]')).toBeVisible({
-        timeout: 30_000,
-      })
+      await expect(row(page, title).locator('[data-slot="reality-track"]')).toHaveAttribute(
+        'aria-label',
+        /PR merged/,
+        { timeout: 30_000 },
+      )
+      // And it is the POPULATED track being drawn in this preset, not the placeholder.
+      await expect(row(page, title).getByLabel('No delivery signal yet')).toHaveCount(0)
     }
   }
 })

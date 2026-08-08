@@ -198,7 +198,7 @@ component rule rather than a class convention.
 ### D7 — The how: a footnote that folds
 
 `<How label="OPEN TO MERGED">…derivation…</How>` renders, at rest, only the mono `how ·` on
-`--text-3`. Activation (click or `Enter`/`Space` on the focusable trigger) opens a small panel
+`--text-2`. Activation (click or `Enter`/`Space` on the focusable trigger) opens a small panel
 carrying the mock's structure: a mono uppercase kicker, the derivation sentence, and an optional
 mono constraint line. `Escape` closes and restores focus. The trigger is a real `<button>` with
 `aria-expanded`; the panel is `aria-labelledby` the kicker. The how is deliberately **not** a peek:
@@ -215,7 +215,7 @@ eye learns — dotted means openable — holds for both.
 <ProvenanceMark provider="github" | "figma" />
 ```
 
-Renders inline-SVG at 12–14px in `currentColor` inside a `text-text-3` wrapper, `aria-hidden` when
+Renders inline-SVG at 12–14px in `currentColor` inside a `text-text-2` wrapper, `aria-hidden` when
 the adjacent text already names the source and labelled otherwise. The component enforces the rule
 structurally: no `color` prop, no `size` prop beyond the 12/13/14 triple, and it is a
 `<span class="inline-flex align-…">` placed by the caller **after** the fact — a lint-visible shape,
@@ -392,7 +392,7 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
   would make the honest case the one somebody has to remember. Defaulting to the provider's name and
   opting *out* where the sentence already says "GitHub" is the screen-reader-honest ordering.
 - **No `color` prop, no numeric `size` prop, no `upload` member.** `ProvenanceSize` is the literal
-  union `12 | 13 | 14`, the mark inherits `currentColor` through a `text-text-3` wrapper the caller
+  union `12 | 13 | 14`, the mark inherits `currentColor` through a `text-text-2` wrapper the caller
   can re-tone but not re-hue per-mark, and there is no union member an upload could pass. The rules
   from `ia.html` §Provenance are enforced by the type, not by a comment.
 - **`Door` is a `<span>` wrapper, not a polymorphic element.** The trigger stays the link or button
@@ -417,8 +417,8 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 - **The rail's mono fact line is `--text-2`, not the mock's `--text-3`.** `issue.html` inks
   `.stop .git` at `--text-3`, which measures **2.80–3.70** on these surfaces. That line carries a
   commit sha and a check count at 11px — a fact the reader must actually read — so the AA bar wins
-  over the mock's exact ink. The mock's `--text-3` remains correct for the `.t-age` suffix and the
-  peek's derivation line, which are secondary to a fact stated elsewhere.
+  over the mock's exact ink. The mock's `--text-3` remains correct for the peek's
+  derivation line, which is secondary to a fact stated directly above it.
 - **The empty station is deliberately below the non-text bar, and the test records why.**
   `--border-strong` measures ~1.4 against every surface, and raising it to 3:1 would make "no pull
   request yet" the loudest mark in a dense row. It is scaffolding, not a fact: the facts are the
@@ -444,3 +444,65 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
   (`auto-status.md` ×2, `github-connector.md`) is updated with it. Historical ROADMAP rows keep the
   words they shipped with — a row describing what change 3 built is a record, not a description of
   today — but every present-tense sentence in README, DESIGN, VISION and ROADMAP is corrected.
+
+### Recorded while fixing the first review round
+
+- **The mock's `.t-age` column is restored, inside the track's own reserved measure.** Review age is
+  one of the four facts §D9 says the track draws, and dropping its drawing left it stated only in
+  the accessible label — a fact a sighted reader lost. `RealityTrack` now takes `age`, drawn in a
+  26px right-aligned mono column inside the same `width` constant, so the width guarantee is
+  unchanged. The prop has **three** states rather than two: `undefined` is a surface with no age
+  column at all (a board card, a home row that states the age in words beside it), `null` is a
+  surface that has the column and this track has nothing to put in it, and a string draws it. A
+  surface that draws the column passes `null` rather than omitting it, which is what makes an
+  unlinked row reserve exactly what a populated one does — asserted through `IssueRow` itself.
+- **The column is `--text-2`, not the mock's `--text-3`.** Same reason as the rail's mono fact line:
+  10.5px carrying a number the reader must read, on surfaces where `--text-3` measures 2.80–3.70.
+- **`DeliveryStrip` is imported from `@yapm/schema`, not re-declared.** §D3 sanctioned mirroring the
+  UNION members so a caller can name a node's state without importing the seam; it did not sanction
+  a second declaration of the four facts, which is the exact duplication this change's own SHALL
+  forbids. The unions stay mirrored and their assignability test stays; the strip is the seam's.
+- **The review age carries which clock it measured.** `DeliverySignal` and `DeliveryStrip` gain
+  `reviewAgeFrom: 'review' | 'pr-open' | null`, set where the fallback already happens. The label
+  reads "reviewed 3d ago" for a change somebody looked at and "unreviewed for 3d" for one nobody
+  has — never the first phrase for the second fact, which is what §D9's "no station or fact line
+  says a reviewer was asked" actually requires. `PR_PHRASE.open` loses ", awaiting review" for the
+  same reason: it was the one phrase in the vocabulary that claimed a reviewer was waiting.
+  `reviewAgeFrom` is optional on the strip, and a strip without it states "review age 3d" —
+  neutral, claiming nothing about who read what.
+- **`closed` keeps drawing the empty Change station, and the docs stop saying otherwise.** A
+  seventh node kind would contradict this change's own spec ("the node kinds SHALL be exactly:"
+  six), and the retired icon strip drew `closed` in `--text-3` — the quietest tone it had — so a
+  loud square would be a regression in the other direction. What was actually wrong was two docs
+  claiming the track *shows* the closed PR: `auto-status.md` and `delivery-signals.md` now say the
+  Change station is left empty because nothing landed, and that "PR closed" is what the track's
+  label says where an unlinked issue says "No delivery signal yet". If a later change wants the
+  distinction drawn, it is a new node kind and a spec amendment, together.
+- **The vertical rail takes its surface from the caller.** The node haloes and the `//` knockout
+  patch paint the surface the rail sits on, and hardcoding `--bg` meant a rail inside a peek or a
+  panel would knock a hole of page colour into it. A `surface` prop — a union of the theme's four
+  surface tokens, so a caller names a token and never a colour — sets `--rail-surface` once on the
+  list, and the nodes read it. Change C mounts the rail on the issue page; this is what lets it.
+- **The `how ·` trigger, the how's kicker and constraint, the peek's footer row and its keycaps,
+  and `ProvenanceMark`'s wrapper move from `--text-3` to `--text-2`**, and `contrast.test.ts` gains
+  the `--bg-elevated` surface the two transients are drawn on — the surface proposal.md said this
+  change would assert and did not. `--text-3` measures 2.88–3.36 there: under the text bar in every
+  preset and under the NON-text bar in two. The one ink deliberately left at `--text-3` is the
+  peek's derivation line, which §"groups 7–8" blessed as secondary to a phrase stated directly
+  above it; it is now measured and recorded as an exemption rather than left unasserted.
+- **The `how ·` trigger gains `aria-describedby`.** `aria-controls` is followed by almost no screen
+  reader, so activating the trigger announced nothing. The peek beside it already paired the two;
+  now both do.
+- **`usePeek`'s label is required, and so is its options argument.** §D6 put the label on the hook
+  so it could not be forgotten at one of several call sites — but an optional field is exactly a
+  field that can be forgotten, and the result was a `role="dialog"` with no accessible name. An
+  unnamed peek no longer compiles, and a minimally-constructed one is asserted to resolve by name.
+- **Team home's tracks announce the facts they draw.** The YOURS rows and the divergence class row
+  carried static strings naming none of them. Both now compose `realityTrackLabel`; the YOURS rows
+  pass no divergence sentence because `row.say` states it in visible text beside them, matching the
+  issue-detail decision recorded above.
+- **The e2e selector rename had silently weakened three assertions.** `reality-strip` existed only
+  on a populated strip; `reality-track` is drawn on the unlinked row too, so `toBeVisible()` no
+  longer proved a delivery signal had arrived. The three renamed assertions now wait on the
+  track's `aria-label` naming the seeded PR, and the three-preset loop asserts the placeholder is
+  absent as well — the shape the first test in the file already used.

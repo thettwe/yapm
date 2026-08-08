@@ -52,7 +52,7 @@ function ProvenanceMark({ provider, size = 12, label, className }: ProvenanceMar
     <span
       data-slot="provenance-mark"
       data-provider={provider}
-      className={cn('inline-flex flex-none align-[-2px] text-text-3', className)}
+      className={cn('inline-flex flex-none align-[-2px] text-text-2', className)}
     >
       <svg
         width={size}

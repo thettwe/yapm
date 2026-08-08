@@ -235,6 +235,7 @@ export type {
   LinkedEntities,
   LinkedPullRequestRow,
   PrState,
+  ReviewAgeSource,
   TeamDeploymentRow,
 } from './zero/delivery.js'
 export {

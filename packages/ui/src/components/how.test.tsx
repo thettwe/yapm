@@ -33,6 +33,10 @@ test('activating the trigger unfolds the derivation, named by its kicker', () =>
   expect(trigger).toHaveAttribute('aria-expanded', 'true')
   expect(panel).toHaveTextContent(/median of the last 26 merged changes/i)
   expect(panel).toHaveTextContent('linear scale · giants included · team-level only')
+  // `aria-controls` alone is followed by almost no screen reader, so the derivation is also the
+  // trigger's description — the same pairing the peek uses, for the same reason.
+  expect(trigger).toHaveAttribute('aria-controls', panel.id)
+  expect(trigger).toHaveAttribute('aria-describedby', panel.id)
 })
 
 test('the trigger is a real button, so Enter and Space open it natively', () => {

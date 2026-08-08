@@ -100,6 +100,26 @@ describe('computeDeliverySignal', () => {
     })
     expect(noReview?.reviewAgeMs).toBeGreaterThanOrEqual(8_000)
   })
+
+  // The two ages are the same number and not the same fact, so the source rides along with it: a
+  // drawing that announced a never-reviewed PR as "reviewed 3d ago" would be inventing the review.
+  it('reports WHICH clock the review age measures, or none at all', () => {
+    const now = Date.now()
+    expect(
+      computeDeliverySignal(issue, {
+        pullRequests: [{ state: 'open', openedAt: now - 20_000 }],
+        reviews: [{ state: 'commented', submittedAt: now - 3_000 }],
+      })?.reviewAgeFrom,
+    ).toBe('review')
+    expect(
+      computeDeliverySignal(issue, {
+        pullRequests: [{ state: 'open', openedAt: now - 8_000 }],
+      })?.reviewAgeFrom,
+    ).toBe('pr-open')
+    expect(computeDeliverySignal(issue, { ciRuns: [{ health: 'passing' }] })?.reviewAgeFrom).toBe(
+      null,
+    )
+  })
 })
 
 describe('computeDivergence over real signals', () => {
@@ -178,6 +198,7 @@ describe('assembleLinkedEntities', () => {
       pr: 'approved',
       ciHealth: 'passing',
       reviewAgeMs: expect.any(Number),
+      reviewAgeFrom: 'review',
       deployedAt: null,
     })
   })

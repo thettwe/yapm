@@ -312,6 +312,40 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     }
   })
 
+  // The two transients — the peek and the `how ·` — are the only surfaces in the language allowed
+  // to lift, and both are drawn on `--bg-elevated`. Everything a reader must READ on them is
+  // `--text-1` or `--text-2`: the `how ·` trigger, the how's kicker and constraint lines, the
+  // peek's `⏎ open · esc stay` footer and its keycaps, and the provenance mark that follows a
+  // fact. They carried `--text-3` until this assertion existed, which measures 2.88–3.36 there —
+  // under the text bar everywhere and under the NON-text bar in two presets.
+  it('the peek and the how ink meets AA on the elevated surface (>= 4.5)', () => {
+    const elevated = hex(t, '--bg-elevated')
+    for (const ink of ['--text-1', '--text-2'] as const) {
+      expect(contrastRatio(hex(t, ink), elevated), ink).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
+  // The provenance mark is non-text drawing (a 12–14px monochrome brand glyph after the fact it
+  // sourced), so 3:1 is its bar — but it inherits `--text-2` through its wrapper, so what this
+  // pins is that the wrapper's ink clears the non-text bar on the surface a peek draws it on. It
+  // is a separate assertion from the one above because the BAR is different, and a later change
+  // that re-tones the mark should have to argue with the right number.
+  it('the provenance mark is distinguishable on the elevated surface (>= 3.0)', () => {
+    expect(contrastRatio(hex(t, '--text-2'), hex(t, '--bg-elevated'))).toBeGreaterThanOrEqual(
+      AA_LARGE,
+    )
+  })
+
+  // The ONE ink in the two transients deliberately left at `--text-3`: the peek's derivation line,
+  // the mono half of a bi-fact whose bold phrase states the same thing in words directly above it
+  // (design decision — "secondary to a fact stated elsewhere"). Recorded as a bound rather than
+  // left unasserted, so the surface is measured and the exemption is visible: it is quieter than
+  // AA on purpose, and it may never fall so far that it stops reading as text at all.
+  // Kept as a lower bound only, so a token edit that RAISES `--text-3` to AA does not fail here.
+  it('records that the peek derivation line is deliberately quieter than AA on the elevated surface', () => {
+    expect(contrastRatio(hex(t, '--text-3'), hex(t, '--bg-elevated'))).toBeGreaterThanOrEqual(2.5)
+  })
+
   it('on-accent text on the accent fill meets AA (>= 4.5)', () => {
     expect(contrastRatio(hex(t, '--on-accent'), hex(t, '--accent'))).toBeGreaterThanOrEqual(
       AA_NORMAL,

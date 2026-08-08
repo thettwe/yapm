@@ -56,6 +56,7 @@ export function deliveryView(
       pr: signal.pr,
       ci: signal.ciHealth,
       reviewAgeMs: signal.reviewAgeMs,
+      reviewAgeFrom: signal.reviewAgeFrom,
       deployedAt: signal.deployedAt,
     },
     divergence,

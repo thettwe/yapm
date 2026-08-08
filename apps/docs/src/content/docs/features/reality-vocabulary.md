@@ -23,20 +23,34 @@ Delivery is drawn as a **track**: four stations, joined by segments, read left t
 | **Review** | Whether the change has been reviewed |
 | **Live** | Whether a deployment carrying this change's merge commit succeeded |
 
-Each station is a node, and the node's **shape** carries its state, never hue alone:
+Each station is a node, and the **reached / in-flight / failed / absent** distinctions are carried by
+its shape, not by hue:
 
-- a **filled disc** — the station is reached (merged, green, approved, live),
+- a **filled disc** — the station has been passed, or is being passed right now,
 - a **hollow ring** — the station is in flight (a draft PR, checks still running, review waiting),
 - a **square** — CI is failing,
 - a **faint open ring** — nothing here yet.
 
+Within the filled discs, hue separates *passed* from *in progress*: a merged or approved change is
+the done hue, an open one the in-review hue. That single distinction is the one the drawing makes by
+colour, and it is why the track always states its facts in words too — the accessible label reads
+"PR open, CI passing" or "PR merged, CI passing", so nothing the hue says is only said by the hue.
+
 The segments between the stations carry the same reading: solid where the work has run through,
 dotted where it has not.
+
+A pull request **closed without merging** leaves the Change station empty — the change never
+landed, and there is no fifth shape for "started and stopped". The fact is not lost: the track's
+accessible label says "PR closed", where an issue with no pull request at all says "No delivery
+signal yet".
 
 An issue with no linked activity still draws the track — four empty stations at exactly the width a
 populated track occupies — so connecting GitHub never shifts a row. The whole track is one image to
 a screen reader, labelled with the facts it actually draws ("PR merged, CI passing, Deployed") or
 "No delivery signal yet".
+
+Beside the stations, in a column reserved whether or not there is anything to put in it, sits the
+**review age** in mono: "3d", "2h", "now".
 
 ### The same track, on its side
 
@@ -57,8 +71,11 @@ the point of disagreement. Which segment breaks says which disagreement fired:
 | The PR merged, but the issue is not done or canceled | On the last segment |
 
 The station just past the break wears an urgent ring, so the break reads as a stop rather than a
-gap. The sentence naming the disagreement is always written out beside the break — the mark draws
-attention, the words carry the meaning.
+gap. The mark draws attention; the words carry the meaning — and where the words go depends on how
+much room the surface has. On an issue page and on the team digest's rows the sentence is written
+out beside the break. On a dense list row there is no room for it, so the break stands alone and the
+sentence is carried in the track's accessible label, which reads, for example, "PR merged, CI
+passing, PR merged but this issue is not marked done".
 
 Earlier versions of yapm drew this as a warning triangle beside the row. It is now part of the
 track, because a disagreement is a fact about the *path* the work took, and belongs on the drawing
@@ -75,7 +92,9 @@ never invents a fifth. Two limits are worth knowing, because yapm will not paper
 - **There is no "review requested" event.** yapm can see reviews that happened, not reviews that
   were asked for. Review age is therefore the time since the newest review, or, before any review,
   how long the PR has been open — never "waiting on a reviewer since Tuesday", which the data cannot
-  distinguish from "open since Tuesday".
+  distinguish from "open since Tuesday". The two clocks are the same number and not the same fact,
+  so they are never announced in the same words: a reviewed change reads "reviewed 3d ago", one
+  nobody has looked at reads "unreviewed for 3d".
 
 ## Status is cycle position
 

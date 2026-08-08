@@ -1,20 +1,18 @@
+import type { DeliveryStrip } from '@yapm/schema'
 import { cn } from '@yapm/ui/lib/utils'
-import { Fragment } from 'react'
+import { type CSSProperties, Fragment } from 'react'
 
 // The one reality vocabulary: nodes and segments, with `//` where the board and git disagree.
-// Mirrored from the schema delivery seam as plain string unions so this design-system primitive
-// stays free of a schema dependency (the app layer computes the signal and hands over these
-// primitives); `reality-track.test.tsx` asserts the two sides stay assignable both ways.
+// The UNION members are mirrored from the schema delivery seam as plain string unions so a caller
+// can name a node's state without importing the seam; `reality-track.test.tsx` asserts the two
+// sides stay assignable both ways. The strip itself is NOT mirrored — there is exactly one
+// `DeliveryStrip`, owned by `packages/schema`, because two structurally identical declarations of
+// the same four facts is the duplication this vocabulary exists to end.
 export type PrState = 'draft' | 'open' | 'approved' | 'merged' | 'closed'
 export type CiHealth = 'passing' | 'failing' | 'pending'
 export type DivergenceKind = 'status_behind_merge' | 'status_ahead_of_pr' | 'done_but_ci_failing'
 
-export interface DeliveryStrip {
-  readonly pr: PrState | null
-  readonly ci: CiHealth | null
-  readonly reviewAgeMs: number | null
-  readonly deployedAt: number | null
-}
+export type { DeliveryStrip }
 
 export type TrackNodeKind = 'done' | 'open' | 'rev-wait' | 'fail' | 'empty' | 'empty-urgent'
 export type TrackSegmentKind = 'solid' | 'review' | 'dotted' | 'broken'
@@ -111,9 +109,11 @@ export function buildRealityShape(
   }
 }
 
+// No review-requested event is stored, so the open state may never be phrased as a reviewer being
+// waited on: "PR open, awaiting review" and "PR open since Tuesday" are the same row to yapm.
 const PR_PHRASE: Record<PrState, string> = {
   draft: 'Draft PR',
-  open: 'PR open, awaiting review',
+  open: 'PR open',
   approved: 'PR approved',
   merged: 'PR merged',
   closed: 'PR closed',
@@ -127,7 +127,8 @@ const CI_PHRASE: Record<CiHealth, string> = {
 
 // Compact review-age label ("3d", "2h", "now"), rendered from the ms since the newest review —
 // or, before any review, how long the PR has been open. There is no review-requested event, so
-// this may never be phrased as a reviewer waiting.
+// this may never be phrased as a reviewer waiting; which of the two clocks it measures is carried
+// by the strip's own `reviewAgeFrom`, so the two are never announced in the same words.
 export function formatReviewAge(ms: number): string {
   if (ms < 60_000) return 'now'
   const min = Math.floor(ms / 60_000)
@@ -137,6 +138,17 @@ export function formatReviewAge(ms: number): string {
   const days = Math.floor(hours / 24)
   if (days < 7) return `${days}d`
   return `${Math.floor(days / 7)}w`
+}
+
+// A PR that has never been reviewed and a PR reviewed three days ago both carry a review age, and
+// the two are not the same sentence. `reviewAgeFrom` says which clock it is; a strip that predates
+// the field states the age neutrally rather than inventing a review that did not happen.
+function reviewAgePhrase(strip: DeliveryStrip): string | null {
+  if (strip.reviewAgeMs == null) return null
+  const age = formatReviewAge(strip.reviewAgeMs)
+  if (strip.reviewAgeFrom === 'pr-open') return `unreviewed for ${age}`
+  if (strip.reviewAgeFrom === 'review') return `reviewed ${age} ago`
+  return `review age ${age}`
 }
 
 // The truthful label the horizontal track announces: the facts actually drawn, in the order they
@@ -149,7 +161,7 @@ export function realityTrackLabel(
     strip?.pr ? PR_PHRASE[strip.pr] : null,
     strip?.ci ? CI_PHRASE[strip.ci] : null,
     strip?.deployedAt != null ? 'Deployed' : null,
-    strip?.reviewAgeMs != null ? `reviewed ${formatReviewAge(strip.reviewAgeMs)} ago` : null,
+    strip === null ? null : reviewAgePhrase(strip),
     divergenceSentence ?? null,
   ].filter((part): part is string => part != null && part !== '')
   return parts.length > 0 ? parts.join(', ') : 'No delivery signal yet'
@@ -202,13 +214,44 @@ export function TrackNodeMark({
   )
 }
 
+// The rail's nodes and its `//` knockout patch are drawn OVER the connector, so one of the two —
+// the node's halo or its fill — has to be the surface the rail sits on. That surface is the
+// caller's, not this component's: a rail inside a peek or a sidebar panel painted `--bg` would
+// knock a hole of page colour into the panel. `--rail-surface` carries it, set once on the list.
 const RAIL_NODE_CLASS: Record<TrackNodeKind, string> = {
-  done: 'size-[13px] rounded-full border-[2.5px] border-bg bg-status-done',
-  open: 'size-[13px] rounded-full border-[2.5px] border-bg bg-status-in-review',
-  'rev-wait': 'size-[13px] rounded-full border-[2.5px] border-status-in-review bg-bg',
-  fail: 'size-[13px] rounded-[3px] border-[2.5px] border-bg bg-status-urgent',
-  empty: 'size-[13px] rounded-full border-[2.5px] border-border-strong bg-bg',
-  'empty-urgent': 'size-[13px] rounded-full border-[2.5px] border-status-urgent bg-bg',
+  done: 'size-[13px] rounded-full border-[2.5px] bg-status-done',
+  open: 'size-[13px] rounded-full border-[2.5px] bg-status-in-review',
+  'rev-wait': 'size-[13px] rounded-full border-[2.5px] border-status-in-review',
+  fail: 'size-[13px] rounded-[3px] border-[2.5px] bg-status-urgent',
+  empty: 'size-[13px] rounded-full border-[2.5px] border-border-strong',
+  'empty-urgent': 'size-[13px] rounded-full border-[2.5px] border-status-urgent',
+}
+
+// Which of the two properties the surface fills for each node kind: a filled node wears the
+// surface as its halo, a hollow one as its centre.
+const RAIL_NODE_KNOCKOUT: Record<TrackNodeKind, 'border' | 'background'> = {
+  done: 'border',
+  open: 'border',
+  'rev-wait': 'background',
+  fail: 'border',
+  empty: 'background',
+  'empty-urgent': 'background',
+}
+
+// Token-only by construction: a caller names one of the theme's surfaces, never a colour.
+export type TrackSurface = 'bg' | 'bg-elevated' | 'bg-sidebar' | 'bg-hover'
+
+const SURFACE_VAR: Record<TrackSurface, string> = {
+  bg: 'var(--bg)',
+  'bg-elevated': 'var(--bg-elevated)',
+  'bg-sidebar': 'var(--bg-sidebar)',
+  'bg-hover': 'var(--bg-hover)',
+}
+
+function knockoutStyle(kind: TrackNodeKind): CSSProperties {
+  return RAIL_NODE_KNOCKOUT[kind] === 'border'
+    ? { borderColor: 'var(--rail-surface)' }
+    : { backgroundColor: 'var(--rail-surface)' }
 }
 
 const RAIL_CONNECTOR_CLASS: Record<TrackSegmentKind, string> = {
@@ -223,6 +266,10 @@ const RAIL_CONNECTOR_CLASS: Record<TrackSegmentKind, string> = {
 // at a wider measure without forking the component.
 export const REALITY_TRACK_WIDTH = 118
 
+// The mock's `.t-age`: a right-aligned mono column beside the stations, inside the same reserved
+// measure, so the fourth fact is drawn and not only announced.
+const AGE_COLUMN_WIDTH = 26
+
 export interface RealityTrackProps {
   shape: TrackShape
   label: string
@@ -230,6 +277,17 @@ export interface RealityTrackProps {
   // Horizontal only, in px: the reserved measure. Every track at the same measure occupies the
   // same width whether it is empty or fully populated, so populating a signal cannot shift a row.
   width?: number
+  // Horizontal only. Review age, formatted by `formatReviewAge`, drawn in the reserved mono column
+  // beside the stations. THREE states on purpose: `undefined` is a surface with no age column at
+  // all (a board card, a home row that states the age in words beside it); `null` is a surface that
+  // HAS the column and this track has no age yet; a string draws it. A surface that draws the
+  // column passes `null` rather than omitting it, so an unlinked row reserves exactly what a
+  // populated one does.
+  age?: string | null
+  // Vertical only: the surface the rail is drawn on. The node haloes and the `//` knockout patch
+  // paint it, so a rail on a panel must be told the panel's colour or it paints a hole of page
+  // colour into it.
+  surface?: TrackSurface
   className?: string
 }
 
@@ -237,6 +295,7 @@ function HorizontalTrack({
   shape,
   label,
   width = REALITY_TRACK_WIDTH,
+  age,
   className,
 }: Omit<RealityTrackProps, 'orientation'>) {
   return (
@@ -247,33 +306,52 @@ function HorizontalTrack({
       style={{ width: `${width}px` }}
       className={cn('flex flex-none items-center', className)}
     >
-      {shape.stations.map((station, index) => {
-        const segment = index > 0 ? shape.segments[index - 1] : undefined
-        return (
-          <Fragment key={station.id}>
-            {segment === undefined ? null : segment === 'broken' ? (
-              <span
-                data-slot="reality-track-break"
-                className="px-[3px] font-mono text-[11px] font-medium leading-none tracking-[-0.05em] text-status-urgent-ink"
-              >
-                {BREAK_MARK}
-              </span>
-            ) : (
-              <span className={SEGMENT_CLASS[segment]} />
-            )}
-            <span className={cn('flex-none', NODE_CLASS[station.node])} />
-          </Fragment>
-        )
-      })}
+      <span className="flex min-w-0 flex-1 items-center">
+        {shape.stations.map((station, index) => {
+          const segment = index > 0 ? shape.segments[index - 1] : undefined
+          return (
+            <Fragment key={station.id}>
+              {segment === undefined ? null : segment === 'broken' ? (
+                <span
+                  data-slot="reality-track-break"
+                  className="px-[3px] font-mono text-[11px] font-medium leading-none tracking-[-0.05em] text-status-urgent-ink"
+                >
+                  {BREAK_MARK}
+                </span>
+              ) : (
+                <span className={SEGMENT_CLASS[segment]} />
+              )}
+              <span className={cn('flex-none', NODE_CLASS[station.node])} />
+            </Fragment>
+          )
+        })}
+      </span>
+      {/* `text-2`, not the mock's `text-3`: at 10.5px this is a fact the reader must read, and
+          `--text-3` measures 2.80–3.70 against the surfaces a row is drawn on. */}
+      {age === undefined ? null : (
+        <span
+          data-slot="reality-track-age"
+          style={{ width: `${AGE_COLUMN_WIDTH}px` }}
+          className="ml-[6px] flex-none text-right font-mono text-[10.5px] leading-none tabular-nums text-text-2"
+        >
+          {age}
+        </span>
+      )}
     </span>
   )
 }
 
-function VerticalRail({ shape, label, className }: Omit<RealityTrackProps, 'orientation'>) {
+function VerticalRail({
+  shape,
+  label,
+  surface = 'bg',
+  className,
+}: Omit<RealityTrackProps, 'orientation'>) {
   return (
     <ol
       data-slot="reality-rail"
       aria-label={label}
+      style={{ '--rail-surface': SURFACE_VAR[surface] } as CSSProperties}
       className={cn('relative flex flex-col', className)}
     >
       {shape.stations.map((station, index) => {
@@ -283,6 +361,7 @@ function VerticalRail({ shape, label, className }: Omit<RealityTrackProps, 'orie
           <li key={station.id} className="relative pb-3.5 pl-[30px] last:pb-0">
             <span
               aria-hidden="true"
+              style={knockoutStyle(station.node)}
               className={cn('absolute left-0 top-[3px]', RAIL_NODE_CLASS[station.node])}
             />
             {connector === undefined ? null : (
@@ -297,7 +376,8 @@ function VerticalRail({ shape, label, className }: Omit<RealityTrackProps, 'orie
             {broken ? (
               <span
                 data-slot="reality-rail-break"
-                className="absolute left-0 bottom-0 w-[13px] bg-bg py-[2px] text-center font-mono text-[12px] font-medium leading-none tracking-[-0.08em] text-status-urgent-ink"
+                style={{ backgroundColor: 'var(--rail-surface)' }}
+                className="absolute left-0 bottom-0 w-[13px] py-[2px] text-center font-mono text-[12px] font-medium leading-none tracking-[-0.08em] text-status-urgent-ink"
               >
                 {BREAK_MARK}
               </span>

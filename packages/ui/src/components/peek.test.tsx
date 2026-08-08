@@ -98,6 +98,35 @@ test('the pointer crosses the gap from trigger into panel without the peek closi
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
+// The minimal peek anybody could build: a trigger, a panel, and nothing spread onto it beyond
+// `peekProps`. Its dialog still resolves BY NAME, because the name is required by `usePeek`'s
+// options rather than left to the panel — an unnamed peek is not a peek somebody can ship.
+function BarePeek() {
+  const { open, triggerProps, peekProps } = usePeek<HTMLButtonElement>('bare', {
+    label: 'Delivery for ENG-204',
+  })
+  return (
+    <span className="relative inline-flex">
+      <button type="button" {...triggerProps}>
+        ENG-204
+      </button>
+      {open ? <PeekPanel {...peekProps}>Built — not live yet</PeekPanel> : null}
+    </span>
+  )
+}
+
+test('a minimally-constructed peek still has an accessible name', () => {
+  render(
+    <PeekProvider>
+      <BarePeek />
+    </PeekProvider>,
+  )
+
+  fireEvent.focus(screen.getByRole('button', { name: 'ENG-204' }))
+
+  expect(screen.getByRole('dialog', { name: 'Delivery for ENG-204' })).toBeInTheDocument()
+})
+
 test('usePeek refuses to work outside a provider, so the one-open rule cannot be bypassed', () => {
   const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
   expect(() => render(<PeekLink id="ENG-116" name="ENG-116" />)).toThrow(/PeekProvider/)

@@ -71,9 +71,10 @@ function PeekProvider({ children }: { children: ReactNode }) {
 }
 
 export interface UsePeekOptions {
-  // Names the thing the panel is about. Given here rather than on the panel so the accessible name
-  // cannot be forgotten at one of several call sites.
-  readonly label?: string
+  // Names the thing the panel is about. REQUIRED, and required here rather than on the panel: a
+  // `role="dialog"` with no accessible name is announced as an unnamed dialog, and an optional
+  // label is one somebody forgets at one of several call sites. Unnamed does not compile.
+  readonly label: string
 }
 
 export interface UsePeekResult<T extends HTMLElement> {
@@ -95,7 +96,7 @@ export interface UsePeekResult<T extends HTMLElement> {
     id: string
     role: 'dialog'
     'aria-modal': false
-    'aria-label': string | undefined
+    'aria-label': string
     onPointerEnter(): void
     onPointerLeave(): void
     onKeyDown(event: KeyboardEvent<HTMLElement>): void
@@ -107,7 +108,7 @@ export interface UsePeekResult<T extends HTMLElement> {
 // the page keeps its focus order, because this is a transient, not a trap.
 function usePeek<T extends HTMLElement = HTMLElement>(
   id: string,
-  options: UsePeekOptions = {},
+  options: UsePeekOptions,
 ): UsePeekResult<T> {
   const registry = useContext(PeekContext)
   if (registry === null) {
@@ -190,15 +191,15 @@ function PeekPanel({ className, children, footer, ...props }: PeekPanelProps) {
     >
       {children}
       {footer === false ? null : (
-        <div className="mt-[11px] flex items-center gap-[7px] border-t border-row-hairline px-0 pt-[7px] pb-[6px] text-[11px] text-text-3">
+        <div className="mt-[11px] flex items-center gap-[7px] border-t border-row-hairline px-0 pt-[7px] pb-[6px] text-[11px] text-text-2">
           {footer ?? (
             <>
-              <kbd className="rounded border border-border-strong bg-bg-elevated px-1 py-px font-mono text-[10px] text-text-3">
+              <kbd className="rounded border border-border-strong bg-bg-elevated px-1 py-px font-mono text-[10px] text-text-2">
                 ⏎
               </kbd>
               <span>open</span>
               <span className="text-border-strong">·</span>
-              <kbd className="rounded border border-border-strong bg-bg-elevated px-1 py-px font-mono text-[10px] text-text-3">
+              <kbd className="rounded border border-border-strong bg-bg-elevated px-1 py-px font-mono text-[10px] text-text-2">
                 esc
               </kbd>
               <span>stay</span>

@@ -48,11 +48,14 @@ function How({ label, children, constraint, className }: HowProps) {
         type="button"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
+        // `aria-controls` is followed by almost no screen reader, so opening the derivation would
+        // announce nothing without this — the same pairing the peek beside it uses.
+        aria-describedby={open ? panelId : undefined}
         aria-label={`How ${label} is derived`}
         onClick={() => setOpen((current) => !current)}
         onKeyDown={onKeyDown}
         onBlur={onBlur}
-        className="cursor-pointer font-mono text-[10px] leading-none text-text-3 transition-colors hover:text-text-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        className="cursor-pointer font-mono text-[10px] leading-none text-text-2 transition-colors hover:text-text-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         how ·
       </button>
@@ -69,13 +72,13 @@ function How({ label, children, constraint, className }: HowProps) {
         >
           <div
             id={kickerId}
-            className="mb-[6px] font-mono text-[10px] uppercase tracking-[0.08em] text-text-3"
+            className="mb-[6px] font-mono text-[10px] uppercase tracking-[0.08em] text-text-2"
           >
             {`how · ${label}`}
           </div>
           <div className="text-[12.5px] leading-[1.55] text-text-1">{children}</div>
           {constraint === undefined ? null : (
-            <div className="mt-[6px] font-mono text-[10.5px] text-text-3">{constraint}</div>
+            <div className="mt-[6px] font-mono text-[10.5px] text-text-2">{constraint}</div>
           )}
         </div>
       ) : null}

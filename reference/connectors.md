@@ -1,6 +1,6 @@
 # Reference: `connectors` change — first-party connector framework (GitHub first)
 
-Prep for ROADMAP change #8 (`connectors`). Feeds the work graph (issue ↔ PR ↔ CI check ↔ deploy) and the issue-list **reality strip** (DESIGN.md §"Issue list"). AI change #9 reuses the same encrypted-secrets/config surface.
+Prep for ROADMAP change #8 (`connectors`). Feeds the work graph (issue ↔ PR ↔ CI check ↔ deploy) and the issue-list **reality track** (DESIGN.md §"Issue list"). AI change #9 reuses the same encrypted-secrets/config surface.
 
 **Verification policy applied:** every API claim below is either quoted from an official GitHub doc (URL inline) or read from a real installed `.d.ts` in a throwaway probe (`scratchpad/probe-connectors`, `octokit@5.0.5` + `@octokit/auth-app@8.2.0` + `@octokit/webhooks@14.2.0` + `@octokit/app@16.1.2`, installed 2026-07-24). Anything not confirmed that way is marked **UNVERIFIED**. Design proposals (the connector interface) are marked **PROPOSAL**.
 
@@ -72,7 +72,7 @@ Source: https://docs.github.com/en/rest/authentication/permissions-required-for-
 | `metadata` | read | Mandatory baseline; repo info. |
 | `contents` | read | Branch/commit/ref data for branch↔issue linking, push events. |
 | `issues` | **write** | Read issues; write comments/labels/status back (auto-link, back-reference). |
-| `pull_requests` | **write** | PR state for the reality strip; optionally write PR comments/links. |
+| `pull_requests` | **write** | PR state for the reality track; optionally write PR comments/links. |
 | `checks` | read | check_run / check_suite → CI health dot. |
 | `statuses` ("Commit statuses") | read | Legacy `status` events (Travis/older CI) → CI health. |
 | `deployments` | read | deployment / deployment_status → deploy state. |
@@ -98,7 +98,7 @@ Source: https://docs.github.com/en/apps/creating-github-apps/authenticating-with
 
 ## 2. Webhooks — events, payloads, HMAC verification
 
-### 2.1 Event → action-enum reference (for the reality strip)
+### 2.1 Event → action-enum reference (for the reality track)
 
 Source: https://docs.github.com/en/webhooks/webhook-events-and-payloads (actions verbatim).
 
@@ -115,9 +115,9 @@ Source: https://docs.github.com/en/webhooks/webhook-events-and-payloads (actions
 
 Notes:
 - **Draft transitions:** `pull_request` `converted_to_draft` and `ready_for_review` are the draft↔open signals; the PR's own boolean is `pull_request.draft`. (**UNVERIFIED** exact nested field name from live payload; from schema it is `draft: boolean`.)
-- **Merge:** there is no `merged` action — a merge fires `pull_request` `closed` with `pull_request.merged === true`. This distinction is load-bearing for the reality strip (merged vs just-closed).
+- **Merge:** there is no `merged` action — a merge fires `pull_request` `closed` with `pull_request.merged === true`. This distinction is load-bearing for the reality track (merged vs just-closed).
 - **Every install-scoped delivery carries `installation.id`** → this is the pg-boss `singletonKey` (§3.3).
-- **`review` events:** PR reviews (approve/changes-requested) arrive on the separate **`pull_request_review`** event (action `submitted`/`edited`/`dismissed`), not on `pull_request`. Needed for the review-state part of the reality strip (§4). Also `pull_request_review_comment`, `pull_request_review_thread` exist. (Event existence: verified in webhooks-names generated set exported by `@octokit/webhooks`; action enums **UNVERIFIED** here — confirm against the events page before coding.)
+- **`review` events:** PR reviews (approve/changes-requested) arrive on the separate **`pull_request_review`** event (action `submitted`/`edited`/`dismissed`), not on `pull_request`. Needed for the review-state part of the reality track (§4). Also `pull_request_review_comment`, `pull_request_review_thread` exist. (Event existence: verified in webhooks-names generated set exported by `@octokit/webhooks`; action enums **UNVERIFIED** here — confirm against the events page before coding.)
 
 ### 2.2 Payload TypeScript types (verified — `@octokit/webhooks`)
 
@@ -163,7 +163,7 @@ The webhook HTTP handler must return 2xx quickly (GitHub times out / retries slo
 
 ### 2.5 Recommended minimal event subscription set
 
-Subscribe (in App settings "Subscribe to events") to exactly what the reality strip needs — nothing more (less signature surface, less queue volume):
+Subscribe (in App settings "Subscribe to events") to exactly what the reality track needs — nothing more (less signature surface, less queue volume):
 - `pull_request` (draft/open/closed+merged/synchronize)
 - `pull_request_review` (approved / changes_requested) — review state + latency
 - `check_suite` and/or `check_run` (CI health) — prefer `check_suite.completed` for a rolled-up conclusion, add `check_run` only if per-check granularity is shown
@@ -308,9 +308,9 @@ https://docs.github.com/en/rest/authentication/permissions-required-for-fine-gra
 
 ---
 
-## 4. APIs that populate the reality strip — push vs poll
+## 4. APIs that populate the reality track — push vs poll
 
-DESIGN.md §"Issue list" reality strip = PR state (draft→open→approved→merged) · CI health dot · review age · deploy state · divergence flag.
+DESIGN.md §"Issue list" reality track = PR state (draft→open→approved→merged) · CI health node · review age · deploy state · the `//` divergence break.
 
 | Signal | Source of truth (REST — verified) | Webhook push? | Poll/reconcile? |
 |---|---|---|---|
@@ -319,7 +319,7 @@ DESIGN.md §"Issue list" reality strip = PR state (draft→open→approved→mer
 | **Review latency** | `reviews[].submitted_at` (date-time) minus PR `ready_for_review`/`created_at` (verified `submitted_at` exists) | derive from `pull_request_review` timestamp | computed, not stored by GH |
 | **CI health** | `GET /repos/{owner}/{repo}/commits/{ref}/check-runs` → per run `status` ∈ `queued`/`in_progress`/`completed` (+`waiting`/`requested`/`pending`), `conclusion` ∈ `success`/`failure`/`neutral`/`cancelled`/`skipped`/`timed_out`/`action_required`/`null` (`stale` GitHub-only). Also legacy `GET /repos/{owner}/{repo}/commits/{ref}/status` (`state` pending/success/failure/error) | ✅ `check_run`/`check_suite` (`completed`) + `status` | reconcile via ETag on the head SHA |
 | **Deploy state** | `GET /repos/{owner}/{repo}/deployments/{deployment_id}/statuses` → `state` ∈ `error`/`failure`/`inactive`/`pending`/`success`/`queued`/`in_progress` (verified endpoints + enum) | ✅ `deployment_status` | poll long-running deploys |
-| **Divergence flag** | derived: human status vs (merged / deploy-failed / CI-failed) | n/a — computed over the above | recompute on any signal change |
+| **The `//` divergence break** | derived: human status vs (merged / deploy-failed / CI-failed) | n/a — computed over the above | recompute on any signal change |
 
 Verified enum sources: check-runs https://docs.github.com/en/rest/checks/runs ; deployment statuses https://docs.github.com/en/rest/deployments/statuses ; reviews https://docs.github.com/en/rest/pulls/reviews .
 
@@ -382,7 +382,7 @@ interface ConnectorCtx {
 
 Why this shape:
 - **`parseDelivery` is intentionally split from `ingest`** so the HTTP handler can verify+enqueue in <10ms (§2.4) and the pg-boss worker does the heavy `ingest`. The `installationKey` it returns is the serialization key (§3.3).
-- **`WorkGraphMutation` is the provider firewall.** GitHub's `check_run.conclusion` and GitLab's pipeline status both normalize to the same union → the reality strip + divergence logic is written once. Mutations flow through yapm's **existing Zero custom mutators** (TECHSTACK: shared mutators in `packages/schema`), so connector writes obey the same server-side authz as human writes — same safety story ROADMAP #9 wants for AI.
+- **`WorkGraphMutation` is the provider firewall.** GitHub's `check_run.conclusion` and GitLab's pipeline status both normalize to the same union → the reality track + divergence logic is written once. Mutations flow through yapm's **existing Zero custom mutators** (TECHSTACK: shared mutators in `packages/schema`), so connector writes obey the same server-side authz as human writes — same safety story ROADMAP #9 wants for AI.
 - **`reconcile` uses `getEtag`/`setEtag`** so 304s stay free (§3.4).
 - GitLab later implements the same interface: system hooks/webhooks → `parseDelivery` (`X-Gitlab-Token` verify instead of HMAC), Merge Request/pipeline/deployment REST → `reconcile`. No feature code changes.
 

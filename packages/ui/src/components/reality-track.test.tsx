@@ -16,6 +16,7 @@ import {
   type CiHealth,
   type DeliveryStrip,
   type DivergenceKind,
+  formatReviewAge,
   type PrState,
   RealityTrack,
   realityTrackLabel,
@@ -25,6 +26,7 @@ const MERGED_NOT_LIVE: DeliveryStrip = {
   pr: 'merged',
   ci: 'passing',
   reviewAgeMs: 86_400_000,
+  reviewAgeFrom: 'review',
   deployedAt: null,
 }
 
@@ -89,13 +91,16 @@ test('a diverged row draws the // break and not one lucide glyph', () => {
   expect(container.querySelectorAll('svg.lucide-triangle-alert')).toHaveLength(0)
 })
 
-test('the empty track and a populated one reserve the same width', () => {
+test('the empty track and a populated one reserve the same width, age column included', () => {
   const width = (node: Element | null) => (node as HTMLElement | null)?.style.width
 
-  const empty = render(<RealityTrack shape={buildRealityShape(null)} label="No delivery signal" />)
+  const empty = render(
+    <RealityTrack shape={buildRealityShape(null)} age={null} label="No delivery signal" />,
+  )
   const populated = render(
     <RealityTrack
       shape={buildRealityShape({ ...MERGED_NOT_LIVE, deployedAt: 1_759_000_000_000 })}
+      age="1d"
       label="Shipped"
     />,
   )
@@ -103,6 +108,47 @@ test('the empty track and a populated one reserve the same width', () => {
   const reserved = width(empty.container.firstElementChild)
   expect(reserved).toBeTruthy()
   expect(width(populated.container.firstElementChild)).toBe(reserved)
+  // The column itself is reserved on BOTH, not only where there is an age to draw — that is what
+  // stops a review age arriving from shifting a row.
+  const ageColumn = (node: Element) => node.querySelector('[data-slot="reality-track-age"]')
+  const emptyAge = ageColumn(empty.container)
+  const populatedAge = ageColumn(populated.container)
+  expect(emptyAge).not.toBeNull()
+  expect(populatedAge).not.toBeNull()
+  expect((emptyAge as HTMLElement).style.width).toBe((populatedAge as HTMLElement).style.width)
+})
+
+test('the row draws the review age, not only announces it', () => {
+  const { container } = render(
+    <IssueRow
+      issueKey="ENG-144"
+      title="Merged a day ago, the board never followed"
+      status="in-progress"
+      priority="high"
+      realityTrack={
+        <RealityTrack
+          shape={buildRealityShape(MERGED_NOT_LIVE)}
+          age={formatReviewAge(MERGED_NOT_LIVE.reviewAgeMs ?? 0)}
+          label={realityTrackLabel(MERGED_NOT_LIVE)}
+        />
+      }
+    />,
+  )
+
+  expect(container.querySelector('[data-slot="reality-track-age"]')?.textContent).toBe('1d')
+})
+
+// An unlinked row's track carries the column with nothing in it, so a row that acquires a PR does
+// not move. Rendered through `IssueRow` itself, because its own empty fallback is the one that has
+// to reserve it.
+test('an unlinked row reserves the age column it has nothing to put in', () => {
+  const { container } = render(
+    <IssueRow issueKey="ENG-9" title="No PR anywhere" status="todo" priority="no-priority" />,
+  )
+  const column = container.querySelector('[data-slot="reality-track-age"]')
+
+  expect(column).not.toBeNull()
+  expect(column?.textContent).toBe('')
 })
 
 test('the label states the facts drawn, the divergence sentence included', () => {
@@ -122,6 +168,41 @@ test('the label states the facts drawn, the divergence sentence included', () =>
   expect(label).not.toContain('Deployed')
   // There is no review-requested event, so no drawn label may name a waiting reviewer.
   expect(label).not.toContain('waiting')
+})
+
+// The same number, two different facts. A PR nobody has reviewed has an age measured from the
+// moment it opened, and announcing that as "reviewed 3d ago" invents a review that never happened.
+test('the label distinguishes a reviewed change from one nobody has looked at', () => {
+  const reviewed = realityTrackLabel({
+    pr: 'open',
+    ci: 'passing',
+    reviewAgeMs: 259_200_000,
+    reviewAgeFrom: 'review',
+    deployedAt: null,
+  })
+  const neverReviewed = realityTrackLabel({
+    pr: 'open',
+    ci: 'passing',
+    reviewAgeMs: 259_200_000,
+    reviewAgeFrom: 'pr-open',
+    deployedAt: null,
+  })
+  // A strip built without the source states the age and claims nothing about who read it.
+  const unattributed = realityTrackLabel({
+    pr: 'open',
+    ci: 'passing',
+    reviewAgeMs: 259_200_000,
+    deployedAt: null,
+  })
+
+  expect(reviewed).toContain('reviewed 3d ago')
+  expect(neverReviewed).toContain('unreviewed for 3d')
+  expect(neverReviewed).not.toContain('reviewed 3d ago')
+  expect(unattributed).toContain('review age 3d')
+  for (const label of [reviewed, neverReviewed, unattributed]) {
+    expect(label).not.toContain('waiting')
+    expect(label).not.toContain('awaiting')
+  }
 })
 
 test('the vertical rail reads its stations rather than summarising them', () => {
@@ -146,9 +227,10 @@ test('the vertical rail reads its stations rather than summarising them', () => 
   expect(screen.getByText('//')).toBeDefined()
 })
 
-// The UI package mirrors the schema seam's unions as plain string unions so these design-system
-// primitives stay schema-free. These assignments are the guard: a schema-side addition that is
-// not mirrored here stops compiling, rather than silently drawing one fact fewer.
+// The UI package mirrors the schema seam's UNIONS as plain string unions so a caller can name a
+// node's state without importing the seam; the strip itself is the seam's own type, imported, not
+// re-declared. These assignments are the guard: a schema-side addition that is not mirrored here
+// stops compiling, rather than silently drawing one fact fewer.
 test('the mirrored unions and the schema seam stay assignable both ways', () => {
   const prToSchema: SchemaPrState = 'approved' as PrState
   const prFromSchema: PrState = 'approved' as SchemaPrState

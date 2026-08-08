@@ -22,7 +22,9 @@ nothing changes.
 For an issue linked to a pull request, the track carries four facts, left to right:
 
 - **PR state** — where the pull request is in its lifecycle: draft → open → approved → merged →
-  closed. An open PR that has an approving review shows as **approved**.
+  closed. An open PR that has an approving review shows as **approved**. A PR **closed without
+  merging** leaves the Change station empty, because nothing landed; the track's accessible label
+  still says "PR closed", which is how it differs from an issue that has no pull request at all.
 - **CI health** — the linked checks rolled up: reached when everything passes, failing when any
   check fails, in flight while checks are still running.
 - **Deployed** — the Live station, reached only once a deployment carrying this change's merge

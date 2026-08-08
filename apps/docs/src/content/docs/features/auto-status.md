@@ -35,7 +35,8 @@ than that is left to you.
   a team that opens drafts at branch creation it would fire on nearly every issue.
 - **A pull request closed without merging drives nothing.** "Closed" can mean superseded by a better
   branch, abandoned, or opened against the wrong base — there is no target that is right more often
-  than it is wrong. The issue keeps the status it had, and its reality track shows the closed PR.
+  than it is wrong. The issue keeps the status it had, and its reality track leaves the Change
+  station empty and states "PR closed" in the label it announces.
 - **Automation never moves an issue backward.** Backlog → Todo → In Progress → In Review → Done is a
   one-way ladder. A target at or below where the issue already sits is a no-op, so a Done issue that
   acquires a new pull request — a follow-up, a revert, a docs pass — stays Done.

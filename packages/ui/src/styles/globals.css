@@ -53,6 +53,12 @@
   --color-statusline-bg: var(--statusline-bg);
   --color-urgent-soft: var(--urgent-soft);
 
+  /* The only elevation in this language. Transients — the peek, the how, the menu — are the sole
+     surfaces allowed to lift off the page, so there is exactly one shadow token and each preset
+     states its own ink: a light theme's shadow is its own warm/cool black, and a dark theme needs
+     a deeper one than a light-theme value would give it. */
+  --shadow-elevated: var(--elevation-transient);
+
   --radius-control: var(--rad-control);
   --radius-pill: var(--rad-pill);
   --radius-card: var(--rad-card);
@@ -141,6 +147,7 @@
   --row-hairline: #efe9dd;
   --statusline-bg: #f4efe5;
   --urgent-soft: rgba(204, 90, 64, 0.08);
+  --elevation-transient: 0 10px 26px rgba(43, 38, 32, 0.14);
 
   /* Syntax colours. Each is one of this preset's own hues — the in-review violet, the done green,
      the in-progress amber, the accent, the text ramp — with its lightness moved until it clears
@@ -202,6 +209,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --elevation-transient: 0 10px 26px rgba(23, 24, 26, 0.12);
 
   --code-keyword: #5860d5;
   --code-string: #307a5f;
@@ -262,6 +270,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --elevation-transient: 0 10px 26px rgba(20, 19, 15, 0.13);
 
   --code-keyword: #6253de;
   --code-string: #277756;
@@ -322,6 +331,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --elevation-transient: 0 10px 26px rgba(0, 0, 0, 0.52);
 
   --code-keyword: #9089da;
   --code-string: #59a57b;
@@ -364,6 +374,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --elevation-transient: 0 10px 26px rgba(0, 0, 0, 0.6);
 
   --code-keyword: #6e79f0;
   --code-string: #3f9e7c;
@@ -406,6 +417,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --elevation-transient: 0 10px 26px rgba(0, 0, 0, 0.58);
 
   --code-keyword: #9b8cf5;
   --code-string: #4fae83;

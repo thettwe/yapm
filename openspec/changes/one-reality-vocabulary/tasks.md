@@ -81,18 +81,18 @@ Sequenced so the app runs after each numbered group.
 
 ## 6. The three shared patterns
 
-- [ ] 6.1 The `Door` affordance — the dotted underline that means "this opens something"
+- [x] 6.1 The `Door` affordance — the dotted underline that means "this opens something"
       (`ia.html` `.door`), accent-hot variant included.
-- [ ] 6.2 The **peek**: `PeekProvider` + `usePeek(id)` holding `openPeekId: string | null`, so at
+- [x] 6.2 The **peek**: `PeekProvider` + `usePeek(id)` holding `openPeekId: string | null`, so at
       most one peek is open **by construction** (design §D6). Hover **or** focus opens; `Enter`
       navigates; `Escape` closes and restores focus. `aria-expanded` on the trigger, accessible name
       on the panel, no focus trap. Elevated via `--bg-elevated` + a tokenized shadow.
-- [ ] 6.3 The **how**: `<How label="…">derivation</How>` — mono `how ·` at rest, click/`Enter`
+- [x] 6.3 The **how**: `<How label="…">derivation</How>` — mono `how ·` at rest, click/`Enter`
       opens, `Escape` closes and restores focus, `aria-expanded` on a real button (design §D7).
-- [ ] 6.4 The **provenance mark**: `<ProvenanceMark provider="github" | "figma" />` — monochrome,
+- [x] 6.4 The **provenance mark**: `<ProvenanceMark provider="github" | "figma" />` — monochrome,
       12–14px, `currentColor`, no color prop, no upload member, additive provider record
       (design §D8).
-- [ ] 6.5 Verify: all three fully operable from the keyboard; `pnpm turbo lint typecheck` green.
+- [x] 6.5 Verify: all three fully operable from the keyboard; `pnpm turbo lint typecheck` green.
 
 ## 7. Tests
 
@@ -104,13 +104,13 @@ Sequenced so the app runs after each numbered group.
 - [x] 7.3 Unit test the shared-type assignability guard (design §D3): the UI's mirrored `PrState` /
       `CiHealth` / day-band unions and the schema's are assignable both ways, so a schema-side
       addition cannot silently diverge.
-- [ ] 7.4 Component test the peek's single-open invariant: opening a second peek closes the first;
+- [x] 7.4 Component test the peek's single-open invariant: opening a second peek closes the first;
       focus opens it; `Escape` closes it and returns focus to the trigger.
-- [ ] 7.5 Component test the how: quiet at rest, opens and closes from the keyboard, focus restored.
+- [x] 7.5 Component test the how: quiet at rest, opens and closes from the keyboard, focus restored.
 - [ ] 7.6 Extend `packages/ui/src/styles/contrast.test.ts` — every track node color and the `//`
       break ink asserted against `--bg`, `--bg-hover`, `--accent-soft` and `--urgent-soft` in all six
       theme blocks, at 3:1 for drawn nodes and 4.5:1 for the break and mono fact lines (design §D11).
-- [ ] 7.7 Update `packages/ui/src/components/issue-row.stories.tsx` and add stories for the
+- [x] 7.7 Update `packages/ui/src/components/issue-row.stories.tsx` and add stories for the
       vertical rail, the peek, the how and the provenance mark.
 - [x] 7.8 Update the e2e selectors that name the retired slot — `apps/web/e2e/connectors.spec.ts`
       (four `[data-slot="reality-strip"]` assertions, including the three-preset light/dark loop) and

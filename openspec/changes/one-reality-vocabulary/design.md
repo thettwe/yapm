@@ -353,3 +353,51 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 - **`priority-mark` gains a `text-text-2` default colour class.** The old drawing hardcoded
   `fill="var(--text-2)"`, which a caller's className could not override; the mock's ticks are
   `currentColor`, so the component now carries its own token and a caller may re-tone it.
+
+### Recorded while building group 6 — the three shared patterns
+
+- **The elevation is one token per preset, `--elevation-transient`, surfaced as Tailwind's
+  `--shadow-elevated`.** The mock's `0 10px 26px rgba(43,38,32,.14)` is a *warm-light* shadow; a
+  dark preset given that value gets a grey haze rather than a lift. So each of the six theme blocks
+  states its own — the lights their own warm/cool ink at 12–14% and the darks black at 52–60% — and
+  the utility is generated once from the `--shadow-*` namespace. Verified against the installed
+  `tailwindcss@4.3.3` compiler (`shadow-elevated` → `--tw-shadow: var(--elevation-transient)`)
+  rather than assumed, since Tailwind 4's theme namespaces postdate the model's training data.
+- **`usePeek` throws outside a `PeekProvider`.** A silent local fallback would let a page mount two
+  independent peeks and quietly lose the one-open invariant — the exact failure the provider exists
+  to make impossible. Failing loudly at the call site is the enforcement.
+- **The peek opens immediately on pointer enter; only the *close* is delayed.** The brief asks for
+  a hover-intent grace corridor so the pointer can cross the gap from trigger into panel (140ms,
+  cancelled by the panel's own pointer enter). An *open* delay is the other half of hover intent and
+  a dense list will want it, but no dense consumer exists yet, and guessing its duration now would
+  bake a number into the vocabulary that the issues-list change should measure. Left out
+  deliberately, not forgotten.
+- **`Escape` is only swallowed while a peek or a how is actually open.** Both handlers return early
+  otherwise, so `esc` still reaches the palette, the dialog or the row editor that owns it. This is
+  what "esc stays" means in a page that has other escapable things in it.
+- **The how folds on focus leaving it, as well as on `Escape`.** Tabbing past a derivation should
+  not leave a panel hanging over the next row. The handlers sit on the button and on the panel (not
+  on a wrapper span) because an interaction handler on a static element is a lint error here, and
+  the two elements between them see every focusout that matters.
+- **`PeekPanel` positions itself absolutely and the caller supplies the anchor.** No portal, no
+  floating-ui: the panel is a sibling of its trigger inside a `relative` box, which keeps it in the
+  DOM order a screen reader reads and keeps `Escape`/focus handling local. If a later page needs
+  collision-aware placement it can pass its own className; nothing here has to change.
+- **`PeekTitle` and `PeekFact` ship with the panel.** The mock's peek is a title, a state row, an
+  optional divergence line and exactly one bi-fact (bold phrase + mono derivation line). The two
+  that are pure structure are components so three pages cannot each invent their own; the state and
+  divergence rows are composed from the vocabulary the pages already import.
+- **`ProvenanceMark` is labelled by default and decorative on request (`label={null}`).** The mock
+  places the mark after text that usually already names the source, but a default of `aria-hidden`
+  would make the honest case the one somebody has to remember. Defaulting to the provider's name and
+  opting *out* where the sentence already says "GitHub" is the screen-reader-honest ordering.
+- **No `color` prop, no numeric `size` prop, no `upload` member.** `ProvenanceSize` is the literal
+  union `12 | 13 | 14`, the mark inherits `currentColor` through a `text-text-3` wrapper the caller
+  can re-tone but not re-hue per-mark, and there is no union member an upload could pass. The rules
+  from `ia.html` §Provenance are enforced by the type, not by a comment.
+- **`Door` is a `<span>` wrapper, not a polymorphic element.** The trigger stays the link or button
+  it already was — that is what makes `⏎ goes` native — and the door decorates the *words* inside
+  it. `hot` is a state of the one door, not a second kind.
+- **No consumer wired in this change.** The three patterns land as vocabulary with stories and
+  component tests; the issues list, issue detail and delivery rebuilds are what mount them. Wiring a
+  peek into today's list layout would be work the very next change deletes.

@@ -1,0 +1,763 @@
+<!doctype html>
+<!--
+  destinations/board — THE BOARD. The Board LENS on Issues: the deck's Issues stop stays current,
+  and band 2 is issues.html's masthead with the toggle flipped to Board. Six fixed status columns
+  in category order; a card is the list row's facts in a different shape — status glyph, priority
+  mark, key, title, phrase, labels, the same reserved reality-track slot, assignee.
+
+  Frame: band 1 and band 3 copied byte-for-byte from northstar/issues.html (only the lens toggle's
+  active class moves). One attention number: 4, in the deck badge and the statusline, nowhere else.
+  Tokens: the Warm LIGHT block from packages/ui/src/styles/globals.css verbatim + the four daylight
+  extensions (--row-hairline, --statusline-bg, --urgent-soft, --status-urgent-ink).
+
+  AMBER: --status-in-progress: #b67500, --status-in-progress-ink: #935e00 — read fresh from
+  packages/ui/src/styles/globals.css [data-theme="warm"] AFTER commit 6a46113 (design-corrections)
+  landed and retuned the light presets: the old #ce8a26 measured 2.69 against --bg, under the 3:1
+  non-text bar. The northstar set predates that commit and still carries #ce8a26; all seven
+  destination mocks carry #b67500, so the destinations agree with the shipped tokens and with
+  each other. Urgent TEXT on a work surface uses --status-urgent-ink #a4462b; band 3 keeps
+  --status-urgent so its markup stays byte-identical to the canonical set.
+
+  Inline SVG only. No motion, no iframes, no external images. Flat surfaces + hairlines; elevation
+  appears exactly once, on the page's one drawn transient — the card in flight.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Issues · Board · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#b67500;
+    --status-in-progress-ink:#935e00;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --status-urgent-ink:#a4462b;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --elevation-transient:0 10px 26px rgba(43,38,32,.14);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — page-owned masthead (issues.html, lens flipped) ============ */
+  .masthead{display:flex;align-items:center;padding:26px 40px 16px}
+  .masthead h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px;margin-left:10px}
+  .viewtog{display:flex;gap:2px;background:var(--bg-hover);border:1px solid var(--border);
+           border-radius:var(--rad-control);padding:2px;margin-left:22px}
+  .vt{padding:3px 11px;border-radius:5px;font-size:12px;color:var(--text-2)}
+  .vt.active{background:var(--bg-elevated);color:var(--text-1);font-weight:600}
+  .mast-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .filters{display:flex;align-items:center;gap:18px;padding:0 40px 12px;color:var(--text-2);font-size:12.5px}
+  .filters .f-ic{color:var(--text-3);font-size:12px}
+  .filters .right{margin-left:auto;color:var(--text-3)}
+  .filters .right b{color:var(--text-2);font-weight:500}
+
+  /* ============ the board ============ */
+  /* Six 1fr columns inside a 40px gutter: at 1440 that is 216.67px a column with a 12px gap and
+     no horizontal scroll. Fluid, so the promise holds at any width without a breakpoint. */
+  .board{flex:1;display:flex;padding:12px 40px 18px;min-height:0}
+  .board-inner{position:relative;flex:1;display:flex;gap:12px;align-items:stretch}
+  .col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;
+       border:1px solid var(--border);border-radius:var(--rad-card);
+       background:color-mix(in oklch,var(--bg-sidebar),var(--bg) 50%)}
+  .col-h{display:flex;align-items:center;gap:8px;padding:9px 11px 8px;
+         font-size:12.5px;font-weight:600;color:var(--text-1)}
+  .col-h .n{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-2)}
+  .col-body{flex:1;display:flex;flex-direction:column;gap:8px;padding:0 8px 10px;min-height:0}
+  .st{width:14px;height:14px;flex:none;display:inline-block}
+  .st svg{display:block}
+
+  /* the card — the list row's facts, stacked */
+  .card{position:relative;background:var(--bg-elevated);border:1px solid var(--border);
+        border-radius:var(--rad-card);padding:8px 10px 9px;display:flex;flex-direction:column;gap:6px}
+  .card.hover{border-color:var(--border-strong)}
+  .card .r1{display:flex;align-items:center;gap:7px}
+  .card .id{font-family:var(--mono);font-size:11.5px;color:var(--text-2)}
+  .card .pri{margin-left:auto;display:flex;align-items:center}
+  .card .ttl{font-size:13px;font-weight:500;line-height:1.32;letter-spacing:-.008em;color:var(--text-1)}
+  .card .phrase{font-size:11.5px;color:var(--text-2);display:flex;align-items:center;gap:5px}
+  .card .phrase.urgent{color:var(--status-urgent-ink);font-weight:600}
+  .card .phrase .prov{color:var(--text-3);display:inline-flex}
+  .card .r3{display:flex;align-items:center;gap:6px;min-height:18px}
+  .labels{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--text-2)}
+  .labels span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+  .ldot{width:7px;height:7px;border-radius:50%;flex:none}
+  .card .tail{margin-left:auto;display:flex;align-items:center;gap:7px;flex:none}
+  .av{width:18px;height:18px;border-radius:50%;background:#5c5348;color:#f1ebe3;font-size:7.5px;
+      font-weight:600;display:flex;align-items:center;justify-content:center;flex:none}
+
+  /* reality track — same vocabulary as the row, at the card's own measure */
+  .track{display:flex;align-items:center;width:86px;flex:none}
+  .tn{width:7px;height:7px;border-radius:50%;flex:none}
+  .tn.done{background:var(--status-done)}
+  .tn.rev-wait{background:transparent;border:1.6px solid var(--status-in-review);width:8px;height:8px}
+  .tn.open{background:var(--status-in-review)}
+  .tn.fail{background:var(--status-urgent);border-radius:1.5px}
+  .tn.empty{background:transparent;border:1.4px solid var(--border-strong)}
+  .tn.empty-urgent{background:transparent;border:1.6px solid var(--status-urgent)}
+  .tseg{height:2px;flex:1;background:var(--status-done)}
+  .tseg.review{background:var(--status-in-review)}
+  .tseg.dotted{background:repeating-linear-gradient(90deg,var(--border-strong) 0 3px,transparent 3px 6px);height:1.5px}
+  .tbreak{color:var(--status-urgent-ink);font-family:var(--mono);font-weight:500;font-size:11px;
+          padding:0 3px;letter-spacing:-.05em;line-height:1}
+  /* a track with no fact and no break: the measure is reserved, the ink is not drawn */
+  .track.quiet{}
+
+  /* the reserved slot, in three readings */
+  .slot{border-radius:var(--rad-card);border:1.5px dashed var(--border-strong)}
+  .slot.rest{height:64px}
+  .slot.hole{height:104px}
+  .slot.drop{height:104px;border-color:var(--accent);background:var(--accent-soft)}
+
+  .fold{padding:6px 3px 0;color:var(--text-3);font-size:11.5px}
+
+  /* the one transient: the card in flight */
+  .flying{position:absolute;z-index:5;width:calc((100% - 60px)/6);
+          background:var(--bg-elevated);border:1px solid var(--accent);
+          border-radius:var(--rad-card);padding:8px 10px 7px;
+          display:flex;flex-direction:column;gap:6px;
+          box-shadow:var(--elevation-transient),0 0 0 2px var(--accent-line)}
+  .flying .fly-foot{border-top:1px solid var(--row-hairline);margin-top:1px;padding-top:6px;
+                    display:flex;flex-wrap:wrap;align-items:center;gap:4px 7px;
+                    font-size:10.5px;color:var(--text-3)}
+  .flying .fly-foot .pair{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+  .flying .fly-foot .sep{color:var(--border-strong)}
+
+  /* ============ band 3 — statusline (identical on every page) ============ */
+  .statusline{margin-top:auto;height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- status is cycle position: one loop, filled as far as the work has run -->
+    <symbol id="g-backlog" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-dasharray="2.6 3.4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-todo" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    </symbol>
+    <symbol id="g-progress" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 0 1 10 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-review" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 1 1 3 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <!-- done: the filled disc the set draws, now carrying the shipped check as a --bg knockout.
+         Stroke stepped 1.6 → 1.8 for legibility at the 14px a card renders it at, per the
+         correction change's D4, which requires the stepped value be written down where it is used. -->
+    <symbol id="g-done" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7.6" fill="currentColor"/>
+      <path d="M6.3 10.3 8.9 12.9 13.7 7.3" fill="none" stroke="var(--bg)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <!-- the product's sixth status, drawn on the same grid and stroke as the rest of the family -->
+    <symbol id="g-canceled" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M6.9 6.9 13.1 13.1M13.1 6.9 6.9 13.1" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <!-- ticks are weight; one tick standing alone is urgent -->
+    <symbol id="p-1" viewBox="0 0 14 14">
+      <path d="M4 9.6 V6.8 M7 9.6 V6.8 M10 9.6 V6.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-opacity=".35"/>
+      <path d="M4 9.6 V6.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="p-2" viewBox="0 0 14 14">
+      <path d="M10 9.6 V5.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-opacity=".35"/>
+      <path d="M4 9.6 V6.8 M7 9.6 V4.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="p-3" viewBox="0 0 14 14">
+      <path d="M4 9.6 V6.8 M7 9.6 V4.4 M10 9.6 V2.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="p-urgent" viewBox="0 0 14 14">
+      <path d="M7 2.6 V8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+      <circle cx="7" cy="11.2" r="1.1" fill="currentColor"/>
+    </symbol>
+    <!-- provenance, whispered: the source's mark, never the meaning -->
+    <symbol id="m-github" viewBox="0 0 16 16">
+      <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab active">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>4</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <h1>Issues</h1><span class="count">120</span>
+    <div class="viewtog"><span class="vt">List</span><span class="vt active">Board</span></div>
+    <div class="mast-actions">
+      <button class="btn">Save view</button>
+      <button class="btn primary">+ New issue</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <span class="f-ic">≔</span>
+    <span>Status</span><span>Priority</span><span>Assignee</span><span>Delivery</span>
+    <span>Label</span><span>Cycle</span><span>Project</span>
+    <span class="right">Order <b>Manual</b></span>
+  </div>
+
+  <div class="board">
+   <div class="board-inner">
+
+    <!-- ============ Backlog ============ -->
+    <section class="col">
+      <div class="col-h">
+        <span class="st" style="color:var(--status-backlog)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-backlog"/></svg></span>
+        Backlog<span class="n">3</span>
+      </div>
+      <div class="col-body">
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-backlog)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-backlog"/></svg></span>
+            <span class="id">ENG-120</span>
+            <span class="pri" style="color:var(--status-urgent)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-urgent"/></svg></span>
+          </div>
+          <div class="ttl">Migrate legacy coupon codes</div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-urgent)"></span>bug</span></span>
+            <span class="tail"><span class="track quiet"></span><span class="av">DA</span></span>
+          </div>
+        </div>
+
+        <div class="card hover">
+          <div class="r1">
+            <span class="st" style="color:var(--status-backlog)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-backlog"/></svg></span>
+            <span class="id">ENG-5</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-3"/></svg></span>
+          </div>
+          <div class="ttl">Bulk-edit from the issue list</div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-in-review)"></span>feature</span></span>
+            <span class="tail"><span class="track quiet"></span></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-backlog)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-backlog"/></svg></span>
+            <span class="id">ENG-6</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-3"/></svg></span>
+          </div>
+          <div class="ttl">Comment drafts lost on navigation</div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-urgent)"></span>bug</span></span>
+            <span class="tail"><span class="track quiet"></span><span class="av">DA</span></span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============ Todo ============ -->
+    <section class="col">
+      <div class="col-h">
+        <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>
+        Todo<span class="n">4</span>
+      </div>
+      <div class="col-body">
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>
+            <span class="id">ENG-115</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-1"/></svg></span>
+          </div>
+          <div class="ttl">Address autocomplete on shipping step</div>
+          <div class="phrase urgent">Checks failing<span class="prov"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-in-review)"></span>feature</span></span>
+            <span class="tail"><span class="track">
+              <span class="tn open"></span><span class="tseg review"></span><span class="tn fail"></span><span class="tseg dotted"></span><span class="tn rev-wait"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+            </span></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>
+            <span class="id">ENG-121</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+          </div>
+          <div class="ttl">Guest checkout without an account</div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-in-review)"></span>feature</span></span>
+            <span class="tail"><span class="track">
+              <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span>
+            </span><span class="av">DA</span></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>
+            <span class="id">ENG-4</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+          </div>
+          <div class="ttl">Warmer empty states across the app</div>
+          <div class="r3">
+            <span class="labels">
+              <span><span class="ldot" style="background:var(--status-in-progress)"></span>chore</span>
+              <span><span class="ldot" style="background:var(--status-done)"></span>design</span>
+            </span>
+            <span class="tail"><span class="track quiet"></span></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>
+            <span class="id">ENG-2</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-3"/></svg></span>
+          </div>
+          <div class="ttl">Saved views for shared filters</div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-in-review)"></span>feature</span></span>
+            <span class="tail"><span class="track quiet"></span></span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============ In Progress — carries the divergence break, and the card in flight left
+         its reserved hole at the foot of this column ============ -->
+    <section class="col">
+      <div class="col-h">
+        <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+        In Progress<span class="n">4</span>
+      </div>
+      <div class="col-body">
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+            <span class="id">ENG-116</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+          </div>
+          <div class="ttl">Apple Pay in the payment sheet</div>
+          <div class="phrase urgent">Done in git, not on the board</div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-in-review)"></span>feature</span></span>
+            <span class="tail"><span class="track">
+              <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tbreak">//</span><span class="tn empty-urgent"></span>
+            </span></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+            <span class="id">ENG-119</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+          </div>
+          <div class="ttl">Persist cart across sessions</div>
+          <div class="phrase">Built — not live yet<span class="prov"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-in-progress)"></span>feature</span></span>
+            <span class="tail"><span class="track">
+              <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+            </span><span class="av">DA</span></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+            <span class="id">ENG-1</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+          </div>
+          <div class="ttl">Focus lost after closing the palette</div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-urgent)"></span>bug</span></span>
+            <span class="tail"><span class="track quiet"></span><span class="av">DA</span></span>
+          </div>
+        </div>
+
+        <!-- ENG-113 is in the air; its place is held, not closed up -->
+        <div class="slot hole"></div>
+
+      </div>
+    </section>
+
+    <!-- ============ In Review — the destination; the drop slot sits where the card would land ============ -->
+    <section class="col">
+      <div class="col-h">
+        <span class="st" style="color:var(--status-in-review)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-review"/></svg></span>
+        In Review<span class="n">3</span>
+      </div>
+      <div class="col-body">
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-in-review)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-review"/></svg></span>
+            <span class="id">ENG-117</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+          </div>
+          <div class="ttl">Rate-limit the coupon endpoint</div>
+          <div class="phrase">Approved — merge when ready<span class="prov"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-in-review)"></span>feature</span></span>
+            <span class="tail"><span class="track">
+              <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg review"></span><span class="tn open"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+            </span><span class="av">MK</span></span>
+          </div>
+        </div>
+
+        <div class="slot drop"></div>
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-in-review)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-review"/></svg></span>
+            <span class="id">ENG-109</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+          </div>
+          <div class="ttl">Idempotent webhook receipts</div>
+          <div class="phrase urgent">In review — waiting 31h</div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-in-progress)"></span>chore</span></span>
+            <span class="tail"><span class="track">
+              <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg review"></span><span class="tn rev-wait"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+            </span><span class="av">DA</span></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-in-review)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-review"/></svg></span>
+            <span class="id">ENG-111</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-3"/></svg></span>
+          </div>
+          <div class="ttl">Split shipment tracking numbers</div>
+          <div class="phrase urgent">In review — waiting 26h</div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-in-review)"></span>feature</span></span>
+            <span class="tail"><span class="track">
+              <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg review"></span><span class="tn rev-wait"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+            </span><span class="av">MK</span></span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============ Done ============ -->
+    <section class="col">
+      <div class="col-h">
+        <span class="st" style="color:var(--status-done)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-done"/></svg></span>
+        Done<span class="n">106</span>
+      </div>
+      <div class="col-body">
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-done)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-done"/></svg></span>
+            <span class="id">ENG-114</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+          </div>
+          <div class="ttl">Cancel an order before it ships</div>
+          <div class="phrase">Built — not live yet<span class="prov"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-in-review)"></span>feature</span></span>
+            <span class="tail"><span class="track">
+              <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+            </span><span class="av">MK</span></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-done)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-done"/></svg></span>
+            <span class="id">ENG-110</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-3"/></svg></span>
+          </div>
+          <div class="ttl">Gift wrap option at checkout</div>
+          <div class="phrase">Built — not live yet<span class="prov"><svg width="12" height="12" viewBox="0 0 16 16"><use href="#m-github"/></svg></span></div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-in-review)"></span>feature</span></span>
+            <span class="tail"><span class="track">
+              <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+            </span><span class="av">DA</span></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="r1">
+            <span class="st" style="color:var(--status-done)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-done"/></svg></span>
+            <span class="id">ENG-108</span>
+            <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-2"/></svg></span>
+          </div>
+          <div class="ttl">Promo codes at checkout</div>
+          <div class="r3">
+            <span class="labels"><span><span class="ldot" style="background:var(--status-in-review)"></span>feature</span></span>
+            <span class="tail"><span class="track">
+              <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg"></span><span class="tn done"></span>
+            </span><span class="av">DA</span></span>
+          </div>
+        </div>
+
+        <div class="fold">↓ 103 more</div>
+
+      </div>
+    </section>
+
+    <!-- ============ Canceled — empty: the column keeps its measure and one reserved slot ============ -->
+    <section class="col">
+      <div class="col-h">
+        <span class="st" style="color:var(--text-3)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-canceled"/></svg></span>
+        Canceled<span class="n">0</span>
+      </div>
+      <div class="col-body">
+        <div class="slot rest"></div>
+      </div>
+    </section>
+
+    <!-- ============ the page's one transient: ENG-113, picked up and carried ============ -->
+    <div class="card flying" style="left:calc(((100% - 60px)/6 + 12px)*2 + 72px);top:136px">
+      <div class="r1">
+        <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-progress"/></svg></span>
+        <span class="id">ENG-113</span>
+        <span class="pri" style="color:var(--text-2)"><svg width="14" height="14" viewBox="0 0 14 14"><use href="#p-1"/></svg></span>
+      </div>
+      <div class="ttl">Refund flow for partial orders</div>
+      <div class="phrase">In review — waiting 16h</div>
+      <div class="r3">
+        <span class="labels"><span><span class="ldot" style="background:var(--status-in-review)"></span>feature</span></span>
+        <span class="tail"><span class="track">
+          <span class="tn done"></span><span class="tseg"></span><span class="tn done"></span><span class="tseg review"></span><span class="tn rev-wait"></span><span class="tseg dotted"></span><span class="tn empty"></span>
+        </span><span class="av">DA</span></span>
+      </div>
+      <div class="fly-foot">
+        <span class="pair"><span class="kbd">space</span>drop</span><span class="sep">·</span>
+        <span class="pair"><span class="kbd">esc</span>cancel</span><span class="sep">·</span>
+        <span class="pair"><span class="kbd">← →</span>column</span>
+      </div>
+    </div>
+
+   </div>
+  </div>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">4 need attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+</body>
+</html>
+
+<!--
+================================================================================================
+WHAT FOLDED, AND WHY
+================================================================================================
+
+The schema is the editor here. Each of these is something a board designer reaches for by reflex;
+each is absent because no fact backs it.
+
+1. COLUMN DWELL / "in this column 3d" / a cycle-time heat on the card.
+   FOLDED: there is no issue status-history table. The product knows an issue's status NOW and
+   knows when the row was last touched; it does not know when it entered this column. Every
+   board convention that ages a card in place — the aging dot, the stale-card wash, the
+   column-entry timestamp — rests on that missing table. Nothing on this page ages a card. The
+   only ages drawn (16h, 26h, 31h) come from the delivery seam's review clock, which is stored.
+
+2. BLOCKED-BY / BLOCKS badges, dependency arrows between cards, a "3 blocked" column strip.
+   FOLDED: there is no issue-to-issue link table. A board is where dependency drawing is most
+   tempting and least supportable.
+
+3. SWIMLANES BY PERSON. FOLDED twice over: no lane entity exists, and a per-person row of a
+   team's work is exactly the per-person scorecard VISION §8 forbids. Assignee stays what it is
+   on a row — one avatar at the card's tail, never an axis.
+
+4. WIP LIMITS ("3 / 5" in the column header, the over-limit red column).
+   FOLDED: no per-column limit is stored on team or on status, so the number would be decoration
+   and the alarm would be a lie. Column headers carry the count only.
+
+5. CUSTOM COLUMNS / column add / drag-to-reorder columns.
+   FOLDED: status is a fixed six-value enum in category order. The columns are the enum.
+
+6. ESTIMATE / POINTS / T-SHIRT SIZE chips. FOLDED: no per-issue change-size band exists.
+   Likewise no PRODUCT-AREA chip and no group-by-area lane: there is no per-issue product area.
+
+7. "WAITING ON MARTA" on a review card. FOLDED: no review-requested event is stored, so the open
+   review node cannot name a reviewer. The phrase says how long, never on whom —
+   "In review — waiting 31h".
+
+8. CHECK DURATION ("checks 4m 12s") beside the failing node. FOLDED: ci_check carries no start or
+   finish time. "Checks failing" is the whole of what is known.
+
+9. DESIGN THUMBNAIL as a card cover. FOLDED: no design-artifact entity backs a per-card image.
+
+10. GALLERY, the third lens issues.html draws. FOLDED by the build already — no entity backs it —
+    so the toggle here reads List then Board, as shipped.
+
+11. THE PEEK. Not folded for lack of data — deliberately unspent. A page gets one open transient,
+    and on the board that budget belongs to the card in flight.
+
+CHANGES AGAINST THE SHIPPED BOARD (apps/web/src/board/board.tsx, packages/ui/.../board-card.tsx)
+
+- The empty column's "No issues" sentence is replaced by one reserved slot with no words. A
+  column that is empty should look reserved, not annotated.
+- Band 2 gains what the shipped route omits and issues.html already draws: the mono count, the
+  Save view / + New issue actions, and the filter line. The team name is NOT repeated — band 1
+  already says Acme / Engineering, and a masthead that says it twice is chrome talking.
+- The quiet track goes truly blank (the correction change's D1), keeping its 86px measure. Six of
+  the nineteen drawn cards carry no delivery ink at all; that is the point.
+- `done` carries the check inside its filled disc, knocked out in --bg. Stroke 1.8, one step above
+  the family's 1.6, for legibility at 14px — recorded here because D4 requires the stepped value
+  be written where it is used.
+- Band 3 reads "Synced".
+
+DIVERGENCES FROM THE CANONICAL SET, STATED
+
+- Band 3's urgent ink. The northstar files draw `.statusline .attn` in --status-urgent; the
+  shipped statusline inks it --status-urgent-ink. The brief says band 3 must be identical to the
+  set, so band 3 is copied verbatim and card phrases use --status-urgent-ink. Two urgent inks on
+  one page is a real inconsistency; it belongs to whoever reconciles the set with the build.
+- ENG-121 sits in Todo carrying a complete four-node track and no phrase, exactly as
+  issues.html draws it. By the product's own divergence rules that shape should fire
+  status_behind_merge and break. Copied rather than corrected, and named here so the discrepancy
+  is inherited visibly instead of laundered.
+- ENG-109 and ENG-111 are new keys. The issues are invented; nothing about them is. They carry
+  the two review ages home-digest-2 already states in aggregate ("2 waiting on review over a
+  day · 31h · 26h"), which had no keys attached to them anywhere in the set.
+
+================================================================================================
+SELF-CRITIQUE
+================================================================================================
+
+The weakest thing here is the card in flight. It is doing three jobs at once — proving the board
+is keyboard-operable, showing what a drag looks like, and spending the page's whole elevation
+budget — and it does none of them the way the real interaction does. In the shipped board the
+lifted card tracks the pointer or the arrow keys and the destination slot opens as you cross into
+it; frozen, the same moment reads as a modal card that has crashed into two columns at once, and
+a reader who has never dragged anything here may take the accent-soft rectangle in In Review for a
+new-card affordance rather than a landing site. The kbd footer is the honest part — space / esc /
+← → is the actual contract — but a footer bolted to a card is a tooltip wearing a card's clothes,
+and it exists because a still frame could not carry the meaning on its own. A drawing that needs a
+legend has lost an argument.
+
+Two smaller faults. First, the column measure is genuinely tight: at 216px a title like "Address
+autocomplete on shipping step" takes two lines and the phrase, the labels and the 86px track are
+all competing for one 196px row, so the anatomy that reads comfortably at 1440 will start
+colliding around 1200 — and unlike the list, a board cannot drop a column to cope. Second, the
+Done column is 106 cards represented by three and a fold line, which is the least honest cell on
+the page: a real Done column is the tallest thing on the board and the first place a scroll
+appears, and drawing it as a tidy stack of three lets the layout look calmer than it will ever be
+in use. The Canceled column has the opposite problem — I chose it as the empty one because it is
+the safest, and a board whose only empty column is the one nobody looks at has not really tested
+the empty state.
+
+════════════════════════════════════════════════════════════════════════════════
+SET-RECONCILIATION PASS (2026-08-09) — applied across all seven destination mocks
+after they were drawn independently. Comparison actually run: every <header class="gbar">
+and every <div class="statusline"> block in northstar/*.html and destinations/*.html was
+extracted, whitespace-normalised and md5'd, with the active-stop class stripped. All
+destination decks now hash to 571eee83 — identical to northstar/issues.html modulo which
+stop is active. All statuslines hash to eb551c33, byte-identical to the canonical five.
+The band-1 and band-3 CSS blocks were hashed the same way and unified on delivery.html's
+variant (1e7593d5).
+  · This file: amber retuned to #b67500 (+ ink token added); g-done's check replaced with the
+    shipped path at 1.6 — the 1.8 stroke this file argued for is gone, because the same glyph
+    drawn at two weights across the set is worse than one weight that is slightly light at 14px;
+    the canceled glyph's path was normalised to the shipped form.
+    Nothing was removed for inventing a fact: no burndown, dependency arrow, status-transition
+    history, design artifact, duplicate link, SLA or per-person metric was drawn here.
+  · TOKENS. All seven now carry ONE token block, taken from packages/ui/src/styles/globals.css
+    [data-theme="warm"] at commit 6a46113: --status-in-progress #b67500 (was #ce8a26 in four
+    files), --status-in-progress-ink #935e00, --status-urgent-ink #a4462b and
+    --elevation-transient present everywhere, declared in the same order. The only hexes drawn
+    outside the token block are the avatar pair #5c5348/#f1ebe3, exactly as northstar/issues.html
+    draws them.
+  · DONE GLYPH. The check inside the filled disc is the shipped DONE_CHECK constant everywhere —
+    d="M6.3 10.3 8.9 12.9 13.7 7.3", stroke-width 1.6, stroke var(--bg). Three files had drifted
+    to hand-rolled paths at 1.7/1.8/1.9.
+  · URGENT INK. Urgent TEXT on a work surface uses --status-urgent-ink; band 3 keeps
+    --status-urgent so its markup stays byte-identical to the canonical set. That two-ink split
+    is deliberate and is the set's standing debt against the build, not a per-file choice.
+  · ONE ATTENTION NUMBER. 4 in the deck badge, 4 in the statusline, no second count anywhere.
+════════════════════════════════════════════════════════════════════════════════
+-->

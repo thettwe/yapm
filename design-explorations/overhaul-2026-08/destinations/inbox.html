@@ -1,0 +1,506 @@
+<!doctype html>
+<!--
+  destinations/inbox — THE INBOX. The right cluster of the deck already carries the unread
+  count; this page's whole job is to let a reader clear the list and get to the thing.
+
+  Frame copied, not re-invented: band 1 (48px deck) and band 3 (32px statusline) are the
+  northstar markup, byte-for-byte. Inbox is not one of the six stops, so NO stop carries
+  .active and the right cluster's Inbox chip is left unmarked — the same call retros.html
+  and ia.html make. Band 2 says where the reader is.
+
+  Rows reuse the issues.html row anatomy exactly — gutter · glyph · key · title · spring ·
+  phrase · age — at 44px, one line. The notification's actor-and-verb is the PHRASE AT REST;
+  the snapshot subjectTitle is the title, because the title is the thing you are trying to
+  reach. Two frames: A the list, B the empty state.
+
+  AMBER: --status-in-progress: #b67500, --status-in-progress-ink: #935e00 — read fresh from
+  packages/ui/src/styles/globals.css [data-theme="warm"] AFTER commit 6a46113 (design-corrections)
+  landed and retuned the light presets: the old #ce8a26 measured 2.69 against --bg, under the 3:1
+  non-text bar. The northstar set predates that commit and still carries #ce8a26; all seven
+  destination mocks carry #b67500, so the destinations agree with the shipped tokens and with
+  each other. Urgent TEXT on a work surface uses --status-urgent-ink #a4462b; band 3 keeps
+  --status-urgent so its markup stays byte-identical to the canonical set.
+  Neither --status-in-progress nor --status-urgent-ink is used on this surface: nothing here is
+  urgent and nothing here is a transient, so this page draws no elevation at all.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Inbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Warm LIGHT, verbatim from packages/ui/src/styles/globals.css [data-theme="warm"],
+     plus the daylight extensions and the two tokens the correction change added. */
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#b67500;
+    --status-in-progress-ink:#935e00;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --status-urgent-ink:#a4462b;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --elevation-transient:0 10px 26px rgba(43,38,32,.14);
+    --density-row:44px; --density-group-header:35px;
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+
+  /* Two states on one sheet, so each frame is drawn as a device. The ia.html annotation
+     manner: mono, accent-strong, above the thing it names. */
+  .sheet{padding:26px 26px 40px}
+  .ann{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--accent-strong);
+       margin:0 0 8px 2px}
+  .ann .m{color:var(--text-3);letter-spacing:0}
+  .frame{display:flex;flex-direction:column;height:604px;background:var(--bg);
+         border:1px solid var(--border-strong);border-radius:10px;overflow:hidden}
+  .frame.short{height:412px}
+  .frame + .ann{margin-top:34px}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — page-owned masthead ============ */
+  .masthead{display:flex;align-items:center;padding:26px 40px 16px}
+  .masthead h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px;margin-left:10px}
+  .viewtog{display:flex;gap:2px;background:var(--bg-hover);border:1px solid var(--border);
+           border-radius:var(--rad-control);padding:2px;margin-left:22px}
+  .vt{padding:3px 11px;border-radius:5px;font-size:12px;color:var(--text-2)}
+  .vt.active{background:var(--bg-elevated);color:var(--text-1);font-weight:600}
+  .mast-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;font-family:var(--ui)}
+
+  /* ============ the list ============ */
+  .group-h{height:var(--density-group-header);display:flex;align-items:center;gap:9px;padding:0 40px;
+           background:var(--bg-hover);border-top:1px solid var(--row-hairline);
+           font-size:12.5px;font-weight:600}
+  .row{height:var(--density-row);display:flex;align-items:center;gap:12px;padding:0 40px 0 37px;
+       border-top:1px solid var(--row-hairline);position:relative;border-left:3px solid transparent}
+  .row.last{border-bottom:1px solid var(--row-hairline)}
+  .row.focused{background:var(--bg-selected);border-left-color:var(--accent)}
+  .row.focused .id{color:var(--accent-strong)}
+
+  /* READ / UNREAD, three redundant channels, none of them colour alone:
+     the gutter disc (present / absent ink), the title's weight, the title's ink. */
+  .mark{width:8px;flex:none;display:flex;align-items:center;justify-content:center}
+  .mark .d{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  .kind{width:14px;height:14px;flex:none;display:inline-block;color:var(--text-2)}
+  .kind svg{display:block}
+  .row.read .kind{color:var(--text-3)}
+  .row .id{font-family:var(--mono);font-size:12px;color:var(--text-3);width:62px;flex:none}
+  .row .title{font-size:13.5px;color:var(--text-1);font-weight:600;
+              white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row.read .title{font-weight:400;color:var(--text-2)}
+  .row .spring{flex:1}
+  .row .tteam{font-family:var(--mono);font-size:10.5px;color:var(--text-3);
+              border:1px solid var(--border-strong);border-radius:5px;padding:1px 5px;flex:none}
+  .row .phrase{font-size:12.5px;color:var(--text-2);white-space:nowrap;flex:none}
+  .row.read .phrase{color:var(--text-3)}
+  .row .when{font-family:var(--mono);font-size:11px;color:var(--text-3);width:30px;text-align:right;flex:none}
+
+  .legend{margin-top:auto;display:flex;align-items:center;gap:7px;padding:12px 40px 14px;
+          color:var(--text-3);font-size:11.5px}
+  .legend .sep{color:var(--border-strong)}
+
+  /* ============ the empty frame ============ */
+  .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px}
+  .empty .ring{color:var(--border-strong)}
+  .empty .say{font-size:15px;font-weight:600;letter-spacing:-.008em}
+  .empty .kinds{font-family:var(--mono);font-size:11px;color:var(--text-3);letter-spacing:.02em}
+  .empty .onward{display:flex;gap:18px;margin-top:6px;font-size:12.5px;color:var(--text-2)}
+  .empty .onward .c{color:var(--text-3);margin-left:4px}
+
+  /* ============ band 3 — statusline (identical on every page) ============ */
+  .statusline{margin-top:auto;height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- the four kinds. Drawn in the house manner: 20-unit box, 1.6 hairline, currentColor.
+         No lucide, no borrowed icon set — these are ours, so they carry meaning. -->
+    <!-- issue_assigned — handed to a person: it arrives, and it lands on someone -->
+    <symbol id="k-assigned" viewBox="0 0 20 20">
+      <path d="M2.6 10 H10.8 M8.2 7.2 L11 10 L8.2 12.8" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="15.2" cy="10" r="2.6" fill="currentColor"/>
+    </symbol>
+    <!-- issue_commented — a said thing, on a thread you are part of -->
+    <symbol id="k-comment" viewBox="0 0 20 20">
+      <path d="M3.4 7.2 A2.4 2.4 0 0 1 5.8 4.8 h8.4 A2.4 2.4 0 0 1 16.6 7.2 v4.2
+               A2.4 2.4 0 0 1 14.2 13.8 H9.2 L5.8 16.4 V13.8 A2.4 2.4 0 0 1 3.4 11.4 Z"
+            fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+    </symbol>
+    <!-- mention — the @, drawn rather than typed -->
+    <symbol id="k-mention" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="2.9" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M12.9 10 v1.9 a2.3 2.3 0 0 0 4.1 1.1 A7.1 7.1 0 1 0 13.9 16.2"
+            fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <!-- pm_digest_published — a document, released to you -->
+    <symbol id="k-digest" viewBox="0 0 20 20">
+      <rect x="4.2" y="3.4" width="11.6" height="13.2" rx="2.2" fill="none"
+            stroke="currentColor" stroke-width="1.6"/>
+      <path d="M7 7.4 H13 M7 10 H13 M7 12.6 H10.6" stroke="currentColor" stroke-width="1.6"
+            stroke-linecap="round"/>
+    </symbol>
+    <!-- the settled empty loop: nothing has started, and nothing needs to -->
+    <symbol id="g-todo" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="sheet">
+
+  <!-- ================================================================= A -->
+  <p class="ann">A · THE LIST <span class="m">— 3 unread, the count the deck is already carrying</span></p>
+
+  <div class="frame">
+
+    <header class="gbar">
+      <div class="gb-ws">
+        <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+        <span class="team">Engineering</span><span class="chev">▾</span>
+      </div>
+      <nav class="gb-nav">
+        <span class="gb-tab">Home</span>
+        <span class="gb-tab">Issues</span>
+        <span class="gb-tab">Triage</span>
+        <span class="gb-tab">Cycles</span>
+        <span class="gb-tab">Delivery</span>
+        <span class="gb-tab">more<span class="chev">▾</span></span>
+      </nav>
+      <div class="gb-right">
+        <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+        <div class="gb-attn"><span class="d"></span>4</div>
+        <div class="gb-inbox">Inbox<span class="count">3</span></div>
+        <div class="gb-avatar">DA</div>
+      </div>
+    </header>
+
+    <div class="masthead">
+      <h1>Inbox</h1><span class="count">3</span>
+      <div class="viewtog"><span class="vt active">All</span><span class="vt">Unread</span></div>
+      <div class="mast-actions">
+        <button class="btn">Mark all read</button>
+      </div>
+    </div>
+
+    <!-- ============ Today ============ -->
+    <div class="group-h">Today</div>
+
+    <div class="row focused">
+      <span class="mark"><span class="d"></span></span>
+      <span class="kind"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#k-mention"/></svg></span>
+      <span class="id">ENG-116</span><span class="title">Apple Pay in the payment sheet</span>
+      <span class="spring"></span>
+      <span class="phrase">Marta mentioned you</span>
+      <span class="when">11m</span>
+    </div>
+    <div class="row">
+      <span class="mark"><span class="d"></span></span>
+      <span class="kind"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#k-assigned"/></svg></span>
+      <span class="id">ENG-120</span><span class="title">Migrate legacy coupon codes</span>
+      <span class="spring"></span>
+      <span class="phrase">Rui assigned you</span>
+      <span class="when">1h</span>
+    </div>
+    <div class="row">
+      <span class="mark"><span class="d"></span></span>
+      <span class="kind"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#k-digest"/></svg></span>
+      <span class="id"></span><span class="title">Engineering · Cycle 2</span>
+      <span class="spring"></span>
+      <span class="phrase">Shared with you</span>
+      <span class="when">3h</span>
+    </div>
+    <div class="row read">
+      <span class="mark"></span>
+      <span class="kind"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#k-comment"/></svg></span>
+      <span class="id">ENG-117</span><span class="title">Rate-limit the coupon endpoint</span>
+      <span class="spring"></span>
+      <span class="phrase">Marta commented</span>
+      <span class="when">5h</span>
+    </div>
+
+    <!-- ============ Yesterday ============ -->
+    <div class="group-h">Yesterday</div>
+
+    <div class="row read">
+      <span class="mark"></span>
+      <span class="kind"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#k-comment"/></svg></span>
+      <span class="id">ENG-113</span><span class="title">Refund flow for partial orders</span>
+      <span class="spring"></span>
+      <span class="phrase">Sam commented</span>
+      <span class="when">1d</span>
+    </div>
+    <div class="row read">
+      <span class="mark"></span>
+      <span class="kind"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#k-assigned"/></svg></span>
+      <span class="id">ENG-119</span><span class="title">Persist cart across sessions</span>
+      <span class="spring"></span>
+      <span class="phrase">Marta assigned you</span>
+      <span class="when">1d</span>
+    </div>
+
+    <!-- ============ Earlier ============ -->
+    <div class="group-h">Earlier</div>
+
+    <div class="row read">
+      <span class="mark"></span>
+      <span class="kind"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#k-mention"/></svg></span>
+      <span class="id">DES-14</span><span class="title">Warmer empty states across the app</span>
+      <span class="spring"></span>
+      <span class="tteam">Design</span>
+      <span class="phrase">Ivo mentioned you</span>
+      <span class="when">3d</span>
+    </div>
+    <div class="row read last">
+      <span class="mark"></span>
+      <span class="kind"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#k-comment"/></svg></span>
+      <span class="id">ENG-121</span><span class="title">Guest checkout without an account</span>
+      <span class="spring"></span>
+      <span class="phrase">Someone commented</span>
+      <span class="when">4d</span>
+    </div>
+
+    <div class="legend">
+      <span class="kbd">j</span><span class="kbd">k</span><span>move</span>
+      <span class="sep">·</span><span class="kbd">⏎</span><span>open</span>
+      <span class="sep">·</span><span class="kbd">e</span><span>read</span>
+    </div>
+
+    <div class="statusline">
+      <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+      <span>8 shipped</span><span class="div">·</span>
+      <span>3 deploys this week</span><span class="div">·</span>
+      <span class="attn">4 need attention</span>
+      <span class="right"><span class="dot-g"></span>Synced</span>
+    </div>
+  </div>
+
+  <!-- ================================================================= B -->
+  <p class="ann">B · EMPTY <span class="m">— the same team day, band 1 and band 3 unchanged.</span></p>
+
+  <div class="frame short">
+
+    <header class="gbar">
+      <div class="gb-ws">
+        <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+        <span class="team">Engineering</span><span class="chev">▾</span>
+      </div>
+      <nav class="gb-nav">
+        <span class="gb-tab">Home</span>
+        <span class="gb-tab">Issues</span>
+        <span class="gb-tab">Triage</span>
+        <span class="gb-tab">Cycles</span>
+        <span class="gb-tab">Delivery</span>
+        <span class="gb-tab">more<span class="chev">▾</span></span>
+      </nav>
+      <div class="gb-right">
+        <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+        <div class="gb-attn"><span class="d"></span>4</div>
+        <div class="gb-inbox">Inbox<span class="count">3</span></div>
+        <div class="gb-avatar">DA</div>
+      </div>
+    </header>
+
+    <div class="masthead">
+      <h1>Inbox</h1>
+    </div>
+
+    <div class="empty">
+      <span class="ring"><svg width="34" height="34" viewBox="0 0 20 20"><use href="#g-todo"/></svg></span>
+      <span class="say">Nothing waiting</span>
+      <span class="kinds">assigned · commented · mentioned · digests</span>
+      <span class="onward">
+        <span>Issues<span class="c">›</span></span>
+        <span>Home<span class="c">›</span></span>
+      </span>
+    </div>
+
+    <div class="statusline">
+      <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+      <span>8 shipped</span><span class="div">·</span>
+      <span>3 deploys this week</span><span class="div">·</span>
+      <span class="attn">4 need attention</span>
+      <span class="right"><span class="dot-g"></span>Synced</span>
+    </div>
+  </div>
+
+</div>
+
+<!--
+================================================================================
+WHAT THIS DREW, AND WHY — the facts, the folds, the self-critique
+================================================================================
+
+FACTS DRAWN, ALL OF WHICH EXIST ON THE ROW ITSELF
+  kind (issue_assigned / issue_commented / mention / pm_digest_published) → the glyph and
+  the verb in the phrase · actor → the name in the phrase, via the row's one permitted
+  relationship (actor) · subjectKey → the mono key column · subjectTitle → the title, the
+  DENORMALISED SNAPSHOT, drawn as the title because it is what the reader is trying to reach ·
+  readAt → present/absent gutter disc + title weight + title ink · createdAt → the mono age,
+  and the Today / Yesterday / Earlier buckets (groupNotifications, verbatim).
+
+  Two rows exist to draw real code paths rather than a happy one:
+  · the digest row has NO key (subjectKey is null for pm_digest) and NO actor — the fan-out
+    writes the system principal deliberately, so "which individual released it" is unknowable
+    here. Its key slot is reserved and empty; its phrase is subjectless.
+  · "Someone commented" is notificationCopy's UNKNOWN_ACTOR fallback, drawn once so the
+    fallback is a designed state rather than a surprise.
+
+WHAT FOLDED AWAY, AND THE EXACT REASON
+  1. THE SUBJECT'S LIVE STATUS AND ITS REALITY TRACK. The strongest instinct on this page —
+     put the issues.html status arc and the four-node track on every row — is exactly the one
+     the schema forbids. A notification has no relationship to its subject (subject_id carries
+     no FK, and the spec's own words: "a notification SHALL render from its own row alone").
+     Drawing an arc here would mean joining, which would widen a read past the team boundary
+     the self-scoped query was built to hold. So the rows carry no arc and no track: the
+     title beside a key is the whole subject, exactly as stored.
+  2. THE STALENESS OF THE SNAPSHOT. Related and equally undrawable: a renamed issue keeps the
+     old title here, and there is no honest way to mark that, because marking it would need
+     the live title.
+  3. GROUP COUNTS. issues.html puts a count on every group header. "Today 4" would put a
+     second 4 on a page whose only 4 is the attention number. Dropped — the day heading is
+     a bucket label, not a tally.
+  4. ACTOR AVATARS. The phrase already names the actor, and the digest row would have to draw
+     an empty disc for a principal that is deliberately nameless. One channel, not two.
+  5. PER-NOTIFICATION PREFERENCES. No gear, no mute, no "turn this kind off". The only
+     preference that exists is user_preference.email_notifications (all / assigned_only /
+     none), it governs EMAIL ONLY, and it lives on the preference surface. A control here
+     would promise per-row muting the product cannot keep.
+  6. THREADING. No "3 comments on ENG-117" roll-up. Every notification is its own row keyed
+     by (recipient, kind, subject, event_key); there is no parent, no thread entity, and
+     collapsing them in the UI would be inventing a grouping the data cannot restore.
+  7. THE ACTIONABLE / AMBIENT SPLIT. isActionableNotification() is real and exported — it
+     could have been a third lens. Left undrawn: the row already carries three channels, and
+     a lens called "Addressed" needs a sentence to explain itself, which the diet forbids.
+  8. A RETENTION FOOTLINE. The sweep is real but its window is configuration, not a fact this
+     mock knows, so no "↓ older than 30 days is swept" line. The list simply ends.
+  9. THE DISABLED "Mark all read". In frame B it is gone rather than dimmed — the same call
+     the build made when it folded Decisions out of more▾ (NORTHSTAR §PR #33): chrome that
+     promises what the product cannot deliver at that moment is worse than no chrome.
+
+DEVIATIONS FROM THE CANONICAL FRAME, STATED
+  · Inbox is not one of the six stops, so NO stop carries .active and the right cluster's
+    Inbox chip is left unmarked — the same call retros.html and ia.html make for a destination
+    that is not a stop. (An earlier draft underlined the Inbox chip and added height:48px to
+    .gb-inbox to land it; that changed band 1's geometry, which the set forbids, and it also
+    outran the build: InboxBadge is a plain <Link> with no active state. Reverted — band 1 is
+    now byte-identical to northstar/issues.html.) Where the reader is, band 2 says.
+  · Frame B's deck still reads "Inbox 3", because band 1 is chrome held constant across the
+    whole set and no canonical deck exists for an empty inbox. That IS a contradiction with
+    frame B's own surface, and it is named here rather than papered over with an invented
+    blank count: the empty state is a band-2-and-below drawing, and the deck around it is the
+    set's frame, not that moment's tally.
+  · Both frames are drawn as bordered devices on one sheet so the two states can be compared;
+    the bands inside them are untouched.
+  · One copy change from the shipped page: the digest row says "Shared with you" rather than
+    "A cycle digest was shared with you". Eight words on a work surface is a sentence; the
+    glyph and the subject "Engineering · Cycle 2" already carry "cycle digest". The shipped
+    empty state's two-sentence explanation is replaced for the same reason.
+  · The shipped page's lucide BellIcon beside the masthead title is gone. issues.html puts no
+    glyph beside "Issues"; a borrowed icon set has no place in a drawn vocabulary.
+  · The cross-team "Design" tag is rendered from the row's own team_id joined to the
+    workspace's teams — never to the subject issue. It appears only where the team differs
+    from the deck's current one, because the inbox is workspace-wide and the deck is not.
+
+SELF-CRITIQUE — the weakest thing here
+  The row is a borrowed suit that does not quite fit. issues.html's anatomy assumes the
+  phrase column is a DERIVED, changing fact about the work — "Checks failing", "Done in git,
+  not on the board" — and the reader learns to scan that column for trouble. Here the same
+  column holds "Marta commented", which is neither derived nor a state, and it never varies
+  beyond four verbs and a handful of names. A reader trained by Issues will keep sweeping a
+  column that has nothing to tell them, and the thing that actually varies — read versus
+  unread — is parked in an 8px gutter at the far left, the coldest pixel on the row. The
+  three redundancy channels defend that gutter against colour-blindness but not against
+  peripheral vision: at a glance, eight rows of near-identical grey text differ mainly by
+  font weight, and weight is the weakest of the three. Second fault, smaller but real: the
+  masthead count means UNREAD here and TOTAL on Issues, and nothing on either page says so —
+  the same mono number in the same slot, two different questions answered. Third: frame B
+  draws the flattering emptiness (a reader who has cleared their list), not the cold one —
+  a brand-new account on day one, where "Nothing waiting" is technically true and completely
+  uninformative, and where the four kind-labels are the only thing standing between the
+  reader and a blank page. That state deserved the second frame more than this one did.
+
+════════════════════════════════════════════════════════════════════════════════
+SET-RECONCILIATION PASS (2026-08-09) — applied across all seven destination mocks
+after they were drawn independently. Comparison actually run: every <header class="gbar">
+and every <div class="statusline"> block in northstar/*.html and destinations/*.html was
+extracted, whitespace-normalised and md5'd, with the active-stop class stripped. All
+destination decks now hash to 571eee83 — identical to northstar/issues.html modulo which
+stop is active. All statuslines hash to eb551c33, byte-identical to the canonical five.
+The band-1 and band-3 CSS blocks were hashed the same way and unified on delivery.html's
+variant (1e7593d5).
+  · This file: amber retuned to #b67500 (unused on this surface). Band 1 was RESTORED to
+    canonical — the .gb-inbox active underline, its height:48px and position:relative are gone,
+    and both frames' decks are byte-identical to northstar/issues.html. Frame B's invented blank
+    Inbox count is gone; it reads 3, and the contradiction with an empty inbox is named in
+    DEVIATIONS above rather than smoothed over. The frame-B annotation lost its explanatory
+    clause. Nothing was removed for inventing a fact.
+  · TOKENS. All seven now carry ONE token block, taken from packages/ui/src/styles/globals.css
+    [data-theme="warm"] at commit 6a46113: --status-in-progress #b67500 (was #ce8a26 in four
+    files), --status-in-progress-ink #935e00, --status-urgent-ink #a4462b and
+    --elevation-transient present everywhere, declared in the same order. The only hexes drawn
+    outside the token block are the avatar pair #5c5348/#f1ebe3, exactly as northstar/issues.html
+    draws them.
+  · DONE GLYPH. The check inside the filled disc is the shipped DONE_CHECK constant everywhere —
+    d="M6.3 10.3 8.9 12.9 13.7 7.3", stroke-width 1.6, stroke var(--bg). Three files had drifted
+    to hand-rolled paths at 1.7/1.8/1.9.
+  · URGENT INK. Urgent TEXT on a work surface uses --status-urgent-ink; band 3 keeps
+    --status-urgent so its markup stays byte-identical to the canonical set. That two-ink split
+    is deliberate and is the set's standing debt against the build, not a per-file choice.
+  · ONE ATTENTION NUMBER. 4 in the deck badge, 4 in the statusline, no second count anywhere.
+════════════════════════════════════════════════════════════════════════════════
+-->
+</body>
+</html>

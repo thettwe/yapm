@@ -1,0 +1,634 @@
+<!doctype html>
+<!--
+  destinations/roadmap — the Roadmap (more▾ · g m). Judged against northstar/ia.html.
+
+  Band 1 (48px deck) and band 3 (32px statusline) are lifted from northstar/issues.html and
+  delivery.html unchanged, modulo the active class, which sits on `more▾` because that is the
+  stop this destination hangs from. One attention number: 4, in the deck badge and the
+  statusline, and nowhere else on the page.
+
+  TOKENS: the Warm LIGHT block from packages/ui/src/styles/globals.css, read fresh today,
+  verbatim — including the two tokens the northstar set predates (--status-urgent-ink #a4462b,
+  shipped in PR #31, and --elevation-transient) — plus the daylight extensions.
+  AMBER: --status-in-progress: #b67500, --status-in-progress-ink: #935e00 — read fresh from
+  packages/ui/src/styles/globals.css [data-theme="warm"] AFTER commit 6a46113 (design-corrections)
+  landed and retuned the light presets: the old #ce8a26 measured 2.69 against --bg, under the 3:1
+  non-text bar. The northstar set predates that commit and still carries #ce8a26; all seven
+  destination mocks carry #b67500, so the destinations agree with the shipped tokens and with
+  each other. Urgent TEXT on a work surface uses --status-urgent-ink #a4462b; band 3 keeps
+  --status-urgent so its markup stays byte-identical to the canonical set.
+
+  THE AXIS: one day = 8px, x = 10 + 8 × (days since Jul 30). Jul 30 is the current cycle's real
+  start date; the axis runs to Nov 30, the month end after the latest target.
+  Inline SVG only. No motion, no elevation — this page draws no transient.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>yapm — Roadmap · Engineering</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf7f1; --bg-sidebar:#f0eae0; --bg-elevated:#ffffff; --bg-hover:#f2ece2;
+    --bg-selected:#f6e6da; --border:#e7e0d4; --border-strong:#dcd3c4;
+    --text-1:#2b2620; --text-2:#6b6357; --text-3:#9a9186;
+    --accent:#bd5837; --accent-strong:#a94d2f; --accent-soft:#f6e6da;
+    --accent-line:rgba(193,90,56,.34); --on-accent:#ffffff;
+    --status-backlog:#a79e92; --status-todo:#8a8175; --status-in-progress:#b67500;
+    --status-in-progress-ink:#935e00;
+    --status-in-review:#6a62c2; --status-done:#3e8c63; --status-urgent:#cc5a40;
+    --status-urgent-ink:#a4462b;
+    --signal-sync:#3e8c63;
+    --rad-control:7px; --rad-pill:20px; --rad-card:15px;
+    --row-hairline:#efe9dd; --statusline-bg:#f4efe5; --urgent-soft:rgba(204,90,64,.08);
+    --elevation-transient:0 10px 26px rgba(43,38,32,.14);
+    --ui:"Figtree",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:var(--ui);background:var(--bg);color:var(--text-1);
+       font-size:13px;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;flex-direction:column;min-height:100vh}
+
+  /* ============ band 1 — global bar (identical on every page) ============ */
+  .gbar{height:48px;min-height:48px;display:flex;align-items:center;padding:0 20px;
+        border-bottom:1px solid var(--border);background:var(--bg)}
+  .gb-ws{display:flex;align-items:center;gap:7px;font-size:13px}
+  .gb-logo{width:20px;height:20px;border-radius:6px;background:var(--accent);color:var(--on-accent);
+           font-weight:700;font-size:10.5px;display:flex;align-items:center;justify-content:center}
+  .gb-ws .org{color:var(--text-3)}
+  .gb-ws .sep{color:var(--text-3)}
+  .gb-ws .team{font-weight:600;color:var(--text-1)}
+  .gb-ws .chev{color:var(--text-3);font-size:9px;margin-top:1px}
+  .gb-nav{display:flex;align-items:stretch;margin-left:26px;height:48px}
+  .gb-tab{display:flex;align-items:center;padding:0 11px;font-size:13px;color:var(--text-2);
+          position:relative}
+  .gb-tab.active{color:var(--accent-strong);font-weight:600}
+  .gb-tab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:2px;
+          border-radius:1px;background:var(--accent)}
+  .gb-tab .chev{color:var(--text-3);font-size:9px;margin-left:4px;margin-top:1px}
+  .gb-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+  .gb-search{display:flex;align-items:center;gap:6px;font-size:13.5px;height:28px;padding:0 8px;
+             background:rgba(255,255,255,.55);border:1px solid var(--border);
+             border-radius:var(--rad-control);color:var(--text-3)}
+  .kbd{font-family:var(--mono);font-size:10px;color:var(--text-3);
+       border:1px solid var(--border-strong);border-radius:4px;padding:1px 4px;background:rgba(255,255,255,.5)}
+  .gb-attn{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;
+           border-radius:var(--rad-pill);background:var(--urgent-soft);
+           color:var(--status-urgent);font-weight:600;font-size:12px}
+  .gb-attn .d{width:6px;height:6px;border-radius:50%;background:var(--status-urgent)}
+  .gb-inbox{display:flex;align-items:center;gap:6px;color:var(--text-2);font-size:13px}
+  .gb-inbox .count{color:var(--text-3);font-size:12px}
+  .gb-avatar{width:24px;height:24px;border-radius:50%;background:#5c5348;color:#f1ebe3;
+             font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  /* ============ band 2 — page-owned masthead ============ */
+  .masthead{display:flex;align-items:center;padding:26px 40px 16px}
+  .masthead h1{font-size:23px;font-weight:700;letter-spacing:-.015em}
+  .masthead .count{font-family:var(--mono);color:var(--text-3);font-size:13px;margin-left:10px}
+  .mast-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn{height:30px;padding:0 12px;border-radius:var(--rad-control);font-size:12.5px;font-weight:600;
+       border:1px solid var(--border-strong);background:transparent;color:var(--text-1);
+       display:inline-flex;align-items:center;gap:6px;font-family:var(--ui)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+  .btn .chev{color:var(--text-3);font-size:9px}
+  .filters{display:flex;align-items:center;gap:18px;padding:0 40px 12px;color:var(--text-2);font-size:12.5px}
+  .filters .f-ic{color:var(--text-3);font-size:12px}
+  .filters .right{margin-left:auto;color:var(--text-3)}
+  .filters .right b{color:var(--text-2);font-weight:500}
+
+  /* ============ the timeline ============ */
+  /* the 3px left border matches the rows' focus rail, so the axis header's cycle boxes and the
+     rows' gridlines land on the same pixel */
+  .hdr{height:54px;display:flex;align-items:stretch;background:var(--bg-hover);
+       border-left:3px solid transparent;
+       border-top:1px solid var(--row-hairline);border-bottom:1px solid var(--row-hairline)}
+  .hdr .h-name{width:260px;flex:none;padding-left:37px;display:flex;align-items:center;
+               font-size:12.5px;font-weight:600}
+  .hdr .h-meter{width:140px;flex:none;display:flex;align-items:center;gap:8px;
+                font-size:12.5px;font-weight:600}
+  .hdr .h-axis{flex:none;width:1000px}
+  .how{font-family:var(--mono);font-size:10px;color:var(--text-3);font-weight:400}
+
+  .p-row{height:56px;display:flex;align-items:stretch;border-bottom:1px solid var(--row-hairline);
+         border-left:3px solid transparent}
+  .p-row.focused{background:var(--bg-selected);border-left-color:var(--accent)}
+  .p-name{width:260px;flex:none;padding-left:37px;padding-right:14px;display:flex;align-items:center;gap:9px}
+  .p-name .st{width:14px;height:14px;flex:none}
+  .p-name .st svg{display:block}
+  .p-name .nm{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .p-name .spring{flex:1}
+  .p-name .av{width:20px;height:20px;border-radius:50%;background:#5c5348;color:#f1ebe3;font-size:8px;
+              font-weight:600;display:flex;align-items:center;justify-content:center;flex:none}
+  /* a leadless project reserves the slot and draws nothing in it */
+  .p-name .av.none{background:transparent}
+
+  .p-meter{width:140px;flex:none;display:flex;align-items:center;gap:10px}
+  .meter{display:flex;align-items:center;gap:2.5px;height:8px}
+  .meter i{width:3px;height:8px;border-radius:1px;background:var(--border-strong)}
+  .meter i.on{background:var(--status-done)}
+  .mct{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+
+  .p-axis{flex:none;width:1000px}
+  .p-axis svg{display:block;overflow:visible}
+
+  .group-h{height:35px;display:flex;align-items:center;gap:9px;padding:0 40px;
+           background:var(--bg-hover);border-top:1px solid var(--row-hairline);
+           border-bottom:1px solid var(--row-hairline);font-size:12.5px;font-weight:600}
+  .group-h .g-count{color:var(--text-3);font-weight:400}
+
+  .footnote{padding:26px 40px 40px;font-size:12.5px;line-height:1.6;color:var(--text-2);max-width:760px}
+  .footnote b{color:var(--text-1)}
+  .footnote .more{font-family:var(--mono);font-size:10.5px;color:var(--text-3)}
+
+  /* ============ band 3 — statusline (identical on every page) ============ */
+  .statusline{margin-top:auto;height:32px;min-height:32px;background:var(--statusline-bg);
+              border-top:1px solid var(--border);display:flex;align-items:center;
+              padding:0 20px;font-size:12px;color:var(--text-2)}
+  .statusline .div{margin:0 10px;color:var(--border-strong)}
+  .statusline .attn{color:var(--status-urgent);font-weight:600}
+  .statusline .right{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--text-3)}
+  .dot-g{width:6px;height:6px;border-radius:50%;background:var(--signal-sync)}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Status is cycle position: one loop, filled as far as the work has run. A project's
+         status is the same idea at a coarser grain, so it borrows the family rather than
+         inventing a second one. planned = open ring · active = half arc · completed = filled
+         disc carrying a check (the shipped correction) · cancelled = ring with the × mark. -->
+    <symbol id="g-planned" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    </symbol>
+    <symbol id="g-active" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-opacity=".28" stroke-width="1.6"/>
+      <path d="M10 3 A7 7 0 0 1 10 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="g-completed" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7.6" fill="currentColor"/>
+      <path d="M6.3 10.3 8.9 12.9 13.7 7.3" fill="none" stroke="var(--bg)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="g-cancelled" viewBox="0 0 20 20">
+      <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M6.9 6.9 13.1 13.1M13.1 6.9 6.9 13.1" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="frame">
+
+  <header class="gbar">
+    <div class="gb-ws">
+      <span class="gb-logo">A</span><span class="org">Acme</span><span class="sep">/</span>
+      <span class="team">Engineering</span><span class="chev">▾</span>
+    </div>
+    <nav class="gb-nav">
+      <span class="gb-tab">Home</span>
+      <span class="gb-tab">Issues</span>
+      <span class="gb-tab">Triage</span>
+      <span class="gb-tab">Cycles</span>
+      <span class="gb-tab">Delivery</span>
+      <span class="gb-tab active">more<span class="chev">▾</span></span>
+    </nav>
+    <div class="gb-right">
+      <div class="gb-search"><span>⌕</span><span class="kbd">⌘K</span></div>
+      <div class="gb-attn"><span class="d"></span>4</div>
+      <div class="gb-inbox">Inbox<span class="count">3</span></div>
+      <div class="gb-avatar">DA</div>
+    </div>
+  </header>
+
+  <div class="masthead">
+    <h1>Roadmap</h1><span class="count">9</span>
+    <div class="mast-actions">
+      <button class="btn">Jul – Nov <span class="chev">▾</span></button>
+      <button class="btn primary">+ New project</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <span class="f-ic">≔</span>
+    <span>Status</span><span>Lead</span>
+    <span class="right">Sort <b>Target date</b></span>
+  </div>
+
+  <!-- ============ the axis header — cycle boundaries are the grid ============ -->
+  <div class="hdr">
+    <span class="h-name">Project</span>
+    <span class="h-meter">Done<span class="how">how ·</span></span>
+    <span class="h-axis">
+      <svg width="1000" height="54" viewBox="0 0 1000 54" role="img" xmlns="http://www.w3.org/2000/svg" style="display:block;overflow:visible">
+        <!-- month ticks + labels -->
+        <line x1="26" y1="2" x2="26" y2="8" stroke="var(--border-strong)" stroke-width="1"/>
+        <text x="29" y="18" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Aug</text>
+        <line x1="274" y1="2" x2="274" y2="8" stroke="var(--border-strong)" stroke-width="1"/>
+        <text x="277" y="18" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Sep</text>
+        <line x1="514" y1="2" x2="514" y2="8" stroke="var(--border-strong)" stroke-width="1"/>
+        <text x="517" y="18" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Oct</text>
+        <line x1="762" y1="2" x2="762" y2="8" stroke="var(--border-strong)" stroke-width="1"/>
+        <text x="765" y="18" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Nov</text>
+
+        <!-- cycle boxes, drawn from real start/end dates. No elapsed wash inside cycle 2: on
+             --bg-hover the accent-soft fill was invisible, and the today caret crossing the box
+             already draws how far the cycle has run. -->
+        <rect x="10.5" y="24.5" width="103" height="17" rx="3" fill="none" stroke="var(--border-strong)" stroke-width="1"/>
+        <text x="16" y="36" font-size="10" style="font-family:var(--mono)" fill="var(--text-1)">Cycle 2</text>
+        <rect x="122.5" y="24.5" width="103" height="17" rx="3" fill="none" stroke="var(--border-strong)" stroke-width="1"/>
+        <text x="128" y="36" font-size="10" style="font-family:var(--mono)" fill="var(--text-2)">Cycle 3</text>
+        <rect x="234.5" y="24.5" width="103" height="17" rx="3" fill="none" stroke="var(--border-strong)" stroke-width="1"/>
+        <text x="240" y="36" font-size="10" style="font-family:var(--mono)" fill="var(--text-2)">Cycle 4</text>
+        <rect x="346.5" y="24.5" width="103" height="17" rx="3" fill="none" stroke="var(--border-strong)" stroke-width="1"/>
+        <text x="352" y="36" font-size="10" style="font-family:var(--mono)" fill="var(--text-2)">Cycle 5</text>
+        <text x="462" y="36" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">no cycles past Sep 23</text>
+
+        <!-- today -->
+        <line x1="74" y1="24" x2="74" y2="42" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="74" y="52" text-anchor="middle" font-size="10" font-weight="600" style="font-family:var(--mono)" fill="var(--accent-strong)">today</text>
+      </svg>
+    </span>
+  </div>
+
+  <!-- ============ dated, in target order ============ -->
+
+  <div class="p-row focused">
+    <span class="p-name">
+      <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-active"/></svg></span>
+      <span class="nm">Checkout rebuild</span><span class="spring"></span><span class="av">DA</span>
+    </span>
+    <span class="p-meter">
+      <span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span>
+      <span class="mct">11/13</span>
+    </span>
+    <span class="p-axis">
+      <svg width="1000" height="56" viewBox="0 0 1000 56" xmlns="http://www.w3.org/2000/svg">
+        <line x1="10" y1="0" x2="10" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="118" y1="0" x2="118" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="230" y1="0" x2="230" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="342" y1="0" x2="342" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="450" y1="0" x2="450" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="74" y1="0" x2="74" y2="56" stroke="var(--accent-line)" stroke-width="1"/>
+        <circle cx="56" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="68" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="26" cy="24" r="4.5" fill="var(--bg)" stroke="var(--status-urgent)" stroke-width="1.8"/>
+        <text x="34.5" y="28" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Aug 1</text>
+        <text x="72" y="28" font-size="12" font-weight="600" fill="var(--status-urgent-ink)">Target passed</text>
+      </svg>
+    </span>
+  </div>
+
+  <div class="p-row">
+    <span class="p-name">
+      <span class="st" style="color:var(--status-done)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-completed"/></svg></span>
+      <span class="nm">Onboarding revamp</span><span class="spring"></span><span class="av">MR</span>
+    </span>
+    <span class="p-meter">
+      <span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span>
+      <span class="mct">12/12</span>
+    </span>
+    <span class="p-axis">
+      <svg width="1000" height="56" viewBox="0 0 1000 56" xmlns="http://www.w3.org/2000/svg">
+        <line x1="10" y1="0" x2="10" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="118" y1="0" x2="118" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="230" y1="0" x2="230" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="342" y1="0" x2="342" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="450" y1="0" x2="450" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="74" y1="0" x2="74" y2="56" stroke="var(--accent-line)" stroke-width="1"/>
+        <circle cx="43" cy="41" r="3.2" fill="var(--status-done)"/>
+        <circle cx="56" cy="41" r="3.2" fill="var(--status-done)"/>
+        <circle cx="69" cy="41" r="3.2" fill="var(--status-done)"/>
+        <circle cx="58" cy="24" r="4.5" fill="var(--status-done)" stroke="var(--bg)" stroke-width="2"/>
+        <text x="66.5" y="28" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Aug 5</text>
+      </svg>
+    </span>
+  </div>
+
+  <div class="p-row">
+    <span class="p-name">
+      <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-active"/></svg></span>
+      <span class="nm">Payments v2</span><span class="spring"></span><span class="av">DA</span>
+    </span>
+    <span class="p-meter">
+      <span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      <span class="mct">8/14</span>
+    </span>
+    <span class="p-axis">
+      <svg width="1000" height="56" viewBox="0 0 1000 56" xmlns="http://www.w3.org/2000/svg">
+        <line x1="10" y1="0" x2="10" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="118" y1="0" x2="118" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="230" y1="0" x2="230" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="342" y1="0" x2="342" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="450" y1="0" x2="450" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="74" y1="0" x2="74" y2="56" stroke="var(--accent-line)" stroke-width="1"/>
+        <circle cx="44" cy="41" r="3.2" fill="var(--status-done)"/>
+        <circle cx="56" cy="41" r="3.2" fill="var(--status-done)"/>
+        <circle cx="68" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="80" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="162" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="174" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="186" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="114" cy="24" r="4.5" fill="var(--status-in-progress)" stroke="var(--bg)" stroke-width="2"/>
+        <text x="122.5" y="28" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Aug 12</text>
+      </svg>
+    </span>
+  </div>
+
+  <div class="p-row">
+    <span class="p-name">
+      <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-active"/></svg></span>
+      <span class="nm">Mobile web polish</span><span class="spring"></span><span class="av">JK</span>
+    </span>
+    <span class="p-meter">
+      <span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      <span class="mct">3/9</span>
+    </span>
+    <span class="p-axis">
+      <svg width="1000" height="56" viewBox="0 0 1000 56" xmlns="http://www.w3.org/2000/svg">
+        <line x1="10" y1="0" x2="10" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="118" y1="0" x2="118" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="230" y1="0" x2="230" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="342" y1="0" x2="342" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="450" y1="0" x2="450" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="74" y1="0" x2="74" y2="56" stroke="var(--accent-line)" stroke-width="1"/>
+        <circle cx="56" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="68" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="156" cy="41" r="3.2" fill="var(--status-done)"/>
+        <circle cx="168" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="180" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="192" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="226" cy="24" r="4.5" fill="var(--status-in-progress)" stroke="var(--bg)" stroke-width="2"/>
+        <text x="234.5" y="28" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Aug 26</text>
+      </svg>
+    </span>
+  </div>
+
+  <div class="p-row">
+    <span class="p-name">
+      <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-planned"/></svg></span>
+      <span class="nm">Search relevance</span><span class="spring"></span><span class="av none"></span>
+    </span>
+    <span class="p-meter">
+      <span class="meter"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      <span class="mct">0/6</span>
+    </span>
+    <span class="p-axis">
+      <svg width="1000" height="56" viewBox="0 0 1000 56" xmlns="http://www.w3.org/2000/svg">
+        <line x1="10" y1="0" x2="10" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="118" y1="0" x2="118" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="230" y1="0" x2="230" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="342" y1="0" x2="342" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="450" y1="0" x2="450" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="74" y1="0" x2="74" y2="56" stroke="var(--accent-line)" stroke-width="1"/>
+        <circle cx="338" cy="24" r="4.5" fill="var(--text-3)" stroke="var(--bg)" stroke-width="2"/>
+        <text x="346.5" y="28" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Sep 9</text>
+        <text x="390" y="28" font-size="12" fill="var(--text-2)">Nothing scheduled</text>
+      </svg>
+    </span>
+  </div>
+
+  <div class="p-row">
+    <span class="p-name">
+      <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-planned"/></svg></span>
+      <span class="nm">Notifications overhaul</span><span class="spring"></span><span class="av">MR</span>
+    </span>
+    <span class="p-meter"></span>
+    <span class="p-axis">
+      <svg width="1000" height="56" viewBox="0 0 1000 56" xmlns="http://www.w3.org/2000/svg">
+        <line x1="10" y1="0" x2="10" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="118" y1="0" x2="118" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="230" y1="0" x2="230" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="342" y1="0" x2="342" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="450" y1="0" x2="450" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="74" y1="0" x2="74" y2="56" stroke="var(--accent-line)" stroke-width="1"/>
+        <circle cx="626" cy="24" r="4.5" fill="var(--text-3)" stroke="var(--bg)" stroke-width="2"/>
+        <text x="634.5" y="28" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Oct 15</text>
+        <text x="682" y="28" font-size="12" fill="var(--text-3)">No issues yet</text>
+      </svg>
+    </span>
+  </div>
+
+  <div class="p-row">
+    <span class="p-name">
+      <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-planned"/></svg></span>
+      <span class="nm">Billing migration</span><span class="spring"></span><span class="av">JK</span>
+    </span>
+    <span class="p-meter">
+      <span class="meter"><i></i><i></i><i></i><i></i></span>
+      <span class="mct">0/4</span>
+    </span>
+    <span class="p-axis">
+      <svg width="1000" height="56" viewBox="0 0 1000 56" xmlns="http://www.w3.org/2000/svg">
+        <line x1="10" y1="0" x2="10" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="118" y1="0" x2="118" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="230" y1="0" x2="230" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="342" y1="0" x2="342" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="450" y1="0" x2="450" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="74" y1="0" x2="74" y2="56" stroke="var(--accent-line)" stroke-width="1"/>
+        <text x="969.5" y="28" text-anchor="end" font-size="10" style="font-family:var(--mono)" fill="var(--text-3)">Nov 28</text>
+        <circle cx="978" cy="24" r="4.5" fill="var(--text-3)" stroke="var(--bg)" stroke-width="2"/>
+      </svg>
+    </span>
+  </div>
+
+  <!-- ============ off the axis ============ -->
+  <div class="group-h">No target date <span class="g-count">2</span></div>
+
+  <div class="p-row">
+    <span class="p-name">
+      <span class="st" style="color:var(--status-in-progress)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-active"/></svg></span>
+      <span class="nm">Design system upgrade</span><span class="spring"></span><span class="av">DA</span>
+    </span>
+    <span class="p-meter">
+      <span class="meter"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></span>
+      <span class="mct">2/7</span>
+    </span>
+    <span class="p-axis">
+      <svg width="1000" height="56" viewBox="0 0 1000 56" xmlns="http://www.w3.org/2000/svg">
+        <line x1="10" y1="0" x2="10" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="118" y1="0" x2="118" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="230" y1="0" x2="230" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="342" y1="0" x2="342" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="450" y1="0" x2="450" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="74" y1="0" x2="74" y2="56" stroke="var(--accent-line)" stroke-width="1"/>
+        <circle cx="56" cy="41" r="3.2" fill="var(--status-done)"/>
+        <circle cx="68" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+        <circle cx="174" cy="41" r="3.2" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.4"/>
+      </svg>
+    </span>
+  </div>
+
+  <div class="p-row">
+    <span class="p-name">
+      <span class="st" style="color:var(--status-todo)"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-planned"/></svg></span>
+      <span class="nm">Data retention</span><span class="spring"></span><span class="av none"></span>
+    </span>
+    <span class="p-meter">
+      <span class="meter"><i></i><i></i><i></i></span>
+      <span class="mct">0/3</span>
+    </span>
+    <span class="p-axis">
+      <svg width="1000" height="56" viewBox="0 0 1000 56" xmlns="http://www.w3.org/2000/svg">
+        <line x1="10" y1="0" x2="10" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="118" y1="0" x2="118" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="230" y1="0" x2="230" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="342" y1="0" x2="342" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="450" y1="0" x2="450" y2="56" stroke="var(--row-hairline)" stroke-width="1"/>
+        <line x1="74" y1="0" x2="74" y2="56" stroke="var(--accent-line)" stroke-width="1"/>
+      </svg>
+    </span>
+  </div>
+
+  <p class="footnote"><b>What this page won't guess:</b> a project's start — only a target is stored, so nothing here draws a bar. <span class="more">more ·</span></p>
+
+  <div class="statusline">
+    <span>Cycle 2, day 9 of 14</span><span class="div">·</span>
+    <span>8 shipped</span><span class="div">·</span>
+    <span>3 deploys this week</span><span class="div">·</span>
+    <span class="attn">4 need attention</span>
+    <span class="right"><span class="dot-g"></span>Synced</span>
+  </div>
+</div>
+
+<!--
+================================================================================
+WHAT THIS SURFACE DRAWS, AND FROM WHAT
+
+  Every mark on this page resolves to a stored column:
+    project.name, project.status, project.lead_id, project.target_date   → the left column
+    issue.status where issue.project_id = P                              → the Done meter
+    issue.cycle_id where issue.project_id = P                            → the marks in a cycle column
+    cycle.start_date, cycle.end_date                                     → the axis grid
+  The one comparison the page makes is target_date < today AND status != completed → "Target
+  passed". That is a date comparison, not a score.
+
+WHAT FOLDED AWAY, AND WHY
+
+  1. The bar — any bar, with any left edge. No project start date exists; only target_date.
+     Earliest-issue-created was available as a derivation and was REJECTED, not overlooked: a
+     drawn left edge reads as a commitment the product never made, and the Gantt idiom that
+     follows it (spans, slips, critical paths) would then all be invented. Each project is one
+     point in time plus what it has actually finished.
+  2. Dependency / blocking arrows between projects. There is no issue-to-issue link table and no
+     project-to-project edge at all.
+  3. Milestones. No milestone entity; a target date is the only dated thing a project owns.
+  4. Confidence, health, and risk scores, and any "will it land" projection. Nothing stores them
+     and nothing derives them honestly.
+  5. Resource levelling / capacity lanes. No allocation exists, and metrics are team-level only —
+     a per-person roadmap lane would break that rule twice over.
+  6. Slip history ("was Aug 1, moved to Aug 15"). No project history table exists — the same
+     absence that kills the issue status-history timeline. Only the current target is stored.
+  7. A per-project product area or change-size band. Neither is stored on a project.
+  8. A "6 days late" number beside the passed target. Derivable — and dropped, because a second
+     red number on a page whose deck already carries 4 would compete with the one attention
+     number. The marker sitting left of the today caret carries it instead.
+  9. A percent per row. The shipped page draws "62% done"; a percent over a project with no
+     issues reads 0%, which is a lie about a project that simply has not been broken down yet.
+     It folds to a drawn meter + done/total, and the zero-issue project draws NO INK at all.
+ 10. A cycle grid past Sep 23. Cycles exist only as far as the team has created them, so the
+     grid stops where the facts stop and the tail carries a mono note instead of ruled columns.
+ 11. A peek. Nothing on this page is a transient, so nothing is elevated.
+ 12. Canceled issues as their own mark. The spec counts them in a project's total but not its
+     done share; the meter therefore shows them as unfilled ticks, indistinguishable from open
+     work. Separating them is undrawn rather than guessed at.
+
+WHAT CHANGED FROM THE SHIPPED ROADMAP (apps/web/src/projects/roadmap-view.tsx)
+
+  Kept: the target-date axis with a month ruler, a now line, undated projects held aside, and
+  the roving-focus keyboard order (drawn here as the focused first row).
+  Changed: the four coloured status dots become the drawn cycle-position family, with completed
+  as a filled disc carrying a CHECK (the design-corrections correction); the per-row italic "No
+  target date" ornament — repeated on every undated row — becomes one group header, and those
+  rows now show where their work is scheduled instead of a repeated phrase; "{n}% done" becomes
+  the meter; the prose empty state ("No projects yet. Create a project to see it on the
+  roadmap.") is a sentence in chrome and does not survive; rows sort by target date rather than
+  status-then-date, because on a time axis date order is what makes the sequence legible, and
+  the filter bar states that sort rather than leaving it implicit.
+  Kept as already correct: the masthead does not repeat the team name, and no lucide icon
+  appears anywhere on the page.
+
+SELF-CRITIQUE
+
+  The weakest thing here is the row of dots in the cycle columns. They are the most valuable
+  drawing on the page — they are the only reason the axis has any density at all once the bar
+  is refused — and they are also the least defensible: they carry roughly the visual weight of
+  a Gantt bar while meaning something quite different, their grammar is stated nowhere except a
+  footnote almost nobody will open, and an eye trained on roadmaps will read a cluster in Cycle
+  2 and a cluster in Cycle 3 as a span between them. Worse, they punish honesty: a project whose
+  issues nobody has put in a cycle yet draws an empty row and looks dead, when the truth is only
+  that its work is unscheduled — Search relevance has six real issues and one phrase to show for
+  them. The Done meter has a second fault of its own: its LENGTH encodes issue count, so a
+  14-issue project's meter is twice a 7-issue project's and the two rows cannot be compared at a
+  glance; length reads as progress even though only the fill means it. And the page pays half
+  its width for the ungridded Oct–Nov stretch, where two lonely dots sit in territory the team
+  has not planned — which is exactly the point being made, and still an expensive way to make
+  it. A quieter version of this page would drop the dots, keep the meter, and let the cycle grid
+  alone carry the rhythm; that version would be more disciplined and much less worth visiting,
+  and I am not certain I chose the right side of that trade.
+================================================================================
+
+════════════════════════════════════════════════════════════════════════════════
+SET-RECONCILIATION PASS (2026-08-09) — applied across all seven destination mocks
+after they were drawn independently. Comparison actually run: every <header class="gbar">
+and every <div class="statusline"> block in northstar/*.html and destinations/*.html was
+extracted, whitespace-normalised and md5'd, with the active-stop class stripped. All
+destination decks now hash to 571eee83 — identical to northstar/issues.html modulo which
+stop is active. All statuslines hash to eb551c33, byte-identical to the canonical five.
+The band-1 and band-3 CSS blocks were hashed the same way and unified on delivery.html's
+variant (1e7593d5).
+  · This file: amber retuned to #b67500 (+ ink token added); g-completed's check replaced with
+    the shipped path at 1.6 (was 1.9). The closing footnote was trimmed from three clauses to
+    one plus "more ·", matching delivery.html's canonical footnote pattern — three clauses on a
+    work surface is prose. Nothing was removed for inventing a fact: no bar, no dependency arrow,
+    no confidence score and no slip history was drawn.
+  · TOKENS. All seven now carry ONE token block, taken from packages/ui/src/styles/globals.css
+    [data-theme="warm"] at commit 6a46113: --status-in-progress #b67500 (was #ce8a26 in four
+    files), --status-in-progress-ink #935e00, --status-urgent-ink #a4462b and
+    --elevation-transient present everywhere, declared in the same order. The only hexes drawn
+    outside the token block are the avatar pair #5c5348/#f1ebe3, exactly as northstar/issues.html
+    draws them.
+  · DONE GLYPH. The check inside the filled disc is the shipped DONE_CHECK constant everywhere —
+    d="M6.3 10.3 8.9 12.9 13.7 7.3", stroke-width 1.6, stroke var(--bg). Three files had drifted
+    to hand-rolled paths at 1.7/1.8/1.9.
+  · URGENT INK. Urgent TEXT on a work surface uses --status-urgent-ink; band 3 keeps
+    --status-urgent so its markup stays byte-identical to the canonical set. That two-ink split
+    is deliberate and is the set's standing debt against the build, not a per-file choice.
+  · ONE ATTENTION NUMBER. 4 in the deck badge, 4 in the statusline, no second count anywhere.
+
+FIXTURE-RECONCILIATION PASS (2026-08-09) — projects.html and roadmap.html
+The two project surfaces named two disjoint workspaces: this file's nine against projects.html's
+six, at the same instant, with zero names in common. THIS FILE'S NINE WERE MADE CANONICAL AND
+projects.html WAS REWRITTEN ONTO THEM. Reason: three of this page's four best drawings are
+fixture-dependent — the two-row "No target date" group, the "Nothing scheduled" and "No issues
+yet" empty states, and the lone Nov 28 mark alone in the ungridded tail. Cutting to six would
+have cost them; growing projects.html to nine cost only rows.
+
+  · NOT ONE MARK ON THIS PAGE CHANGED. No name, status, lead, target, meter or dot was touched;
+    the nine rows, the axis and the masthead count of 9 are exactly as drawn. This note is the
+    whole of the edit.
+  · WHAT projects.html TOOK: name, status, lead initials (or the reserved-empty lead slot),
+    target date and done/total, per project, row by row. It groups them by status —
+    Active 4 (Checkout rebuild, Payments v2, Mobile web polish, Design system upgrade) ·
+    Planned 4 (Search relevance, Notifications overhaul, Billing migration, Data retention) ·
+    Completed 1 (Onboarding revamp) — and holds undated projects last inside their own status
+    group rather than under a header of their own, which is that page's grouping, not this one's.
+  · WHAT IT ADDED, from a column this page never reads: the ENG n · DES n team split, derived
+    from issue.team_id. Its splits sum to the totals in the Done meters here, so the two pages
+    agree on every count.
+  · TODAY IS Aug 7. The caret at x=74 is 10 + 8 × 8 days from Jul 30 — day 9 of 14, the day
+    band 3 states, and six days past the Aug 1 target this page marks "Target passed". Footnote
+    8 above already said "6 days late"; projects.html had drawn "7 days past" against an Aug 8
+    today, and was corrected to this page's arithmetic rather than the reverse.
+  · WHAT STAYS UNRESOLVED. Nothing on this page tells a reader that Notifications overhaul's
+    blank meter and Search relevance's 0/6 are different kinds of nothing — one has no issues,
+    the other has six unscheduled ones. projects.html draws that distinction plainly, in a
+    reserved-but-blank count against a written 0/6. That the same two facts read more clearly
+    on the index than on the axis is an argument against this page, and it survives the
+    reconciliation intact.
+════════════════════════════════════════════════════════════════════════════════
+-->
+</body>
+</html>

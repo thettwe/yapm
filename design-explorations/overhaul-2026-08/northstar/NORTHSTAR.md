@@ -51,12 +51,12 @@ honesty behind "more ·", "opens:" lists behind door affordances.
 - PNGs re-rendered from final HTML (Playwright, 1440×900 viewport + full-page) after the
   last edit pass, so every screenshot matches its file.
 
-### What the build kept, and the two places it had to diverge (PR #33)
+### What the build kept, and the three places it had to diverge (PR #33, PR #38)
 
 The frame shipped from these files: 48px deck, 32px statusline on `--statusline-bg`, the six
 stops with `more▾` as a transient, and the one attention number enforced by a single
-`buildTeamFrame` derivation the Home digest consumes rather than recomputes. Two divergences,
-both forced by facts the mock did not have to hold:
+`buildTeamFrame` derivation the Home digest consumes rather than recomputes. Three divergences,
+each forced by a fact the mock did not have to hold:
 
 - **The active stop's ink is `--text-1`, not the accent.** `--accent-strong` on `--bg` measures
   ~4.44:1 in editorial light — under AA for normal text — so the mock's accent-coloured tab label
@@ -65,6 +65,22 @@ both forced by facts the mock did not have to hold:
 - **Decisions (`g d`) folded away and `g d` went to Delivery.** The mock draws Decisions in the
   open `more▾` menu; no entity backs it, and a disabled row is chrome promising what the product
   cannot keep. The free shortcut went to the destination that exists.
+- **The in-progress amber is darker than the mock's (PR #38).** These files carry the shipped Warm
+  LIGHT `--status-in-progress` verbatim, and that value fails WCAG 1.4.11: it measures **2.69**
+  against `--bg` in warm light, **2.17** in focused light and **2.87** in editorial light, under the
+  3:1 bar the hue must meet as non-text drawing — the in-progress half arc, the row's label dot, the
+  digest's attention square, the flow band's added-block outline. The three light presets are
+  retuned on the same OKLCH hue (h 71 / 79 / 75, held exactly, so the separation from
+  `--status-done` and `--status-urgent` is unchanged) to **`#b67500` / `#b47e00` / `#b37900`**,
+  measuring **3.55 / 3.54 / 3.62** against `--bg` and clearing 3:1 on every ground a row or a card
+  is painted — the hovered row, the selected row's tint, a selected board card's soft-accent wash
+  and the divergence row's urgent wash. The three darks already measured 8.80 / 9.03 / 9.49 and did
+  not move. Text drawn in this hue takes a new `--status-in-progress-ink` at 4.5:1, the same split
+  `--status-urgent-ink` already makes. **The mock is wrong here and the product is right**: a
+  re-render of these files should adopt the retuned amber rather than the product adopting the
+  mock's. Everything else PR #38 changed moved the product *toward* these files — quiet rows going
+  truly blank as `issues.png` draws them, the check returning to the `done` disc, and band 3's
+  healthy label reading `Synced` as all five files draw it.
 
 One thing the mock could not decide, and the build had to: `ia.html` assumes team context
 ("Acme / Engineering"), while yapm is one workspace of many teams and six routes are

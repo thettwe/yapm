@@ -43,6 +43,7 @@
   --color-status-backlog: var(--status-backlog);
   --color-status-todo: var(--status-todo);
   --color-status-in-progress: var(--status-in-progress);
+  --color-status-in-progress-ink: var(--status-in-progress-ink);
   --color-status-in-review: var(--status-in-review);
   --color-status-done: var(--status-done);
   --color-status-urgent: var(--status-urgent);
@@ -129,7 +130,15 @@
   --on-accent: #ffffff;
   --status-backlog: #a79e92;
   --status-todo: #8a8175;
-  --status-in-progress: #ce8a26;
+  /* Darkened from #ce8a26, which measured 2.69 against `--bg` and 2.37 against the selected row's
+     tint — under the 3:1 non-text bar the in-progress arc, the label dot and the attention square
+     must meet. Hue and chroma are held (OKLCH h 71), so the separation from `--status-done` and
+     `--status-urgent` is exactly what it was; the mark that changed is its lightness. */
+  --status-in-progress: #b67500;
+  /* In-progress TEXT ink, the same split `--status-urgent-ink` makes and for the same reason:
+     dragging one amber to 4.5:1 on a near-white ground stops it being an amber. The only
+     normal-size text drawn in this hue is `drawn.tsx` §ScopeBand's 9px `+`. */
+  --status-in-progress-ink: #935e00;
   --status-in-review: #6a62c2;
   --status-done: #3e8c63;
   --status-urgent: #cc5a40;
@@ -199,7 +208,10 @@
   --on-accent: #ffffff;
   --status-backlog: #6b7078;
   --status-todo: #8a8f97;
-  --status-in-progress: #e0a63c;
+  /* Darkened from #e0a63c (2.17 against `--bg`, the worst of the six) on the held hue, OKLCH h 79.
+     Same reason as warm light. */
+  --status-in-progress: #b47e00;
+  --status-in-progress-ink: #956800;
   /* Darkened from #3f9e7c: the reality track's `open` and `rev-wait` nodes are drawn in this hue on
      the selected row's `--accent-soft` wash, where the original measured 2.88 — under the 3:1
      non-text bar. Asserted per preset in `styles/contrast.test.ts`. */
@@ -260,7 +272,9 @@
   --on-accent: #ffffff;
   --status-backlog: #a19e95;
   --status-todo: #a19e95;
-  --status-in-progress: #c98a15;
+  /* Darkened from #c98a15 (2.87 against `--bg`) on the held hue, OKLCH h 75. */
+  --status-in-progress: #b37900;
+  --status-in-progress-ink: #946300;
   --status-in-review: #6d5fe0;
   --status-done: #2f9068;
   /* Darkened from the original #d9741c: that orange measured 2.91:1 against its own
@@ -325,6 +339,9 @@
   --status-backlog: #7c736a;
   --status-todo: #948a80;
   --status-in-progress: #e7ab44;
+  /* Measured 8.80 against `--bg` and 8.00 against the worst ground a row paints: the darks clear
+     both bars on one token, so the ink is an alias exactly as `--status-urgent-ink` is below. */
+  --status-in-progress-ink: var(--status-in-progress);
   --status-in-review: #9089da;
   --status-done: #59a57b;
   --status-urgent: #df6a4e;
@@ -370,6 +387,7 @@
   --status-backlog: #6b7078;
   --status-todo: #8a8f97;
   --status-in-progress: #e0a63c;
+  --status-in-progress-ink: var(--status-in-progress);
   --status-in-review: #3f9e7c;
   --status-done: #6e79f0;
   --status-urgent: #e2593f;
@@ -413,6 +431,7 @@
   --status-backlog: #6e6c66;
   --status-todo: #6e6c66;
   --status-in-progress: #e7a93a;
+  --status-in-progress-ink: var(--status-in-progress);
   --status-in-review: #9b8cf5;
   --status-done: #4fae83;
   --status-urgent: #f0872e;

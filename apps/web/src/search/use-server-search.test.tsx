@@ -7,7 +7,7 @@ const connection = vi.hoisted(() => ({
   summary: {
     state: 'connected',
     recovery: 'idle',
-    label: 'Connected',
+    label: 'Synced',
     writable: true,
     retryOffered: false,
   } as ConnectionSummary,

@@ -7,7 +7,7 @@ import { SyncIndicator } from './sync-indicator'
 const CONNECTED: ConnectionSummary = {
   state: 'connected',
   recovery: 'idle',
-  label: 'Connected',
+  label: 'Synced',
   writable: true,
   retryOffered: false,
 }
@@ -25,7 +25,7 @@ test('the statusline segment keeps the data-connection hook the existing suites 
   const { pill } = show(CONNECTED)
 
   expect(pill).toHaveAttribute('data-connection', 'connected')
-  expect(screen.getByText('Connected')).toBeInTheDocument()
+  expect(screen.getByText('Synced')).toBeInTheDocument()
 })
 
 test('the recovery phase is exposed for tests without disturbing data-connection', () => {

@@ -20,6 +20,28 @@ function luminance(hex: string): number {
   return 0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b)
 }
 
+// Contrast is a luminance ratio and says nothing about hue, so two status marks can be perfectly
+// separable to a photometer and indistinguishable to a reader. The hue angle is the missing half:
+// OKLab is used rather than HSL because it is the space the palette's own `color-mix` declarations
+// are written in, so an angle measured here is the angle a preset was tuned at.
+function oklchHue(hexColor: string): number {
+  const m = hexColor.replace('#', '')
+  const [r, g, b] = [0, 1, 2].map((i) =>
+    srgbToLinear(Number.parseInt(m.slice(i * 2, i * 2 + 2), 16)),
+  ) as [number, number, number]
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+  const mm = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+  const a = 1.9779984951 * l - 2.428592205 * mm + 0.4505937099 * s
+  const bb = 0.0259040371 * l + 0.7827717662 * mm - 0.808675766 * s
+  return (Math.atan2(bb, a) * 180) / Math.PI
+}
+
+function hueDistance(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360
+  return d > 180 ? 360 - d : d
+}
+
 function contrastRatio(a: string, b: string): number {
   const la = luminance(a)
   const lb = luminance(b)
@@ -562,23 +584,97 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     }
   })
 
-  // THE ADDED CAP, and the measurement that changed how it is drawn. `--status-in-progress` is an
-  // amber: it measures 2.17–2.87 on the base surface in the three LIGHT presets, under the non-text
-  // bar, and 1.31–2.31 against `--status-done` in ALL SIX. Drawn the way it first was — a solid
-  // block stacked flush on the shipped bar — the two quantities read as one taller bar of shipped
-  // work in every theme, which is the opposite of the fact.
+  // THE IN-PROGRESS AMBER, at the bar each of its two jobs actually requires. It was pinned here
+  // at `>= 2.1` while it measured 2.17–2.87 on the base surface in the three LIGHT presets — an
+  // assertion written below the bar to record a known break, which is the one thing a contrast
+  // assertion may not be. The lights are retuned (2.69/2.17/2.87 → 3.55/3.54/3.62 on `--bg`) and
+  // the bar is the real one.
   //
-  // Raising the amber to 3:1 on a near-white ground is a product-wide decision (it inks the
-  // in-progress status glyph, the issue row and the retro's caution card), so the fix is in the
-  // DRAWING instead, and it is the shared vocabulary's own: `drawn.tsx` §ScopeBand already draws
-  // "added" as an outlined block rather than a filled one. The flow band's cap is now an outline
-  // separated from the bar by the page ground, so the two are two shapes at any contrast, and the
-  // count is carried by the `+N added` label in `--text-2` (AA above) and by the `role="img"`
-  // label. The tint is reinforcement — recorded here with its real numbers rather than deleted.
-  it('records the added cap’s tint as reinforcement, with the numbers that made it an outline', () => {
+  // It is DRAWN — the in-progress half arc, the issue row's label dot, the digest's attention
+  // square, the connecting sync dot, the project and roadmap active dots, the retro caution mark,
+  // the flow band's added-block outline — on every ground a row or a card is painted, so 3:1
+  // (WCAG 1.4.11) holds on all seven rather than on `--bg` alone. Focused light's
+  // `--status-in-review` is the precedent above: a status hue that reads on the page and not on
+  // the selected row reads in the screenshot and not in use.
+  it('the in-progress amber is distinguishable on every ground a row is drawn on (>= 3.0)', () => {
     const bg = hex(t, '--bg')
-    const amber = hex(t, '--status-in-progress')
-    expect(contrastRatio(amber, bg)).toBeGreaterThanOrEqual(2.1)
-    expect(contrastRatio(amber, hex(t, '--status-done'))).toBeGreaterThanOrEqual(1.3)
+    const grounds = {
+      '--bg': bg,
+      '--bg-elevated': hex(t, '--bg-elevated'),
+      '--bg-sidebar': hex(t, '--bg-sidebar'),
+      '--bg-hover': over(t['--bg-hover'] ?? '', bg),
+      '--bg-selected': over(t['--bg-selected'] ?? '', bg),
+      '--accent-soft': over(t['--accent-soft'] ?? '', bg),
+      '--urgent-soft': wash(hex(t, '--status-urgent'), bg, 0.08),
+    }
+    for (const [name, ground] of Object.entries(grounds)) {
+      expect(
+        contrastRatio(hex(t, '--status-in-progress'), ground),
+        `amber on ${name}`,
+      ).toBeGreaterThanOrEqual(AA_LARGE)
+    }
+  })
+
+  // The same hue as TEXT: `drawn.tsx` §ScopeBand's 9px bold `+`. One amber cannot be both — dragged
+  // to 4.5:1 on a near-white ground it lands around #935e00, which is a brown, so the token splits
+  // exactly as `--status-urgent` / `--status-urgent-ink` does. The three darks alias the ink to the
+  // drawn hue, and this assertion is what proves the alias is allowed to stand.
+  it('the in-progress text ink meets AA on every ground the amber `+` is drawn on (>= 4.5)', () => {
+    const bg = hex(t, '--bg')
+    const grounds = {
+      '--bg': bg,
+      '--bg-elevated': hex(t, '--bg-elevated'),
+      '--bg-sidebar': hex(t, '--bg-sidebar'),
+      '--bg-hover': over(t['--bg-hover'] ?? '', bg),
+    }
+    for (const [name, ground] of Object.entries(grounds)) {
+      expect(
+        contrastRatio(hex(t, '--status-in-progress-ink'), ground),
+        `amber ink on ${name}`,
+      ).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
+  // Why the amber-vs-green number is NOT the bar above, kept with its reason rather than deleted:
+  // the two hues measure 1.03–1.71 against each other in all six presets and never reach 3:1 at any
+  // lightness that leaves both recognisable. That is why the flow band's added cap is an OUTLINE
+  // separated from the shipped bar by the page ground — two quantities must be two shapes at any
+  // contrast — and why the count is carried by the `+N added` label and the chart's `role="img"`.
+  // A lower bound, so a later retune that happens to raise it does not fail this file.
+  it('records that amber and green never separate by luminance, which is why the cap is an outline', () => {
+    expect(
+      contrastRatio(hex(t, '--status-in-progress'), hex(t, '--status-done')),
+    ).toBeGreaterThanOrEqual(1.0)
+  })
+
+  // What DOES keep the three statuses apart, stated as a number so a later retune cannot quietly
+  // make them confusable: hue. The retune held the amber's OKLCH hue exactly, so this bound is the
+  // one that shipped rather than one invented to fit. Colour is never the sole carrier anyway —
+  // the status glyph draws each state as a different SHAPE (half arc, three-quarter arc, filled
+  // disc with a check) — but a mark whose hue drifts toward the terracotta is a mark two states
+  // share, and 20.9° (editorial light, amber against its orange urgent) is the tightest the palette
+  // has ever been.
+  it('the amber stays a hue apart from the done green and the urgent terracotta', () => {
+    const amber = oklchHue(hex(t, '--status-in-progress'))
+    expect(hueDistance(amber, oklchHue(hex(t, '--status-done'))), 'vs done').toBeGreaterThanOrEqual(
+      60,
+    )
+    expect(
+      hueDistance(amber, oklchHue(hex(t, '--status-urgent'))),
+      'vs urgent',
+    ).toBeGreaterThanOrEqual(18)
+  })
+
+  // THE DONE GLYPH'S CHECK. It is knocked out of the filled disc in `--bg`, and the glyph is inked
+  // `--status-done` everywhere except the digest's urgent say rows, where `team-home.tsx` re-inks it
+  // `--status-urgent`. Non-text drawing, so 3:1 — against BOTH hues, because a check that vanishes
+  // on the urgent row is a `done` that reads as a plain disc exactly where the reader is being told
+  // something went wrong. `--bg` was chosen over `--on-accent` (both clear it) so the brand accent's
+  // ink token never denotes status.
+  it('the done glyph’s knockout check reads against every hue the glyph is inked with (>= 3.0)', () => {
+    const knockout = hex(t, '--bg')
+    for (const ink of ['--status-done', '--status-urgent'] as const) {
+      expect(contrastRatio(knockout, hex(t, ink)), ink).toBeGreaterThanOrEqual(AA_LARGE)
+    }
   })
 })

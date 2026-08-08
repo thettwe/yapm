@@ -10,7 +10,7 @@ const harness = vi.hoisted(() => ({
   connection: {
     state: 'connected',
     recovery: 'idle',
-    label: 'Connected',
+    label: 'Synced',
     writable: true,
     retryOffered: false,
   } as ConnectionSummary,

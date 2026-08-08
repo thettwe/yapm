@@ -18,6 +18,7 @@ import {
   type DeliveryStrip,
   type DivergenceKind,
   formatReviewAge,
+  isQuietTrack,
   type PrState,
   RealityTrack,
   realityTrackLabel,
@@ -92,7 +93,11 @@ test('a diverged row draws the // break and not one lucide glyph', () => {
   expect(container.querySelectorAll('svg.lucide-triangle-alert')).toHaveLength(0)
 })
 
-test('the empty track and a populated one reserve the same width, age column included', () => {
+// THE ALIGNMENT GUARANTEE. A quiet track draws nothing, and drawing nothing is only honest if the
+// slot still measures exactly what a populated one does — otherwise the first PR to sync in shunts
+// every row on the page. This is the assertion the quiet rule is most able to break, so it gained
+// the age-column comparison rather than losing anything.
+test('the quiet track and a populated one reserve the same width, age column included', () => {
   const width = (node: Element | null) => (node as HTMLElement | null)?.style.width
 
   const empty = render(
@@ -117,6 +122,98 @@ test('the empty track and a populated one reserve the same width, age column inc
   expect(emptyAge).not.toBeNull()
   expect(populatedAge).not.toBeNull()
   expect((emptyAge as HTMLElement).style.width).toBe((populatedAge as HTMLElement).style.width)
+})
+
+// The rule is a property of the SHAPE, so it is asserted over shapes rather than restated at three
+// call sites. One fact — even a draft PR, the quietest fact the strip can carry — takes a track out
+// of it, and so does a break.
+test('a track is quiet only when it carries no fact and no break', () => {
+  expect(isQuietTrack(buildRealityShape(null))).toBe(true)
+
+  const draftOnly = buildRealityShape({
+    pr: 'draft',
+    ci: null,
+    reviewAgeMs: null,
+    deployedAt: null,
+  })
+  expect(isQuietTrack(draftOnly)).toBe(false)
+  expect(isQuietTrack(buildRealityShape(MERGED_NOT_LIVE))).toBe(false)
+  expect(isQuietTrack(buildRealityShape(null, { divergence: 'status_ahead_of_pr' }))).toBe(false)
+})
+
+// `issues.png` draws NOTHING in the slot of a row with no linked change, and on a real list that is
+// most of the page. The slot keeps its measure (above) and lays down no ink at all.
+test('a quiet track draws no node, no segment, no break and no age text', () => {
+  const { container } = render(
+    <RealityTrack shape={buildRealityShape(null)} age={null} label={realityTrackLabel(null)} />,
+  )
+  const slot = container.querySelector('[data-slot="reality-track"]')
+
+  expect(slot?.getAttribute('data-quiet')).toBe('true')
+  expect(
+    container.querySelectorAll(
+      '[class*="bg-status-"], [class*="border-status-"], [class*="border-border-strong"], [class*="repeating-linear-gradient"]',
+    ),
+  ).toHaveLength(0)
+  expect(container.querySelector('[data-slot="reality-track-break"]')).toBeNull()
+  expect(container.querySelector('[data-slot="reality-track-age"]')?.textContent).toBe('')
+})
+
+// Silent to the eye and silent to a screen reader: announcing "No delivery signal yet" on sixty of
+// sixty-nine rows is the audible form of the ornament this removes. The phrase itself is unchanged
+// and still available to surfaces that state the absence in words.
+test('a quiet track is not exposed as an image and carries no label', () => {
+  const { container } = render(
+    <RealityTrack shape={buildRealityShape(null)} age={null} label={realityTrackLabel(null)} />,
+  )
+
+  expect(screen.queryByRole('img')).toBeNull()
+  expect(screen.queryByLabelText('No delivery signal yet')).toBeNull()
+  expect(container.querySelector('[data-slot="reality-track"]')?.getAttribute('aria-hidden')).toBe(
+    'true',
+  )
+  expect(realityTrackLabel(null)).toBe('No delivery signal yet')
+})
+
+// The hollow ring is scaffolding BETWEEN facts, not a stand-in for their absence: one fact and the
+// whole track draws, exactly as `issues.html` draws ENG-115 and ENG-119.
+test('a partially populated track still draws its empty stations and dotted segments', () => {
+  const { container } = render(
+    <RealityTrack
+      shape={buildRealityShape({ pr: 'open', ci: null, reviewAgeMs: null, deployedAt: null })}
+      age={null}
+      label="PR open"
+    />,
+  )
+
+  expect(container.querySelector('[data-slot="reality-track"]')?.hasAttribute('data-quiet')).toBe(
+    false,
+  )
+  expect(
+    container.querySelectorAll('[class*="border-border-strong"]').length,
+  ).toBeGreaterThanOrEqual(1)
+  expect(
+    container.querySelectorAll('[class*="repeating-linear-gradient"]').length,
+  ).toBeGreaterThanOrEqual(1)
+  expect(screen.getByRole('img')).toBeDefined()
+})
+
+// The rail is the ONE exception, and it is deliberate: the issue detail's subject IS the change, so
+// a page that draws nothing where the change would be says less than one saying "not linked yet".
+test('the vertical rail keeps its explicit unlinked station', () => {
+  render(
+    <RealityTrack
+      orientation="vertical"
+      label="Delivery for ENG-9"
+      shape={{
+        stations: [{ id: 'change', node: 'empty', label: 'No change linked yet' }],
+        segments: [],
+      }}
+    />,
+  )
+
+  expect(screen.getByText('No change linked yet')).toBeDefined()
+  expect(screen.getAllByRole('listitem')).toHaveLength(1)
 })
 
 test('the row draws the review age, not only announces it', () => {

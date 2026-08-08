@@ -20,10 +20,22 @@ test('a live connection is writable and says so', () => {
   expect(summarizeConnection({ name: 'connected' }, RECOVERY_IDLE)).toMatchObject({
     state: 'connected',
     recovery: 'idle',
-    label: 'Connected',
+    label: 'Synced',
     writable: true,
     retryOffered: false,
   })
+})
+
+// The label names what the reader HAS, not what the socket is doing — every mock draws band 3's
+// right end as `● Synced`. The `data-connection` attribute the e2e suite reads is the STATE name,
+// which is why fifteen specs did not have to move for this.
+test('only the healthy state says Synced; every other state names its own condition', () => {
+  expect(summarizeConnection({ name: 'connected' }, RECOVERY_IDLE).label).toBe('Synced')
+  for (const state of STATES.filter((s) => s.name !== 'connected')) {
+    for (const phase of ['idle', 'retrying', 'waiting'] as const) {
+      expect(summarizeConnection(state, recovery(phase)).label, state.name).not.toContain('Synced')
+    }
+  }
 })
 
 test('the first connect reads as connecting; a recovery attempt reads as reconnecting', () => {

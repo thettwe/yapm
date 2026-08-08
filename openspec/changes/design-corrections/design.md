@@ -235,4 +235,152 @@ here adds a network wait, a layout pass or a focus stop.
 
 ## Decisions made during implementation
 
-<!-- Ambiguities resolved while building go here: what was ambiguous, what was chosen, and why. -->
+### DI-1 — The baseline was reproduced, not trusted
+
+Re-measured from `globals.css` with `contrast.test.ts`'s own sRGB maths before any edit.
+`--status-in-progress` against each block's `--bg`:
+
+| preset | value | vs `--bg` |
+|---|---|---|
+| warm light | `#ce8a26` | **2.69** |
+| focused light | `#e0a63c` | **2.17** |
+| editorial light | `#c98a15` | **2.87** |
+| warm dark | `#e7ab44` | 8.80 |
+| focused dark | `#e0a63c` | 9.03 |
+| editorial dark | `#e7a93a` | 9.49 |
+
+Identical to §Context. D4's knockout table was reproduced too: `--bg` against `--status-done`
+measures 3.82 / 5.00 / 3.85 / 6.06 / 5.27 / 7.23 and against `--status-urgent` 3.85 / 3.66 / 3.60 /
+5.39 / 5.34 / 7.69, so the check clears 3:1 against both hues in all six blocks.
+
+### DI-2 — The amber's bar is every ground a row is painted on, not `--bg` alone
+
+The brief and D6 name 3:1 against `--bg`. Measuring the lights at that bar alone leaves the amber
+at ~2.65 on the **selected** row's tint and on a selected board card's soft-accent wash — grounds
+the in-progress half arc and the row's label dot are genuinely drawn on. That is a contrast
+assertion written below the bar the usage requires, which is the one thing this change's own spec
+delta forbids, and the palette already has the precedent: focused light's `--status-in-review` was
+darkened in PR #32 for exactly that surface, with the reason written into `globals.css`.
+
+So the bar is 3:1 on all seven grounds a row or card paints — `--bg`, `--bg-elevated`,
+`--bg-sidebar`, the hover wash, the selected tint, a selected card's soft accent, and the divergence
+row's urgent wash. Retuned by holding OKLCH hue and chroma and lowering lightness only:
+
+| preset | before → after | vs `--bg` | worst of the seven |
+|---|---|---|---|
+| warm light | `#ce8a26` → **`#b67500`** | 2.69 → **3.55** | 3.12 (selected) |
+| focused light | `#e0a63c` → **`#b47e00`** | 2.17 → **3.54** | 3.11 (selected) |
+| editorial light | `#c98a15` → **`#b37900`** | 2.87 → **3.62** | 3.13 (selected) |
+
+The three darks measure 8.00–9.49 on the same seven grounds and were left alone — measured, not
+assumed, and now asserted.
+
+### DI-3 — Separation is a HUE bound, because it was never a luminance one
+
+Task 6.3 asks for a numeric separation bound. Contrast ratio is the wrong instrument for it: amber
+against green measures **1.31–2.31** across the six presets *before* this change and 1.03–1.71
+after, and no lightness that leaves both recognisable ever reaches 3:1. What actually separates the
+three statuses is hue — and, on the status glyph, shape. So the assertion is an OKLCH hue-angle
+bound (`>= 60°` from `--status-done`, `>= 18°` from `--status-urgent`), and the amber-vs-green
+contrast is kept as a **recorded lower bound with its reason**: it is why the flow band's added cap
+is an outline separated by page ground rather than a stacked fill.
+
+Because the retune held hue exactly, the measured separations are **unchanged** by this change:
+86.7–162.6° from the done hue and 20.9–46.0° from the urgent one. The tightest pair is editorial
+light's amber against its orange `--status-urgent` at 20.9°, which is what it has always been. This
+change neither improves nor worsens it; nudging the hue to widen it was considered and rejected as
+an unrequested restyle, and it is recorded here so a later change wanting it finds the number.
+
+### DI-4 — The token splits (D6 confirmed), and only one usage moved
+
+Every `--status-in-progress` occurrence in the product was enumerated and classified. D6's list is
+accurate and complete: the status glyph's half arc, `issue-row.tsx`'s `LABEL_TONE` `bg-current`
+dot, `team-home.tsx`'s attention square, `sync-indicator.tsx`'s connecting/needs-auth dot,
+`projects-view.tsx` and `roadmap-view.tsx`'s active dots, `retro-card.tsx`'s caution mark,
+`issue-detail.tsx`'s warm activity dot and `flow-band.tsx`'s ribbon and added-block outline are all
+**non-text drawing** and stay on `--status-in-progress`. `team-home.tsx`'s 20px-bold in-progress
+hero count is **large text** (3:1) and stays. The single normal-size text usage — `drawn.tsx`
+§ScopeBand's 9px bold `+` — moved to the new `--status-in-progress-ink`.
+
+The ink clears 4.5:1 against `--bg`, `--bg-elevated`, `--bg-sidebar` and the hover wash:
+`#935e00` (4.57–5.47), `#956800` (4.56–4.93), `#946300` (4.56–5.19). The three darks alias it to
+`--status-in-progress`, which measures 8.00–9.49 there, exactly as two of the three dark blocks do
+for `--status-urgent-ink`. `--color-status-in-progress-ink` is registered in `@theme` beside its
+base token, mirroring the urgent pair.
+
+### DI-5 — What the retune does to the charts, measured
+
+`--chart-1` aliases this token, so the delivery page's flow band moved. Measured rather than
+eyeballed (the showcase pass is 8.4, Close phase):
+
+- The carryover **ribbon** (`--status-in-progress` at 15% over `--bg`) goes `#f2e7d3 → #f0e4cd` in
+  warm light and equivalently in the other two lights. `--text-1` over it measures 11.91–15.26, so
+  the count drawn on the ribbon is if anything more legible. The existing assertion still passes.
+- The ribbon's **outline** (the same hue at 40%) rises from ~1.4 to **1.59** against `--bg` in all
+  three lights — still deliberately below the non-text bar, still scaffolding, and now slightly
+  easier to see. The assertion that records it as scaffolding is a lower bound, so it holds.
+- The flow band's **added-block outline** is a full-strength stroke and gains the whole retune: it
+  goes from 2.17–2.87 to 3.54–3.62 against the page ground, which is the one chart mark that was
+  actually failing.
+
+Nothing on the page reads differently in kind; the amber is deeper. Eyes-on confirmation of that in
+all six presets belongs to task 8.4.
+
+### DI-6 — The check keeps the shared 1.6 stroke
+
+Drawn as `M6.3 10.3 8.9 12.9 13.7 7.3` on the 20-unit grid, `stroke="var(--bg)"`, round caps and
+round join, `strokeWidth` from the shared `STROKE` constant. D4 permits stepping the stroke up one
+value if 1.6 proves illegible at `size-3.5`; it was **not** stepped, and the reason is a ratio
+rather than a guess: 1.6 on a 20-unit box is a stroke-to-viewBox ratio of 0.080, and the icon set
+this glyph family reads beside (Lucide's `circle-check`, 2 on 24) is 0.083. At 14px both land at
+~1.1 device px, which is the ordinary weight for a check inside a 14px disc. Every vertex sits
+inside r=7.6 with the half-stroke clear of the edge, asserted in `status-glyph.test.tsx`. The
+judgement that survives testing — whether a human reads it as a check at 1.12 device px — is task
+8.4's, and if it fails there the one-step increase is still available with this note to amend.
+
+`backlog`, `todo`, `in-progress`, `in-review` and `canceled` are byte-unchanged; confirmed by diff
+and by a test asserting no other status draws a `currentColor`-filled disc.
+
+### DI-7 — The three quiet call sites needed no edit, confirmed by reading
+
+`issue-list.tsx` (~703) always passes `realityTrack` built from a possibly-null strip, so it never
+reaches `issue-row.tsx`'s `EmptyRealityTrack` fallback — the correction had to be in the component,
+not at the call site, exactly as D1 says. `team-home.tsx`'s divergence attention row (~438) and its
+YOURS rows (~787) both pass a `RealityTrack` directly, as does `board-card.tsx` (~110) for its own
+fallback. All four route through `HorizontalTrack`, and none was edited. Board cards therefore go
+quiet too — argued and accepted in D1.
+
+`issue-row.tsx`'s `EmptyRealityTrack` still composes `realityTrackLabel(null)`; the label is simply
+not rendered while the slot is quiet. It is left in place because it is what the slot would announce
+the moment it has a fact, and removing it would make the fallback differ in shape from every real
+call site.
+
+### DI-8 — The e2e rewrites assert something stronger, not something weaker
+
+`issues.spec.ts` asserted a newly created row shows `getByLabel('No delivery signal yet')`. It now
+asserts the slot is present, carries `data-quiet="true"`, is `aria-hidden`, has a **non-zero
+measured width read off the element itself** (never a hard-coded number, and nothing that encodes
+fixture size), draws no status-inked or `border-border-strong` node, and no longer announces the
+absence.
+
+`connectors.spec.ts`'s two `getByLabel('No delivery signal yet')` count-0 assertions would have
+become vacuously true — a quiet slot has no label to find. Both now assert
+`[data-slot="reality-track"][data-quiet]` has count 0 on the populated row, which still fails if the
+track ever stops populating.
+
+### DI-9 — `Synced` moved one string, and four fixtures
+
+`summarizeConnection`'s `connected` case is the only production edit; `sync-indicator.tsx` is
+byte-unchanged, and `data-testid="connection-status"`, `data-connection`, `data-recovery` and the
+retry control are untouched — grepped and confirmed, and the fifteen e2e specs read the **state
+name**, not the label. `connection.test.ts` gained an assertion that only the healthy state says
+`Synced` and that no other state's wording contains it, in every recovery phase. The four
+`label: 'Connected'` stubs in `sync-indicator.test.tsx`, `search-view.test.tsx`,
+`use-server-search.test.tsx` and `issues/command.test.tsx` now describe the product.
+
+### DI-10 — Constraints, confirmed by inspection
+
+No table, no query, no mutator, no migration; `packages/schema` is untouched. No new container. No
+literal colour was added anywhere — the check's ink is `var(--bg)` and the `+`'s is a token class.
+Nothing was added to the keyboard path and nothing new waits on the network: the quiet branch is a
+pure render-time predicate over an already-computed shape, and the token retune is CSS.

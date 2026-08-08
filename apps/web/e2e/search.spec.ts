@@ -1,7 +1,8 @@
-import { expect, type Locator, type Page, test } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 import type { Database } from '@yapm/schema/db'
 import { findIssue, findUserId, openDb, seedComment, setIssueDescription } from './db'
-import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
+import { test } from './fixtures'
+import { ADMIN, ensureAccount, mintInvite, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ISSUE_ROW = '[data-testid="issue-row"]'
@@ -300,7 +301,7 @@ test.describe('search', () => {
   // issue and other teams' issues do not sync at all.
   test('a comment on another team is found through the index, and only by someone who may read it', async ({
     page,
-    browser,
+    newContext,
   }) => {
     test.slow()
     await enterApp(page)
@@ -309,11 +310,7 @@ test.describe('search', () => {
     await createIssue(page, unique('An issue on the team the teammate joins'))
 
     await page.goto('/')
-    await page.getByTestId('create-invite').click()
-    const inviteDialog = page.getByRole('dialog')
-    await inviteDialog.getByLabel('Team (optional)').selectOption({ label: teamName })
-    await inviteDialog.getByRole('button', { name: 'Create invite' }).click()
-    const inviteLink = await page.getByTestId('invite-link').first().inputValue()
+    const inviteLink = await mintInvite(page, { teamName })
 
     await openTeamIssues(page, 'Complete B')
     const hostTitle = unique('The issue holding the comment')
@@ -337,28 +334,24 @@ test.describe('search', () => {
     await expect(hit.locator('mark').first()).toContainText(found)
     await expect(hit).toContainText('stalls on its second attempt')
 
-    const teammate = await browser.newContext()
-    try {
-      const other = await teammate.newPage()
-      await other.goto(inviteLink)
-      await other.getByRole('button', { name: 'Create one' }).click()
-      await other.getByLabel('Name').fill('Team A Only')
-      await other.getByLabel('Email').fill(uniqueEmail('teamaonly'))
-      await other.getByLabel('Password', { exact: true }).fill('teammate-password-1234')
-      await other.getByTestId('login-submit').click()
-      await expect(other.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+    const teammate = await newContext()
+    const other = await teammate.newPage()
+    await other.goto(inviteLink)
+    await other.getByRole('button', { name: 'Create one' }).click()
+    await other.getByLabel('Name').fill('Team A Only')
+    await other.getByLabel('Email').fill(uniqueEmail('teamaonly'))
+    await other.getByLabel('Password', { exact: true }).fill('teammate-password-1234')
+    await other.getByTestId('login-submit').click()
+    await expect(other.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
 
-      await other.goto(`/search?q=${found}`)
-      // The same bytes a token that exists nowhere produces. Not "0 results you may not see" —
-      // nothing at all, which is what keeps search from being an oracle over the other team.
-      await expect(other.getByTestId('search-empty')).toBeVisible({ timeout: 30_000 })
-      await expect(other.getByRole('option')).toHaveCount(0)
-      await expect(other.getByTestId('search-announcement')).toHaveText(
-        '0 results on this device, 0 results from the server.',
-      )
-    } finally {
-      await teammate.close()
-    }
+    await other.goto(`/search?q=${found}`)
+    // The same bytes a token that exists nowhere produces. Not "0 results you may not see" —
+    // nothing at all, which is what keeps search from being an oracle over the other team.
+    await expect(other.getByTestId('search-empty')).toBeVisible({ timeout: 30_000 })
+    await expect(other.getByRole('option')).toHaveCount(0)
+    await expect(other.getByTestId('search-announcement')).toHaveText(
+      '0 results on this device, 0 results from the server.',
+    )
   })
 
   // 11.3 — cursor stability against a REAL asynchronous arrival. The component tier settles a
@@ -445,11 +438,17 @@ test.describe('search', () => {
     await input.fill(found)
 
     const selected = page.locator('[cmdk-item][data-selected="true"]')
-    for (let step = 0; step < 12; step += 1) {
+    // One pass of the list the palette is actually showing, counted from the page rather than
+    // budgeted: the number of rows depends on how many issues match the token.
+    const rows = await page.locator('[cmdk-item]').count()
+    for (let step = 0; step < rows; step += 1) {
       if ((await selected.getAttribute('data-value')) === ESCALATE_ROW) break
       await input.press('ArrowDown')
     }
-    await expect(selected).toHaveAttribute('data-value', ESCALATE_ROW)
+    await expect(
+      selected,
+      `the escalation row must be reachable within ${rows} ArrowDown presses`,
+    ).toHaveAttribute('data-value', ESCALATE_ROW)
     await input.press('Enter')
 
     await expect(page).toHaveURL(new RegExp(`/search\\?q=${found}`))

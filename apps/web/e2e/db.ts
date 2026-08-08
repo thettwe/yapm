@@ -460,7 +460,9 @@ export interface SeedSsoProviderOptions {
 // domain is not yet proven.
 //
 // ALWAYS UNVERIFIED. A verified row would make `/api/auth-methods` report SSO available and put a
-// "Continue with SSO" button on the login form for every other spec sharing this database.
+// "Continue with SSO" button on the login form for the rest of this test — including the second
+// browser it opens. The baseline reset clears the row between tests; it does not clear it between
+// two clients inside one.
 export async function seedSsoProvider(
   db: Database,
   options: SeedSsoProviderOptions,

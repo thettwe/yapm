@@ -1,4 +1,5 @@
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
+import { test } from './fixtures'
 import { ADMIN, ensureAccount } from './support'
 
 const CACHE_KEY = 'yapm:pref'
@@ -30,41 +31,33 @@ function rootTheme(page: Page): Promise<{ theme: string | null; dark: boolean; a
 
 test.describe('theme preference', () => {
   test('applies the cached theme on the document root before first paint (no flash)', async ({
-    browser,
+    newContext,
   }) => {
-    const context = await browser.newContext()
-    try {
-      // Seed the bootstrap cache before any page script runs, mimicking a prior session.
-      await context.addInitScript(() => {
-        localStorage.setItem(
-          'yapm:pref',
-          JSON.stringify({ theme: 'editorial', mode: 'dark', accent: '#2288cc' }),
-        )
-      })
-      const page = await context.newPage()
-      await page.goto('/login')
+    const context = await newContext()
+    // Seed the bootstrap cache before any page script runs, mimicking a prior session.
+    await context.addInitScript(() => {
+      localStorage.setItem(
+        'yapm:pref',
+        JSON.stringify({ theme: 'editorial', mode: 'dark', accent: '#2288cc' }),
+      )
+    })
+    const page = await context.newPage()
+    await page.goto('/login')
 
-      // The synchronous inline script in index.html sets these before the bundle mounts, so
-      // the very first paint is already the cached theme — no default-to-warm flash.
-      const applied = await rootTheme(page)
-      expect(applied.theme).toBe('editorial')
-      expect(applied.dark).toBe(true)
-      expect(applied.accent).toBe('#2288cc')
-    } finally {
-      await context.close()
-    }
+    // The synchronous inline script in index.html sets these before the bundle mounts, so
+    // the very first paint is already the cached theme — no default-to-warm flash.
+    const applied = await rootTheme(page)
+    expect(applied.theme).toBe('editorial')
+    expect(applied.dark).toBe(true)
+    expect(applied.accent).toBe('#2288cc')
   })
 
-  test('defaults to warm when no cache is present', async ({ browser }) => {
-    const context = await browser.newContext()
-    try {
-      const page = await context.newPage()
-      await page.goto('/login')
-      const applied = await rootTheme(page)
-      expect(applied.theme).toBe('warm')
-    } finally {
-      await context.close()
-    }
+  test('defaults to warm when no cache is present', async ({ newContext }) => {
+    const context = await newContext()
+    const page = await context.newPage()
+    await page.goto('/login')
+    const applied = await rootTheme(page)
+    expect(applied.theme).toBe('warm')
   })
 
   test('keyboard-only theme, mode, and accent change persist across reload', async ({ page }) => {

@@ -1,5 +1,6 @@
-import { expect, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount, goToMore, stop, uniqueEmail } from './support'
+import { expect, type Page } from '@playwright/test'
+import { test } from './fixtures'
+import { ADMIN, ensureAccount, goToMore, mintInvite, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -114,9 +115,10 @@ test('the roadmap places a dated project and is keyboard-navigable', async ({ pa
 
   await openProjects(page)
   // Two dated projects: the near one (14d) is the row we open; the far one (40d) guarantees at
-  // least one roadmap row sorts below it, so ArrowDown always has somewhere to move. Projects are
-  // workspace-level, so the roadmap also holds rows from earlier runs — hence we navigate by the
-  // focused row's own roving index rather than assuming our two projects are adjacent.
+  // least one roadmap row sorts below it, so ArrowDown always has somewhere to move. The roadmap
+  // holds exactly these two — the baseline reset means no earlier spec's projects are on it — and
+  // the walk still reads the focused row's own roving index rather than assuming a position, which
+  // is what makes it an assertion about the roving tabindex rather than about the fixture.
   const nearName = unique('Roadmap near')
   const farName = unique('Roadmap far')
   await createProject(page, nearName, 14)
@@ -160,8 +162,9 @@ test('the projects view is correct across every preset in light and dark', async
   await enterApp(page)
   await openTeam(page)
   await openProjects(page)
-  await createProject(page, unique('Theme project'), 10)
-  await page.getByTestId('project-rail-item').first().click()
+  const projectName = unique('Theme project')
+  await createProject(page, projectName, 10)
+  await page.getByTestId('project-rail-item').filter({ hasText: projectName }).click()
 
   for (const preset of PRESETS) {
     for (const mode of MODES) {
@@ -187,7 +190,7 @@ test('the projects view is correct across every preset in light and dark', async
 
 test('a viewer reads the workspace-level projects but cannot create one', async ({
   page,
-  browser,
+  newContext,
 }) => {
   await enterApp(page)
   const teamName = await openTeam(page)
@@ -199,81 +202,69 @@ test('a viewer reads the workspace-level projects but cannot create one', async 
   // The admin mints a viewer invite from the workspace overview.
   await page.goto('/')
   await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
-  await page.getByTestId('create-invite').click()
-  await page.getByLabel('Role', { exact: true }).selectOption('viewer')
-  await page.getByRole('button', { name: 'Create invite' }).click()
-  const inviteLink = await page.getByTestId('invite-link').first().inputValue()
+  const inviteLink = await mintInvite(page, { role: 'viewer' })
 
   const viewer = {
     email: uniqueEmail('projects-viewer'),
     password: 'viewer-password-1234',
     name: `Projects Viewer ${Date.now().toString(36)}`,
   }
-  const context = await browser.newContext()
-  try {
-    const vp = await context.newPage()
-    await vp.goto(inviteLink)
-    await vp.getByRole('button', { name: 'Create one' }).click()
-    await vp.getByLabel('Name').fill(viewer.name)
-    await vp.getByLabel('Email').fill(viewer.email)
-    await vp.getByLabel('Password', { exact: true }).fill(viewer.password)
-    await vp.getByTestId('login-submit').click()
-    await expect(vp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
-    await expect(vp.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
-      timeout: 30_000,
-    })
+  const context = await newContext()
+  const vp = await context.newPage()
+  await vp.goto(inviteLink)
+  await vp.getByRole('button', { name: 'Create one' }).click()
+  await vp.getByLabel('Name').fill(viewer.name)
+  await vp.getByLabel('Email').fill(viewer.email)
+  await vp.getByLabel('Password', { exact: true }).fill(viewer.password)
+  await vp.getByTestId('login-submit').click()
+  await expect(vp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await expect(vp.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+    timeout: 30_000,
+  })
 
-    const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
-    await teamCard.getByRole('button', { name: 'Join this team' }).click()
-    await vp.getByRole('link', { name: new RegExp(teamName) }).click()
+  const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
+  await teamCard.getByRole('button', { name: 'Join this team' }).click()
+  await vp.getByRole('link', { name: new RegExp(teamName) }).click()
 
-    // The Projects link lives on the issue-views switch, so reach it via Issues (the team
-    // overview only links to Issues and Board). The workspace-level project is then readable
-    // by any member, including a viewer.
-    await stop(vp, 'Issues').click()
-    await goToMore(vp, 'Projects')
-    await expect(vp.getByTestId('project-rail-item').filter({ hasText: projectName })).toBeVisible({
-      timeout: 20_000,
-    })
+  // The Projects link lives on the issue-views switch, so reach it via Issues (the team
+  // overview only links to Issues and Board). The workspace-level project is then readable
+  // by any member, including a viewer.
+  await stop(vp, 'Issues').click()
+  await goToMore(vp, 'Projects')
+  await expect(vp.getByTestId('project-rail-item').filter({ hasText: projectName })).toBeVisible({
+    timeout: 20_000,
+  })
 
-    // But the writer-gated create control is absent for a viewer.
-    await expect(vp.getByTestId('new-project')).toHaveCount(0)
-  } finally {
-    await context.close()
-  }
+  // But the writer-gated create control is absent for a viewer.
+  await expect(vp.getByTestId('new-project')).toHaveCount(0)
 })
 
 test('a project created in one client converges to another without a reload', async ({
-  browser,
+  newContext,
 }) => {
-  const editorCtx = await browser.newContext()
-  const watcherCtx = await browser.newContext()
-  try {
-    const editor = await editorCtx.newPage()
-    const watcher = await watcherCtx.newPage()
+  const editorCtx = await newContext()
+  const watcherCtx = await newContext()
+  const editor = await editorCtx.newPage()
+  const watcher = await watcherCtx.newPage()
 
-    await enterApp(editor)
-    const teamName = await openTeam(editor)
-    await openProjects(editor)
+  await enterApp(editor)
+  const teamName = await openTeam(editor)
+  await openProjects(editor)
 
-    // A second client (same admin) watches the same team's projects.
-    await enterApp(watcher)
-    await watcher.getByRole('link', { name: new RegExp(teamName) }).click()
-    await stop(watcher, 'Issues').click()
-    await goToMore(watcher, 'Projects')
-    await expect(watcher.getByRole('button', { name: 'New project' })).toBeVisible({
-      timeout: 20_000,
-    })
+  // A second client (same admin) watches the same team's projects.
+  await enterApp(watcher)
+  await watcher.getByRole('link', { name: new RegExp(teamName) }).click()
+  await stop(watcher, 'Issues').click()
+  await goToMore(watcher, 'Projects')
+  await expect(watcher.getByRole('button', { name: 'New project' })).toBeVisible({
+    timeout: 20_000,
+  })
 
-    const projectName = unique('Converged')
-    await createProject(editor, projectName, 30)
+  const projectName = unique('Converged')
+  await createProject(editor, projectName, 30)
 
-    // The new project reaches the watcher over sync without a reload.
-    await expect(
-      watcher.getByTestId('project-rail-item').filter({ hasText: projectName }),
-    ).toBeVisible({ timeout: 20_000 })
-  } finally {
-    await editorCtx.close()
-    await watcherCtx.close()
-  }
+  // The new project reaches the watcher over sync without a reload.
+  await expect(
+    watcher.getByTestId('project-rail-item').filter({ hasText: projectName }),
+  ).toBeVisible({ timeout: 20_000 })
 })

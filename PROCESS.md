@@ -26,6 +26,8 @@ Audiences: evaluators (why / the work-graph wedge), self-hosters (install, 3-con
 
 **Big-feature rule** — a change needs all three tiers iff it touches **≥2 of** {synced entity/schema, mutator, permission surface, signature UI}. Otherwise it is small: unit + integration only; do not add E2E reflexively.
 
+**The E2E isolation contract** — every Playwright test starts from the state the server leaves behind at boot: one workspace and nothing else. Import `test` from `apps/web/e2e/fixtures`, never from `@playwright/test`; never create a browser context by hand; never encode fixture size or machine speed as a constant. The full rule, and how to run the suite locally, is in [`apps/web/e2e/README.md`](apps/web/e2e/README.md).
+
 > CI runs the full Playwright E2E suite as a dedicated `e2e` job (added with `connectors`) alongside the compose smoke test: fresh volumes on the e2e port (`YAPM_HOST_PORT=3210`), booting postgres → migrate → zero-cache → vite. **CI is where e2e runs** — the PR-review flow no longer duplicates it locally; it blocks the merge on the `e2e` and `smoke` checks instead, so merges stay gated on it either way.
 
 ## 4. Every feature ships via a reviewed PR

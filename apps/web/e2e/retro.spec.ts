@@ -1,6 +1,7 @@
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
+import { test } from './fixtures'
 import { readReplica, replicaHolds } from './replica'
-import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, mintInvite, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const DRAFT = '[data-testid="retro-draft"]'
@@ -440,7 +441,7 @@ test('the retro is correct across every preset in light and dark', async ({ page
 // to CONTENT, so the assertion is made per synced row, by table.
 test('two clients: brainstorm stays private and advancing reveals a card with no author', async ({
   page,
-  browser,
+  newContext,
 }) => {
   await enterApp(page)
   const teamName = await openTeam(page)
@@ -459,103 +460,95 @@ test('two clients: brainstorm stays private and advancing reveals a card with no
   // dialog's default role, which is what the second participant must be.
   await page.goto('/')
   await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
-  await page.getByTestId('create-invite').click()
-  const inviteDialog = page.getByRole('dialog')
-  await inviteDialog.getByLabel('Team (optional)').selectOption({ label: teamName })
-  await inviteDialog.getByRole('button', { name: 'Create invite' }).click()
-  const inviteLink = await page.getByTestId('invite-link').first().inputValue()
+  const inviteLink = await mintInvite(page, { teamName })
 
   const participant = {
     email: uniqueEmail('retro-participant'),
     password: 'participant-password-1234',
     name: `Retro Participant ${Date.now().toString(36)}`,
   }
-  const context = await browser.newContext()
-  try {
-    const second = await context.newPage()
-    await second.goto(inviteLink)
-    await second.getByRole('button', { name: 'Create one' }).click()
-    await second.getByLabel('Name').fill(participant.name)
-    await second.getByLabel('Email').fill(participant.email)
-    await second.getByLabel('Password', { exact: true }).fill(participant.password)
-    await second.getByTestId('login-submit').click()
-    await expect(second.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
-    await expect(second.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
-      timeout: 30_000,
-    })
+  const context = await newContext()
+  const second = await context.newPage()
+  await second.goto(inviteLink)
+  await second.getByRole('button', { name: 'Create one' }).click()
+  await second.getByLabel('Name').fill(participant.name)
+  await second.getByLabel('Email').fill(participant.email)
+  await second.getByLabel('Password', { exact: true }).fill(participant.password)
+  await second.getByTestId('login-submit').click()
+  await expect(second.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await expect(second.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+    timeout: 30_000,
+  })
 
-    await second.goto(retroUrl)
-    await expect(second.locator('[data-retro-column]')).toHaveCount(3, { timeout: 20_000 })
-    await expect(second.getByText('Anonymous')).toBeVisible({ timeout: 20_000 })
+  await second.goto(retroUrl)
+  await expect(second.locator('[data-retro-column]')).toHaveCount(3, { timeout: 20_000 })
+  await expect(second.getByText('Anonymous')).toBeVisible({ timeout: 20_000 })
 
-    const facilitatorCard = 'I did not feel safe raising this in standup'
-    const participantCard = 'Our estimates were fantasy again'
+  const facilitatorCard = 'I did not feel safe raising this in standup'
+  const participantCard = 'Our estimates were fantasy again'
 
-    await page.goto(retroUrl)
-    await expect(page.locator('[data-retro-column]')).toHaveCount(3, { timeout: 20_000 })
-    await page.keyboard.press('c')
-    await page.getByTestId('retro-composer').fill(facilitatorCard)
-    await page.keyboard.press('Enter')
-    await page.keyboard.press('Escape')
-    await expect(page.locator(DRAFT)).toHaveCount(1, { timeout: 20_000 })
+  await page.goto(retroUrl)
+  await expect(page.locator('[data-retro-column]')).toHaveCount(3, { timeout: 20_000 })
+  await page.keyboard.press('c')
+  await page.getByTestId('retro-composer').fill(facilitatorCard)
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Escape')
+  await expect(page.locator(DRAFT)).toHaveCount(1, { timeout: 20_000 })
 
-    await second.keyboard.press('c')
-    await second.getByTestId('retro-composer').fill(participantCard)
-    await second.keyboard.press('Enter')
-    await second.keyboard.press('Escape')
-    await expect(second.locator(DRAFT)).toHaveCount(1, { timeout: 20_000 })
+  await second.keyboard.press('c')
+  await second.getByTestId('retro-composer').fill(participantCard)
+  await second.keyboard.press('Enter')
+  await second.keyboard.press('Escape')
+  await expect(second.locator(DRAFT)).toHaveCount(1, { timeout: 20_000 })
 
-    // Each client holds exactly its own draft and no card at all: during brainstorm there is
-    // nothing in `retro_card` yet, so there is nothing to hide.
-    await expect(second.locator(DRAFT)).toHaveText([participantCard])
-    await expect(second.locator(CARD)).toHaveCount(0)
-    await expect(page.locator(DRAFT)).toHaveText([facilitatorCard])
-    await expect(page.locator(CARD)).toHaveCount(0)
+  // Each client holds exactly its own draft and no card at all: during brainstorm there is
+  // nothing in `retro_card` yet, so there is nothing to hide.
+  await expect(second.locator(DRAFT)).toHaveText([participantCard])
+  await expect(second.locator(CARD)).toHaveCount(0)
+  await expect(page.locator(DRAFT)).toHaveText([facilitatorCard])
+  await expect(page.locator(CARD)).toHaveCount(0)
 
-    // The control, polled: Zero flushes its in-memory head to IndexedDB on its own schedule, so an
-    // absence read too early would mean nothing at all. Client 2's own draft has to land first —
-    // then the walk is demonstrably reading a populated replica.
-    await expect.poll(() => replicaHolds(second, participantCard), { timeout: 30_000 }).toBe(true)
-    const brainstorm = await readReplica(second)
-    // Client 1's draft has not arrived, in any form, anywhere in the persisted bytes.
-    expect(brainstorm.raw).not.toContain(facilitatorCard)
-    // And the only draft rows in this replica are its owner's.
-    const brainstormDrafts = brainstorm.rows.filter((row) => row.table === 'retro_draft')
-    expect(brainstormDrafts.length).toBe(1)
-    for (const row of brainstormDrafts) {
-      expect(row.json).toContain(participantCard)
-      expect(row.json).not.toContain(facilitatorId)
-    }
-    expect(brainstorm.rows.some((row) => row.table === 'retro_card')).toBe(false)
+  // The control, polled: Zero flushes its in-memory head to IndexedDB on its own schedule, so an
+  // absence read too early would mean nothing at all. Client 2's own draft has to land first —
+  // then the walk is demonstrably reading a populated replica.
+  await expect.poll(() => replicaHolds(second, participantCard), { timeout: 30_000 }).toBe(true)
+  const brainstorm = await readReplica(second)
+  // Client 1's draft has not arrived, in any form, anywhere in the persisted bytes.
+  expect(brainstorm.raw).not.toContain(facilitatorCard)
+  // And the only draft rows in this replica are its owner's.
+  const brainstormDrafts = brainstorm.rows.filter((row) => row.table === 'retro_draft')
+  expect(brainstormDrafts.length).toBe(1)
+  for (const row of brainstormDrafts) {
+    expect(row.json).toContain(participantCard)
+    expect(row.json).not.toContain(facilitatorId)
+  }
+  expect(brainstorm.rows.some((row) => row.table === 'retro_card')).toBe(false)
 
-    // Advance out of brainstorm. Publish is server-only, so the card arrives at both clients a sync
-    // tick later — with no author on the row, because the retro is anonymous.
-    await page.getByTestId('retro-phase-forward').click()
-    await expect(phaseStep(page, 'group')).toHaveAttribute('aria-current', 'step', {
-      timeout: 20_000,
-    })
-    await expect(second.locator(CARD)).toHaveCount(2, { timeout: 20_000 })
-    await expect(second.getByText(facilitatorCard)).toBeVisible({ timeout: 20_000 })
+  // Advance out of brainstorm. Publish is server-only, so the card arrives at both clients a sync
+  // tick later — with no author on the row, because the retro is anonymous.
+  await page.getByTestId('retro-phase-forward').click()
+  await expect(phaseStep(page, 'group')).toHaveAttribute('aria-current', 'step', {
+    timeout: 20_000,
+  })
+  await expect(second.locator(CARD)).toHaveCount(2, { timeout: 20_000 })
+  await expect(second.getByText(facilitatorCard)).toBeVisible({ timeout: 20_000 })
 
-    await expect.poll(() => replicaHolds(second, facilitatorCard), { timeout: 30_000 }).toBe(true)
-    const revealed = await readReplica(second)
-    const cards = revealed.rows.filter((row) => row.table === 'retro_card')
-    expect(cards.length).toBe(2)
-    expect(cards.some((row) => row.json.includes(facilitatorCard))).toBe(true)
-    for (const row of cards) {
-      expect(row.json).toContain('"authorDisplayId":null')
-      expect(row.json).not.toContain(facilitatorId)
-    }
+  await expect.poll(() => replicaHolds(second, facilitatorCard), { timeout: 30_000 }).toBe(true)
+  const revealed = await readReplica(second)
+  const cards = revealed.rows.filter((row) => row.table === 'retro_card')
+  expect(cards.length).toBe(2)
+  expect(cards.some((row) => row.json.includes(facilitatorCard))).toBe(true)
+  for (const row of cards) {
+    expect(row.json).toContain('"authorDisplayId":null')
+    expect(row.json).not.toContain(facilitatorId)
+  }
 
-    // The general form of the guarantee, stated over the whole replica: no row of any table that
-    // carries retro CONTENT names the author. `retro` itself (who is facilitating, who opened it)
-    // and `retro_presence` (who is in the room) deliberately do, and neither binds a person to
-    // anything written — which is why the content tables are named exhaustively here.
-    const content = ['retro_card', 'retro_draft', 'retro_vote', 'retro_vote_tally', 'retro_group']
-    for (const row of revealed.rows.filter((entry) => content.includes(entry.table))) {
-      expect(row.json).not.toContain(facilitatorId)
-    }
-  } finally {
-    await context.close()
+  // The general form of the guarantee, stated over the whole replica: no row of any table that
+  // carries retro CONTENT names the author. `retro` itself (who is facilitating, who opened it)
+  // and `retro_presence` (who is in the room) deliberately do, and neither binds a person to
+  // anything written — which is why the content tables are named exhaustively here.
+  const content = ['retro_card', 'retro_draft', 'retro_vote', 'retro_vote_tally', 'retro_group']
+  for (const row of revealed.rows.filter((entry) => content.includes(entry.table))) {
+    expect(row.json).not.toContain(facilitatorId)
   }
 })

@@ -1,5 +1,6 @@
-import { expect, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
+import { expect, type Page } from '@playwright/test'
+import { test } from './fixtures'
+import { ADMIN, ensureAccount, mintInvite, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -191,7 +192,7 @@ test('the Triage view is correct across every preset in light and dark', async (
   }
 })
 
-test('a viewer sees a read-only triage inbox', async ({ page, browser }) => {
+test('a viewer sees a read-only triage inbox', async ({ page, newContext }) => {
   await enterApp(page)
   const teamName = await openTeam(page)
 
@@ -202,55 +203,48 @@ test('a viewer sees a read-only triage inbox', async ({ page, browser }) => {
   // The admin mints a viewer invite from the workspace overview.
   await page.goto('/')
   await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
-  await page.getByTestId('create-invite').click()
-  await page.getByLabel('Role', { exact: true }).selectOption('viewer')
-  await page.getByRole('button', { name: 'Create invite' }).click()
-  const inviteLink = await page.getByTestId('invite-link').first().inputValue()
+  const inviteLink = await mintInvite(page, { role: 'viewer' })
 
   const viewer = {
     email: uniqueEmail('triage-viewer'),
     password: 'viewer-password-1234',
     name: `Triage Viewer ${Date.now().toString(36)}`,
   }
-  const context = await browser.newContext()
-  try {
-    const vp = await context.newPage()
-    await vp.goto(inviteLink)
-    await vp.getByRole('button', { name: 'Create one' }).click()
-    await vp.getByLabel('Name').fill(viewer.name)
-    await vp.getByLabel('Email').fill(viewer.email)
-    await vp.getByLabel('Password', { exact: true }).fill(viewer.password)
-    await vp.getByTestId('login-submit').click()
-    await expect(vp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
-    await expect(vp.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
-      timeout: 30_000,
-    })
+  const context = await newContext()
+  const vp = await context.newPage()
+  await vp.goto(inviteLink)
+  await vp.getByRole('button', { name: 'Create one' }).click()
+  await vp.getByLabel('Name').fill(viewer.name)
+  await vp.getByLabel('Email').fill(viewer.email)
+  await vp.getByLabel('Password', { exact: true }).fill(viewer.password)
+  await vp.getByTestId('login-submit').click()
+  await expect(vp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await expect(vp.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+    timeout: 30_000,
+  })
 
-    // The viewer joins the team for read scope, then opens its triage inbox. The Triage link
-    // lives on the issue-views switch, so reach it via Issues (the team overview only links to
-    // Issues and Board).
-    const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
-    await teamCard.getByRole('button', { name: 'Join this team' }).click()
-    await vp.getByRole('link', { name: new RegExp(teamName) }).click()
-    await stop(vp, 'Issues').click()
-    await stop(vp, 'Triage').click()
-    await expect(vp.getByRole('heading', { name: /Triage/ })).toBeVisible({ timeout: 20_000 })
+  // The viewer joins the team for read scope, then opens its triage inbox. The Triage link
+  // lives on the issue-views switch, so reach it via Issues (the team overview only links to
+  // Issues and Board).
+  const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
+  await teamCard.getByRole('button', { name: 'Join this team' }).click()
+  await vp.getByRole('link', { name: new RegExp(teamName) }).click()
+  await stop(vp, 'Issues').click()
+  await stop(vp, 'Triage').click()
+  await expect(vp.getByRole('heading', { name: /Triage/ })).toBeVisible({ timeout: 20_000 })
 
-    // The viewer reads the inbox row, but every triage action is absent.
-    const inboxRow = vp.locator(TRIAGE_ROW).filter({ hasText: title })
-    await expect(inboxRow).toBeVisible({ timeout: 20_000 })
-    await expect(vp.locator('[data-testid="triage-accept"]')).toHaveCount(0)
-    await expect(vp.locator('[data-testid="triage-route"]')).toHaveCount(0)
-    await expect(vp.locator('[data-testid="triage-decline"]')).toHaveCount(0)
+  // The viewer reads the inbox row, but every triage action is absent.
+  const inboxRow = vp.locator(TRIAGE_ROW).filter({ hasText: title })
+  await expect(inboxRow).toBeVisible({ timeout: 20_000 })
+  await expect(vp.locator('[data-testid="triage-accept"]')).toHaveCount(0)
+  await expect(vp.locator('[data-testid="triage-route"]')).toHaveCount(0)
+  await expect(vp.locator('[data-testid="triage-decline"]')).toHaveCount(0)
 
-    // The keyboard handlers are gated too: a/d/r on a focused row are no-ops.
-    await inboxRow.focus()
-    await vp.keyboard.press('a')
-    await vp.keyboard.press('d')
-    await vp.keyboard.press('r')
-    await expect(vp.getByRole('dialog', { name: 'Route issue' })).toHaveCount(0)
-    await expect(vp.locator(TRIAGE_ROW).filter({ hasText: title })).toBeVisible()
-  } finally {
-    await context.close()
-  }
+  // The keyboard handlers are gated too: a/d/r on a focused row are no-ops.
+  await inboxRow.focus()
+  await vp.keyboard.press('a')
+  await vp.keyboard.press('d')
+  await vp.keyboard.press('r')
+  await expect(vp.getByRole('dialog', { name: 'Route issue' })).toHaveCount(0)
+  await expect(vp.locator(TRIAGE_ROW).filter({ hasText: title })).toBeVisible()
 })

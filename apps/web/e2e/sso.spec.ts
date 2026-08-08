@@ -1,6 +1,7 @@
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { deleteSsoProvider, findUserId, openDb, seedSsoProvider } from './db'
-import { ADMIN, ensureAccount, uniqueEmail } from './support'
+import { test } from './fixtures'
+import { ADMIN, ensureAccount, mintInvite, uniqueEmail } from './support'
 
 // The SSO settings surface end to end: reachable by keyboard from the user menu, operable by
 // keyboard once there, absent for everyone who is not a workspace admin, and legible in all three
@@ -25,22 +26,6 @@ async function enterApp(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
 }
 
-async function mintInvite(page: Page, role: 'member' | 'viewer'): Promise<string> {
-  const links = page.getByTestId('invite-link')
-  const read = () =>
-    links.evaluateAll((nodes) => nodes.map((node) => (node as HTMLInputElement).value))
-
-  const before = await read()
-  await page.getByTestId('create-invite').click()
-  await page.getByLabel('Role', { exact: true }).selectOption(role)
-  await page.getByRole('button', { name: 'Create invite' }).click()
-  await expect(links).toHaveCount(before.length + 1, { timeout: 20_000 })
-
-  const minted = (await read()).find((value) => !before.includes(value))
-  expect(minted, `a ${role} invite link`).toBeDefined()
-  return minted as string
-}
-
 test('an admin reaches and operates the SSO surface with the keyboard alone', async ({ page }) => {
   await enterApp(page)
 
@@ -53,12 +38,17 @@ test('an admin reaches and operates the SSO surface with the keyboard alone', as
   const entry = page.getByRole('menuitem', { name: 'Single sign-on' })
   await expect(entry).toBeVisible({ timeout: 20_000 })
   // Walk down rather than counting: the entry's position among Connectors, AI and Sign out is
-  // arrangement, not behaviour, and the fact under test is that arrow keys reach it at all.
-  for (let step = 0; step < 8; step += 1) {
+  // arrangement, not behaviour, and the fact under test is that arrow keys reach it at all. The
+  // bound is the menu's own length, so adding an item to the menu never turns this red.
+  const menuLength = await page.getByRole('menuitem').count()
+  for (let step = 0; step < menuLength; step += 1) {
     if (await entry.evaluate((node) => node === document.activeElement)) break
     await page.keyboard.press('ArrowDown')
   }
-  await expect(entry).toBeFocused()
+  await expect(
+    entry,
+    `the SSO entry must be reachable within ${menuLength} arrow presses`,
+  ).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('heading', { name: 'Single sign-on', level: 1 })).toBeVisible({
     timeout: 20_000,
@@ -165,36 +155,32 @@ test('an unverified provider shows the DNS record an admin has to publish', asyn
 
 test('a member and a viewer get the admins-only absence, not an error or a form', async ({
   page,
-  browser,
+  newContext,
 }) => {
   await enterApp(page)
 
   for (const role of ['member', 'viewer'] as const) {
-    const link = await mintInvite(page, role)
+    const link = await mintInvite(page, { role })
     const account = {
       email: uniqueEmail(`sso-${role}`),
       password: `${role}-password-1234`,
       name: `SSO ${role} ${Date.now().toString(36)}`,
     }
 
-    const context = await browser.newContext()
-    try {
-      const other = await context.newPage()
-      await other.goto(link)
-      await expect(other.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
-      await other.getByRole('button', { name: 'Create one' }).click()
-      await other.getByLabel('Name').fill(account.name)
-      await other.getByLabel('Email').fill(account.email)
-      await other.getByLabel('Password', { exact: true }).fill(account.password)
-      await other.getByTestId('login-submit').click()
-      await expect(other.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+    const context = await newContext()
+    const other = await context.newPage()
+    await other.goto(link)
+    await expect(other.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
+    await other.getByRole('button', { name: 'Create one' }).click()
+    await other.getByLabel('Name').fill(account.name)
+    await other.getByLabel('Email').fill(account.email)
+    await other.getByLabel('Password', { exact: true }).fill(account.password)
+    await other.getByTestId('login-submit').click()
+    await expect(other.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
 
-      await other.goto('/settings/sso')
-      await expect(other.getByTestId('sso-admin-only')).toBeVisible({ timeout: 20_000 })
-      await expect(other.getByTestId('sso-register-form')).toHaveCount(0)
-      await expect(other.getByRole('alert')).toHaveCount(0)
-    } finally {
-      await context.close()
-    }
+    await other.goto('/settings/sso')
+    await expect(other.getByTestId('sso-admin-only')).toBeVisible({ timeout: 20_000 })
+    await expect(other.getByTestId('sso-register-form')).toHaveCount(0)
+    await expect(other.getByRole('alert')).toHaveCount(0)
   }
 })

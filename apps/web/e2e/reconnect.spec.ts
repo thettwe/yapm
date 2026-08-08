@@ -1,4 +1,5 @@
-import { type BrowserContext, expect, type Page, test } from '@playwright/test'
+import { type BrowserContext, expect, type Page } from '@playwright/test'
+import { test } from './fixtures'
 import { ADMIN, ensureAccount } from './support'
 
 const NAME = '[data-testid="workspace-name"]'
@@ -152,13 +153,14 @@ async function interceptSyncSocket(page: Page): Promise<SyncSocket> {
 // here may need a pointer.
 //
 // The walk's length is DERIVED from the page, never guessed. That move put the retry LAST in the
-// tab ring, and the ring on `/` is as long as the shared e2e workspace has grown: every earlier
-// spec that creates a team, a member or an invite adds stops in front of it, so a constant here
-// measures how much fixture data happened to accumulate rather than whether the control is
-// reachable. "Reachable by Tab alone" means "landed on within one pass of the ring", so one pass
-// of the ring is the honest bound — and the assertion below is unchanged by it. A retry that is
-// `inert`, out of the tab order, unmounted, or sealed inside a focus trap is never focused however
-// many stops the walk is given.
+// tab ring, and the ring on `/` is as long as the page in front of it: each team, member and invite
+// adds stops. The baseline reset (`fixtures.ts`) means the ring is now small and this test's own,
+// but a constant would still be the wrong instrument — it would measure how much this test happened
+// to create, and it is what broke once already (the `app-frame` change: the retry became the 166th
+// stop against a budget of 150). "Reachable by Tab alone" means "landed on within one pass of the
+// ring", so one pass of the ring is the honest bound, and the assertion below is unchanged by it. A
+// retry that is `inert`, out of the tab order, unmounted, or sealed inside a focus trap is never
+// focused however many stops the walk is given.
 async function retryFromTheKeyboard(page: Page): Promise<void> {
   const retry = page.getByTestId('connection-retry')
   await expect(retry).toBeVisible()

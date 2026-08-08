@@ -1,6 +1,7 @@
-import { type Browser, expect, type Page, test } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
+import { type NewContext, test } from './fixtures'
 import { readReplica, replicaHolds } from './replica'
-import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, mintInvite, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const BADGE = '[data-testid="inbox-badge"]'
@@ -55,17 +56,11 @@ async function createNumberedIssue(page: Page, title: string): Promise<void> {
   await expect(row).not.toHaveAttribute('data-pending', '', { timeout: 20_000 })
 }
 
-// A shareable link bound to the team, so accepting it joins the workspace AND the team in one
-// step. The email field is left empty deliberately: filling it would fire the invite-email POST,
-// which is a different capability with its own tests and no transport configured here.
+// A shareable link bound to the team, so accepting it joins the workspace AND the team in one step.
 async function inviteToTeam(page: Page, teamName: string): Promise<string> {
   await page.goto('/')
   await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
-  await page.getByTestId('create-invite').click()
-  const dialog = page.getByRole('dialog')
-  await dialog.getByLabel('Team (optional)').selectOption({ label: teamName })
-  await dialog.getByRole('button', { name: 'Create invite' }).click()
-  return await page.getByTestId('invite-link').first().inputValue()
+  return await mintInvite(page, { teamName })
 }
 
 interface Recipient {
@@ -74,13 +69,13 @@ interface Recipient {
   complaints: string[]
 }
 
-async function acceptInvite(browser: Browser, inviteLink: string) {
+async function acceptInvite(newContext: NewContext, inviteLink: string) {
   const credentials = {
     email: uniqueEmail('notified'),
     password: 'recipient-password-1234',
     name: `Notified Member ${Date.now().toString(36)}`,
   }
-  const context = await browser.newContext()
+  const context = await newContext()
   const page = await context.newPage()
   // The badge sits in the app shell, so anything it says on the console is said on every page of
   // the product rather than once. Collected here and asserted at the end of the run through this
@@ -99,7 +94,7 @@ async function acceptInvite(browser: Browser, inviteLink: string) {
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })
-  return { context, recipient: { page, name: credentials.name, complaints } satisfies Recipient }
+  return { recipient: { page, name: credentials.name, complaints } satisfies Recipient }
 }
 
 // Filter to one option, then Enter off the input. Typing narrows the list to a single stable
@@ -152,21 +147,20 @@ interface Fixture {
   teamName: string
   issueTitle: string
   recipient: Recipient
-  close: () => Promise<void>
 }
 
 // The admin creates a team and a numbered issue, then invites a second person onto that team in
 // their own browser. Every test here needs exactly this, and nothing here has assigned anything
 // yet — the recipient's inbox is provably empty at the start of each test.
-async function twoClients(page: Page, browser: Browser): Promise<Fixture> {
+async function twoClients(page: Page, newContext: NewContext): Promise<Fixture> {
   await enterApp(page)
   const teamName = await openTeam(page)
   const issueTitle = unique('Reconnect loop freezes the board')
   await createNumberedIssue(page, issueTitle)
   const inviteLink = await inviteToTeam(page, teamName)
-  const { context, recipient } = await acceptInvite(browser, inviteLink)
+  const { recipient } = await acceptInvite(newContext, inviteLink)
   await openTeamIssues(page, teamName)
-  return { teamName, issueTitle, recipient, close: () => context.close() }
+  return { teamName, issueTitle, recipient }
 }
 
 // THE TWO-CLIENT PASS. This is the one tier that can express the claim at all: an assignment made
@@ -179,138 +173,127 @@ async function twoClients(page: Page, browser: Browser): Promise<Fixture> {
 // and not against the DOM, because "not rendered" and "not received" are different guarantees.
 test('an assignment in one client lights the recipient’s badge in another, with no reload', async ({
   page,
-  browser,
+  newContext,
 }) => {
   test.slow()
-  const { issueTitle, recipient, close } = await twoClients(page, browser)
+  const { issueTitle, recipient } = await twoClients(page, newContext)
   const bee = recipient.page
 
-  try {
-    // The recipient parks on the workspace overview — an app-shell surface, so the badge is
-    // mounted and its subscription is live. The baseline matters: without it, "1 unread" could be
-    // a badge that was always wrong.
-    await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 0 unread', { timeout: 20_000 })
+  // The recipient parks on the workspace overview — an app-shell surface, so the badge is
+  // mounted and its subscription is live. The baseline matters: without it, "1 unread" could be
+  // a badge that was always wrong.
+  await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 0 unread', { timeout: 20_000 })
 
-    await assignTo(page, issueTitle, recipient.name)
+  await assignTo(page, issueTitle, recipient.name)
 
-    // No reload, no navigation, no interaction of any kind in the recipient's browser.
-    await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 1 unread', { timeout: 30_000 })
+  // No reload, no navigation, no interaction of any kind in the recipient's browser.
+  await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 1 unread', { timeout: 30_000 })
 
-    // Keyboard-only from the badge: it is a link in the tab order, so focus plus Enter reaches
-    // the inbox without a pointer.
-    await bee.locator(BADGE).focus()
-    await bee.keyboard.press('Enter')
-    await expect(bee.getByRole('heading', { name: 'Inbox' })).toBeVisible({ timeout: 20_000 })
+  // Keyboard-only from the badge: it is a link in the tab order, so focus plus Enter reaches
+  // the inbox without a pointer.
+  await bee.locator(BADGE).focus()
+  await bee.keyboard.press('Enter')
+  await expect(bee.getByRole('heading', { name: 'Inbox' })).toBeVisible({ timeout: 20_000 })
 
-    const row = bee.locator(NOTIFICATION_ROW)
-    await expect(row).toHaveCount(1)
-    await expect(row).toHaveAttribute('data-read', 'false')
-    await expect(row).toContainText(`${ADMIN.name} assigned you`)
-    await expect(row).toContainText(issueTitle)
+  const row = bee.locator(NOTIFICATION_ROW)
+  await expect(row).toHaveCount(1)
+  await expect(row).toHaveAttribute('data-read', 'false')
+  await expect(row).toContainText(`${ADMIN.name} assigned you`)
+  await expect(row).toContainText(issueTitle)
 
-    // The list takes the cursor on arrival, which is what makes `j` then Enter possible at all.
-    await expect(row).toBeFocused()
-    await bee.keyboard.press('j')
-    await bee.keyboard.press('Enter')
+  // The list takes the cursor on arrival, which is what makes `j` then Enter possible at all.
+  await expect(row).toBeFocused()
+  await bee.keyboard.press('j')
+  await bee.keyboard.press('Enter')
 
-    const panel = bee.getByRole('dialog', { name: 'Issue detail' })
-    await expect(panel).toBeVisible({ timeout: 20_000 })
-    await expect(panel.getByRole('textbox', { name: 'Issue title' })).toHaveValue(issueTitle)
+  const panel = bee.getByRole('dialog', { name: 'Issue detail' })
+  await expect(panel).toBeVisible({ timeout: 20_000 })
+  await expect(panel.getByRole('textbox', { name: 'Issue title' })).toHaveValue(issueTitle)
 
-    // Back to the inbox by history, not by reload: the read stamp came from the mutator, not from
-    // a re-fetch, and the badge recounts from the same synced rows the list holds.
-    await bee.goBack()
-    await expect(bee.getByRole('heading', { name: 'Inbox' })).toBeVisible({ timeout: 20_000 })
-    await expect(bee.locator(NOTIFICATION_ROW)).toHaveAttribute('data-read', 'true', {
-      timeout: 20_000,
+  // Back to the inbox by history, not by reload: the read stamp came from the mutator, not from
+  // a re-fetch, and the badge recounts from the same synced rows the list holds.
+  await bee.goBack()
+  await expect(bee.getByRole('heading', { name: 'Inbox' })).toBeVisible({ timeout: 20_000 })
+  await expect(bee.locator(NOTIFICATION_ROW)).toHaveAttribute('data-read', 'true', {
+    timeout: 20_000,
+  })
+  await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 0 unread', { timeout: 20_000 })
+
+  // The positive control for the walk below: the recipient's own replica DOES hold the row, so
+  // "no notification rows" read from another replica means the row was withheld and not that the
+  // walk cannot see notifications.
+  await expect
+    .poll(() => readReplica(bee).then((r) => r.rows.some((row) => row.table === 'notification')), {
+      timeout: 30_000,
     })
-    await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 0 unread', { timeout: 20_000 })
+    .toBe(true)
 
-    // The positive control for the walk below: the recipient's own replica DOES hold the row, so
-    // "no notification rows" read from another replica means the row was withheld and not that the
-    // walk cannot see notifications.
-    await expect
-      .poll(
-        () => readReplica(bee).then((r) => r.rows.some((row) => row.table === 'notification')),
-        {
-          timeout: 30_000,
-        },
-      )
-      .toBe(true)
+  // H4: the workspace admin who CAUSED this notification cannot read it. They run the same
+  // synced query — the badge on this very page is that subscription — and receive nothing.
+  await page.goto('/')
+  await expect(page.locator(BADGE)).toHaveAccessibleName('Inbox, 0 unread', { timeout: 20_000 })
+  // The second control: the admin's replica demonstrably holds this workspace's data, so the
+  // absence below is read from a populated replica rather than an empty one.
+  await expect.poll(() => replicaHolds(page, issueTitle), { timeout: 30_000 }).toBe(true)
+  const adminReplica = await readReplica(page)
+  expect(adminReplica.rows.some((replicaRow) => replicaRow.table === 'notification')).toBe(false)
 
-    // H4: the workspace admin who CAUSED this notification cannot read it. They run the same
-    // synced query — the badge on this very page is that subscription — and receive nothing.
-    await page.goto('/')
-    await expect(page.locator(BADGE)).toHaveAccessibleName('Inbox, 0 unread', { timeout: 20_000 })
-    // The second control: the admin's replica demonstrably holds this workspace's data, so the
-    // absence below is read from a populated replica rather than an empty one.
-    await expect.poll(() => replicaHolds(page, issueTitle), { timeout: 30_000 }).toBe(true)
-    const adminReplica = await readReplica(page)
-    expect(adminReplica.rows.some((replicaRow) => replicaRow.table === 'notification')).toBe(false)
-
-    // Nothing this change's own surfaces said on the console along the way. Scoped by component
-    // rather than asserted empty, because the issue-detail panel this walk ends on carries its own
-    // pre-existing Base UI complaint, which is not this change's to fix or to hide.
-    const ours = /\b(InboxBadge|InboxView|InboxRow)\b/
-    expect(recipient.complaints.filter((line) => ours.test(line))).toEqual([])
-  } finally {
-    await close()
-  }
+  // Nothing this change's own surfaces said on the console along the way. Scoped by component
+  // rather than asserted empty, because the issue-detail panel this walk ends on carries its own
+  // pre-existing Base UI complaint, which is not this change's to fix or to hide.
+  const ours = /\b(InboxBadge|InboxView|InboxRow)\b/
+  expect(recipient.complaints.filter((line) => ours.test(line))).toEqual([])
 })
 
 // The palette half of the surface (tasks 7.5): both new entries, reached only from the keyboard,
 // and the guarantee that a comment notification names the comment without carrying a word of it.
 test('the palette reaches the inbox and marks it read, and no comment body follows', async ({
   page,
-  browser,
+  newContext,
 }) => {
   test.slow()
-  const { teamName, issueTitle, recipient, close } = await twoClients(page, browser)
+  const { teamName, issueTitle, recipient } = await twoClients(page, newContext)
   const bee = recipient.page
   const confidential = `payroll-${Date.now().toString(36)}`
 
-  try {
-    await assignTo(page, issueTitle, recipient.name)
+  await assignTo(page, issueTitle, recipient.name)
 
-    // A comment from the admin on the issue the recipient now owns: the recipient is the
-    // assignee, so they are a comment recipient, and the admin is the actor, so they are not.
-    const issueRow = page.locator(ISSUE_ROW).filter({ hasText: issueTitle })
-    await issueRow.focus()
-    await page.keyboard.press('Enter')
-    const panel = page.getByRole('dialog', { name: 'Issue detail' })
-    await expect(panel).toBeVisible({ timeout: 20_000 })
-    const composer = panel.getByRole('textbox', { name: 'Add a comment' })
-    await composer.click()
-    await page.keyboard.type(`Rolling this back because ${confidential} is exposed`)
-    await panel.getByRole('button', { name: 'Comment', exact: true }).click()
+  // A comment from the admin on the issue the recipient now owns: the recipient is the
+  // assignee, so they are a comment recipient, and the admin is the actor, so they are not.
+  const issueRow = page.locator(ISSUE_ROW).filter({ hasText: issueTitle })
+  await issueRow.focus()
+  await page.keyboard.press('Enter')
+  const panel = page.getByRole('dialog', { name: 'Issue detail' })
+  await expect(panel).toBeVisible({ timeout: 20_000 })
+  const composer = panel.getByRole('textbox', { name: 'Add a comment' })
+  await composer.click()
+  await page.keyboard.type(`Rolling this back because ${confidential} is exposed`)
+  await panel.getByRole('button', { name: 'Comment', exact: true }).click()
 
-    // The recipient works from the team issue list, which is where the palette lives.
-    await openTeamIssues(bee, teamName)
-    await runPaletteCommand(bee, 'Go to inbox', 'Go to inbox')
+  // The recipient works from the team issue list, which is where the palette lives.
+  await openTeamIssues(bee, teamName)
+  await runPaletteCommand(bee, 'Go to inbox', 'Go to inbox')
 
-    await expect(bee.getByRole('heading', { name: 'Inbox' })).toBeVisible({ timeout: 20_000 })
-    await expect(bee.locator(NOTIFICATION_ROW)).toHaveCount(2, { timeout: 30_000 })
-    await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 2 unread', { timeout: 20_000 })
-    const list = bee.getByRole('region', { name: 'Notifications' })
-    await expect(list).toContainText(`${ADMIN.name} commented on`)
-    await expect(list).toContainText(`${ADMIN.name} assigned you`)
+  await expect(bee.getByRole('heading', { name: 'Inbox' })).toBeVisible({ timeout: 20_000 })
+  await expect(bee.locator(NOTIFICATION_ROW)).toHaveCount(2, { timeout: 30_000 })
+  await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 2 unread', { timeout: 20_000 })
+  const list = bee.getByRole('region', { name: 'Notifications' })
+  await expect(list).toContainText(`${ADMIN.name} commented on`)
+  await expect(list).toContainText(`${ADMIN.name} assigned you`)
 
-    // The whole point of cutting excerpts: the comment reached the inbox as an event, and its
-    // text did not reach it at all.
-    await expect(list).not.toContainText(confidential)
+  // The whole point of cutting excerpts: the comment reached the inbox as an event, and its
+  // text did not reach it at all.
+  await expect(list).not.toContainText(confidential)
 
-    await bee.goBack()
-    await expect(bee.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
-    await runPaletteCommand(bee, 'Mark all notifications as read', 'Mark all notifications as read')
-    await runPaletteCommand(bee, 'Go to inbox', 'Go to inbox')
+  await bee.goBack()
+  await expect(bee.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
+  await runPaletteCommand(bee, 'Mark all notifications as read', 'Mark all notifications as read')
+  await runPaletteCommand(bee, 'Go to inbox', 'Go to inbox')
 
-    await expect(bee.getByRole('heading', { name: 'Inbox' })).toBeVisible({ timeout: 20_000 })
-    await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 0 unread', { timeout: 20_000 })
-    const rows = bee.locator(NOTIFICATION_ROW)
-    await expect(rows).toHaveCount(2)
-    await expect(rows.nth(0)).toHaveAttribute('data-read', 'true')
-    await expect(rows.nth(1)).toHaveAttribute('data-read', 'true')
-  } finally {
-    await close()
-  }
+  await expect(bee.getByRole('heading', { name: 'Inbox' })).toBeVisible({ timeout: 20_000 })
+  await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 0 unread', { timeout: 20_000 })
+  const rows = bee.locator(NOTIFICATION_ROW)
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0)).toHaveAttribute('data-read', 'true')
+  await expect(rows.nth(1)).toHaveAttribute('data-read', 'true')
 })

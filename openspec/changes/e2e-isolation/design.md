@@ -271,3 +271,154 @@ same 21 files:
   do not assume either way.)
 - Is any of the ~100 tests genuinely dependent on a sibling test's fixture? (Audit; if yes, name it
   and give it its own fixture.)
+
+## Decisions made during implementation
+
+### What was measured, and what was not
+
+**Not measured in this pass, and this matters.** The build pass was explicitly scoped to the fast
+gates — `turbo typecheck`, `lint`, affected `test`, `check-boundaries` — and told not to run
+Playwright, docker compose, the full build or the smoke test, because the PR is already open and CI
+runs the whole suite on every push (PROCESS.md §4: "CI is the gate of record"). So tasks 2.2–2.6 and
+7.2–7.4 are **not** ticked, and nothing below claims a number that was not read off something real:
+
+- The baseline failure rate over ≥5 repeated runs of `projects.spec.ts` + `connectors.spec.ts`: **not
+  measured.** The evidence for the failure rate remains the three PRs in the Context section.
+- Per-spec-file row counts and durations: **not measured.**
+- `PushProcessor` message counts split by spec file across a passing and a failing run: **not
+  measured.** The prior in the Context section — benign idempotency bookkeeping inside
+  `@rocicorp/zero/server`, since Zero keeps a `lastMutationID` per client and skips anything at or
+  below it — stands as a prior and nothing more. It has *not* been ruled on with counts.
+- Whether `Target.disposeBrowserContext` fires before or after the test timeout: **not measured.**
+  The change removes the manual lifecycle either way (D5), which is correct whichever it turns out
+  to be, but the falsification is still owed.
+
+The measured before/after pass rate is the deliverable this change advertises, and it is still
+outstanding. Whoever runs the review pass should treat "CI went green once" as insufficient and get
+those numbers, or say plainly that the change landed without them.
+
+What *was* verified in this pass: the whole `e2e/` tree typechecks under an ad-hoc TS project
+(`apps/web/tsconfig.json` deliberately excludes `e2e/` — see D11), `biome ci` is clean over it, and
+the assertion multiset before and after is identical bar the two deltas named in D10.
+
+### D8 — The reset deletes the bootstrap admin too, and lets `bootstrapFirstAdmin` re-promote
+
+D1 planned to preserve the admin's `user`, `account` and `workspace_member` rows and named
+deleting-everything-but-`workspace` as the fallback. **The fallback was chosen**, for three reasons
+found while writing it:
+
+1. Preserving those rows means the harness has to name better-auth's own column layout — which table
+   holds the credential, what the user foreign key is called. That is a coupling to a library's
+   internals that breaks silently on an upgrade, and CLAUDE.md's rule about not writing post-cutoff
+   APIs from memory applies to schemas as much as to functions.
+2. The promotion really is deterministic. `bootstrapFirstAdmin` fires only when `workspace_member`
+   is empty **and** the caller's address matches `requiredEmail`, and the Playwright server env pins
+   `YAPM_BOOTSTRAP_ADMIN_EMAIL=admin@example.test`. No other account can ever be promoted, whatever
+   order sign-ups happen in.
+3. It is not slower. `ensureAccount` already leads with sign-up and only falls through to sign-in
+   when the address is taken, so a cleared account takes the *short* path (one round trip), not the
+   long one.
+
+The thing that would have made this wrong is `seedDemoContent`, which runs off the back of a
+successful promotion and would then re-seed a demo team, twelve issues, three cycles, two projects
+and a retro before **every** test. It does not fire: `SEED_DEMO_CONTENT` defaults to `'false'`
+(`apps/server/src/config/env.ts`) and the Playwright webServer env does not set it. If a later change
+turns that default on, `zz-isolation.spec.ts` goes red immediately, which is the right failure.
+
+`jwks` is in the never-touched set for a reason worth keeping: `apps/server/src/auth.ts` verifies
+Zero tokens against a **remote** JWKS set fetched over loopback and cached by `jose` behind a
+refetch cooldown. Deleting the row rotates better-auth's signing key, and verification would then
+sit behind that cooldown rather than fail fast — a self-inflicted flake of exactly the kind this
+change exists to remove.
+
+### D9 — `auth.spec.ts` stopped being a serial journey instead of opting out of the reset
+
+`auth.spec.ts` was the only genuine cross-test dependence in the suite, and it was a real one: a
+`test.describe.serial` block where step 3 minted an invite into a module-level `let` that step 4
+consumed, and step 4 created the viewer account that steps 5, 6 and 7 signed in as. The audit
+(task 4.3) found no others — every other file's tests open with their own `enterApp` + `openTeam`,
+and the two `test.beforeAll` hooks (`attachments.spec.ts`, `search.spec.ts`) only open a Kysely
+handle.
+
+The plan allowed an explicit, named opt-out for such a file. It was **not** used. Each of the seven
+tests now builds its own viewer through one `inviteAViewer` helper — the same admin-mints-invite,
+second-context-accepts pattern six other spec files already use — so the contract has no exceptions
+and the README has no asterisk. `.serial` is gone with it, which is a strengthening: a failure in one
+of those tests no longer skips the six behind it.
+
+Cost: four extra invite-and-sign-up cycles in that file, perhaps 30–40 seconds. Set against a suite
+that should get faster overall, that is worth paying to keep the rule absolute.
+
+### D10 — The coverage delta, stated exactly
+
+`git diff main -- apps/web/e2e`, with every assertion line normalised for indentation and compared as
+a multiset, shows **two** removals that are not moves or reformats:
+
+1. `expect(inviteLink).not.toBe('')` in `auth.spec.ts`. It asserted that the *previous test in the
+   serial block* had populated a module-level variable. With no cross-test state there is no
+   variable and nothing to assert; it was never a claim about the product.
+2. The `signInViewer` helper, which signed the viewer in through the login form. The viewer now
+   arrives by accepting the invite. Form sign-in for a non-admin account is still covered, in the
+   same file, by "keyboard-only sign-in reaches the app".
+
+Everything else that the raw grep flags is a move (`page` → `viewerPage`, a helper relocating into
+`support.ts`) or a Biome reflow. The `test.slow()` count is 20 before and 20 after — none added, none
+removed. No `test.skip`, no `test.fixme`. One assertion was **strengthened**: `retro-ai.spec.ts` now
+asserts `toHaveCount(2)` before its two positional reads.
+
+One timeout was raised, with its evidence: `auth.spec.ts`'s "admin changes the viewer role" now waits
+20s (was the 15s default) for `Role for <viewer>`. Under the old serial block the viewer had joined
+in an earlier test and the row was already in the admin's replica when the test started; the viewer
+now joins *during* the test, so the control genuinely waits on one sync hop that it previously did
+not. That is an under-provisioned wait by the change's own definition, not a papered-over failure.
+
+### D11 — `e2e/` is not typechecked by `pnpm typecheck`, and this change did not fix that
+
+`apps/web/tsconfig.json`'s `include` is `["src", "vite.config.ts", "vitest.config.ts"]`, so neither
+the specs nor `playwright.config.ts` are typechecked by the repo's gates; Playwright transpiles
+without checking. Folding `e2e/` in surfaces five pre-existing errors in `e2e/db.ts` — all
+`Date` vs `ColumnType<…>` on insert — which exist only because `@yapm/schema/db`'s published types
+name `kysely` and `apps/web` does not depend on `kysely`, so TS cannot resolve `ColumnType` from
+here. Fixing it properly means adding `kysely` to `apps/web`'s devDependencies (catalog-pinned) and
+a lockfile change, which is a different change from this one.
+
+It is not hypothetical: the first draft of `reset.ts` imported `sql` from `kysely` and would have
+failed at runtime under Playwright with an unresolvable module, and no gate in this repo would have
+caught it. `reset.ts` now goes through the pg `Pool` already on the `Database` handle, which needs no
+new dependency. **Named follow-up:** add `kysely` to `apps/web` devDependencies, fix the five
+`db.ts` insert types, and put `e2e` in the typecheck project. Until then, the check is
+`npx tsc --noEmit` against an ad-hoc project that includes `e2e`, which this pass ran clean.
+
+### D12 — The bounds that were derived, and the ones deliberately left alone
+
+Derived from the page (task 6.1): `sso.spec.ts`'s account-menu walk now counts `menuitem` roles
+instead of walking a literal 8, and `search.spec.ts`'s palette walk counts `[cmdk-item]` rows
+instead of a literal 12. Both failure messages state the derived bound.
+
+Left alone, with the reasoning rather than silently:
+
+- `retro-ai.spec.ts`'s `tabTo(page, testId, steps)` keeps its numeric budgets (4, 14, 20). Those
+  bound a walk over a retro board the test builds in full — they encode DOM arrangement, not fixture
+  size or machine speed. Converting it to a full-ring walk like `reconnect.spec.ts` would break its
+  in-loop `expect(at).not.toBe('BODY')` assertion, because focus legitimately passes through the
+  document body when a tab ring wraps. Deriving the bound would therefore have cost a real
+  assertion, which rule 1 forbids.
+- `retro.spec.ts`'s `for (let frame = 0; frame < 60 && closingPopup() === null; …)` is a bounded
+  `requestAnimationFrame` poll with an exit condition, not a fixed wait. That is already the right
+  shape.
+- Every `.first()` over a list a test built itself (board cards, retro cards, palette options) stays.
+  The `getByTestId('invite-link').first()` sites — thirteen of them, not the six the brief counted —
+  are gone: `support.ts`'s `mintInvite` returns the link that was **not** on the page before it
+  clicked, which is identity rather than position. `sso.spec.ts` had already invented that pattern
+  locally; the shared helper is its generalisation and `sso.spec.ts` now calls it.
+- `notifications.spec.ts`'s `rows.nth(0)` / `.nth(1)` are already preceded by
+  `expect(rows).toHaveCount(2)` over the recipient's own inbox, which is the derived form.
+
+### D13 — Open, and honestly open
+
+- **Does zero-cache need a barrier after the bulk delete?** Unanswered — it needs a run.
+  `zz-isolation.spec.ts` is the instrument: it asserts the *browser* sees the empty states, not just
+  that Postgres is empty, so a replica that serves deleted rows fails it. If that turns out to need
+  a barrier, the fix is a polled post-reset invariant, never a sleep.
+- **Are the `PushProcessor` replay messages benign?** Still a prior, not a ruling. See above.
+- **Runtime delta against the ~21-minute baseline.** Predicted faster, unmeasured.

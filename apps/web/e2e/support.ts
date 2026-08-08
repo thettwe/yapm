@@ -40,9 +40,10 @@ export async function signIn(page: Page, credentials: Credentials): Promise<void
   await page.getByTestId('login-submit').click()
 }
 
-// Sign up the account if it does not exist yet, otherwise sign in. Idempotent across a run
-// on a shared database (the first call creates the account; later calls fall through to
-// sign-in when sign-up reports the address is taken).
+// Sign up the account if it does not exist yet, otherwise sign in. The per-test baseline reset
+// (`fixtures.ts`) clears every account, so the first call inside a test creates the account and the
+// `/api/zero/token` that follows promotes it; a second client in the same test finds the address
+// taken and falls through to sign-in.
 export async function ensureAccount(page: Page, credentials: Credentials): Promise<void> {
   await signUp(page, credentials)
   // A fresh sign-up navigates into the app and unmounts the form; a duplicate keeps the
@@ -61,6 +62,48 @@ export async function ensureAccount(page: Page, credentials: Credentials): Promi
   if (stillOnLogin) {
     await signIn(page, credentials)
   }
+}
+
+export type WorkspaceRole = 'admin' | 'member' | 'viewer'
+
+export interface MintInviteOptions {
+  role?: WorkspaceRole
+  // A shareable link bound to a team, so accepting it joins the workspace AND that team in one
+  // step. Named by the label the dialog's team select renders.
+  teamName?: string
+}
+
+async function inviteLinkValues(links: Locator): Promise<string[]> {
+  return await links.evaluateAll((nodes) => nodes.map((node) => (node as HTMLInputElement).value))
+}
+
+// Mint an invite from the workspace overview and return the link that was NOT on the page a moment
+// ago. The `invite-link` inputs are ordered by `invites.all`'s `createdAt desc`, which is the
+// query's business and not the spec's: reading `.first()` is a selector that is right by accident,
+// and it stops being right the moment that ordering changes. The email field is left empty
+// deliberately — filling it fires the invite-email POST, a different capability with its own tests
+// and no transport configured here.
+export async function mintInvite(page: Page, options: MintInviteOptions = {}): Promise<string> {
+  const links = page.getByTestId('invite-link')
+  const before = new Set(await inviteLinkValues(links))
+
+  await page.getByTestId('create-invite').click()
+  const dialog = page.getByRole('dialog')
+  if (options.role !== undefined) {
+    await dialog.getByLabel('Role', { exact: true }).selectOption(options.role)
+  }
+  if (options.teamName !== undefined) {
+    await dialog.getByLabel('Team (optional)').selectOption({ label: options.teamName })
+  }
+  await dialog.getByRole('button', { name: 'Create invite' }).click()
+
+  await expect(links).toHaveCount(before.size + 1, { timeout: 20_000 })
+  const minted = (await inviteLinkValues(links)).filter((value) => !before.has(value))
+  expect(
+    minted,
+    `expected exactly one invite link that was not on the page before (saw ${minted.length})`,
+  ).toHaveLength(1)
+  return minted[0] as string
 }
 
 // The deck's six destinations (app-frame band 1). Scoped to the nav landmark, because a page may

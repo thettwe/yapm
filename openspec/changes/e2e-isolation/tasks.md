@@ -1,10 +1,10 @@
 ## 1. Read before writing anything
 
-- [ ] 1.1 Read `apps/web/e2e/support.ts` (ADMIN, `ensureAccount`, `stop`, `goToMore`, `signOut`), `apps/web/e2e/db.ts` (the direct-to-Postgres seeder), `apps/web/playwright.config.ts` (webServer env, `DATABASE_URL` requirement, `workers: 1`, `timeout: 60_000`, `retries` in CI)
-- [ ] 1.2 Read the two worst offenders in full — `apps/web/e2e/projects.spec.ts` (`:188`, `:246`) and `apps/web/e2e/connectors.spec.ts` (`:236`) — and `apps/web/e2e/reconnect.spec.ts:162` (`retryFromTheKeyboard`, the derived-bound pattern to copy) plus `auto-status.spec.ts`'s `tabTo`
-- [ ] 1.3 Read `packages/schema/src/zero/queries.ts` lines 89–121 and 212–240 (the five unbounded workspace-wide queries) and `packages/schema/src/db/seed.ts` (`seedWorkspace`, `bootstrapFirstAdmin` — the promote-only-when-`workspace_member`-is-empty rule and the required-email gate)
-- [ ] 1.4 Read `reference/zero.md` §"Failure modes" and §"Postgres objects zero-cache creates" **before** judging the `PushProcessor` replay messages or touching the database between tests. Zero 1.x is `defineQuery`/`defineMutator`/`handleMutateRequest`; the `PushProcessor` in the log is a log context inside `@rocicorp/zero/server`, not an API this repo calls
-- [ ] 1.5 Read `.github/workflows/ci.yml`'s `e2e` job (fresh volumes, `YAPM_HOST_PORT=3210`, `DATABASE_URL=…:5440/yapm`, `pnpm --filter @yapm/web e2e`) and the `## Decisions made during implementation` sections of the three most recent archived changes — `2026-08-08-app-frame` (the 166-vs-150 tab-stop failure), `2026-08-08-issue-list-daylight`, `2026-08-08-one-reality-vocabulary`
+- [x] 1.1 Read `apps/web/e2e/support.ts` (ADMIN, `ensureAccount`, `stop`, `goToMore`, `signOut`), `apps/web/e2e/db.ts` (the direct-to-Postgres seeder), `apps/web/playwright.config.ts` (webServer env, `DATABASE_URL` requirement, `workers: 1`, `timeout: 60_000`, `retries` in CI)
+- [x] 1.2 Read the two worst offenders in full — `apps/web/e2e/projects.spec.ts` (`:188`, `:246`) and `apps/web/e2e/connectors.spec.ts` (`:236`) — and `apps/web/e2e/reconnect.spec.ts:162` (`retryFromTheKeyboard`, the derived-bound pattern to copy) plus `auto-status.spec.ts`'s `tabTo`
+- [x] 1.3 Read `packages/schema/src/zero/queries.ts` lines 89–121 and 212–240 (the five unbounded workspace-wide queries) and `packages/schema/src/db/seed.ts` (`seedWorkspace`, `bootstrapFirstAdmin` — the promote-only-when-`workspace_member`-is-empty rule and the required-email gate)
+- [x] 1.4 Read `reference/zero.md` §"Failure modes" and §"Postgres objects zero-cache creates" **before** judging the `PushProcessor` replay messages or touching the database between tests. Zero 1.x is `defineQuery`/`defineMutator`/`handleMutateRequest`; the `PushProcessor` in the log is a log context inside `@rocicorp/zero/server`, not an API this repo calls
+- [x] 1.5 Read `.github/workflows/ci.yml`'s `e2e` job (fresh volumes, `YAPM_HOST_PORT=3210`, `DATABASE_URL=…:5440/yapm`, `pnpm --filter @yapm/web e2e`) and the `## Decisions made during implementation` sections of the three most recent archived changes — `2026-08-08-app-frame` (the 166-vs-150 tab-stop failure), `2026-08-08-issue-list-daylight`, `2026-08-08-one-reality-vocabulary`
 
 ## 2. Diagnose before fixing — real numbers, written down
 
@@ -18,51 +18,51 @@
 
 ## 3. The reset (`apps/web/e2e/reset.ts`)
 
-- [ ] 3.1 `resetToBaseline(db)`: derive the table set from `information_schema.tables` for the application schema, subtract an explicit commented ignore set (Kysely migration bookkeeping, pg-boss's job tables, anything outside `public`), and delete the rest in FK-dependency order using ordinary `DELETE` — never `TRUNCATE` (design D3)
-- [ ] 3.2 Preserve exactly: the single `workspace` row, and the bootstrap admin's rows in `user`, `account` and `workspace_member` (targeted deletes, not table-level skips), so `admin@example.test` stays deterministically the workspace admin (design D1)
-- [ ] 3.3 `assertBaseline(db)`: assert every non-preserved table is empty and fail naming the offending table and its row count
-- [ ] 3.4 If preserving the admin's auth rows proves troublesome, fall back to deleting everything but `workspace` and letting `bootstrapFirstAdmin` re-promote on the next `/api/zero/token` — the required-email gate makes that deterministic. Record whichever was chosen, and why, in `design.md`
+- [x] 3.1 `resetToBaseline(db)`: derive the table set from `information_schema.tables` for the application schema, subtract an explicit commented ignore set (Kysely migration bookkeeping, pg-boss's job tables, anything outside `public`), and delete the rest in FK-dependency order using ordinary `DELETE` — never `TRUNCATE` (design D3)
+- [x] 3.2 Preserve exactly: the single `workspace` row, and the bootstrap admin's rows in `user`, `account` and `workspace_member` (targeted deletes, not table-level skips), so `admin@example.test` stays deterministically the workspace admin (design D1)
+- [x] 3.3 `assertBaseline(db)`: assert every non-preserved table is empty and fail naming the offending table and its row count
+- [x] 3.4 If preserving the admin's auth rows proves troublesome, fall back to deleting everything but `workspace` and letting `bootstrapFirstAdmin` re-promote on the next `/api/zero/token` — the required-email gate makes that deterministic. Record whichever was chosen, and why, in `design.md`
 
 ## 4. The fixture (`apps/web/e2e/fixtures.ts`)
 
-- [ ] 4.1 Export a `test` extending `@playwright/test` with an auto fixture that runs `resetToBaseline` then `assertBaseline` before each test (design D2), reusing one Kysely handle per worker rather than opening one per test
-- [ ] 4.2 Export a browser-context fixture that hands out fresh contexts and closes every one in its own teardown, once, on both the pass and the fail path (design D5)
-- [ ] 4.3 Audit all ~100 tests for cross-test dependence within a file. Name every case found. Where one is real, give the test its own fixture — never re-share state. If a file genuinely needs shared state, the opt-out is explicit and named in the file
+- [x] 4.1 Export a `test` extending `@playwright/test` with an auto fixture that runs `resetToBaseline` then `assertBaseline` before each test (design D2), reusing one Kysely handle per worker rather than opening one per test
+- [x] 4.2 Export a browser-context fixture that hands out fresh contexts and closes every one in its own teardown, once, on both the pass and the fail path (design D5)
+- [x] 4.3 Audit all ~100 tests for cross-test dependence within a file. Name every case found. Where one is real, give the test its own fixture — never re-share state. If a file genuinely needs shared state, the opt-out is explicit and named in the file
 - [ ] 4.4 Measure whether zero-cache needs a barrier after the bulk delete (design risk 1). If a client is observed rendering deleted rows, add a polled post-reset invariant — never a fixed sleep. Record the answer
 
 ## 5. Migrate the 21 spec files
 
-- [ ] 5.1 Every spec imports `test` from `./fixtures` instead of `@playwright/test` (`expect` may still come from `@playwright/test`)
-- [ ] 5.2 Replace all 17 `browser.newContext()` sites with the fixture: `board:380`, `attachments:127`, `notifications:83`, `issues:340`, `triage:215`, `sync:64,65`, `projects:212,249,250`, `retro:473`, `search:340`, `sso:180`, `auto-status:129`, `mentions:81`, `retro-ai:571,572`, `theme:35,59`, `auth:66,90,109`, `pm-digest:345,632`, `connectors:310`. No `finally { await context.close() }` survives
-- [ ] 5.3 Delete the comments that documented the accumulation as a fact of life once it is no longer one — `projects.spec.ts:116–119` ("the roadmap also holds rows from earlier runs"), `reconnect.spec.ts:153–161`, `support.ts:43–45` — replacing each with what is now true. Keep `reconnect.spec.ts`'s derived walk; only its rationale changes
-- [ ] 5.4 Verify the specs that were written *around* accumulation still assert the same thing on a clean workspace: `projects.spec.ts:111` (roadmap roving index needs ≥2 rows — it creates both itself), `auth.spec.ts` (the non-member cases), `sso.spec.ts` (the deliberately-unverified provider)
+- [x] 5.1 Every spec imports `test` from `./fixtures` instead of `@playwright/test` (`expect` may still come from `@playwright/test`)
+- [x] 5.2 Replace all 17 `browser.newContext()` sites with the fixture: `board:380`, `attachments:127`, `notifications:83`, `issues:340`, `triage:215`, `sync:64,65`, `projects:212,249,250`, `retro:473`, `search:340`, `sso:180`, `auto-status:129`, `mentions:81`, `retro-ai:571,572`, `theme:35,59`, `auth:66,90,109`, `pm-digest:345,632`, `connectors:310`. No `finally { await context.close() }` survives
+- [x] 5.3 Delete the comments that documented the accumulation as a fact of life once it is no longer one — `projects.spec.ts:116–119` ("the roadmap also holds rows from earlier runs"), `reconnect.spec.ts:153–161`, `support.ts:43–45` — replacing each with what is now true. Keep `reconnect.spec.ts`'s derived walk; only its rationale changes
+- [x] 5.4 Verify the specs that were written *around* accumulation still assert the same thing on a clean workspace: `projects.spec.ts:111` (roadmap roving index needs ≥2 rows — it creates both itself), `auth.spec.ts` (the non-member cases), `sso.spec.ts` (the deliberately-unverified provider)
 
 ## 6. No hidden caps on determinism
 
-- [ ] 6.1 Sweep for constants encoding fixture size or machine speed: literal loop bounds, tab budgets, index-based row assertions. Derive each from the page and make the failure message state the derived bound (the `reconnect.spec.ts:162` pattern)
-- [ ] 6.2 Replace `getByTestId('invite-link').first()` at all six sites (`auth:58`, `attachments:116`, `connectors:303`, `notifications:68`, `auto-status:122`, `mentions:65`, `projects:205`) with a selection the test itself knows. It is currently correct only because `invites.all` orders `createdAt desc` — a selector that is right by accident is still wrong
-- [ ] 6.3 Audit every `.nth(i)` over a list other specs can append to (`notifications:311,312`, `retro-ai:443,447,448,449`) and confirm the list is test-local after isolation, or make the selection explicit
+- [x] 6.1 Sweep for constants encoding fixture size or machine speed: literal loop bounds, tab budgets, index-based row assertions. Derive each from the page and make the failure message state the derived bound (the `reconnect.spec.ts:162` pattern)
+- [x] 6.2 Replace `getByTestId('invite-link').first()` at all six sites (`auth:58`, `attachments:116`, `connectors:303`, `notifications:68`, `auto-status:122`, `mentions:65`, `projects:205`) with a selection the test itself knows. It is currently correct only because `invites.all` orders `createdAt desc` — a selector that is right by accident is still wrong
+- [x] 6.3 Audit every `.nth(i)` over a list other specs can append to (`notifications:311,312`, `retro-ai:443,447,448,449`) and confirm the list is test-local after isolation, or make the selection explicit
 - [ ] 6.4 Do **not** raise timeouts as a class. After the reset lands, re-measure; raise only where the evidence shows the wait was genuinely under-provisioned and write that evidence beside the number
-- [ ] 6.5 Confirm no assertion was weakened, skipped, `fixme`-d, newly `slow`-ed or deleted: `git diff main -- apps/web/e2e | grep -E '^\-.*(expect|test\()'` reviewed line by line, and the coverage delta reported explicitly (expected: none)
+- [x] 6.5 Confirm no assertion was weakened, skipped, `fixme`-d, newly `slow`-ed or deleted: `git diff main -- apps/web/e2e | grep -E '^\-.*(expect|test\()'` reviewed line by line, and the coverage delta reported explicitly (expected: none)
 
 ## 7. Tests
 
-- [ ] 7.1 `apps/web/e2e/zz-isolation.spec.ts` — the falsifiable check. Runs last (Playwright orders files lexicographically) and asserts the workspace it inherits from the whole preceding run holds zero teams, invites, projects and issues. **It must fail against today's `main`** (where it sees ~45 teams) and pass with this change. Verify both directions, not just the passing one
+- [x] 7.1 `apps/web/e2e/zz-isolation.spec.ts` — the falsifiable check. Runs last (Playwright orders files lexicographically) and asserts the workspace it inherits from the whole preceding run holds zero teams, invites, projects and issues. **It must fail against today's `main`** (where it sees ~45 teams) and pass with this change. Verify both directions, not just the passing one
 - [ ] 7.2 Prove the fix by measurement, not by one green run: run the affected specs **at least 5 times** and the full suite **at least twice** after the change, and report the pass rate before and after with real output
 - [ ] 7.3 Report the runtime delta against the ~21-minute baseline. The prediction is that it gets faster; if it is materially slower, say by how much and why the trade is worth it
 - [ ] 7.4 Confirm the `Target.disposeBrowserContext` error no longer appears in any run, and state whether that is because the timeouts stopped or because the lifecycle changed (2.6 decides which)
 
 ## 8. Documentation
 
-- [ ] 8.1 `apps/web/e2e/README.md` (new): the isolation contract in the terms the next person writing a spec needs — every test starts from the bootstrapped baseline; import `test` from `./fixtures`; never create a context by hand; never encode fixture size or machine speed as a constant; `workers: 1` is still required and why; how to run locally (the port-3000 trap, `E2E_SERVER_PORT`, the compose commands CI uses)
-- [ ] 8.2 `PROCESS.md` §3: the E2E tier bullet gains the isolation contract and points at the new README
-- [ ] 8.3 Sweep every root doc this makes stale per PROCESS.md §2 — `README.md`, `ROADMAP.md`, `TECHSTACK.md`, `CLAUDE.md` (its Verification section), `.env.example` (expected: unchanged; confirm rather than assume). No docs-site page: `apps/docs` serves evaluators, self-hosters and users and has no contributor section
-- [ ] 8.4 Record every judgement call taken during the build in `design.md` under `## Decisions made during implementation`, including the answers to the three Open Questions
+- [x] 8.1 `apps/web/e2e/README.md` (new): the isolation contract in the terms the next person writing a spec needs — every test starts from the bootstrapped baseline; import `test` from `./fixtures`; never create a context by hand; never encode fixture size or machine speed as a constant; `workers: 1` is still required and why; how to run locally (the port-3000 trap, `E2E_SERVER_PORT`, the compose commands CI uses)
+- [x] 8.2 `PROCESS.md` §3: the E2E tier bullet gains the isolation contract and points at the new README
+- [x] 8.3 Sweep every root doc this makes stale per PROCESS.md §2 — `README.md`, `ROADMAP.md`, `TECHSTACK.md`, `CLAUDE.md` (its Verification section), `.env.example` (expected: unchanged; confirm rather than assume). No docs-site page: `apps/docs` serves evaluators, self-hosters and users and has no contributor section
+- [x] 8.4 Record every judgement call taken during the build in `design.md` under `## Decisions made during implementation`, including the answers to the three Open Questions
 
 ## 9. Gates
 
 - [ ] 9.1 `pnpm turbo lint typecheck test build`
 - [ ] 9.2 The compose smoke test
 - [ ] 9.3 The full Playwright suite, run more than once (7.2), with the output quoted honestly — including any failure
-- [ ] 9.4 `node scripts/check-boundaries.mjs` (the harness must not make `packages/schema` import an app)
+- [x] 9.4 `node scripts/check-boundaries.mjs` (the harness must not make `packages/schema` import an app)
 - [ ] 9.5 `npx -y @fission-ai/openspec@latest validate e2e-isolation` clean, and every scenario in `specs/ci-pipeline/spec.md` verified true

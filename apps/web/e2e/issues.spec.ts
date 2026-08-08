@@ -1,5 +1,6 @@
-import { expect, type Locator, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
+import { expect, type Locator, type Page } from '@playwright/test'
+import { test } from './fixtures'
+import { ADMIN, ensureAccount, mintInvite, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -314,7 +315,7 @@ test('the grouped list renders in all three presets, light and dark', async ({ p
 // the read-only surfaces.
 test('a viewer reads issues but cannot write across list, detail, and palette', async ({
   page,
-  browser,
+  newContext,
 }) => {
   await enterApp(page)
   const teamName = await openTeamIssues(page)
@@ -326,10 +327,7 @@ test('a viewer reads issues but cannot write across list, detail, and palette', 
   // The admin mints a viewer invite from the workspace overview.
   await page.goto('/')
   await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
-  await page.getByTestId('create-invite').click()
-  await page.getByLabel('Role', { exact: true }).selectOption('viewer')
-  await page.getByRole('button', { name: 'Create invite' }).click()
-  const inviteLink = await page.getByTestId('invite-link').first().inputValue()
+  const inviteLink = await mintInvite(page, { role: 'viewer' })
   expect(inviteLink).toContain('/invite?token=')
 
   const viewer = {
@@ -337,51 +335,47 @@ test('a viewer reads issues but cannot write across list, detail, and palette', 
     password: 'viewer-password-1234',
     name: `Issue Viewer ${Date.now().toString(36)}`,
   }
-  const context = await browser.newContext()
-  try {
-    const vp = await context.newPage()
-    await vp.goto(inviteLink)
-    await expect(vp.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
-    await vp.getByRole('button', { name: 'Create one' }).click()
-    await vp.getByLabel('Name').fill(viewer.name)
-    await vp.getByLabel('Email').fill(viewer.email)
-    await vp.getByLabel('Password', { exact: true }).fill(viewer.password)
-    await vp.getByTestId('login-submit').click()
-    await expect(vp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
-    await expect(vp.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
-      timeout: 30_000,
-    })
+  const context = await newContext()
+  const vp = await context.newPage()
+  await vp.goto(inviteLink)
+  await expect(vp.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
+  await vp.getByRole('button', { name: 'Create one' }).click()
+  await vp.getByLabel('Name').fill(viewer.name)
+  await vp.getByLabel('Email').fill(viewer.email)
+  await vp.getByLabel('Password', { exact: true }).fill(viewer.password)
+  await vp.getByTestId('login-submit').click()
+  await expect(vp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await expect(vp.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+    timeout: 30_000,
+  })
 
-    // The viewer joins the team for read scope, then opens its issues.
-    const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
-    await teamCard.getByRole('button', { name: 'Join this team' }).click()
-    await vp.getByRole('link', { name: new RegExp(teamName) }).click()
-    await stop(vp, 'Issues').click()
+  // The viewer joins the team for read scope, then opens its issues.
+  const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
+  await teamCard.getByRole('button', { name: 'Join this team' }).click()
+  await vp.getByRole('link', { name: new RegExp(teamName) }).click()
+  await stop(vp, 'Issues').click()
 
-    // List: the viewer reads the admin's issue.
-    await expect(row(vp, issueTitle)).toBeVisible({ timeout: 20_000 })
+  // List: the viewer reads the admin's issue.
+  await expect(row(vp, issueTitle)).toBeVisible({ timeout: 20_000 })
 
-    // Detail: opening the issue is fully read-only.
-    const target = row(vp, issueTitle)
-    await target.focus()
-    await vp.keyboard.press('Enter')
-    const panel = vp.getByRole('dialog', { name: 'Issue detail' })
-    await expect(panel).toBeVisible({ timeout: 20_000 })
-    await expect(panel.getByRole('heading', { name: issueTitle })).toBeVisible()
-    await expect(panel.getByRole('textbox', { name: 'Issue title' })).toHaveCount(0)
-    await expect(panel.getByRole('textbox', { name: 'Issue description' })).toHaveCount(0)
-    await expect(panel.getByRole('textbox', { name: 'Add a comment' })).toHaveCount(0)
-    await expect(panel.getByRole('button', { name: /^Status:/ })).toBeDisabled()
-    await vp.keyboard.press('Escape')
+  // Detail: opening the issue is fully read-only.
+  const target = row(vp, issueTitle)
+  await target.focus()
+  await vp.keyboard.press('Enter')
+  const panel = vp.getByRole('dialog', { name: 'Issue detail' })
+  await expect(panel).toBeVisible({ timeout: 20_000 })
+  await expect(panel.getByRole('heading', { name: issueTitle })).toBeVisible()
+  await expect(panel.getByRole('textbox', { name: 'Issue title' })).toHaveCount(0)
+  await expect(panel.getByRole('textbox', { name: 'Issue description' })).toHaveCount(0)
+  await expect(panel.getByRole('textbox', { name: 'Add a comment' })).toHaveCount(0)
+  await expect(panel.getByRole('button', { name: /^Status:/ })).toBeDisabled()
+  await vp.keyboard.press('Escape')
 
-    // Palette: no write commands are offered even with a focused target.
-    await target.focus()
-    await vp.keyboard.press('ControlOrMeta+k')
-    await expect(vp.getByRole('dialog', { name: 'Command palette' })).toBeVisible()
-    await expect(vp.getByRole('option', { name: /Change status/ })).toHaveCount(0)
-    await expect(vp.getByRole('option', { name: /^Assign/ })).toHaveCount(0)
-    await expect(vp.getByRole('option', { name: /Add label/ })).toHaveCount(0)
-  } finally {
-    await context.close()
-  }
+  // Palette: no write commands are offered even with a focused target.
+  await target.focus()
+  await vp.keyboard.press('ControlOrMeta+k')
+  await expect(vp.getByRole('dialog', { name: 'Command palette' })).toBeVisible()
+  await expect(vp.getByRole('option', { name: /Change status/ })).toHaveCount(0)
+  await expect(vp.getByRole('option', { name: /^Assign/ })).toHaveCount(0)
+  await expect(vp.getByRole('option', { name: /Add label/ })).toHaveCount(0)
 })

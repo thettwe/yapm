@@ -97,7 +97,8 @@ yapm/
 ├─ packages/
 │  ├─ schema/       # THE data layer: Kysely migrations + generated DB types,
 │  │                #   hand-written Zero schema, Zod validators, shared mutators
-│  ├─ ui/           # design-system components (Radix + Tailwind), keyboard primitives
+│  ├─ ui/           # design-system components (Base UI + Tailwind), the drawn delivery
+│  │                #   vocabulary (reality track, glyphs, bands, charts), keyboard primitives
 │  ├─ api/          # OpenAPI spec + typed client, generated from server routes
 │  ├─ email/        # react-email templates → {subject, html, text}. No transport, no env,
 │  │                #   no schema dep — which is what keeps its JSX/DOM tsconfig out of server/

@@ -9,8 +9,21 @@ runs as three containers you own.
 
 ## Features
 
-- [Board](/features/board/) — a keyboard-first kanban of your team's issues, grouped into
-  the six fixed status columns, at `/teams/<teamId>/board`.
+- [Team Home](/features/team-home/) — the team page is a morning digest at `/teams/<teamId>`: the
+  cycle's vitals, the exceptions that need a human, what happened overnight, and your own in-flight
+  work. Every empty band folds away rather than apologising, and the whole page is computed on your
+  device from rows already synced.
+- [The issue list](/features/issue-list/) — where a team's work lives, at `/teams/<teamId>/issues`.
+  Every row with a linked change **states** what git says about it in words as well as drawing it,
+  and a row with none stays genuinely blank. A quiet filter bar, group headers, a fold that states
+  the true remaining count, and a complete keyboard model.
+- [The issue detail](/features/issue-detail/) — at `/teams/<teamId>/issues/ENG-116`, the one page
+  that states a fact twice on purpose: a plain line a product manager reads directly above a mono
+  line an engineer reads, a vertical delivery rail, and — when the board and git disagree — a
+  callout carrying both clocks as evidence.
+- [Board](/features/board/) — a keyboard-first kanban of your team's issues, grouped into the six
+  fixed status columns. A **lens on Issues**, not a destination of its own, at
+  `/teams/<teamId>/board`.
 - [Cycles](/features/cycles/) — time-boxed iterations for a team, with automatic rollover of
   unfinished work when a cycle ends, at `/teams/<teamId>/cycles`.
 - [Triage](/features/triage/) — an inbox for incoming, unsorted issues with keyboard-first
@@ -18,10 +31,17 @@ runs as three containers you own.
 - [Projects & roadmap](/features/projects/) — lightweight, workspace-level projects with
   computed progress and a keyboard-first roadmap timeline across teams, at
   `/teams/<teamId>/projects` and `/teams/<teamId>/roadmap`.
-- [Delivery signals](/features/delivery-signals/) — every issue row shows delivery reality
-  (PR state, CI health, whether a deployment carrying the merge commit succeeded, review age)
-  derived from linked GitHub activity, with a divergence break when a human status disagrees with
-  git. [Connect GitHub](/self-hosting/github-connector/) to turn it on.
+- [The app frame](/features/app-frame/) — every page sits in the same three bands: a 48px deck
+  identical everywhere, the page's own masthead, and a 32px statusline. Six destinations, one
+  command palette, and one attention number the deck badge, the statusline and Team Home all read.
+- [The reality vocabulary](/features/reality-vocabulary/) — one language for PR, CI, review and
+  deploy reality wherever it is drawn: four stations joined by segments, a `//` break where the
+  board and git disagree, status as a position around the cycle, priority as weight in ticks, and
+  phrases at rest from one shared dictionary.
+- [Delivery signals](/features/delivery-signals/) — an issue row with a linked change shows
+  delivery reality (PR state, CI health, whether a deployment carrying the merge commit succeeded,
+  review age) derived from linked GitHub activity, with a divergence break when a human status
+  disagrees with git. [Connect GitHub](/self-hosting/github-connector/) to turn it on.
 - [Status automation](/features/auto-status/) — opt in, per team, to let a linked pull request drive
   an issue's status: opened moves it to In Review, merged moves it to Done. Off by default, never
   backward, and it changes no existing issue when you enable it.

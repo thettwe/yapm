@@ -409,8 +409,8 @@ Design (input): multiply usage × the (volatile) per-model price to show estimat
 1. **Model IDs & prices are volatile and partly UNVERIFIED** (OpenAI GPT-5.x naming, Gemini 3.x). Resolve live via each provider's models/list endpoint; never hardcode as constants.
 2. **Gemini `usageMetadata` accessor** — confirm exact field path in `@google/genai` d.ts before wiring spend tracking.
 3. **AI SDK `providerOptions` passthrough typing** — validate the specific per-provider options yapm needs (Anthropic `effort`/thinking, Gemini grounding off, OpenAI `strict`) are honored; the LCD surface is uniform, the tail is not fully type-checked.
-4. **Connector secret surface (#8) must land first** — no at-rest encryption utility exists today; AI key storage depends on it.
-5. **Issue mutators (#3) must land** — today only workspace/team/auth mutators exist; the agent's action surface is thin until the work graph's core mutators are built. This is by design (AI is #9, last) — "differentiated by the data, not the model."
+4. ~~**Connector secret surface (#8) must land first**~~ — **RESOLVED.** Shipped as `packages/schema/src/secrets/codec.ts`: AES-256-GCM, a `v1.`-prefixed versioned blob so a key rotation can re-encrypt lazily, and `decodeEncryptionKey` over the `SECRETS_ENCRYPTION_KEY` env var (`apps/server/src/config/env.ts`). AI keys use it.
+5. ~~**Issue mutators (#3) must land**~~ — **RESOLVED**, long since. `packages/schema/src/index.ts` exports the full issue/cycle/project/retro/notification/pm-digest mutator surface, and `apps/server/src/ai/tools.ts` derives the agent's tool set from it — which is what "differentiated by the data, not the model" cashes out to.
 6. **`jose` version-collision risk** (TECHSTACK.md risk #5, Zero jose@5 vs better-auth jose@6) is unrelated to these SDKs, but note none of the four AI SDKs pull `jose`, so they don't worsen it (unverified deep-tree check, but none surfaced).
 
 ---

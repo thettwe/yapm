@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Authenticated } from '@/components/authenticated'
+import { AppFrame } from '@/frame/app-frame'
 import { PmDigestsGate } from '@/pm-digest/digests-gate'
 
 export const Route = createFileRoute('/digests')({ component: PmDigestsPage })
@@ -10,7 +11,9 @@ export const Route = createFileRoute('/digests')({ component: PmDigestsPage })
 function PmDigestsPage() {
   return (
     <Authenticated>
-      <PmDigestsGate />
+      <AppFrame>
+        <PmDigestsGate />
+      </AppFrame>
     </Authenticated>
   )
 }

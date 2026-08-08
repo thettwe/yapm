@@ -8,6 +8,8 @@ import {
   type IssueLinkRow,
   type IssueStatus,
   type LinkedEntities,
+  type RestPhrase,
+  sayRestPhrase,
   type TeamDeploymentRow,
 } from '@yapm/schema'
 
@@ -20,6 +22,9 @@ export interface DeliveryView {
   // "not linked" state). `pr`/`ci` are the seam's own string unions, passed straight through.
   readonly strip: DeliveryStrip | null
   readonly divergence: DivergenceKind | null
+  // What the row says at rest, from the shared dictionary's neutral register. Derived from the
+  // SAME signal the track is drawn from — one `computeDeliverySignal` per row, never two.
+  readonly phrase: RestPhrase
 }
 
 // The human sentence the `//` break carries — the one place status-vs-reality is named for the
@@ -50,8 +55,10 @@ export function deliveryView(
 ): DeliveryView {
   const signal = computeDeliverySignal(issue, linked)
   const divergence = computeDivergence(issue.status, signal)
-  if (signal === null) return { strip: null, divergence }
+  const phrase = sayRestPhrase(issue.status, signal, divergence, 'neutral')
+  if (signal === null) return { strip: null, divergence, phrase }
   return {
+    phrase,
     strip: {
       pr: signal.pr,
       ci: signal.ciHealth,

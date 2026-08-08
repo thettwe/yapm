@@ -1,5 +1,7 @@
+import { restPhrase } from '@yapm/schema'
 import { IssueRow } from './issue-row'
 import { buildRealityShape, RealityTrack, realityTrackLabel } from './reality-track'
+import { RestPhraseText } from './rest-phrase'
 import { PresetGrid } from './story-presets'
 
 export default {
@@ -209,6 +211,85 @@ export function AllPresets() {
             priority="no-priority"
             status="backlog"
             date="2w"
+          />
+        </div>
+      </div>
+    </PresetGrid>
+  )
+}
+
+// The mock's four phrase cases, a quiet row, and the selected divergent row that carries its
+// phrase AND its broken track at once. Every string comes from the shared dictionary — a story
+// that typed its own would be the second vocabulary the dictionary exists to prevent.
+function say(key: Parameters<typeof restPhrase>[0], reviewAgeMs?: number) {
+  return (
+    <RestPhraseText phrase={restPhrase(key, 'neutral', { reviewAgeMs: reviewAgeMs ?? null })} />
+  )
+}
+
+export function PhrasesAtRest() {
+  return (
+    <PresetGrid>
+      <div className="overflow-hidden rounded-card border border-border bg-bg">
+        <div className="divide-y divide-border">
+          <IssueRow
+            issueKey="ENG-115"
+            title="Address autocomplete on shipping step"
+            priority="low"
+            status="todo"
+            labels={[{ name: 'feature', tone: 'in-review' }]}
+            date="7h"
+            phrase={say('checks_failing')}
+            realityTrack={<Track strip={DRAFT_RED} />}
+          />
+          <IssueRow
+            issueKey="ENG-116"
+            title="Apple Pay in the payment sheet"
+            priority="high"
+            status="in-progress"
+            labels={[{ name: 'feature', tone: 'in-review' }]}
+            date="11h"
+            selected
+            phrase={say('diverged_behind_merge')}
+            realityTrack={
+              <Track
+                strip={DIVERGED}
+                divergence={{ divergence: 'status_behind_merge' }}
+                sentence="PR merged but this issue is not marked done"
+              />
+            }
+          />
+          <IssueRow
+            issueKey="ENG-119"
+            title="Persist cart across sessions"
+            priority="high"
+            status="in-progress"
+            labels={[{ name: 'feature', tone: 'in-progress' }]}
+            date="1d"
+            assignee={{ name: 'Ada Lovelace' }}
+            phrase={say('merged_not_deployed')}
+            realityTrack={<Track strip={DIVERGED} />}
+          />
+          <IssueRow
+            issueKey="ENG-113"
+            title="Refund flow for partial orders"
+            priority="low"
+            status="in-progress"
+            labels={[{ name: 'feature', tone: 'in-review' }]}
+            date="15h"
+            assignee={{ name: 'Grace Hopper' }}
+            phrase={say('review_unreviewed', 16 * 60 * 60 * 1000)}
+            realityTrack={<Track strip={OPEN_GREEN} />}
+          />
+          {/* Quiet: the slot is reserved and genuinely blank. */}
+          <IssueRow
+            issueKey="ENG-1"
+            title="Focus lost after closing the palette"
+            priority="high"
+            status="in-progress"
+            labels={[{ name: 'bug', tone: 'urgent' }]}
+            date="2m"
+            assignee={{ name: 'Alan Turing' }}
           />
         </div>
       </div>

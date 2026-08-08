@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { restPhrase } from '@yapm/schema'
 import { Avatar, AvatarFallback } from '@yapm/ui/components/avatar'
 import { Badge } from '@yapm/ui/components/badge'
 import { Button } from '@yapm/ui/components/button'
@@ -255,11 +256,14 @@ function ShippedPeek() {
           <div className="mt-2.5">
             <RealityTrack
               shape={buildRealityShape(DIVERGED, { divergence: 'status_behind_merge' })}
-              label={realityTrackLabel(DIVERGED, 'Done in git, not on the board')}
+              label={realityTrackLabel(
+                DIVERGED,
+                restPhrase('diverged_behind_merge', 'neutral').text,
+              )}
             />
           </div>
           <PeekFact
-            phrase="Built — not live yet"
+            phrase={restPhrase('merged_not_deployed', 'neutral').text ?? ''}
             detail={
               <>
                 merged 8f21c4a · 14/14 checks

@@ -21,6 +21,7 @@ import {
   type PrState,
 } from './delivery.js'
 import { plural } from './metrics/scope.js'
+import { sayRestPhrase } from './phrases.js'
 
 // The team Home digest's whole page model, computed in ONE place over rows the page already syncs
 // (design §D1). Pure and deterministic: `now` and `viewerId` are explicit arguments, no `Date.now()`
@@ -845,7 +846,10 @@ function buildYours(
       if (signal.reviewAgeMs !== null) waitingAges.push(signal.reviewAgeMs)
       continue
     }
-    const { say, sayUrgent } = sayPhrase(issue.status, signal, divergence)
+    // The shared dictionary, personal register. YOURS holds no phrase table of its own — the
+    // strings it speaks and the strings the issue list speaks resolve from one classifier, so the
+    // two surfaces cannot drift.
+    const phrase = sayRestPhrase(issue.status, signal, divergence, 'personal')
     rows.push({
       issueId: issue.id,
       issueKey: issueKeyOf(teamKey, issue),
@@ -862,8 +866,8 @@ function buildYours(
               deployedAt: signal.deployedAt,
             },
       divergence,
-      say,
-      sayUrgent,
+      say: phrase.text ?? '',
+      sayUrgent: phrase.urgent,
       git: gitLine(issue, signal, now),
     })
   }
@@ -881,31 +885,6 @@ function buildYours(
       waitingAges.length === 0 ? null : { count: waitingAges.length, agesMs: waitingAges },
     noReviewsOwed: !anyAwaitingReview,
     footnote: YOURS_FOOTNOTE,
-  }
-}
-
-function sayPhrase(
-  status: IssueStatus,
-  signal: DeliverySignal | null,
-  divergence: DivergenceKind | null,
-): { say: string; sayUrgent: boolean } {
-  if (divergence === 'status_behind_merge') {
-    return { say: 'Done in git — update the board', sayUrgent: true }
-  }
-  if (signal?.ciHealth === 'failing') {
-    return { say: 'Checks failing — the fix is yours', sayUrgent: true }
-  }
-  if (signal?.pr === 'approved') return { say: 'Approved — merge when ready', sayUrgent: false }
-  if (signal?.pr === 'draft') return { say: 'Draft open — not in review yet', sayUrgent: false }
-  switch (status) {
-    case 'in_review':
-      return { say: 'In review', sayUrgent: false }
-    case 'in_progress':
-      return { say: 'In progress', sayUrgent: false }
-    case 'todo':
-      return { say: 'Not started', sayUrgent: false }
-    default:
-      return { say: 'In the backlog', sayUrgent: false }
   }
 }
 

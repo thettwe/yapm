@@ -1,3 +1,4 @@
+import type { IssueSortKey } from '@yapm/schema'
 import { describe, expect, it } from 'vitest'
 import { buildGroups, DEFAULT_SORT, type IssueRowData } from './model'
 
@@ -132,5 +133,67 @@ describe('buildGroups — filter by project', () => {
     const issues = [issue({ id: 'a', projectId: 'p1' }), issue({ id: 'b', projectId: null })]
     const { ordered } = buildGroups(issues, { ...base, grouping: 'none' })
     expect(ordered.map((i) => i.id).sort()).toEqual(['a', 'b'])
+  })
+})
+
+// Every sort key over one fixture whose SIX ascending orders are six distinct permutations, so a
+// comparator case that fell through to the default (`updated`) would produce the wrong order for
+// every other key rather than accidentally agreeing with it.
+describe('buildGroups — the six sort keys', () => {
+  const issues = [
+    issue({
+      id: 'a',
+      priority: 'low',
+      status: 'done',
+      assigneeId: 'u2',
+      createdAt: 3,
+      updatedAt: 2,
+      number: 1,
+    }),
+    issue({
+      id: 'b',
+      priority: 'medium',
+      status: 'todo',
+      assigneeId: 'u3',
+      createdAt: 2,
+      updatedAt: 1,
+      number: 3,
+    }),
+    issue({
+      id: 'c',
+      priority: 'urgent',
+      status: 'in_progress',
+      assigneeId: 'u1',
+      createdAt: 1,
+      updatedAt: 3,
+      number: 2,
+    }),
+  ]
+
+  const ASCENDING = [
+    ['priority', ['a', 'b', 'c']],
+    ['status', ['b', 'c', 'a']],
+    ['assignee', ['c', 'a', 'b']],
+    ['created', ['c', 'b', 'a']],
+    ['number', ['a', 'c', 'b']],
+    ['updated', ['b', 'a', 'c']],
+  ] as const satisfies readonly (readonly [IssueSortKey, readonly string[]])[]
+
+  it.each(ASCENDING)('%s sorts ascending', (key, expected) => {
+    const { ordered } = buildGroups(issues, {
+      ...base,
+      grouping: 'none',
+      sort: { key, direction: 'asc' },
+    })
+    expect(ordered.map((i) => i.id)).toEqual([...expected])
+  })
+
+  it.each(ASCENDING)('%s reverses under the direction toggle', (key, expected) => {
+    const { ordered } = buildGroups(issues, {
+      ...base,
+      grouping: 'none',
+      sort: { key, direction: 'desc' },
+    })
+    expect(ordered.map((i) => i.id)).toEqual([...expected].reverse())
   })
 })

@@ -1,4 +1,4 @@
-import type { DeliveryStrip } from '@yapm/schema'
+import { type DeliveryStrip, formatReviewAge } from '@yapm/schema'
 import { cn } from '@yapm/ui/lib/utils'
 import { type CSSProperties, Fragment } from 'react'
 
@@ -125,20 +125,10 @@ const CI_PHRASE: Record<CiHealth, string> = {
   pending: 'CI running',
 }
 
-// Compact review-age label ("3d", "2h", "now"), rendered from the ms since the newest review —
-// or, before any review, how long the PR has been open. There is no review-requested event, so
-// this may never be phrased as a reviewer waiting; which of the two clocks it measures is carried
-// by the strip's own `reviewAgeFrom`, so the two are never announced in the same words.
-export function formatReviewAge(ms: number): string {
-  if (ms < 60_000) return 'now'
-  const min = Math.floor(ms / 60_000)
-  if (min < 60) return `${min}m`
-  const hours = Math.floor(min / 60)
-  if (hours < 24) return `${hours}h`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d`
-  return `${Math.floor(days / 7)}w`
-}
+// Re-exported, not redeclared: the phrase dictionary states the same age in words, and the two
+// would eventually disagree if each owned a formatter. The implementation lives beside the seam
+// that produces the milliseconds.
+export { formatReviewAge }
 
 // A PR that has never been reviewed and a PR reviewed three days ago both carry a review age, and
 // the two are not the same sentence. `reviewAgeFrom` says which clock it is; a strip that predates

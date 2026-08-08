@@ -80,7 +80,7 @@ out beside it. It fires when:
 
 - a linked PR is **merged** but the issue is not marked done or canceled,
 - an issue is **done** but its CI is failing, or
-- an issue is **in review** with no linked pull request at all, or only a draft one.
+- an issue is **in review** while its only linked pull request is still a draft.
 
 Which segment breaks says which of the three fired — see
 [the `//` break](/features/reality-vocabulary/#the--break). It rides on the same linked data as the
@@ -119,6 +119,24 @@ positive costs a glance and a false negative costs a missed release.
 
 Where an issue has no linked data, a delivery filter simply matches nothing rather than hiding the
 issue.
+
+## Where each signal is said in words
+
+Every signal on this page is also **stated**, not only drawn. The words come from one shared
+dictionary — see [phrases at rest](/features/reality-vocabulary/#phrases-at-rest) for the
+vocabulary and [the issue list](/features/issue-list/) for where each phrase lands on a row.
+
+| Signal | The row says |
+| --- | --- |
+| Merged PR under an unfinished issue | Done in git, not on the board |
+| CI failing | Checks failing |
+| Merged, no deployment carried the commit | Built — not live yet |
+| Open PR, nobody has reviewed | In review — waiting *N* |
+| Open PR, a review came back without approving | In review — reviewed *N* ago |
+| Deployed | *(nothing — the track's Live station already says it)* |
+
+The check and deploy phrases carry GitHub's mark, because those facts came from GitHub. The
+divergence and review-age phrases carry none: yapm derived them.
 
 ## Issue detail
 

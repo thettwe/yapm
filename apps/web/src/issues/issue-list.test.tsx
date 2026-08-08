@@ -12,7 +12,7 @@ const harness = vi.hoisted(() => ({
   navigate: vi.fn(),
   openCreate: vi.fn(),
   openStatus: vi.fn(),
-  mutate: vi.fn(() => ({
+  mutate: vi.fn((_mutation: unknown) => ({
     client: Promise.resolve({ type: 'ok' }),
     server: Promise.resolve({ type: 'ok' }),
   })),
@@ -81,6 +81,9 @@ function issue(
     updatedAt: number
     pr: PrFixture | null
     labels: { id: string; name: string; color: string }[]
+    assigneeId: string | null
+    cycleId: string | null
+    projectId: string | null
   }> & { id: string },
 ): unknown {
   const { pr, ...rest } = overrides
@@ -293,9 +296,23 @@ test('moving down from the last rendered row reaches the fold', () => {
 // ---------------------------------------------------------------------------
 
 const LABEL = { id: 'label-1', name: 'bug', color: '#cc5a40' }
+const CYCLE = { id: 'cycle-1', teamId: 'team-1', name: 'Checkout push', number: 7 }
+const PROJECT = { id: 'project-1', name: 'Checkout' }
 
+// Alpha carries a value on every axis and Beta carries none of them, so a toggle on ANY axis has
+// exactly one right answer — an axis wired to the wrong predicate leaves both rows or neither.
 const FILTER_FIXTURE = [
-  issue({ id: 'i-a', number: 1, title: 'Alpha row', status: 'todo', priority: 'urgent' }),
+  issue({
+    id: 'i-a',
+    number: 1,
+    title: 'Alpha row',
+    status: 'todo',
+    priority: 'urgent',
+    assigneeId: 'user-1',
+    cycleId: CYCLE.id,
+    projectId: PROJECT.id,
+    pr: { state: 'open', openedAt: NOW - 3 * HOUR, ciChecks: [{ conclusion: 'failure' }] },
+  }),
   issue({
     id: 'i-b',
     number: 2,
@@ -311,23 +328,46 @@ function mountFiltering() {
     'teams.all': [TEAM],
     'issues.byTeam': FILTER_FIXTURE,
     'labels.byTeam': [LABEL],
+    'cycles.byTeam': [CYCLE],
+    'projects.all': [PROJECT],
     'users.all': [{ id: 'user-1', name: 'Ada', email: 'ada@example.com' }],
   }
   return mount()
 }
 
-test('every filter axis is present, named, and narrows the list', () => {
-  mountFiltering()
+function survivors(): string[] {
+  return ['Alpha row', 'Beta row'].filter((title) =>
+    rows().some((row) => within(row).queryByText(title) !== null),
+  )
+}
 
-  for (const axis of ['Status', 'Priority', 'Assignee', 'Delivery', 'Label']) {
-    expect(screen.getByRole('button', { name: `Filter by ${axis}` })).toBeInTheDocument()
-  }
+// All seven axes, each proven by the row it leaves standing rather than by the menu opening — an
+// axis wired to the wrong predicate leaves both rows or neither.
+// Status and Priority options carry their own drawn mark, whose `role="img"` label joins the
+// option's accessible name ahead of the text ("TodoTodo") — hence the trailing anchor on those two
+// rather than a whole-string match.
+test.each([
+  ['Status', /Todo$/, 'Alpha row'],
+  ['Priority', /Urgent$/, 'Alpha row'],
+  ['Assignee', /^Ada$/, 'Alpha row'],
+  ['Delivery', /^Failing CI$/, 'Alpha row'],
+  ['Label', /^bug$/, 'Beta row'],
+  ['Cycle', /^Checkout push · Cycle 7$/, 'Alpha row'],
+  ['Project', /^Checkout$/, 'Alpha row'],
+] as const)(
+  'the %s axis is named and narrows to the row its predicate matches',
+  (axis, option, survivor) => {
+    mountFiltering()
 
-  fireEvent.click(screen.getByRole('button', { name: 'Filter by Status' }))
-  fireEvent.click(screen.getByRole('menuitem', { name: /Todo/ }))
-  expect(rows()).toHaveLength(1)
-  expect(screen.getByText('Alpha row')).toBeInTheDocument()
-})
+    const trigger = screen.getByRole('button', { name: `Filter by ${axis}` })
+    expect(trigger).toBeInTheDocument()
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('menuitem', { name: option }))
+
+    expect(rows()).toHaveLength(1)
+    expect(survivors()).toEqual([survivor])
+  },
+)
 
 test('the three delivery predicates are all offered', () => {
   mountFiltering()
@@ -378,6 +418,22 @@ test('every sort key and both directions survive the menu', () => {
   expect(first()).toBe(before)
 })
 
+interface SavedViewMutation {
+  mutator: { mutatorName: string }
+  args: { name: string; grouping: unknown; filter: unknown; sort: unknown }
+}
+
+function saveViewAs(name: string): void {
+  fireEvent.click(screen.getByRole('button', { name: 'Save current view' }))
+  fireEvent.change(screen.getByLabelText('View name'), { target: { value: name } })
+  const submit = screen
+    .getAllByRole('button', { name: 'Save view' })
+    .find((button) => button.getAttribute('type') === 'submit')
+  if (submit === undefined) throw new Error('no submit button')
+  fireEvent.click(submit)
+  expect(harness.mutate).toHaveBeenCalled()
+}
+
 test('a view saves through the mutator and a saved view re-applies', () => {
   harness.rows = {
     'teams.all': [TEAM],
@@ -398,14 +454,29 @@ test('a view saves through the mutator and a saved view re-applies', () => {
   expect(rows()).toHaveLength(1)
   expect(screen.getByText('Alpha row')).toBeInTheDocument()
 
-  fireEvent.click(screen.getByRole('button', { name: 'Save current view' }))
-  fireEvent.change(screen.getByLabelText('View name'), { target: { value: 'Mine' } })
-  const submit = screen
-    .getAllByRole('button', { name: 'Save view' })
-    .find((button) => button.getAttribute('type') === 'submit')
-  if (submit === undefined) throw new Error('no submit button')
-  fireEvent.click(submit)
-  expect(harness.mutate).toHaveBeenCalled()
+  saveViewAs('Mine')
+
+  const call = harness.mutate.mock.calls[0]?.[0] as SavedViewMutation | undefined
+  expect(call?.mutator.mutatorName).toBe('savedView.create')
+  expect(call?.args.name).toBe('Mine')
+  // The applied view's filter and sort are what gets re-saved, not the defaults.
+  expect(call?.args.filter).toEqual({ priority: ['urgent'] })
+  expect(call?.args.sort).toEqual({ key: 'priority', direction: 'desc' })
+})
+
+test('saving while grouped by cycle downgrades the grouping and keeps the rest', () => {
+  mountFiltering()
+
+  fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'cycle' } })
+  expect(screen.getByRole('region', { name: 'Checkout push' })).toBeInTheDocument()
+
+  saveViewAs('By cycle')
+
+  const call = harness.mutate.mock.calls[0]?.[0] as SavedViewMutation | undefined
+  // `cycle` is not in the persistable grouping enum, so it falls back to the default rather than
+  // being stored as a value the schema cannot express — and the on-screen grouping is untouched.
+  expect(call?.args.grouping).toBe('status')
+  expect(screen.getByLabelText('Group by')).toHaveValue('cycle')
 })
 
 // ---------------------------------------------------------------------------

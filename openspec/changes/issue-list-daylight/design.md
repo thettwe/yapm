@@ -332,3 +332,20 @@ Taken during the build:
   would duplicate ~120 lines of mocking for no added coverage. Every assertion the plan named is
   present: the mock's four phrase strings, the empty slot on a quiet row, and
   `[data-slot="provenance-mark"][data-provider="github"]` on exactly the check and deploy phrases.
+
+- **DI-12 — the seven-axis sweep is a component test; the six sort keys are a unit test.** Task 6.6
+  asks one test to prove "every axis toggles its predicate, every sort key sorts". Those two halves
+  want different tiers. The axes are proven in `issue-list.test.tsx` over a fixture where **Alpha
+  carries a value on every axis and Beta on none**, so a toggle on any axis has exactly one right
+  answer and an axis wired to the wrong predicate leaves both rows or neither — that has to be a
+  component test, because what is under test is the control's wiring, not `matchesFilter`, which
+  `packages/schema/src/zero/filter.test.ts` already covers. The sort keys are proven in
+  `model.test.ts` instead: driving six keys × two directions through the menu would be twelve
+  mounts to re-test a pure comparator, so `buildGroups` is called directly over a fixture whose six
+  ascending orders are **six distinct permutations** — which is what makes a comparator case that
+  fell through to the default (`updated`) fail rather than accidentally agree. The menu itself is
+  still asserted in the component test: all six keys offered, both directions named, and the
+  direction toggle actually reversing the rendered order.
+  One incidental fact worth writing down: a `Status` or `Priority` option's accessible name is the
+  drawn mark's `role="img"` label **concatenated with** the option text and no separator
+  (`"TodoTodo"`), so those two queries anchor on the tail rather than matching the whole string.

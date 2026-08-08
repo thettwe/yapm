@@ -118,6 +118,111 @@ test('the distribution draws exactly one dot per merged change and names the uni
   expect(screen.getByText('1 change waited 220h or more')).toBeInTheDocument()
 })
 
+// A column stacks upward, and nothing in the data bounds how many marks share one moment. Both
+// charts grow the box to hold the tallest column rather than painting through their own annotations
+// and then outside the viewBox, over the section above.
+function viewBoxOf(chart: Element) {
+  const [, minY, , height] = (chart.getAttribute('viewBox') ?? '')
+    .split(/\s+/)
+    .map((part) => Number(part))
+  return { minY: minY as number, height: height as number }
+}
+
+test('a crowded column stays inside the box it is drawn in — the timeline', () => {
+  // Fifteen deployments at one moment: one column, fifteen high.
+  const deploys = Array.from({ length: 15 }, (_, index) => ({
+    id: `deploy-${index + 1}`,
+    position: 0.5,
+  }))
+  const { container } = render(
+    <AnnotatedTimeline
+      startLabel="Jul 30"
+      endLabel="Aug 12"
+      deploys={deploys}
+      retros={[]}
+      callout={{ position: 0.5, headline: 'A deployment went out here', subline: 'Aug 4' }}
+      todayPosition={0.6}
+      todayLabel="today · day 9 of 14"
+      daysLeftLabel="5 days left"
+      label={TIMELINE_LABEL}
+    />,
+  )
+
+  const chart = screen.getByRole('img', { name: TIMELINE_LABEL })
+  const box = viewBoxOf(chart)
+  const circles = [...container.querySelectorAll('circle')]
+  expect(circles.length).toBeGreaterThanOrEqual(deploys.length)
+  for (const circle of circles) {
+    const cy = Number(circle.getAttribute('cy'))
+    const r = Number(circle.getAttribute('r'))
+    expect(cy - r).toBeGreaterThanOrEqual(box.minY)
+    expect(cy + r).toBeLessThanOrEqual(box.minY + box.height)
+  }
+  // The call-out rose above the column rather than being painted through by it.
+  const headline = screen.getByText('A deployment went out here')
+  expect(Number(headline.getAttribute('y'))).toBeLessThan(
+    Math.min(...circles.map((circle) => Number(circle.getAttribute('cy')))),
+  )
+})
+
+test('a crowded column stays inside the box it is drawn in — the distribution', () => {
+  const dots = Array.from({ length: 15 }, (_, index) => ({
+    id: `pr-${index + 1}`,
+    position: 0.3,
+    outlier: false,
+  }))
+  const { container } = render(
+    <DistributionStrip
+      dots={dots}
+      ticks={[0, 24, 48]}
+      axisMax={48}
+      tickSuffix="h"
+      medianPosition={0.3}
+      medianLabel="median 14h"
+      notes={[{ id: 'crowd', kind: 'crowd', position: 0.3, text: '15 of 15 merged inside 14h' }]}
+      label={DISTRIBUTION_LABEL}
+    />,
+  )
+
+  const box = viewBoxOf(screen.getByRole('img', { name: DISTRIBUTION_LABEL }))
+  for (const circle of container.querySelectorAll('circle')) {
+    const cy = Number(circle.getAttribute('cy'))
+    const r = Number(circle.getAttribute('r'))
+    expect(cy - r).toBeGreaterThanOrEqual(box.minY)
+    expect(cy + r).toBeLessThanOrEqual(box.minY + box.height)
+  }
+  // The median's own label cleared the column too.
+  expect(Number(screen.getByText('median 14h').getAttribute('y'))).toBeGreaterThanOrEqual(box.minY)
+})
+
+test('two notes that land on top of each other take separate baselines, and neither runs off the left', () => {
+  const crowdText = '3 of 5 merged inside 2h'
+  const outlierText = '2 changes waited 9h or more'
+  render(
+    <DistributionStrip
+      dots={[{ id: 'pr-1', position: 0.02, outlier: false }]}
+      ticks={[0, 48, 96]}
+      axisMax={96}
+      tickSuffix="h"
+      medianPosition={2 / 96}
+      medianLabel="median 2h"
+      notes={[
+        { id: 'crowd', kind: 'crowd', position: 2 / 96, text: crowdText },
+        { id: 'outlier', kind: 'outlier', position: 9 / 96, text: outlierText },
+      ]}
+      label={DISTRIBUTION_LABEL}
+    />,
+  )
+
+  const crowd = screen.getByText(crowdText)
+  const outlier = screen.getByText(outlierText)
+  expect(outlier.getAttribute('y')).not.toBe(crowd.getAttribute('y'))
+  // Reading back leftward from a giant this close to the axis start would begin off the box.
+  expect(outlier.getAttribute('text-anchor')).toBe('start')
+  expect(Number(outlier.getAttribute('x'))).toBeGreaterThanOrEqual(0)
+  expect(Number(crowd.getAttribute('x'))).toBeGreaterThanOrEqual(0)
+})
+
 const FLOW_LABEL =
   'Shipped per cycle across the last 3 completed cycles: Cycle 1 4, Cycle 2 6, Cycle 3 5; one bar is one cycle, a ribbon is work carried into the next cycle, a cap is work added after that cycle started'
 

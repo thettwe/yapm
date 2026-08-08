@@ -530,3 +530,47 @@ shared component with one remaining caller breaks in the CALLER's wiring as read
 markup — the panel's `action` prop reaching the tile is the part no type-check would catch if the
 prop were quietly dropped. The test asserts one `retro-seed-add-card` per tile drawn, which is what
 that wiring produces.
+
+### Review round 1 — what the fixes changed about the shipped behaviour
+
+Fixing the round's findings moved seven stated behaviours, each recorded here because the page's
+words are its product:
+
+- **The carryover trend is a dense series.** The ribbons drawn between bars are the non-zero carries,
+  but the sentence above them now compares one entry per ADJACENT PAIR (zero included) and names both
+  sides by cycle title. Comparing the drawn ribbons compared cycles any distance apart, and "the last
+  cycle" named the wrong cycle in every case: the newest ribbon leaves the second-to-last cycle in the
+  window, because the last cycle's carry has no bar to reach.
+- **The distribution classifies against the exact median.** The label quotes the reading's rounded
+  figure; the crowd count and the outlier rule are read off `median(...)` of the same population. A
+  median under six minutes rounds to `0h`, and four times zero made every change a giant; a median
+  that rounds down below its own population reported a crowd of none. The outlier rule is also
+  guarded on a positive median — at zero it states nothing, so it classifies nothing.
+- **A cycle past its end date says so.** `dayIndex` is clamped and `daysLeft` bottoms out at zero, so
+  the timeline published "day 14 of 14 · 0 days left" for a cycle six days overdue. It now carries
+  `overdue`/`overdueDays` and reads `day 14 of 14 · 6 days over`.
+- **The peek picks a subject it can place.** Choosing purely by newest merge let one out-of-span
+  diverged change suppress the page's only chip. The diverged set is filtered to merges inside the
+  cycle in progress before the newest is taken; `classCount` still counts the whole class.
+- **`metricMap`'s `drawn` is per reading.** Three of the four stat keys are connector-fed and are
+  omitted rather than zeroed, so "the stats row drew" was claiming a reading that was never emitted.
+- **Both stacking charts grow their own box.** A column stacks upward with no ceiling; unbounded it
+  painted through the call-out and the median label and then outside the `overflow-visible` viewBox,
+  over the section above. Each chart now measures its tallest column first, lifts the annotation band
+  above it and grows the viewBox top by the same amount — the timeline already did this downward for
+  extra retrospective rows. The distribution's two notes are also laid out against each other
+  (estimated widths, since a static drawing cannot measure text): an outlier note that would overlap
+  the crowd takes its own baseline above it, and one that would begin left of the axis turns around
+  and reads rightward from the edge.
+- **A `how ·` / peek panel can hang from either edge.** `How` and `PeekPanel` take
+  `align: 'start' | 'end'`, which swaps `left-0` for `right-0` ON THE PANEL. Every section-level
+  trigger on this page sits at the right of the content column and passes `end`; the peek chip does
+  when it sits in the back half of the cycle. A wrapper class could not have fixed it — the
+  positioning class is on the panel.
+
+Two smaller ones: the binding rule's near-duplicate on the retro's data panel is dropped (the panel's
+heading plus "Team-level trends from this cycle's own work" already carries the register), and the
+product-wide "appears exactly once" claim is now backed by a source walk over the four `src` roots in
+`metrics/page.test.ts`, on the phrase-dictionary guard's pattern. The timeline's peek chip is
+positioned through the same `LEFT + position * SPAN` arithmetic as the marks it annotates, rather
+than as a raw percentage of a wrapper whose axis is inset.

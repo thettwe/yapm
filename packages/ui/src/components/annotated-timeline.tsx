@@ -106,12 +106,21 @@ export function AnnotatedTimeline({
   const todayX = at(todayPosition)
   const calloutX = callout === null ? 0 : at(callout.position)
 
+  // A busy day stacks upward without a ceiling, so the annotation band above the track rises above
+  // the tallest column and the box grows to hold it — the same way an extra retrospective row grows
+  // it downward. Left unbounded the dots paint through the call-out and then out of the viewBox,
+  // over whatever the page drew above this section.
+  const stackTop = dots.reduce((top, dot) => Math.min(top, dot.cy - DOT_R), DOT_Y - DOT_R)
+  const lift = Math.max(0, CALLOUT_TOP - stackTop)
+  const calloutTop = CALLOUT_TOP - lift
+  const viewHeight = height + lift
+
   return (
     <div className="relative">
       <svg
         role="img"
         aria-label={label}
-        viewBox={`0 0 ${WIDTH} ${height}`}
+        viewBox={`0 ${-lift} ${WIDTH} ${viewHeight}`}
         className="block h-auto w-full overflow-visible"
       >
         <rect
@@ -200,7 +209,7 @@ export function AnnotatedTimeline({
         </text>
         <text
           x={(todayX + RIGHT) / 2}
-          y={TRACK_Y - 10}
+          y={TRACK_Y - 10 - lift}
           textAnchor="middle"
           fontSize={11}
           fill="var(--text-2)"
@@ -211,7 +220,7 @@ export function AnnotatedTimeline({
         {callout === null ? null : (
           <g>
             <path
-              d={`M ${calloutX} ${TRACK_Y - 4} L ${calloutX} ${CALLOUT_TOP}`}
+              d={`M ${calloutX} ${TRACK_Y - 4} L ${calloutX} ${calloutTop}`}
               fill="none"
               stroke="var(--border-strong)"
               strokeWidth={1}
@@ -219,7 +228,7 @@ export function AnnotatedTimeline({
             <circle cx={calloutX} cy={TRACK_Y - 4} r={1.5} fill="var(--border-strong)" />
             <text
               x={calloutX - 6}
-              y={CALLOUT_TOP - 16}
+              y={calloutTop - 16}
               textAnchor="end"
               fontSize={12}
               fontWeight={600}
@@ -229,7 +238,7 @@ export function AnnotatedTimeline({
             </text>
             <text
               x={calloutX - 6}
-              y={CALLOUT_TOP - 2}
+              y={calloutTop - 2}
               textAnchor="end"
               fontSize={10}
               fontFamily="var(--type-mono)"
@@ -268,11 +277,15 @@ export function AnnotatedTimeline({
         })}
       </svg>
       {chip === undefined || chipPosition == null ? null : (
+        // Placed through the SAME arithmetic every drawn mark goes through: the axis is inset by
+        // `LEFT`/`RIGHT`, so a raw percentage of the wrapper's width does not sit over the moment it
+        // annotates. The band above the track rises with a tall column and the chip rises with it,
+        // which is why its offset stays `CHIP_Y` from the viewBox's own top rather than from zero.
         <span
           data-slot="timeline-chip"
           style={{
-            left: `${Math.min(1, Math.max(0, chipPosition)) * 100}%`,
-            top: `${(CHIP_Y / height) * 100}%`,
+            left: `${((LEFT + Math.min(1, Math.max(0, chipPosition)) * SPAN) / WIDTH) * 100}%`,
+            top: `${(CHIP_Y / viewHeight) * 100}%`,
           }}
           className="absolute -translate-x-1/2 -translate-y-1/2"
         >

@@ -16,6 +16,7 @@ import {
   type DeliveryIssueInput,
   type DeliveryPrInput,
   HOUR_MS,
+  median,
   plural,
   prCycleHours,
   prFirstReviewHours,
@@ -178,6 +179,11 @@ export interface DeliveryTimelineSection {
   readonly dayIndex: number
   readonly dayCount: number
   readonly daysLeft: number
+  // Whether `now` is past the cycle's end date, and by how many days. `dayIndex` is clamped to
+  // `dayCount` and `daysLeft` bottoms out at zero, so without these two the page would report a
+  // cycle six days overdue as one that ends today.
+  readonly overdue: boolean
+  readonly overdueDays: number
   readonly todayPosition: number
   readonly todayLabel: string
   readonly daysLeftLabel: string
@@ -560,9 +566,7 @@ export function buildDeliveryPage(input: DeliveryPageInput, now: number): Delive
     rhythm,
     peek,
     honesty: HONESTY,
-    metricMap: metricMap({
-      statsDrawn: stats.length > 0,
-      distributionDrawn: distribution !== null,
+    metricMap: metricMap(stats, {
       flowDrawn: flow !== null,
       rhythmDrawn: rhythm !== null,
     }),
@@ -625,9 +629,19 @@ function buildTimeline(
     .sort((a, b) => a.atMs - b.atMs || a.title.localeCompare(b.title))
 
   const startDay = utcDayIndex(startMs)
-  const dayCount = Math.max(1, utcDayIndex(endMs) - startDay + 1)
-  const dayIndex = Math.min(dayCount, Math.max(1, utcDayIndex(now) - startDay + 1))
+  const endDay = utcDayIndex(endMs)
+  const nowDay = utcDayIndex(now)
+  const dayCount = Math.max(1, endDay - startDay + 1)
+  const dayIndex = Math.min(dayCount, Math.max(1, nowDay - startDay + 1))
+  // A cycle whose end date has passed is OVERDUE, and saying "day 14 of 14 · 0 days left" for a
+  // cycle six days past its end is a clamp reported as a fact. The overrun is stated instead.
+  const overdueDays = Math.max(0, nowDay - endDay)
+  const overdue = overdueDays > 0
   const daysLeft = dayCount - dayIndex
+  const overLabel = `${overdueDays} ${plural(overdueDays, 'day', 'days')} over`
+  const todayLabel = overdue
+    ? `today · day ${dayIndex} of ${dayCount} · ${overLabel}`
+    : `today · day ${dayIndex} of ${dayCount}`
 
   return {
     cycleId: cycle.id,
@@ -639,14 +653,16 @@ function buildTimeline(
     dayIndex,
     dayCount,
     daysLeft,
+    overdue,
+    overdueDays,
     todayPosition: position(now),
-    todayLabel: `today · day ${dayIndex} of ${dayCount}`,
-    daysLeftLabel: `${daysLeft} ${plural(daysLeft, 'day', 'days')} left`,
+    todayLabel,
+    daysLeftLabel: overdue ? overLabel : `${daysLeft} ${plural(daysLeft, 'day', 'days')} left`,
     deploys,
     retros,
     callout: calloutOf(deploys),
     markUnit: 'one dot is one deployment that reached production',
-    label: `${cycleTitle(cycle)}, ${dayLabel(startMs)} to ${dayLabel(endMs)}: ${deploys.length} ${plural(deploys.length, 'deployment', 'deployments')} reached production and ${retros.length} ${plural(retros.length, 'retrospective closed', 'retrospectives closed')}; one dot is one deployment; today is day ${dayIndex} of ${dayCount}`,
+    label: `${cycleTitle(cycle)}, ${dayLabel(startMs)} to ${dayLabel(endMs)}: ${deploys.length} ${plural(deploys.length, 'deployment', 'deployments')} reached production and ${retros.length} ${plural(retros.length, 'retrospective closed', 'retrospectives closed')}; one dot is one deployment; today is day ${dayIndex} of ${dayCount}${overdue ? `, ${overLabel}` : ''}`,
     how: {
       label: 'the cycle in progress',
       body: `One dot per deployment that reached production inside ${cycleTitle(cycle)}, at the moment it reached it, and a mark where a retrospective closed. The counts either side of that date are counts either side of a date, not a claim that one caused the other. The numbers below read the ${windowClause(cycleCount)} instead.`,
@@ -831,17 +847,28 @@ function buildDistribution(
     .sort((a, b) => a.exact - b.exact || (a.changeId ?? '').localeCompare(b.changeId ?? ''))
   const maxHours = exact.reduce((max, entry) => Math.max(max, entry.exact), 0)
   const axis = linearAxis(Math.max(maxHours, medianHours))
-  const outlierFrom = medianHours * DISTRIBUTION_OUTLIER_MULTIPLE
+
+  // The crowd and the outliers are classified against the UNROUNDED median — the same `median` of
+  // the same population the reading rounds for its label. Classifying against the rounded figure
+  // makes a sub-six-minute median round to 0 and every change an outlier, and a median that rounds
+  // down below its own population report a crowd of none: in both cases the sentence and the
+  // annotations state the opposite of the median they quote.
+  const exactMedian = median(exact.map((entry) => entry.exact)) ?? medianHours
+  const outlierFrom = exactMedian * DISTRIBUTION_OUTLIER_MULTIPLE
+  // A median of zero has no multiple: everything is "four times" it, which would call the whole
+  // population giants. Below one the rule states nothing, so it classifies nothing.
+  const isOutlier = (hours: number) =>
+    exactMedian > 0 && hours >= outlierFrom && hours > exactMedian
 
   const entries: DeliveryDistributionEntry[] = exact.map((entry) => ({
     changeId: entry.changeId,
     hours: round(entry.exact),
     position: clamp01(entry.exact / axis.max),
-    outlier: entry.exact >= outlierFrom && entry.exact > medianHours,
+    outlier: isOutlier(entry.exact),
   }))
 
-  const inside = exact.filter((entry) => entry.exact <= medianHours)
-  const outliers = exact.filter((entry) => entry.exact >= outlierFrom && entry.exact > medianHours)
+  const inside = exact.filter((entry) => entry.exact <= exactMedian)
+  const outliers = exact.filter((entry) => isOutlier(entry.exact))
   const annotations: DeliveryDistributionAnnotation[] = [
     {
       kind: 'crowd',
@@ -920,7 +947,11 @@ function buildFlow(
   // The carry a ribbon draws is the per-cycle carry-out NARROWED to the successor cycle in the
   // window: which cycle the work landed in is a fact no aggregate carries, and a carry that left the
   // window has no second bar to reach, so it draws no ribbon and is stated in the derivation instead.
-  const carries: DeliveryFlowCarry[] = []
+  //
+  // The series is DENSE — one entry per adjacent pair, zero included — because the trend sentence
+  // below compares consecutive cycles. Comparing two entries of the drawn (non-zero) list would
+  // compare cycles any distance apart and call them "the last" and "the one before".
+  const pairs: DeliveryFlowCarry[] = []
   for (let index = 0; index + 1 < windowRows.length; index += 1) {
     const from = windowRows[index] as DeliveryPageCycleRow
     const to = windowRows[index + 1] as DeliveryPageCycleRow
@@ -928,14 +959,15 @@ function buildFlow(
       (issue) =>
         (issue.rolledOverFromCycleId ?? null) === from.id && (issue.cycleId ?? null) === to.id,
     ).length
-    if (count === 0) continue
-    carries.push({
+    pairs.push({
       fromIndex: index,
       toIndex: index + 1,
       count,
       label: `${count} carried`,
     })
   }
+  // A zero carry draws no ribbon at all: an empty band would be a claim that nothing is something.
+  const carries = pairs.filter((pair) => pair.count > 0)
 
   const twicePlus = metrics.get('carried_twice_plus')?.value ?? 0
   const twiceClause =
@@ -943,15 +975,18 @@ function buildFlow(
       ? ''
       : ` ${twicePlus} ${plural(twicePlus, 'item has', 'items have')} carried twice or more.`
 
-  const last = carries.at(-1)
-  const previous = carries.at(-2)
+  // Both entries are named by the cycles they ran between, never as "the last cycle": the newest
+  // pair is the carry out of the SECOND-TO-LAST cycle in the window, because the last one's carry
+  // leaves the window and has no bar to reach.
+  const between = (pair: DeliveryFlowCarry) =>
+    `${(cycles[pair.fromIndex] as DeliveryFlowCycle).title} into ${(cycles[pair.toIndex] as DeliveryFlowCycle).title}`
+  const last = pairs.at(-1)
+  const previous = pairs.at(-2)
   let standfirst: string
-  if (last === undefined) {
+  if (last === undefined || carries.length === 0) {
     standfirst = `Nothing carried from one of these ${windowRows.length} ${plural(windowRows.length, 'cycle', 'cycles')} into the next.${twiceClause}`
   } else if (previous === undefined) {
-    const fromTitle = (cycles[last.fromIndex] as DeliveryFlowCycle).title
-    const toTitle = (cycles[last.toIndex] as DeliveryFlowCycle).title
-    standfirst = `${last.count} ${plural(last.count, 'item', 'items')} carried from ${fromTitle} into ${toTitle}.${twiceClause}`
+    standfirst = `${last.count} ${plural(last.count, 'item', 'items')} carried from ${between(last)}.${twiceClause}`
   } else {
     const trend =
       last.count < previous.count
@@ -959,7 +994,7 @@ function buildFlow(
         : last.count > previous.count
           ? 'Carryover is growing'
           : 'Carryover is holding steady'
-    standfirst = `${trend} — ${last.count} ${plural(last.count, 'item', 'items')} carried out of the last cycle where ${previous.count} carried out of the one before.${twiceClause}`
+    standfirst = `${trend} — ${last.count} ${plural(last.count, 'item', 'items')} carried from ${between(last)}, where ${previous.count} carried from ${between(previous)}.${twiceClause}`
   }
 
   const carriedIn = metrics.get('carried_in')?.value ?? 0
@@ -1082,9 +1117,21 @@ function buildPeek(
   }
   if (diverged.length === 0) return null
 
+  // PLACEABLE first, then newest. The chip sits on the timeline, so a diverged change whose merge
+  // fell outside the cycle in progress cannot be drawn — and choosing by merge date alone lets one
+  // out-of-span change suppress the page's only peek while a placeable one is sitting right there.
+  const placeable =
+    activeCycle === null
+      ? []
+      : diverged.filter(
+          (entry) =>
+            entry.mergedAt !== null &&
+            entry.mergedAt >= activeCycle.startDate &&
+            entry.mergedAt <= activeCycle.endDate,
+        )
   // The newest merge is the one worth asking about; ties break by id so the chip is the same chip on
   // every render.
-  const subject = [...diverged].sort(
+  const subject = [...(placeable.length > 0 ? placeable : diverged)].sort(
     (a, b) => (b.mergedAt ?? 0) - (a.mergedAt ?? 0) || a.issue.id.localeCompare(b.issue.id),
   )[0] as (typeof diverged)[number]
   const issue = subject.issue
@@ -1155,48 +1202,53 @@ const HONESTY: DeliveryPageHonesty = {
 // A redraw is exactly how a signal gets quietly deleted, and "we redistributed them" is a claim only
 // a total mapping can keep. Every key in `DELIVERED_METRICS` + `FLOW_METRICS` appears below exactly
 // once, and a unit test walks those two tables against this.
-function metricMap(drawn: {
-  readonly statsDrawn: boolean
-  readonly distributionDrawn: boolean
-  readonly flowDrawn: boolean
-  readonly rhythmDrawn: boolean
-}): readonly DeliveryMetricPlacement[] {
+function metricMap(
+  stats: readonly DeliveryStatReading[],
+  drawn: {
+    readonly flowDrawn: boolean
+    readonly rhythmDrawn: boolean
+  },
+): readonly DeliveryMetricPlacement[] {
+  // Per READING, not per row: three of the four stat keys are connector-fed and are omitted rather
+  // than reported as a zero, so "the stats row drew" is a different claim from "this reading drew".
+  const stated = new Set(stats.map((stat) => stat.key))
+  const shippedDrawn = stated.has('shipped')
   return [
     {
       metricKey: 'shipped',
       section: 'stats',
       place: 'the Shipped reading, drawn again as the per-cycle bars in CYCLE FLOW',
-      drawn: drawn.statsDrawn,
+      drawn: shippedDrawn,
     },
     {
       metricKey: 'pr_cycle_time',
       section: 'stats',
       place: 'the Open to merged reading, drawn again as the median rule in OPEN TO MERGED',
-      drawn: drawn.statsDrawn,
+      drawn: stated.has('pr_cycle_time'),
     },
     {
       metricKey: 'ci_failing_rate',
       section: 'stats',
       place: 'the Checks failing reading and its tick mini',
-      drawn: drawn.statsDrawn,
+      drawn: stated.has('ci_failing_rate'),
     },
     {
       metricKey: 'issues_without_pr',
       section: 'stats',
       place: 'the Not linked to a change reading',
-      drawn: drawn.statsDrawn,
+      drawn: stated.has('issues_without_pr'),
     },
     {
       metricKey: 'total',
       section: 'stats_how',
       place: "the Shipped reading's how ·",
-      drawn: drawn.statsDrawn,
+      drawn: shippedDrawn,
     },
     {
       metricKey: 'canceled',
       section: 'stats_how',
       place: "the Shipped reading's how ·",
-      drawn: drawn.statsDrawn,
+      drawn: shippedDrawn,
     },
     {
       metricKey: 'carried_out',

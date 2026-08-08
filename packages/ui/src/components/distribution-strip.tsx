@@ -46,9 +46,20 @@ const MEDIAN_TOP = 58
 // Above the median's own label, never beside it: the crowd note and the median label share an x,
 // and drawn on one line they overprint each other.
 const NOTE_TOP = 26
+// A second baseline for a note that would otherwise be drawn through the one beside it.
+const NOTE_ROW = 14
+// 11px mono, per character. The drawing cannot measure text, so the estimate is deliberately
+// generous: a note that thinks itself wider than it is drops to its own baseline, which is never
+// worse than two notes sharing one.
+const NOTE_CHAR_W = 6.4
+const NOTE_INSET = 10
 
 function at(position: number): number {
   return LEFT + Math.min(1, Math.max(0, position)) * SPAN
+}
+
+function noteWidth(text: string): number {
+  return text.length * NOTE_CHAR_W
 }
 
 function stack(dots: readonly DistributionDot[]) {
@@ -84,11 +95,31 @@ export function DistributionStrip({
     x: at(axisMax === 0 ? 0 : tick / axisMax),
   }))
 
+  // A crowd stacks upward without a ceiling, so the annotations rise above the tallest column and
+  // the box grows to hold them rather than the dots painting through the median label and then out
+  // of the viewBox, over whatever the page drew above this section.
+  const stackTop = placed.reduce((top, dot) => Math.min(top, dot.cy - DOT_R), AXIS_Y - 10 - DOT_R)
+  const lift = Math.max(0, MEDIAN_TOP - stackTop)
+  const medianTop = MEDIAN_TOP - lift
+  const noteTop = NOTE_TOP - lift
+
+  // The crowd note reads rightward from the median rule and the outlier note reads back leftward
+  // from the giants — but a small median beside a near-threshold outlier puts both in the same
+  // place, so the two are laid out against each other rather than assumed apart.
+  const crowdNote = notes.find((note) => note.kind === 'crowd')
+  const crowdSpan =
+    crowdNote === undefined
+      ? null
+      : {
+          from: at(crowdNote.position) + NOTE_INSET,
+          to: at(crowdNote.position) + NOTE_INSET + noteWidth(crowdNote.text),
+        }
+
   return (
     <svg
       role="img"
       aria-label={label}
-      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+      viewBox={`0 ${-lift} ${WIDTH} ${HEIGHT + lift}`}
       className="block h-auto w-full overflow-visible"
     >
       <line x1={LEFT} x2={RIGHT} y1={AXIS_Y} y2={AXIS_Y} stroke="var(--border)" strokeWidth={1} />
@@ -118,7 +149,7 @@ export function DistributionStrip({
       <line
         x1={medianX}
         x2={medianX}
-        y1={MEDIAN_TOP}
+        y1={medianTop}
         y2={AXIS_Y}
         stroke="var(--accent)"
         strokeWidth={1.6}
@@ -128,7 +159,7 @@ export function DistributionStrip({
           not sit under AA. */}
       <text
         x={medianX}
-        y={MEDIAN_TOP - 10}
+        y={medianTop - 10}
         textAnchor="middle"
         fontSize={11}
         fontWeight={600}
@@ -165,9 +196,21 @@ export function DistributionStrip({
 
       {notes.map((note) => {
         const x = at(note.position)
-        // The crowd reads rightward from the median rule; the outlier note reads back leftward from
-        // the giants, so the two can never run into each other whatever the axis holds.
         const crowd = note.kind === 'crowd'
+        const width = noteWidth(note.text)
+        // Reading back leftward from a giant near the axis start would start the text off the left
+        // edge of the box, where it is simply not drawn. At the edge it turns around instead.
+        const fromLeft = !crowd && x - NOTE_INSET - width < LEFT
+        const reads = crowd || fromLeft ? 'start' : 'end'
+        const anchorX = crowd ? x + NOTE_INSET : fromLeft ? LEFT : x - NOTE_INSET
+        const span =
+          reads === 'start'
+            ? { from: anchorX, to: anchorX + width }
+            : { from: anchorX - width, to: anchorX }
+        const collides =
+          !crowd && crowdSpan !== null && span.from < crowdSpan.to && crowdSpan.from < span.to
+        // Its own baseline, ABOVE the crowd's: below would run into the median label under it.
+        const y = noteTop - (collides ? NOTE_ROW : 0)
         return (
           <g key={note.id}>
             {/* The crowd note needs no leader: the median rule under it IS one. */}
@@ -175,16 +218,16 @@ export function DistributionStrip({
               <line
                 x1={x}
                 x2={x}
-                y1={NOTE_TOP + 6}
+                y1={y + 6}
                 y2={AXIS_Y - 22}
                 stroke="var(--border-strong)"
                 strokeWidth={1}
               />
             )}
             <text
-              x={x + (crowd ? 10 : -10)}
-              y={NOTE_TOP}
-              textAnchor={crowd ? 'start' : 'end'}
+              x={anchorX}
+              y={y}
+              textAnchor={reads}
               fontSize={11}
               fontFamily="var(--type-mono)"
               fill="var(--text-2)"

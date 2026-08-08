@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { collectKeys, FORBIDDEN_IDENTITY_KEYS } from '../testing/blameless.js'
 import { DELIVERED_METRICS, FLOW_METRICS, flowEmptyState } from './descriptors.js'
@@ -284,6 +287,24 @@ describe('buildDeliveryPage — the redraw loses no signal', () => {
       expect(placement.place.length).toBeGreaterThan(0)
     }
   })
+
+  // `drawn` is per READING, not per row: the stats row still draws Shipped on an instance with no
+  // connector, and claiming the three connector-fed readings drew with it would be a promise the
+  // page did not keep.
+  it('reports the connector-fed readings as undrawn when nothing is linked', () => {
+    const unlinked = ISSUES.map((row) => ({ ...row, issueLinks: undefined }))
+    const model = built({ issues: unlinked })
+    const home = new Map(model.metricMap.map((placement) => [placement.metricKey, placement]))
+
+    for (const key of ['pr_cycle_time', 'ci_failing_rate', 'issues_without_pr']) {
+      expect(home.get(key)?.drawn, key).toBe(false)
+    }
+    expect(model.stats.map((stat) => stat.key)).toEqual(['shipped'])
+    expect(home.get('shipped')?.drawn).toBe(true)
+    expect(home.get('total')?.drawn).toBe(true)
+    // The mapping stays total whatever drew: a definition with a home is a different claim.
+    expect(model.metricMap).toHaveLength(built().metricMap.length)
+  })
 })
 
 describe('buildDeliveryPage — the honesty statement is corrected, not ported', () => {
@@ -417,6 +438,18 @@ describe('buildDeliveryPage — the annotated timeline is the cycle in progress'
     expect(model.timeline?.callout?.headline).toBe('A deployment went out here')
   })
 
+  it('states the overrun rather than reporting a cycle past its end as one ending today', () => {
+    const overdue = buildDeliveryPage(input(), ACTIVE.startDate + 19 * DAY)
+    expect(overdue?.timeline?.overdue).toBe(true)
+    expect(overdue?.timeline?.overdueDays).toBe(6)
+    expect(overdue?.timeline?.todayLabel).toBe('today · day 14 of 14 · 6 days over')
+    expect(overdue?.timeline?.daysLeftLabel).toBe('6 days over')
+    expect(overdue?.timeline?.label).toContain('6 days over')
+    // And a cycle still running says nothing about an overrun.
+    expect(timeline?.overdue).toBe(false)
+    expect(timeline?.overdueDays).toBe(0)
+  })
+
   it('states what one mark is, and does not render at all with no cycle in progress', () => {
     expect(timeline?.markUnit).toBe('one dot is one deployment that reached production')
     expect(timeline?.label).toContain('one dot is one deployment')
@@ -517,6 +550,46 @@ describe('buildDeliveryPage — one dot is one merged pull request', () => {
   })
 })
 
+// The stated median is ROUNDED; the classification must not be. A median that rounds to zero makes
+// every change four times it, and a median that rounds down below its own population empties the
+// crowd — in both cases the sentence contradicts the median it quotes.
+describe('buildDeliveryPage — the crowd and the giants are read off the exact median', () => {
+  function mergedAfter(hours: readonly number[]) {
+    return built({
+      issues: hours.map((span, index) =>
+        issue({
+          id: `fast-${index}`,
+          cycleId: LAST.id,
+          issueLinks: [
+            {
+              pullRequest: pr({ id: `pr-fast-${index}`, mergedAt: C_LAST + span * HOUR }),
+            },
+          ],
+        }),
+      ),
+    })
+  }
+
+  it('calls nothing a giant when the median rounds to zero', () => {
+    // Two minutes each: a median of 0.033h, stated as 0h.
+    const model = mergedAfter([1 / 30, 1 / 30, 1 / 30])
+    expect(model.distribution?.medianHours).toBe(0)
+    expect(model.distribution?.entries.every((entry) => !entry.outlier)).toBe(true)
+    expect(model.distribution?.annotations.some((note) => note.kind === 'outlier')).toBe(false)
+    expect(model.distribution?.annotations.find((note) => note.kind === 'crowd')?.count).toBe(
+      model.distribution?.entries.length,
+    )
+  })
+
+  it('counts the crowd against the exact median, not the rounded one it quotes', () => {
+    // 2.44h each, stated as 2.4h — every observation is above the number the sentence names.
+    const model = mergedAfter([2.44, 2.44])
+    expect(model.distribution?.medianHours).toBe(2.4)
+    expect(model.distribution?.annotations.find((note) => note.kind === 'crowd')?.count).toBe(2)
+    expect(model.distribution?.standfirst).toContain('2 of the 2 merged changes')
+  })
+})
+
 // Spec §"Degrades to the data that exists": a whole family missing because nothing has been fed in
 // is said ONCE, in the measurement scope's own words, rather than once per absent drawing.
 describe('buildDeliveryPage — the absent family', () => {
@@ -566,6 +639,38 @@ describe('buildDeliveryPage — cycle flow', () => {
     expect(flow?.standfirst).toMatch(/^(\d+ items? carried from|Carryover is|Nothing carried)/)
     expect(flow?.standfirst).toContain('carried twice or more')
     expect(flow?.how.body).toContain('carried out past its end')
+  })
+
+  // The trend is between CONSECUTIVE cycles, and each side is named by the two cycles it ran
+  // between. Comparing the drawn (non-zero) ribbons instead compares cycles any distance apart, and
+  // "the last cycle" names the wrong one either way: the newest ribbon leaves the second-to-last.
+  it('compares consecutive cycles and names them, rather than the two most recent ribbons', () => {
+    const carried = [
+      ...ISSUES,
+      // A far older carry, into a cycle four bars before the newest ribbon.
+      issue({
+        id: 'carry-old',
+        cycleId: 'cycle-9',
+        status: 'todo',
+        rolledOverFromCycleId: 'cycle-8',
+        carryoverCount: 1,
+      }),
+      issue({
+        id: 'carry-old-2',
+        cycleId: 'cycle-9',
+        status: 'todo',
+        rolledOverFromCycleId: 'cycle-8',
+        carryoverCount: 1,
+      }),
+    ]
+    const model = built({ issues: carried })
+    // Two ribbons: cycle 8 → 9 (two items) and cycle 11 → 12 (one). Read off the ribbons, the
+    // trend would be "shrinking, 1 against 2"; read off consecutive cycles it is 1 against 0.
+    expect(model.flow?.carries.map((carry) => carry.count)).toEqual([2, 1])
+    expect(model.flow?.standfirst).toContain('Carryover is growing')
+    expect(model.flow?.standfirst).toContain('1 item carried from Cycle 11 into Cycle 12')
+    expect(model.flow?.standfirst).toContain('where 0 carried from Cycle 10 into Cycle 11')
+    expect(model.flow?.standfirst).not.toContain('the last cycle')
   })
 
   it('draws no connection and no cap when nothing carried and nothing was added', () => {
@@ -659,6 +764,74 @@ describe('buildDeliveryPage — the one peek', () => {
   it('does not render at all when nothing has diverged', () => {
     const agreed = ISSUES.filter((row) => !DIVERGED_IDS.includes(row.id))
     expect(built({ issues: agreed }).peek).toBeNull()
+  })
+
+  // Newest ACROSS THE TEAM is not the same as newest it can draw: the chip sits on the timeline, so
+  // picking by merge date alone lets one out-of-span change suppress the page's only peek.
+  it('picks a diverged change it can place when the newest merge fell outside the cycle', () => {
+    const overrun: DeliveryPageCycleRow = { ...ACTIVE, endDate: ACTIVE.startDate + 4 * DAY }
+    const placeable = issue({
+      id: 'diverged-in-span',
+      number: 117,
+      title: 'A change the cycle can hold',
+      status: 'in_progress',
+      cycleId: 'cycle-13',
+      issueLinks: [
+        {
+          pullRequest: pr({
+            id: 'pr-in-span',
+            openedAt: ACTIVE.startDate,
+            mergedAt: ACTIVE.startDate + 3 * DAY,
+          }),
+        },
+      ],
+    })
+    const model = built({ cycles: [...COMPLETED, overrun], issues: [...ISSUES, placeable] })
+
+    // `diverged` merged on day 6 of a cycle that ended on day 4 — newer, and unplaceable.
+    expect(model.peek?.issueId).toBe('diverged-in-span')
+    expect(model.peek?.position).not.toBeNull()
+    // The class is still the whole class, so the one chip never implies it is the only one.
+    expect(model.peek?.classCount).toBe(DIVERGED_IDS.length + 1)
+  })
+})
+
+// The binding rule appears ONCE in the whole product (`ia.html` §"The word diet", and this change's
+// own SHALL) — a claim about the product, so it is checked over the product's sources rather than
+// over one rendered page. The phrase-dictionary guard in `phrases.test.ts` is the precedent.
+describe('the binding rule is written in exactly one production module', () => {
+  const repoRoot = fileURLToPath(new URL('../../../../../', import.meta.url))
+  // The distinguishing clause, not the whole sentence: a second surface that says it in its own
+  // words is exactly the duplication this guards, and it would not quote the constant.
+  const CLAUSE = /never a per-person number/i
+
+  function sources(dir: string, found: string[] = []): string[] {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name.startsWith('.')) {
+          continue
+        }
+        sources(path, found)
+        continue
+      }
+      if (!/\.tsx?$/.test(entry.name)) continue
+      // Tests and stories may quote the rule — that is what asserting it looks like.
+      if (/\.(test|spec|stories)\.tsx?$/.test(entry.name)) continue
+      found.push(path)
+    }
+    return found
+  }
+
+  it('is declared here and said nowhere else in the product', () => {
+    const roots = ['packages/schema/src', 'packages/ui/src', 'apps/web/src', 'apps/server/src']
+    const offenders = roots
+      .flatMap((root) => sources(join(repoRoot, root)))
+      .filter((path) => CLAUSE.test(readFileSync(path, 'utf8')))
+      .map((path) => path.slice(repoRoot.length))
+
+    expect(offenders).toEqual(['packages/schema/src/zero/metrics/page.ts'])
+    expect(BINDING_TEAM_LEVEL_RULE).toMatch(CLAUSE)
   })
 })
 

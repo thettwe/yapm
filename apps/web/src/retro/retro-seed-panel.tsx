@@ -64,8 +64,10 @@ export function RetroSeedPanel({
           What actually happened
         </h2>
         <span className="text-xs text-text-2">{seed.cycleName}</span>
+        {/* The binding rule itself lives once in the product, on Delivery (`BINDING_TEAM_LEVEL_RULE`).
+            This line states the panel's scope in the label register and does not repeat it. */}
         <p className="ml-auto text-[11.5px] text-text-2">
-          Team-level trends from this cycle's own work. Never a per-person number.
+          Team-level trends from this cycle's own work
         </p>
       </div>
 

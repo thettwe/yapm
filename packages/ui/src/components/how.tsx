@@ -9,6 +9,10 @@ export interface HowProps {
   readonly children: ReactNode
   // The mono line under it: the constraints the number was computed within.
   readonly constraint?: ReactNode
+  // Which edge the panel hangs from. A trigger at the right edge of a content column opens a
+  // 280px panel that runs past it — clipped by whatever scrolls, and unreadable without scrolling
+  // sideways. `end` hangs the panel from the trigger's right edge instead.
+  readonly align?: 'start' | 'end'
   readonly className?: string
 }
 
@@ -18,7 +22,7 @@ export interface HowProps {
 // Click / `Enter`, not hover: a derivation is read, not glanced at, and hover-opening one over a
 // dense metric row would fire on every pass of the pointer. That is the one place this pattern
 // deliberately parts from the peek beside it.
-function How({ label, children, constraint, className }: HowProps) {
+function How({ label, children, constraint, align = 'start', className }: HowProps) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const wrapperRef = useRef<HTMLSpanElement | null>(null)
@@ -68,7 +72,10 @@ function How({ label, children, constraint, className }: HowProps) {
           data-slot="how-panel"
           onKeyDown={onKeyDown}
           onBlur={onBlur}
-          className="absolute left-0 top-[calc(100%+6px)] z-50 w-[280px] rounded-[10px] border border-border bg-bg-elevated px-[14px] py-[11px] text-left font-ui shadow-elevated"
+          className={cn(
+            'absolute top-[calc(100%+6px)] z-50 w-[280px] rounded-[10px] border border-border bg-bg-elevated px-[14px] py-[11px] text-left font-ui shadow-elevated',
+            align === 'end' ? 'right-0' : 'left-0',
+          )}
         >
           <div
             id={kickerId}

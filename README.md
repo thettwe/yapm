@@ -197,12 +197,16 @@ message carries **a link and nothing else**: a mailed artifact sits outside the 
 retention and outside the audit log at the same time, so the one path that leaves the governed
 surface carries nothing that could survive them. Retraction still stops further reads without
 un-reading, and the product still says so in those words. The **review-health and CI-health half of
-the metrics story is now a view rather than a promise**: the team Delivery view ships PR cycle time,
-time to first review, review rounds and the CI failing rate over a rolling window — team-level only,
-never individual scorecards — and says on the page which DORA keys it still lacks. Of the four,
-lead time is partial (open→merge, not commit→deploy); **deployment frequency** is now computable
-from the durable deploy history the connector records but is not yet a tile, and **change failure
-rate** and **MTTR** wait on an incident record that does not exist yet (Phase 3). Next: those. More connectors (GitLab, …) slot into the same framework with no
+the metrics story is now a view rather than a promise**: the team Delivery view reads PR cycle time,
+time to first review, review rounds and the CI failing rate over a rolling window as a story rather
+than a dashboard — an annotated timeline of the cycle in progress with the deployments that reached
+production drawn on it, four stat readings, an open→merged distribution, a cycle-flow band and
+review-rhythm small multiples, team-level only and never individual scorecards. It closes with one
+permanent line naming what it genuinely cannot measure — **change failure rate**, **time to restore**
+and **deployment frequency as a rate** — plus the coverage limit that a pull request linked to no
+issue is invisible to it. It deliberately does *not* call merged→live unmeasured: that join is exact
+and is stated per change on the issue's delivery rail. Change failure rate and MTTR wait on an
+incident record that does not exist yet (Phase 3). Next: those. More connectors (GitLab, …) slot into the same framework with no
 feature-code change — inheriting the reality track and the status automation above for free.
 
 ## Quickstart

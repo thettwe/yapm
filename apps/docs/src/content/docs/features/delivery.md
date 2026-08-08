@@ -36,7 +36,7 @@ production** (`deployed_at` is written once, the moment a deployment first succe
 | The retro mark | A retrospective that **closed** inside the span, with its title and its close date |
 | The retro's subline | The count of deployments before that date and after it |
 | `today · day N of M` | The cycle's start and end dates against now |
-| `N days left` | The same |
+| `N days left` | The same. A cycle whose end date has passed reads `day M of M · N days over` and `N days over` instead — an overrun is stated, never clamped to "0 days left" |
 
 Two things the design mock drew that this page will **not** say:
 
@@ -76,15 +76,25 @@ The axis is linear and the giants are included. That compresses the crowd into t
 which *is* the reading — and it is why the outlier annotation exists and states the count and the
 slowest observed wait in words. No log axis, no clipped axis, no "other" bucket: each would hide the
 shape the section exists to show. A change is called an outlier when it took **four times the median
-or longer**, which is a stated rule over the data rather than a hand-picked pair of dots.
+or longer**, which is a stated rule over the data rather than a hand-picked pair of dots. The rule is
+read against the median's *exact* value, not the rounded figure the sentence quotes — a team whose
+median change merges in two minutes rounds to `0h`, and four times zero would make every change a
+giant. Below a median of zero the rule states nothing and nothing is called out.
 
 ## Cycle flow
 
-> *Carryover is shrinking — last cycle let go of what it couldn't finish.*
+> *Carryover is shrinking — 1 item carried from Cycle 11 into Cycle 12, where 3 carried from Cycle
+> 10 into Cycle 11.*
 
 One bar is **one completed cycle**, showing what it shipped. A **ribbon** between two bars is work
 the rollover carried from one of those cycles into the next, carrying its count. A **cap** on a bar
 is work added after that cycle had started.
+
+The sentence compares **consecutive cycles** and names them. A cycle that carried nothing counts as
+a zero rather than being skipped, so "shrinking" never means a comparison against whichever cycle
+last happened to carry something; and the newest comparable carry is the one out of the
+second-to-last cycle in the window, because the last cycle's carry left the window and has no bar to
+reach.
 
 A carry that left the window has no second bar to reach, so it draws no ribbon — that count, and the
 work that carried in from before the window, are stated in the section's `how ·` instead. So is
@@ -108,7 +118,9 @@ to a yapm user, and the model this section renders has no field that could carry
 ## The peek
 
 One chip sits on the timeline: the issue whose change is **done in git but not on the board**, at the
-moment its change merged. Focus or hover it and a peek answers *what is this?* — the issue's own
+moment its change merged. The chip is the newest such change *the timeline can hold* — one whose
+merge falls inside the cycle in progress — so a change that merged outside that span never suppresses
+the chip for one that fits. Focus or hover it and a peek answers *what is this?* — the issue's own
 phrase from the [shared dictionary](/features/reality-vocabulary/), its reality track, and how many
 changes are in that class. `⏎` opens the issue (the chip is a real link, so that is the browser's own
 activation); `esc` closes the peek and returns focus without going anywhere.

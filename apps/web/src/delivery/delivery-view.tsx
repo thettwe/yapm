@@ -268,7 +268,13 @@ function DivergedChip({ peek, teamId }: { peek: DeliveryPeekSubject; teamId: str
         <Door hot={open}>{peek.issueKey}</Door>
       </Link>
       {open ? (
-        <PeekPanel {...peekProps} data-testid="delivery-peek">
+        // A chip in the back half of the cycle opens a 312px panel that would run past the content
+        // column; from there the panel hangs from the chip's right edge instead.
+        <PeekPanel
+          {...peekProps}
+          align={(peek.position ?? 0) > 0.6 ? 'end' : 'start'}
+          data-testid="delivery-peek"
+        >
           <PeekTitle>{peek.title}</PeekTitle>
           <div className="mt-1.5 flex items-center gap-1.5 text-[12px] text-text-2">
             <StatusGlyph status={STATUS_TO_KIND[peek.status]} className="size-[13px]" />
@@ -288,9 +294,11 @@ function DivergedChip({ peek, teamId }: { peek: DeliveryPeekSubject; teamId: str
 // The three drawn sections. Each leads with a sentence and carries one `how ·`.
 // ---------------------------------------------------------------------------
 
-function HowLine({ how }: { how: DeliveryPageHow }) {
+// Every section's trigger sits at the RIGHT edge of the content column, so its panel hangs from
+// that edge rather than running 280px past it into a scroll container that clips it.
+function HowLine({ how, align = 'end' }: { how: DeliveryPageHow; align?: 'start' | 'end' }) {
   return (
-    <How label={how.label} constraint={how.constraint}>
+    <How label={how.label} constraint={how.constraint} align={align}>
       {how.body}
     </How>
   )

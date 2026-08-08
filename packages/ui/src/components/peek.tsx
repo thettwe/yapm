@@ -175,16 +175,21 @@ export interface PeekPanelProps extends ComponentPropsWithoutRef<'div'> {
   // The `⏎ open · esc stay` line the mock draws. `false` drops it for a peek whose trigger goes
   // nowhere; anything else replaces it.
   readonly footer?: ReactNode | false
+  // Which edge the panel hangs from. A trigger near the right of its container opens a 312px panel
+  // that runs past it — clipped by whatever scrolls, and unreadable without scrolling sideways.
+  // `end` hangs the panel from the trigger's right edge instead.
+  readonly align?: 'start' | 'end'
 }
 
 // The one elevated surface in this language. Transients lift; pages do not. The shadow is a token
 // per preset, so a dark theme is never handed a light theme's shadow.
-function PeekPanel({ className, children, footer, ...props }: PeekPanelProps) {
+function PeekPanel({ className, children, footer, align = 'start', ...props }: PeekPanelProps) {
   return (
     <div
       data-slot="peek"
       className={cn(
-        'absolute left-0 top-[calc(100%+6px)] z-50 w-[312px] rounded-[12px] border border-border bg-bg-elevated px-[15px] pt-[13px] pb-[6px] font-ui text-text-1 shadow-elevated',
+        'absolute top-[calc(100%+6px)] z-50 w-[312px] rounded-[12px] border border-border bg-bg-elevated px-[15px] pt-[13px] pb-[6px] font-ui text-text-1 shadow-elevated',
+        align === 'end' ? 'right-0' : 'left-0',
         className,
       )}
       {...props}

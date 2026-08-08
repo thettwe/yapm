@@ -83,8 +83,9 @@ const GROUPING_LABEL: Record<ListGrouping, string> = {
   none: 'No grouping',
 }
 
-// Reality-derived predicates, dormant until the delivery signal is real (this change). Where a
-// predicate has no linked data it simply matches nothing rather than being hidden.
+// The three reality-derived predicates. A team with no connector still sees all three offered:
+// where a predicate has no linked data it matches nothing rather than being hidden, so the axis
+// never implies the facts do not exist.
 const DELIVERY_LABEL: Record<DeliveryPredicate, string> = {
   'blocked-on-review': 'Blocked on review',
   'failing-ci': 'Failing CI',

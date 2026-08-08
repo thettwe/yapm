@@ -324,3 +324,11 @@ Taken during the build:
   2. **A focused-and-selected row shows the focus ring over the rail.** The mock draws ENG-116
      selected but not focused, so it has no ring to reconcile. Both states are correct
      separately; the ring wins where they overlap, because focus is the more urgent fact.
+
+- **DI-11 — the list's component assertions live in one file, not two.** The plan named a separate
+  `issue-list.phrases.test.tsx` for the phrase assertions. They sit in `issue-list.test.tsx`
+  instead, alongside the fold, the re-registered bar and the keyboard model, because all of them
+  mount the same `IssueList` over the same Zero harness and splitting the mount across two files
+  would duplicate ~120 lines of mocking for no added coverage. Every assertion the plan named is
+  present: the mock's four phrase strings, the empty slot on a quiet row, and
+  `[data-slot="provenance-mark"][data-provider="github"]` on exactly the check and deploy phrases.

@@ -55,8 +55,8 @@ vi.mock('@rocicorp/zero/react', () => ({
   },
 }))
 
+import { RetroSeedPanel } from '@/retro/retro-seed-panel'
 import { DeliveryView } from './delivery-view'
-import { MetricSection } from './metric-tiles'
 
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
@@ -452,9 +452,10 @@ test('exposes no per-person control or reading', async () => {
 })
 
 // Design §D8's tripwire: `metric-tiles.tsx` was left untouched so the retro's panel keeps its
-// markup, its classes, its formatters and its `retro-seed-*` selectors. This mounts that consumer
-// directly, because the Delivery page no longer renders it and a shared component with one
-// remaining caller is exactly the one that quietly breaks.
+// markup, its classes, its formatters and its `retro-seed-*` selectors. This mounts `RetroSeedPanel`
+// itself rather than the shared component beneath it — the Delivery page no longer renders either,
+// and a shared component with one remaining caller is exactly the one that quietly breaks, in the
+// caller's own wiring as readily as in its own markup.
 test('the retro panel still renders the shared tiles unchanged', () => {
   const cycle = completedCycles()[11] as { id: string; name: string; startDate: number }
   const seed = buildRetroSeed({
@@ -486,19 +487,16 @@ test('the retro panel still renders the shared tiles unchanged', () => {
   })
 
   render(
-    seed.sections.map((section) => (
-      <MetricSection
-        key={section.key}
-        section={section}
-        sectionTestId="retro-seed-section"
-        emptyTestId="retro-seed-empty"
-        testId="retro-seed-widget"
-        sparklineTestId="retro-seed-sparkline"
-        noTrendTestId="retro-seed-no-trend"
-      />
-    )),
+    <RetroSeedPanel
+      seed={seed}
+      canDraft={true}
+      open={true}
+      onOpenChange={vi.fn()}
+      onSeedCard={vi.fn()}
+    />,
   )
 
+  expect(screen.getByTestId('retro-seed-panel')).toBeInTheDocument()
   const sections = screen.getAllByTestId('retro-seed-section')
   expect(sections.map((section) => section.getAttribute('data-section'))).toEqual([
     'delivered',
@@ -510,5 +508,8 @@ test('the retro panel still renders the shared tiles unchanged', () => {
   // the Delivery page's stat reading, which is the whole point of D8.
   expect((tiles[0] as HTMLElement).className).toContain('rounded-card')
   expect((tiles[0] as HTMLElement).tagName).toBe('ARTICLE')
+  // The one affordance that is retro-only still reaches the shared tile through the panel's
+  // `action` prop, once per metric drawn.
+  expect(screen.getAllByTestId('retro-seed-add-card')).toHaveLength(tiles.length)
   expect(screen.getByTestId('retro-seed-empty')).toHaveTextContent('No delivery data yet')
 })

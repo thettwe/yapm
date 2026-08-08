@@ -503,3 +503,30 @@ D11 says a section with no data does not render; a flow band with bars but no ca
 **does** have data — it has the bars. Its standfirst states the true finding ("Nothing carried from
 one of these 6 cycles into the next.") rather than folding, because the sentence a section leads with
 introduces the drawing under it, and that drawing exists.
+
+### The `+N added` cap became an outline, because the measurement said the stack was a lie
+
+Enumerating this page's marks in `contrast.test.ts` (task 6.11) turned up a real defect rather than a
+token to retune. `--status-in-progress` is an amber: it measures **2.17–2.87 on `--bg` in the three
+light presets** — under the non-text bar — and **1.31–2.31 against `--status-done` in all six**.
+Drawn as it first was, a solid block stacked flush on the shipped bar, the added cap and the shipped
+bar read as ONE taller bar of shipped work in every theme. That is not a contrast nicety; it is the
+drawing stating the opposite of the fact.
+
+Raising the amber to 3:1 on a near-white ground is a product-wide decision — it inks the in-progress
+status glyph, the issue row and the retro's caution card — and this change does not get to make it
+for one chart. So the fix is in the drawing, and it is the shared vocabulary's own: `drawn.tsx`
+§`ScopeBand` already draws "added" as an **outlined** block rather than a filled one. The flow band's
+cap now matches it — an outline, separated from the shipped bar by 3px of page ground, so the two
+quantities are two shapes at any contrast, with the count carried by the `+N added` label in
+`--text-2` and by the chart's `role="img"` label. `delivery-charts.test.tsx` asserts the cap is
+`fill="none"` and that its bottom edge sits above its own column's bar; the two measurements are
+recorded in the contrast block rather than deleted.
+
+### The retro tripwire mounts `RetroSeedPanel`, not the shared component beneath it
+
+D8's tripwire originally mounted `MetricSection` directly. It now mounts the real consumer, because a
+shared component with one remaining caller breaks in the CALLER's wiring as readily as in its own
+markup — the panel's `action` prop reaching the tile is the part no type-check would catch if the
+prop were quietly dropped. The test asserts one `retro-seed-add-card` per tile drawn, which is what
+that wiring produces.

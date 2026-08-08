@@ -40,6 +40,11 @@ const BAR_W = 24
 const MAX_UNIT = 13
 const LABEL_Y = 232
 const COUNT_Y = 248
+// The page ground between the shipped bar and the cap above it. Without it the two quantities
+// touch, and the amber tint measures 1.31–2.31 against the shipped green in the six themes — close
+// enough that the pair reads as ONE taller bar of shipped work, which is the opposite of the fact.
+// Recorded in `styles/contrast.test.ts`.
+const CAP_GAP = 3
 
 export function FlowBand({ bars, carries, label }: FlowBandProps) {
   const slot = bars.length === 0 ? RIGHT - LEFT : (RIGHT - LEFT) / bars.length
@@ -53,6 +58,7 @@ export function FlowBand({ bars, carries, label }: FlowBandProps) {
     const center = centerOf(index)
     const shippedH = bar.shipped * unit
     const addedH = bar.added * unit
+    const gap = bar.added === 0 ? 0 : CAP_GAP
     return {
       ...bar,
       center,
@@ -60,8 +66,8 @@ export function FlowBand({ bars, carries, label }: FlowBandProps) {
       shippedH,
       addedH,
       shippedY: BASELINE - shippedH,
-      addedY: BASELINE - shippedH - addedH,
-      topY: BASELINE - shippedH - addedH,
+      addedY: BASELINE - shippedH - gap - addedH,
+      topY: BASELINE - shippedH - gap - addedH,
     }
   })
 
@@ -138,14 +144,20 @@ export function FlowBand({ bars, carries, label }: FlowBandProps) {
             rx={2}
             fill="var(--status-done)"
           />
+          {/* Work added after the cycle started is drawn the way the shared vocabulary already
+              draws it (`drawn.tsx` §ScopeBand): an OUTLINED block, separated from the shipped bar
+              rather than stacked on it, so the two quantities are two shapes at any contrast. The
+              count itself is the `+N added` label. */}
           {bar.added === 0 ? null : (
             <rect
-              x={bar.x}
-              y={bar.addedY}
-              width={BAR_W}
-              height={bar.addedH}
+              x={bar.x + 0.7}
+              y={bar.addedY + 0.7}
+              width={BAR_W - 1.4}
+              height={Math.max(0, bar.addedH - 1.4)}
               rx={2}
-              fill="var(--status-in-progress)"
+              fill="none"
+              stroke="var(--status-in-progress)"
+              strokeWidth={1.4}
             />
           )}
           {bar.addedLabel === null ? null : (

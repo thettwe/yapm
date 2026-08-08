@@ -540,4 +540,45 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   it('the median rule and the today caret are distinguishable on the page ground (>= 3.0)', () => {
     expect(contrastRatio(hex(t, '--accent'), hex(t, '--bg'))).toBeGreaterThanOrEqual(AA_LARGE)
   })
+
+  // The rest of the page's fact-carrying marks, enumerated at their own names. These tokens are
+  // already pinned by the track block above; what is new is that they now carry facts in a SECOND
+  // place, at a different size, on a chart rather than a row — so a later change that retunes one
+  // of them for the track has this page's usage written down to argue with.
+  it('every mark the delivery charts draw is distinguishable on the page ground (>= 3.0)', () => {
+    const bg = hex(t, '--bg')
+    const marks = {
+      // The timeline's deployment dot, the rhythm's merge node, the flow band's shipped bar.
+      'deployment dot / merge node / shipped bar': '--status-done',
+      // The rhythm's review segment and each review node on it.
+      'review segment and review node': '--status-in-review',
+      // The distribution's hollow outlier ring and the rhythm's over-axis arrow. Both also state
+      // themselves in words (the outlier note, the row's own duration), so colour is never the
+      // carrier — but a ring nobody can see is still a ring nobody can see.
+      'outlier ring / over-axis arrow': '--status-urgent',
+    }
+    for (const [mark, token] of Object.entries(marks)) {
+      expect(contrastRatio(hex(t, token), bg), mark).toBeGreaterThanOrEqual(AA_LARGE)
+    }
+  })
+
+  // THE ADDED CAP, and the measurement that changed how it is drawn. `--status-in-progress` is an
+  // amber: it measures 2.17–2.87 on the base surface in the three LIGHT presets, under the non-text
+  // bar, and 1.31–2.31 against `--status-done` in ALL SIX. Drawn the way it first was — a solid
+  // block stacked flush on the shipped bar — the two quantities read as one taller bar of shipped
+  // work in every theme, which is the opposite of the fact.
+  //
+  // Raising the amber to 3:1 on a near-white ground is a product-wide decision (it inks the
+  // in-progress status glyph, the issue row and the retro's caution card), so the fix is in the
+  // DRAWING instead, and it is the shared vocabulary's own: `drawn.tsx` §ScopeBand already draws
+  // "added" as an outlined block rather than a filled one. The flow band's cap is now an outline
+  // separated from the bar by the page ground, so the two are two shapes at any contrast, and the
+  // count is carried by the `+N added` label in `--text-2` (AA above) and by the `role="img"`
+  // label. The tint is reinforcement — recorded here with its real numbers rather than deleted.
+  it('records the added cap’s tint as reinforcement, with the numbers that made it an outline', () => {
+    const bg = hex(t, '--bg')
+    const amber = hex(t, '--status-in-progress')
+    expect(contrastRatio(amber, bg)).toBeGreaterThanOrEqual(2.1)
+    expect(contrastRatio(amber, hex(t, '--status-done'))).toBeGreaterThanOrEqual(1.3)
+  })
 })

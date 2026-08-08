@@ -78,5 +78,5 @@
 
 - [ ] 8.1 `pnpm turbo lint typecheck test build` green, with the actual output reported
 - [ ] 8.2 The compose smoke test and the full Playwright e2e suite green in CI; no assertion weakened to get there
-- [ ] 8.3 `npx -y @fission-ai/openspec@latest validate delivery-journalism` clean
-- [ ] 8.4 Every scenario in `specs/delivery-metrics/spec.md` is true of the built page; every decision the specs did not anticipate is recorded in design.md §"Decisions made during implementation"
+- [x] 8.3 `npx -y @fission-ai/openspec@latest validate delivery-journalism` clean
+- [x] 8.4 Every scenario in `specs/delivery-metrics/spec.md` is true of the built page; every decision the specs did not anticipate is recorded in design.md §"Decisions made during implementation"

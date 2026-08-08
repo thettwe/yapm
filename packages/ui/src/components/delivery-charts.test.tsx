@@ -140,6 +140,20 @@ test('the flow band draws one bar per cycle, a ribbon only where work carried, a
   expect(screen.getByText('3 carried')).toBeInTheDocument()
   expect(screen.getByText('+2 added')).toBeInTheDocument()
   for (const bar of bars) expect(screen.getByText(bar.label)).toBeInTheDocument()
+
+  // Work added after a cycle started is a SECOND shape, not a second colour stacked on the first:
+  // its tint measures 1.31–2.31 against the shipped bar's across the six themes (recorded in
+  // `styles/contrast.test.ts`), so a flush stack would read as one taller bar of shipped work. The
+  // cap is outlined and the page ground runs between the two.
+  const rects = [...container.querySelectorAll('rect')]
+  const cap = rects.find((rect) => rect.getAttribute('fill') === 'none')
+  const shipped = rects.filter((rect) => rect.getAttribute('fill') !== 'none')
+  expect(cap).toBeDefined()
+  expect(shipped).toHaveLength(bars.length)
+  const capX = Number(cap?.getAttribute('x'))
+  const sameColumn = shipped.find((rect) => Math.abs(Number(rect.getAttribute('x')) - capX) <= 1)
+  const capBottom = Number(cap?.getAttribute('y')) + Number(cap?.getAttribute('height'))
+  expect(capBottom).toBeLessThan(Number(sameColumn?.getAttribute('y')))
 })
 
 test('the flow band with nothing carried and nothing added draws bars and nothing else', () => {

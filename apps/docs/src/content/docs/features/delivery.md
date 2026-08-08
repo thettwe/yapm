@@ -175,6 +175,24 @@ anybody.
 This is deliberate. Individual delivery scorecards are the fastest way to make a team optimise the
 metric instead of the work.
 
+## Readable without the colour, and without a mouse
+
+Every drawing on this page carries a label that states, in words, **the population it drew and what
+one mark represents** — "5 merged changes by hours from open to merged… one dot is one merged pull
+request; median 46 hours". A screen reader gets the same reading a sighted reader gets, and the label
+is the model's own sentence rather than something the drawing composed for itself.
+
+No fact is carried by colour alone. A slow change is a **hollow ring** as well as a warmer one, and
+the outlier note states its count in words. Work added after a cycle started is an **outlined cap
+separated from the shipped bar** rather than a second colour stacked on it — the amber measures as
+little as 1.31 against the shipped green in some themes, so a flush stack would read as one taller
+bar of shipped work. A delta says "up", "down" or "no change" before any arrow or tint does.
+
+Everything is reachable from the keyboard: each `how ·` is a button that opens and folds, `esc`
+closing it and returning focus to it; the peek opens on focus alone and `esc` closes it without
+navigating; the window is a native select. `⌘K` belongs to the frame, and this page registers its
+commands with it.
+
 ## What this doesn't show yet
 
 The page carries one line about this at its foot, permanently, with a `more ·` that unfolds the rest.

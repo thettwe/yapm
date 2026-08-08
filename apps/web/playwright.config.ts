@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
+import { DEFAULT_WORKSPACE_NAME } from '@yapm/schema/db'
 
 const DATABASE_URL = process.env.DATABASE_URL
 const ZERO_CACHE_URL = process.env.E2E_ZERO_CACHE_URL ?? 'http://localhost:4848'
@@ -62,6 +63,14 @@ export default defineConfig({
         BETTER_AUTH_URL: SERVER_ORIGIN,
         WEB_ORIGIN: `http://localhost:${WEB_PORT}`,
         YAPM_BOOTSTRAP_ADMIN_EMAIL: 'admin@example.test',
+        // `reset.ts` restores the preserved workspace row's name to `DEFAULT_WORKSPACE_NAME`, which
+        // is only the name the server seeded while `SEED_WORKSPACE_NAME` is unset — Playwright's
+        // `env` is merged over `process.env`, so an ambient value would otherwise reach the server
+        // and the reset would rename the workspace away from its boot state. Pinning it here makes
+        // the two agree by construction. Reading the seeded name at runtime would not: under
+        // `retries: 1` the worker is replaced mid-run (`e2e/fixtures.ts`), and a replacement
+        // worker's first read would return whatever name an earlier test wrote.
+        SEED_WORKSPACE_NAME: DEFAULT_WORKSPACE_NAME,
       },
     },
     {

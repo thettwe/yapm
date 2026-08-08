@@ -67,7 +67,10 @@ Three exceptions, all commented in the file:
   are restored — the same statement writes `name` back to `DEFAULT_WORKSPACE_NAME`, because a
   workspace a spec renamed is otherwise the one piece of mutable state a delete-everything sweep
   cannot reach. `assertBaseline` reads the name back, so the restore cannot silently stop covering
-  it.
+  it. That restore is only a restore while the server actually seeded that name, so
+  `playwright.config.ts` pins `SEED_WORKSPACE_NAME` to the same constant in the server's env — an
+  ambient `SEED_WORKSPACE_NAME` would otherwise reach the server through Playwright's env merge and
+  the reset would rename the workspace away from its boot state on the very first test.
 - `kysely_migration` / `kysely_migration_lock` are never touched — migration bookkeeping.
 - `jwks` is never touched. The server verifies Zero tokens against a remote JWKS set that `jose`
   caches behind a refetch cooldown; rotating the signing key per test would park verification behind

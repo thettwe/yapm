@@ -633,3 +633,26 @@ Three corrections from the review round, each a defect in the contract rather th
    the schema name in the message. `vitest.config.ts` picks up `e2e/**/*.test.ts`; `playwright.config.ts`
    is pinned to `testMatch: '**/*.spec.ts'` so Playwright's default pattern does not claim the unit
    file as a browser spec.
+
+### D21 — The restored workspace name is pinned in the harness, not assumed
+
+D20's restore writes `DEFAULT_WORKSPACE_NAME` back, which is the name the server seeded only while
+`SEED_WORKSPACE_NAME` is unset — the env's Zod default (`apps/server/src/config/env.ts`) happens to
+be the same string. Playwright merges a `webServer.env` map over the runner's own `process.env`, so a
+developer or a CI job that exports `SEED_WORKSPACE_NAME` would boot a server that seeds one name
+while the reset writes another back: the first test's reset would *rename* the workspace instead of
+restoring it, and `assertBaseline` would fail on a database that was never dirty.
+
+The fix keeps the agreement structural rather than coincidental: `playwright.config.ts` pins
+`SEED_WORKSPACE_NAME: DEFAULT_WORKSPACE_NAME` in the server's env from the same import `reset.ts`
+uses, alongside the `YAPM_BOOTSTRAP_ADMIN_EMAIL` pin the bootstrap-admin path already depends on
+(D8). The two values are then the same constant by construction.
+
+The alternative — read the seeded name from the database once per worker and write *that* back — was
+rejected. Any such read has to be memoised somewhere worker-scoped (`workspaceDb` in `fixtures.ts`
+is the only worker-scoped thing here), and `retries: 1` replaces the worker process mid-run — the
+same hazard the comment above `test` already records for a per-file memo. A replacement worker's
+first read happens *after* earlier tests have run: it would memoise whatever name the last spec wrote
+and enshrine the leak as the baseline. A read
+before any test could be right, but only by adding a global-setup ordering constraint to buy what one
+env pin already gives.

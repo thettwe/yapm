@@ -13,6 +13,7 @@ export default defineConfig({
           items: [
             { label: 'The app frame', slug: 'features/app-frame' },
             { label: 'Team Home', slug: 'features/team-home' },
+            { label: 'The issue list', slug: 'features/issue-list' },
             { label: 'Board', slug: 'features/board' },
             { label: 'Cycles', slug: 'features/cycles' },
             { label: 'Triage', slug: 'features/triage' },

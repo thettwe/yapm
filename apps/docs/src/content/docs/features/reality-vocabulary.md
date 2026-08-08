@@ -160,6 +160,38 @@ and nothing else. So a provider's mark is:
 GitHub's mark appears after facts sourced from GitHub. Figma's appears on linked design artifacts
 only. **An uploaded file carries no mark** — there is no provider to name.
 
+Which phrases carry a mark is a property of the **dictionary entry** below, not a decision each
+screen makes, so two screens showing the same fact cannot disagree about where it came from.
+
+## Phrases at rest
+
+The vocabulary is not only drawn. A row, a digest line and a rail also state delivery reality **in
+words**, and those words come from **one shared dictionary** living beside the delivery-signal
+derivation — never inside a screen's own module.
+
+The dictionary is keyed by a classifier over **real predicates only**: the delivery signal and the
+divergence computation. There is no phrase a stored fact cannot support, and a classification with
+nothing behind it resolves to silence rather than to an invented sentence.
+
+One key can be spoken in more than one **register**, so a personal digest and a neutral list can
+say the same fact in their own voice:
+
+| The facts | Neutral (the issue list) | Personal ([Team Home](/features/team-home/)'s YOURS) |
+| --- | --- | --- |
+| A merged PR under an issue that is not done | Done in git, not on the board | Done in git — update the board |
+| Linked checks are failing | Checks failing | Checks failing — the fix is yours |
+| Merged, nothing deployed the commit | Built — not live yet | Merged — not live yet |
+| A PR approved and waiting | Approved | Approved — merge when ready |
+| Nothing has happened yet | *(silence)* | In progress |
+
+Every register is **total** over the key set: a key that exists in one exists in every one, and a
+register may resolve a key to *silence* — in which case that screen renders nothing there rather
+than filler. A screen with nothing true to say says nothing.
+
+A phrase is always real text, never an icon standing in for one, so it is readable by assistive
+technology and by a reader who cannot tell the drawing's hues apart. Where each phrase appears in
+context is documented on [The issue list](/features/issue-list/).
+
 ## Accessibility
 
 Every mark in this vocabulary is drawn from theme tokens and holds its contrast bar in all three

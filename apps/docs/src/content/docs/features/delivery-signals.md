@@ -120,6 +120,24 @@ positive costs a glance and a false negative costs a missed release.
 Where an issue has no linked data, a delivery filter simply matches nothing rather than hiding the
 issue.
 
+## Where each signal is said in words
+
+Every signal on this page is also **stated**, not only drawn. The words come from one shared
+dictionary — see [phrases at rest](/features/reality-vocabulary/#phrases-at-rest) for the
+vocabulary and [the issue list](/features/issue-list/) for where each phrase lands on a row.
+
+| Signal | The row says |
+| --- | --- |
+| Merged PR under an unfinished issue | Done in git, not on the board |
+| CI failing | Checks failing |
+| Merged, no deployment carried the commit | Built — not live yet |
+| Open PR, nobody has reviewed | In review — waiting *N* |
+| Open PR, a review came back without approving | In review — reviewed *N* ago |
+| Deployed | *(nothing — the track's Live station already says it)* |
+
+The check and deploy phrases carry GitHub's mark, because those facts came from GitHub. The
+divergence and review-age phrases carry none: yapm derived them.
+
 ## Issue detail
 
 Opening an issue shows the same track plus the full linked context: each linked pull request with

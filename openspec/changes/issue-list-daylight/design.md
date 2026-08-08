@@ -256,3 +256,57 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
   fixture size (e2e fixtures accumulate across specs — derive bounds from the page), and no
   test's premise is "this environment lacks X" (CI is Node 24, dev machines may be Node 26 —
   stub the environment explicitly).
+
+Taken during the build:
+
+- **DI-1 — the key set gained `in_review`, and `diverged_ahead_of_pr` sits BELOW `pr_draft`.**
+  D1's sketch had no plain in-review key, but an issue whose status is `in_review` with a null
+  signal reaches no other branch, and totality is the property the whole structure rests on. The
+  ordering matters more: `sayPhrase` used to resolve a draft PR under an in-review issue to
+  `Draft open — not in review yet` and a PR-less one to `In review`, and `computeDivergence`
+  returns `status_ahead_of_pr` for *both*. Classifying divergence first would therefore have
+  collapsed two of Home's rendered strings into one — a byte change in YOURS. The draft branch
+  runs first because a draft PR is the more specific fact about the same disagreement.
+
+- **DI-2 — the mock's accent-inked selected key could not ship.** `issues.html` draws the
+  selected row's mono key in `--accent-strong`. On `--bg-selected` that measures **4.38** in one
+  preset and **3.84** in another — under AA for normal text. Following `app-frame` DI-2's
+  precedent, the ink steps up to `--text-1` and the rail plus the tinted ground carry the
+  selection state. `contrast.test.ts` keeps the measurement as a >=3.0 bound with the reason
+  written beside it, so a later token edit that fixes the pair does not fail the file and a
+  later change reaching for the accent finds the number rather than re-deriving it.
+
+- **DI-3 — `formatReviewAge` moved from `packages/ui` down into `packages/schema`.** D4 requires
+  the phrase and the track's age column to read the same formatter, and the phrase is built in
+  `packages/schema`, which cannot import UI. `reality-track.tsx` re-exports it, so every existing
+  importer is unchanged.
+
+- **DI-4 — the source-level guard matches whole entries, and it found a real second copy on its
+  first run.** `apps/web/src/routes/showcase.tsx` had hard-coded `Done in git, not on the board`
+  and `Built — not live yet` in its peek demo; both now resolve through `restPhrase`. The guard's
+  first draft also matched `Checks failing on 3 issues` — the attention band counting a class, not
+  the dictionary speaking — so it asserts complete entries rather than fragments.
+
+- **DI-5 — the search field stays, off-mock.** `issues.html` draws no search input; ⌘K carries
+  search in band 1. Cutting the field would cut a capability the spec forbids losing, so it stays
+  in the bar at the mock's register — borderless, iconless, 128px — placed after the seven axes so
+  the plain-text run from the filter mark reads uninterrupted.
+
+- **DI-6 — the phrase slot folds below `lg`, it does not wrap.** `issues.html`'s own
+  self-critique names the 1280px collision between a long title and a long phrase. The row's
+  height is a rule, so below the breakpoint the phrase folds away exactly as the label column
+  already does, rather than wrapping the row onto two lines.
+
+- **DI-7 — the fold re-closes on a new query, not on a new result.** Raising the cap is a
+  statement about the result the member is looking at. It resets when the filter, grouping, sort
+  or the cycle/project selections change; a row arriving over sync does not collapse a page they
+  opened.
+
+- **DI-8 — `IssueGroup` gained an optional `color`.** The spec asks for a label dot on
+  label-grouped headers and the group model carried no colour. One optional field, populated in
+  the label branch of `groupBy`.
+
+- **DI-9 — the e2e heading assertion moved rather than weakened.** `issues.spec.ts` asserted
+  `<team> · Issues`; it now asserts the masthead reads `Issues` **and** that the deck states the
+  team name. What the old selector proved — that the reader can see which team they are on — is
+  still asserted, one band up, where D10 moved it.

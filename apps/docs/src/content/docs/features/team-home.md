@@ -90,8 +90,12 @@ Every card carries a provenance line naming its source rows, and every card is a
 
 The *Yours* band lists **the signed-in user's** in-flight issues in this team, with the
 issue list's row anatomy (status glyph, key, title, reality track) plus a two-line
-say/git bifact whose phrases come from a fixed dictionary keyed on real status and
-delivery-signal predicates. Rows waiting on someone else's review collapse into a single
+say/git bifact. Its phrases come from the **shared phrase dictionary** described in
+[The reality vocabulary](/features/reality-vocabulary/) — the same dictionary
+[the issue list](/features/issue-list/) speaks, keyed by the same classifier over the same
+real predicates, rendered here in the **personal** register. The band holds no phrase table
+of its own, so the two surfaces cannot drift apart.
+Rows waiting on someone else's review collapse into a single
 "N of yours are waiting on others" line with the waiting ages.
 
 Two honesty rules are structural here:

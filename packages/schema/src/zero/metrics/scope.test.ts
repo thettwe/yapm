@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   type DeliveryCycleInput,
+  type DeliveryPrInput,
   deliveredCounts,
   flowMeasures,
+  pullRequests,
   scopeOfCycle,
   scopeOfCycles,
 } from './scope.js'
@@ -278,5 +280,76 @@ describe('scopeOfCycles — the window reading is exact, not a sum of cycles', (
   it('shipped and canceled pool across the window', () => {
     expect(counts.shipped).toBe(3)
     expect(counts.canceled).toBe(0)
+  })
+})
+
+// The population fix. A pull request linked to two issues in scope reaches `pullRequests` through
+// both of them, and counting it twice pulls every median and every rate towards whatever that one
+// change happens to be — invisible in a stated number, and two dots for one change in a drawing.
+describe('pullRequests — one change linked to two in-scope issues is one change', () => {
+  const shared: DeliveryPrInput = {
+    id: 'pr-shared',
+    openedAt: START,
+    mergedAt: START + 30 * HOUR,
+    reviewSubmittedAt: [START + 4 * HOUR],
+    ciConclusions: ['failure', 'success'],
+  }
+  const solo: DeliveryPrInput = {
+    id: 'pr-solo',
+    openedAt: START,
+    mergedAt: START + 10 * HOUR,
+    reviewSubmittedAt: [START + 2 * HOUR],
+    ciConclusions: ['success'],
+  }
+
+  function cycleWith(prs: {
+    readonly shared: DeliveryPrInput
+    readonly solo: DeliveryPrInput
+  }): DeliveryCycleInput {
+    return {
+      id: 'cycle-2',
+      name: 'Cycle 2',
+      startDate: START,
+      issues: [
+        { id: 'linked-a', status: 'done', cycleId: 'cycle-2', pullRequests: [prs.shared] },
+        { id: 'linked-b', status: 'done', cycleId: 'cycle-2', pullRequests: [prs.shared] },
+        { id: 'linked-c', status: 'done', cycleId: 'cycle-2', pullRequests: [prs.solo] },
+      ],
+    }
+  }
+
+  const scope = scopeOfCycle(cycleWith({ shared, solo }))
+
+  it('appears once in the population', () => {
+    expect(pullRequests(scope).map((pr) => pr.id)).toEqual(['pr-shared', 'pr-solo'])
+  })
+
+  it('contributes once to the median cycle time and once to the CI failing rate', () => {
+    const measures = flowMeasures(scope)
+    // Two changes, 30h and 10h: the median is 20. Counted twice it would be 30.
+    expect(measures.prCycleTimeHours).toBe(20)
+    // One of two changes had a failing check. Counted twice it would be 67%.
+    expect(measures.ciFailingRate).toBe(50)
+    expect(measures.timeToFirstReviewHours).toBe(3)
+    expect(measures.reviewRounds).toBe(1)
+  })
+
+  it('leaves an id-less projection exactly as it was', () => {
+    const anonymous = cycleWith({
+      shared: { ...shared, id: undefined },
+      solo: { ...solo, id: undefined },
+    })
+    const measures = flowMeasures(scopeOfCycle(anonymous))
+    expect(pullRequests(scopeOfCycle(anonymous))).toHaveLength(3)
+    expect(measures.prCycleTimeHours).toBe(30)
+    expect(measures.ciFailingRate).toBe(67)
+  })
+
+  it('de-duplicates across the cycles of a window, not only within one', () => {
+    const windowed = scopeOfCycles([
+      { id: 'w-1', name: 'Cycle 1', startDate: START, issues: [] },
+      cycleWith({ shared, solo }),
+    ])
+    expect(pullRequests(windowed)).toHaveLength(2)
   })
 })

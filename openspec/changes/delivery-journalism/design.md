@@ -324,5 +324,96 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 
 Taken during the build:
 
-<!-- Append one entry per decision the specs did not anticipate: what was ambiguous, what was
-     chosen, and why. -->
+### The retro's golden did not move, so the dedupe is proven directly (task 2.3)
+
+`DeliveryPrInput` gained an optional `id` and `pullRequests(scope)` now skips a repeat of the same
+id. **Neither `retro/seed.golden.test.ts` nor `retro/seed.test.ts` moved**, because both fixtures
+project pull requests without ids — the dedupe is a no-op for an id-less population by construction,
+which is exactly the property D5 asked for. So the fix is proven directly instead, in
+`metrics/scope.test.ts`: one merged change linked to two in-scope issues is one entry in the
+population, one contribution to `prCycleTimeHours` (20h rather than the double-counted 30h) and one
+to `ciFailingRate` (50% rather than 67%); an id-less projection keeps all three of its old numbers;
+and the dedupe holds across the cycles of a window, not only within one cycle.
+
+### Two projections of the same subtree, but only one population rule
+
+`packages/schema` cannot import `apps/web`, and D1 requires `page.ts` to declare its row shapes
+locally rather than sharing `team-home.ts`'s. `apps/web/src/delivery/rows.ts` also cannot be retired:
+the retrospective's `seed-model.ts` projects through it. So the synced `issue → issueLinks →
+pullRequest` subtree is projected in two places — `rows.ts` for the retro, `page.ts` for the page.
+What is **not** duplicated is the thing that could produce two readings: the population rule (one
+entry per change) lives once in `pullRequests(scope)`, and the per-change arithmetic lives once in
+`scope.ts` (below). Two projections that both hand the same rows to the same population function
+cannot measure two populations.
+
+### `prCycleHours` and `prFirstReviewHours` extracted rather than re-derived
+
+The distribution needs the open→merged duration of one change, and the rhythm needs one change's
+first-review wait; both already existed inside `flowMeasures`' median expressions. Re-writing either
+in `page.ts` would have put a dot's position and the median rule drawn over it behind two
+arithmetics. Both are now exported one-liners in `scope.ts` that `flowMeasures` itself calls, so "no
+formula is re-derived" is literally true rather than nearly true.
+
+### `clampDeliveryWindowSize` exported from `window.ts`
+
+`buildDeliveryPage` slices the completed cycles itself (it needs the window's rows for the flow band
+and the prior window for the delta), so it has to bound the request with the same arithmetic
+`buildDeliveryWindow` will apply — otherwise an oversized request would hand over a window of one
+length and compare it against another. The private `clampSize` became exported rather than copied.
+
+### Two `how ·` bodies state no denominator count, on purpose
+
+`flowMeasures` publishes the CI failing **rate** and the unlinked-issue **count**, not the
+populations underneath them. Quoting "N of M changes had a failing check" would have meant computing
+M in `page.ts` — a second computation of a published number's own denominator. Those two derivations
+state the rule instead ("a change with no checks at all is not in the denominator"), and only the
+Shipped derivation quotes counts, because `total` and `canceled` are metric definitions it reads
+straight off the window (D7 gives them that home).
+
+### The week boundary is re-stated locally, not imported
+
+The call-out rule buckets by ISO week, and `team-home.ts` already has a Monday-based UTC week start —
+but D1 requires the two page models to stay independent of one another (the same Zero rows satisfy
+both, and neither imports the other). `page.ts` therefore carries its own three-line `utcWeekStart`
+with a comment naming the chart it agrees with, rather than creating an import edge between the two
+largest models in the package.
+
+### `metricMap` carries a `drawn` flag beside each placement
+
+The totality rule is about definitions having a home; whether that home rendered today is a
+different claim. A placement that said `flow` while the flow band was null would be a promise the
+page did not keep, so each placement also states whether its section drew for this input. The
+totality test walks the twelve keys regardless.
+
+### The outlier rule, and the mock's un-derivable clause
+
+The mock calls out "two waited 200h+ · both were single giant PRs". The threshold is now a stated
+multiple — `DISTRIBUTION_OUTLIER_MULTIPLE = 4` times the median — so the call-out is a rule over the
+data rather than a hand-picked pair of dots, and the annotation states the count and the slowest
+observed hours. **"Both were single giant PRs" is not derivable at all** (nothing in the schema
+carries a diff size) and is not said anywhere.
+
+The review rhythm's axis is likewise a published constant, `REVIEW_RHYTHM_AXIS_HOURS = 96`, beside
+`REVIEW_RHYTHM_CAP = 24`: a change that ran longer states its own duration in text (the mock's
+`208h` / `236h`) instead of being clipped, and both numbers are read from the model by the tests
+rather than written into them.
+
+### The divergence class is bigger than the mock's one chip, and the model says so
+
+An issue whose linked change merged while its status is still `todo`/`in_progress` diverges — which
+in a realistic fixture is more than one issue. The peek names the newest merge (ties by id) and
+carries `classCount` plus a `classLabel`, so the one chip never implies it is the only one.
+
+### `deliveryCyclesOf` is exported
+
+The proof that the distribution's median is the measure's own and not a second computation has to
+build the exact scope the page read. Exporting the projection lets the test write
+`flowMeasures(scopeOfCycles(deliveryCyclesOf(window, issues))).prCycleTimeHours` and compare, rather
+than re-implementing the projection in the test and proving only that two copies agree.
+
+### A flow band with nothing to flow still gets a sentence
+
+D11 says a section with no data does not render; a flow band with bars but no carries and no caps
+**does** have data — it has the bars. Its standfirst states the true finding ("Nothing carried from
+one of these 6 cycles into the next.") rather than folding, because the sentence a section leads with
+introduces the drawing under it, and that drawing exists.

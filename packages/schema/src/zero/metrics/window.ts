@@ -47,13 +47,16 @@ export interface DeliveryWindow {
   readonly sections: readonly DeliverySection[]
 }
 
-function clampSize(size: number): number {
+// Exported because a caller that slices the cycles ITSELF — the Delivery page, which needs the same
+// window twice, once for the numbers and once for the drawings — has to bound the request with the
+// same arithmetic, or it would hand over a window of one length and compare it against another.
+export function clampDeliveryWindowSize(size: number): number {
   if (!Number.isFinite(size)) return MAX_DELIVERY_WINDOW
   return Math.min(Math.max(Math.trunc(size), 1), MAX_DELIVERY_WINDOW)
 }
 
 export function buildDeliveryWindow(input: DeliveryWindowInput): DeliveryWindow | null {
-  const size = clampSize(input.size)
+  const size = clampDeliveryWindowSize(input.size)
   const cycles = input.cycles.slice(-size)
   if (cycles.length === 0) return null
 

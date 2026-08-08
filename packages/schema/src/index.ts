@@ -331,6 +331,46 @@ export {
   toMetric,
 } from './zero/metrics/descriptors.js'
 export type {
+  DeliveryDistributionAnnotation,
+  DeliveryDistributionEntry,
+  DeliveryDistributionSection,
+  DeliveryFlowCarry,
+  DeliveryFlowCycle,
+  DeliveryFlowSection,
+  DeliveryMetricPlacement,
+  DeliveryPageCycleRow,
+  DeliveryPageDelta,
+  DeliveryPageDeploymentRow,
+  DeliveryPageHonesty,
+  DeliveryPageHow,
+  DeliveryPageInput,
+  DeliveryPageIssueLinkRow,
+  DeliveryPageIssueRow,
+  DeliveryPageModel,
+  DeliveryPagePullRequestRow,
+  DeliveryPageRetroRow,
+  DeliveryPageSection,
+  DeliveryPageStandfirst,
+  DeliveryPeekSubject,
+  DeliveryRhythmChange,
+  DeliveryRhythmSection,
+  DeliveryStatKey,
+  DeliveryStatMini,
+  DeliveryStatReading,
+  DeliveryTimelineCallout,
+  DeliveryTimelineDeploy,
+  DeliveryTimelineRetroMark,
+  DeliveryTimelineSection,
+} from './zero/metrics/page.js'
+export {
+  BINDING_TEAM_LEVEL_RULE,
+  buildDeliveryPage,
+  DISTRIBUTION_OUTLIER_MULTIPLE,
+  deliveryCyclesOf,
+  REVIEW_RHYTHM_AXIS_HOURS,
+  REVIEW_RHYTHM_CAP,
+} from './zero/metrics/page.js'
+export type {
   DeliveredCounts,
   DeliveryCycleInput,
   DeliveryIssueInput,
@@ -341,6 +381,9 @@ export type {
 export {
   deliveredCounts,
   flowMeasures,
+  prCycleHours,
+  prFirstReviewHours,
+  pullRequests,
   scopeOfCycle,
   scopeOfCycles,
 } from './zero/metrics/scope.js'
@@ -351,6 +394,7 @@ export type {
 } from './zero/metrics/window.js'
 export {
   buildDeliveryWindow,
+  clampDeliveryWindowSize,
   DELIVERY_WINDOW_SIZES,
   MAX_DELIVERY_WINDOW,
 } from './zero/metrics/window.js'

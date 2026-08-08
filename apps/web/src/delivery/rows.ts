@@ -17,6 +17,10 @@ import type {
 // projection is the wall.
 
 export interface SeedPrRow {
+  // Carried through so the measurement scope can tell one change from two links to it: a pull
+  // request reached by two of the scope's issues is ONE change. Optional because a fixture has no
+  // row id, and an id-less projection keeps exactly the reading it had.
+  readonly id?: string | null
   readonly openedAt: number
   readonly mergedAt?: number | null
   readonly ciChecks?: readonly { readonly conclusion: string }[]
@@ -46,6 +50,7 @@ export function pullRequestsOf(issue: SeedIssueRow): readonly DeliveryPrInput[] 
     .map((link) => link.pullRequest)
     .filter((pr): pr is SeedPrRow => pr != null)
     .map((pr) => ({
+      id: pr.id ?? undefined,
       openedAt: pr.openedAt,
       mergedAt: pr.mergedAt ?? null,
       reviewSubmittedAt: (pr.reviews ?? []).map((review) => review.submittedAt),

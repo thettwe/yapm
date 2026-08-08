@@ -12,6 +12,11 @@ import { ciHealthFromConclusion } from '../delivery.js'
 //      returns `NO_FLOW` rather than zeros when no connector has fed anything in.
 
 export interface DeliveryPrInput {
+  // The pull request row's own id, when the producer has one. Optional because a fixture and a
+  // summarised class have no row to name — and because it is the DE-DUPLICATION key: without it a
+  // change linked to two issues in scope is two entries in every median and every rate, which is
+  // invisible in a stated number and glaring in a drawing that puts one mark per change on an axis.
+  readonly id?: string
   readonly openedAt: number
   readonly mergedAt?: number | null
   readonly reviewSubmittedAt?: readonly number[]
@@ -151,8 +156,43 @@ export function plural(count: number, one: string, many: string): string {
   return count === 1 ? one : many
 }
 
+// THE population every formula and every drawing is evaluated over: one entry per CHANGE. A pull
+// request linked to two issues in scope reaches this through both of them, and counting it twice
+// would put two dots on a distribution for one change and pull the median between them. Entries
+// carrying no `id` are left exactly as they arrived, in order — a producer that cannot name its rows
+// (a fixture, a summarised class) keeps the reading it has always had.
 export function pullRequests(scope: DeliveryScope): readonly DeliveryPrInput[] {
-  return scope.issues.flatMap((issue) => issue.pullRequests ?? [])
+  const seen = new Set<string>()
+  const population: DeliveryPrInput[] = []
+  for (const issue of scope.issues) {
+    for (const pr of issue.pullRequests ?? []) {
+      if (pr.id !== undefined) {
+        if (seen.has(pr.id)) continue
+        seen.add(pr.id)
+      }
+      population.push(pr)
+    }
+  }
+  return population
+}
+
+// The open→merged duration of ONE change, in hours, and the only definition of it: the median below
+// and the Delivery page's distribution both read it, so a dot's position and the median rule drawn
+// over it can never come from two arithmetics. `undefined` for a change that has not merged, or one
+// whose stored merge precedes its open.
+export function prCycleHours(pr: DeliveryPrInput): number | undefined {
+  if (pr.mergedAt == null) return undefined
+  const hours = (pr.mergedAt - pr.openedAt) / HOUR_MS
+  return hours >= 0 ? hours : undefined
+}
+
+// How long ONE change waited for its first review, in hours. `undefined` when no review has been
+// submitted — which is not a zero wait, and is why the median below filters rather than defaults.
+export function prFirstReviewHours(pr: DeliveryPrInput): number | undefined {
+  const submitted = pr.reviewSubmittedAt ?? []
+  if (submitted.length === 0) return undefined
+  const hours = (Math.min(...submitted) - pr.openedAt) / HOUR_MS
+  return hours >= 0 ? hours : undefined
 }
 
 export interface FlowMeasures {
@@ -179,18 +219,11 @@ export function flowMeasures(scope: DeliveryScope): FlowMeasures {
   const prs = pullRequests(scope)
   if (prs.length === 0) return NO_FLOW
 
-  const cycleTimes = prs
-    .filter((pr) => pr.mergedAt != null)
-    .map((pr) => ((pr.mergedAt as number) - pr.openedAt) / HOUR_MS)
-    .filter((hours) => hours >= 0)
+  const cycleTimes = prs.map(prCycleHours).filter((hours): hours is number => hours !== undefined)
 
   const firstReviewWaits = prs
-    .map((pr) => {
-      const submitted = pr.reviewSubmittedAt ?? []
-      if (submitted.length === 0) return undefined
-      return (Math.min(...submitted) - pr.openedAt) / HOUR_MS
-    })
-    .filter((hours): hours is number => hours !== undefined && hours >= 0)
+    .map(prFirstReviewHours)
+    .filter((hours): hours is number => hours !== undefined)
 
   const reviewCounts = prs
     .filter((pr) => (pr.reviewSubmittedAt ?? []).length > 0)

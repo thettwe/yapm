@@ -25,7 +25,8 @@ local data the issue list reads, so it renders instantly and is correct offline.
 6. **Ship cadence** — a weekly dot chart of the team's deployments: one dot per deploy that
    actually reached production (the write-once `deployedAt` fact), bucketed by UTC week,
    with month labels, a today caret, a tick at each closed retro, and an onward link to the
-   [Delivery view](/features/delivery/).
+   [Delivery view](/features/delivery/) — where the same deployments are drawn along the cycle in
+   progress, annotated with the release that went out and the retrospective that closed.
 7. **Shipped this cycle** — the cycle's done issues, each badged **Live** when a deployment
    carried its merged pull request's merge commit to production, else **Built — not live**.
    The badge is the same exact merge-commit join the issue row's reality track uses — never

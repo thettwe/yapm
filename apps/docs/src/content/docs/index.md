@@ -36,11 +36,15 @@ runs as three containers you own.
   data already gathered, anonymity guaranteed at the storage layer, and actions that become real
   issues in the next cycle, at `/teams/<teamId>/retros`.
 - [Delivery view](/features/delivery/) — the same delivery and flow figures a retro opens with, over
-  a rolling window of 3, 6 or 12 completed cycles instead of one, at `/teams/<teamId>/delivery`. PR
-  cycle time, time to first review, review rounds, unlinked issues and the CI failing rate, each with
-  a trend and a comparison against the window before it. Computed in your browser from rows already
-  synced, so changing the window is instant and works offline; team-level only at every depth, and
-  the page names the DORA keys it does not carry.
+  a rolling window of 3, 6 or 12 completed cycles instead of one, read as a story at
+  `/teams/<teamId>/delivery`: an annotated timeline of the cycle in progress, four stat readings each
+  with a mini, a delta in words and a `how ·` that unfolds its own derivation, an open→merged
+  distribution where one dot is one merged change, a cycle-flow band with carryover ribbons and
+  review-rhythm small multiples that name no reviewer. Computed in your browser from rows already
+  synced, so changing the window is instant and works offline; team-level only at every depth. It
+  closes with one permanent line naming change failure rate, time to restore and deployment frequency
+  as a rate as unmeasured, plus the coverage limit that a pull request linked to no issue is
+  invisible to it.
 - [Retro AI draft](/features/retro-ai-draft/) — opt in, per team, to have the AI draft up to three
   wins, losses and improvements into a retro at the moment the board is revealed, each citing a
   work-graph entity or one of yapm's own computed metrics. It reads no cards, no comments and

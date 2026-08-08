@@ -5,8 +5,8 @@ import type { ReactNode } from 'react'
 // chrome, which is what ten routes did before this change. `ia.html`'s band-2 anatomy and nothing
 // else: title + mono count on the left, the lens toggle beside it, meta below, actions right.
 //
-// Labels only — the word diet's CHROME tier. The one binding-rule sentence ("team-level only —
-// never a per-person number") lives on Delivery, once per app, not here.
+// Labels only — the word diet's CHROME tier. The one binding-rule sentence (declared once, as
+// `BINDING_TEAM_LEVEL_RULE` in `@yapm/schema`) is stated on Delivery, once per app, not here.
 export function Masthead({
   kicker,
   title,

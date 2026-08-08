@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { collectKeys, FORBIDDEN_IDENTITY_KEYS } from './blameless.js'
 
 // The walker is the instrument every blamelessness assertion in this repository is read through:
-// `metrics/window.test.ts` and `delivery/window-model.test.ts` both prove their entry point carries
+// `metrics/window.test.ts` and `metrics/page.test.ts` both prove their entry point carries
 // no identity by asking it for a key set and finding nothing forbidden in it. A walker that silently
 // returned nothing would make BOTH of those pass while measuring nothing at all — so the instrument
 // is calibrated here, against inputs that are known to be dirty.

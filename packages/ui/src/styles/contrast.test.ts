@@ -487,4 +487,98 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     )
     expect(ratio).toBeGreaterThanOrEqual(AA_LARGE)
   })
+
+  // THE DELIVERY PAGE'S DRAWN FORMS (delivery-journalism §D12). Every one of them is drawn on the
+  // base surface, so `--bg` is the ground for all of it.
+  //
+  // The annotation ink on every chart — the callout headline, the retro mark, the crowd and outlier
+  // notes, the axis labels, the per-cycle labels — is `--text-1` or `--text-2` on `--bg`, which the
+  // first assertion in this block already holds at AA. What is NEW here is the three grounds this
+  // page paints that nothing else does: the delta pill's sense wash, the carryover ribbon, and the
+  // ribbon's own count drawn over it.
+  it('the delta pill ink meets AA on all three of its sense grounds (>= 4.5)', () => {
+    const bg = hex(t, '--bg')
+    const grounds = {
+      // `bg-status-done/10` — the only NEW composite the page introduces.
+      better: wash(hex(t, '--status-done'), bg, 0.1),
+      worse: wash(hex(t, '--status-urgent'), bg, 0.08),
+      neither: over(t['--bg-hover'] ?? '', bg),
+    }
+    for (const [sense, ground] of Object.entries(grounds)) {
+      expect(contrastRatio(hex(t, '--text-1'), ground), sense).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
+  // The carryover ribbon. Its INK — the count drawn on it, which is the fact — is `--text-1` over
+  // the ribbon's own 15% wash, painted with a `--bg` halo, so both composites must read. The FILL
+  // is deliberately below the non-text bar: it is a shape joining two bars whose meaning is stated
+  // in words on it and in the chart's `role="img"` label, exactly like the track's empty station.
+  // Recorded as a bound rather than left unasserted, so the exemption is visible and a later change
+  // that darkens the ribbon has to argue with the right number.
+  it('the carryover ribbon ink meets AA over the ribbon and its halo (>= 4.5)', () => {
+    const bg = hex(t, '--bg')
+    const ribbon = wash(hex(t, '--status-in-progress'), bg, 0.15)
+    for (const ground of [ribbon, bg]) {
+      expect(contrastRatio(hex(t, '--text-1'), ground)).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
+
+  it('records that the carryover ribbon fill is scaffolding, not a fact-carrying colour', () => {
+    const bg = hex(t, '--bg')
+    // The ribbon's outline is the stronger of its two paints and still sits under 3:1 — which is
+    // why the count is drawn ON it rather than left to the shape.
+    expect(contrastRatio(wash(hex(t, '--status-in-progress'), bg, 0.4), bg)).toBeGreaterThanOrEqual(
+      1.1,
+    )
+  })
+
+  // The two accent RULES on this page — the distribution's median line and the timeline's today
+  // caret — are non-text drawing (WCAG 1.4.11), so 3:1 on the base surface is the bar. Their
+  // LABELS carry `--text-1` rather than `--accent-strong`: this block's own frame assertion records
+  // that the accent ink measures ~4.44 on `--bg` in editorial light, and a median a sighted reader
+  // has to squint at is the same bug as one a screen reader cannot hear.
+  it('the median rule and the today caret are distinguishable on the page ground (>= 3.0)', () => {
+    expect(contrastRatio(hex(t, '--accent'), hex(t, '--bg'))).toBeGreaterThanOrEqual(AA_LARGE)
+  })
+
+  // The rest of the page's fact-carrying marks, enumerated at their own names. These tokens are
+  // already pinned by the track block above; what is new is that they now carry facts in a SECOND
+  // place, at a different size, on a chart rather than a row — so a later change that retunes one
+  // of them for the track has this page's usage written down to argue with.
+  it('every mark the delivery charts draw is distinguishable on the page ground (>= 3.0)', () => {
+    const bg = hex(t, '--bg')
+    const marks = {
+      // The timeline's deployment dot, the rhythm's merge node, the flow band's shipped bar.
+      'deployment dot / merge node / shipped bar': '--status-done',
+      // The rhythm's review segment and each review node on it.
+      'review segment and review node': '--status-in-review',
+      // The distribution's hollow outlier ring and the rhythm's over-axis arrow. Both also state
+      // themselves in words (the outlier note, the row's own duration), so colour is never the
+      // carrier — but a ring nobody can see is still a ring nobody can see.
+      'outlier ring / over-axis arrow': '--status-urgent',
+    }
+    for (const [mark, token] of Object.entries(marks)) {
+      expect(contrastRatio(hex(t, token), bg), mark).toBeGreaterThanOrEqual(AA_LARGE)
+    }
+  })
+
+  // THE ADDED CAP, and the measurement that changed how it is drawn. `--status-in-progress` is an
+  // amber: it measures 2.17–2.87 on the base surface in the three LIGHT presets, under the non-text
+  // bar, and 1.31–2.31 against `--status-done` in ALL SIX. Drawn the way it first was — a solid
+  // block stacked flush on the shipped bar — the two quantities read as one taller bar of shipped
+  // work in every theme, which is the opposite of the fact.
+  //
+  // Raising the amber to 3:1 on a near-white ground is a product-wide decision (it inks the
+  // in-progress status glyph, the issue row and the retro's caution card), so the fix is in the
+  // DRAWING instead, and it is the shared vocabulary's own: `drawn.tsx` §ScopeBand already draws
+  // "added" as an outlined block rather than a filled one. The flow band's cap is now an outline
+  // separated from the bar by the page ground, so the two are two shapes at any contrast, and the
+  // count is carried by the `+N added` label in `--text-2` (AA above) and by the `role="img"`
+  // label. The tint is reinforcement — recorded here with its real numbers rather than deleted.
+  it('records the added cap’s tint as reinforcement, with the numbers that made it an outline', () => {
+    const bg = hex(t, '--bg')
+    const amber = hex(t, '--status-in-progress')
+    expect(contrastRatio(amber, bg)).toBeGreaterThanOrEqual(2.1)
+    expect(contrastRatio(amber, hex(t, '--status-done'))).toBeGreaterThanOrEqual(1.3)
+  })
 })

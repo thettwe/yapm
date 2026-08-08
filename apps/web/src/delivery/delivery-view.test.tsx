@@ -486,19 +486,17 @@ test('the retro panel still renders the shared tiles unchanged', () => {
   })
 
   render(
-    <>
-      {seed.sections.map((section) => (
-        <MetricSection
-          key={section.key}
-          section={section}
-          sectionTestId="retro-seed-section"
-          emptyTestId="retro-seed-empty"
-          testId="retro-seed-widget"
-          sparklineTestId="retro-seed-sparkline"
-          noTrendTestId="retro-seed-no-trend"
-        />
-      ))}
-    </>,
+    seed.sections.map((section) => (
+      <MetricSection
+        key={section.key}
+        section={section}
+        sectionTestId="retro-seed-section"
+        emptyTestId="retro-seed-empty"
+        testId="retro-seed-widget"
+        sparklineTestId="retro-seed-sparkline"
+        noTrendTestId="retro-seed-no-trend"
+      />
+    )),
   )
 
   const sections = screen.getAllByTestId('retro-seed-section')

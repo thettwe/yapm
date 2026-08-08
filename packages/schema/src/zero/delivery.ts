@@ -245,8 +245,11 @@ export interface TeamDeploymentRow {
 // promises ("a single pass over the team's deployments, not one per row").
 export type DeploymentIndex = ReadonlyMap<string, number>
 
-// A space separator, because neither a repo full name (`owner/name`) nor a git sha can contain
-// one — so two distinct (repo, sha) pairs can never collide into a single key.
+// A NUL separator, because neither a repo full name (`owner/name`) nor a git sha can contain one —
+// so two distinct (repo, sha) pairs can never collide into a single key. The separator is private
+// to this function on purpose: a caller that needs the join calls `assembleLinkedEntities` rather
+// than spelling the key itself, and this comment used to say "space", which is precisely the trap
+// a second copy would have fallen into.
 function deploymentKey(repo: string, sha: string): string {
   return `${repo} ${sha}`
 }

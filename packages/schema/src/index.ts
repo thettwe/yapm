@@ -291,6 +291,25 @@ export {
   matchesFilter,
 } from './zero/filter.js'
 export type {
+  IssueChangeOpenedMoment,
+  IssueCreatedMoment,
+  IssueDeployedMoment,
+  IssueLinkedMoment,
+  IssueMergedMoment,
+  IssueMoment,
+  IssueMomentKind,
+  IssuePlannedMoment,
+  IssueReviewedMoment,
+  IssueTimelineCycleRow,
+  IssueTimelineDeploymentRow,
+  IssueTimelineInput,
+  IssueTimelineIssueRow,
+  IssueTimelineLinkRow,
+  IssueTimelinePullRequestRow,
+  IssueTimelineReviewRow,
+} from './zero/issue-timeline.js'
+export { buildIssueTimeline, ISSUE_MOMENT_KINDS, latestMoment } from './zero/issue-timeline.js'
+export type {
   DeliveredContext,
   DeliveryEmptyState,
   DeliveryMetric,
@@ -627,6 +646,7 @@ export {
   DIGESTS_BY_TEAM_QUERY_NAME,
   denyAll,
   INVITES_ALL_QUERY_NAME,
+  ISSUE_BY_KEY_QUERY_NAME,
   ISSUE_DETAIL_QUERY_NAME,
   ISSUES_BY_TEAM_QUERY_NAME,
   ISSUES_MINE_QUERY_NAME,

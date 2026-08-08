@@ -8,6 +8,7 @@ import type { ReactNode } from 'react'
 // Labels only — the word diet's CHROME tier. The one binding-rule sentence ("team-level only —
 // never a per-person number") lives on Delivery, once per app, not here.
 export function Masthead({
+  kicker,
   title,
   count,
   lens,
@@ -15,6 +16,11 @@ export function Masthead({
   actions,
   className,
 }: {
+  // The row ABOVE the title: a breadcrumb, an identifier, a state pill — what the reader needs to
+  // know they are in the right place before they read the title. Additive and optional, so band 2
+  // stays one component: the alternative is a page hand-rolling its own masthead, which is exactly
+  // what `app-frame` deleted from ten routes.
+  kicker?: ReactNode
   title: ReactNode
   // A string count is the already-capped reading a surface publishes ("99+"), not a second
   // formatting of the same number.
@@ -29,6 +35,11 @@ export function Masthead({
       data-testid="masthead"
       className={cn('flex flex-col gap-2 border-b border-border px-5 py-3', className)}
     >
+      {kicker === undefined ? null : (
+        <div data-testid="masthead-kicker" className="flex flex-wrap items-center gap-2">
+          {kicker}
+        </div>
+      )}
       <div className="flex items-center gap-3">
         <h1 className="font-heading text-[15px] font-bold tracking-tight text-text-1">{title}</h1>
         {count === undefined ? null : (

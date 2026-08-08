@@ -271,4 +271,59 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 
 Taken during the build:
 
-<!-- Append one entry per decision: what was ambiguous, what was chosen, why. -->
+### DI-1 — The rail's "branch → base" has nothing behind it, so no field pretends otherwise
+
+`issue.html` draws the Change-opened station as `eng-116-apple-pay → main`. `pull_request` stores
+`repo`, `number`, `url`, `title`, `state`, `headSha`, `mergeCommitSha`, `openedAt` and `mergedAt` —
+**no head ref and no base ref**. The plan's phrasing ("head/base refs where stored") resolves to
+*not stored*. `IssueChangeOpenedMoment` therefore carries `headSha` and nothing that could be
+mistaken for a branch name; the branch fact the page *can* state is the one on the LINK
+(`issue_link.source === 'branch'`, "matched by branch"), which is a different claim and a true one.
+
+### DI-2 — `now` is spent on one shared age, not on a second clock
+
+`buildIssueTimeline(input, now)` gives every moment an `ageMs` alongside its `at`. Two fact lines
+on one page describing one timeline (the rail's station and the feed's entry) then cannot disagree
+about how long ago something happened, which is the same failure mode D1 exists to prevent on the
+date axis. It is a number, not a formatted string — the surface still owns the words.
+
+### DI-3 — The deploy join is *called*, not *re-implemented*
+
+The first draft re-derived the `repo + sha` index key inside `issue-timeline.ts`. Its unit tests
+failed immediately: `delivery.ts` builds that key with a NUL separator, not the space its comment
+describes, and a second copy of a private key format is a bug waiting for a rename. The timeline now
+calls `assembleLinkedEntities([link], deployIndex)` with the index `buildDeploymentIndex` produced,
+so the join rule — same repo, merged PR only, `mergeCommitSha` against `deployment.sha`, earliest
+success, **no `headSha` fallback** — exists in exactly one place. The raw deployment rows are read
+back only to name the `environment`, which the index does not carry.
+
+The stale comment in `delivery.ts` is corrected in the same pass (comment only — the separator
+itself is unchanged, because changing a shipped join's key format is a behaviour change nothing here
+needs).
+
+### DI-4 — `latestMoment` ships beside the derivation
+
+The rail draws ONE Reviewed station and ONE Merged station over a list that may hold several of
+each. Left to the page, that scan grows in the component and picks its own tie-break. It is a
+four-line export next to the thing it scans instead.
+
+### DI-5 — `issues.byKey` filters `needsTriage`, so a guessed number cannot reach the inbox
+
+`issues.detail` carries no `needsTriage` filter (it is keyed by an id the reader had to already
+hold). A by-KEY resolver is different: `(teamId, number)` is guessable, so it takes the
+`issues.byTeam` treatment — `where('needsTriage', false)` — and a triage row the list holds back
+stays held back. Tested in `queries.test.ts` beside the sibling assertions.
+
+### DI-6 — Key parsing has a third state: undecided
+
+`parseIssueKey(segment, teamKey)` returns `number` (resolved), `null` (not an address in this team)
+or **`undefined`** — "the team key has not synced, so `ENG-116` cannot be told apart from
+`OPS-116`". Collapsing that third state into not-found is how a correct deep link flashes "this
+issue does not exist" on a cold client. The route holds it: not-found is said only once the team
+list is complete AND either the segment is malformed or the by-key query returned complete-and-empty.
+
+### DI-7 — `Masthead` gains a kicker with a `data-testid`, matching its siblings
+
+The new row is `data-testid="masthead-kicker"`, in the same style as `masthead-count`, and it is
+absent from the DOM entirely when no kicker is passed. Every existing caller's rendered output is
+byte-unchanged, which `masthead.test.tsx` asserts directly rather than by inspection.

@@ -333,3 +333,26 @@ export function issueKey(teamKey: string, issue: { number?: number | null }): st
 export function isPendingNumber(issue: { number?: number | null }): boolean {
   return issue.number == null
 }
+
+// The inverse of `issueKey`, and the only thing a URL segment is allowed to mean. Two accepted
+// spellings and no third: `<TEAMKEY>-<number>` matched case-insensitively against THIS team's key
+// (an address bar loses case, and `eng-116` is the same issue as `ENG-116`), or a bare `<number>`,
+// which is the form the side panel's "open full view" link emits. Anything else — another team's
+// key, a trailing word, a number that is not one — is not an address in this team and resolves to
+// not-found rather than to some other issue that happens to share digits.
+//
+// `undefined` means "cannot be decided yet": the team key has not synced, so `ENG-116` cannot be
+// told apart from `OPS-116`. A caller must keep showing loading rather than deciding not-found.
+export function parseIssueKey(
+  segment: string,
+  teamKey: string | undefined,
+): number | null | undefined {
+  const bare = /^\d+$/u.exec(segment)
+  if (bare) return Number.parseInt(segment, 10)
+  const prefixed = /^([A-Za-z][A-Za-z0-9]*)-(\d+)$/u.exec(segment)
+  if (!prefixed) return null
+  if (teamKey === undefined) return undefined
+  const [, key, number] = prefixed
+  if (key === undefined || number === undefined) return null
+  return key.toLowerCase() === teamKey.toLowerCase() ? Number.parseInt(number, 10) : null
+}

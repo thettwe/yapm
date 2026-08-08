@@ -164,6 +164,33 @@ export const queries = defineQueries({
         ctx,
       )
     }),
+    // The DEEP-LINK resolver, and the only reason a query exists here that `detail` does not
+    // already serve: the URL carries `<TEAMKEY>-<number>`, never the row's id, and the alternative
+    // was syncing the WHOLE team's backlog with its linked-delivery subtree to find one row by
+    // scanning it. `(teamId, number)` is the same pair the key spells.
+    //
+    // The predicate is its siblings' predicate, deliberately character for character: the same
+    // `teamScoped` wrapper (so the `teamId` arg can never widen past the caller's memberships), the
+    // same `withLinkedDelivery` subtree, and the same `needsTriage` false filter as `issues.byTeam`
+    // — an issue the list holds back in the triage inbox does not become reachable by guessing its
+    // number.
+    byKey: defineQuery(z.object({ teamId: z.string(), number: z.number() }), ({ args, ctx }) =>
+      teamScoped(
+        withLinkedDelivery(
+          zql.issue
+            .where('teamId', args.teamId)
+            .where('number', args.number)
+            .where('needsTriage', false)
+            .related('assignee')
+            .related('creator')
+            .related('labels')
+            .related('comments', (comments) =>
+              comments.related('author').orderBy('createdAt', 'asc'),
+            ),
+        ).one(),
+        ctx,
+      ),
+    ),
     detail: defineQuery(z.object({ id: z.string() }), ({ args, ctx }) =>
       teamScoped(
         withLinkedDelivery(
@@ -442,6 +469,7 @@ export const PREFERENCES_MINE_QUERY_NAME = 'preferences.mine'
 export const ISSUES_BY_TEAM_QUERY_NAME = 'issues.byTeam'
 export const ISSUES_MINE_QUERY_NAME = 'issues.mine'
 export const ISSUE_DETAIL_QUERY_NAME = 'issues.detail'
+export const ISSUE_BY_KEY_QUERY_NAME = 'issues.byKey'
 export const CYCLES_BY_TEAM_QUERY_NAME = 'cycles.byTeam'
 export const PROJECTS_ALL_QUERY_NAME = 'projects.all'
 export const PROJECT_GET_QUERY_NAME = 'projects.get'

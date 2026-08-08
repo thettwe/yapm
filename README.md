@@ -62,10 +62,10 @@ a keyboard-first triage inbox for incoming issues (accept / decline / route, wit
 lightweight, workspace-level projects with computed progress and a keyboard-first roadmap timeline across teams ·
 three switchable themes (Warm, Focused, Editorial) with a custom accent color · a first-party
 **GitHub connector** (admin-configured) that ingests PR, CI, review, and deploy state into the
-work graph, so every issue row's **reality strip** shows live PR state, a CI health dot, whether a
+work graph, so every issue row's **reality track** shows live PR state, CI health, whether a
 deployment carrying the merge commit actually succeeded, and review
-age — with a **divergence flag** when a human status disagrees with git, and **opt-in status
-automation** that closes the loop the flag opens: turn it on for a team and a linked pull request
+age — with a **`//` break** in the track when a human status disagrees with git, and **opt-in status
+automation** that closes the loop the break opens: turn it on for a team and a linked pull request
 opening moves its issue to In Review, merging moves it to Done — forward only, never over a canceled
 or untriaged issue, off by default, and enabling it changes no existing issue · a **BYO-key AI
 foundation** (bring your own Anthropic / Gemini / OpenAI key, admin-configured, off until you
@@ -184,7 +184,7 @@ never individual scorecards — and says on the page which DORA keys it still la
 lead time is partial (open→merge, not commit→deploy); **deployment frequency** is now computable
 from the durable deploy history the connector records but is not yet a tile, and **change failure
 rate** and **MTTR** wait on an incident record that does not exist yet (Phase 3). Next: those. More connectors (GitLab, …) slot into the same framework with no
-feature-code change — inheriting the reality strip and the status automation above for free.
+feature-code change — inheriting the reality track and the status automation above for free.
 
 ## Quickstart
 

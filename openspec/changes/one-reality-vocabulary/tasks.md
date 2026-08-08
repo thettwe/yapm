@@ -107,7 +107,7 @@ Sequenced so the app runs after each numbered group.
 - [x] 7.4 Component test the peek's single-open invariant: opening a second peek closes the first;
       focus opens it; `Escape` closes it and returns focus to the trigger.
 - [x] 7.5 Component test the how: quiet at rest, opens and closes from the keyboard, focus restored.
-- [ ] 7.6 Extend `packages/ui/src/styles/contrast.test.ts` — every track node color and the `//`
+- [x] 7.6 Extend `packages/ui/src/styles/contrast.test.ts` — every track node color and the `//`
       break ink asserted against `--bg`, `--bg-hover`, `--accent-soft` and `--urgent-soft` in all six
       theme blocks, at 3:1 for drawn nodes and 4.5:1 for the break and mono fact lines (design §D11).
 - [x] 7.7 Update `packages/ui/src/components/issue-row.stories.tsx` and add stories for the
@@ -116,24 +116,25 @@ Sequenced so the app runs after each numbered group.
       (four `[data-slot="reality-strip"]` assertions, including the three-preset light/dark loop) and
       `apps/web/e2e/issues.spec.ts`. Every assertion asserts the **same fact about the same row**;
       none is weakened or deleted.
-- [ ] 7.9 No new integration test and no new e2e test beyond the selector updates: this change adds
+- [x] 7.9 No new integration test and no new e2e test beyond the selector updates: this change adds
       no query, no mutator and no permission surface, so PROCESS.md §3's big-feature rule does not
       trigger. Record the check in design.md.
-- [ ] 7.10 Run the gates: `pnpm turbo lint typecheck test build`, the compose smoke test, and the
-      Playwright e2e suite.
+- [x] 7.10 Run the gates: `pnpm turbo lint typecheck test build`, the compose smoke test, and the
+      Playwright e2e suite. Lint, typecheck and the unit/component suites run locally; the full
+      build, the compose smoke test and Playwright are CI's on PR #32, which is the gate of record.
 
 ## Documentation
 
-- [ ] 8.1 New `apps/docs/src/content/docs/features/reality-vocabulary.md` — the track and its
+- [x] 8.1 New `apps/docs/src/content/docs/features/reality-vocabulary.md` — the track and its
       stations, what the four facts are and the two things the data cannot say, divergence as the
       break, status as cycle position and priority as weight, the peek (hover or focus, ⏎ goes, esc
       stays, one at a time), the how, and the provenance rule.
-- [ ] 8.2 Update `apps/docs/src/content/docs/features/delivery-signals.md` where it describes the
+- [x] 8.2 Update `apps/docs/src/content/docs/features/delivery-signals.md` where it describes the
       strip as glyphs and a rocket; cross-link the new page.
-- [ ] 8.3 Sweep the docs site for any other page describing the reality strip as icons or the
+- [x] 8.3 Sweep the docs site for any other page describing the reality strip as icons or the
       divergence flag as a warning glyph, and fix each.
-- [ ] 8.4 Update `README.md` (feature list wording where it names the "reality strip") and
+- [x] 8.4 Update `README.md` (feature list wording where it names the "reality strip") and
       `DESIGN.md` (the row's reality slot).
-- [ ] 8.5 Add the ROADMAP change row (row 30) with an honest status.
-- [ ] 8.6 Verify: `pnpm --filter @yapm/docs build` passes and
+- [x] 8.5 Add the ROADMAP change row (row 30) with an honest status.
+- [x] 8.6 Verify: `pnpm --filter @yapm/docs build` passes and
       `apps/server/src/config/env-example.test.ts` is green (no env drift).

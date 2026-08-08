@@ -1,0 +1,149 @@
+---
+title: The reality vocabulary
+description: How yapm draws delivery reality — the track and its stations, the divergence break, status as cycle position, priority as weight, the peek, the how, and the provenance mark.
+---
+
+yapm draws the same things the same way everywhere. An issue row, an issue page, the team's morning
+digest and the Delivery view all render delivery reality with **one vocabulary**: a track of nodes,
+a `//` break where the board and git disagree, an arc for status, ticks for priority. Learning it on
+one surface means you already know it on the next.
+
+This page is the reference for what each mark means. What the marks are *derived from* — how a PR
+links to an issue, what counts as deployed — lives in
+[Delivery signals](/features/delivery-signals/).
+
+## The track
+
+Delivery is drawn as a **track**: four stations, joined by segments, read left to right.
+
+| Station | What it says |
+| --- | --- |
+| **Change** | A pull request exists, and where it is: draft → open → approved → merged → closed |
+| **Checks** | CI health rolled up over the linked checks |
+| **Review** | Whether the change has been reviewed |
+| **Live** | Whether a deployment carrying this change's merge commit succeeded |
+
+Each station is a node, and the node's **shape** carries its state, never hue alone:
+
+- a **filled disc** — the station is reached (merged, green, approved, live),
+- a **hollow ring** — the station is in flight (a draft PR, checks still running, review waiting),
+- a **square** — CI is failing,
+- a **faint open ring** — nothing here yet.
+
+The segments between the stations carry the same reading: solid where the work has run through,
+dotted where it has not.
+
+An issue with no linked activity still draws the track — four empty stations at exactly the width a
+populated track occupies — so connecting GitHub never shifts a row. The whole track is one image to
+a screen reader, labelled with the facts it actually draws ("PR merged, CI passing, Deployed") or
+"No delivery signal yet".
+
+### The same track, on its side
+
+Where a surface has room for words rather than only for marks, the same track is drawn **vertically
+as a rail**: the same stations, top to bottom, each with a sentence and a mono line of the evidence
+under it. It is one shape on two axes, not two vocabularies — so a break in a dense row and a break
+in a rail mean exactly the same thing.
+
+## The `//` break
+
+Where the board and git disagree, the track does not continue: it **breaks**, with a mono `//` at
+the point of disagreement. Which segment breaks says which disagreement fired:
+
+| The disagreement | Where the track breaks |
+| --- | --- |
+| The board ran ahead of the pull request — in review with no PR, or only a draft | On the first segment |
+| Done, but CI is failing | On the segment leaving Checks |
+| The PR merged, but the issue is not done or canceled | On the last segment |
+
+The station just past the break wears an urgent ring, so the break reads as a stop rather than a
+gap. The sentence naming the disagreement is always written out beside the break — the mark draws
+attention, the words carry the meaning.
+
+Earlier versions of yapm drew this as a warning triangle beside the row. It is now part of the
+track, because a disagreement is a fact about the *path* the work took, and belongs on the drawing
+of that path.
+
+## What the track can and cannot say
+
+The track shows exactly four facts — PR state, CI health, review age, and the deploy join — and
+never invents a fifth. Two limits are worth knowing, because yapm will not paper over either:
+
+- **Checks have no duration.** GitHub gives yapm a check's conclusion and when it last changed, not
+  when it started and finished. So "red for 41 minutes" is a fact yapm can state; "checks took 4
+  minutes" is not, and no surface claims it.
+- **There is no "review requested" event.** yapm can see reviews that happened, not reviews that
+  were asked for. Review age is therefore the time since the newest review, or, before any review,
+  how long the PR has been open — never "waiting on a reviewer since Tuesday", which the data cannot
+  distinguish from "open since Tuesday".
+
+## Status is cycle position
+
+The status glyph is **one loop, filled as far as the work has run**:
+
+| Status | Glyph |
+| --- | --- |
+| Backlog | A dashed ring — nothing has started |
+| Todo | An open ring |
+| In progress | A half arc |
+| In review | A three-quarter arc |
+| Done | A filled disc |
+| Canceled | An open ring with a cross through it |
+
+Because the glyphs differ by how much of the loop is drawn, they are distinguishable without
+relying on color — and they read as *progress around a cycle*, which is what a status is.
+
+## Priority is weight
+
+Priority is drawn as **ticks of rising height**. All three ticks are always in place — the ones the
+work does not carry stay faint — so weight reads as height against a fixed row rather than as a
+count of shapes you have to make. Low lights one tick, medium two, high three, and an issue with no
+priority lights none.
+
+Urgent is the exception that proves it is a different claim rather than more of high: **a single
+tick standing alone**, with a dot beneath it. It is deliberately not a fourth tick.
+
+## The peek
+
+**Anything with a dotted underline opens something.** Hovering it — or reaching it with the keyboard
+— opens a **peek**: a small elevated panel answering "what is this?" without leaving the page.
+
+- **⏎ goes to the thing.** The trigger is still the link it always was, so Enter navigates.
+- **esc stays.** Escape closes the peek and puts focus back where it was.
+- **At most one peek is open at a time**, anywhere on the page. This is enforced by construction,
+  not by convention, so peeks can never stack up as you sweep across a list.
+
+A peek is transient, so it is the one kind of surface in yapm allowed to lift off the page with a
+shadow. Everything else stays flat.
+
+## The how
+
+A derived number never explains itself at rest. Beside it sits a quiet mono **`how ·`**. Open it —
+by click or by Enter, never by hover, because a derivation is read rather than glanced at — and it
+tells you exactly how the number was computed and within what constraints. Close it, and the surface
+returns to quiet. Facts stay; footnotes fold.
+
+Escape closes it and returns focus to the affordance, and tabbing away closes it too.
+
+## The provenance mark
+
+yapm's own glyphs carry **meaning**. A brand mark carries **provenance** — where a fact came from —
+and nothing else. So a provider's mark is:
+
+- **monochrome**, drawn in the current text color, never in the provider's brand color,
+- **12–14px**, never larger than the text beside it,
+- placed **after** the fact it sourced, never in place of a status arc or a track node.
+
+GitHub's mark appears after facts sourced from GitHub. Figma's appears on linked design artifacts
+only. **An uploaded file carries no mark** — there is no provider to name.
+
+## Accessibility
+
+Every mark in this vocabulary is drawn from theme tokens and holds its contrast bar in all three
+presets in both light and dark: the 3:1 non-text bar for the drawn nodes and segments, and the 4.5:1
+text bar for the `//` break and the rail's mono fact lines — on a plain row, a hovered row, a
+selected row and the digest's divergence row alike.
+
+State is never carried by color alone: the track's nodes differ by shape, the status glyphs by how
+much of the loop is drawn, and priority by how many ticks stand. The peek and the how are both fully
+operable from the keyboard and both announce their open state; neither traps focus.

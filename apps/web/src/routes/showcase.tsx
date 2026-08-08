@@ -21,6 +21,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@yapm/ui/components/dialog'
+import { Door } from '@yapm/ui/components/door'
+import { How } from '@yapm/ui/components/how'
 import { Input } from '@yapm/ui/components/input'
 import { IssueRow } from '@yapm/ui/components/issue-row'
 import { Label } from '@yapm/ui/components/label'
@@ -33,6 +35,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from '@yapm/ui/components/menu'
+import { PeekFact, PeekPanel, PeekProvider, PeekTitle, usePeek } from '@yapm/ui/components/peek'
 import {
   Popover,
   PopoverContent,
@@ -41,10 +44,12 @@ import {
   PopoverTrigger,
 } from '@yapm/ui/components/popover'
 import { PRIORITY, type PriorityKind, PriorityMark } from '@yapm/ui/components/priority-mark'
+import { ProvenanceMark } from '@yapm/ui/components/provenance-mark'
 import {
   buildRealityShape,
   RealityTrack,
   realityTrackLabel,
+  type TrackShape,
 } from '@yapm/ui/components/reality-track'
 import { Select } from '@yapm/ui/components/select'
 import { STATUS, StatusGlyph, type StatusKind } from '@yapm/ui/components/status-glyph'
@@ -204,6 +209,56 @@ function IssueListMockup() {
   )
 }
 
+// The rail is the same shape the row draws, turned on its side and given a sentence and a mono
+// fact per station — one implementation, two axes.
+const DELIVERY_RAIL: TrackShape = {
+  stations: [
+    { id: 'idea', node: 'done', label: 'Idea filed', fact: 'ENG-142 · 6 Jun' },
+    { id: 'designed', node: 'done', label: 'Designed', fact: 'figma · 2 revisions' },
+    { id: 'built', node: 'done', label: 'Built', fact: 'merged 8f21c4a · 14/14 checks' },
+    { id: 'live', node: 'empty-urgent', label: 'Live', fact: 'no deploy carries this commit' },
+  ],
+  segments: ['solid', 'solid', 'broken'],
+}
+
+function ShippedPeek() {
+  const { open, triggerProps, peekProps } = usePeek<HTMLAnchorElement>('showcase-peek', {
+    label: 'ENG-142 — Investigate flaky sync on reconnect',
+  })
+  return (
+    <span className="relative inline-flex">
+      <a
+        href="#showcase"
+        {...triggerProps}
+        className="inline-flex items-center gap-1.5 rounded-control px-1.5 py-0.5 font-mono text-[11.5px] text-text-1 hover:bg-bg-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+      >
+        <StatusGlyph status="in-progress" className="size-[13px]" />
+        <Door hot={open}>ENG-142</Door>
+      </a>
+      {open ? (
+        <PeekPanel {...peekProps}>
+          <PeekTitle>Investigate flaky sync on reconnect</PeekTitle>
+          <div className="mt-2.5">
+            <RealityTrack
+              shape={buildRealityShape(DIVERGED, { divergence: 'status_behind_merge' })}
+              label={realityTrackLabel(DIVERGED, 'Done in git, not on the board')}
+            />
+          </div>
+          <PeekFact
+            phrase="Built — not live yet"
+            detail={
+              <>
+                merged 8f21c4a · 14/14 checks
+                <ProvenanceMark provider="github" label={null} className="ml-[5px]" />
+              </>
+            }
+          />
+        </PeekPanel>
+      ) : null}
+    </span>
+  )
+}
+
 function accentStyle(accent: string | null, dark: boolean): CSSProperties | undefined {
   if (!accent) return undefined
   const shades = deriveAccent(accent, dark ? 'dark' : 'light')
@@ -353,6 +408,32 @@ function Showcase() {
                 ))}
               </div>
             </div>
+          </Section>
+
+          <Section title="Reality vocabulary — the rail, the peek, the how, provenance">
+            <PeekProvider>
+              <div className="flex flex-wrap items-start gap-10">
+                <RealityTrack shape={DELIVERY_RAIL} orientation="vertical" label="Delivery" />
+                <div className="flex flex-col gap-5">
+                  <ShippedPeek />
+                  <span className="flex items-baseline gap-2 text-[13px] text-text-2">
+                    <b className="font-heading text-[22px] font-semibold text-text-1">3.2d</b>
+                    open to merged
+                    <How
+                      label="open to merged"
+                      constraint="12 merged PRs · cycle 24 · team-level only"
+                    >
+                      Median hours from a pull request opening to the moment it merged, over every
+                      PR linked to an issue this team closed in the window.
+                    </How>
+                  </span>
+                  <span className="flex items-center gap-2 text-[13px] text-text-2">
+                    yapm/yapm#412 merged
+                    <ProvenanceMark provider="github" />
+                  </span>
+                </div>
+              </div>
+            </PeekProvider>
           </Section>
 
           <Section title="Overlays">

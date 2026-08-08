@@ -200,7 +200,10 @@
   --status-backlog: #6b7078;
   --status-todo: #8a8f97;
   --status-in-progress: #e0a63c;
-  --status-in-review: #3f9e7c;
+  /* Darkened from #3f9e7c: the reality track's `open` and `rev-wait` nodes are drawn in this hue on
+     the selected row's `--accent-soft` wash, where the original measured 2.88 — under the 3:1
+     non-text bar. Asserted per preset in `styles/contrast.test.ts`. */
+  --status-in-review: #398e70;
   --status-done: #5b63d6;
   --status-urgent: #e2593f;
   --status-urgent-ink: #ba3c26;
@@ -325,7 +328,9 @@
   --status-in-review: #9089da;
   --status-done: #59a57b;
   --status-urgent: #df6a4e;
-  --status-urgent-ink: var(--status-urgent);
+  /* The one dark preset that cannot alias the ink to the glyph hue: the `//` break is text-sized and
+     is drawn on the selected row's `--accent-soft` wash, where `--status-urgent` measures 4.35. */
+  --status-urgent-ink: #e2765c;
   --signal-sync: #5eb489;
 
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);

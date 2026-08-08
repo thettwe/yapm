@@ -401,3 +401,46 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 - **No consumer wired in this change.** The three patterns land as vocabulary with stories and
   component tests; the issues list, issue detail and delivery rebuilds are what mount them. Wiring a
   peek into today's list layout would be work the very next change deletes.
+
+### Recorded while building groups 7–8 — tests and documentation
+
+- **The contrast assertion found two real token failures, and both are fixed in the tokens rather
+  than in the assertion.** Extending `contrast.test.ts` to the four surfaces the track is actually
+  drawn on — a plain row, a hovered row, the **selected** row (`--accent-soft`, `issue-row.tsx`) and
+  the digest's divergence class row (`--urgent-soft`, `team-home.tsx`) — measured focused light's
+  `--status-in-review` at **2.88** over the selected row (under the 3:1 non-text bar; the track's
+  `open` and `rev-wait` nodes carry that hue) and warm dark's `--status-urgent-ink` at **4.35** over
+  the same wash (under the 4.5:1 text bar; the `//` break carries it). Focused light's in-review
+  green is darkened to `#398e70`, and warm dark stops aliasing its urgent ink to `--status-urgent`
+  and states `#e2765c`. Both failures were invisible in five of six presets and on every row state
+  but one, which is exactly the class of bug this file exists to catch.
+- **The rail's mono fact line is `--text-2`, not the mock's `--text-3`.** `issue.html` inks
+  `.stop .git` at `--text-3`, which measures **2.80–3.70** on these surfaces. That line carries a
+  commit sha and a check count at 11px — a fact the reader must actually read — so the AA bar wins
+  over the mock's exact ink. The mock's `--text-3` remains correct for the `.t-age` suffix and the
+  peek's derivation line, which are secondary to a fact stated elsewhere.
+- **The empty station is deliberately below the non-text bar, and the test records why.**
+  `--border-strong` measures ~1.4 against every surface, and raising it to 3:1 would make "no pull
+  request yet" the loudest mark in a dense row. It is scaffolding, not a fact: the facts are the
+  filled nodes, and the absence is stated *in words* by the track's `role="img"` label ("No delivery
+  signal yet"), which `reality-track.test.tsx` asserts. What the contrast file pins instead is that
+  an empty ring can never be mistaken for a fact node (≥ 2.5 against all three status hues) — a bar
+  the old focused-light green failed, so the assertion is falsifiable rather than decorative.
+- **No new integration test and no new e2e spec (task 7.9).** PROCESS.md §3's big-feature rule needs
+  ≥ 2 of {synced entity/schema, mutator, permission surface, signature UI}; this change touches
+  exactly one — signature UI. `git diff origin/main` over `packages/schema/src/zero/` shows no table,
+  no named query, no mutator and no permission change, and the query registry is byte-unchanged, so
+  there is nothing for a pg integration suite to scope. The e2e work is therefore selector renames
+  only: `connectors.spec.ts` (four `[data-slot="reality-strip"]` assertions, including the
+  three-preset light/dark loop) and `issues.spec.ts` now name `reality-track`, and every assertion
+  still asserts the same fact about the same row.
+- **The showcase route gains the vocabulary section the stories cover.** The three patterns and the
+  vertical rail had stories but no in-app surface, so nothing rendered them against a real theme
+  toggle. `/showcase` now draws the rail, one peek, one `how` and a provenance mark beside the
+  existing glyph sets — the app-level proof that the tokens hold in all six presets, which a
+  Storybook-only artifact cannot give.
+- **"Reality strip" and "divergence flag" are renamed across the docs to "reality track" and the
+  "`//` break", and the `#the-divergence-flag` anchor becomes `#divergence`.** Every inbound link
+  (`auto-status.md` ×2, `github-connector.md`) is updated with it. Historical ROADMAP rows keep the
+  words they shipped with — a row describing what change 3 built is a record, not a description of
+  today — but every present-tense sentence in README, DESIGN, VISION and ROADMAP is corrected.

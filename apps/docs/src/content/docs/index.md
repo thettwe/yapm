@@ -20,7 +20,7 @@ runs as three containers you own.
   `/teams/<teamId>/projects` and `/teams/<teamId>/roadmap`.
 - [Delivery signals](/features/delivery-signals/) — every issue row shows delivery reality
   (PR state, CI health, whether a deployment carrying the merge commit succeeded, review age)
-  derived from linked GitHub activity, with a divergence flag when a human status disagrees with
+  derived from linked GitHub activity, with a divergence break when a human status disagrees with
   git. [Connect GitHub](/self-hosting/github-connector/) to turn it on.
 - [Status automation](/features/auto-status/) — opt in, per team, to let a linked pull request drive
   an issue's status: opened moves it to In Review, merged moves it to Done. Off by default, never

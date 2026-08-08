@@ -307,8 +307,10 @@ function VerticalRail({ shape, label, className }: Omit<RealityTrackProps, 'orie
                 {station.label}
               </span>
             )}
+            {/* `text-2`, not the mock's `text-3`: this line carries a fact the reader must read at
+                11px, and `--text-3` measures 2.80–3.70 against the surfaces the rail sits on. */}
             {station.fact === undefined ? null : (
-              <span className="mt-[3px] block font-mono text-[11px] leading-[1.5] text-text-3">
+              <span className="mt-[3px] block font-mono text-[11px] leading-[1.5] text-text-2">
                 {station.fact}
               </span>
             )}

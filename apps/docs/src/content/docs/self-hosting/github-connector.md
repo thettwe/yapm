@@ -48,7 +48,7 @@ to own it under an organization).
 | Checks | Read-only | CI health |
 | Deployments | Read-only | Deploy state |
 
-Read-only covers the wedge (PR/CI/deploy state driving the issue's reality strip **and**, for teams
+Read-only covers the wedge (PR/CI/deploy state driving the issue's reality track **and**, for teams
 that opt in, the issue's status) and guarantees yapm never modifies your GitHub. Only escalate
 Issues + Pull requests to **Read & write** if you later want yapm to post back-reference comments on
 PRs — that forces installers to re-approve.
@@ -86,7 +86,7 @@ yapm was already receiving are now kept:
 
 - **The commit each deployment carried.** It arrives in the same object as the ref and the
   environment; yapm used to drop it. It is what links a merged pull request to the deploy that
-  shipped it, and it drives the reality strip's
+  shipped it, and it drives the reality track's
   [deployed signal](/features/delivery-signals/#how-a-change-is-counted-as-deployed).
 - **The moment a deployment first succeeded**, stored separately from its state and never rewritten.
   GitHub's `auto_inactive` flips a superseded deployment to `inactive` the moment the next one
@@ -162,13 +162,13 @@ Open *Settings → Connectors* in yapm (workspace admins only), **Enable** the G
 map each repository (`owner/repo`) to the team that should own its pull requests, checks, and
 deployments. Ingested work-graph rows land inside that team's boundary; a webhook for an unmapped
 repo is dropped. Once mapped, a PR whose branch name or body mentions an issue key (e.g. `ENG-142`)
-lights up that issue's **reality strip** — PR state, CI health, whether a deployment carrying the
+lights up that issue's **reality track** — PR state, CI health, whether a deployment carrying the
 merge commit succeeded, and review age — on the issue row and detail.
 
 ## 10. Optionally, let pull requests drive issue status
 
 By default, linked PR activity only *shows* on the issue — a status that disagrees with git gets a
-[divergence flag](/features/delivery-signals/#the-divergence-flag), never a rewrite. The same
+[divergence break](/features/delivery-signals/#divergence), never a rewrite. The same
 *Settings → Connectors* page has a **Status automation** section where an admin can turn that into a
 transition, **per team**:
 
@@ -184,4 +184,4 @@ transition, **per team**:
 - **No new environment variable, container, or job.** The whole setting is one column per team.
 
 See [Status automation](/features/auto-status/) for the full guard ladder, how it interacts with the
-divergence flag, and the branch-name caveat worth knowing before you enable it.
+divergence break, and the branch-name caveat worth knowing before you enable it.

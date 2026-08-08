@@ -226,8 +226,9 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   // its `--urgent-soft` wash, the YOURS urgent say line, the runway urgent phrase, the `//` break
   // mark — all carry `--status-urgent-ink`, which must meet AA normal over the base surface AND
   // over the urgent-soft composite (the wash is defined as the urgent hue at 8% over the surface,
-  // reconstructed here the same way). The darks alias the ink to `--status-urgent`, which this
-  // assertion proves is already enough there.
+  // reconstructed here the same way). Two of the three darks alias the ink to `--status-urgent`,
+  // which this assertion proves is enough there; warm dark states its own, for the soft-accent
+  // reason recorded on the track assertions below.
   it('the urgent text ink meets AA on the base surface and the urgent-soft wash (>= 4.5)', () => {
     const bg = hex(t, '--bg')
     const urgentWash = wash(hex(t, '--status-urgent'), bg, 0.08)
@@ -247,6 +248,67 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     const urgent = hex(t, '--status-urgent')
     for (const surface of [bg, wash(urgent, bg, 0.08)]) {
       expect(contrastRatio(urgent, surface)).toBeGreaterThanOrEqual(AA_LARGE)
+    }
+  })
+
+  // The reality track — the one vocabulary every surface draws delivery in — is drawn on exactly
+  // four surfaces: a plain row, a hovered row, the SELECTED row (`--accent-soft`, `issue-row.tsx`)
+  // and the digest's divergence class row (`--urgent-soft`, `team-home.tsx`). The three washes are
+  // composited over the base surface here the same way the browser paints them.
+  const trackSurfaces = (): ReadonlyArray<readonly [string, string]> => {
+    const bg = hex(t, '--bg')
+    return [
+      ['--bg', bg],
+      ['--bg-hover', over(t['--bg-hover'] ?? '', bg)],
+      ['--accent-soft', over(t['--accent-soft'] ?? '', bg)],
+      ['--urgent-soft', wash(hex(t, '--status-urgent'), bg, 0.08)],
+    ]
+  }
+
+  // Every node and segment that CARRIES a fact: `--status-done` (the done disc and the solid
+  // segment), `--status-in-review` (the open disc, the review ring, the review segment) and
+  // `--status-urgent` (the failing square, the urgent ring after a break, the broken rail
+  // connector). Non-text drawing, so 3:1 (WCAG 1.4.11) is the bar — on all four surfaces, because a
+  // track that is legible on a plain row and not on the selected one is legible in the screenshot
+  // and not in use. Pinned because focused light's original `--status-in-review` measured 2.88 over
+  // its own soft-accent wash: a failure visible in exactly one preset, on exactly one row state.
+  it('every fact-carrying track node is distinguishable on all four track surfaces (>= 3.0)', () => {
+    for (const [name, surface] of trackSurfaces()) {
+      for (const node of ['--status-done', '--status-in-review', '--status-urgent'] as const) {
+        expect(contrastRatio(hex(t, node), surface), `${node} on ${name}`).toBeGreaterThanOrEqual(
+          AA_LARGE,
+        )
+      }
+    }
+  })
+
+  // The two TEXT-sized parts of the same vocabulary: the `//` break mark (`--status-urgent-ink`, on
+  // both the horizontal track and the vertical rail) and the rail's mono fact line, which carries
+  // `--text-2` rather than the mock's `--text-3` precisely so it lands inside this assertion —
+  // `--text-3` measures 2.80–3.70 on these surfaces, which is not a bar an 11px commit sha may sit
+  // under. Warm dark is why `--status-urgent-ink` is no longer an alias of `--status-urgent` in
+  // every dark preset: the glyph hue measured 4.35 over that preset's soft-accent wash.
+  it('the // break ink and the mono fact line meet AA on all four track surfaces (>= 4.5)', () => {
+    for (const [name, surface] of trackSurfaces()) {
+      for (const ink of ['--status-urgent-ink', '--text-2'] as const) {
+        expect(contrastRatio(hex(t, ink), surface), `${ink} on ${name}`).toBeGreaterThanOrEqual(
+          AA_NORMAL,
+        )
+      }
+    }
+  })
+
+  // The empty station is the one part of the track deliberately BELOW the non-text bar:
+  // `--border-strong` measures ~1.4 against every surface, and raising it to 3:1 would make "no
+  // pull request yet" the loudest thing in a dense row. It is scaffolding, not a fact — the facts
+  // are the filled nodes asserted above, and the absence is stated in words by the track's
+  // `role="img"` label ("No delivery signal yet", asserted in `reality-track.test.tsx`). What must
+  // hold is that an empty ring can never be mistaken FOR a fact node, which is what this measures.
+  it('records that the empty station is scaffolding, distinguishable from every fact node', () => {
+    const bg = hex(t, '--bg')
+    const ring = over(t['--border-strong'] ?? '', bg)
+    for (const node of ['--status-done', '--status-in-review', '--status-urgent'] as const) {
+      expect(contrastRatio(hex(t, node), ring), node).toBeGreaterThanOrEqual(2.5)
     }
   })
 

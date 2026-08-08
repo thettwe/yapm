@@ -141,7 +141,9 @@ test('route a triage issue applies fields and clears the inbox', async ({ page }
   // Keyboard-open the route dialog, pick a status, and submit.
   await inboxRow.focus()
   await page.keyboard.press('r')
-  const dialog = page.getByRole('dialog', { name: 'Route issue' })
+  // The route transient is the page's one transient: a labelled panel that names the issue it
+  // will write, addressed by role and name rather than by test id.
+  const dialog = page.getByRole('dialog', { name: /^Route [A-Z]+-/ })
   await expect(dialog).toBeVisible({ timeout: 20_000 })
   await dialog.getByLabel('Status').selectOption('todo')
   await dialog.getByTestId('route-submit').click()
@@ -248,7 +250,7 @@ test('a viewer sees a read-only triage inbox', async ({ page, browser }) => {
     await vp.keyboard.press('a')
     await vp.keyboard.press('d')
     await vp.keyboard.press('r')
-    await expect(vp.getByRole('dialog', { name: 'Route issue' })).toHaveCount(0)
+    await expect(vp.getByRole('dialog', { name: /^Route [A-Z]+-/ })).toHaveCount(0)
     await expect(vp.locator(TRIAGE_ROW).filter({ hasText: title })).toBeVisible()
   } finally {
     await context.close()

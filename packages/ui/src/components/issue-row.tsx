@@ -59,6 +59,11 @@ export interface IssueRowProps extends Omit<ComponentProps<'div'>, 'children'> {
   cycle?: string
   date?: string
   assignee?: IssueAssignee
+  // What the trailing avatar ANNOUNCES, when the person in that slot is not the assignee. Triage
+  // puts the reporter there — an inbox issue has no meaningful assignee until routing sets one —
+  // and a slot that announced "Priya Raman" alone would let a reader infer the wrong relation.
+  // Initials still derive from the name, so the drawing is unchanged.
+  assigneeLabel?: string
   selected?: boolean
   // The row's one reality slot: the drawn track, at `REALITY_TRACK_WIDTH`. Divergence rides on
   // the track's `//` break, so there is no second flag slot to keep in step with it.
@@ -77,6 +82,7 @@ function IssueRow({
   cycle,
   date,
   assignee,
+  assigneeLabel,
   selected = false,
   realityTrack,
   phrase,
@@ -175,9 +181,13 @@ function IssueRow({
       ) : null}
 
       {assignee ? (
-        <Avatar size="xs" className="shrink-0" title={assignee.name}>
-          {assignee.src ? <AvatarImage src={assignee.src} alt={assignee.name} /> : null}
-          <AvatarFallback aria-label={assignee.name}>{initials(assignee.name)}</AvatarFallback>
+        <Avatar size="xs" className="shrink-0" title={assigneeLabel ?? assignee.name}>
+          {assignee.src ? (
+            <AvatarImage src={assignee.src} alt={assigneeLabel ?? assignee.name} />
+          ) : null}
+          <AvatarFallback aria-label={assigneeLabel ?? assignee.name}>
+            {initials(assignee.name)}
+          </AvatarFallback>
         </Avatar>
       ) : (
         <span className="w-5 shrink-0" aria-hidden="true" />

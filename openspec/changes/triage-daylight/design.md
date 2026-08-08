@@ -189,3 +189,59 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 
 <!-- Build-time decisions are appended below this line, each with what was ambiguous, what was
      chosen, and why. -->
+
+### B1 — The Project row shipped; `routeIssue` gained the field (D1 executed as written)
+
+`routeIssueArgs` gained `projectId: z.string().min(1).nullable().optional()`. The branch runs the
+existence check `setIssueProject` runs — workspace-level, **no** cross-team rejection, because a
+project spans teams — and folds `projectId` into the same single `issue.update` that clears
+`needsTriage`. `canWrite` / `loadIssueForWrite` ordering is untouched, so a viewer is still refused
+before the project is looked up (asserted). No table, no migration, no new named query.
+
+`ai-tools.ts` derives the tool from the args schema, so the field arrived for free; the registry
+test previously asserted nothing about `issue.routeIssue`'s fields, so the expectation was **added**
+(the field list plus its `write` class) rather than adjusted. Nothing was loosened.
+
+### B2 — A verdict's accessible name is the word alone; the key is `aria-keyshortcuts`
+
+Ambiguous: the rail draws a keycap *inside* the control, which would make the button's accessible
+name "A Accept". Chosen: `aria-label` carries the word, `aria-keyshortcuts` carries the key the cap
+draws, and Decline's landing status ("canceled", with the shared canceled mark) is wired through
+`aria-describedby` so it is announced as a description rather than smuggled into the name. The
+alternative — hiding the cap from assistive tech — would have thrown away the one thing a keyboard
+user most wants to hear.
+
+### B3 — The route transient is a hand-focused panel, not `Popover` or `Menu`
+
+`Popover` portals its content to the document root, which would take the transient out of the
+decision panel's drawn position and out of the queue's key handling; `Menu` fires items on
+activation, which is the wrong grammar for five values committed once (D4). Chosen: a
+`role="dialog"` panel positioned inside the decision panel, focused on open, escapable, returning
+focus to the row it came from, stopping every key from reaching the queue (`a` inside a select is a
+typeahead, not a verdict). It keeps an explicit accessible name — `Route ENG-125` — so the e2e
+addresses it by role and name; `apps/web/e2e/triage.spec.ts` now names it that way instead of
+`Route issue`, and the three `triage-*` test ids are untouched.
+
+### B4 — One age measure, shared
+
+`formatRelative` moved from `issue-list.tsx` to `issues/model.ts` and both surfaces import it. A
+second copy would have let the list's `updated_at` column and Triage's `created_at` column drift
+out of the same register, which is exactly what "the row anatomy is identical" forbids.
+
+### B5 — A sync tick may not steal focus out of the open transient
+
+The shipped focus effect re-focuses the row whenever the inbox result changes. With a transient
+carrying form controls that becomes a mid-edit focus theft on any sync tick, so the effect now
+stands down while the transient is open; the transient hands focus back itself on close.
+
+### B6 — The decision panel renders for a viewer; only the verdicts are gated
+
+A viewer's inbox is read-only, not factless: the description, the reporter/created-at line and the
+attachment chips are facts they are entitled to. The rail renders only the movement hint for them,
+so the four e2e assertions that no `triage-accept` / `triage-route` / `triage-decline` exists hold
+verbatim.
+
+### B7 — Loading and team-missing states became labels
+
+`Loading inbox…` → `Loading…`, `This team no longer exists.` → `No such team.` — the word diet's
+CHROME tier. `oldest first` is absent over an empty queue, per the mock.

@@ -1,45 +1,45 @@
 ## 1. Read the rulebook first
 
-- [ ] 1.1 Read `design-explorations/overhaul-2026-08/destinations/triage.html` end to end **including its closing comment** (§"What folded, and why", §"Decision made here, beyond the shipped mutator", §"Self-critique"), and look at `triage.png` and `triage-full.png`
-- [ ] 1.2 Read `destinations/DESTINATIONS.md` (the `triage.html` row, §"What the render showed" items 2–4) and `northstar/ia.html` (§"The word diet", the band-2 anatomy, transients-never-destinations)
-- [ ] 1.3 Read `northstar/issues.html` — the row anatomy this page must line up with, column for column
-- [ ] 1.4 Read `reference/zero.md` (Zero 1.x — `defineQuery` / `defineMutator` / `createBuilder`; the 0.x names are non-functional) plus the Tailwind 4.3 and TanStack Router references
-- [ ] 1.5 Read the surfaces this change consumes and must NOT rebuild: `packages/ui/src/components/{issue-row,reality-track,status-glyph,priority-mark,provenance-mark,peek,how,drawn,avatar,popover}.tsx`, `apps/web/src/frame/masthead.tsx`, `apps/web/src/issues/issue-list.tsx` (the row's wiring), `apps/web/src/issues/attachments/files-section.tsx`
-- [ ] 1.6 Read `packages/schema/src/zero/{queries.ts,mutators.ts,team-home.ts,ai-tools.ts}` — `triage.inbox`, `routeIssue`, `setIssueProject` (the permission story D1 copies), `buildAttention` (the one attention number), and the derived agent-tool registry
+- [x] 1.1 Read `design-explorations/overhaul-2026-08/destinations/triage.html` end to end **including its closing comment** (§"What folded, and why", §"Decision made here, beyond the shipped mutator", §"Self-critique"), and look at `triage.png` and `triage-full.png`
+- [x] 1.2 Read `destinations/DESTINATIONS.md` (the `triage.html` row, §"What the render showed" items 2–4) and `northstar/ia.html` (§"The word diet", the band-2 anatomy, transients-never-destinations)
+- [x] 1.3 Read `northstar/issues.html` — the row anatomy this page must line up with, column for column
+- [x] 1.4 Read `reference/zero.md` (Zero 1.x — `defineQuery` / `defineMutator` / `createBuilder`; the 0.x names are non-functional) plus the Tailwind 4.3 and TanStack Router references
+- [x] 1.5 Read the surfaces this change consumes and must NOT rebuild: `packages/ui/src/components/{issue-row,reality-track,status-glyph,priority-mark,provenance-mark,peek,how,drawn,avatar,popover}.tsx`, `apps/web/src/frame/masthead.tsx`, `apps/web/src/issues/issue-list.tsx` (the row's wiring), `apps/web/src/issues/attachments/files-section.tsx`
+- [x] 1.6 Read `packages/schema/src/zero/{queries.ts,mutators.ts,team-home.ts,ai-tools.ts}` — `triage.inbox`, `routeIssue`, `setIssueProject` (the permission story D1 copies), `buildAttention` (the one attention number), and the derived agent-tool registry
 
 ## 2. `issue.routeIssue` gains `projectId` (`packages/schema`)
 
-- [ ] 2.1 `routeIssueArgs`: add `projectId: z.string().min(1).nullable().optional()`
-- [ ] 2.2 `routeIssue`: when `projectId` is a non-null string, run the same existence check `setIssueProject` runs (workspace-level, **no** cross-team rejection — a project spans teams), throwing `MutationErrorCode.crossTeam` with `'Project not found'`
-- [ ] 2.3 Fold `projectId` into the single existing atomic `issue.update` — routing stays one write, and `needs_triage` is cleared in the same statement
-- [ ] 2.4 Comment the branch with the one constraint the code cannot express: why the project is existence-checked rather than team-checked (design D1)
-- [ ] 2.5 Confirm nothing else moved: no new table, no migration, no new named query, no change to `canWrite` / `loadIssueForWrite` ordering
-- [ ] 2.6 Update the `ai-tools` expectation for the derived `issue.routeIssue` tool to include the new field, at its existing `write` risk class — update the expectation, never loosen the assertion
+- [x] 2.1 `routeIssueArgs`: add `projectId: z.string().min(1).nullable().optional()`
+- [x] 2.2 `routeIssue`: when `projectId` is a non-null string, run the same existence check `setIssueProject` runs (workspace-level, **no** cross-team rejection — a project spans teams), throwing `MutationErrorCode.crossTeam` with `'Project not found'`
+- [x] 2.3 Fold `projectId` into the single existing atomic `issue.update` — routing stays one write, and `needs_triage` is cleared in the same statement
+- [x] 2.4 Comment the branch with the one constraint the code cannot express: why the project is existence-checked rather than team-checked (design D1)
+- [x] 2.5 Confirm nothing else moved: no new table, no migration, no new named query, no change to `canWrite` / `loadIssueForWrite` ordering
+- [x] 2.6 Update the `ai-tools` expectation for the derived `issue.routeIssue` tool to include the new field, at its existing `write` risk class — update the expectation, never loosen the assertion
 
 ## 3. The row (`packages/ui`)
 
-- [ ] 3.1 `issue-row.tsx`: one optional prop overriding **only** the trailing avatar's announced name (`title` / `aria-label`), defaulting to the person's name (design D5). Initials still derive from the name; no visual change to any existing surface
-- [ ] 3.2 `issue-row.stories.tsx`: a Triage case — reserved-empty reality slot, empty phrase slot, `created_at` age, reporter avatar — so the two row registers are visible side by side
+- [x] 3.1 `issue-row.tsx`: one optional prop overriding **only** the trailing avatar's announced name (`title` / `aria-label`), defaulting to the person's name (design D5). Initials still derive from the name; no visual change to any existing surface
+- [x] 3.2 `issue-row.stories.tsx`: a Triage case — reserved-empty reality slot, empty phrase slot, `created_at` age, reporter avatar — so the two row registers are visible side by side
 
 ## 4. The Triage destination (`apps/web/src/triage/triage-view.tsx`)
 
-- [ ] 4.1 Masthead: `title="Triage"`, mono `count`, and `oldest first` in the actions slot — the team name goes. `oldest first` is not rendered when the queue is empty. The error line keeps its `role="alert"` in `meta`
-- [ ] 4.2 The queue: render every waiting issue through `IssueRow` **unwrapped** — no flex shell, no bolted-on action cluster — with the reality slot reserved and empty, the phrase slot empty, `date` from `created_at`, labels as dot + name, and the reporter in the trailing avatar with its honest announced name
-- [ ] 4.3 The decision panel, unfolded in place below the focused row: the issue's description via the shared read-only rich-text renderer, a mono `<reporter> · <created-at>` line, and each attachment as an upload chip read from the existing `attachments.byIssue` synced query (mounted only for the issue under decision, so the hook is unconditional)
-- [ ] 4.4 The verdict rail: `[A] Accept`, `[R] Route`, `[D] Decline` as real buttons whose accessible names are the words, each drawing its keycap; `Decline` states where it lands (the canceled mark). Keep `data-testid="triage-accept" | "triage-route" | "triage-decline"` **verbatim** — four e2e viewer assertions depend on them
-- [ ] 4.5 The rail's key hint: `⏎ Open · J K Move`, in the mock's register
-- [ ] 4.6 The route transient (design D4): replaces `RouteDialog`. A labelled panel naming the issue, five rows — Status, Assignee, Cycle, **Project**, Labels — each showing the value routing will write (`none` where nothing is set); keyboard-operable; `⏎` commits one `issue.routeIssue`; `esc` closes writing nothing; focus returns to the row it opened from. Keep an explicit accessible role and name so e2e can address it by role
-- [ ] 4.7 Wire `projectId` through the transient into `routeIssue`, reading `queries.projects.all()` for the options
-- [ ] 4.8 The empty state (design D7): the done disc at the mock's size, `Nothing waiting.`, and the onward foot (Issues · Cycles · Projects, `⌘K goes anywhere`) — all `role="status"`. Distinguish it from the incomplete-query state, which says `Loading…`, so a premature all-clear is never announced
-- [ ] 4.9 The keyboard model survives intact: `j`/`k` and arrows move (and move the unfolded panel with them, design D3), `⏎` opens, `a`/`r`/`d` fire the verdicts, every one gated on `canWrite`; `esc` closes the transient. The frame owns ⌘K — this surface binds no listener of its own
-- [ ] 4.10 Word diet: no explanatory sentence renders anywhere on this page. Loading, empty and team-missing states are labels
-- [ ] 4.11 Verify the count: the masthead's number is the length of the same `triage.inbox` result `buildAttention` counts — one derivation, no second cap
+- [x] 4.1 Masthead: `title="Triage"`, mono `count`, and `oldest first` in the actions slot — the team name goes. `oldest first` is not rendered when the queue is empty. The error line keeps its `role="alert"` in `meta`
+- [x] 4.2 The queue: render every waiting issue through `IssueRow` **unwrapped** — no flex shell, no bolted-on action cluster — with the reality slot reserved and empty, the phrase slot empty, `date` from `created_at`, labels as dot + name, and the reporter in the trailing avatar with its honest announced name
+- [x] 4.3 The decision panel, unfolded in place below the focused row: the issue's description via the shared read-only rich-text renderer, a mono `<reporter> · <created-at>` line, and each attachment as an upload chip read from the existing `attachments.byIssue` synced query (mounted only for the issue under decision, so the hook is unconditional)
+- [x] 4.4 The verdict rail: `[A] Accept`, `[R] Route`, `[D] Decline` as real buttons whose accessible names are the words, each drawing its keycap; `Decline` states where it lands (the canceled mark). Keep `data-testid="triage-accept" | "triage-route" | "triage-decline"` **verbatim** — four e2e viewer assertions depend on them
+- [x] 4.5 The rail's key hint: `⏎ Open · J K Move`, in the mock's register
+- [x] 4.6 The route transient (design D4): replaces `RouteDialog`. A labelled panel naming the issue, five rows — Status, Assignee, Cycle, **Project**, Labels — each showing the value routing will write (`none` where nothing is set); keyboard-operable; `⏎` commits one `issue.routeIssue`; `esc` closes writing nothing; focus returns to the row it opened from. Keep an explicit accessible role and name so e2e can address it by role
+- [x] 4.7 Wire `projectId` through the transient into `routeIssue`, reading `queries.projects.all()` for the options
+- [x] 4.8 The empty state (design D7): the done disc at the mock's size, `Nothing waiting.`, and the onward foot (Issues · Cycles · Projects, `⌘K goes anywhere`) — all `role="status"`. Distinguish it from the incomplete-query state, which says `Loading…`, so a premature all-clear is never announced
+- [x] 4.9 The keyboard model survives intact: `j`/`k` and arrows move (and move the unfolded panel with them, design D3), `⏎` opens, `a`/`r`/`d` fire the verdicts, every one gated on `canWrite`; `esc` closes the transient. The frame owns ⌘K — this surface binds no listener of its own
+- [x] 4.10 Word diet: no explanatory sentence renders anywhere on this page. Loading, empty and team-missing states are labels
+- [x] 4.11 Verify the count: the masthead's number is the length of the same `triage.inbox` result `buildAttention` counts — one derivation, no second cap
 
 ## 5. Tests
 
-- [ ] 5.1 `packages/schema` unit (`mutators.triage.test.ts`) — **the falsifiable check, part one**: `routeIssue` with `projectId` sets `project_id` and clears `needs_triage` in one write; a project that exists in the workspace but belongs to another team's issues is accepted (no cross-team rejection); an unknown project id is rejected and nothing is written; `projectId: null` clears the project; omitting the field leaves `project_id` untouched
-- [ ] 5.2 `packages/schema` unit: a viewer's `routeIssue` with a `projectId` is still rejected before existence is revealed — the new field does not open a path around `canWrite`
-- [ ] 5.3 `apps/web` component (`apps/web/src/triage/triage-view.test.tsx`) — **the falsifiable check, part two**: the masthead reads `Triage` plus the mono count and does **not** contain the team's name; the head of the queue is unfolded and its panel shows the issue's description text, a mono line naming the reporter and the created-at, and an attachment chip; each of the three verdicts is a named button rendering its key
+- [x] 5.1 `packages/schema` unit (`mutators.triage.test.ts`) — **the falsifiable check, part one**: `routeIssue` with `projectId` sets `project_id` and clears `needs_triage` in one write; a project that exists in the workspace but belongs to another team's issues is accepted (no cross-team rejection); an unknown project id is rejected and nothing is written; `projectId: null` clears the project; omitting the field leaves `project_id` untouched
+- [x] 5.2 `packages/schema` unit: a viewer's `routeIssue` with a `projectId` is still rejected before existence is revealed — the new field does not open a path around `canWrite`
+- [x] 5.3 `apps/web` component (`apps/web/src/triage/triage-view.test.tsx`) — **the falsifiable check, part two**: the masthead reads `Triage` plus the mono count and does **not** contain the team's name; the head of the queue is unfolded and its panel shows the issue's description text, a mono line naming the reporter and the created-at, and an attachment chip; each of the three verdicts is a named button rendering its key
 - [ ] 5.4 `apps/web` component: moving the keyboard selection moves the unfolded panel, and the verdict fired by `a` acts on the newly unfolded issue — the panel and the keys can never name different issues
 - [ ] 5.5 `apps/web` component: the row anatomy matches the list's — the reality slot renders reserved and empty, the age column states `created_at` (not `updated_at`), the trailing avatar announces the reporter, and no control is rendered outside the row
 - [ ] 5.6 `apps/web` component: the empty state renders the done mark and `Nothing waiting.` with `role="status"` **only** when the query result is complete; an incomplete result says `Loading…`; neither renders an explanatory sentence, and `oldest first` is absent over an empty queue

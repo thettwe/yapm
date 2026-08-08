@@ -201,9 +201,10 @@ test('the GitHub mark suffixes exactly the check and deploy phrases', () => {
   harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
   mount()
 
+  // The provider is named in the selector: a mark rendered for some other source would be the
+  // wrong claim about where the fact came from, and a bare `provenance-mark` check could not see it.
   const marked = (title: string) =>
-    phraseOf(title)?.querySelector('[data-slot="provenance-mark"]') !== null &&
-    phraseOf(title)?.querySelector('[data-slot="provenance-mark"]') !== undefined
+    phraseOf(title)?.querySelector('[data-slot="provenance-mark"][data-provider="github"]') != null
 
   expect(marked('Address autocomplete on shipping step')).toBe(true)
   expect(marked('Persist cart across sessions')).toBe(true)

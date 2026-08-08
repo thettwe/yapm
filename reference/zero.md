@@ -1627,10 +1627,21 @@ function ConnectionStatus() {
     case 'disconnected': return <div title={state.reason}>Offline</div>
     case 'error':        return <div title={state.reason}>Error</div>
     case 'needs-auth':   return <div>Session expired</div>
+    case 'closed':       return <div title={state.reason}>Closed</div>
     default:             return null
   }
 }
 ```
+
+`ConnectionState` has **six** members in `@rocicorp/zero@1.8.0`, and `closed` is the one a
+from-memory switch drops. It is **terminal**: no retry recovers it, and the `.d.ts` says a new
+`Zero` instance is required. yapm handles it explicitly in `apps/web/src/zero/connection.ts`
+(label "Closed", `writable: false`), and the reconnect loop must not treat it as a backoff state.
+
+`reason` is a **string** on `connecting`, `disconnected`, `error` and `closed`, so `title={state.reason}`
+is fine on those. On `needs-auth` it is a discriminated **object** —
+`{type: 'mutate' | 'query', status: 401 | 403, body?}` or `{type: 'zero-cache', reason}` — so
+rendering it into an attribute produces `[object Object]`. Narrow it before you show it.
 
 ### 7.9 React Native / Expo
 
@@ -2612,7 +2623,7 @@ Previews (Vercel-style per-branch hostnames): set `ZERO_QUERY_URL`/`ZERO_MUTATE_
 - **`ZQLDatabase` re-reads the Postgres schema before every transaction** (bug 3799) — a scaling concern.
 
 ### Correctness gotchas
-- **Do not generate IDs inside mutators.** Mutators run multiple times (up to twice on the client for rebase, once on the server). Generate `crypto.randomUUID()` / `uuidv7` / `nanoid` at the **call site** and pass it in as an arg. Also avoid auto-increment PKs — optimistic creation with relationships breaks.
+- **Nothing minted from mutable state may be computed inside a mutator body — ids, fractional ranks, timestamps.** Mutators run multiple times (up to twice on the client for rebase, once on the server), so a value derived inside one changes between runs and corrupts the optimistic result. Mint at the **call site** and pass it in as an arg. Two worked instances in this repo: `crypto.randomUUID()` / `uuidv7` for primary keys (also avoid auto-increment PKs — optimistic creation with relationships breaks), and the board's fractional `rank`, minted by `rankBetween` at the call site and taken as a finished string by `issue.move` — because recomputing it inside the mutator from neighbours that have since shifted makes the card jump (`packages/schema/src/zero/rank.ts`, and the retro-card rank reuses it verbatim).
 - **Treat all ZQL results as immutable.** ZQL caches row objects across queries; mutating one mutates it everywhere.
 - **Client-side `tx.run` only sees synced data.** If no *active* query covers a row, a mutator's client-side read returns nothing, while the server read returns everything. Write mutators that tolerate this asymmetry (zbugs' `assertIsCreatorOrAdmin` returns a generic "not authorized" rather than distinguishing "missing").
 - **Deny reads by returning an empty query, not by throwing.** `q.where(({or}) => or())`. The two
@@ -2685,18 +2696,34 @@ Project status: GA since March 2026. 2026 roadmap: Cloud Zero GA, column permiss
 
 ---
 
-## 15. Quick-start skeleton for yapm (all pieces, correct API)
+## 15. The layout in this repo (all pieces, correct API)
 
 ```
-src/zero/schema.ts     # table(), relationships(), createSchema(), createBuilder() + DefaultTypes.schema
-src/zero/queries.ts    # defineQueries({...}) — ONE top-level call
-src/zero/mutators.ts   # defineMutators({...}) — ONE top-level call
-src/zero/context.ts    # AuthContext type + DefaultTypes.context
-src/zero/db-provider.ts# zeroPostgresJS/zeroDrizzle/... + DefaultTypes.dbProvider
-app/api/zero/query/route.ts    # handleQueryRequest
-app/api/zero/mutate/route.ts   # handleMutateRequest
-app/providers.tsx      # 'use client' + ZeroProvider
+packages/schema/src/zero/schema.ts    # table(), relationships(), createSchema(), createBuilder()
+packages/schema/src/zero/queries.ts   # defineQueries({...}) — ONE top-level call
+packages/schema/src/zero/mutators.ts  # defineMutators({...}) — ONE top-level call
+packages/schema/src/zero/context.ts   # AuthContext type + DefaultTypes.context
+packages/schema/src/zero/<surface>.ts # PURE DERIVATION over synced rows — no ZQL, no React,
+                                      #   unit-tested standalone (see below)
+apps/server/src/zero/routes.ts        # Hono: handleQueryRequest + handleMutateRequest
+apps/server/src/index.ts              # createZeroDatabase(database.db) — the DB provider
+apps/web/src/zero/provider.tsx        # ZeroProvider (a Vite SPA — there is no app router here)
 ```
+
+**The fifth line is the one an agent reading this file for "the shape of `packages/schema`" will
+otherwise miss, and it now carries most of the product's read path.** Zero has no aggregates (§13),
+and deriving on the client is what keeps a common interaction off the network — so **every
+aggregate and every piece of cross-entity narrative is a pure exported function in
+`packages/schema`, never ZQL and never a computation living in a component**. It takes
+already-synced rows and returns a finished view model, which makes what a page *states* testable as
+data rather than as rendered HTML. Shipped instances: `buildTeamHome` / `buildTeamFrame`
+(`team-home.ts`), `buildDeliveryPage` (`metrics/page.ts`), `buildIssueTimeline`
+(`issue-timeline.ts`), `computeDeliverySignal` / `computeDivergence` / `assembleLinkedEntities`
+(`delivery.ts`), `restPhrase` / `classifyRestPhrase` (`phrases.ts`), `buildRetroSeed` and
+`buildCycleFacts` — each with its own unit test beside it.
+
+The endpoint **paths** below are the deployed ones (`docker/docker-compose.yml`); only the file
+layout differs from a Next.js app-router project.
 
 ```bash
 # .env

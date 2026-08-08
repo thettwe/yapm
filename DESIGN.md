@@ -4,16 +4,34 @@ Chosen 2026-07-24 from three rendered explorations (kept in `design-explorations
 
 ## Direction: Warm
 
-A distinctive, human aesthetic that stays dense enough for an issue list — the opposite of enterprise-cold, without becoming a toy. The full token set, type scale, and density metrics live in [`design-explorations/warm/DIRECTION.md`](design-explorations/warm/DIRECTION.md); the mockups it was chosen from are the four PNGs beside it.
+A distinctive, human aesthetic that stays dense enough for an issue list — the opposite of enterprise-cold, without becoming a toy. [`design-explorations/warm/DIRECTION.md`](design-explorations/warm/DIRECTION.md) is where the colour set, type scale, radii and row density were fixed, and stays authoritative for exactly those; its **sidebar, topbar and toolbar metrics are superseded** by the three-band frame below, and the four PNGs beside it draw a 244px left sidebar the product no longer has.
 
 - **Base**: warm neutrals — soft paper off-white (light) / warm espresso charcoal (dark), never cold slate.
 - **Accent**: one committed terracotta/clay, carrying every interactive state (selection, focus bar, links, primary action, command-palette highlight).
 - **Type**: Figtree (humanist-geometric sans) for UI; IBM Plex Mono for issue keys, counts, and keyboard hints.
-- **Status colors**: earthy semantic scale (honey in-progress, indigo in-review, green done) kept separate from the accent so terracotta never means "status."
+- **Status colors**: earthy semantic scale (honey in-progress, indigo in-review, green done) kept separate from the accent so terracotta never means "status." **Hue separation, not contrast, is what keeps amber, green and urgent apart** — amber against green never reaches 3:1 at any usable lightness, so anything that must be told apart is told apart by shape too (which is why the flow band's added cap is an outline).
 - **Density**: ~44px rows — a touch roomier than Linear, still efficient.
 - **Dark mode is first-class**, not an afterthought.
 
-The winning direction becomes real theme tokens and core components in `packages/ui` (Tailwind v4 `@theme` + Base UI). Judge shipped screens against the Warm mockups.
+The winning direction becomes real theme tokens and core components in `packages/ui` (Tailwind v4 `@theme` + Base UI). **Judge shipped screens against [`design-explorations/overhaul-2026-08/northstar/`](design-explorations/overhaul-2026-08/northstar/)** — five files whose [`NORTHSTAR.md`](design-explorations/overhaul-2026-08/northstar/NORTHSTAR.md) is the canonical set, and which also records the divergences the build was right to take (the active stop's ink, Decisions folded away for want of an entity, and the retuned in-progress amber — the one place the mock is wrong and the product is right).
+
+## The settled vocabulary
+
+Six changes (`one-reality-vocabulary` → `design-corrections`) rebuilt the frame, the team home, the issue list, the issue detail and the Delivery view against the northstar set. What settled, one line each:
+
+- **The frame** — three bands on every authenticated page: the **deck** (48px, identical everywhere), the page-owned **masthead** (title · count · lens · meta · actions), and the **statusline** (32px — the team's day and the sync state).
+- **The deck's six stops** — Home · Issues · Triage · Cycles · Delivery · `more▾`, plus workspace/team, the `⌘K` pill, the attention badge, Inbox and you. Below the deck's comfortable width the stops fold into `more▾` from the right (Delivery, then Cycles, then Triage); the band never wraps.
+- **Board is a lens, not a destination** — it lives in the Issues masthead beside List, and the deck's Issues stop stays lit on it.
+- **One attention number** — the deck badge, the statusline segment and Home's NEEDS ATTENTION are one derivation over four disjoint exception classes; at zero it is absent, not zeroed.
+- **The reality track** — four stations (PR · checks · review · deployed) joined by segments, with the divergence `//` as a *segment kind* positioned by which divergence fired. One language on the row, the digest, the rail and the peek.
+- **Glyph geometry** — status is **cycle position** (dashed ring → open ring → half arc → three-quarter arc → filled disc, `done` carrying a knockout check); priority is **weight in ticks**, urgent as one tick standing alone. One family, one 20-unit grid, one 1.6 stroke.
+- **Phrases at rest** — a surface says its reality in words from ONE shared dictionary (`Checks failing`, `Done in git, not on the board`, `Built — not live yet`), in two registers: `neutral` for team surfaces, `personal` for your own work. Either register may resolve a key to silence.
+- **The two-register bifact** — a plain line for a PM directly above a mono line for an engineer, both built from one signal and one timeline so they cannot drift.
+- **The peek** — hover *or* focus opens, ⏎ goes, esc stays; at most one open per page by construction.
+- **The `how ·` dot** — a derived number carries a quiet mono `how ·` and explains itself only when asked (click or Enter, never hover).
+- **The provenance mark** — monochrome, 12–14px, `currentColor`, after the fact it sourced. Our glyphs carry meaning; brand marks carry provenance.
+- **The word diet** — chrome carries labels, surfaces carry phrases, and only the hero of a page is allowed a sentence. Explanatory prose on a work surface is a bug.
+- **Nothing draws ink it has no fact for** — a row with no linked change reserves its slot and lays down nothing, and it is `aria-hidden`, because an ornament repeated on sixty of sixty-nine rows is noise in either modality. The issue detail's vertical rail is the deliberate exception: that page's subject *is* the change.
 
 ## Theme system (built from the start)
 
@@ -27,7 +45,10 @@ yapm ships a **tokenized theme system**, decided 2026-07-24. Every component ref
 **Deferred to a later dedicated change:**
 - A **full multi-color theme editor** (arbitrary per-token colors, contrast validation, import/export of theme JSON). The token architecture already makes this a clean add; the editor UI is the cost. Not built while there is still no core tracker to theme.
 
-All presets and any custom accent MUST pass WCAG contrast in both light and dark.
+All presets and any custom accent MUST pass WCAG contrast in both light and dark, against **two explicit bars** asserted in `contrast.test.ts` for all six theme blocks:
+
+- **Non-text drawing — 3:1** (WCAG 1.4.11), and not against `--bg` alone: against every ground a row or a card is painted on — plain, hovered, the selected row's tint, a selected board card's soft-accent wash and the divergence row's urgent wash.
+- **Text — 4.5:1.** A hue that cannot hold both bars **splits** rather than being dragged to 4.5: the drawing keeps the hue and a `-ink` sibling token carries the text, which is why `--status-urgent-ink` and `--status-in-progress-ink` exist in every block. Dragging one amber to 4.5 on near-white produces a brown that closes on editorial's orange urgent — the split is what keeps the family separable.
 
 **Syntax highlighting is a token family, not a stylesheet.** `editor-rich-content` added seven
 `--code-*` tokens (keyword, string, number, comment, function, type, punctuation) to every preset in

@@ -797,6 +797,14 @@ For a migration containing something that cannot run in a transaction (`CREATE I
 
 ## 3. kysely-codegen 0.20.0
 
+> ## ⛔ `kysely-codegen` IS BANNED IN THIS REPO — §3 IS BACKGROUND ONLY
+>
+> CLAUDE.md non-negotiable #5: **no `kysely-codegen`.** Under TS 7 it logs the Compiler-API
+> failure, **exits 0, and writes a broken file** (§9.3) — a build gate that cannot fail is worse
+> than no gate. The `DB` interface is hand-written, and the one sanctioned drift guard is the §8
+> introspection test, shipped as `packages/schema/src/db/schema-drift.test.ts`. The package appears
+> in no `package.json` and in no catalog entry; do not add it.
+
 Sources: `kysely-codegen@0.20.0` tarball (`dist/cli/*.js`, `dist/config/config.js`); <https://github.com/RobinBlomberg/kysely-codegen>
 
 ### 3.1 Install and run
@@ -961,13 +969,13 @@ Observations that matter:
 |---|---|---|
 | Source of truth | the live database | the TypeScript file |
 | Needs a running DB to build | **yes** (CI must spin up Postgres) | no |
-| Catches drift | yes, via `--verify` | no (add the §8 guard) |
+| Catches drift | in principle via `--verify`; **not under TS 7**, where it exits 0 on failure (§9.3) | no (add the §8 guard) |
 | Branded / narrowed column types (`UserId`, `type Role = 'a'\|'b'`) | only via `overrides` + `customImports`, and those are **broken under TS 7** (§9.3) | trivial |
 | `ColumnType` asymmetry tuned per column (e.g. insert `string`, select `Date`) | one global `Timestamp` alias | per column |
 | Extra tables from better-auth / pg-boss | leak into `DB` unless filtered | never appear |
 | Cost of a schema change | free (regenerate) | one manual edit |
 
-**Recommendation for this stack: hand-write `DB`.** Reasons specific to yapm: the Zero schema is already hand-written (so `DB` and the Zero schema are edited together in one commit), the primary keys are client-supplied UUIDv7 which codegen cannot know is intentional, and better-auth/pg-boss tables would otherwise pollute `DB`. Then use **`kysely-codegen --verify` in CI purely as a drift detector** against a checked-in generated file, or the §8 introspection test, or both.
+**Recommendation for this stack: hand-write `DB`.** Reasons specific to yapm: the Zero schema is already hand-written (so `DB` and the Zero schema are edited together in one commit), the primary keys are client-supplied UUIDv7 which codegen cannot know is intentional, and better-auth/pg-boss tables would otherwise pollute `DB`. The drift guard is **the §8 introspection test and nothing else** — `kysely-codegen --verify` is not an option here, because under TS 7 codegen exits 0 on its own failure (§9.3), so a `--verify` job would go green against a file it had just broken.
 
 Use codegen as the source of truth if the database is owned by another team/service, has hundreds of tables, or is changed outside your migration pipeline.
 

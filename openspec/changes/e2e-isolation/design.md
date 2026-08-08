@@ -511,3 +511,71 @@ or it was not the card the dot went on; typing a query that matches no item and 
 no-op, which is exactly the observed nothing-happened. What this pass could not establish, without
 the trace, is why isolation changes which card is focused. It is unresolved and it is the first
 thing the next pass should take, ahead of anything cosmetic.
+
+### D17 — The second run, and the measured verdict: isolation landed, determinism did not
+
+Run 31276211088 on `73bc8a0`, the second full-suite run of this change: **1 failed, 92 passed
+(18.2m)**. Set beside run 1 and beside `main`'s own runs from the same afternoon, that is finally a
+measurement rather than an anecdote.
+
+| Run | Commit | Result | Wall clock | Failures |
+|---|---|---|---|---|
+| 31270121050 | `main` | failed | — | `projects.spec.ts:188`, `projects.spec.ts:246` |
+| 31274936160 | `main` | failed | 22.4m | `projects.spec.ts:188` |
+| 31274716121 | `23ceff3` (this change) | failed | 22.4m | `projects.spec.ts:188`, `retro.spec.ts:236` |
+| 31276211088 | `73bc8a0` (this change) | failed | 18.2m | `projects.spec.ts:242` |
+
+Four things follow, and two of them are unwelcome:
+
+1. **`retro.spec.ts:236` passed on run 2.** D16 called it "new, and probably ours" on the strength of
+   failing both attempts of one run. One clean run is not proof of innocence either, but the
+   deterministic-regression reading is dead: it is a flake, and the `myDots`/focused-target
+   narrowing in D16 stands as the mechanism to check if it returns.
+2. **`projects.spec.ts` is still the offender, and isolation did not fix it.** Run 2's failure is the
+   two-client convergence test (`:242` here, `:246` on `main` — the line moved, the test did not),
+   dying on `Test timeout of 60000ms exceeded` inside `goToMore`, waiting for the `Projects`
+   menuitem. Run 1's was `:188`, also a test-budget timeout. Both are the same shape as the
+   pre-change failures: wall clock exhausted, no assertion disagreeing.
+3. **First-attempt pass rate: 0/2 before (`main`, today), 0/2 after.** That is the number this change
+   advertised and it has not moved. What HAS moved is that the failures are now a smaller, more
+   specific set — both runs failed inside `projects.spec.ts`'s two-client tests, where before the
+   set also included `connectors.spec.ts:236`.
+4. **Runtime improved: `main`'s 22.4m → 18.2m** (run 31274936160 against run 31276211088, same runner class, same day) — 19% faster, against the ~21m baseline, which is the direction the
+   prediction in Goals stated. Run 1's 22.4m is not comparable — it contained two 60s timeouts plus
+   two retries.
+
+**The honest verdict.** This change delivers what its title says — a per-test baseline, an executed
+gate, no hand-rolled contexts, no constant encoding fixture size — and it delivers a faster suite.
+It does **not** deliver a deterministic one. The accumulation hypothesis in the Context section was
+a real defect and is now fixed; it was not, on this evidence, the cause of the flake the brief was
+chasing. Whatever is exhausting a 60-second budget in a two-client `projects` test is still there.
+
+**What was deliberately not done about it.** Raising `timeout` for those tests would be the obvious
+way to green, and it is refused: the brief allows a raised timeout only where the evidence shows the
+wait was genuinely under-provisioned, and there is no such evidence yet — only that the budget ran
+out, which is equally consistent with the page reloading under the test (D16's 50 `[vite] connected.`
+messages in 95 seconds, from the run-1 browser log). Guessing at the number would convert a visible
+failure into an invisible one. The next pass should get the trace for a `projects` two-client
+failure and answer where the sixty seconds went, before touching anything.
+
+### D18 — `Target.disposeBrowserContext` does not appear on either side of this change
+
+Task 7.4 asked whether the protocol error the brief centred on stops appearing, and whether that is
+because the timeouts stopped or because the lifecycle changed. Counted in the raw job logs:
+
+| Log | `Target.disposeBrowserContext` | `browserContext.close: Test ended.` |
+|---|---|---|
+| `main` run 31274936160 | 0 | 4 |
+| `23ceff3` run 31274716121 | 0 | 4 |
+| `73bc8a0` run 31276211088 | 0 | 0 |
+
+So the honest answer is **neither**: the error the brief quoted is not present in today's runs at
+all, on `main` or here, and this change cannot claim to have removed something that was already
+absent from the before-picture available to it. What does appear on both sides is
+`browserContext.close: Test ended.`, which is Playwright's own message when a context is closed
+after the test has already ended — the benign shape, not the protocol error.
+
+The fixture-owned lifecycle (D5) is still the right call on its own terms: it removes seventeen
+hand-rolled `finally` blocks whose failure mode is a secondary error that masks the real one. But
+"the context leak is fixed" is not a claim this change gets to make, because on the evidence it
+could gather there was no leak to see.

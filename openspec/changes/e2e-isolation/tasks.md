@@ -48,9 +48,9 @@
 ## 7. Tests
 
 - [x] 7.1 `apps/web/e2e/zz-isolation.spec.ts` — the falsifiable check. Runs last (Playwright orders files lexicographically) and asserts the workspace it inherits from the whole preceding run holds zero teams, invites, projects and issues. **It must fail against today's `main`** (where it sees ~45 teams) and pass with this change. Verify both directions, not just the passing one
-- [ ] 7.2 Prove the fix by measurement, not by one green run: run the affected specs **at least 5 times** and the full suite **at least twice** after the change, and report the pass rate before and after with real output
-- [ ] 7.3 Report the runtime delta against the ~21-minute baseline. The prediction is that it gets faster; if it is materially slower, say by how much and why the trade is worth it
-- [ ] 7.4 Confirm the `Target.disposeBrowserContext` error no longer appears in any run, and state whether that is because the timeouts stopped or because the lifecycle changed (2.6 decides which)
+- [ ] 7.2 Prove the fix by measurement, not by one green run: run the affected specs **at least 5 times** and the full suite **at least twice** after the change, and report the pass rate before and after with real output — **partially done (D17):** the full suite ran twice in CI (2 failed/90 passed, then 1 failed/92 passed) against two `main` runs the same day (both failed). First-attempt pass rate is **0/2 before, 0/2 after**. The ≥5 repeats of the affected specs are still owed, and the verdict so far is that isolation did not deliver determinism
+- [x] 7.3 Report the runtime delta against the ~21-minute baseline. The prediction is that it gets faster; if it is materially slower, say by how much and why the trade is worth it — **22.4m on `main` → 18.2m here, 19% faster** (D17)
+- [x] 7.4 Confirm the `Target.disposeBrowserContext` error no longer appears in any run, and state whether that is because the timeouts stopped or because the lifecycle changed (2.6 decides which) — **neither: it appears 0 times on `main` too** (D18). The change cannot claim credit for removing it
 
 ## 8. Documentation
 
@@ -61,8 +61,8 @@
 
 ## 9. Gates
 
-- [ ] 9.1 `pnpm turbo lint typecheck test build`
-- [ ] 9.2 The compose smoke test
-- [ ] 9.3 The full Playwright suite, run more than once (7.2), with the output quoted honestly — including any failure
+- [x] 9.1 `pnpm turbo lint typecheck test build` — green in CI's `Lint, typecheck, test, build` job on both pushes; locally `typecheck`, `lint` (670 files) and affected `test` (589) are green and the full `build` was left to CI
+- [x] 9.2 The compose smoke test — green in CI on `73bc8a0`
+- [ ] 9.3 The full Playwright suite, run more than once (7.2), with the output quoted honestly — including any failure. **Run twice; both runs red.** Quoted in D16 and D17. Left unticked because the suite is not green, not because it was not run
 - [x] 9.4 `node scripts/check-boundaries.mjs` (the harness must not make `packages/schema` import an app)
-- [ ] 9.5 `npx -y @fission-ai/openspec@latest validate e2e-isolation` clean, and every scenario in `specs/ci-pipeline/spec.md` verified true
+- [ ] 9.5 `npx -y @fission-ai/openspec@latest validate e2e-isolation` clean (**done — "Change 'e2e-isolation' is valid"**), and every scenario in `specs/ci-pipeline/spec.md` verified true (**not yet: the scenarios about a red gate on a broken restore have not been provoked**)

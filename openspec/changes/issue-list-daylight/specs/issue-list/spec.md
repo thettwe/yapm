@@ -50,8 +50,12 @@ syncs.
 ### Requirement: The selected row carries an accent rail and a tinted ground
 
 The row under selection SHALL be marked by a left accent rail and a tinted ground drawn from
-theme tokens, and its mono issue key SHALL take the accent ink. The marking SHALL be visible
-without hover and SHALL NOT depend on hue alone — the rail is a position as well as a colour.
+theme tokens. The marking SHALL be visible without hover and SHALL NOT depend on hue alone — the
+rail is a position as well as a colour.
+
+The selected row's mono issue key SHALL take the primary text ink rather than the accent ink: on
+the selected tint the accent ink cannot hold the text contrast bar in every preset, so the rail
+and the tinted ground carry the selection state and the key stays readable (DI-2).
 
 Selection marking SHALL meet the non-text contrast bar against the row's ground and the text
 contrast bar for every string drawn on the tinted ground, in every preset in light and dark.
@@ -59,8 +63,8 @@ contrast bar for every string drawn on the tinted ground, in every preset in lig
 #### Scenario: Selection reads without a pointer
 
 - **WHEN** a member selects a row using the keyboard
-- **THEN** that row shows the accent rail and tinted ground, and its key takes the accent ink,
-  with no pointer interaction and no hover required
+- **THEN** that row shows the accent rail and tinted ground, and its key is drawn in the primary
+  text ink, with no pointer interaction and no hover required
 
 #### Scenario: The tinted ground stays legible
 

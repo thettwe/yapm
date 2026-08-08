@@ -263,20 +263,57 @@ test('a short result draws no fold', () => {
   expect(screen.queryByTestId('issue-fold')).toBeNull()
 })
 
-test('the fold opens from the keyboard and focus lands on the first revealed row', () => {
-  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': manyIssues(63) }
+test('the fold counts issues, not row slots, when a grouping repeats a row', () => {
+  const both = [
+    { id: 'l-1', name: 'bug', color: '#cc5a40' },
+    { id: 'l-2', name: 'ux', color: '#3f7fbf' },
+  ]
+  harness.rows = {
+    'teams.all': [TEAM],
+    'labels.byTeam': both,
+    'issues.byTeam': Array.from({ length: 30 }, (_, index) =>
+      issue({ id: `i-${index}`, number: index + 1, title: `Row ${index}`, labels: both, pr: null }),
+    ),
+  }
   mount()
+  fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'label' } })
 
-  const before = rows().length
-  const fold = screen.getByTestId('issue-fold')
-  fold.focus()
-  expect(fold).toHaveFocus()
-  fireEvent.click(fold)
-
-  expect(rows().length).toBeGreaterThan(before)
-  expect(rows()[before]).toHaveFocus()
+  // Under label grouping an issue holds a slot in every label group it carries: 30 issues become
+  // 60 slots over a 50-slot page. Every one of the 30 is nonetheless on screen, so the page has
+  // nothing left to state — a fold here would be counting slots and claiming issues.
+  expect(rows().length).toBeGreaterThan(30)
+  for (let index = 0; index < 30; index += 1) {
+    expect(screen.getAllByText(`Row ${index}`).length).toBeGreaterThan(0)
+  }
   expect(screen.queryByTestId('issue-fold')).toBeNull()
 })
+
+test.each([['Enter'], [' ']] as const)(
+  'the fold opens from the keyboard (%s) and focus lands on the first revealed row',
+  (key) => {
+    harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': manyIssues(63) }
+    mount()
+
+    const before = rows().length
+    const fold = screen.getByTestId('issue-fold')
+    fold.focus()
+    expect(fold).toHaveFocus()
+
+    // The fold is a real `<button>`, so the browser is what turns Enter and Space on it into a
+    // click. jsdom does not synthesize that click, so the keyboard path is asserted in the two
+    // halves the browser actually performs: the list's own key handler must NOT swallow the
+    // keystroke (`fireEvent` returns false for a prevented default — the row model reading Enter
+    // as "open the focused issue" would fail here), and the click it leaves the browser free to
+    // dispatch must open the fold.
+    expect(fireEvent.keyDown(fold, { key })).toBe(true)
+    expect(rows().length).toBe(before)
+    fireEvent.click(fold)
+
+    expect(rows().length).toBeGreaterThan(before)
+    expect(rows()[before]).toHaveFocus()
+    expect(screen.queryByTestId('issue-fold')).toBeNull()
+  },
+)
 
 test('moving down from the last rendered row reaches the fold', () => {
   harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': manyIssues(63) }

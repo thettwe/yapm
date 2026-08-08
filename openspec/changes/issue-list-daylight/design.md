@@ -263,10 +263,21 @@ Taken during the build:
   D1's sketch had no plain in-review key, but an issue whose status is `in_review` with a null
   signal reaches no other branch, and totality is the property the whole structure rests on. The
   ordering matters more: `sayPhrase` used to resolve a draft PR under an in-review issue to
-  `Draft open — not in review yet` and a PR-less one to `In review`, and `computeDivergence`
-  returns `status_ahead_of_pr` for *both*. Classifying divergence first would therefore have
-  collapsed two of Home's rendered strings into one — a byte change in YOURS. The draft branch
-  runs first because a draft PR is the more specific fact about the same disagreement.
+  `Draft open — not in review yet`, and `computeDivergence` returns `status_ahead_of_pr` for that
+  case. Classifying divergence first would therefore have replaced one of Home's rendered strings
+  — a byte change in YOURS. The draft branch runs first because a draft PR is the more specific
+  fact about the same disagreement.
+
+  Corrected after review: `computeDivergence` also names `status_ahead_of_pr` for the PR-**less**
+  in-review case, and DI-1's first draft claimed both halves reach the classifier. They do not.
+  `assembleLinkedEntities` derives CI runs only from a linked pull request, so
+  `computeDeliverySignal` returns `null` when there is no PR — and a null signal yields no
+  divergence at all. A PR-less in-review row therefore classifies as `in_review`, which the
+  neutral register leaves **silent**. `diverged_ahead_of_pr` is consequently unreachable through
+  `sayRestPhrase` today: it is kept as an explicitly-marked totality placeholder (commented as
+  such in `phrases.ts`), and the docs table no longer promises its string, because a phrase no
+  code path can render is a documented lie. It becomes reachable the day CI runs are sourced
+  independently of a pull request.
 
 - **DI-2 — the mock's accent-inked selected key could not ship.** `issues.html` draws the
   selected row's mono key in `--accent-strong`. On `--bg-selected` that measures **4.38** in one

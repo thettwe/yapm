@@ -46,11 +46,10 @@ blank** — no placeholder, no dash, no filler.
 | Merged, and no successful deployment carried the merge commit | **Built — not live yet** |
 | An open PR nobody has reviewed yet | **In review — waiting 16h** |
 | An open PR whose review came back without approving | **In review — reviewed 3h ago** |
-| Marked in review with no PR behind it | **In review — no PR** |
 | A done issue whose checks are red | **Done — checks failing** |
 | A PR approved and waiting to merge | **Approved** |
 | A draft PR | **Draft open** |
-| Deployed, or nothing has happened yet | *(nothing — the track already says it)* |
+| Deployed, or nothing has happened yet — including an issue marked in review with no PR behind it | *(nothing — the track already says it)* |
 
 Two of those deserve their own note.
 

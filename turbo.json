@@ -67,7 +67,10 @@
         "$TURBO_ROOT$/SECURITY.md",
         "$TURBO_ROOT$/.env.example",
         "$TURBO_ROOT$/docker/docker-compose.yml",
-        "$TURBO_ROOT$/apps/docs/src/content/docs/**"
+        "$TURBO_ROOT$/apps/docs/src/content/docs/**",
+        "$TURBO_ROOT$/apps/web/src/**",
+        "$TURBO_ROOT$/apps/server/src/**",
+        "$TURBO_ROOT$/packages/ui/src/**"
       ],
       "outputs": ["coverage/**"],
       "env": ["DATABASE_URL", "CI"]

@@ -9,6 +9,13 @@ import { type DeliverySignal, type DivergenceKind, formatReviewAge } from './del
 
 export type RestPhraseKey =
   | 'diverged_behind_merge'
+  // TOTALITY PLACEHOLDER — no classifier path reaches this key with the shipped producer, and no
+  // surface may promise its string. `computeDivergence` returns `status_ahead_of_pr` for an
+  // in-review issue whose signal has a draft PR OR no PR at all, but `assembleLinkedEntities`
+  // derives CI runs only from a linked pull request, so a non-null signal always carries one — and
+  // the draft case resolves at `pr_draft`, one branch above. It stays in the key set because
+  // `computeDivergence` can still produce the kind and the registers are total over what the
+  // classifier can name; it becomes reachable the day CI runs are sourced independently of a PR.
   | 'diverged_ahead_of_pr'
   | 'diverged_done_ci_failing'
   | 'checks_failing'
@@ -149,6 +156,9 @@ export function classifyRestPhrase(
   }
   if (signal?.pr === 'approved') return 'pr_approved'
   if (signal?.pr === 'draft') return 'pr_draft'
+  // Unreachable with the shipped producer — see the key's note above. Kept so the classifier stays
+  // total over `DivergenceKind` rather than falling through to a status phrase if a future producer
+  // yields a signal with no pull request.
   if (divergence === 'status_ahead_of_pr') return 'diverged_ahead_of_pr'
   if (signal?.pr === 'open') {
     return signal.reviewAgeFrom === 'review' ? 'review_returned' : 'review_unreviewed'

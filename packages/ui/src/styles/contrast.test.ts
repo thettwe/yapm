@@ -263,15 +263,17 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   })
 
   // The reality track — the one vocabulary every surface draws delivery in — is drawn on exactly
-  // four surfaces: a plain row, a hovered row, the SELECTED row (`--accent-soft`, `issue-row.tsx`)
+  // four surfaces: a plain row, a hovered row, the SELECTED row (`--bg-selected`, `issue-row.tsx`)
   // and the digest's divergence class row (`--urgent-soft`, `team-home.tsx`). The three washes are
-  // composited over the base surface here the same way the browser paints them.
+  // composited over the base surface here the same way the browser paints them. The selected ground
+  // is `--bg-selected` and not the soft accent: the row's tint moved, and a track measured against
+  // a surface no row paints is a measurement of nothing.
   const trackSurfaces = (): ReadonlyArray<readonly [string, string]> => {
     const bg = hex(t, '--bg')
     return [
       ['--bg', bg],
       ['--bg-hover', over(t['--bg-hover'] ?? '', bg)],
-      ['--accent-soft', over(t['--accent-soft'] ?? '', bg)],
+      ['--bg-selected', over(t['--bg-selected'] ?? '', bg)],
       ['--urgent-soft', wash(hex(t, '--status-urgent'), bg, 0.08)],
     ]
   }

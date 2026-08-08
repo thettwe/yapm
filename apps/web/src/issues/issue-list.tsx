@@ -106,6 +106,14 @@ const SORT_LABEL: Record<IssueSortKey, string> = {
 // the masthead count, the selection targets and the palette's context.
 const VISIBLE_ROW_CAP = 50
 
+// The quiet register for the two native `<select>`s the bar keeps: transparent, borderless, and —
+// because the base Select indicates focus with the very border and ring this strips — carrying the
+// same focus outline the neighbouring plain-text triggers do. `outline-solid` is not decoration:
+// the base sets `outline-none`, which pins `--tw-outline-style` to `none` on the element, so an
+// outline width alone would draw nothing and the control would focus invisibly.
+const QUIET_SELECT =
+  'h-6 w-auto rounded-none border-0 bg-transparent py-0 pr-5 pl-0 text-[12.5px] text-text-2 shadow-none focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-accent'
+
 // The mock's `≔` — the filter axes' shared mark, drawn once at the head of the row. Decorative:
 // each axis carries its own accessible name.
 function FilterMark() {
@@ -359,7 +367,19 @@ function IssueListBody({
   )
 
   const visibleCount = Math.min(cap, ordered.length)
-  const hiddenCount = ordered.length - visibleCount
+  // The cap bounds ROW SLOTS, but the fold counts ISSUES — and under label grouping one issue
+  // holds a slot in every label group it carries. Subtracting slots would draw `↓ 3 more` over a
+  // page where all three are already on screen under another label, which is the one thing the
+  // fold may never do.
+  const hiddenCount = useMemo(() => {
+    const rendered = new Set(ordered.slice(0, visibleCount).map((issue) => issue.id))
+    return new Set(
+      ordered
+        .slice(visibleCount)
+        .map((issue) => issue.id)
+        .filter((id) => !rendered.has(id)),
+    ).size
+  }, [ordered, visibleCount])
 
   // A new filter is a new result, so the fold starts closed again — otherwise a cap raised on a
   // hundred rows would silently render every row of the next, narrower query.
@@ -936,7 +956,7 @@ function GroupSelect({
       aria-label="Group by"
       value={grouping}
       onChange={(event) => setGrouping(event.target.value as ListGrouping)}
-      className="h-6 w-auto rounded-none border-0 bg-transparent py-0 pr-5 pl-0 font-semibold text-[12.5px] text-text-2 shadow-none focus-visible:ring-0"
+      className={cn(QUIET_SELECT, 'font-semibold')}
     >
       {(Object.keys(GROUPING_LABEL) as ListGrouping[]).map((value) => (
         <option key={value} value={value}>
@@ -1078,7 +1098,7 @@ function SavedViewControls({
       {savedViews.length > 0 ? (
         <Select
           aria-label="Saved view"
-          className="h-6 w-auto rounded-none border-0 bg-transparent py-0 pr-5 pl-0 text-[12.5px] text-text-2 shadow-none focus-visible:ring-0"
+          className={QUIET_SELECT}
           defaultValue=""
           onChange={(event) => {
             const view = savedViews.find((candidate) => candidate.id === event.target.value)

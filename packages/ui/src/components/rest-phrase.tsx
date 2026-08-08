@@ -28,8 +28,11 @@ export function RestPhraseText({
       {phrase.text}
       {phrase.source === null ? null : (
         // A source suffix, after the fact it sourced, at 12px — never replacing a status arc or a
-        // track node, and `label={null}` because the phrase beside it does not name the provider.
-        <ProvenanceMark provider={phrase.source} size={12} label={null} className="text-current" />
+        // track node. It names itself ("GitHub"), because no phrase in either register names the
+        // provider, and it keeps its own neutral `text-text-2`: an urgent phrase carries urgency in
+        // its weight and ink, and a brand mark that took the urgent ink would be stating the fact
+        // twice in a colour the brand does not own.
+        <ProvenanceMark provider={phrase.source} size={12} />
       )}
     </span>
   )

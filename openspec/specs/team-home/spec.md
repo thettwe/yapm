@@ -175,19 +175,24 @@ anchor it does not have.
 The YOURS band SHALL list the signed-in user's in-flight issues in this team (assignee =
 viewer, status unfinished, not in triage), ordered by last movement, each row carrying the
 issue-list anatomy: status glyph, key, title, reality track, and a two-line bifact whose
-phrases derive from a fixed dictionary keyed on real status/signal predicates. Rows whose
-signal shows an open pull request awaiting review SHALL collapse into a single "N of yours
-are waiting on others" row carrying the waiting ages. A "No reviews owed" reciprocal line
-SHALL render only when no open pull request linked to the team's issues awaits review at
-all, and SHALL fold otherwise — it never renders a claim the data cannot verify. The band
-SHALL close with a mono derivation footnote ending "your work only — never compared", and
-every clause of the footnote SHALL be true of the rendered derivation.
+phrases come from the **shared phrase dictionary** defined in the reality-vocabulary
+capability, in that dictionary's personal register. The band SHALL NOT hold a phrase table of
+its own: the strings it speaks and the strings the issue list speaks SHALL resolve from one
+dictionary keyed by one classifier over the delivery signal and the divergence computation, so
+the two surfaces cannot drift apart.
 
-When the viewer has no in-flight issues, the band SHALL render a single warmth line instead
-of an empty list, with a doorway to the ready work only while the READY FOR YOU band
-renders; on a fully quiet day the READY band has folded, so the warmth line stands alone —
-a doorway SHALL NOT point at a band that cannot render. The band SHALL never render another
-person's work, name, or count.
+Rows whose signal shows an open pull request awaiting review SHALL collapse into a single "N of
+yours are waiting on others" row carrying the waiting ages. A "No reviews owed" reciprocal line
+SHALL render only when no open pull request linked to the team's issues awaits review at all,
+and SHALL fold otherwise — it never renders a claim the data cannot verify. The band SHALL close
+with a mono derivation footnote ending "your work only — never compared", and every clause of
+the footnote SHALL be true of the rendered derivation.
+
+When the viewer has no in-flight issues, the band SHALL render a single warmth line instead of
+an empty list, with a doorway to the ready work only while the READY FOR YOU band renders; on a
+fully quiet day the READY band has folded, so the warmth line stands alone — a doorway SHALL NOT
+point at a band that cannot render. The band SHALL never render another person's work, name, or
+count.
 
 #### Scenario: In-flight rows with delivery reality
 
@@ -195,6 +200,13 @@ person's work, name, or count.
   one in progress, one with failing checks
 - **THEN** YOURS renders three rows whose say/git bifacts derive from each issue's own
   delivery signal, ordered by most recent movement
+
+#### Scenario: The band speaks the shared dictionary
+
+- **WHEN** YOURS renders a row for an issue whose checks are failing
+- **THEN** its phrase resolves from the shared dictionary's personal register for the same key
+  the issue list would resolve in its neutral register, and no second phrase table exists for
+  that fact
 
 #### Scenario: Waiting work collapses
 

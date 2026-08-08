@@ -63,7 +63,7 @@
 
 ## 8. Gates
 
-- [ ] 8.1 `pnpm turbo lint typecheck test build`
-- [ ] 8.2 The compose smoke test
-- [ ] 8.3 The full Playwright e2e suite
+- [x] 8.1 `pnpm turbo lint typecheck test build` — pass on CI run 31252600592 (2m9s)
+- [x] 8.2 The compose smoke test — pass on CI run 31252600592 (4m33s)
+- [x] 8.3 The full Playwright e2e suite — pass on CI run 31252600592 (22m19s)
 - [x] 8.4 `npx -y @fission-ai/openspec@latest validate issue-detail-bridge` clean, and every scenario in this change's specs walked against the built surface

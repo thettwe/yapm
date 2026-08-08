@@ -177,8 +177,6 @@
   --type-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --density-row: 44px;
-  --density-sidebar: 244px;
-  --density-topbar: 52px;
   --density-group-header: 35px;
 
   --radius: 0.5rem;
@@ -241,8 +239,6 @@
   --type-mono: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 
   --density-row: 36px;
-  --density-sidebar: 236px;
-  --density-topbar: 48px;
   --density-group-header: 34px;
 
   --radius: 0.4375rem;
@@ -302,8 +298,6 @@
   --type-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --density-row: 42px;
-  --density-sidebar: 248px;
-  --density-topbar: 48px;
   --density-group-header: 33px;
 
   --radius: 0.25rem;

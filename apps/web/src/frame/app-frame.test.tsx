@@ -1,6 +1,6 @@
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router'
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { beforeEach, expect, test, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { beforeAll, beforeEach, expect, test, vi } from 'vitest'
 import { RECOVERY_IDLE, SyncRecoveryContext, type SyncRecoveryValue } from '@/zero/recovery'
 
 // THE FALSIFIABLE CHECK for the app frame. It renders the REAL `/teams/$teamId/issues` route — one
@@ -182,13 +182,7 @@ function renderAt(path: string, recovery?: SyncRecoveryValue) {
   return render(<SyncRecoveryContext.Provider value={recovery}>{app}</SyncRecoveryContext.Provider>)
 }
 
-beforeEach(() => {
-  zero.teams = []
-  zero.cycles = []
-  zero.issues = []
-  zero.triage = []
-  zero.deployments = []
-  zero.notifications = []
+function stubBrowserGlobals(): void {
   Element.prototype.scrollIntoView = vi.fn()
   // jsdom ships neither; `cmdk` observes its list and Base UI measures its popup.
   vi.stubGlobal(
@@ -199,6 +193,44 @@ beforeEach(() => {
       disconnect() {}
     },
   )
+  // Owned rather than inherited: whether jsdom's `localStorage` survives depends on the Node the
+  // runner is on (≥25 shadows it with an undefined-returning global), and the frame WRITES the
+  // anchor on every team route — so on a runner that has it, one test's anchor would decide the
+  // next test's stops. A fresh empty store per test instead.
+  const store = new Map<string, string>()
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+  })
+}
+
+// A route's first render in this process pays a cost its later ones do not. `autoCodeSplitting` is
+// on in test mode too, so every route's `component` is a dynamic import: `RouterProvider` paints
+// NOTHING until vite-node has transformed and evaluated the chunk behind it — the frame, the deck,
+// the statusline, the palette and the UI library under them. The first is ~180ms against ~10ms for
+// every later render in the same file; on a CI runner an order of magnitude slower it is seconds,
+// and it used to be charged to the first assertion's `findBy` budget, which is how this file went
+// red on CI while passing everywhere else. Every route the file visits is loaded here instead, so
+// no assertion below is racing a module load — with the chunks warm each of them resolves on the
+// first tick, which is the property this hook exists to buy.
+beforeAll(async () => {
+  stubBrowserGlobals()
+  zero.teams = [TEAM]
+  for (const path of ['/teams/team-1/issues', '/teams/team-1/board', '/inbox']) {
+    renderAt(path)
+    await screen.findByTestId('deck', undefined, { timeout: 20_000 })
+    cleanup()
+  }
+})
+
+beforeEach(() => {
+  zero.teams = []
+  zero.cycles = []
+  zero.issues = []
+  zero.triage = []
+  zero.deployments = []
+  zero.notifications = []
+  stubBrowserGlobals()
 })
 
 test('every authenticated route renders one deck, one statusline, and one attention number', async () => {

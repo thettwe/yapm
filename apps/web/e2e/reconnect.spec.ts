@@ -149,18 +149,51 @@ async function interceptSyncSocket(page: Page): Promise<SyncSocket> {
 // stretched to tens of seconds, so a token request arriving within a second of pressing
 // Enter can only have come from the button. Reached by Tab alone — the pill lives in the
 // statusline now (band 3, at the end of the document rather than the start of it), and nothing
-// here may need a pointer. That move is why the stop budget is generous: every focusable on the
-// page comes first.
+// here may need a pointer.
+//
+// The walk's length is DERIVED from the page, never guessed. That move put the retry LAST in the
+// tab ring, and the ring on `/` is as long as the shared e2e workspace has grown: every earlier
+// spec that creates a team, a member or an invite adds stops in front of it, so a constant here
+// measures how much fixture data happened to accumulate rather than whether the control is
+// reachable. "Reachable by Tab alone" means "landed on within one pass of the ring", so one pass
+// of the ring is the honest bound — and the assertion below is unchanged by it. A retry that is
+// `inert`, out of the tab order, unmounted, or sealed inside a focus trap is never focused however
+// many stops the walk is given.
 async function retryFromTheKeyboard(page: Page): Promise<void> {
   const retry = page.getByTestId('connection-retry')
   await expect(retry).toBeVisible()
 
+  // `auto-status.spec.ts`'s `tabTo` bounds its walk the same way. Overcounting is the safe
+  // direction — radio groups, disabled controls and `tabindex="-1"` nodes all inflate this and only
+  // make the bound generous, while UNDERcounting would fail a button that is genuinely reachable.
+  // So the two stops a selector cannot see are added rather than hoped away: Chromium gives an
+  // overflow container with no keyboard-focusable descendant a stop of its own (measured), and a
+  // media element's shadow controls take more than the one its tag suggests. The app renders no
+  // shadow root and no iframe, so nothing else tabbable sits outside this count.
+  const ring = await page.evaluate(() => {
+    const focusable =
+      'a[href], area[href], button, input, select, textarea, summary, [contenteditable], [tabindex]'
+    const scrollers = [...document.querySelectorAll<HTMLElement>('*')].filter((node) => {
+      if (node.querySelector(focusable) !== null) return false
+      const style = getComputedStyle(node)
+      const scrollsDown =
+        node.scrollHeight > node.clientHeight && /auto|scroll/.test(style.overflowY)
+      const scrollsAcross =
+        node.scrollWidth > node.clientWidth && /auto|scroll/.test(style.overflowX)
+      return scrollsDown || scrollsAcross
+    }).length
+    return document.querySelectorAll(focusable).length + scrollers + 8
+  })
+
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
-  for (let stop = 0; stop < 150; stop += 1) {
+  for (let stop = 0; stop <= ring; stop += 1) {
     if (await retry.evaluate((node) => node === document.activeElement)) break
     await page.keyboard.press('Tab')
   }
-  await expect(retry, 'Retry now must be reachable by Tab alone').toBeFocused()
+  await expect(
+    retry,
+    `Retry now must be reachable by Tab alone (walked ${ring} stops, one full pass of this page)`,
+  ).toBeFocused()
 
   const minted = page.waitForRequest((request) => request.url().includes('/api/zero/token'), {
     timeout: 2_000,

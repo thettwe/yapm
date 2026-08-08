@@ -67,3 +67,13 @@
 - [ ] 9.2 The compose smoke test
 - [ ] 9.3 The full Playwright e2e suite (CI is the gate of record; run locally once after the migration since this is cross-cutting chrome)
 - [x] 9.4 Walk every scenario in `openspec/changes/app-frame/specs/**` and confirm it is true — the three that had no assertion behind them now do (the badge's accessible name, search reachable without the palette, and no frame on an unauthenticated surface)
+
+## 10. The red CI run on `8aa64de` — three tests that had baked their environment into a budget
+
+None of the three was a product defect; see design DI-22/23/24 for the evidence behind each.
+
+- [x] 10.1 `e2e/reconnect.spec.ts` — bound `retryFromTheKeyboard`'s Tab walk by the page's own tab ring instead of a hard-coded 150. The retry is stop 166 of 166 on `/` and the ring grows with every spec that creates a team, so any constant rots; `auto-status.spec.ts`'s `tabTo` already bounds its walk this way. The count includes the tab stops a selector cannot see (Chromium makes an overflow container with no focusable descendant a stop of its own — measured, and enough on its own to have reproduced the original red). The `toBeFocused()` assertion is unchanged, and was re-verified in a real Chromium to still fail for a `tabindex="-1"` retry, one under an `inert` ancestor, and a hidden one — design DI-22
+- [x] 10.2 `src/frame/team-context.test.ts` — the suite stubs storage away in `beforeEach` rather than assuming the runner's jsdom has none. Node ≥25 shadows jsdom's `localStorage`; CI's Node 24 does not, so the disabled-storage test was reading a store the previous line had really written. Both browser shapes (global absent, global throwing) are kept, and `team-context.ts` is untouched — design DI-23
+- [x] 10.3 `src/frame/app-frame.test.tsx` — a `beforeAll` loads each route the file renders, so no assertion races the one-shot `autoCodeSplitting` dynamic import; the file now passes with the async budget cut to 1ms. The same file also owns its `localStorage` per test, closing the order-dependence the frame's anchor write would otherwise create on CI — design DI-24
+- [x] 10.4 `src/test-setup.ts` + `vitest.config.ts` — `asyncUtilTimeout: 5_000` with matching `testTimeout`/`hookTimeout`, because the exposure is general to router-mounting suites (`routes.test.tsx` runs 113ms locally where CI is an order of magnitude slower) — design DI-24
+- [ ] 10.5 Re-run the two red checks on CI: "Lint, typecheck, test, build" and "Playwright e2e". Docker is unavailable on the machine that made these fixes, so the e2e suite could not be run locally — the Tab-walk helper was verified against a synthetic page in a real Chromium instead

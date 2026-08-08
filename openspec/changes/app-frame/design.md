@@ -542,3 +542,85 @@ the matched row — `ENG-116 · Saved cards behind a flag`, per D7 — and the b
 only in the side panel, where it is the panel's only chrome. Nothing is lost full-page: the reality
 strip below already announces the divergence with a label, and a pending (unsynced) issue number
 exists only in the panel, never at a URL.
+
+### Stage 4 — the red CI run, and what it was actually telling us
+
+Three failures on run `31238090530` (head `8aa64de`). None of them was a product defect: the frame,
+the anchor resolver and the sync retry all behave exactly as specified on both runtimes. All three
+were tests that had baked an accident of their environment into an assertion's *budget*.
+
+**DI-22 — a keyboard-reachability walk must be bounded by the page's tab ring, not by a constant.**
+`e2e/reconnect.spec.ts`'s `retryFromTheKeyboard` blurred to `<body>` and pressed Tab a fixed number
+of times looking for `connection-retry`. It went red because on `/` the retry is tab stop **166 of
+166** and the budget was **150** — off by sixteen, deterministically, which is why both tests and
+both CI retries failed identically. Nothing was unreachable: the traces show focus advancing
+monotonically (scrollTop 405 → 4166), the locator resolving to one stable button 34 times, no
+`inert`, no focus trap, no remount (`retryOffered` is sticky at `provider.tsx:231-236`, so the
+button cannot flicker out mid-outage).
+
+The constant was the defect, and **raising it to 200 would have been the same defect with a later
+expiry date.** The ring it has to cross is not a property of the frame — it is a property of how
+much fixture data the *earlier* specs left in the shared `admin@example.test` workspace: 45 teams ×
+2 stops, 13 members × 2, 12 invites × 3. Every spec that creates a team lengthens it. So the budget
+is now derived — one pass of the document's tab ring, counted in the page — which is what
+"reachable by Tab **alone**" actually means. `auto-status.spec.ts`'s `tabTo` already bounded its
+walk this way; this is the house pattern, not a new one.
+
+This is not a loosened assertion, and that was checked rather than asserted: driving the same helper
+against a synthetic page in a real Chromium, a retry carrying `tabindex="-1"`, and a retry under an
+`inert` ancestor, both still exhaust the walk and fail — while a reachable retry is found at ring
+lengths (364 stops) where the old constant could not have found it. The bound decides how long the
+walk waits before declaring failure; it cannot make an unreachable control pass.
+
+**A derived bound still has to be derived from the right thing, and the first version was not.**
+Counting `querySelectorAll` matches was assumed to overcount — `tabindex="-1"` nodes and disabled
+controls inflate it — but it can also UNDERcount, which is the direction that fails a reachable
+button. Measured in the bundled Chromium (1.61.1): a scroll container with no keyboard-focusable
+descendant is itself a tab stop that no selector can see (a page of 20 links, 5 such scrollers and
+the retry needs 26 presses against a count of 21), and a media element's shadow controls take more
+stops than its one tag. Five scrollers on the overview would have reproduced the original red with a
+derived bound. So the count now adds the scrollers it can identify by the same rule Chromium uses —
+overflowing, `auto`/`scroll`, no focusable descendant — plus a small slack for the shadow-control
+case. Re-measured across eight shapes: reachable at 141, 361 and 51 stops (scrollers included) all
+pass, and `tabindex="-1"`, an `inert` ancestor and `visibility: hidden` all still fail. Slack only
+lengthens a losing walk; a control outside the tab ring is never focused at any number of presses.
+
+**The product consequence stands and is worth naming plainly:** moving sync to band 3 took the retry
+from ~3 Tab stops (band 1) to last-in-document, which on a large workspace overview is 166. The
+one-home rule (`sync-indicator.tsx` header, `ia.html`) forbids a second indicator, and a skip-link
+to it would be one, so the mitigation remains DI-20's `Retry sync now` palette command — a path
+whose length does not depend on the page's. Two facts keep constraint 10 honest meanwhile: the
+control *is* in the tab ring, and because it is the document's **last** stop, Shift+Tab from the top
+reaches it in one press.
+
+**DI-23 — a test may not inherit its environment from whichever Node the runner is on.**
+`frame/team-context.test.ts` carried the comment "This suite's jsdom has no `localStorage` at all",
+and that was never a fact the suite established — it was a fact about Node ≥25, which defines its
+own undefined-returning `localStorage` on `globalThis` and shadows jsdom's working one. CI runs Node
+24 (`.node-version`), where jsdom's survives, so `writeAnchorTeam('team-2')` really persisted and
+the disabled-storage test resolved to OPS instead of ENG. Reproduced locally by installing a working
+store in a setup file — the failure is byte-identical — and fixed by having the suite *stub storage
+away* in `beforeEach` rather than hope it is absent. Both halves of the test are kept: the global
+missing outright, and a global whose every access throws, because browsers ship both.
+`team-context.ts` is untouched — its `try`/`catch` was already correct for both, which is precisely
+why only the test could fail. `app-frame.test.tsx` got the same treatment for the same reason: the
+frame *writes* the anchor on every team route, so on a runner where storage works, one test's anchor
+would have decided the next test's stops. That was latent, not yet failing, and is now impossible.
+
+**DI-24 — `autoCodeSplitting` applies in test mode, so a router-mounted first render is a module
+load.** `app-frame.test.tsx`'s first test found `<body><div /></body>` and blew Testing Library's 1s
+default at 1517ms. The frame renders no band conditionally — `AppFrame` emits deck, `<main>` and
+`Statusline` unconditionally — so this was never "the frame waits for data". `vite.config.ts` sets
+`autoCodeSplitting: true` with no production guard, so every route `component` is a dynamic import
+that vite-node must transform and evaluate before anything paints: measured at ~180ms for the file's
+first render against ~10ms for every later one, which on a runner an order of magnitude slower is
+seconds. Fixed at the cause — a `beforeAll` loads each route the file visits, once — and then
+budgeted, because the cause is general: `configure({ asyncUtilTimeout: 5_000 })` in `test-setup.ts`
+(with matching vitest `testTimeout`/`hookTimeout`), since `routes.test.tsx` has the same exposure at
+113ms locally and nine tests across three files still depend on that budget.
+
+The warm-up was verified to be the real fix rather than a longer wait: with the async budget cut to
+**1ms**, all fourteen tests in `app-frame.test.tsx` still pass, which they could not do if anything
+in the file were genuinely waiting on data. Raising a timeout is the wrong move when it hides a
+defect; here the evidence says the wait was for a one-shot module transform that the harness, not
+the product, imposes — and the assertions are untouched.

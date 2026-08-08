@@ -1,4 +1,4 @@
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
   ANCHOR_STORAGE_KEY,
   readAnchorTeam,
@@ -14,8 +14,12 @@ import {
 const ENG = { id: 'team-1', name: 'Engineering', key: 'ENG' }
 const OPS = { id: 'team-2', name: 'Operations', key: 'OPS' }
 
-// This suite's jsdom has no `localStorage` at all, which is the disabled-storage case the frame has
-// to survive — so the working case is the one that needs a stand-in.
+// This suite OWNS its storage environment rather than inheriting one. Whether `localStorage` exists
+// under jsdom depends on the Node the runner happens to be on — Node ≥25 defines its own
+// undefined-returning `localStorage` on `globalThis`, which shadows jsdom's working one — so a suite
+// that assumes an empty store passes on one runner and fails on the other. Absent is the default
+// here because that is the disabled-storage case the frame has to survive; the working case gets a
+// stand-in.
 function stubStorage(initial: Record<string, string> = {}): Map<string, string> {
   const store = new Map(Object.entries(initial))
   vi.stubGlobal('localStorage', {
@@ -24,6 +28,10 @@ function stubStorage(initial: Record<string, string> = {}): Map<string, string> 
   })
   return store
 }
+
+beforeEach(() => {
+  vi.stubGlobal('localStorage', undefined)
+})
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -62,7 +70,8 @@ test('the anchor round-trips through storage', () => {
 })
 
 // Storage disabled — Safari private browsing, a locked-down enterprise profile — is a frame that
-// forgets the anchor, never a frame that fails to draw.
+// forgets the anchor, never a frame that fails to draw. Two shapes, because browsers ship both: the
+// global missing outright (the `beforeEach` default), and a global whose every access throws.
 test('a browser that refuses storage still resolves an anchor and never throws', () => {
   expect(readAnchorTeam()).toBeNull()
   expect(() => writeAnchorTeam('team-2')).not.toThrow()

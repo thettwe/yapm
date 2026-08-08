@@ -1,0 +1,191 @@
+# Design — triage-daylight
+
+The rulebook is `design-explorations/overhaul-2026-08/northstar/ia.html`; the drawing is
+`destinations/triage.html` (renders `triage.png`, `triage-full.png`); the row to match is
+`northstar/issues.html`, already shipped as `packages/ui/src/components/issue-row.tsx`. The
+mock's closing comment records what it folded and why, and this file does not re-argue any of it.
+
+## D1 — The Project row ships, and `issue.routeIssue` gains one field
+
+The mock's route menu lists Status, Assignee, Cycle, **Project** and Labels. `issue.routeIssue`
+today writes the first, second, third and fifth. The mock's own comment flags this as the one
+place it drew beyond the shipped mutator, and the brief asks for a decision: add the field, or
+drop the row.
+
+**Decided: add the field.** Three reasons.
+
+1. Both halves already exist. `issue.project_id` is a column, `project` is a table, and
+   `issue.setProject` is a shipped mutator over exactly this write.
+2. The permission story is already written and does not change. `setIssueProject` runs
+   `canWrite` then `loadIssueForWrite` (auth before existence, team-scoped on the **issue**), and
+   requires the project only to *exist* in the workspace — deliberately no cross-team rejection,
+   because a project spans teams. `routeIssue`'s new branch is that branch, verbatim.
+3. Dropping the row would make routing the one place in the product where a member can set every
+   placement fact about an issue *except* the one that decides which body of work it belongs to,
+   for no reason a reader could reconstruct.
+
+Shape: `projectId: z.string().min(1).nullable().optional()` on `routeIssueArgs`; when present and
+non-null, the same existence check `setIssueProject` runs, throwing `MutationErrorCode.crossTeam`
+with `'Project not found'`; folded into the same single atomic `issue.update` as the rest, so
+routing stays one write.
+
+Two consequences worth stating rather than discovering:
+
+- **The AI tool registry gains the field for free.** `ai-tools.ts` derives the agent tool schema
+  from `routeIssueArgs`, and `issue.routeIssue` is already classified `write`. Adding an optional
+  field that resolves to an existing, permission-gated write does not move the risk class. The
+  registry test asserting the derived tool set must be updated to expect the new field, never
+  loosened to ignore it.
+- **This change now touches two big-feature axes** (mutator + signature UI), so PROCESS.md §3
+  requires all three tiers. `apps/web/e2e/triage.spec.ts` already exists and is extended, not
+  added to — see D9.
+
+## D2 — The queue is a list with no fold, and only one row is unfolded at a time
+
+The brief is explicit: all items visible, because a queue you want to empty should show its own
+floor. So no `↓ n more` fold here, unlike the issue list — the list's fold is a promise about how
+much work a *page* shows; the inbox's whole claim is that it shows everything waiting.
+
+Exactly one row carries a decision panel at a time.
+
+## D3 — The panel follows FOCUS, and focus starts at the head
+
+The mock draws the head of the queue unfolded. The shipped page keeps `j`/`k` and the verdicts act
+on the *focused* row. If the panel were pinned to the head while focus moved down, the rail's
+`[A]`/`[R]`/`[D]` would name one issue and act on another — a control that lies, which is the
+exact failure mode this whole overhaul is correcting.
+
+**Decided: the unfolded row is the focused row; on arrival, focus is index 0, which is the head,
+which is what the mock draws.** The mock's drawing is the arrival state, not a special case for
+row one. This also softens the mock's own first self-critique ("the design only serves the head of
+the queue"): every row can be brought under decision, one at a time, by moving focus.
+
+## D4 — The route transient is a labelled panel, not a `Menu`
+
+`ia.html` classifies transients (the ⌘K palette, peeks, menus) as never destinations. The mock
+draws ROUTE as one open transient with a header (`ROUTE · ENG-125`), five value rows and a foot
+(`⏎ route · esc stay`).
+
+A `base-ui` `Menu` is the wrong primitive: its items are commands that fire on activation, and
+these five rows are values being *edited* before **one** commit. The transient is therefore a
+popover panel that keeps an explicit accessible role and an accessible name naming the issue, with:
+
+- five rows — Status, Assignee, Cycle, Project, Labels — each showing the value routing will
+  write, `none` where nothing is set;
+- arrow keys moving between rows, each row's control operable from the keyboard;
+- `⏎` committing the whole routing in one mutation, `esc` closing it with nothing written;
+- focus returning to the row it was opened from on close.
+
+Keeping a named role means the e2e assertions get *stronger* (they can name the transient) rather
+than weaker. It replaces `RouteDialog` entirely; the four fields the dialog exposed all survive,
+plus project.
+
+The mock draws the open transient covering the label, age and reporter columns of the rows beneath
+it, and its self-critique calls that a fault ("a queue whose whole purpose is comparison should
+probably never occlude its own right-hand columns"). The build reproduces the mock rather than
+inventing a different placement, and the fault is carried forward as drawn — see "Left standing".
+
+## D5 — The trailing avatar on a triage row is the reporter
+
+The mock's rows carry `PR`, `MB`, `DO`, `PR` — and the panel names ENG-125's reporter as Priya
+Raman. On this surface the avatar is the **reporter**, not the assignee: an inbox issue's assignee
+is not yet a meaningful fact (routing is what sets it), and "who reported this" is a fact the
+decision actually turns on.
+
+`IssueRow`'s trailing slot is typed `assignee` and draws initials from `assignee.name`. Rather than
+overload that name silently, `IssueRow` gains **one optional prop** overriding only the avatar's
+announced name (`title` / `aria-label`), defaulting to the person's name. Triage passes the issue's
+`creator` and announces `Reported by <name>`. The drawing is byte-identical to the list's; the
+announcement is honest; no other surface changes.
+
+## D6 — The age column states `created_at`, and claims nothing
+
+The mock's `when` column is age since creation (`2d`, `1d`, `6h`, `41m`). The issue list's
+equivalent column states `updated_at`; on Triage it states `created_at`, because arrival time is
+what an intake queue is ordered by and the only age fact the surface has.
+
+It is a plain mono relative number in the same measure and the same ink as the list's — **no
+colour ramp, no threshold, no overdue mark, no target**. The precise fact is stated once, in the
+decision panel's mono line (`<reporter> · <created-at>`), which is where the surface makes a claim
+at all.
+
+## D7 — The empty state, and the loading state that is not it
+
+The mock's second frame: the shipped done disc at 26px, `Nothing waiting.`, and an onward foot
+(`Issues › · Cycles › · Projects ›` with `⌘K goes anywhere` at the trailing edge). No sentence.
+
+The one thing the mock cannot draw and the build must get right: **an inbox that has not finished
+syncing is not an empty inbox**. `Nothing waiting.` renders only when the synced query has
+completed; before that the surface says `Loading…`. Both carry `role="status"`, so a screen reader
+hears the transition rather than a premature all-clear. `oldest first` is not drawn over an empty
+queue — an order label over no rows is noise, per the mock.
+
+## D8 — One attention number, unchanged
+
+The triage count is one of the four exception classes feeding the ONE attention number. The
+masthead count is the length of the same `triage.inbox` result `team-home.ts`'s `buildAttention`
+counts. No second derivation, no second cap, no new count anywhere on the page — the masthead
+count, the deck badge, the statusline and Team Home's "N new issues sit in triage" all trace to
+the same rows.
+
+## D9 — Tests: the tiers this earns, and the two standing CI lessons
+
+Two big-feature axes (D1) ⇒ unit + integration + e2e. `apps/web/e2e/triage.spec.ts` already drives
+this page and is **updated**, not replaced: the `triage-accept` / `triage-route` /
+`triage-decline` test ids are deliberately preserved so the viewer's four read-only assertions
+hold verbatim, and the route flow gains a project assertion rather than losing the status one.
+
+Carried forward from `issue-list-daylight`:
+
+- No test hard-codes a budget that encodes e2e fixture size — bounds are derived from the page.
+- No test's premise is what a given Node runtime provides. CI is Node 24; dev machines here run
+  26; anything environmental is stubbed explicitly.
+
+## What is deliberately NOT built
+
+Each of these is folded by the mock, and the reason is a missing stored fact, not a missing idea:
+
+| Folded | Why it cannot be drawn honestly |
+|---|---|
+| SLA, queue-age target, overdue mark, age colour ramp | No SLA and no target exist anywhere in the product |
+| Triage owner / rota | No entity backs either |
+| Suggested label or priority | There is no classifier |
+| Per-person triage throughput | Metrics are team-level only (VISION, constraint 8) |
+| Duplicate-detection hint | `issue_link` is issue→pull_request only; no issue-to-issue table exists |
+| "Moved to triage at 14:02" | There is no issue status-history table |
+| Bulk select bar | Out of scope; the palette already carries multi-target triage actions |
+
+## Left standing, and named
+
+Three faults the mock names in its own self-critique are reproduced rather than fixed here,
+because fixing any of them is a design change to an approved drawing:
+
+1. The open transient occludes the right-hand columns of the rows beneath it (D4).
+2. The reserved-but-blank reality slot spends its measure on a fact triage rows structurally never
+   have — correct for cross-surface alignment, and indistinguishable from a layout bug on this
+   page alone.
+3. The empty state cannot say the clearing was *yours* or *recent*, because no triage event is
+   recorded anywhere. Emptying the queue leaves a page identical to a team that has never used
+   Triage.
+
+## Decisions made during implementation
+
+Pre-seeded scoping decisions (settled at proposal time; revise only with evidence):
+
+- **No new tables, no migration, no new named query.** The single schema-side change permitted is
+  `projectId` on `routeIssueArgs` (D1).
+- **Every shipped capability survives**: the `a` / `r` / `d` / `j` / `k` / `⏎` keys, oldest-first
+  ordering, the viewer's read-only inbox, the command palette's Accept / Route / Decline /
+  Send-to-triage actions, and the triage count that feeds the ONE attention number.
+- **Keyboard-first**: every verdict reachable and activatable without a pointer; the route
+  transient focus-reachable and escapable, returning focus where it came from.
+- **Sub-100ms, offline-capable**: everything renders from already-synced rows. The attachment
+  chips read the existing `attachments.byIssue` synced query for the one issue under decision —
+  no new named query, no ZQL outside `packages/schema`.
+- **Accessibility**: verdicts are named buttons, never icon-only; the empty state is announced
+  honestly and is distinguishable from the loading state; theme contrast holds in every theme
+  block, light and dark, asserted in `packages/ui/src/styles/contrast.test.ts`.
+- **The three `triage-*` test ids are preserved** so the e2e viewer assertions hold verbatim.
+
+<!-- Build-time decisions are appended below this line, each with what was ambiguous, what was
+     chosen, and why. -->

@@ -11,18 +11,21 @@ const PRIORITY = {
 
 export type PriorityKind = keyof typeof PRIORITY
 
-const BAR_HEIGHTS = [
-  { x: 2, y: 8, h: 4 },
-  { x: 6, y: 5, h: 7 },
-  { x: 10, y: 2, h: 10 },
-] as const
+// Priority is WEIGHT, drawn as ticks on the northstar's 14-grid with 1.6px round caps: the ticks
+// the work does not carry stay in place at .35 opacity, so weight reads as height against a fixed
+// row rather than as a count of shapes. One tick standing alone, with a dot beneath it, is urgent.
+const STROKE = 1.6
+const QUIET = 0.35
 
-const FILLED: Record<Exclude<PriorityKind, 'urgent'>, number> = {
-  'no-priority': 0,
-  low: 1,
-  medium: 2,
-  high: 3,
+// Each level's lit ticks, in the mock's own geometry (`p-1` / `p-2` / `p-3`).
+const LIT: Record<Exclude<PriorityKind, 'urgent'>, string> = {
+  'no-priority': '',
+  low: 'M4 9.6 V6.8',
+  medium: 'M4 9.6 V6.8 M7 9.6 V4.4',
+  high: 'M4 9.6 V6.8 M7 9.6 V4.4 M10 9.6 V2.4',
 }
+
+const QUIET_TICKS = 'M4 9.6 V6.8 M7 9.6 V4.4 M10 9.6 V2.4'
 
 function PriorityMark({
   priority,
@@ -30,34 +33,45 @@ function PriorityMark({
   ...props
 }: { priority: PriorityKind } & Omit<SVGProps<SVGSVGElement>, 'children'>) {
   const label = PRIORITY[priority]
+  const lit = priority === 'urgent' ? '' : LIT[priority]
   return (
     <svg
       viewBox="0 0 14 14"
       role="img"
       aria-label={label}
-      className={cn('size-3.5 shrink-0', priority === 'urgent' && 'text-status-urgent', className)}
+      className={cn(
+        'size-3.5 shrink-0',
+        priority === 'urgent' ? 'text-status-urgent' : 'text-text-2',
+        className,
+      )}
       {...props}
     >
       <title>{label}</title>
       {priority === 'urgent' ? (
         <>
-          <rect x="1" y="1" width="12" height="12" rx="2.5" fill="currentColor" />
-          <rect x="6.25" y="3.5" width="1.5" height="4.5" rx="0.75" fill="var(--bg)" />
-          <rect x="6.25" y="9.2" width="1.5" height="1.6" rx="0.75" fill="var(--bg)" />
+          <path d="M7 2.6 V8" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+          <circle cx="7" cy="11.2" r="1.1" fill="currentColor" />
         </>
       ) : (
-        BAR_HEIGHTS.map((bar, index) => (
-          <rect
-            key={bar.x}
-            x={bar.x}
-            y={bar.y}
-            width="2.5"
-            height={bar.h}
-            rx="0.75"
-            fill={index < FILLED[priority] ? 'var(--text-2)' : 'var(--text-3)'}
-            opacity={index < FILLED[priority] ? 1 : 0.4}
+        <>
+          <path
+            d={QUIET_TICKS}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={STROKE}
+            strokeLinecap="round"
+            strokeOpacity={QUIET}
           />
-        ))
+          {lit === '' ? null : (
+            <path
+              d={lit}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={STROKE}
+              strokeLinecap="round"
+            />
+          )}
+        </>
       )}
     </svg>
   )

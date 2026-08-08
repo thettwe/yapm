@@ -1,20 +1,8 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@yapm/ui/components/avatar'
 import { type PriorityKind, PriorityMark } from '@yapm/ui/components/priority-mark'
+import { buildRealityShape, RealityTrack } from '@yapm/ui/components/reality-track'
 import { StatusGlyph, type StatusKind } from '@yapm/ui/components/status-glyph'
 import { cn } from '@yapm/ui/lib/utils'
-import {
-  CheckIcon,
-  GitMergeIcon,
-  GitPullRequestArrowIcon,
-  GitPullRequestClosedIcon,
-  GitPullRequestDraftIcon,
-  GitPullRequestIcon,
-  LoaderIcon,
-  type LucideIcon,
-  RocketIcon,
-  TriangleAlertIcon,
-  XIcon,
-} from 'lucide-react'
 import type { ComponentProps, ReactNode } from 'react'
 
 const LABEL_TONE = {
@@ -49,140 +37,10 @@ function initials(name: string): string {
     .join('')
 }
 
-// One fixed width shared with `RealityStrip`, so populating a signal can never shift a row's
-// alignment. Four slots now: PR, CI, deploy, review age.
-const REALITY_STRIP_WIDTH = 'w-[86px]'
-
-function RealityStripPlaceholder() {
-  return (
-    <span
-      role="img"
-      aria-label="No delivery signal yet"
-      className={cn('flex shrink-0 items-center gap-1 text-text-3', REALITY_STRIP_WIDTH)}
-    >
-      <span className="size-1.5 rounded-full border border-current opacity-40" />
-      <span className="size-1.5 rounded-full border border-current opacity-40" />
-      <span className="size-1.5 rounded-full border border-current opacity-40" />
-      <span className="size-1.5 rounded-full border border-current opacity-40" />
-    </span>
-  )
-}
-
-// The reality strip's typed vocabulary, mirrored from the schema delivery seam as plain string
-// unions so this design-system primitive stays free of a schema dependency (the web layer
-// computes the signal and hands over these primitives).
-export type PrGlyphState = 'draft' | 'open' | 'approved' | 'merged' | 'closed'
-export type CiHealthState = 'passing' | 'failing' | 'pending'
-
-const PR_GLYPH: Record<PrGlyphState, { icon: LucideIcon; label: string; tone: string }> = {
-  draft: { icon: GitPullRequestDraftIcon, label: 'Draft PR', tone: 'text-text-3' },
-  open: {
-    icon: GitPullRequestIcon,
-    label: 'PR open, awaiting review',
-    tone: 'text-status-in-review',
-  },
-  approved: { icon: GitPullRequestArrowIcon, label: 'PR approved', tone: 'text-signal-sync' },
-  merged: { icon: GitMergeIcon, label: 'PR merged', tone: 'text-status-done' },
-  closed: { icon: GitPullRequestClosedIcon, label: 'PR closed', tone: 'text-text-3' },
-}
-
-// CI health carries a distinct GLYPH per state (check / x / spinner), not hue alone, so passing
-// vs failing vs pending is distinguishable without color — a WCAG 1.4.1 requirement for the
-// row's core reality signal. The tone token still reinforces the shape.
-const CI_GLYPH: Record<CiHealthState, { label: string; icon: LucideIcon; tone: string }> = {
-  passing: { label: 'CI passing', icon: CheckIcon, tone: 'text-signal-sync' },
-  failing: { label: 'CI failing', icon: XIcon, tone: 'text-status-urgent' },
-  pending: { label: 'CI running', icon: LoaderIcon, tone: 'text-status-in-progress' },
-}
-
-// Compact review-age label ("3d", "2h", "now"), rendered from the ms since the newest review
-// (or, before any review, how long the PR has awaited one).
-export function formatReviewAge(ms: number): string {
-  if (ms < 60_000) return 'now'
-  const min = Math.floor(ms / 60_000)
-  if (min < 60) return `${min}m`
-  const hours = Math.floor(min / 60)
-  if (hours < 24) return `${hours}h`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d`
-  return `${Math.floor(days / 7)}w`
-}
-
-export interface RealityStripProps {
-  pr: PrGlyphState | null
-  ci: CiHealthState | null
-  reviewAgeMs: number | null
-  // The moment a deployment carrying this change's merge commit first succeeded, or null when
-  // none has. The environment is not consulted — yapm cannot know which of a team's environment
-  // strings means production — so the label says "Deployed" and no more. Its own glyph, for the
-  // same reason CI health has one: a signal this load-bearing may not be carried by hue.
-  deployedAt: number | null
-}
-
-// The reality strip: PR lifecycle glyph, CI health dot, deploy glyph, and review age — the row's
-// "reality over ritual" slot. Occupies the same reserved width as the placeholder so populating a
-// signal never shifts row alignment. Every color is a theme token; correct in all presets,
-// light+dark.
-function RealityStrip({ pr, ci, reviewAgeMs, deployedAt }: RealityStripProps) {
-  const prGlyph = pr ? PR_GLYPH[pr] : null
-  const ciGlyph = ci ? CI_GLYPH[ci] : null
-  const PrIcon = prGlyph?.icon
-  const CiIcon = ciGlyph?.icon
-  const summary = [
-    prGlyph?.label,
-    ciGlyph?.label,
-    deployedAt != null ? 'Deployed' : null,
-    reviewAgeMs != null ? `reviewed ${formatReviewAge(reviewAgeMs)} ago` : null,
-  ]
-    .filter(Boolean)
-    .join(', ')
-
-  return (
-    <span
-      data-slot="reality-strip"
-      role="img"
-      aria-label={summary || 'Delivery signal'}
-      className={cn(
-        'flex shrink-0 items-center gap-1.5 font-mono text-[10.5px] tabular-nums text-text-3',
-        REALITY_STRIP_WIDTH,
-      )}
-    >
-      {PrIcon && prGlyph ? (
-        <PrIcon className={cn('size-3.5 shrink-0', prGlyph.tone)} aria-hidden="true" />
-      ) : (
-        <span className="size-3.5 shrink-0" aria-hidden="true" />
-      )}
-      {CiIcon && ciGlyph ? (
-        <CiIcon className={cn('size-3 shrink-0', ciGlyph.tone)} aria-hidden="true" />
-      ) : null}
-      {deployedAt != null ? (
-        <RocketIcon className="size-3 shrink-0 text-signal-sync" aria-hidden="true" />
-      ) : null}
-      {reviewAgeMs != null ? (
-        <span className="truncate">{formatReviewAge(reviewAgeMs)}</span>
-      ) : null}
-    </span>
-  )
-}
-
-function DivergenceFlag({
-  label = 'Status diverges from delivery reality',
-  decorative = false,
-}: {
-  label?: string
-  // When the same sentence is already shown as adjacent visible text, mark the icon decorative
-  // so a screen reader announces the divergence once, not twice.
-  decorative?: boolean
-}) {
-  return (
-    <span className="flex w-4 shrink-0 items-center justify-center text-status-urgent">
-      {decorative ? (
-        <TriangleAlertIcon aria-hidden="true" className="size-3.5" />
-      ) : (
-        <TriangleAlertIcon role="img" aria-label={label} className="size-3.5" />
-      )}
-    </span>
-  )
+// The unlinked row still draws the track — four empty stations at the same reserved measure — so
+// populating a signal can never shift a row's alignment.
+function EmptyRealityTrack() {
+  return <RealityTrack shape={buildRealityShape(null)} label="No delivery signal yet" />
 }
 
 export interface IssueRowProps extends Omit<ComponentProps<'div'>, 'children'> {
@@ -195,8 +53,9 @@ export interface IssueRowProps extends Omit<ComponentProps<'div'>, 'children'> {
   date?: string
   assignee?: IssueAssignee
   selected?: boolean
-  realityStrip?: ReactNode
-  divergenceFlag?: ReactNode
+  // The row's one reality slot: the drawn track, at `REALITY_TRACK_WIDTH`. Divergence rides on
+  // the track's `//` break, so there is no second flag slot to keep in step with it.
+  realityTrack?: ReactNode
 }
 
 function IssueRow({
@@ -209,8 +68,7 @@ function IssueRow({
   date,
   assignee,
   selected = false,
-  realityStrip,
-  divergenceFlag,
+  realityTrack,
   className,
   ...props
 }: IssueRowProps) {
@@ -249,7 +107,7 @@ function IssueRow({
         {title}
       </span>
 
-      {realityStrip ?? <RealityStripPlaceholder />}
+      {realityTrack ?? <EmptyRealityTrack />}
 
       {labels.length > 0 ? (
         <span className="hidden shrink-0 items-center gap-2 md:flex">
@@ -293,10 +151,8 @@ function IssueRow({
       ) : (
         <span className="w-5 shrink-0" aria-hidden="true" />
       )}
-
-      {divergenceFlag ?? <span className="w-4 shrink-0" aria-hidden="true" />}
     </div>
   )
 }
 
-export { DivergenceFlag, IssueRow, RealityStrip, RealityStripPlaceholder }
+export { IssueRow }

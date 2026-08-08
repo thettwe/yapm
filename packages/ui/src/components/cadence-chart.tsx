@@ -1,8 +1,18 @@
-import type { TeamHomeCadence } from '@yapm/schema'
-
-// §D7's ship-cadence drawing: one dot per real release (deployments carry `deployedAt` only when
+// The ship-cadence drawing: one dot per real release (deployments carry `deployedAt` only when
 // they succeeded), stacked per UTC week, with a dashed tick at each closed retro and the today
 // caret at the right edge. Static SVG, no motion; every color is a theme token via `var()`.
+// Structural props, so the drawing is free of the schema seam that computes them.
+
+export interface CadenceWeek {
+  readonly startMs: number
+  readonly deploys: number
+  readonly retro: boolean
+  readonly monthLabel: string | null
+}
+
+export interface CadenceShape {
+  readonly weeks: readonly CadenceWeek[]
+}
 
 const SLOT = 52
 const HEIGHT = 84
@@ -11,7 +21,7 @@ const DOT_R = 3.6
 const DOT_STACK = 11
 const DOT_CAP = 6
 
-export function CadenceChart({ cadence }: { cadence: TeamHomeCadence }) {
+export function CadenceChart({ cadence }: { cadence: CadenceShape }) {
   const width = cadence.weeks.length * SLOT
   const weeks = cadence.weeks.map((week, index) => ({
     ...week,

@@ -1,11 +1,55 @@
-import { DivergenceFlag, IssueRow, RealityStrip } from './issue-row'
+import { IssueRow } from './issue-row'
+import { buildRealityShape, RealityTrack, realityTrackLabel } from './reality-track'
 import { PresetGrid } from './story-presets'
 
 export default {
   title: 'Issue row',
 }
 
-export function RealityStripStates() {
+const OPEN_GREEN = {
+  pr: 'open',
+  ci: 'passing',
+  reviewAgeMs: 7_200_000,
+  deployedAt: null,
+} as const
+const APPROVED_RUNNING = {
+  pr: 'approved',
+  ci: 'pending',
+  reviewAgeMs: 3_600_000,
+  deployedAt: null,
+} as const
+const SHIPPED = {
+  pr: 'merged',
+  ci: 'passing',
+  reviewAgeMs: 600_000,
+  deployedAt: 1_759_000_000_000,
+} as const
+const DIVERGED = {
+  pr: 'merged',
+  ci: 'passing',
+  reviewAgeMs: 600_000,
+  deployedAt: null,
+} as const
+const DRAFT_RED = { pr: 'draft', ci: 'failing', reviewAgeMs: null, deployedAt: null } as const
+
+function Track({
+  strip,
+  divergence,
+  sentence,
+}: {
+  strip: Parameters<typeof buildRealityShape>[0]
+  divergence?: Parameters<typeof buildRealityShape>[1]
+  sentence?: string
+}) {
+  return (
+    <RealityTrack
+      shape={buildRealityShape(strip, divergence ?? {})}
+      label={realityTrackLabel(strip, sentence ?? null)}
+    />
+  )
+}
+
+export function RealityTrackStates() {
   return (
     <PresetGrid>
       <div className="overflow-hidden rounded-card border border-border bg-bg">
@@ -16,9 +60,7 @@ export function RealityStripStates() {
             priority="high"
             status="in-review"
             date="2h"
-            realityStrip={
-              <RealityStrip pr="open" ci="passing" reviewAgeMs={7_200_000} deployedAt={null} />
-            }
+            realityTrack={<Track strip={OPEN_GREEN} />}
           />
           <IssueRow
             issueKey="ENG-143"
@@ -26,9 +68,7 @@ export function RealityStripStates() {
             priority="medium"
             status="in-review"
             date="1h"
-            realityStrip={
-              <RealityStrip pr="approved" ci="pending" reviewAgeMs={3_600_000} deployedAt={null} />
-            }
+            realityTrack={<Track strip={APPROVED_RUNNING} />}
           />
           <IssueRow
             issueKey="ENG-144"
@@ -36,25 +76,29 @@ export function RealityStripStates() {
             priority="high"
             status="in-progress"
             date="10m"
-            realityStrip={
-              <RealityStrip
-                pr="merged"
-                ci="passing"
-                reviewAgeMs={600_000}
-                deployedAt={1_759_000_000_000}
+            realityTrack={<Track strip={SHIPPED} />}
+          />
+          <IssueRow
+            issueKey="ENG-147"
+            title="Merged a day ago, the board never followed"
+            priority="high"
+            status="in-progress"
+            date="1d"
+            realityTrack={
+              <Track
+                strip={DIVERGED}
+                divergence={{ divergence: 'status_behind_merge' }}
+                sentence="PR merged but this issue is not marked done"
               />
             }
-            divergenceFlag={<DivergenceFlag label="PR merged but this issue is not marked done" />}
           />
           <IssueRow
             issueKey="ENG-145"
-            title="CI failing on an open PR"
+            title="CI failing on a draft PR"
             priority="urgent"
             status="in-progress"
             date="30m"
-            realityStrip={
-              <RealityStrip pr="draft" ci="failing" reviewAgeMs={null} deployedAt={null} />
-            }
+            realityTrack={<Track strip={DRAFT_RED} />}
           />
           <IssueRow
             issueKey="ENG-146"
@@ -64,6 +108,47 @@ export function RealityStripStates() {
             date="1w"
           />
         </div>
+      </div>
+    </PresetGrid>
+  )
+}
+
+export function VerticalRail() {
+  const shape = {
+    stations: [
+      { id: 'idea', node: 'done' as const, label: 'Idea — planned into Cycle 2', fact: '9d ago' },
+      {
+        id: 'designed',
+        node: 'done' as const,
+        label: 'Designed — approved in crit',
+        fact: 'payment-sheet-v3 · 2 comments',
+      },
+      {
+        id: 'opened',
+        node: 'done' as const,
+        label: 'Change opened',
+        fact: 'PR #188 · apple-pay → main',
+      },
+      {
+        id: 'reviewed',
+        node: 'done' as const,
+        label: 'Reviewed — approved',
+        fact: '2 rounds · changes requested, then approved',
+      },
+      {
+        id: 'merged',
+        node: 'done' as const,
+        label: 'Merged, checks green',
+        fact: '8f21c4a on main · 14/14 checks passed',
+      },
+      { id: 'live', node: 'empty-urgent' as const, label: 'Not live yet' },
+    ],
+    segments: ['solid', 'solid', 'solid', 'solid', 'broken'] as const,
+  }
+  return (
+    <PresetGrid>
+      <div className="rounded-card border border-border bg-bg p-4">
+        <RealityTrack orientation="vertical" shape={shape} label="Delivery for ENG-188" />
       </div>
     </PresetGrid>
   )
@@ -83,11 +168,17 @@ export function AllPresets() {
             cycle="C-24"
             date="3d"
             assignee={{ name: 'Ada Lovelace' }}
-            divergenceFlag={<DivergenceFlag />}
+            realityTrack={
+              <Track
+                strip={DIVERGED}
+                divergence={{ divergence: 'status_behind_merge' }}
+                sentence="PR merged but this issue is not marked done"
+              />
+            }
           />
           <IssueRow
             issueKey="ENG-138"
-            title="Row primitive reserves reality-strip slot"
+            title="Row primitive reserves one reality-track slot"
             priority="high"
             status="in-review"
             labels={[{ name: 'graph', tone: 'in-review' }]}

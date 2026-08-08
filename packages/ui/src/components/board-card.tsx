@@ -1,10 +1,14 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@yapm/ui/components/avatar'
 import type { IssueAssignee } from '@yapm/ui/components/issue-row'
-import { RealityStripPlaceholder } from '@yapm/ui/components/issue-row'
 import { type PriorityKind, PriorityMark } from '@yapm/ui/components/priority-mark'
+import { buildRealityShape, RealityTrack } from '@yapm/ui/components/reality-track'
 import { StatusGlyph, type StatusKind } from '@yapm/ui/components/status-glyph'
 import { cn } from '@yapm/ui/lib/utils'
 import type { ComponentProps, ReactNode, Ref } from 'react'
+
+// The card is narrower than a list row, so the same shape is placed at the card's own measure —
+// composable width, one implementation.
+const CARD_TRACK_WIDTH = 86
 
 function initials(name: string): string {
   return name
@@ -23,14 +27,12 @@ export interface BoardCardProps extends Omit<ComponentProps<'div'>, 'children' |
   labels?: { name: string; color?: string }[]
   selected?: boolean
   dragging?: boolean
-  realityStrip?: ReactNode
-  divergenceFlag?: ReactNode
+  realityTrack?: ReactNode
   ref?: Ref<HTMLDivElement>
 }
 
-// The board's tokenized card primitive: reuses the same status/priority/assignee visuals and
-// the reserved reality-strip and divergence slots as the list row, laid out vertically for a
-// kanban column. Strictly tokenized (no hardcoded colors/fonts). All DnD/keyboard wiring
+// The board's tokenized card primitive: reuses the same status/priority/assignee visuals and the
+// same reserved reality-track slot as the list row, laid out vertically for a kanban column. Strictly tokenized (no hardcoded colors/fonts). All DnD/keyboard wiring
 // (ref, listeners, role, tabIndex, aria-*) is spread in by the board via `...props`.
 function BoardCard({
   issueKey,
@@ -41,8 +43,7 @@ function BoardCard({
   labels = [],
   selected = false,
   dragging = false,
-  realityStrip,
-  divergenceFlag,
+  realityTrack,
   className,
   ref,
   ...props
@@ -77,7 +78,6 @@ function BoardCard({
         <StatusGlyph status={status} />
         <span className="font-mono text-xs tabular-nums text-text-2">{issueKey}</span>
         <span className="ml-auto flex items-center gap-1.5">
-          {divergenceFlag}
           <PriorityMark priority={priority} />
         </span>
       </div>
@@ -105,7 +105,13 @@ function BoardCard({
           </span>
         ) : null}
         <span className="ml-auto flex items-center gap-2">
-          {realityStrip ?? <RealityStripPlaceholder />}
+          {realityTrack ?? (
+            <RealityTrack
+              shape={buildRealityShape(null)}
+              width={CARD_TRACK_WIDTH}
+              label="No delivery signal yet"
+            />
+          )}
           {assignee ? (
             <Avatar size="xs" className="shrink-0" title={assignee.name}>
               {assignee.src ? <AvatarImage src={assignee.src} alt={assignee.name} /> : null}

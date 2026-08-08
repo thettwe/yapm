@@ -308,3 +308,48 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 - **The track wins over the icon strip**, on the evidence of all four northstar mocks; the icon
   strip, the lucide git glyph set and the `DivergenceFlag` triangle are deleted rather than
   deprecated.
+
+### Recorded while building groups 2–5
+
+- **`DeliveryStrip` lives in `packages/schema/src/zero/delivery.ts`, not in `team-home.ts`.** The
+  shape is the delivery seam's, not the home page's; `TeamHomeStrip` was deleted outright and
+  `team-home.ts` now imports the neutral name. `packages/schema/src/index.ts` exports it beside
+  `DeliverySignal`.
+- **The CI segment is index 1 — the segment *leaving* the checks station.** `done_but_ci_failing`
+  means the board claimed done past a red check, so the break belongs after the check, not before
+  it. That also gives the three kinds three distinct indices on a four-station track (0, 1, 2),
+  which is what makes the builder's honesty testable.
+- **The station after a break is promoted from `empty` to `empty-urgent`.** It is the station
+  reality has not reached; the urgent ring makes the break read as a stop rather than a gap. This
+  reproduces the old hardcoded broken shape exactly for `status_behind_merge` without hardcoding
+  anything.
+- **Team home's divergence-attention row passes a strip, not a boolean.** The class summarises N
+  issues and has no single strip, so it passes the shape those issues share — merged, green,
+  nothing live carrying it — and the divergence kind. The rendered result is byte-for-byte the old
+  `['done','done','done','empty-urgent']` with the break before the last node, so the page is
+  unchanged.
+- **The YOURS row now breaks for all three divergence kinds, not only `status_behind_merge`.**
+  The old call site passed `broken={row.divergence === 'status_behind_merge'}` because the boolean
+  could only draw one shape. With the position derived from the kind, suppressing the other two
+  would be hiding a fact the row already carries in its phrase. This is the one intentional visual
+  difference on team home.
+- **`formatReviewAge` moved from `issue-row.tsx` to `reality-track.tsx`** — one implementation, one
+  name, no re-export shim. Its two callers (`inbox-view.tsx`, `issue-detail.tsx`) import from the
+  new home.
+- **`CiHealthMark` is replaced by `TrackNodeMark` + `ciNodeKind` + `ciPhrase`.** The issue detail's
+  per-PR CI fact is now drawn in the track's own node vocabulary: filled disc / square / hollow
+  ring, three distinct SHAPES, so 1.4.1 still holds without a second glyph family.
+- **The issue-detail header's divergence flag became the `//` mark**, `role="img"` with the same
+  `DIVERGENCE_LABEL` sentence, so the header keeps the fact and loses the triangle. Inside
+  `DeliveryDetail` the sentence is visible text beside the track, so the track's label deliberately
+  omits it there — a screen reader announces the divergence once, not twice.
+- **The board card places the same shape at 86px**, its own measure, rather than the list row's
+  118px: composable width, one implementation.
+- **Two `rg` hits survive the repo guard, and neither is a reality drawing.** `GitPullRequestIcon`
+  ("Link a pull request", a command-palette action) and `RocketIcon` ("Projects", a nav lens, and
+  "Move to project…") are chrome, not facts. No reality surface — `issue-row`, `issue-list`,
+  `issue-detail`, `board-card`, `showcase`'s row mockup, `team-home` — imports a lucide glyph any
+  more. Renaming nav iconography belongs to the app-frame change, not this one.
+- **`priority-mark` gains a `text-text-2` default colour class.** The old drawing hardcoded
+  `fill="var(--text-2)"`, which a caller's className could not override; the mock's ticks are
+  `currentColor`, so the component now carries its own token and a caller may re-tone it.

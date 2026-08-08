@@ -12,11 +12,11 @@ import { compareCycles, isUnfinished } from './cycles.js'
 import {
   assembleLinkedEntities,
   buildDeploymentIndex,
-  type CiHealth,
   ciHealthFromConclusion,
   computeDeliverySignal,
   computeDivergence,
   type DeliverySignal,
+  type DeliveryStrip,
   type DivergenceKind,
   type PrState,
 } from './delivery.js'
@@ -132,13 +132,6 @@ export interface TeamHomeInput {
 // Output model — identity-free by construction.
 // ---------------------------------------------------------------------------
 
-export interface TeamHomeStrip {
-  readonly pr: PrState | null
-  readonly ci: CiHealth | null
-  readonly reviewAgeMs: number | null
-  readonly deployedAt: number | null
-}
-
 export interface AttentionDivergenceRow {
   readonly issueId: string
   readonly issueKey: string
@@ -251,7 +244,7 @@ export interface TeamHomeYoursRow {
   readonly issueKey: string
   readonly title: string
   readonly status: IssueStatus
-  readonly strip: TeamHomeStrip | null
+  readonly strip: DeliveryStrip | null
   readonly divergence: DivergenceKind | null
   readonly say: string
   readonly sayUrgent: boolean

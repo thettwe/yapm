@@ -55,7 +55,7 @@ async function createIssue(page: Page, title: string): Promise<void> {
   await expect(row(page, title)).not.toHaveAttribute('data-pending', '', { timeout: 20_000 })
 }
 
-test('a linked merged PR lights up the reality strip and divergence flag on row and detail', async ({
+test('a linked merged PR fills the reality track and breaks it on row and detail', async ({
   page,
 }) => {
   await enterApp(page)
@@ -79,10 +79,11 @@ test('a linked merged PR lights up the reality strip and divergence flag on row 
     await db.close()
   }
 
-  // The rows sync in from zero-cache; the seeded issue's placeholder is replaced by a real strip
-  // and, because the PR is merged while the issue is not done, the divergence flag appears.
+  // The rows sync in from zero-cache; the seeded issue's empty track fills in and, because the PR
+  // is merged while the issue is not done, the track's `//` break — and the sentence it carries in
+  // the track's accessible label — appears.
   const target = row(page, title)
-  await expect(target.locator('[data-slot="reality-strip"]')).toBeVisible({ timeout: 30_000 })
+  await expect(target.locator('[data-slot="reality-track"]')).toBeVisible({ timeout: 30_000 })
   await expect(target.getByLabel(DIVERGENCE)).toBeVisible({ timeout: 30_000 })
   await expect(target.getByLabel('No delivery signal yet')).toHaveCount(0)
 
@@ -135,13 +136,13 @@ test('a deployment carrying the merge commit lights the deploy glyph, and Delive
     await db.close()
   }
 
-  // The deploy glyph is named in the strip's accessible summary — and only for the change whose
+  // The deploy station is named in the track's accessible summary — and only for the change whose
   // merge commit a deployment actually carried.
-  const shippedStrip = row(page, shipped).locator('[data-slot="reality-strip"]')
-  await expect(shippedStrip).toHaveAttribute('aria-label', /Deployed/, { timeout: 30_000 })
-  const waitingStrip = row(page, waiting).locator('[data-slot="reality-strip"]')
-  await expect(waitingStrip).toBeVisible({ timeout: 30_000 })
-  await expect(waitingStrip).not.toHaveAttribute('aria-label', /Deployed/)
+  const shippedTrack = row(page, shipped).locator('[data-slot="reality-track"]')
+  await expect(shippedTrack).toHaveAttribute('aria-label', /Deployed/, { timeout: 30_000 })
+  const waitingTrack = row(page, waiting).locator('[data-slot="reality-track"]')
+  await expect(waitingTrack).toBeVisible({ timeout: 30_000 })
+  await expect(waitingTrack).not.toHaveAttribute('aria-label', /Deployed/)
 
   // Apply Delivery -> "Merged, not deployed" with the keyboard alone; only the unshipped row
   // survives the filter that shipped empty until this change.
@@ -153,7 +154,7 @@ test('a deployment carrying the merge commit lights the deploy glyph, and Delive
   await expect(row(page, shipped)).toHaveCount(0)
 })
 
-test('the reality strip renders in all three presets, light and dark', async ({ page }) => {
+test('the reality track renders in all three presets, light and dark', async ({ page }) => {
   await enterApp(page)
   await openTeamIssues(page)
 
@@ -169,7 +170,7 @@ test('the reality strip renders in all three presets, light and dark', async ({ 
   }
 
   const target = row(page, title)
-  await expect(target.locator('[data-slot="reality-strip"]')).toBeVisible({ timeout: 30_000 })
+  await expect(target.locator('[data-slot="reality-track"]')).toBeVisible({ timeout: 30_000 })
 
   for (const preset of ['warm', 'focused', 'editorial'] as const) {
     for (const mode of ['light', 'dark'] as const) {
@@ -184,7 +185,7 @@ test('the reality strip renders in all three presets, light and dark', async ({ 
       )
       await page.reload()
       await expect(page.locator('html')).toHaveAttribute('data-theme', preset)
-      await expect(row(page, title).locator('[data-slot="reality-strip"]')).toBeVisible({
+      await expect(row(page, title).locator('[data-slot="reality-track"]')).toBeVisible({
         timeout: 30_000,
       })
     }

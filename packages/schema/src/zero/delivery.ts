@@ -21,6 +21,20 @@ export interface DeliverySignal {
   readonly deployedAt: number | null
 }
 
+// The four facts every reality drawing may show, and no others: PR state, CI health, review age,
+// and the deploy join. One shape for every surface — the list row's track, the team home's rows,
+// the issue detail's rail — so a second, incompatible strip type cannot be declared beside it.
+// Two limits ride along with it and are never papered over: `ci_check` carries no start/finish
+// time (only `updatedAt`), so a duration for a check run is not derivable; and there is no
+// review-requested event, so `reviewAgeMs` falls back to the PR's open time and nothing drawn
+// from it may claim a reviewer has been waiting.
+export interface DeliveryStrip {
+  readonly pr: PrState | null
+  readonly ci: CiHealth | null
+  readonly reviewAgeMs: number | null
+  readonly deployedAt: number | null
+}
+
 // The linked work-graph entities a delivery signal is computed over. Owned by `connectors`;
 // empty for an unlinked issue, which is why the signal is null there. `deployments` is optional,
 // so every caller that predates the deploy axis keeps compiling and keeps its result.

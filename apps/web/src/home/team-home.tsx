@@ -21,12 +21,13 @@ import {
   type TeamHomeTriageRow,
   type TeamHomeYours,
 } from '@yapm/schema'
+import { CadenceChart } from '@yapm/ui/components/cadence-chart'
+import { DayBand, ScopeBand, TickBar, TriageDots } from '@yapm/ui/components/drawn'
 import { PriorityMark } from '@yapm/ui/components/priority-mark'
+import { buildRealityShape, RealityTrack } from '@yapm/ui/components/reality-track'
 import { StatusGlyph } from '@yapm/ui/components/status-glyph'
 import { cn } from '@yapm/ui/lib/utils'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
-import { CadenceChart } from '@/home/cadence-chart'
-import { DayBand, RealityTrack, ScopeBand, TickBar, TriageDots } from '@/home/drawn'
 import { PRIORITY_TO_KIND, STATUS_TO_KIND } from '@/issues/model'
 import { useSyncSession } from '@/zero/provider'
 
@@ -410,6 +411,16 @@ function RetroGlyph({ className }: { className?: string }) {
 const ATTENTION_ROW =
   'flex h-[50px] items-center gap-3 border-t border-row-hairline px-3 text-[13.5px] text-text-1 last:border-b'
 
+// The divergence class summarises N issues, so it has no single strip; what every one of those
+// issues shares is the shape the class is named for — merged, green, and nothing live carrying it.
+// The break's position still comes from the divergence kind, not from a hardcoded index.
+const DIVERGED_CLASS_STRIP = {
+  pr: 'merged',
+  ci: 'passing',
+  reviewAgeMs: null,
+  deployedAt: null,
+} as const
+
 function AttentionBand({ attention, teamId }: { attention: TeamHomeAttention; teamId: string }) {
   return (
     <Band>
@@ -429,7 +440,14 @@ function AttentionBand({ attention, teamId }: { attention: TeamHomeAttention; te
                 the board
               </span>
             }
-            evidence={<RealityTrack strip={null} broken label="Reality ran ahead of the board" />}
+            evidence={
+              <RealityTrack
+                shape={buildRealityShape(DIVERGED_CLASS_STRIP, {
+                  divergence: 'status_behind_merge',
+                })}
+                label="Reality ran ahead of the board"
+              />
+            }
           />
         )}
         {attention.waitingReview === null ? null : (
@@ -770,8 +788,7 @@ function YoursBand({
                 <span className="truncate">{row.title}</span>
                 <span className="flex-1" />
                 <RealityTrack
-                  strip={row.strip}
-                  broken={row.divergence === 'status_behind_merge'}
+                  shape={buildRealityShape(row.strip, { divergence: row.divergence })}
                   label={`Delivery reality for ${row.issueKey}`}
                 />
                 <span className="flex-none text-right">

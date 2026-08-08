@@ -22,7 +22,7 @@ import {
   DialogTrigger,
 } from '@yapm/ui/components/dialog'
 import { Input } from '@yapm/ui/components/input'
-import { DivergenceFlag, IssueRow } from '@yapm/ui/components/issue-row'
+import { IssueRow } from '@yapm/ui/components/issue-row'
 import { Label } from '@yapm/ui/components/label'
 import {
   Menu,
@@ -41,6 +41,11 @@ import {
   PopoverTrigger,
 } from '@yapm/ui/components/popover'
 import { PRIORITY, type PriorityKind, PriorityMark } from '@yapm/ui/components/priority-mark'
+import {
+  buildRealityShape,
+  RealityTrack,
+  realityTrackLabel,
+} from '@yapm/ui/components/reality-track'
 import { Select } from '@yapm/ui/components/select'
 import { STATUS, StatusGlyph, type StatusKind } from '@yapm/ui/components/status-glyph'
 import {
@@ -112,6 +117,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
+// The two ends of the vocabulary, drawn on the same row: reality ran ahead of the board (the
+// `//` break), and a change that is merged, green and live.
+const DIVERGED = { pr: 'merged', ci: 'passing', reviewAgeMs: 86_400_000, deployedAt: null } as const
+const SHIPPED = {
+  pr: 'merged',
+  ci: 'passing',
+  reviewAgeMs: 3_600_000,
+  deployedAt: 1_759_000_000_000,
+} as const
+
 function IssueListMockup() {
   return (
     <div className="overflow-hidden rounded-card border border-border bg-bg">
@@ -130,11 +145,16 @@ function IssueListMockup() {
           cycle="C-24"
           date="3d"
           assignee={{ name: 'Ada Lovelace' }}
-          divergenceFlag={<DivergenceFlag />}
+          realityTrack={
+            <RealityTrack
+              shape={buildRealityShape(DIVERGED, { divergence: 'status_behind_merge' })}
+              label={realityTrackLabel(DIVERGED, 'PR merged but this issue is not marked done')}
+            />
+          }
         />
         <IssueRow
           issueKey="ENG-138"
-          title="Issue row reserves reality-strip and divergence slots"
+          title="Issue row reserves one reality-track slot"
           priority="high"
           status="in-progress"
           labels={[{ name: 'graph', tone: 'in-review' }]}
@@ -167,6 +187,9 @@ function IssueListMockup() {
           labels={[{ name: 'a11y', tone: 'done' }]}
           date="5d"
           assignee={{ name: 'Ada Lovelace' }}
+          realityTrack={
+            <RealityTrack shape={buildRealityShape(SHIPPED)} label={realityTrackLabel(SHIPPED)} />
+          }
         />
         <IssueRow
           issueKey="ENG-120"

@@ -228,6 +228,7 @@ export {
 export type {
   CiHealth,
   DeliverySignal,
+  DeliveryStrip,
   DeploymentIndex,
   DivergenceKind,
   IssueLinkRow,
@@ -738,7 +739,6 @@ export type {
   TeamHomeShipped,
   TeamHomeShippedRow,
   TeamHomeSinceYesterday,
-  TeamHomeStrip,
   TeamHomeTeamRow,
   TeamHomeTriageRow,
   TeamHomeYours,

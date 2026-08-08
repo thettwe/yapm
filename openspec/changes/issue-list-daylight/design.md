@@ -310,3 +310,17 @@ Taken during the build:
   `<team> · Issues`; it now asserts the masthead reads `Issues` **and** that the deck states the
   team name. What the old selector proved — that the reader can see which team they are on — is
   still asserted, one band up, where D10 moved it.
+
+- **DI-10 — the rendered page against `issues.png`, and the two places it differs.** Captured at
+  1440x900 over a seeded team carrying the mock's four phrase cases plus quiet rows. Row anatomy,
+  slot order, the phrase column, the `//` break, the GitHub suffix on the check phrase, the group
+  band and the `Group X · Sort Y` trailing edge all read as the mock draws them; the selected row
+  measures `#f6e6da` ground and a full-height accent rail, exactly `--bg-selected` and `--accent`.
+  Two deliberate differences:
+
+  1. **The `Group by` control keeps a chevron.** The mock draws `Group **Status**` as bare text.
+     Per D7 the control stays a native `<select>`, and stripping its only affordance would leave
+     a control nothing announces as operable. The chevron stays, quiet, at `--text-3`.
+  2. **A focused-and-selected row shows the focus ring over the rail.** The mock draws ENG-116
+     selected but not focused, so it has no ring to reconcile. Both states are correct
+     separately; the ring wins where they overlap, because focus is the more urgent fact.

@@ -19,7 +19,7 @@ sorting, grouping, opening the fold — none of it waits on the network.
 | **Key** | `ENG-116`, in mono. A key still replicating renders as pending |
 | **Title** | The one element that yields space when the row is narrow |
 | **Phrase at rest** | What git says about this issue right now — or nothing at all |
-| **Reality track** | The same fact, drawn: stations, segments, and `//` where the board and git disagree |
+| **Reality track** | The same fact, drawn: stations, segments, and `//` where the board and git disagree. With no linked change it draws nothing |
 | **Age** | How long the review clock has been running, in mono |
 | **Labels** | A coloured dot and the label's name |
 | **Updated** | Last movement, in mono |
@@ -29,6 +29,12 @@ Every slot right of the title occupies a **reserved measure**. A row whose check
 merges, or whose deploy lands does not shove its neighbours' columns sideways — the space was
 always there. On a narrow window the phrase and the labels fold away rather than wrapping: the
 row's height is a rule.
+
+A reserved measure is not the same as a drawn one. An issue with no linked change reserves the
+track's full width and its age column and lays down **no ink at all** — the alignment is held by
+the layout, not by a placeholder. On a list where most issues have no linked change, that leaves
+delivery ink only on the rows that have delivery. See
+[The reality vocabulary](/features/reality-vocabulary/).
 
 The selected row carries a **left accent rail** and a tinted ground. The rail is a position as
 well as a colour, so selection reads without relying on hue.
@@ -49,7 +55,8 @@ blank** — no placeholder, no dash, no filler.
 | A done issue whose checks are red | **Done — checks failing** |
 | A PR approved and waiting to merge | **Approved** |
 | A draft PR | **Draft open** |
-| Deployed, or nothing has happened yet — including an issue marked in review with no PR behind it | *(nothing — the track already says it)* |
+| Deployed | *(nothing — the track already says it)* |
+| Nothing has happened yet — including an issue marked in review with no PR behind it | *(nothing — and the track draws nothing either)* |
 
 Two of those deserve their own note.
 

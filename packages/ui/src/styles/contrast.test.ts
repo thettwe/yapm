@@ -640,11 +640,14 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   // lightness that leaves both recognisable. That is why the flow band's added cap is an OUTLINE
   // separated from the shipped bar by the page ground — two quantities must be two shapes at any
   // contrast — and why the count is carried by the `+N added` label and the chart's `role="img"`.
-  // A lower bound, so a later retune that happens to raise it does not fail this file.
+  // Written as the bound that can actually FAIL: a contrast ratio is >= 1 by definition, so a lower
+  // bound here would assert nothing. The claim being recorded is that the pair stays BELOW the
+  // non-text bar, and the day a retune makes it clear 3:1 is the day the outline's premise is gone
+  // and someone should look at the drawing again rather than find this reason quietly untrue.
   it('records that amber and green never separate by luminance, which is why the cap is an outline', () => {
-    expect(
-      contrastRatio(hex(t, '--status-in-progress'), hex(t, '--status-done')),
-    ).toBeGreaterThanOrEqual(1.0)
+    expect(contrastRatio(hex(t, '--status-in-progress'), hex(t, '--status-done'))).toBeLessThan(
+      AA_LARGE,
+    )
   })
 
   // What DOES keep the three statuses apart, stated as a number so a later retune cannot quietly

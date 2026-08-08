@@ -40,7 +40,7 @@
 
 ## 6. Tests
 
-- [x] 6.1 `contrast.test.ts`: **replace** the `records the added cap's tint as reinforcement` assertion (`>= 2.1` amber-vs-`--bg`, `>= 1.3` amber-vs-`--status-done`) with real bars — `--status-in-progress` at `>= 3.0` against `--bg` in all six blocks, and `--status-in-progress-ink` at `>= 4.5` against `--bg` and each ground the amber `+` is drawn on. Keep the amber-vs-green measurement as a **recorded lower bound with its reason** (two quantities must be two shapes at any contrast), because it is why the flow band's added cap is an outline
+- [x] 6.1 `contrast.test.ts`: **replace** the `records the added cap's tint as reinforcement` assertion (`>= 2.1` amber-vs-`--bg`, `>= 1.3` amber-vs-`--status-done`) with real bars — `--status-in-progress` at `>= 3.0` against `--bg` in all six blocks, and `--status-in-progress-ink` at `>= 4.5` against `--bg` and each ground the amber `+` is drawn on. Keep the amber-vs-green measurement as a **recorded lower bound with its reason** (two quantities must be two shapes at any contrast), because it is why the flow band's added cap is an outline *(the recorded bound is written as `< 3.0`, not `>= 1.0` — a contrast ratio is `>= 1` by definition, so the lower bound could never have failed; see §DI-11)*
 - [x] 6.2 `contrast.test.ts`: assert the done glyph's check ink clears `>= 3.0` against `--status-done` **and** against `--status-urgent` (the glyph is inked urgent on the digest's urgent say rows), in all six blocks
 - [x] 6.3 `contrast.test.ts`: assert the retuned amber stays separated from `--status-done` and `--status-urgent` by a stated numeric bound, so a later retune cannot quietly make the three statuses confusable
 - [x] 6.4 `reality-track.test.tsx`: the quiet predicate is true for `buildRealityShape(null)` and false for every shape carrying any fact or a break — including a strip whose only fact is a draft PR
@@ -58,13 +58,13 @@
 - [x] 7.1 `apps/docs/src/content/docs/features/reality-vocabulary.md`: §"An issue with no linked activity still draws the track — four empty stations…" becomes the new behaviour (reserved measure, no ink, silent to assistive tech, and the rail's deliberate exception); the `| Done | A filled disc |` row becomes the disc with a check; §"Each station is a node" keeps its four shapes, which are unchanged
 - [x] 7.2 `apps/docs/src/content/docs/features/delivery-signals.md`: "the track draws four empty stations and…" becomes the reserved-but-blank behaviour
 - [x] 7.3 `apps/docs/src/content/docs/self-hosting/sync-recovery.md`: the state table's `**Connected**` row becomes `**Synced**`. The other five rows do not move
-- [x] 7.4 `apps/docs/src/content/docs/features/{issue-list,team-home,app-frame,board}.md`: read each for a claim this change makes stale, and fix what you find. Report explicitly if nothing needed changing
-- [x] 7.5 Root docs sweep — `README.md`, `ROADMAP.md`, `DESIGN.md`, `TECHSTACK.md`, `.env.example`: confirm none makes a claim this change falsifies, and say so in the PR description
+- [x] 7.4 `apps/docs/src/content/docs/features/{issue-list,team-home,app-frame,board}.md`: read each for a claim this change makes stale, and fix what you find. Report explicitly if nothing needed changing *(`issue-list.md` DID need it — see §DI-12; `team-home.md`, `app-frame.md` and `board.md` did not)*
+- [x] 7.5 Root docs sweep — `README.md`, `ROADMAP.md`, `DESIGN.md`, `TECHSTACK.md`, `.env.example`: confirm none makes a claim this change falsifies, and say so in the PR description *(two did — `DESIGN.md` §1 and a missing `ROADMAP` row; see §DI-12. `README.md`, `TECHSTACK.md`, `VISION.md` and `.env.example` are clean, and no env var moved)*
 - [x] 7.6 `NORTHSTAR.md`'s divergence entry (task 5.7) is documentation too — verify it is written before calling this group done
 
 ## 8. Verification
 
-- [ ] 8.1 `pnpm turbo lint typecheck test build` — report the actual output, never a claim
+- [ ] 8.1 `pnpm turbo lint typecheck test build` — report the actual output, never a claim *(fast gates run locally and green — typecheck 3/3, `biome ci` 667 files clean, `@yapm/ui` 19 files / 440 tests, `@yapm/web` 55 files / 589 tests, `check-boundaries.mjs` OK, `@yapm/docs build` 35 pages. `build` itself is left to CI on the push, which runs the whole gate)*
 - [ ] 8.2 The compose smoke test
 - [ ] 8.3 The full Playwright e2e suite. `apps/web/e2e/projects.spec.ts` has known timeout flake independent of this change: re-run before diagnosing, and do not loosen it
 - [ ] 8.4 Open the showcase route and step every one of the six theme blocks: the done glyph's check, a quiet issue row, a populated row beside it, the retuned amber on the status glyph, the attention square and the delivery charts

@@ -384,3 +384,53 @@ No table, no query, no mutator, no migration; `packages/schema` is untouched. No
 literal colour was added anywhere — the check's ink is `var(--bg)` and the `+`'s is a token class.
 Nothing was added to the keyboard path and nothing new waits on the network: the quiet branch is a
 pure render-time predicate over an already-computed shape, and the token retune is CSS.
+
+### DI-11 — One of the new assertions could not have failed, and now can
+
+Task 6.1 asked for the amber-vs-green measurement to be kept "as a recorded lower bound with its
+reason". It was written as `toBeGreaterThanOrEqual(1.0)`, and a contrast ratio is `>= 1` by
+definition — the assertion could not fail under any palette, which is the one property this
+repository's tests are not allowed to have. It was a comment wearing an `expect`.
+
+The claim the comment actually makes is that the pair stays **below** the non-text bar, which is
+why the flow band's added cap is an outline separated by the page ground rather than a stacked
+fill. That is the falsifiable form, so the bound is now `toBeLessThan(AA_LARGE)`: it measures
+1.03–1.71 today, and the day a retune makes amber and green clear 3:1 against each other is the day
+the outline's premise is gone and someone should look at the drawing again rather than find the
+recorded reason quietly untrue. Failing on an improvement is the correct behaviour here — the test
+guards a *decision*, and the decision's input changed.
+
+The other thirteen new assertions were checked against `main`'s sources rather than argued about:
+reverting `reality-track.tsx`, `status-glyph.tsx`, `globals.css` and `connection.ts` to `main` and
+running the suite fails **15 tests** — the three quiet-track cases, the three check cases, and nine
+contrast cases across the six presets. The width-parity pair does *not* fail on `main`, correctly:
+it is an invariant that must hold on both sides. It was proven falsifiable separately by mutation —
+pinning the quiet slot's width to `0px` fails both `reality-track.test.tsx`'s parity test and
+`issue-row.test.tsx`'s.
+
+### DI-12 — The docs sweep found three stale claims, not zero
+
+Task 7.4's four pages: `team-home.md`, `app-frame.md` and `board.md` needed nothing (`app-frame.md`
+already drew `● Synced` in its statusline example; `board.md` describes the card without mentioning
+its track at all, which is a pre-existing omission this change does not create). **`issue-list.md`
+did need it**, in two places the first pass missed:
+
+- The phrases-at-rest table collapsed two different facts into one row — *"Deployed, or nothing has
+  happened yet … *(nothing — the track already says it)*"*. After this change the track says it
+  only in the deployed case; when nothing has happened the row is blank **and so is the track**, so
+  the parenthetical was half false. Split into two rows that each state what is drawn.
+- The row anatomy and the reserved-measure paragraph described the slot's width without saying it
+  draws nothing, which is the correction itself. Both now say it, with the pointer to the
+  vocabulary page.
+
+Task 7.5's root sweep found two more. `DESIGN.md` §1 said the row "renders a quiet 'not linked'
+state" pre-connectors — the sentence this change falsifies most directly; it now states the inkless
+reserved slot and names the rail as the deliberate exception. And **`ROADMAP.md` had no row for
+this change at all**: the convention every recent change follows is that the feature PR adds its
+row as `🚧 in progress` and the archive commit flips it to `✅ built & archived (PR #N)` — confirmed
+by reading `31de6e0`, which added row 34 in exactly that state. Row 35 is added the same way.
+`README.md`, `TECHSTACK.md`, `VISION.md` and `.env.example` make no claim this change falsifies, and
+no environment variable moved, so the Zod schema and `.env.example` stay in step by not moving.
+
+No new docs page was needed, so the sidebar in `apps/docs/astro.config.mjs` is unchanged; the three
+pages this change edits were already wired.

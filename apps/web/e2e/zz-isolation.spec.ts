@@ -4,17 +4,29 @@ import { test } from './fixtures'
 import { ADMIN, ensureAccount } from './support'
 
 // The falsifiable check for the whole change, and the reason for the `zz` prefix: Playwright orders
-// spec FILES lexicographically and this suite runs `fullyParallel: false, workers: 1`, so this file
-// runs last. Everything the other twenty-one specs created has passed through here.
+// spec FILES lexicographically and this suite runs `fullyParallel: false, workers: 1`, so this runs
+// last, on the database the other twenty-one specs spent the whole run writing to.
 //
-// On a suite without the per-test reset this fails on its first assertion: eighteen spec files call
-// `create-team` and thirteen call `create-invite` into one workspace that nothing ever cleans, and
-// the archived `app-frame` trace recorded 45 teams, 13 members and 12 invites by this point.
+// Be precise about what that means, because the loose version of this sentence is wrong. The
+// per-test fixture resets BEFORE each test, so what this test literally inherits is not the run's
+// accumulation — it is the baseline the reset produced from it. What is unique to this position in
+// the suite is the SIZE of the job that reset had to do: everything twenty-one files created had to
+// disappear immediately before these assertions ran. On a suite without the reset the same
+// assertions fail on the first one — eighteen files call `create-team` and thirteen call
+// `create-invite` into a workspace nothing cleans, and the archived `app-frame` trace recorded 45
+// teams, 13 members and 12 invites by this point in a run.
 //
-// It is deliberately more than a database count. The counts only say Postgres is clean; the browser
-// assertions say the SYNCED REPLICA is clean too, which is the half a bulk delete could plausibly
-// get wrong — a client that renders rows the reset removed would pass a `select count(*)` and still
-// break the next spec.
+// Two things here are NOT covered by `assertBaseline`, which is why the spec exists on top of the
+// gate that already runs before every test:
+//
+//  1. The browser. `assertBaseline` reads Postgres; a client rendering rows the bulk delete removed
+//     would pass a `select count(*)` and still break the next spec. The empty states below are the
+//     only assertion in the suite that the SYNCED REPLICA reached the baseline too.
+//  2. The gate's own coverage. `assertBaseline` derives its tables from `information_schema`, so a
+//     table wrongly added to `IGNORED_TABLES` drops out of the reset AND out of the assertion
+//     together, silently. The tables below are named as literals on purpose: they are the ones
+//     earlier specs fill, and a hard-coded list is exactly the right instrument for checking a
+//     derived one.
 
 async function countRows(db: Database, table: string): Promise<number> {
   const { rows } = await db.pool.query<{ rows: number }>(
@@ -23,7 +35,7 @@ async function countRows(db: Database, table: string): Promise<number> {
   return rows[0]?.rows ?? 0
 }
 
-test('the workspace this run leaves behind holds no accumulated fixtures', async ({
+test('after a whole run of fixtures, the baseline is what a signed-in admin sees', async ({
   page,
   workspaceDb,
 }) => {
@@ -43,12 +55,24 @@ test('the workspace this run leaves behind holds no accumulated fixtures', async
   await expect(page.getByTestId('members-list').getByRole('listitem')).toHaveCount(1)
   await expect(page.getByTestId('members-list')).toContainText(ADMIN.name)
 
-  // And what Postgres holds behind it. `project` and `issue` have no surface reachable without a
-  // team, so they are asserted where they live.
-  for (const table of ['team', 'invite', 'project', 'issue', 'cycle', 'retro']) {
+  // And what Postgres holds behind it. Every table here is one an earlier spec fills and no surface
+  // on this page could report — `project` and `issue` need a team to be reachable at all, and
+  // `comment`, `notification`, `attachment` and `pull_request` are reachable only from an issue.
+  for (const table of [
+    'team',
+    'invite',
+    'project',
+    'issue',
+    'cycle',
+    'retro',
+    'comment',
+    'notification',
+    'attachment',
+    'pull_request',
+  ]) {
     expect(
       await countRows(workspaceDb, table),
-      `${table} should be empty after every preceding spec`,
+      `${table} still holds rows at the baseline the last reset of this run produced`,
     ).toBe(0)
   }
 

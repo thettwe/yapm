@@ -12,9 +12,13 @@ nothing else.** No team, invite, project, issue, cycle, retro, notification or a
 one test is visible to another, whichever tests ran before it and in whatever order.
 
 That is enforced, not requested. `fixtures.ts` runs an automatic per-test fixture that calls
-`resetToBaseline` and then `assertBaseline` from `reset.ts` before the test body runs, and
-`zz-isolation.spec.ts` — which Playwright orders last, because spec files run lexicographically —
-signs in and asserts the workspace it inherits from the entire preceding run is empty.
+`resetToBaseline` and then `assertBaseline` from `reset.ts` before the test body runs — roughly a
+hundred times a suite — and `zz-isolation.spec.ts`, which Playwright orders last because spec files
+run lexicographically, signs in at the point where the reset had the whole preceding run to clear
+and asserts the baseline arrived **in the browser**: the empty states, one member, and a short list
+of literally-named tables at zero. It is not a nicer restatement of `assertBaseline`; it covers the
+two things `assertBaseline` structurally cannot (the synced replica, and its own table set going
+wrong), and the file says so at the top.
 
 Four rules follow from it:
 

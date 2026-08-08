@@ -8,8 +8,9 @@ type Pool = Database['pool']
 // The application schema, and the whole of the harness's reach. zero-cache keeps its own
 // bookkeeping (`clients`, `mutations` — the `lastMutationID` per client) in `zero_*` schemas of this
 // same database, and those own themselves: clearing them would make the server reject or replay
-// every queued mutation. Restricting the sweep to `public` is what keeps this a fixture reset
-// rather than a sync reset.
+// every queued mutation. pg-boss is installed into `pgboss` (`jobs/scheduler.ts`), so the job queue
+// is out of reach here by construction rather than by an entry in the ignore set below.
+// Restricting the sweep to `public` is what keeps this a fixture reset rather than a sync reset.
 const APP_SCHEMA = 'public'
 
 // Tables inside `public` that the reset never touches:
@@ -111,6 +112,16 @@ function orderByDependency(tables: readonly string[], edges: readonly ForeignKey
 async function deletionOrder(pool: Pool): Promise<string[]> {
   if (deletionOrderMemo !== undefined) return deletionOrderMemo
   const [tables, edges] = await Promise.all([resettableTables(pool), foreignKeys(pool)])
+  // An empty set is the one way this whole gate could pass while doing nothing: a reset that clears
+  // no table and an assertion that counts no row are both vacuously green. It can only happen if the
+  // schema name is wrong or the migrations never ran, and both deserve a name rather than a suite
+  // that reports success for a database it never looked at.
+  if (tables.length === 0) {
+    throw new Error(
+      `the e2e reset found no base tables in schema "${APP_SCHEMA}". ` +
+        'Either DATABASE_URL points somewhere the migrations have not run, or the schema moved.',
+    )
+  }
   deletionOrderMemo = orderByDependency(tables, edges)
   return deletionOrderMemo
 }

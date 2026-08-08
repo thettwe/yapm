@@ -59,6 +59,11 @@ pnpm turbo lint typecheck test build
 
 Git hooks (lefthook) run formatting and commit checks automatically.
 
+The end-to-end suite needs Docker and runs separately — CI runs it on every PR. If you write or
+change a Playwright spec, read [`apps/web/e2e/README.md`](apps/web/e2e/README.md) first: every test
+starts from a reset workspace, `test` comes from `./fixtures` rather than `@playwright/test`, and
+nothing in a spec may encode how much fixture data exists or how fast your machine is.
+
 ## Architecture rules
 
 These are enforced in CI, not just aspirational:

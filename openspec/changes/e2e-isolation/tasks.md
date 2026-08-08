@@ -56,7 +56,7 @@
 
 - [x] 8.1 `apps/web/e2e/README.md` (new): the isolation contract in the terms the next person writing a spec needs — every test starts from the bootstrapped baseline; import `test` from `./fixtures`; never create a context by hand; never encode fixture size or machine speed as a constant; `workers: 1` is still required and why; how to run locally (the port-3000 trap, `E2E_SERVER_PORT`, the compose commands CI uses)
 - [x] 8.2 `PROCESS.md` §3: the E2E tier bullet gains the isolation contract and points at the new README
-- [x] 8.3 Sweep every root doc this makes stale per PROCESS.md §2 — `README.md`, `ROADMAP.md`, `TECHSTACK.md`, `CLAUDE.md` (its Verification section), `.env.example` (expected: unchanged; confirm rather than assume). No docs-site page: `apps/docs` serves evaluators, self-hosters and users and has no contributor section
+- [x] 8.3 Sweep every root doc this makes stale per PROCESS.md §2 — `README.md`, `ROADMAP.md`, `TECHSTACK.md`, `CLAUDE.md` (its Verification section), `CONTRIBUTING.md` (its Development section, where a contributor looks before writing a spec), `.env.example` (expected: unchanged; confirm rather than assume). No docs-site page: `apps/docs` serves evaluators, self-hosters and users and has no contributor section
 - [x] 8.4 Record every judgement call taken during the build in `design.md` under `## Decisions made during implementation`, including the answers to the three Open Questions
 
 ## 9. Gates

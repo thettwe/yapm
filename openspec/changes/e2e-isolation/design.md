@@ -169,7 +169,8 @@ A hand-kept table list is a leak waiting for the next migration. The reset reads
 **preserve/ignore** set, and deletes the rest:
 
 - **Preserved:** `workspace`, plus the bootstrap admin's rows in `user`, `account`,
-  `workspace_member` (targeted deletes, not table-level).
+  `workspace_member` (targeted deletes, not table-level). **Superseded by D8: only `workspace` is
+  preserved.** The admin is deleted with everyone else and re-promoted by the product's own gate.
 - **Never touched:** Kysely's migration bookkeeping, pg-boss's job schema, and anything outside
   `public` (zero-cache's `zero_*` schemas own themselves — see `reference/zero.md` §"Postgres
   objects zero-cache creates").
@@ -422,3 +423,51 @@ Left alone, with the reasoning rather than silently:
   a barrier, the fix is a polled post-reset invariant, never a sleep.
 - **Are the `PushProcessor` replay messages benign?** Still a prior, not a ruling. See above.
 - **Runtime delta against the ~21-minute baseline.** Predicted faster, unmeasured.
+
+### D14 — What `zz-isolation.spec.ts` actually proves, and the claim it stopped making
+
+D4 and the first draft of the spec both said the last spec "asserts the workspace it inherits from
+the whole preceding run holds no accumulated fixtures". Read literally against what was built, that
+is false, and it is worth writing down because it is the sentence a reviewer would nod along to.
+
+The reset runs **before** each test, never after. So at the end of any test the database holds that
+test's own fixtures, and what `zz-isolation.spec.ts` inherits is not the run's accumulation — it is
+the baseline produced from it moments earlier. A version of this spec that opted out of the reset in
+order to observe the accumulation directly would fail every run, correctly: the test before it left
+its own team behind, exactly as designed.
+
+What is genuinely unique about that position in the suite is the *size* of the job the reset had to
+do there — twenty-one files' worth of rows had to disappear immediately before the assertions ran —
+and two things the per-test gate structurally cannot check:
+
+1. **The browser.** `assertBaseline` reads Postgres. A client rendering rows the bulk delete removed
+   passes a `select count(*)` and breaks the next spec anyway. The empty states, and the
+   single-member list, are the only place in the suite where the synced replica is asserted to have
+   reached the baseline. This is also the instrument for D13's first open question.
+2. **The gate's own coverage.** Both halves of `reset.ts` read the same derived table set, so a
+   table wrongly added to `IGNORED_TABLES` leaves the reset and the assertion together and nothing
+   goes red. `zz-isolation.spec.ts` names its tables as literals for that reason — `team`, `invite`,
+   `project`, `issue`, `cycle`, `retro`, `comment`, `notification`, `attachment`, `pull_request`,
+   each one an earlier spec fills. A hard-coded list is the right instrument for checking a derived
+   one; it is the wrong instrument for *being* one, which is D3.
+
+Two changes followed from writing this down. The spec delta now states the browser claim rather than
+the inheritance claim, and `deletionOrder` throws when the derived table set is **empty** — the one
+way this entire gate could have been green while inspecting nothing, reachable by a wrong schema
+name or a database the migrations never ran against.
+
+### D15 — No docs-site page, and the one root doc that was missing
+
+PROCESS.md §2 blocks archive on "the pages exist in `apps/docs`". There is no page here, and the
+reason is structural rather than an omission: `apps/docs` has exactly two sections, Features and
+Self-hosting, serving evaluators, users and operators. This change adds no behaviour any of the
+three can observe — no setting, no surface, no env var, so `.env.example`, the compose environment
+block and the configuration reference all stay byte-identical, and `pnpm --filter @yapm/docs build`
+passes unchanged (35 pages). §2's fourth audience, contributors, is served by the root docs, which
+is where the contract went: `apps/web/e2e/README.md` for the rule in full, PROCESS.md §3 for the
+tier it belongs to.
+
+`CONTRIBUTING.md` was the gap. Its "Development / Before pushing" section named the fast gates and
+said nothing about the e2e suite at all, so a first-time contributor writing a spec would meet the
+isolation contract for the first time as a CI failure. It now points at the e2e README in three
+lines, next to the gates it sits beside.

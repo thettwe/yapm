@@ -295,6 +295,25 @@ test('keep as is writes nothing, and the divergence it dismissed is still stated
   expect(screen.getByTestId('subline-say')).toHaveTextContent('Done in git, not on the board')
 })
 
+// The masthead's Mark Done removes itself the moment it succeeds — a done issue offers no Mark
+// Done — so it unmounts under the keyboard user exactly as the callout's actions do, and lands the
+// same place rather than dropping focus to `<body>`.
+test('the masthead action writes the same mutation and lands the keyboard somewhere', () => {
+  mount('page')
+
+  const markDone = screen.getByTestId('masthead-mark-done')
+  markDone.focus()
+  expect(markDone).toHaveFocus()
+  fireEvent.click(markDone)
+
+  const call = harness.mutate.mock.calls[0]?.[0] as StatusMutation | undefined
+  expect(call?.mutator.mutatorName).toBe('issue.setStatus')
+  expect(call?.args.status).toBe('done')
+  expect(call?.args.id).toBe('issue-1')
+  expect(document.activeElement).not.toBe(document.body)
+  expect(document.activeElement).toBe(screen.getByRole('region', { name: 'Delivery' }))
+})
+
 test('a viewer is offered no action that writes', () => {
   harness.canWrite = false
   mount('page')

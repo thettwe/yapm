@@ -18,8 +18,9 @@ export type ReviewAgeSource = 'review' | 'pr-open'
 
 export interface DeliverySignal {
   readonly pr: PrState | null
-  // WHICH pull request `pr` describes: the newest-opened linked one, or null when the producer did
-  // not carry ids (or there is no pull request at all). A surface that draws a second register over
+  // WHICH pull request `pr`, `ciHealth` and the review age describe: the newest-opened linked one,
+  // or null when the producer did not carry ids (or there is no pull request at all, in which case
+  // the CI axis is the whole-issue rollup). A surface that draws a second register over
   // the same issue — the detail's mono line, its rail — reads this rather than picking a "the" pull
   // request by a rule of its own, because two selection rules over two linked changes is how one
   // page ends up describing two changes as if they were one.
@@ -68,8 +69,17 @@ export interface LinkedEntities {
     // not key deployments at all, and the flat `deployments` list below is read instead.
     readonly deployedAt?: number | null
   }[]
-  readonly ciRuns?: readonly { readonly health: CiHealth }[]
-  readonly reviews?: readonly { readonly state: ReviewState; readonly submittedAt: number }[]
+  // `pullRequestId` names the change each check and each review belongs to, for the same reason
+  // `deployedAt` is keyed per pull request: the signal describes ONE change, and a check or a review
+  // rolled up over every linked one lets a change the surface has filtered off the page state a fact
+  // about the change still on it. `undefined` means the producer did not key the list at all, and
+  // the whole-issue rollup is read instead.
+  readonly ciRuns?: readonly { readonly health: CiHealth; readonly pullRequestId?: string | null }[]
+  readonly reviews?: readonly {
+    readonly state: ReviewState
+    readonly submittedAt: number
+    readonly pullRequestId?: string | null
+  }[]
   readonly deployments?: readonly { readonly deployedAt: number }[]
 }
 
@@ -129,6 +139,20 @@ export function formatReviewAge(ms: number): string {
   return `${Math.floor(days / 7)}w`
 }
 
+// The entries belonging to ONE pull request. Every axis of the signal describes the same change, so
+// a list the producer keyed is narrowed to the change `pr` names before it is rolled up. Two cases
+// fall back to the whole list, and both mean "this cannot be attributed": the pull request has no id
+// (a summarised class, a fixture), or the producer did not key the entries at all — the same
+// `undefined`-means-unkeyed fallback the deploy axis uses.
+function entriesOf<T extends { readonly pullRequestId?: string | null }>(
+  entries: readonly T[],
+  pullRequestId: string | null | undefined,
+): readonly T[] {
+  if (pullRequestId == null) return entries
+  if (!entries.every((entry) => entry.pullRequestId !== undefined)) return entries
+  return entries.filter((entry) => entry.pullRequestId === pullRequestId)
+}
+
 // Rolls up many checks into one dot: any failing dominates, then any pending, else passing.
 function aggregateCiHealth(runs: readonly { readonly health: CiHealth }[]): CiHealth | null {
   if (runs.length === 0) return null
@@ -140,8 +164,9 @@ function aggregateCiHealth(runs: readonly { readonly health: CiHealth }[]): CiHe
 // Pure seam. With no linked entities the signal is null and the reality strip renders its
 // quiet "not linked" state. Real linked PRs/CI/reviews now produce a real signal: the latest
 // PR's lifecycle state (upgraded to `approved` when the newest review approves an open PR),
-// the rolled-up CI health, and the review age (time since the newest review, or — before any
-// review — how long the PR has been open awaiting one). Signature extended ADDITIVELY with an
+// THAT PR's rolled-up CI health, and THAT PR's review age (time since its newest review, or —
+// before any review — how long it has been open awaiting one). Every axis describes one change;
+// see `entriesOf`. Signature extended ADDITIVELY with an
 // optional clock: every existing caller keeps wall-clock behavior, while a caller that must be
 // deterministic under test (`buildTeamHome`) passes its own `now`.
 export function computeDeliverySignal(
@@ -170,7 +195,13 @@ export function computeDeliverySignal(
       (latest, pr) => (latest === undefined || pr.openedAt > latest.openedAt ? pr : latest),
       undefined,
     )
-  const latestReview = reviews.reduce<(typeof reviews)[number] | undefined>(
+  // The review and check axes describe `latestPr` — the change `pr` and `pullRequestId` name — so an
+  // older linked change's approval cannot upgrade a newer open one, and its red checks cannot make
+  // the newer one's phrase read "Checks failing".
+  const prReviews = entriesOf(reviews, latestPr?.id)
+  const prCiRuns = entriesOf(ciRuns, latestPr?.id)
+
+  const latestReview = prReviews.reduce<(typeof prReviews)[number] | undefined>(
     (latest, r) => (latest === undefined || r.submittedAt > latest.submittedAt ? r : latest),
     undefined,
   )
@@ -197,7 +228,7 @@ export function computeDeliverySignal(
   return {
     pr,
     pullRequestId: latestPr?.id ?? null,
-    ciHealth: aggregateCiHealth(ciRuns),
+    ciHealth: aggregateCiHealth(prCiRuns),
     reviewAgeMs,
     reviewAgeFrom,
     deployedAt,
@@ -313,8 +344,8 @@ export function assembleLinkedEntities(
     openedAt: number
     deployedAt: number | null
   }[] = []
-  const ciRuns: { health: CiHealth }[] = []
-  const reviews: { state: ReviewState; submittedAt: number }[] = []
+  const ciRuns: { health: CiHealth; pullRequestId: string | null }[] = []
+  const reviews: { state: ReviewState; submittedAt: number; pullRequestId: string | null }[] = []
   const deployed: { deployedAt: number }[] = []
 
   for (const link of links) {
@@ -324,12 +355,15 @@ export function assembleLinkedEntities(
       index !== undefined && pr.state === 'merged' && pr.mergeCommitSha && pr.repo
         ? (index.get(deploymentKey(pr.repo, pr.mergeCommitSha)) ?? null)
         : null
-    pullRequests.push({ id: pr.id ?? null, state: pr.state, openedAt: pr.openedAt, deployedAt })
+    const pullRequestId = pr.id ?? null
+    pullRequests.push({ id: pullRequestId, state: pr.state, openedAt: pr.openedAt, deployedAt })
+    // Every check and every review carries the change it belongs to, so the signal's review and CI
+    // axes narrow to the same one `pr` describes rather than rolling up across linked changes.
     for (const check of pr.ciChecks ?? []) {
-      ciRuns.push({ health: ciHealthFromConclusion(check.conclusion) })
+      ciRuns.push({ health: ciHealthFromConclusion(check.conclusion), pullRequestId })
     }
     for (const r of pr.reviews ?? []) {
-      reviews.push({ state: r.state, submittedAt: r.submittedAt })
+      reviews.push({ state: r.state, submittedAt: r.submittedAt, pullRequestId })
     }
     if (deployedAt !== null) deployed.push({ deployedAt })
   }

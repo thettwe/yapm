@@ -495,6 +495,28 @@ this change exists to prevent.
 The activity **feed** is deliberately not narrowed: a feed reports what happened, and a second linked
 change is one of the things that happened.
 
+**Axis by axis, and why the narrowing had to reach the signal itself.** Naming the change in
+`pullRequestId` narrowed only the drawn evidence. The signal's other axes still rolled up across
+every linked change, so the plain register kept stating facts — "Approved", "Checks failing" — that
+belonged to the change the mono line and the rail had just filtered off the page. The narrowing
+therefore lives where the deploy axis's already does: each entry `assembleLinkedEntities` pushes into
+`ciRuns` and `reviews` carries its owning `pullRequestId`, and `computeDeliverySignal` computes `pr`,
+`reviewAgeMs`, `reviewAgeFrom` and `ciHealth` over the entries belonging to the change it names.
+
+- **`pr`** — the newest-opened change, unchanged. The `approved` upgrade now reads only that
+  change's reviews, so an older merged change's approval cannot upgrade a newer open one.
+- **review age** — that change's newest review, else that change's open time. An issue whose older
+  change was reviewed and whose newer one has not been now reports `pr-open`, which is the true
+  clock.
+- **`ciHealth`** — that change's checks. Red checks on a superseded change no longer read "Checks
+  failing" over the change on the page, and no longer fire `done_but_ci_failing` against it.
+- **`deployedAt`** — unchanged, and keyed to the newest **merged** change rather than the newest
+  one, because only a merged change can have shipped (§D3).
+
+The fallback mirrors the deploy axis exactly: `undefined` means the producer did not key the entries
+at all, and that producer keeps today's whole-issue rollup. A change with no row id narrows nothing,
+for the same reason it names nothing.
+
 ### DI-22 — A pending check is not a failing check
 
 `checksFact` printed `checksTotal - checksPassed` as the failing count, which calls every check that
@@ -518,3 +540,17 @@ Both callout actions unmount the element holding focus. Left alone that drops a 
 `<body>` at the exact moment the flow is keyboard-only. The `Delivery` section — the thing the
 callout was talking about, and the one that survives both outcomes — takes `tabIndex={-1}` and is
 focused by both handlers before the callout goes. It is a landing place, not a tab stop.
+
+The masthead's *Mark Done* and the palette entry beside it do exactly the same thing to focus: a done
+issue offers no Mark Done, so the button removes itself the moment it succeeds. Both take the same
+landing rather than a second answer to the same question — there is one place on this page a
+disappearing delivery action hands the keyboard to, and every one of them uses it.
+
+### DI-25 — The dictionary's one " ago" clause says "just now"
+
+`review_returned` is the only phrase in the shared dictionary that ends in " ago", and it built the
+clause straight from `formatReviewAge`, which answers `now` under a minute — so a review submitted
+seconds ago read "In review — reviewed now ago". `agoPhrase` fixed the identical construction one
+layer up in `apps/web`; the dictionary needed its own treatment because a register table cannot reach
+a surface's phrasing layer, and a second copy of the rule in `apps/web` would be the second
+vocabulary the dictionary exists to prevent. Under a minute the whole clause is now "just now".

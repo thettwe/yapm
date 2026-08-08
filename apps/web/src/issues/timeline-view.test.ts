@@ -160,6 +160,43 @@ describe('the two registers agree about which change backs the issue', () => {
     expect(moments.some((moment) => moment.kind === 'created')).toBe(true)
   })
 
+  // The plain register is not narrowed by the moment list — it is computed from the signal — so the
+  // signal itself has to describe the same change. An approval on the older, merged change would
+  // otherwise put "Approved" over a page whose mono line and rail draw only the newer open one.
+  it('states the plain register over the same change, on the review axis', () => {
+    const view = deliveryView(
+      { status: 'in_progress' },
+      linkedEntitiesFor(TWO_CHANGES as unknown as readonly LinkedIssueRow[]),
+    )
+    expect(view.strip?.pr).toBe('open')
+    expect(view.phrase.text).not.toMatch(/Approved/)
+    // Nobody reviewed the open change, so the age is that change's own open time and the phrase
+    // says waiting rather than reviewed. The age itself is wall-clock here, so only the clause is
+    // asserted — `phrases.test.ts` owns the number.
+    expect(view.strip?.reviewAgeFrom).toBe('pr-open')
+    expect(view.phrase.text).toMatch(/^In review — waiting /)
+  })
+
+  // And on the CI axis: the older change's red checks belong to the older change.
+  it('states the plain register over the same change, on the CI axis', () => {
+    const redOldChange = [
+      {
+        pullRequest: {
+          ...TWO_CHANGES[0].pullRequest,
+          ciChecks: [{ conclusion: 'failure' }],
+        },
+      },
+      TWO_CHANGES[1],
+    ]
+    const view = deliveryView(
+      { status: 'in_progress' },
+      linkedEntitiesFor(redOldChange as unknown as readonly LinkedIssueRow[]),
+    )
+    expect(view.pullRequestId).toBe('pr-200')
+    expect(view.strip?.ci).toBe('passing')
+    expect(view.phrase.text).not.toMatch(/Checks failing/)
+  })
+
   it('narrows nothing when there is no change to narrow to', () => {
     const all = buildIssueTimeline(TWO_CHANGE_INPUT, NOW)
     expect(momentsForChange(all, null)).toBe(all)

@@ -108,7 +108,11 @@ const NEUTRAL: Register = {
   },
   review_returned: (context) => {
     const value = age(context)
-    return value === null ? 'In review' : `In review — reviewed ${value} ago`
+    if (value === null) return 'In review'
+    // `formatReviewAge` answers "now" under a minute, and this is the one clause in the dictionary
+    // that ends in " ago" — so a review submitted seconds ago read "reviewed now ago" until this
+    // existed. Under a minute the whole clause is "just now".
+    return value === 'now' ? 'In review — reviewed just now' : `In review — reviewed ${value} ago`
   },
   in_review: null,
   in_progress: null,

@@ -473,10 +473,11 @@ function IssueDetailBody({
   const [dismissed, setDismissed] = useState(false)
   const [error, setError] = useState<string | undefined>(undefined)
 
-  // Where the keyboard lands when the callout unmounts under it. Both of its actions remove the
-  // element holding focus, and focus dropped to `<body>` is a keyboard reader losing their place in
-  // the one flow that is keyboard-only. The Delivery section is the deliberate landing: it is the
-  // thing the callout was talking about, and it survives both outcomes.
+  // Where the keyboard lands when a control unmounts under it: the callout's two actions, the
+  // masthead's Mark Done, and the palette entry that does the same thing. Each removes the element
+  // holding focus, and focus dropped to `<body>` is a keyboard reader losing their place in the one
+  // flow that is keyboard-only. The Delivery section is the deliberate landing: it is the thing all
+  // four were talking about, and it survives every outcome.
   const deliveryRef = useRef<HTMLElement | null>(null)
   const landOnDelivery = useCallback(() => {
     deliveryRef.current?.focus()
@@ -581,7 +582,10 @@ function IssueDetailBody({
                 {
                   id: 'issue-detail-mark-done',
                   label: 'Mark done',
-                  onSelect: () => setStatus('done'),
+                  onSelect: () => {
+                    setStatus('done')
+                    landOnDelivery()
+                  },
                 },
               ]
             : []),
@@ -597,7 +601,7 @@ function IssueDetailBody({
         ],
       },
     ],
-    [markDone, firstChangeUrl, setStatus],
+    [markDone, firstChangeUrl, setStatus, landOnDelivery],
   )
   useCommandSource('issue-detail', { groups: commandGroups })
 
@@ -916,7 +920,13 @@ function IssueDetailBody({
                 <Button
                   size="sm"
                   data-testid="masthead-mark-done"
-                  onClick={() => setStatus('done')}
+                  // Marking done removes this button — the issue is done, so `markDone` is false and
+                  // the action is gone. Same unmount-under-the-focus as the callout's two actions,
+                  // so the same landing: `<body>` is not where a keyboard reader may be left.
+                  onClick={() => {
+                    setStatus('done')
+                    landOnDelivery()
+                  }}
                 >
                   Mark Done
                   <KeyHint onAccent>⏎</KeyHint>

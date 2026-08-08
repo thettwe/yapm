@@ -174,8 +174,13 @@ describe('assembleLinkedEntities', () => {
     expect(linked.pullRequests).toEqual([
       { id: null, state: 'open', openedAt: 500, deployedAt: null },
     ])
-    expect(linked.ciRuns).toEqual([{ health: 'failing' }, { health: 'passing' }])
-    expect(linked.reviews).toEqual([{ state: 'approved', submittedAt: 600 }])
+    // Each check and each review names the change it belongs to, so the signal's CI and review
+    // axes can narrow to the one `pr` describes.
+    expect(linked.ciRuns).toEqual([
+      { health: 'failing', pullRequestId: null },
+      { health: 'passing', pullRequestId: null },
+    ])
+    expect(linked.reviews).toEqual([{ state: 'approved', submittedAt: 600, pullRequestId: null }])
   })
 
   it('produces a null signal for an issue with no links', () => {
@@ -220,6 +225,98 @@ describe('assembleLinkedEntities', () => {
     )
     expect(signal?.pr).toBe('open')
     expect(signal?.pullRequestId).toBe('pr-200')
+  })
+
+  // Every axis describes the change `pullRequestId` names. An older linked change's approval must
+  // not upgrade the newer open one: the surface narrowed to the newer change, so a phrase reading
+  // "Approved" would state a fact belonging to a change that is no longer on the page.
+  it('reads the review axis over the named change, not over every linked one', () => {
+    const now = Date.now()
+    const signal = computeDeliverySignal(
+      issue,
+      assembleLinkedEntities([
+        {
+          pullRequest: {
+            id: 'pr-100',
+            state: 'merged',
+            openedAt: now - 10_000,
+            reviews: [{ state: 'approved', submittedAt: now - 9_000 }],
+          },
+        },
+        { pullRequest: { id: 'pr-200', state: 'open', openedAt: now - 2_000 } },
+      ]),
+      now,
+    )
+    expect(signal?.pullRequestId).toBe('pr-200')
+    expect(signal?.pr).toBe('open')
+    // Nobody has reviewed the change the signal describes, so the age is that change's open time.
+    expect(signal?.reviewAgeFrom).toBe('pr-open')
+    expect(signal?.reviewAgeMs).toBe(2_000)
+  })
+
+  // Same rule on the CI axis: red checks on the older change would otherwise make the newer one's
+  // phrase read "Checks failing", and `done_but_ci_failing` fire over a change with nothing red.
+  it('reads the CI axis over the named change, not over every linked one', () => {
+    const links: IssueLinkRow[] = [
+      {
+        pullRequest: {
+          id: 'pr-100',
+          state: 'merged',
+          openedAt: 100,
+          ciChecks: [{ conclusion: 'failure' }],
+        },
+      },
+      {
+        pullRequest: {
+          id: 'pr-200',
+          state: 'open',
+          openedAt: 200,
+          ciChecks: [{ conclusion: 'success' }],
+        },
+      },
+    ]
+    const signal = computeDeliverySignal(issue, assembleLinkedEntities(links))
+    expect(signal?.pullRequestId).toBe('pr-200')
+    expect(signal?.ciHealth).toBe('passing')
+    expect(computeDivergence('done', signal)).toBeNull()
+
+    // And the other way round: the failure on the described change is still reported, whatever the
+    // older one did.
+    const reversed = computeDeliverySignal(
+      issue,
+      assembleLinkedEntities([
+        {
+          pullRequest: {
+            id: 'pr-100',
+            state: 'merged',
+            openedAt: 100,
+            ciChecks: [{ conclusion: 'success' }],
+          },
+        },
+        {
+          pullRequest: {
+            id: 'pr-200',
+            state: 'open',
+            openedAt: 200,
+            ciChecks: [{ conclusion: 'failure' }],
+          },
+        },
+      ]),
+    )
+    expect(reversed?.ciHealth).toBe('failing')
+  })
+
+  // The `undefined`-means-unkeyed fallback the deploy axis already uses: a producer that carries no
+  // ids cannot be narrowed, so it keeps exactly today's whole-issue rollup.
+  it('falls back to the whole-issue rollup when the producer carried no ids', () => {
+    const signal = computeDeliverySignal(issue, {
+      pullRequests: [{ state: 'open', openedAt: 200 }],
+      ciRuns: [{ health: 'failing' }],
+      reviews: [{ state: 'approved', submittedAt: 300 }],
+    })
+    expect(signal?.pullRequestId).toBeNull()
+    expect(signal?.ciHealth).toBe('failing')
+    expect(signal?.reviewAgeFrom).toBe('review')
   })
 })
 

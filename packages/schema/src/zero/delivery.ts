@@ -103,6 +103,23 @@ function earliestDeployedAt(
   )
 }
 
+// Compact review-age label ("3d", "2h", "now"), rendered from the ms since the newest review —
+// or, before any review, how long the PR has been open. There is no review-requested event, so
+// this may never be phrased as a reviewer waiting; which of the two clocks it measures is carried
+// by the strip's own `reviewAgeFrom`, so the two are never announced in the same words. It sits
+// beside the seam that produces the milliseconds because both the drawn age column and the phrase
+// dictionary read it — two formatters would eventually print two ages for one fact.
+export function formatReviewAge(ms: number): string {
+  if (ms < 60_000) return 'now'
+  const min = Math.floor(ms / 60_000)
+  if (min < 60) return `${min}m`
+  const hours = Math.floor(min / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d`
+  return `${Math.floor(days / 7)}w`
+}
+
 // Rolls up many checks into one dot: any failing dominates, then any pending, else passing.
 function aggregateCiHealth(runs: readonly { readonly health: CiHealth }[]): CiHealth | null {
   if (runs.length === 0) return null

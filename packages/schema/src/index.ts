@@ -244,6 +244,7 @@ export {
   ciHealthFromConclusion,
   computeDeliverySignal,
   computeDivergence,
+  formatReviewAge,
 } from './zero/delivery.js'
 export type {
   DigestAreaCoverage,
@@ -595,6 +596,18 @@ export {
   commentRecipients,
   NOTIFICATION_RECIPIENT_CAP,
 } from './zero/notifications/recipients.js'
+export type {
+  PhraseRegister,
+  RestPhrase,
+  RestPhraseContext,
+  RestPhraseKey,
+} from './zero/phrases.js'
+export {
+  classifyRestPhrase,
+  REST_PHRASE_KEYS,
+  restPhrase,
+  sayRestPhrase,
+} from './zero/phrases.js'
 export type {
   PmDigestContent,
   PmDigestSubject,

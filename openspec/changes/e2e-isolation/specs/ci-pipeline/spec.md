@@ -6,6 +6,10 @@ The Playwright suite SHALL restore the database to the state the server creates 
 test: exactly one `workspace` row and nothing else. No team, invite, project, issue, cycle, retro,
 notification, user or work-graph row created by one test SHALL be visible to another.
 
+A row the restore preserves SHALL be restored to the contents the server gave it, not merely left in
+place. The workspace's name is writable by the product, so a name one test wrote SHALL NOT be
+inherited by any later test.
+
 The account named by `YAPM_BOOTSTRAP_ADMIN_EMAIL` is cleared with the rest and re-created by the
 next sign-up; the workspace `admin` role SHALL be restored to it by the product's own promotion
 path, whose required-email gate makes that deterministic. The harness SHALL NOT curate the
@@ -26,6 +30,12 @@ establishes test isolation, not parallelism.
 - **WHEN** any end-to-end test begins
 - **THEN** the workspace it signs in to holds no team, invite, project or issue created by any other
   test, whichever tests ran before it and in whatever order
+
+#### Scenario: A renamed workspace does not follow the run
+
+- **WHEN** a test renames the workspace and a later test signs in
+- **THEN** the later test sees the name the server seeded, and the isolation assertion fails if the
+  restore stopped putting it back
 
 #### Scenario: The bootstrap admin stays deterministically the admin
 
@@ -50,6 +60,17 @@ of the check at the same time.
 
 The restore SHALL fail loudly rather than silently do nothing: a derived table set that is empty is
 a broken gate, not a clean database.
+
+The precondition the restore depends on — that every spec takes its `test` from the harness's
+fixtures, and creates no browser context by hand — SHALL be checked by a gate outside the suite. A
+spec that opts out of the restore cannot detect its own leak, so no assertion inside the suite can
+cover this.
+
+#### Scenario: A spec cannot opt out of the restore unnoticed
+
+- **WHEN** an end-to-end spec imports `test` from the Playwright package instead of the harness's
+  fixtures, or creates a browser context by hand
+- **THEN** the package-boundary check fails, naming the file and pointing at the fixtures module
 
 #### Scenario: A broken restore turns CI red
 

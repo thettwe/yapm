@@ -113,6 +113,35 @@ const CHROME_OWNER_PREFIX = 'apps/web/src/frame/'
 const CHROME_EXEMPT = ['apps/web/src/routes/showcase.tsx']
 const STICKY_HEADER = /<header[^>]*className=(?:"|\{`|')[^"`']*\bsticky\s+top-0\b/
 
+// Rule 7, the e2e isolation contract (`apps/web/e2e/README.md`, `openspec/changes/e2e-isolation`).
+// Every Playwright spec gets its per-test reset from the `test` exported by
+// `apps/web/e2e/fixtures.ts`. A spec that takes `test` from `@playwright/test` instead runs with no
+// reset at all: it sees the previous test's rows and quietly reintroduces the accumulation the
+// contract exists to remove, and nothing anywhere goes red — the isolation is unobservable from
+// inside a spec that opted out of it. The same file shape also bans a hand-rolled
+// `browser.newContext()`, whose `finally { close() }` races Playwright's teardown when a test times
+// out and reports a protocol error over the real failure.
+const E2E_SPEC = /^apps\/web\/e2e\/[^/]+\.spec\.ts$/
+const PLAYWRIGHT_IMPORT = /import\s+(type\s+)?\{([^}]*)\}\s+from\s+['"]@playwright\/test['"]/g
+const MANUAL_CONTEXT = /\bbrowser\s*\.\s*newContext\s*\(/
+
+function importsPlaywrightTest(source) {
+  for (const match of source.matchAll(PLAYWRIGHT_IMPORT)) {
+    // `import type { … }` names no runtime binding, so it cannot be the `test` a spec runs with.
+    if (match[1]) continue
+    const named = match[2].split(',').map((name) =>
+      name
+        .trim()
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)[0]
+        .trim(),
+    )
+    // Pre-alias: `import { test as base }` in a spec is the same opt-out with a different name.
+    if (named.includes('test')) return true
+  }
+  return false
+}
+
 /**
  * @param rel POSIX-separated repo-relative path of the file.
  * @param source Its full text.
@@ -198,6 +227,19 @@ export function findViolations(rel, source) {
       if (specifierPattern(spec).test(source)) {
         violations.push(`${rel}: schema imports "${spec}" — ${SCHEMA_VIOLATION_REASON}`)
       }
+    }
+  }
+
+  if (E2E_SPEC.test(rel)) {
+    if (importsPlaywrightTest(source)) {
+      violations.push(
+        `${rel}: imports "test" from @playwright/test — every e2e spec MUST import \`test\` from ./fixtures, which is what runs the per-test reset to the bootstrapped baseline (expect and the types still come from @playwright/test). See apps/web/e2e/fixtures.ts`,
+      )
+    }
+    if (MANUAL_CONTEXT.test(source)) {
+      violations.push(
+        `${rel}: calls browser.newContext() by hand — take the \`newContext\` fixture instead, so Playwright owns the teardown and a timing-out test reports its real failure rather than "Failed to find context". See apps/web/e2e/fixtures.ts`,
+      )
     }
   }
 

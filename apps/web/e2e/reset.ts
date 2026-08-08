@@ -1,4 +1,5 @@
-import type { Database } from '@yapm/schema/db'
+import { type Database, DEFAULT_WORKSPACE_NAME } from '@yapm/schema/db'
+import { deletionOrderFor, type ForeignKeyEdge } from './order'
 
 // Everything here goes through `database.pool` rather than the Kysely handle: `kysely` is a
 // dependency of `packages/schema`, not of `apps/web`, and the harness has no business adding one to
@@ -29,12 +30,12 @@ const IGNORED_TABLES = new Set(['kysely_migration', 'kysely_migration_lock', 'jw
 // membership — is rebuilt by the product's own paths on the next sign-up, because
 // `bootstrapFirstAdmin` promotes the caller when `workspace_member` is empty AND their address
 // matches `YAPM_BOOTSTRAP_ADMIN_EMAIL`.
+//
+// Preserving the ROW is not the same as preserving its CONTENTS. `name` is the one column of it the
+// product lets a test write, and a workspace renamed by one spec would otherwise be inherited by
+// every spec after it — the last piece of mutable shared state a delete-everything sweep cannot
+// reach. It is restored below, so "preserved" means "as the server left it at boot".
 const PRESERVED_TABLES = new Set(['workspace'])
-
-interface ForeignKeyEdge {
-  child: string
-  parent: string
-}
 
 // The order is derived from the live schema, not from a list a human maintains, and the schema
 // cannot change while the suite runs — migrations are applied once, at boot. Computed once per
@@ -49,6 +50,17 @@ function quoteIdentifier(name: string): string {
     throw new Error(`refusing to reset a table whose name needs escaping: ${name}`)
   }
   return `"${name}"`
+}
+
+// Same reasoning one level down, for the one VALUE the reset writes. A multi-statement simple query
+// takes no bind parameters at all — passing values would split the reset into several round trips
+// and several implicit transactions — so the workspace name is interpolated. It is a repo-owned
+// constant, not input, and this refuses rather than escapes if that ever stops being true.
+function quoteLiteral(value: string): string {
+  if (!/^[A-Za-z0-9 _-]+$/.test(value)) {
+    throw new Error(`refusing to inline a workspace name that needs escaping: ${value}`)
+  }
+  return `'${value}'`
 }
 
 async function resettableTables(pool: Pool): Promise<string[]> {
@@ -78,51 +90,12 @@ async function foreignKeys(pool: Pool): Promise<ForeignKeyEdge[]> {
   return rows
 }
 
-// Children before parents. A self-reference is not an edge — one whole-table delete satisfies it —
-// and a genuine cycle between two tables cannot be ordered at all, so those tables are emitted
-// together and Postgres names the constraint if the delete really is impossible.
-function orderByDependency(tables: readonly string[], edges: readonly ForeignKeyEdge[]): string[] {
-  const known = new Set(tables)
-  const referencedBy = new Map<string, Set<string>>()
-  for (const table of tables) referencedBy.set(table, new Set())
-  for (const edge of edges) {
-    if (edge.child === edge.parent) continue
-    if (!known.has(edge.child) || !known.has(edge.parent)) continue
-    referencedBy.get(edge.parent)?.add(edge.child)
-  }
-
-  const order: string[] = []
-  const remaining = new Set(tables)
-  while (remaining.size > 0) {
-    const free = [...remaining].filter((table) =>
-      [...(referencedBy.get(table) ?? [])].every((child) => !remaining.has(child)),
-    )
-    if (free.length === 0) {
-      order.push(...remaining)
-      break
-    }
-    for (const table of free) {
-      order.push(table)
-      remaining.delete(table)
-    }
-  }
-  return order
-}
-
+// The ordering itself, and the empty-set guard, live in `order.ts` — pure functions a unit test can
+// call without a database.
 async function deletionOrder(pool: Pool): Promise<string[]> {
   if (deletionOrderMemo !== undefined) return deletionOrderMemo
   const [tables, edges] = await Promise.all([resettableTables(pool), foreignKeys(pool)])
-  // An empty set is the one way this whole gate could pass while doing nothing: a reset that clears
-  // no table and an assertion that counts no row are both vacuously green. It can only happen if the
-  // schema name is wrong or the migrations never ran, and both deserve a name rather than a suite
-  // that reports success for a database it never looked at.
-  if (tables.length === 0) {
-    throw new Error(
-      `the e2e reset found no base tables in schema "${APP_SCHEMA}". ` +
-        'Either DATABASE_URL points somewhere the migrations have not run, or the schema moved.',
-    )
-  }
-  deletionOrderMemo = orderByDependency(tables, edges)
+  deletionOrderMemo = deletionOrderFor(APP_SCHEMA, tables, edges)
   return deletionOrderMemo
 }
 
@@ -137,6 +110,9 @@ async function deletionOrder(pool: Pool): Promise<string[]> {
 export async function resetToBaseline(database: Database): Promise<void> {
   const order = await deletionOrder(database.pool)
   const statements = order.map((table) => `delete from ${quoteIdentifier(table)}`)
+  // The preserved row's contents, put back in the same query and therefore the same transaction: a
+  // spec that renames the workspace must not hand that name to the next one.
+  statements.push(`update "workspace" set name = ${quoteLiteral(DEFAULT_WORKSPACE_NAME)}`)
   await database.pool.query(statements.join('; '))
 }
 
@@ -162,13 +138,23 @@ export async function assertBaseline(database: Database): Promise<void> {
     )
   }
 
-  const workspaces = await database.pool.query<{ rows: number }>(
-    'select count(*)::int as rows from workspace',
+  // The row AND its contents: the name is read back here so the restore in `resetToBaseline` cannot
+  // silently stop covering the one mutable column of the one preserved table.
+  const workspaces = await database.pool.query<{ rows: number; name: string | null }>(
+    'select count(*)::int as rows, min(name) as name from workspace',
   )
-  if (workspaces.rows[0]?.rows !== 1) {
+  const workspace = workspaces.rows[0]
+  if (workspace?.rows !== 1) {
     throw new Error(
-      `the e2e baseline expects exactly one workspace row, found ${workspaces.rows[0]?.rows ?? 0}. ` +
+      `the e2e baseline expects exactly one workspace row, found ${workspace?.rows ?? 0}. ` +
         'The workspace is seeded once at boot and never recreated — restart the server stack.',
+    )
+  }
+  if (workspace.name !== DEFAULT_WORKSPACE_NAME) {
+    throw new Error(
+      `the e2e baseline expects the workspace to be named "${DEFAULT_WORKSPACE_NAME}", found ` +
+        `"${workspace.name}". The reset restores the name a spec may have changed; if this fails, ` +
+        'that restore stopped running or stopped covering the column.',
     )
   }
 }

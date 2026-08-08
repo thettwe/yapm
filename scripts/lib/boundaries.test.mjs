@@ -180,3 +180,57 @@ test('rule 6: a sticky page-top header outside the frame is a violation', () => 
   const ruler = 'return <div className="sticky top-0 z-10 flex border-b" />\n'
   assert.deepEqual(messages('apps/web/src/projects/roadmap-view.tsx', ruler), [])
 })
+
+// Rule 7 — the e2e isolation contract. The per-test reset lives in the `test` exported by
+// `apps/web/e2e/fixtures.ts`, so a spec that imports `test` from the package instead opts out of it
+// with nothing going red anywhere: the accumulation comes back and only the next flake reports it.
+const SPEC = 'apps/web/e2e/projects.spec.ts'
+
+test('rule 7: an e2e spec importing `test` from @playwright/test is a violation', () => {
+  const found = messages(SPEC, "import { expect, test } from '@playwright/test'\n")
+
+  assert.equal(found.length, 1)
+  assert.match(found[0], /apps\/web\/e2e\/projects\.spec\.ts/)
+  assert.match(found[0], /MUST import `test` from \.\/fixtures/)
+})
+
+test('rule 7: aliasing the import does not evade it', () => {
+  assert.equal(messages(SPEC, "import { test as base } from '@playwright/test'\n").length, 1)
+})
+
+test('rule 7: the shape every migrated spec already has is clean', () => {
+  const clean = [
+    "import { expect, type Page } from '@playwright/test'",
+    "import { test } from './fixtures'",
+    '',
+    "test('a viewer reads the workspace-level projects', async ({ page, newContext }) => {",
+    '  const viewer = await newContext()',
+    '})',
+    '',
+  ].join('\n')
+
+  assert.deepEqual(messages(SPEC, clean), [])
+})
+
+test('rule 7: a type-only import of the package is not an opt-out', () => {
+  assert.deepEqual(messages(SPEC, "import type { test } from '@playwright/test'\n"), [])
+})
+
+test('rule 7: a hand-rolled browser.newContext() in a spec is a violation', () => {
+  const found = messages(SPEC, 'const context = await browser.newContext()\n')
+
+  assert.equal(found.length, 1)
+  assert.match(found[0], /Failed to find context/)
+})
+
+test('rule 7: the fixtures module itself owns both, and is not a spec', () => {
+  const fixtures = [
+    "import { test as base } from '@playwright/test'",
+    'const context = await browser.newContext(options)',
+    '',
+  ].join('\n')
+
+  assert.deepEqual(messages('apps/web/e2e/fixtures.ts', fixtures), [])
+  // Nor is the unit test over the reset's pure helpers, which sits in the same directory.
+  assert.deepEqual(messages('apps/web/e2e/order.test.ts', fixtures), [])
+})

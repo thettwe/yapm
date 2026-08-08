@@ -19,6 +19,9 @@ const SERVER_ORIGIN = `http://localhost:${SERVER_PORT}`
 
 export default defineConfig({
   testDir: './e2e',
+  // Playwright's default `testMatch` also claims `*.test.ts`, and `e2e/order.test.ts` is a Vitest
+  // unit test over the reset's pure helpers. Naming the pattern keeps the two tiers from colliding.
+  testMatch: '**/*.spec.ts',
   outputDir: './test-results',
   fullyParallel: false,
   workers: 1,

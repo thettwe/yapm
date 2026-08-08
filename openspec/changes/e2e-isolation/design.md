@@ -293,6 +293,9 @@ runs the whole suite on every push (PROCESS.md §4: "CI is the gate of record").
 - Whether `Target.disposeBrowserContext` fires before or after the test timeout: **not measured.**
   The change removes the manual lifecycle either way (D5), which is correct whichever it turns out
   to be, but the falsification is still owed.
+- The **failing** direction of task 7.1 — `zz-isolation.spec.ts` red without the reset: **not run.**
+  It has passed twice (D16, D17), so only half the both-directions requirement is met, and 7.1 is
+  unticked for that reason. How to run it is D19.
 
 The measured before/after pass rate is the deliverable this change advertises, and it is still
 outstanding. Whoever runs the review pass should treat "CI went green once" as insufficient and get
@@ -579,3 +582,54 @@ The fixture-owned lifecycle (D5) is still the right call on its own terms: it re
 hand-rolled `finally` blocks whose failure mode is a secondary error that masks the real one. But
 "the context leak is fixed" is not a claim this change gets to make, because on the evidence it
 could gather there was no leak to see.
+
+### D19 — The negative direction of the gate is not a cherry-pick onto `main`
+
+Task 7.1 says `zz-isolation.spec.ts` "must fail against today's `main`", and the obvious reading —
+cherry-pick the one spec file onto `main` and watch it go red — does not run. The spec imports `test`
+from `./fixtures`, and `fixtures.ts` exists only on this branch; on `main` it fails to resolve a
+module rather than failing an assertion, which proves nothing about accumulation. Rewriting it to
+import `test` from `@playwright/test` so it *would* run there produces a different spec from the one
+being verified (and, as of this round, one the boundary gate rejects).
+
+The falsification that does run, from this branch: comment out the two calls in the `baseline`
+fixture (`fixtures.ts`, `resetToBaseline` / `assertBaseline`), run the full suite, and quote the
+`countRows` loop's failure — the non-zero `team=` / `invite=` counts at `zz-isolation.spec.ts:61-77`.
+That inverts exactly one thing, keeps the spec and the whole run identical otherwise, and is the
+artefact task 7.1 is missing. It is not run in this pass: it needs a full ~20-minute suite against
+the compose stack, which this pass was scoped out of.
+
+### D20 — What "preserved" means, and two gates the contract was missing
+
+Three corrections from the review round, each a defect in the contract rather than in a test:
+
+1. **The preserved row's *contents* are restored, not just its existence.** `workspace.name` is
+   writable by the product, so a spec that renames the workspace handed that name to every spec after
+   it — the last mutable shared state a delete-everything sweep cannot reach, and a direct violation
+   of the requirement that no state created by one test is visible to another. `resetToBaseline` now
+   appends `update "workspace" set name = '<DEFAULT_WORKSPACE_NAME>'` to the same multi-statement
+   query, so it stays one round trip inside one implicit transaction, and `assertBaseline` reads the
+   name back so the restore cannot silently stop covering it. The constant is imported from
+   `@yapm/schema/db`, and it is interpolated rather than bound because a multi-statement simple query
+   takes no parameters at all — `quoteLiteral` refuses anything that would need escaping, the same
+   posture `quoteIdentifier` already takes for table names.
+
+2. **Rules 1 and 2 of the contract are now a check, not a paragraph.** "Import `test` from
+   `./fixtures`" is the precondition for the entire reset, and a spec that ignores it is precisely
+   the spec that cannot report its own leak: it sees the previous test's rows and every assertion it
+   makes still passes. `scripts/lib/boundaries.mjs` gains rule 7 over `apps/web/e2e/*.spec.ts` — an
+   import of `test` from `@playwright/test` (aliases included, type-only imports excluded), and a
+   hand-rolled `browser.newContext(`. It rides the existing `Package boundaries` CI job, which runs
+   on node builtins with no install, so the rule costs nothing. A Biome `noRestrictedImports`
+   override would have worked too; the boundaries script won because the repo already keeps its
+   path-shaped rules there with a `node --test` suite beside them.
+
+3. **The reset's two pure decisions are unit-tested.** `orderByDependency` and the empty-set guard
+   decide whether the gate works at all, and both were unreachable by any gate: `e2e/` is outside
+   `pnpm typecheck` (D11) and outside Vitest's `include`, and `reset.ts` cannot be imported without a
+   database. They move to `apps/web/e2e/order.ts` — no imports, so the unit tier can reach it — with
+   `order.test.ts` covering children-before-parents, a self-reference as a non-edge, a two-table cycle
+   emitting both rather than looping, edges naming tables outside the set, and the guard throwing with
+   the schema name in the message. `vitest.config.ts` picks up `e2e/**/*.test.ts`; `playwright.config.ts`
+   is pinned to `testMatch: '**/*.spec.ts'` so Playwright's default pattern does not claim the unit
+   file as a browser spec.

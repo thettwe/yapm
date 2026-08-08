@@ -45,7 +45,7 @@ Work-graph placement: `pull_request` / `deployment` hang off `team`; `ci_check` 
 
 The system SHALL link an issue to a pull request via an `issue_link` edge when a branch name or the PR body contains the issue's human key `<TEAM_KEY>-<NUMBER>` (e.g. `ENG-142`), matched case-insensitively on a word boundary and resolved against the mapped team's key and the issue number. A reference that resolves to no issue in the mapped team SHALL be ignored (no fabricated links). One pull request MAY link several issues and one issue MAY be linked by several pull requests. The link SHALL record which rule matched (branch or body). Reference parsing SHALL be a pure function testable independently of GitHub.
 
-Work-graph placement: `issue_link` is the `issue ↔ pull_request` edge that lets a PR drive its issue's reality strip. Sync/permission story: the edge is team-scoped to the issue's/PR's team; it is written only by the connector mutator path; it never links across a team boundary.
+Work-graph placement: `issue_link` is the `issue ↔ pull_request` edge that lets a PR drive its issue's reality track. Sync/permission story: the edge is team-scoped to the issue's/PR's team; it is written only by the connector mutator path; it never links across a team boundary.
 
 #### Scenario: A branch name links the issue
 
@@ -68,19 +68,19 @@ The system SHALL assemble a `LinkedEntities` value for an issue from its linked 
 
 The delivery signal SHALL carry a deployment axis: the instant the issue's change first reached production, or null when it has not. That instant SHALL be determined by an **exact commit match** — a deployment whose stored commit equals the linked pull request's merge commit within the same repository, and which carries a recorded first-success instant. Where several such deployments exist the **earliest** first-success instant SHALL be used. The system SHALL NOT infer a deployment from timing, ordering or environment alone, so the signal can never assert that a change reached production when no deployment carrying that commit succeeded. A team with no connector, or a linked issue whose merge commit no deployment carries, SHALL yield a null deployment axis and every other axis exactly as before.
 
-`computeDivergence` SHALL NOT gain a deployment-derived divergence kind in this change: "merged and not deployed for long enough to be wrong" carries a threshold that is a product decision, and the divergence flag SHALL keep the three kinds it has.
+`computeDivergence` SHALL NOT gain a deployment-derived divergence kind in this change: "merged and not deployed for long enough to be wrong" carries a threshold that is a product decision, and the `//` divergence break SHALL keep the three kinds it has.
 
 Work-graph placement: a computation over `issue`, its linked delivery entities and the team's deployments; it adds no new synced entity and no new synced query beyond those already defined. Permission story: the assembly runs over already-permitted, team-scoped synced rows and adds no new visibility surface.
 
 #### Scenario: A linked issue shows real delivery state
 
 - **WHEN** an issue is linked to an open, approved PR with passing checks
-- **THEN** `computeDeliverySignal` returns a non-null signal and the reality strip shows PR state, CI health, and review age
+- **THEN** `computeDeliverySignal` returns a non-null signal and the reality track shows PR state, CI health, and review age
 
 #### Scenario: Divergence fires when status disagrees with git
 
 - **WHEN** an issue is marked In Progress but its linked PR is merged
-- **THEN** `computeDivergence` returns a divergence marker and the row shows the divergence flag
+- **THEN** `computeDivergence` returns a divergence marker and the row's track carries the `//` divergence break
 
 #### Scenario: An unlinked issue is unchanged
 

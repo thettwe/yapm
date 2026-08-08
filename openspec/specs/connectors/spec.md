@@ -5,7 +5,7 @@ TBD - created by archiving change connectors. Update Purpose after archive.
 ## Requirements
 ### Requirement: Provider-neutral connector framework
 
-The system SHALL define a provider-neutral `ConnectorDefinition` interface in `packages/schema` that isolates the three provider-specific concerns — auth/config (a Zod `configSchema` for non-secret settings, a Zod `secretSchema` for encrypted settings, and a `verifySignature(raw, headers, secrets)`), synchronous ingest (`parseDelivery(raw, headers)` returning an installation key, event type, delivery id, and payload), and asynchronous ingest/reconcile (`ingest(event, ctx)` and `reconcile(installation, ctx)`) — each returning a provider-neutral `WorkGraphMutation[]`. The `WorkGraphMutation` union SHALL be the only shape feature code consumes, so a second connector (e.g. GitLab) can be added by implementing the interface with **no** change to reality-strip, divergence, **status-automation**, query, or row code. GitHub SHALL be the single v1 implementation of this interface; its octokit/webhook code SHALL live in `apps/server` and SHALL call shared mutators, never raw ZQL.
+The system SHALL define a provider-neutral `ConnectorDefinition` interface in `packages/schema` that isolates the three provider-specific concerns — auth/config (a Zod `configSchema` for non-secret settings, a Zod `secretSchema` for encrypted settings, and a `verifySignature(raw, headers, secrets)`), synchronous ingest (`parseDelivery(raw, headers)` returning an installation key, event type, delivery id, and payload), and asynchronous ingest/reconcile (`ingest(event, ctx)` and `reconcile(installation, ctx)`) — each returning a provider-neutral `WorkGraphMutation[]`. The `WorkGraphMutation` union SHALL be the only shape feature code consumes, so a second connector (e.g. GitLab) can be added by implementing the interface with **no** change to reality-track, divergence, **status-automation**, query, or row code. GitHub SHALL be the single v1 implementation of this interface; its octokit/webhook code SHALL live in `apps/server` and SHALL call shared mutators, never raw ZQL.
 
 The union's pull-request variant SHALL additionally be the sole trigger for opt-in status automation: the decision to transition a linked issue SHALL be taken in `packages/schema` from that variant's state, its own source timestamp, and the rows it names — never from a provider payload — so the automation is inherited by any connector that emits it. The connector SHALL NOT write anything back to the provider as a result of a transition, and SHALL NOT require an additional provider permission scope.
 
@@ -19,7 +19,7 @@ Work-graph placement: the interface and `WorkGraphMutation` union define the wri
 #### Scenario: A second connector needs no feature-code change
 
 - **WHEN** a new provider is added by implementing `ConnectorDefinition`
-- **THEN** the reality strip, divergence, status automation, queries, and rows are unchanged because they depend only on the `WorkGraphMutation` union and the synced entities, not on the provider
+- **THEN** the reality track, divergence, status automation, queries, and rows are unchanged because they depend only on the `WorkGraphMutation` union and the synced entities, not on the provider
 
 #### Scenario: Connector code does not leak ZQL
 
@@ -116,7 +116,7 @@ Work-graph placement: the safety-net path that keeps linked entities consistent 
 #### Scenario: First install backfills existing state
 
 - **WHEN** the App is installed on a repository with pre-existing PRs and checks
-- **THEN** a backfill sweep populates the linked entities so the reality strip reflects state that predates the install
+- **THEN** a backfill sweep populates the linked entities so the reality track reflects state that predates the install
 
 #### Scenario: The sweep backfills a missing deployment commit
 
@@ -173,7 +173,7 @@ Work-graph placement: gates whether the ingestion pipeline exists at all. Permis
 #### Scenario: Disabled connector is inert
 
 - **WHEN** the connector is disabled and a webhook is received
-- **THEN** nothing is enqueued or written and the reality strip stays in its unlinked state
+- **THEN** nothing is enqueued or written and the reality track stays in its unlinked state
 
 ### Requirement: Transient changed-file metadata under the already-granted permissions
 

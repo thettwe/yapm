@@ -290,13 +290,13 @@ Permission story: unchanged; the setting is admin-gated and holds no secret.
 #### Scenario: Upgrading changes nothing until someone opts in
 
 - **WHEN** an existing instance is upgraded and the migration runs
-- **THEN** every team has automation off, no issue's status changes, and every divergence flag reads
+- **THEN** every team has automation off, no issue's status changes, and every `//` divergence break reads
   as it did before
 
 #### Scenario: Turning it off restores the previous behaviour exactly
 
 - **WHEN** an admin disables automation for a team that had it on
-- **THEN** no further transition occurs for that team and the divergence flag resumes being the only
+- **THEN** no further transition occurs for that team and the `//` divergence break resumes being the only
   response to a status that disagrees with git
 
 ### Requirement: Attachment storage adds no container and defaults to a local volume

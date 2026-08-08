@@ -5,7 +5,7 @@ TBD - created by archiving change board-view. Update Purpose after archive.
 ## Requirements
 ### Requirement: Status-grouped keyboard-first board
 
-The system SHALL present a team's issues as a kanban board of six fixed columns in the status category order (Backlog, Todo, In Progress, In Review, Done, Canceled) at a `/board` route that is a peer to the issue list. The board SHALL read the same team-scoped synced query the list uses, so already-synced rows render and re-arrange locally without a network round-trip, meeting the sub-100ms budget. Each card SHALL render the tokenized status/priority/key/title/assignee visuals and the reserved reality-strip and divergence slots, correct in all three presets in both light and dark with no hardcoded colors or fonts. A viewer SHALL see the board read-only.
+The system SHALL present a team's issues as a kanban board of six fixed columns in the status category order (Backlog, Todo, In Progress, In Review, Done, Canceled) at a `/board` route that is a peer to the issue list. The board SHALL read the same team-scoped synced query the list uses, so already-synced rows render and re-arrange locally without a network round-trip, meeting the sub-100ms budget. Each card SHALL render the tokenized status/priority/key/title/assignee visuals and the reserved reality-track slot — whose `//` divergence break carries a disagreement between the board and git, so no separate divergence slot is laid out — correct in all three presets in both light and dark with no hardcoded colors or fonts. A viewer SHALL see the board read-only.
 
 Work-graph placement: a view over team-scoped `issue` rows; introduces no new entity. Permission story: renders only the caller's teams' issues; viewers read but cannot move.
 

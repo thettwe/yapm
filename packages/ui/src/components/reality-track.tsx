@@ -238,14 +238,16 @@ const RAIL_NODE_KNOCKOUT: Record<TrackNodeKind, 'border' | 'background'> = {
   'empty-urgent': 'background',
 }
 
-// Token-only by construction: a caller names one of the theme's surfaces, never a colour.
-export type TrackSurface = 'bg' | 'bg-elevated' | 'bg-sidebar' | 'bg-hover'
+// Token-only by construction: a caller names one of the theme's surfaces, never a colour. A
+// knockout surface must be OPAQUE — the halo and the `//` patch paint over the rail line, and a
+// translucent paint lets the line show through. That rules out `--bg-hover`, which several presets
+// define as an rgba overlay: it is a tint laid on a surface, not a surface a rail is drawn on.
+export type TrackSurface = 'bg' | 'bg-elevated' | 'bg-sidebar'
 
 const SURFACE_VAR: Record<TrackSurface, string> = {
   bg: 'var(--bg)',
   'bg-elevated': 'var(--bg-elevated)',
   'bg-sidebar': 'var(--bg-sidebar)',
-  'bg-hover': 'var(--bg-hover)',
 }
 
 function knockoutStyle(kind: TrackNodeKind): CSSProperties {

@@ -253,7 +253,7 @@ band SHALL fold when the team has no deployment with a production timestamp.
 The SHIPPED THIS CYCLE band SHALL list the active cycle's done issues in a two-column
 grid, each badged **Live** when a deployment carried its linked merged pull request's
 merge commit to production, else **Built — not live**. The badge SHALL derive from the
-exact merge-commit join the reality strip already uses — never inferred from status alone.
+exact merge-commit join the reality track already uses — never inferred from status alone.
 The band SHALL fold when the cycle has no done issues.
 
 #### Scenario: Live requires a deployment

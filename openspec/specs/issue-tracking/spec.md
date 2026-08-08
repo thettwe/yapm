@@ -108,33 +108,33 @@ Work-graph placement: `comment` hangs off `issue` (and transitively off `team`).
 - **WHEN** a `viewer` attempts to post a comment
 - **THEN** the mutator rejects it as not authorized
 
-### Requirement: Reality-strip and divergence computation seam
+### Requirement: Reality-track and divergence computation seam
 
-The system SHALL model the issue-row's delivery signal (reality strip) and divergence flag as pure derived values computed in `packages/schema`, not as stored columns on `issue`. A `computeDeliverySignal(issue, linkedEntities)` function SHALL return a typed delivery signal or null, and a `computeDivergence(status, signal)` function SHALL return a typed divergence marker or null. With the `connectors` change, real linked git entities (pull requests, checks, reviews, deployments) now exist, so `linkedEntities` is populated from an issue's linked delivery entities and `computeDeliverySignal` returns a **non-null** signal (PR state, CI health, review age) for a linked issue, while an unlinked issue still yields null and the quiet "not linked" state. `computeDivergence` SHALL return a marker when the human-set status disagrees with git reality (e.g. In Progress but PR merged; Done but CI failing). No git-shaped columns (PR state, CI status) SHALL be added to `issue`; delivery reality SHALL remain modeled as linked entities so that the seam's exported signatures stay unchanged and only their inputs become non-empty.
+The system SHALL model the issue-row's delivery signal (the reality track) and its `//` divergence break as pure derived values computed in `packages/schema`, not as stored columns on `issue`. A `computeDeliverySignal(issue, linkedEntities)` function SHALL return a typed delivery signal or null, and a `computeDivergence(status, signal)` function SHALL return a typed divergence marker or null. With the `connectors` change, real linked git entities (pull requests, checks, reviews, deployments) now exist, so `linkedEntities` is populated from an issue's linked delivery entities and `computeDeliverySignal` returns a **non-null** signal (PR state, CI health, review age) for a linked issue, while an unlinked issue still yields null and the quiet "not linked" state. `computeDivergence` SHALL return a marker when the human-set status disagrees with git reality (e.g. In Progress but PR merged; Done but CI failing). No git-shaped columns (PR state, CI status) SHALL be added to `issue`; delivery reality SHALL remain modeled as linked entities so that the seam's exported signatures stay unchanged and only their inputs become non-empty.
 
 Divergence SHALL remain the system's response wherever opt-in status automation does not act — that is, for every team with automation off, and for every event a guard blocks. Where a transition does fire, the divergence marker SHALL become null **by construction**, because status and git then agree; the seam SHALL NOT be suppressed, weakened, or special-cased for automated writes, and no new `DivergenceKind` SHALL be introduced. Both exported functions SHALL keep the signatures and the returned union that issue-core defined.
 
 Work-graph placement: the seam is a computation over `issue` and its linked work-graph entities (defined in the work-graph capability). Permission story: the computation runs over already-permitted, team-scoped synced rows and adds no new visibility surface.
 
-#### Scenario: Reality strip renders a linked issue's real state
+#### Scenario: The reality track renders a linked issue's real state
 
 - **WHEN** an issue linked to a pull request and its checks is rendered in the list or detail
-- **THEN** `computeDeliverySignal` returns a non-null signal and the reality-strip slot shows PR state, CI health, and review age
+- **THEN** `computeDeliverySignal` returns a non-null signal and the reality-track slot shows PR state, CI health, and review age
 
-#### Scenario: Reality strip renders the unlinked state
+#### Scenario: The reality track renders the unlinked state
 
 - **WHEN** an issue with no linked git entities is rendered in the list or detail
-- **THEN** `computeDeliverySignal` returns null and the reality-strip slot shows the quiet "not linked" placeholder
+- **THEN** `computeDeliverySignal` returns null and the reality-track slot shows the quiet "not linked" placeholder
 
-#### Scenario: Divergence flag fires when status disagrees with git
+#### Scenario: The divergence break fires when status disagrees with git
 
 - **WHEN** an issue is marked In Progress while its linked PR is merged, or Done while its CI is failing
-- **THEN** `computeDivergence` returns the corresponding marker and the divergence flag is shown
+- **THEN** `computeDivergence` returns the corresponding marker and the `//` divergence break is drawn on the track
 
-#### Scenario: Divergence flag is dormant without delivery state
+#### Scenario: The divergence break is dormant without delivery state
 
 - **WHEN** an issue with no linked git entities is evaluated for divergence
-- **THEN** `computeDivergence` returns null and no divergence flag is shown, regardless of the human-set status
+- **THEN** `computeDivergence` returns null and the track carries no `//` break, regardless of the human-set status
 
 #### Scenario: No git columns on the issue
 

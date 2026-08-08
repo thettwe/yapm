@@ -27,7 +27,7 @@ Work-graph placement: rendering surface for the computation seam defined in issu
 - **WHEN** the list renders issues with no linked git entities
 - **THEN** every such row draws the track's quiet empty state and no break, without disturbing row alignment
 
-#### Scenario: Divergence flag renders on a diverged row
+#### Scenario: The `//` break renders on a diverged row
 
 - **WHEN** a listed issue is marked In Progress while its linked PR is merged
 - **THEN** that row's track carries the `//` break drawn from tokens, correct in every preset in light and dark, and the row draws no warning symbol

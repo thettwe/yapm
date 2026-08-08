@@ -506,3 +506,27 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
   longer proved a delivery signal had arrived. The three renamed assertions now wait on the
   track's `aria-label` naming the seeded PR, and the three-preset loop asserts the placeholder is
   absent as well — the shape the first test in the file already used.
+
+### Recorded while fixing the second review round
+
+- **The rename swept the shipped capability specs too, not only the docs site.** The first pass
+  corrected every present-tense sentence in the root docs and renamed the requirements this
+  change's own deltas replace, which left the untouched capabilities still naming components that
+  no longer exist — so archiving would have published a normative spec set describing a "reality
+  strip" and a "divergence flag". `board`, `issue-tracking`, `work-graph`, `team-home`,
+  `connectors`, `status-automation` and `self-host-deploy` now say "reality track" and "the `//`
+  divergence break". Only `component-library`, `issue-detail` and `issue-list` keep the old words,
+  because this change's deltas rewrite those three wholesale at archive time and their `RENAMED
+  FROM:` lines must keep matching the requirement headers as they stand today.
+- **`--bg-hover` is not a rail surface.** `TrackSurface` offered it, but three of the six theme
+  blocks define `--bg-hover` as a translucent rgba — a tint laid over a surface, not a surface. The
+  halo and the `//` knockout patch paint *over* the rail line, so a translucent paint lets the line
+  show through and the prop silently fails to do the one thing it exists for. The union is now the
+  three opaque surfaces, and the comment above it says why a fourth cannot be added without an
+  opaque token behind it. No caller passed it.
+- **The feature page states where the age column is drawn, rather than claiming it everywhere.**
+  The reserved mono column is a property of the dense list row; the team digest states the age in
+  words beside the track and the board card and issue page state it elsewhere, so three of the four
+  product surfaces draw no column at all. The page now qualifies it the way the divergence
+  paragraph two sections down was already qualified — the surface's room decides where the words
+  go — matching the three-state `age` prop recorded above.

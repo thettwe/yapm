@@ -25,7 +25,7 @@ can see whether a team's board moves on its own; only an `admin` MAY write it, t
 
 - **WHEN** an instance is upgraded and no team has enabled automation
 - **THEN** every team's `auto_status_since` is `NULL`, no pull-request event writes any issue status,
-  and the divergence flag behaves identically to before the upgrade
+  and the `//` divergence break behaves identically to before the upgrade
 
 #### Scenario: Enabling automation does not rewrite the existing board
 
@@ -75,7 +75,7 @@ under the system principal and is subject to that mutator's own team-scoped auth
 #### Scenario: A draft pull request drives nothing
 
 - **WHEN** a linked pull request is opened as a draft
-- **THEN** no status is written and the issue's reality strip shows the draft PR state as before
+- **THEN** no status is written and the issue's reality track shows the draft PR state as before
 
 #### Scenario: A pull request closed without merging drives nothing
 
@@ -129,7 +129,7 @@ state change; no entity. Permission story: unchanged — a blocked transition wr
 - **WHEN** reconciliation discovers a pull request that merged two days ago, and a member set that
   issue's status yesterday
 - **THEN** the transition is blocked because `last_human_status_at` is newer than the event's own
-  timestamp, and the divergence flag reports the disagreement instead
+  timestamp, and the `//` divergence break reports the disagreement instead
 
 #### Scenario: Setting a status just before opening a pull request does not block the transition
 
@@ -178,7 +178,7 @@ instance-wide actor write across every team without a membership row, mirroring 
 
 ### Requirement: Divergence is the behaviour whenever automation does not act
 
-The divergence flag SHALL remain the system's response wherever automation is off or a transition is
+The `//` divergence break SHALL remain the system's response wherever automation is off or a transition is
 blocked, and SHALL go quiet on its own — by construction, not by suppression — wherever a transition
 fires and makes status and git agree. The divergence computation SHALL NOT be disabled, weakened, or
 special-cased by this capability, and no new divergence kind SHALL be introduced.
@@ -190,7 +190,7 @@ Permission story: unchanged — it adds no visibility surface.
 
 - **WHEN** a team has automation off and one of its issues is In Progress with a merged linked pull
   request
-- **THEN** the divergence flag fires exactly as it did before this capability existed
+- **THEN** the `//` divergence break fires exactly as it did before this capability existed
 
 #### Scenario: A fired transition leaves nothing to diverge about
 
@@ -202,7 +202,7 @@ Permission story: unchanged — it adds no visibility surface.
 
 - **WHEN** a transition is blocked by the human-intent guard and the issue's status therefore
   disagrees with a merged pull request
-- **THEN** the divergence flag fires, so the team sees the disagreement even though nothing was
+- **THEN** the `//` divergence break fires, so the team sees the disagreement even though nothing was
   overwritten
 
 ### Requirement: Keyboard-operable, tokenized admin surface for the per-team setting

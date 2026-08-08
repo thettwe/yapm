@@ -49,8 +49,12 @@ populated track occupies — so connecting GitHub never shifts a row. The whole 
 a screen reader, labelled with the facts it actually draws ("PR merged, CI passing, Deployed") or
 "No delivery signal yet".
 
-Beside the stations, in a column reserved whether or not there is anything to put in it, sits the
-**review age** in mono: "3d", "2h", "now".
+Where the **review age** is written depends on how much room the surface has. On a dense list row
+there is no room for words, so it sits beside the stations in a mono column reserved whether or not
+there is anything to put in it — "3d", "2h", "now" — and a row with nothing to say still holds
+exactly the space a row with an age takes. The team digest's rows state the age in words beside the
+track instead, and the board card and the issue page state it elsewhere on the surface; none of
+those three draws an age column at all.
 
 ### The same track, on its side
 

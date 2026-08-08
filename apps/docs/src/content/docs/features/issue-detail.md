@@ -129,6 +129,13 @@ Opening an issue from the list gives you the same detail in a side panel; the UR
 two columns — it is the same implementation of every section, at a narrower measure, with nothing
 missing.
 
+The full page is addressed by the issue's **key**: `/teams/<team>/issues/ENG-116`. The team prefix
+is matched case-insensitively against *that team's* key, and a bare number (`…/issues/116`) is
+accepted too, which is the form the panel's **Open full view** link emits. Another team's key is not
+an address here — `ENG/issues/OPS-116` is not found rather than quietly answering with this team's
+116 — and a link you followed before the page finished syncing says *Loading*, never *does not
+exist*. Resolving costs one row and its linked change, not the team's whole backlog.
+
 ## Keyboard
 
 | Key | Where | What it does |

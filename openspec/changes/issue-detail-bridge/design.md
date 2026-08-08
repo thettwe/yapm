@@ -442,3 +442,37 @@ halves of the two-register subline naming the same merge commit. A new spec driv
 from the keyboard on the full page — breadcrumb, key, pill, chain, evidence, then ⏎ on the callout —
 and asserts that marking done removes the pill, the callout AND the break, because all three state
 one fact that stopped being true. No bound anywhere is a hard-coded fixture size.
+
+### DI-19 — The address resolver is a component, because a route body cannot be driven
+
+Task 6.7 asks for a test that `ENG-116` resolves, a bare `116` resolves, `OPS-116` in team ENG is
+not-found, and loading is distinguished from missing. The first three are the parser's, and
+`model.test.ts` holds them. The fourth is **not the parser's**: it is the three-way decision the route
+makes over two query results, and DI-6's whole point is that the third state exists. That decision
+sat inside a `createFileRoute` component reachable only through a `RouterProvider` — which is to say,
+only through the e2e suite.
+
+So the body moves to `apps/web/src/issues/issue-address.tsx` (`IssueAddress({teamId, issueKey})`) and
+the route becomes what every other route in this app already is: params, `Authenticated`, `AppFrame`,
+one feature component. `issue-address.test.tsx` then drives all three states directly, including the
+two that no e2e run can produce on demand — a by-key query that has not answered yet, and a team list
+that has not answered yet. Mutating `undecided` to `false` fails exactly one case, which is what makes
+it a check rather than a decoration.
+
+The harness models one thing the earlier detail harness did not need: an unanswered `.one()` query
+yields `undefined` and an unanswered collection yields `[]`. Collapsing those two is how a test claims
+"missing" is rendered when the surface actually renders "loading".
+
+### DI-20 — Two claims the docs make that only a test can keep true
+
+The docs page states that ⌘K on this surface offers *Mark done* and *Open the change*, and that a
+viewer is offered neither. Nothing asserted either: `useCommandSource` is inert without a provider, so
+the existing suite — which renders the detail bare — proved only that registering did not throw.
+`issue-detail.test.tsx` now mounts the detail inside `CommandRegistryProvider`, presses ⌘K on
+`window`, and selects *Mark done* through the palette to the same mutator. It is the positive half of
+the assertion that was already there in the negative: nothing is bound on `document`, and what is
+registered actually arrives.
+
+The e2e suite gains the address contract it never had — the panel's door, the key typed into the bar,
+and another team's key resolving to nothing. The key is READ OFF THE PAGE (the team key is generated
+per run), so no bound in it is a fixture value.

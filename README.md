@@ -57,7 +57,11 @@ GitHub, and **OIDC/SSO** sign-in, all free and unlimited — SSO registered by a
 login form only once it can actually complete ·
 a keyboard-first issue list whose every row states what git says about it in words as
 well as in a drawing, with a quiet filter bar, a command palette and
-filtering · an issue detail view with rich-text descriptions and comments · a kanban board ·
+filtering · an issue detail that states one reality in two registers — a plain sentence for a PM
+directly above the mono git facts for an engineer — beside a vertical delivery rail carrying a
+station per moment a real timestamp supports, and, where the board and git disagree, a callout whose
+evidence is the two clocks side by side and whose ⏎ takes the one repair the board can honestly
+make; rich-text descriptions, files and comments intact · a kanban board ·
 time-boxed cycles with a progress view and automatic rollover of unfinished work ·
 a keyboard-first triage inbox for incoming issues (accept / decline / route, without a seventh status) ·
 lightweight, workspace-level projects with computed progress and a keyboard-first roadmap timeline across teams ·

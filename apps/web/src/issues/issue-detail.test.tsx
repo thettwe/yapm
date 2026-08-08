@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest'
 
 // THE FALSIFIABLE CHECK for the issue detail: one reality said in two registers, with the vertical
@@ -45,6 +45,7 @@ vi.mock('@/auth/use-membership', () => ({
   }),
 }))
 
+import { CommandRegistryProvider } from '@/frame/command-registry'
 import { IssueDetail, type IssueDetailLayout } from './issue-detail'
 
 interface StatusMutation {
@@ -373,6 +374,48 @@ test('the divergence evidence contrasts the human status with the merge', () => 
   expect(evidence).toHaveTextContent('in-progress set 3d ago')
   expect(evidence).toHaveTextContent('8f21c4a')
   expect(evidence).toHaveTextContent('22h ago')
+})
+
+// ⌘K has ONE owner, and it is the frame. What this surface may do is REGISTER — so the binding the
+// deck advertises on every page reaches this page's actions without a second listener existing to
+// swallow it.
+test('the palette is registered with rather than bound, and only offers what can be done', async () => {
+  render(
+    <CommandRegistryProvider>
+      <IssueDetail issueId="issue-1" teamId="team-1" layout="page" />
+    </CommandRegistryProvider>,
+  )
+
+  act(() => {
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+  })
+
+  expect(await screen.findByPlaceholderText('Type a command or search…')).toBeInTheDocument()
+  expect(screen.getByText('Mark done')).toBeInTheDocument()
+  expect(screen.getByText('Open the change')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByText('Mark done'))
+  const call = harness.mutate.mock.calls[0]?.[0] as StatusMutation | undefined
+  expect(call?.mutator.mutatorName).toBe('issue.setStatus')
+  expect(call?.args.status).toBe('done')
+})
+
+test('the palette offers a viewer nothing that writes, and no change it does not have', async () => {
+  harness.canWrite = false
+  harness.rows = baseRows(eng116({ issueLinks: [] }))
+  render(
+    <CommandRegistryProvider>
+      <IssueDetail issueId="issue-1" teamId="team-1" layout="page" />
+    </CommandRegistryProvider>,
+  )
+
+  act(() => {
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+  })
+
+  expect(await screen.findByPlaceholderText('Type a command or search…')).toBeInTheDocument()
+  expect(screen.queryByText('Mark done')).toBeNull()
+  expect(screen.queryByText('Open the change')).toBeNull()
 })
 
 test('an issue with no recorded status time says which clock it is reading', () => {

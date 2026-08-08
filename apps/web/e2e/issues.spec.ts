@@ -190,6 +190,49 @@ test('an issue opens to a detail panel where the description and comments persis
   ).toBeVisible()
 })
 
+// The full page is addressed by the issue's KEY, and the key is read off the page rather than
+// assumed: the team key is generated per run, so anything hard-coded here would be a fixture size
+// in disguise. What is asserted is the whole address contract — the panel's door reaches the page,
+// the key typed into the bar reaches the same page, and another team's key reaches nothing.
+test('the full page answers to the issue’s key, and to no other team’s', async ({ page }) => {
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  const title = unique('Address issue')
+  await createIssue(page, title)
+  await expect(row(page, title)).not.toHaveAttribute('data-pending', '', { timeout: 20_000 })
+
+  const panel = await openIssue(page, title)
+  const key = (await panel.getByTestId('detail-key').innerText()).trim()
+  expect(key).toMatch(/^[A-Z]+-\d+$/)
+  await panel.getByRole('link', { name: 'Open full view' }).click()
+
+  // Band 2 on the full page: the way back to the list, the key, and the issue itself.
+  const kicker = page.getByTestId('masthead-kicker')
+  await expect(kicker.getByTestId('detail-key')).toHaveText(key, { timeout: 20_000 })
+  await expect(kicker.getByRole('link', { name: 'Issues' })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Issue title' })).toHaveValue(title)
+  // A rail is drawn even for an issue nothing is linked to, and its chain promises only the idea.
+  await expect(page.locator('[data-slot="reality-rail"]')).toBeVisible()
+
+  // The panel's door emits the bare number; the key is the other accepted spelling of the same
+  // address, and it lands on the same issue.
+  const base = new URL(page.url()).pathname.replace(/[^/]+$/u, '')
+  await page.goto(`${base}${key}`)
+  await expect(page.getByRole('textbox', { name: 'Issue title' })).toHaveValue(title, {
+    timeout: 20_000,
+  })
+
+  // The same number under a key this team does not answer to is not this team's issue — the scan
+  // this replaced would have handed back exactly the row above.
+  const number = key.split('-')[1]
+  await page.goto(`${base}ZZZZ-${number}`)
+  await expect(page.getByText('This issue does not exist or is not visible to you.')).toBeVisible({
+    timeout: 20_000,
+  })
+  await expect(page.getByRole('textbox', { name: 'Issue title' })).toHaveCount(0)
+})
+
 test('status can be changed from the detail panel and persists', async ({ page }) => {
   await enterApp(page)
   await openTeamIssues(page)

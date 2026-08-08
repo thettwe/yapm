@@ -170,10 +170,15 @@ export interface GroupOptions {
 // Filter (locally, over synced rows) → group → sort within each group. Groups render in a
 // deterministic order: status uses the fixed category order; priority uses rank; assignee/label
 // are alphabetical with the empty bucket last.
+//
+// `ordered` is a list of row SLOTS — under label grouping one issue holds a slot in every label it
+// carries — so `count` is stated beside it: how many distinct issues matched. Everything the page
+// says about "how much work" (the masthead, the fold's remainder) reads `count`; everything about
+// "how many rows" reads `ordered`. Deciding that once here is what keeps the two from drifting.
 export function buildGroups(
   issues: readonly IssueRowData[],
   options: GroupOptions,
-): { groups: IssueGroup[]; ordered: IssueRowData[] } {
+): { groups: IssueGroup[]; ordered: IssueRowData[]; count: number } {
   const cycleIds = options.cycleIds
   const projectIds = options.projectIds
   const filtered = issues.filter(
@@ -192,7 +197,7 @@ export function buildGroups(
     ;(group.issues as IssueRowData[]).sort(cmp)
   }
   const ordered = groups.flatMap((group) => group.issues)
-  return { groups, ordered }
+  return { groups, ordered, count: filtered.length }
 }
 
 function groupBy(issues: readonly IssueRowData[], options: GroupOptions): IssueGroup[] {

@@ -263,17 +263,20 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   })
 
   // The reality track — the one vocabulary every surface draws delivery in — is drawn on exactly
-  // four surfaces: a plain row, a hovered row, the SELECTED row (`--bg-selected`, `issue-row.tsx`)
-  // and the digest's divergence class row (`--urgent-soft`, `team-home.tsx`). The three washes are
-  // composited over the base surface here the same way the browser paints them. The selected ground
-  // is `--bg-selected` and not the soft accent: the row's tint moved, and a track measured against
-  // a surface no row paints is a measurement of nothing.
+  // five surfaces: a plain row, a hovered row, the SELECTED list row (`--bg-selected`,
+  // `issue-row.tsx`), the SELECTED board card (`--accent-soft`, `board-card.tsx`) and the digest's
+  // divergence class row (`--urgent-soft`, `team-home.tsx`). The washes are composited over the
+  // base surface here the same way the browser paints them. The list row's selected ground and the
+  // card's are two different tokens and both are measured: the row's tint moved to `--bg-selected`,
+  // while a selected card still replaces its elevated fill with the soft accent, and a track
+  // measured against a surface nothing paints is a measurement of nothing.
   const trackSurfaces = (): ReadonlyArray<readonly [string, string]> => {
     const bg = hex(t, '--bg')
     return [
       ['--bg', bg],
       ['--bg-hover', over(t['--bg-hover'] ?? '', bg)],
       ['--bg-selected', over(t['--bg-selected'] ?? '', bg)],
+      ['--accent-soft', over(t['--accent-soft'] ?? '', bg)],
       ['--urgent-soft', wash(hex(t, '--status-urgent'), bg, 0.08)],
     ]
   }
@@ -281,11 +284,11 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   // Every node and segment that CARRIES a fact: `--status-done` (the done disc and the solid
   // segment), `--status-in-review` (the open disc, the review ring, the review segment) and
   // `--status-urgent` (the failing square, the urgent ring after a break, the broken rail
-  // connector). Non-text drawing, so 3:1 (WCAG 1.4.11) is the bar — on all four surfaces, because a
+  // connector). Non-text drawing, so 3:1 (WCAG 1.4.11) is the bar — on all five surfaces, because a
   // track that is legible on a plain row and not on the selected one is legible in the screenshot
   // and not in use. Pinned because focused light's original `--status-in-review` measured 2.88 over
   // its own soft-accent wash: a failure visible in exactly one preset, on exactly one row state.
-  it('every fact-carrying track node is distinguishable on all four track surfaces (>= 3.0)', () => {
+  it('every fact-carrying track node is distinguishable on all five track surfaces (>= 3.0)', () => {
     for (const [name, surface] of trackSurfaces()) {
       for (const node of ['--status-done', '--status-in-review', '--status-urgent'] as const) {
         expect(contrastRatio(hex(t, node), surface), `${node} on ${name}`).toBeGreaterThanOrEqual(
@@ -301,7 +304,7 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   // `--text-3` measures 2.80–3.70 on these surfaces, which is not a bar an 11px commit sha may sit
   // under. Warm dark is why `--status-urgent-ink` is no longer an alias of `--status-urgent` in
   // every dark preset: the glyph hue measured 4.35 over that preset's soft-accent wash.
-  it('the // break ink and the mono fact line meet AA on all four track surfaces (>= 4.5)', () => {
+  it('the // break ink and the mono fact line meet AA on all five track surfaces (>= 4.5)', () => {
     for (const [name, surface] of trackSurfaces()) {
       for (const ink of ['--status-urgent-ink', '--text-2'] as const) {
         expect(contrastRatio(hex(t, ink), surface), `${ink} on ${name}`).toBeGreaterThanOrEqual(

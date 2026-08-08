@@ -120,8 +120,11 @@ A long result renders one page of rows and then states, plainly, how many matchi
 **not** on screen: `↓ 109 more`. That number is the real remainder of the filtered set — never a
 constant, never an estimate.
 
-The masthead's count always states the **full** filtered total, so the page never understates how
-much work matches. The fold is a real button: move down from the last row to reach it, press Enter
+A page holds a fixed number of **issues**, not of rows — so when you group by label, an issue that
+carries two labels appears under both, and the page draws both rows. The masthead's count always
+states the **full** filtered total of issues, so the page never understates how much work matches,
+and the fold's number is that total minus the issues on screen. The fold is a real button: move
+down from the last row to reach it, press Enter
 or Space to render the next page, and focus lands on the first newly revealed row. When everything
 matching is on screen, no fold is drawn at all.
 

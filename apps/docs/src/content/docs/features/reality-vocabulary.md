@@ -70,7 +70,7 @@ the point of disagreement. Which segment breaks says which disagreement fired:
 
 | The disagreement | Where the track breaks |
 | --- | --- |
-| The board ran ahead of the pull request — in review with no PR, or only a draft | On the first segment |
+| The board ran ahead of the pull request — an in-review issue whose only PR is a draft | On the first segment |
 | Done, but CI is failing | On the segment leaving Checks |
 | The PR merged, but the issue is not done or canceled | On the last segment |
 

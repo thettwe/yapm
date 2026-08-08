@@ -17,7 +17,7 @@
 ## 3. The row (`packages/ui`)
 
 - [x] 3.1 `issue-row.tsx`: an optional `phrase?: ReactNode` slot between the title's spring and the reality track, at a reserved `PHRASE_SLOT_WIDTH`, right-aligned, `flex-none`, non-wrapping (design D5) — reserved whether or not it is filled
-- [x] 3.2 The selected row's treatment as the mock draws it: left accent rail, tinted ground, accent ink on the mono key
+- [x] 3.2 The selected row's treatment as the mock draws it: left accent rail, tinted ground, primary text ink on the mono key (DI-2 — the accent cannot hold AA on the selected tint)
 - [x] 3.3 Confirm the slot order matches the mock exactly: priority tick · status arc · key · title · spring · phrase · track · age · labels · updated · avatar
 - [x] 3.4 `issue-row.stories.tsx`: the mock's four cases (checks failing, done-in-git, built-not-live, in-review) plus a quiet row and the selected divergent row (the mock's ENG-116 — phrase AND broken track together)
 
@@ -26,7 +26,7 @@
 - [x] 4.1 `delivery.ts`: extend `deliveryView` (or add a sibling) to return the row's `RestPhrase` from the SAME `computeDeliverySignal` result the track already uses — one signal computation per row, not two
 - [x] 4.2 `issue-list.tsx`: render the phrase into the row's slot, with `ProvenanceMark provider="github" size={12} label={null}` appended when the entry carries a source; nothing rendered when `text` is `null`
 - [x] 4.3 Group headers to the mock: quiet tinted band, the grouping's own mark (status arc / priority tick / label dot / none), label, mono filtered count; the labelled region survives
-- [x] 4.4 The fold (design D8): `visible = ordered.slice(0, cap)`, a real `<button>` reading `↓ {ordered.length - cap} more`, rendered only when there is something hidden; `j`/`ArrowDown` from the last row reaches it, Enter/Space raises the cap and focus lands on the first newly revealed row; `ordered` (and so the masthead count, the selection targets and the ⌘K context) stays the full filtered set
+- [x] 4.4 The fold (design D8, amended by DI-13): the page holds the first `cap` DISTINCT issues and draws every row slot they own, and a real `<button>` reads `↓ {count - shown} more` over the same unit, rendered only when there is something hidden; `j`/`ArrowDown` from the last row reaches it, Enter/Space raises the cap and focus lands on the first newly revealed row; the filtered issue count (and so the masthead count, the selection targets and the ⌘K context) stays whole
 
 ## 5. The quiet filter bar
 

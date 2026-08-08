@@ -101,9 +101,9 @@ const SORT_LABEL: Record<IssueSortKey, string> = {
   number: 'Number',
 }
 
-// One rendered page. The fold below states the true remainder, so this is a rendering bound and
-// never a claim about how much work matches — `ordered` stays the whole filtered set, and so do
-// the masthead count, the selection targets and the palette's context.
+// One rendered page, counted in ISSUES rather than in row slots. The fold below states the true
+// remainder, so this is a rendering bound and never a claim about how much work matches — the
+// masthead count stays the whole filtered set.
 const VISIBLE_ROW_CAP = 50
 
 // The quiet register for the two native `<select>`s the bar keeps: transparent, borderless, and —
@@ -321,8 +321,10 @@ function IssueListBody({
   const [cap, setCap] = useState(VISIBLE_ROW_CAP)
   const containerRef = useRef<HTMLElement>(null)
   const foldRef = useRef<HTMLButtonElement>(null)
-  // The index the fold must land focus on once the newly revealed rows have mounted.
-  const revealedRef = useRef<number | null>(null)
+  // The issues on screen when the fold was pressed. Focus lands on the first row that is not one
+  // of them — an index cannot stand in for that, because raising the cap can reveal a row ABOVE
+  // the last visible one (a newly admitted issue's first slot sits wherever its group does).
+  const revealedRef = useRef<ReadonlySet<string> | null>(null)
 
   const assigneeName = useCallback(
     (id: string) => memberOptions.find((member) => member.id === id)?.name ?? id,
@@ -339,7 +341,7 @@ function IssueListBody({
     [projectOptions],
   )
 
-  const { groups, ordered } = useMemo(
+  const { groups, ordered, count } = useMemo(
     () =>
       buildGroups(rows, {
         filter,
@@ -366,20 +368,29 @@ function IssueListBody({
     ],
   )
 
-  const visibleCount = Math.min(cap, ordered.length)
-  // The cap bounds ROW SLOTS, but the fold counts ISSUES — and under label grouping one issue
-  // holds a slot in every label group it carries. Subtracting slots would draw `↓ 3 more` over a
-  // page where all three are already on screen under another label, which is the one thing the
-  // fold may never do.
-  const hiddenCount = useMemo(() => {
-    const rendered = new Set(ordered.slice(0, visibleCount).map((issue) => issue.id))
-    return new Set(
-      ordered
-        .slice(visibleCount)
-        .map((issue) => issue.id)
-        .filter((id) => !rendered.has(id)),
-    ).size
-  }, [ordered, visibleCount])
+  // The page is cut in ISSUES, not in row slots: `cap` and the fold's remainder then speak the
+  // same unit as the masthead. The visible set is the first `cap` DISTINCT ids in `ordered`, and a
+  // repeated issue's later slots come with it — so under label grouping a page that holds every
+  // matching issue draws every one of their rows, and `hiddenCount === 0` means nothing is hidden
+  // rather than "nothing is hidden except the rows we truncated".
+  const { visibleGroups, visible, visibleIds, hiddenCount } = useMemo(() => {
+    const ids = new Set<string>()
+    for (const issue of ordered) {
+      if (ids.size >= cap) break
+      ids.add(issue.id)
+    }
+    const shown = groups
+      .map((group) => ({ group, issues: group.issues.filter((issue) => ids.has(issue.id)) }))
+      .filter((entry) => entry.issues.length > 0)
+    return {
+      visibleGroups: shown,
+      visible: shown.flatMap((entry) => entry.issues),
+      visibleIds: ids as ReadonlySet<string>,
+      hiddenCount: count - ids.size,
+    }
+  }, [groups, ordered, cap, count])
+
+  const visibleCount = visible.length
 
   // A new filter is a new result, so the fold starts closed again — otherwise a cap raised on a
   // hundred rows would silently render every row of the next, narrower query.
@@ -396,9 +407,9 @@ function IssueListBody({
 
   const targets = useMemo(() => {
     if (selection.size > 0) return [...selection]
-    const current = ordered[focusIndex]
+    const current = visible[focusIndex]
     return current ? [current.id] : []
-  }, [selection, ordered, focusIndex])
+  }, [selection, visible, focusIndex])
 
   // Feed the ambient palette target (⌘K acts on the focused/selected issue). Writes a ref in
   // the provider, so this never re-renders the list.
@@ -430,17 +441,19 @@ function IssueListBody({
 
   // Focus lands on the first newly revealed row, once it has mounted.
   useEffect(() => {
-    const target = revealedRef.current
-    if (target === null) return
+    const previous = revealedRef.current
+    if (previous === null) return
     revealedRef.current = null
+    const target = visible.findIndex((issue) => !previous.has(issue.id))
+    if (target < 0) return
     setFocusIndex(target)
     focusRow(target)
-  }, [cap, focusRow])
+  }, [visible, focusRow])
 
   const openFold = useCallback(() => {
-    revealedRef.current = Math.min(visibleCount, ordered.length - 1)
+    revealedRef.current = visibleIds
     setCap((prev) => prev + VISIBLE_ROW_CAP)
-  }, [visibleCount, ordered.length])
+  }, [visibleIds])
 
   const toggleSelect = useCallback((id: string) => {
     setSelection((prev) => {
@@ -453,7 +466,7 @@ function IssueListBody({
 
   const onKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>) => {
-      if (ordered.length === 0) return
+      if (visible.length === 0) return
       // The fold is a real button: the browser already turns Enter and Space on it into a click,
       // and the row model must not also read those as "open the focused issue".
       if (event.target === foldRef.current) {
@@ -464,7 +477,7 @@ function IssueListBody({
         }
         return
       }
-      const current = ordered[focusIndex]
+      const current = visible[focusIndex]
       switch (event.key) {
         case 'j':
         case 'ArrowDown':
@@ -522,7 +535,7 @@ function IssueListBody({
       }
     },
     [
-      ordered,
+      visible,
       focusIndex,
       move,
       toggleSelect,
@@ -548,7 +561,7 @@ function IssueListBody({
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-bg">
       <Toolbar
-        count={ordered.length}
+        count={count}
         {...(lens === undefined ? {} : { lens })}
         filter={filter}
         setFilter={setFilter}
@@ -576,21 +589,20 @@ function IssueListBody({
         onKeyDown={onKeyDown}
         aria-label={`${team.name} issues`}
       >
-        {ordered.length === 0 ? (
+        {visible.length === 0 ? (
           <p className="p-8 text-center text-sm text-text-3" role="status">
             No matches
           </p>
         ) : (
-          groups.map((group) => {
+          visibleGroups.map(({ group, issues }) => {
             const startIndex = runningIndex
-            runningIndex += group.issues.length
-            if (startIndex >= cap) return null
+            runningIndex += issues.length
             return (
               <IssueGroupSection
                 key={group.key}
                 group={group}
+                issues={issues}
                 startIndex={startIndex}
-                cap={cap}
                 focusIndex={focusIndex}
                 selection={selection}
                 teamKey={teamKey}
@@ -604,8 +616,8 @@ function IssueListBody({
         )}
 
         {hiddenCount > 0 ? (
-          // The count is a subtraction over the true filtered length — never a constant, never an
-          // estimate, and never a truncation the page declines to mention.
+          // The count is a subtraction over the true filtered ISSUE count — never a constant,
+          // never an estimate, and never a truncation the page declines to mention.
           <button
             ref={foldRef}
             type="button"
@@ -623,8 +635,8 @@ function IssueListBody({
 
 function IssueGroupSection({
   group,
+  issues,
   startIndex,
-  cap,
   focusIndex,
   selection,
   teamKey,
@@ -634,8 +646,10 @@ function IssueGroupSection({
   onToggleSelect,
 }: {
   group: IssueGroup
+  // The group's rows on THIS page. Equal to `group.issues` whenever nothing is folded away, which
+  // is what makes the header's count and the rows beneath it agree.
+  issues: readonly IssueRowData[]
   startIndex: number
-  cap: number
   focusIndex: number
   selection: ReadonlySet<string>
   teamKey: string
@@ -665,9 +679,8 @@ function IssueGroupSection({
         {/* The count after filtering, not after the fold: the group states how much matches. */}
         <span className="font-mono text-[11.5px] text-text-2">{group.issues.length}</span>
       </div>
-      {group.issues.map((issue, offset) => {
+      {issues.map((issue, offset) => {
         const index = startIndex + offset
-        if (index >= cap) return null
         const pending = isPendingNumber(issue)
         const view = deliveryView(issue, issue.linked ?? {})
         return (

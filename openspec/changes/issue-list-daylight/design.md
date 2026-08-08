@@ -360,3 +360,16 @@ Taken during the build:
   One incidental fact worth writing down: a `Status` or `Priority` option's accessible name is the
   drawn mark's `role="img"` label **concatenated with** the option text and no separator
   (`"TodoTodo"`), so those two queries anchor on the tail rather than matching the whole string.
+
+- **DI-13 — the page is cut in ISSUES, and `buildGroups` publishes the count that says so.** D8
+  described the fold as `ordered.slice(0, cap)`, which is a bound on row SLOTS. Under label
+  grouping one issue holds a slot in every label it carries, so slots and issues are different
+  numbers and every expression that mixed them was wrong in a different way: the masthead stated
+  double the matching issues, and a page whose overflowing slots were all repeats truncated its
+  last group with no fold to say so. `buildGroups` now returns `count` — the distinct issues that
+  matched — beside `groups` and `ordered`, and the list takes the first `cap` distinct ids as the
+  visible set, drawing every slot those issues hold. One unit is decided in one place: the
+  masthead and the fold's remainder both read `count`, the rows read the slots. The consequence
+  worth naming is that a page can now draw more ROWS than the cap (60 rows for 50 issues under two
+  labels) — which is the honest reading, because the cap is a promise about how much work the page
+  shows, not about how many lines it prints.

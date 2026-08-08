@@ -263,29 +263,68 @@ test('a short result draws no fold', () => {
   expect(screen.queryByTestId('issue-fold')).toBeNull()
 })
 
-test('the fold counts issues, not row slots, when a grouping repeats a row', () => {
-  const both = [
-    { id: 'l-1', name: 'bug', color: '#cc5a40' },
-    { id: 'l-2', name: 'ux', color: '#3f7fbf' },
-  ]
+const BOTH_LABELS = [
+  { id: 'l-1', name: 'bug', color: '#cc5a40' },
+  { id: 'l-2', name: 'ux', color: '#3f7fbf' },
+]
+
+function mountGroupedByLabel(count: number) {
   harness.rows = {
     'teams.all': [TEAM],
-    'labels.byTeam': both,
-    'issues.byTeam': Array.from({ length: 30 }, (_, index) =>
-      issue({ id: `i-${index}`, number: index + 1, title: `Row ${index}`, labels: both, pr: null }),
+    'labels.byTeam': BOTH_LABELS,
+    'issues.byTeam': Array.from({ length: count }, (_, index) =>
+      issue({
+        id: `i-${index}`,
+        number: index + 1,
+        title: `Row ${index}`,
+        labels: BOTH_LABELS,
+        pr: null,
+      }),
     ),
   }
   mount()
   fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'label' } })
+}
+
+// The header's own count, read off the page rather than assumed.
+function groupCount(name: string): number {
+  const header = screen.getByRole('region', { name }).firstElementChild as HTMLElement
+  return Number(within(header).getByText(/^\d+$/).textContent)
+}
+
+test('with no fold drawn, every group draws every slot its header counts', () => {
+  mountGroupedByLabel(30)
 
   // Under label grouping an issue holds a slot in every label group it carries: 30 issues become
-  // 60 slots over a 50-slot page. Every one of the 30 is nonetheless on screen, so the page has
-  // nothing left to state — a fold here would be counting slots and claiming issues.
-  expect(rows().length).toBeGreaterThan(30)
-  for (let index = 0; index < 30; index += 1) {
-    expect(screen.getAllByText(`Row ${index}`).length).toBeGreaterThan(0)
-  }
+  // 60 slots over a 50-ISSUE page. Nothing is hidden, so a fold here would be counting slots and
+  // claiming issues — and every one of the 60 slots must be on screen, because the page is cut in
+  // issues and a repeated issue's later slots come with it.
   expect(screen.queryByTestId('issue-fold')).toBeNull()
+  expect(rows()).toHaveLength(60)
+  for (let index = 0; index < 30; index += 1) {
+    expect(screen.getAllByText(`Row ${index}`)).toHaveLength(2)
+  }
+  // The invariant the truncation broke: a header states how much matches, and with nothing folded
+  // away that is also how much it draws.
+  for (const name of ['bug', 'ux']) {
+    const group = screen.getByRole('region', { name })
+    expect(within(group).getAllByTestId('issue-row'), name).toHaveLength(groupCount(name))
+  }
+})
+
+test('when a repeating grouping does overflow, the fold states the issues still to come', () => {
+  mountGroupedByLabel(60)
+
+  const fold = screen.getByTestId('issue-fold')
+  const hidden = Number(/\d+/.exec(fold.textContent ?? '')?.[0])
+  const stated = Number(screen.getByTestId('masthead-count').textContent)
+  const shown = new Set(rows().map((row) => row.getAttribute('data-issue-id')))
+
+  // The masthead counts issues, not slots, so it states 60 rather than 120.
+  expect(stated).toBe(60)
+  expect(shown.size + hidden).toBe(stated)
+  // Every issue the page admitted brought both of its slots with it.
+  expect(rows()).toHaveLength(shown.size * 2)
 })
 
 test.each([['Enter'], [' ']] as const)(

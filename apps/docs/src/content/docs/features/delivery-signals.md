@@ -80,7 +80,7 @@ out beside it. It fires when:
 
 - a linked PR is **merged** but the issue is not marked done or canceled,
 - an issue is **done** but its CI is failing, or
-- an issue is **in review** with no linked pull request at all, or only a draft one.
+- an issue is **in review** while its only linked pull request is still a draft.
 
 Which segment breaks says which of the three fired — see
 [the `//` break](/features/reality-vocabulary/#the--break). It rides on the same linked data as the

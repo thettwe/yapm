@@ -471,3 +471,43 @@ tier it belongs to.
 said nothing about the e2e suite at all, so a first-time contributor writing a spec would meet the
 isolation contract for the first time as a CI failure. It now points at the e2e README in three
 lines, next to the gates it sits beside.
+
+### D16 — The first CI result, read honestly: 90 passed, 2 failed, and one of them is new
+
+Run 31274716121 on `23ceff3` — the first full-suite run of this change — finished **2 failed, 90
+passed (22.4m)**. Both failures failed on the first attempt AND on `retries: 1`. Neither is waved
+away here, because a suite this change exists to make trustworthy cannot land on "it was probably
+flaky".
+
+**`projects.spec.ts:188` — `Test timeout of 60000ms exceeded`.** This is the same test named in the
+brief, and the isolation did not fix it. Two things about it are now measured rather than assumed:
+
+- It **also fails on `main`**, twice today, on runs with none of this change in them (31274936160 and
+  31270121050, the latter also taking `projects.spec.ts:246` with it). So this is not a regression
+  introduced here, and the change is not the reason it is still failing.
+- The browser log attached to the failure holds **50 `[vite] connected.` messages across 95
+  seconds**, each preceded by `[vite] connecting...` and followed by React's devtools banner — the
+  signature of a **full page load**, not of a websocket blip. That is far more page loads than the
+  test performs. Something is reloading the page under the test. Vite's dev server watches
+  `apps/web`, and two things write into `apps/web` **while the suite runs**: Playwright's
+  `outputDir: './test-results'` (traces are written continuously under `retain-on-failure`) and
+  `STORAGE_LOCAL_DIR: 'data/e2e-files'`. That is a hypothesis with a mechanism and a cheap test —
+  move both paths outside the Vite root, or add them to `server.watch.ignored`, and re-measure —
+  and it is a **better** candidate for the two-day flake than fixture accumulation was. It is not
+  fixed here; it is written down with its evidence so the next pass starts from it rather than
+  from the beginning.
+
+**`retro.spec.ts:236 › the retro command palette reaches every retro action` — new, and probably
+ours.** `expect(getByTestId('retro-vote-budget')).toHaveText('3/3 dots left')` received
+`2/3 dots left`, resolved 44 times over 20s without ever changing: the "take a dot back" palette
+action did nothing at all. This test has **not** failed on any `main` run examined, and the palette
+half of this file was not edited by this change (the only diff in `retro.spec.ts` is the `test`
+import and the two-client test's context handling).
+
+The narrowing, from reading `apps/web/src/retro/retro-command.tsx:312`: the "Take a dot back" item
+renders only when `myDots.length > 0`, and `myDots` is `myVotesFor(votes, target.targetId)` — scoped
+to the **focused** target, not to the retro. So at the second palette open either `target` was null
+or it was not the card the dot went on; typing a query that matches no item and pressing Enter is a
+no-op, which is exactly the observed nothing-happened. What this pass could not establish, without
+the trace, is why isolation changes which card is focused. It is unresolved and it is the first
+thing the next pass should take, ahead of anything cosmetic.

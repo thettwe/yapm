@@ -202,7 +202,7 @@ test('an empty inbox says two words, and only once the result is complete', () =
   harness.rows['triage.inbox'] = []
   const view = render(<TriageView teamId="team-1" />)
 
-  const cleared = screen.getByRole('status')
+  const cleared = screen.getByTestId('triage-cleared')
   expect(within(cleared).getByTitle('Done')).toBeInTheDocument()
   expect(within(cleared).getByText('Nothing waiting.')).toBeInTheDocument()
   // Two words and three doorways: the only full stop on the cleared page is the one in them.
@@ -212,8 +212,91 @@ test('an empty inbox says two words, and only once the result is complete', () =
   view.unmount()
   harness.incomplete = new Set(['triage.inbox'])
   render(<TriageView teamId="team-1" />)
-  expect(screen.getByRole('status')).toHaveTextContent('Loading…')
+  expect(screen.getByTestId('triage-announcement')).toHaveTextContent('Loading…')
+  expect(screen.getByText('Loading…', { selector: 'p:not(.sr-only)' })).toBeInTheDocument()
   expect(screen.queryByText('Nothing waiting.')).not.toBeInTheDocument()
+  // A count of 0 beside `Loading…` would be band 2 contradicting the body underneath it.
+  expect(screen.queryByTestId('masthead-count')).not.toBeInTheDocument()
+})
+
+// A live region announces a CHANGE to its contents. A `role="status"` node inserted with its
+// message already inside it is not reliably spoken, so the node that carries the syncing→cleared
+// transition has to be the same node on both sides of it.
+test('the announcement is one region that survives the transition it announces', () => {
+  seedQueue()
+  harness.rows['triage.inbox'] = []
+  harness.incomplete = new Set(['triage.inbox'])
+  const view = render(<TriageView teamId="team-1" />)
+
+  const region = screen.getByRole('status')
+  expect(region).toBe(screen.getByTestId('triage-announcement'))
+  expect(region).toHaveTextContent('Loading…')
+
+  harness.incomplete = new Set()
+  view.rerender(<TriageView teamId="team-1" />)
+
+  expect(screen.getByTestId('triage-announcement')).toBe(region)
+  expect(region).toHaveTextContent('Nothing waiting.')
+  // Exactly one live region: the drawn states no longer each carry their own.
+  expect(screen.getAllByRole('status')).toHaveLength(1)
+})
+
+// The routed issue can leave the inbox by a path this view never sees — another client, the
+// palette, a rebase. When it does, the id it left behind must not latch the whole queue shut.
+test('an issue leaving the inbox under an open transient does not deaden the queue', () => {
+  seedQueue()
+  const view = render(<TriageView teamId="team-1" />)
+
+  fireEvent.click(screen.getByTestId('triage-route'))
+  expect(screen.getByRole('dialog', { name: 'Route ENG-125' })).toBeInTheDocument()
+
+  harness.rows['triage.inbox'] = (harness.rows['triage.inbox'] as readonly { id: string }[]).filter(
+    (row) => row.id !== 'issue-1',
+  )
+  view.rerender(<TriageView teamId="team-1" />)
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  harness.mutate.mockClear()
+  fireEvent.keyDown(screen.getAllByTestId('triage-row')[0] as HTMLElement, { key: 'a' })
+  expect(lastMutation()?.mutator.mutatorName).toBe('issue.acceptTriage')
+  expect(lastMutation()?.args.id).toBe('issue-2')
+})
+
+// The queue owns the keys pressed ON a row and nothing else. A section-wide `Enter` that
+// preventDefaults everything reaching it leaves the attachment chip — a plain download link —
+// with no keyboard activation at all.
+test('the queue’s keys stop at the row: the panel’s own controls keep Enter', () => {
+  seedQueue()
+  render(<TriageView teamId="team-1" />)
+
+  harness.navigate.mockClear()
+  for (const testId of ['triage-attachment', 'triage-accept', 'triage-open']) {
+    fireEvent.keyDown(screen.getByTestId(testId), { key: 'Enter', bubbles: true })
+  }
+  expect(harness.navigate).not.toHaveBeenCalled()
+
+  fireEvent.keyDown(screen.getAllByTestId('triage-row')[0] as HTMLElement, { key: 'Enter' })
+  expect(harness.navigate).toHaveBeenCalledTimes(1)
+})
+
+// A pointer-only reader must be able to bring any row under decision, not only the head. A click
+// SELECTS; opening the issue is `⏎` or the panel's own Open control.
+test('clicking a row brings it under decision rather than navigating away', () => {
+  seedQueue()
+  render(<TriageView teamId="team-1" />)
+
+  harness.navigate.mockClear()
+  const third = screen.getAllByTestId('triage-row')[2] as HTMLElement
+  fireEvent.click(third)
+
+  expect(harness.navigate).not.toHaveBeenCalled()
+  const panel = screen.getByTestId('triage-decision')
+  expect(third.nextElementSibling).toBe(panel)
+  expect(within(panel).getByTestId('triage-provenance')).toHaveTextContent('Dana Okoro')
+
+  // …and the panel's Open control is the pointer path onto the issue itself.
+  fireEvent.click(within(panel).getByTestId('triage-open'))
+  expect(harness.navigate).toHaveBeenCalledTimes(1)
 })
 
 test('the panel follows the decision, and the verdict acts on the issue the panel names', () => {

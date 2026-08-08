@@ -733,4 +733,19 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   it('the empty queue’s done disc is distinguishable on the page ground (>= 3.0)', () => {
     expect(contrastRatio(hex(t, '--status-done'), hex(t, '--bg'))).toBeGreaterThanOrEqual(AA_LARGE)
   })
+
+  // Triage states a refused write in two places — the masthead's meta line on `--bg` at 12px, and
+  // the route transient's failure line on `--bg-elevated` at 11px — and both are TEXT, so both
+  // answer to AA normal. That is the whole reason the palette splits `--status-urgent-ink` off
+  // `--status-urgent`: the mark hue is tuned to read as a MARK, and inking a sentence with it
+  // misses 4.5:1 in every light preset. A failure message the reader cannot read is the one
+  // message on this page that must never be lost.
+  it('the triage failure lines meet AA on both grounds they are drawn on (>= 4.5)', () => {
+    for (const ground of ['--bg', '--bg-elevated'] as const) {
+      expect(
+        contrastRatio(hex(t, '--status-urgent-ink'), hex(t, ground)),
+        ground,
+      ).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
 })

@@ -21,6 +21,7 @@ import { useMembership } from '@/auth/use-membership'
 import { cycleKey } from '@/cycles/model'
 import { Masthead } from '@/frame/masthead'
 import { attachmentSrc } from '@/issues/attachments/upload'
+import { mentionNamesFor } from '@/issues/mentionables'
 import {
   formatRelative,
   type IssueRowData,
@@ -135,9 +136,10 @@ function UploadGlyph() {
 export function TriageView({ teamId }: { teamId: string }) {
   const navigate = useNavigate()
   const zero = useZero()
-  const { canWrite } = useMembership()
+  const { canWrite, userId } = useMembership()
   const [teams] = useQuery(queries.teams.all())
   const [users] = useQuery(queries.users.all())
+  const [workspaceMembers] = useQuery(queries.members.all())
   const [labels] = useQuery(queries.labels.byTeam({ teamId }))
   const [cycles] = useQuery(queries.cycles.byTeam({ teamId }))
   const [projects] = useQuery(queries.projects.all())
@@ -184,23 +186,38 @@ export function TriageView({ teamId }: { teamId: string }) {
     [inboxRaw],
   )
 
+  // Scoped to the people who can read the issue under decision, not to the whole roster: the same
+  // map `issue-detail` builds, so one description reads the same on both surfaces.
+  const mentionNames = useMemo(
+    () => mentionNamesFor({ teamMembers: members, workspaceMembers, users, selfId: userId }),
+    [members, workspaceMembers, users, userId],
+  )
+
   const focusRow = useCallback((index: number) => {
     const el = containerRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`)
     el?.focus()
   }, [])
 
+  // Whether the transient is ACTUALLY open, never the raw id: an issue can leave the inbox by a
+  // path this view never sees (another client, the palette, a rebase), and an id that outlives its
+  // row would leave the whole queue latched shut.
+  const routingOpen = routingId !== null && issues[focusIndex]?.id === routingId
+
   useEffect(() => {
     const clamped = Math.min(focusIndex, Math.max(0, issues.length - 1))
     if (clamped !== focusIndex) setFocusIndex(clamped)
+    if (routingId !== null && !issues.some((candidate) => candidate.id === routingId)) {
+      setRoutingId(null)
+    }
     const container = containerRef.current
     // A sync tick must never pull focus out of the open transient mid-edit; the transient hands
     // focus back to its row itself when it closes.
-    if (!container || issues.length === 0 || routingId !== null) return
+    if (!container || issues.length === 0 || routingOpen) return
     const active = document.activeElement
     if (active === document.body || container.contains(active)) {
       focusRow(clamped)
     }
-  }, [issues, focusIndex, routingId, focusRow])
+  }, [issues, focusIndex, routingId, routingOpen, focusRow])
 
   // The panel and the verdict keys must always name the same issue, so moving focus closes an
   // open transient rather than leaving it addressed to the row that just lost the decision.
@@ -240,9 +257,40 @@ export function TriageView({ teamId }: { teamId: string }) {
     [navigate, teamId],
   )
 
+  const closeRoute = useCallback(() => {
+    setRoutingId(null)
+    focusRow(focusIndex)
+  }, [focusIndex, focusRow])
+
+  // A pointer must be able to bring any row under decision, not just the head: on this surface a
+  // plain click SELECTS, and opening the issue is `⏎` or the panel's own Open control.
+  const select = useCallback(
+    (index: number) => {
+      setRoutingId(null)
+      setFocusIndex(index)
+      focusRow(index)
+    },
+    [focusRow],
+  )
+
   const onKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>) => {
-      if (issues.length === 0 || routingId !== null) return
+      // Dismissal never depends on where focus ended up: a transient a stranded reader cannot
+      // close is worse than one that closes a little eagerly.
+      if (event.key === 'Escape') {
+        if (!routingOpen) return
+        event.preventDefault()
+        event.stopPropagation()
+        closeRoute()
+        return
+      }
+      // The queue owns only the keys pressed ON a row. Everything the decision panel contains —
+      // the attachment link, the verdict buttons, the transient's controls — keeps its own keys,
+      // which is why `Enter` on a chip must not be swallowed into a navigation.
+      if (!(event.target instanceof HTMLElement) || event.target.dataset.slot !== 'issue-row') {
+        return
+      }
+      if (issues.length === 0 || routingOpen) return
       const current = issues[focusIndex]
       switch (event.key) {
         case 'j':
@@ -287,13 +335,8 @@ export function TriageView({ teamId }: { teamId: string }) {
           break
       }
     },
-    [issues, focusIndex, routingId, move, onOpenIssue, canWrite, accept, decline],
+    [issues, focusIndex, routingOpen, closeRoute, move, onOpenIssue, canWrite, accept, decline],
   )
-
-  const closeRoute = useCallback(() => {
-    setRoutingId(null)
-    focusRow(focusIndex)
-  }, [focusIndex, focusRow])
 
   const commitRoute = useCallback(
     async (issue: TriageIssue, draft: RouteDraft): Promise<string | undefined> => {
@@ -344,8 +387,10 @@ export function TriageView({ teamId }: { teamId: string }) {
       <Masthead
         title="Triage"
         // The same `triage.inbox` rows `team-home.ts`'s `buildAttention` counts: one derivation,
-        // so the masthead, the deck badge, the statusline and Team Home cannot disagree.
-        count={issues.length}
+        // so the masthead, the deck badge, the statusline and Team Home cannot disagree. An
+        // unfinished sync has no count to state — `0` beside `Loading…` is the page contradicting
+        // itself in the same band.
+        {...(inboxResult.type === 'complete' ? { count: issues.length } : {})}
         {...(issues.length === 0
           ? {}
           : { actions: <span className="font-mono text-[11px] text-text-3">oldest first</span> })}
@@ -353,13 +398,23 @@ export function TriageView({ teamId }: { teamId: string }) {
           ? {}
           : {
               meta: (
-                <span className="text-xs text-status-urgent" role="alert">
+                <span className="text-xs text-status-urgent-ink" role="alert">
                   {error}
                 </span>
               ),
             })}
       />
       <div className="flex min-h-0 flex-1 flex-col bg-bg">
+        {/* ONE live region, mounted before its contents ever change. A `role="status"` node that is
+            INSERTED with its message already inside it is not reliably spoken, and the transition
+            this page most needs announced — still syncing, then cleared — is exactly that swap. */}
+        <p className="sr-only" role="status" aria-live="polite" data-testid="triage-announcement">
+          {inboxResult.type === 'complete'
+            ? issues.length === 0
+              ? 'Nothing waiting.'
+              : `${issues.length} waiting`
+            : 'Loading…'}
+        </p>
         <section
           ref={containerRef}
           className="flex-1 overflow-y-auto pb-10 outline-none"
@@ -370,9 +425,7 @@ export function TriageView({ teamId }: { teamId: string }) {
             inboxResult.type === 'complete' ? (
               <EmptyQueue teamId={teamId} />
             ) : (
-              <p className="p-8 text-sm text-text-3" role="status">
-                Loading…
-              </p>
+              <p className="p-8 text-sm text-text-3">Loading…</p>
             )
           ) : (
             issues.map((issue, index) => (
@@ -399,7 +452,7 @@ export function TriageView({ teamId }: { teamId: string }) {
                         assigneeLabel: `Reported by ${issue.reporter}`,
                       })}
                   onFocus={() => setFocusIndex(index)}
-                  onClick={() => onOpenIssue(issue)}
+                  onClick={() => select(index)}
                 />
                 {index === focusIndex ? (
                   <DecisionPanel
@@ -407,11 +460,13 @@ export function TriageView({ teamId }: { teamId: string }) {
                     issue={issue}
                     issueKeyText={issueKey(teamKey, issue)}
                     canWrite={canWrite}
-                    routing={routingId === issue.id}
+                    routing={routingOpen}
+                    mentionNames={mentionNames}
                     members={members}
                     labelOptions={labelOptions}
                     cycleOptions={cycleOptions}
                     projectOptions={projectOptions}
+                    onOpen={() => onOpenIssue(issue)}
                     onAccept={() => accept(issue.id)}
                     onDecline={() => decline(issue.id)}
                     onOpenRoute={() => setRoutingId(issue.id)}
@@ -435,10 +490,12 @@ function DecisionPanel({
   issueKeyText,
   canWrite,
   routing,
+  mentionNames,
   members,
   labelOptions,
   cycleOptions,
   projectOptions,
+  onOpen,
   onAccept,
   onDecline,
   onOpenRoute,
@@ -449,10 +506,12 @@ function DecisionPanel({
   issueKeyText: string
   canWrite: boolean
   routing: boolean
+  mentionNames: ReadonlyMap<string, string>
   members: readonly Option[]
   labelOptions: readonly LabelOption[]
   cycleOptions: readonly Option[]
   projectOptions: readonly Option[]
+  onOpen: () => void
   onAccept: () => void
   onDecline: () => void
   onOpenRoute: () => void
@@ -473,6 +532,7 @@ function DecisionPanel({
           <RichTextRenderer
             value={issue.description}
             resolveAttachmentSrc={attachmentSrc}
+            mentionNames={mentionNames}
             className="text-sm leading-relaxed text-text-1"
           />
         )}
@@ -538,8 +598,20 @@ function DecisionPanel({
             />
           </>
         ) : null}
+        {/* The movement hint, drawn as the mock draws it — but Open is a real control, because a
+            pointer-only reader has no other way off this page into the issue itself. */}
         <span className="mt-[3px] flex items-center gap-1.5 border-border-strong border-t pt-2.5 text-xs text-text-2">
-          <Key>⏎</Key>Open
+          <button
+            type="button"
+            data-testid="triage-open"
+            aria-label="Open issue"
+            aria-keyshortcuts="Enter"
+            onClick={onOpen}
+            className="flex items-center gap-1.5 rounded-control outline-none hover:text-accent-strong focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <Key>⏎</Key>
+            <span aria-hidden="true">Open</span>
+          </button>
           <span aria-hidden="true" className="text-border-strong">
             ·
           </span>
@@ -641,6 +713,27 @@ function RouteTransient({
     panelRef.current?.focus()
   }, [])
 
+  // The transient is non-modal, so focus can legitimately end up outside it — and a panel that can
+  // only be dismissed from inside itself is a panel a reader can get stranded beside. Both routes
+  // out are therefore document-level; the panel's own handler stops `Escape` before it reaches
+  // here, so a keypress inside closes exactly once.
+  useEffect(() => {
+    function onDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    function onDocumentPointerDown(event: PointerEvent) {
+      const target = event.target
+      if (target instanceof Node && panelRef.current?.contains(target) === true) return
+      onClose()
+    }
+    document.addEventListener('keydown', onDocumentKeyDown)
+    document.addEventListener('pointerdown', onDocumentPointerDown)
+    return () => {
+      document.removeEventListener('keydown', onDocumentKeyDown)
+      document.removeEventListener('pointerdown', onDocumentPointerDown)
+    }
+  }, [onClose])
+
   const applied = issue.labels ?? []
   const appliedIds = new Set(applied.map((label) => label.id))
   const addable = labelOptions.filter((label) => !appliedIds.has(label.id))
@@ -667,6 +760,9 @@ function RouteTransient({
       void commit()
       return
     }
+    // The frame's chords are not the queue's: `⌘K` and the `g …` go-tos are unqualified app-wide
+    // shortcuts and a transient that ate them would strand a reader inside it.
+    if (event.metaKey || event.ctrlKey) return
     // Every other key stays inside the transient: `a` in a select is a typeahead, not a verdict.
     event.stopPropagation()
   }
@@ -813,7 +909,7 @@ function RouteTransient({
       </div>
 
       {failure === undefined ? null : (
-        <p className="px-2 pb-1 text-[11px] text-status-urgent" role="alert">
+        <p className="px-2 pb-1 text-[11px] text-status-urgent-ink" role="alert">
           {failure}
         </p>
       )}
@@ -884,7 +980,7 @@ function EmptyQueue({ teamId }: { teamId: string }) {
     </span>
   )
   return (
-    <div role="status">
+    <div data-testid="triage-cleared">
       <div className="flex items-center gap-4 border-row-hairline border-y px-10 pt-[34px] pb-8">
         <StatusGlyph status="done" aria-hidden="true" className="size-[26px] text-status-done" />
         <span className="font-heading text-[21px] font-bold tracking-[-0.018em] text-text-1">

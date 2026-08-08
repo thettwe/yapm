@@ -74,6 +74,10 @@ On arrival that is the head of the queue — the oldest waiting issue. Moving th
 selection moves the panel with it, so the panel and the verdict keys can never name different
 issues. A viewer sees the panel too; only the verdicts are withheld.
 
+**Clicking a row brings it under decision** rather than opening it — on this surface the click
+is how a pointer reaches the row it wants to decide about. Opening the issue itself is `⏎`, or
+the **Open** control in the panel's own foot.
+
 ## The three verdicts
 
 The verdicts are **keys**, each stating its keycap and its word:
@@ -100,7 +104,9 @@ routing writes, each showing the value it will write (`none` where nothing is se
 | Labels | Labels of **this** issue's team — routing **adds**, it never removes |
 
 All five are applied in **one atomic write** that also clears the triage flag. `⏎` commits;
-`esc` closes the panel having written nothing and returns focus to the row it opened from.
+`esc` closes the panel having written nothing and returns focus to the row it opened from —
+from anywhere, not only from inside the panel — as does a click outside it. The frame's own
+chords (`⌘K`, and the `g …` go-tos) keep working while it is open.
 
 **Project** is the one field whose scope is not the issue's team, and deliberately so:
 [projects are workspace-level](/features/projects/), so any team's issue can belong to any

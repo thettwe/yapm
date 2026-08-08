@@ -295,3 +295,54 @@ write, exercised in `queries.anonymity.pg.test.ts`. The field adds no permission
 `canWrite` → `loadIssueForWrite` ordering is untouched and the project is existence-checked only —
 so the pg tier gains nothing it does not already hold, and no new pg file was invented to satisfy a
 tier count.
+
+### B11 — The transient's open-ness is DERIVED, and its dismissal does not depend on focus
+
+Ambiguous: `routingId` was both "which issue is being routed" and "is the queue's key handler
+live". Those are not the same claim — an issue can leave the inbox by a path this view never sees
+(another client, the palette, a rebase), and the id then outlives its row and latches the whole
+queue shut. Chosen: `routingOpen` is derived (`routingId` is the FOCUSED row's id), the effect
+reaps a `routingId` whose row is gone, and dismissal is document-level — `Escape` and a
+pointer-down outside both close, and `Escape` is handled ahead of the queue handler's early
+returns. The panel's own handler stops `Escape` before it reaches the document, so a keypress
+inside closes exactly once. `⌘K` and the `g …` chords are let through the transient's catch-all,
+because they are frame-owned and unqualified.
+
+### B12 — The queue's keys stop at the row, and a click SELECTS
+
+Two faults with one root: the queue's handler sat on the whole `<section>`. Its `Enter` branch
+preventDefaulted every `Enter` reaching it, which left the attachment chip — a plain
+`<a href download>` — with no keyboard activation path; and the only pointer gesture on a row
+navigated away, so a pointer-only reader could never bring rows 2..n under decision.
+
+Chosen: the handler bails unless the event originated on a row (`data-slot="issue-row"`, which
+`IssueRow` already carries), and a plain click SELECTS rather than opens. Opening is `⏎`, or the
+**Open** control the panel's movement hint became — the mock's `⏎ Open` drawn as it is drawn, but
+as a real button, because a pointer-only reader otherwise has no way onto the issue at all. This
+softens D3's mock-fidelity claim in the reader's favour and changes no measure.
+
+### B13 — One live region, not two that replace each other
+
+D7 asked that both the loading state and the cleared state carry `role="status"`. Built literally
+that is two nodes swapping places, and a live region that is INSERTED with its message already
+inside it is not reliably spoken — which is exactly the syncing→cleared transition the requirement
+exists for. Chosen: one persistent `sr-only` `role="status"` region outside the conditional, whose
+TEXT changes; the drawn states no longer carry their own. The spec's wording ("both states SHALL be
+announced") holds, and now actually happens. The masthead's count is suppressed while the result is
+incomplete for the same reason a premature `Nothing waiting.` is: a mono `0` beside `Loading…` is
+band 2 contradicting the body beneath it.
+
+### B14 — A refused write is a sentence, so it is inked `--status-urgent-ink`
+
+Both places Triage states a failure — the masthead's meta line and the route transient's 11px
+failure line — were inked `--status-urgent`, the MARK hue, which misses AA normal in every light
+preset. That is the split `--status-urgent-ink` exists for. Both moved; the pair is now asserted in
+`contrast.test.ts` on both grounds it is drawn on (`--bg` and `--bg-elevated`).
+
+### B15 — The decision panel resolves mentions with the same map the detail view uses
+
+The panel's `RichTextRenderer` had no `mentionNames`, so a description's `@mention` fell back to
+its frozen stored label — or to a raw user id — losing its chip and its resolved accessible name.
+One document must not read two ways on two surfaces. `mentionNamesFor` from `@/issues/mentionables`
+is threaded through, scoped exactly as `issue-detail` scopes it, which needed one already-shipped
+named query (`queries.members.all`) and no new ZQL.

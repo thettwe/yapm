@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -45,7 +45,7 @@ async function openTeamIssues(page: Page): Promise<string> {
   const teamLink = page.getByRole('link', { name: new RegExp(teamName) })
   await expect(teamLink).toBeVisible({ timeout: 20_000 })
   await teamLink.click()
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await stop(page, 'Issues').click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
   return teamName
 }
@@ -75,7 +75,7 @@ async function createIssue(page: Page, title: string): Promise<void> {
   await expect(page.locator(ROW).filter({ hasText: title })).toBeVisible({ timeout: 20_000 })
 }
 
-// From the list, seed some issues then switch to the board via the List↔Board toggle.
+// From the list, seed some issues then switch to the board via the masthead's List | Board lens.
 async function openBoard(page: Page, titles: string[]): Promise<void> {
   for (const title of titles) await createIssue(page, title)
   await page.getByRole('link', { name: 'Board' }).click()
@@ -394,6 +394,8 @@ test('a viewer sees the board but cannot move cards', async ({ page, browser }) 
     const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
     await teamCard.getByRole('button', { name: 'Join this team' }).click()
     await vp.getByRole('link', { name: new RegExp(teamName) }).click()
+    // Board is a LENS in the Issues masthead now, not a bar stop, so it is reached through Issues.
+    await stop(vp, 'Issues').click()
     await vp.getByRole('link', { name: 'Board' }).click()
 
     // The viewer reads the card.

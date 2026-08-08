@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, goToMore, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -42,7 +42,7 @@ async function openTeam(page: Page): Promise<string> {
   const teamLink = page.getByRole('link', { name: new RegExp(teamName) })
   await expect(teamLink).toBeVisible({ timeout: 20_000 })
   await teamLink.click()
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await stop(page, 'Issues').click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
   return teamName
 }
@@ -57,7 +57,7 @@ async function createIssue(page: Page, title: string): Promise<void> {
 }
 
 async function openProjects(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'Projects' }).click()
+  await goToMore(page, 'Projects')
   await expect(page.getByRole('button', { name: 'New project' })).toBeVisible({ timeout: 20_000 })
 }
 
@@ -74,7 +74,7 @@ async function createProject(page: Page, name: string, targetOffset?: number): P
 }
 
 async function moveIssueToProject(page: Page, issueTitle: string, projectName: string) {
-  await page.getByRole('link', { name: 'List' }).click()
+  await stop(page, 'Issues').click()
   const row = page.locator(ROW).filter({ hasText: issueTitle })
   await expect(row).toBeVisible({ timeout: 20_000 })
   await row.focus()
@@ -122,7 +122,7 @@ test('the roadmap places a dated project and is keyboard-navigable', async ({ pa
   await createProject(page, nearName, 14)
   await createProject(page, farName, 40)
 
-  await page.getByRole('link', { name: 'Roadmap' }).click()
+  await goToMore(page, 'Roadmap')
   const nearRow = page.locator(ROADMAP_ROW).filter({ hasText: nearName })
   await expect(nearRow).toBeVisible({ timeout: 20_000 })
 
@@ -230,8 +230,8 @@ test('a viewer reads the workspace-level projects but cannot create one', async 
     // The Projects link lives on the issue-views switch, so reach it via Issues (the team
     // overview only links to Issues and Board). The workspace-level project is then readable
     // by any member, including a viewer.
-    await vp.getByRole('link', { name: 'Issues' }).click()
-    await vp.getByRole('link', { name: 'Projects' }).click()
+    await stop(vp, 'Issues').click()
+    await goToMore(vp, 'Projects')
     await expect(vp.getByTestId('project-rail-item').filter({ hasText: projectName })).toBeVisible({
       timeout: 20_000,
     })
@@ -259,8 +259,8 @@ test('a project created in one client converges to another without a reload', as
     // A second client (same admin) watches the same team's projects.
     await enterApp(watcher)
     await watcher.getByRole('link', { name: new RegExp(teamName) }).click()
-    await watcher.getByRole('link', { name: 'Issues' }).click()
-    await watcher.getByRole('link', { name: 'Projects' }).click()
+    await stop(watcher, 'Issues').click()
+    await goToMore(watcher, 'Projects')
     await expect(watcher.getByRole('button', { name: 'New project' })).toBeVisible({
       timeout: 20_000,
     })

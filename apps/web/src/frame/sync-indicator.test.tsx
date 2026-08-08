@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
 import type { ConnectionSummary } from '@/zero/connection'
 import { RECOVERY_IDLE, SyncRecoveryContext } from '@/zero/recovery'
-import { ConnectionStatus } from './connection-status'
+import { SyncIndicator } from './sync-indicator'
 
 const CONNECTED: ConnectionSummary = {
   state: 'connected',
@@ -15,13 +15,13 @@ const CONNECTED: ConnectionSummary = {
 function show(connection: ConnectionSummary, retryNow = vi.fn()) {
   render(
     <SyncRecoveryContext.Provider value={{ ...RECOVERY_IDLE, retryNow }}>
-      <ConnectionStatus connection={connection} />
+      <SyncIndicator connection={connection} />
     </SyncRecoveryContext.Provider>,
   )
   return { retryNow, pill: screen.getByTestId('connection-status') }
 }
 
-test('the pill keeps the data-connection hook the existing suites assert on', () => {
+test('the statusline segment keeps the data-connection hook the existing suites assert on', () => {
   const { pill } = show(CONNECTED)
 
   expect(pill).toHaveAttribute('data-connection', 'connected')
@@ -84,7 +84,7 @@ test('the retry escape hatch is a real button, reachable by keyboard alone', () 
 
   retry.focus()
   expect(retry).toHaveFocus()
-  expect(retry.className).toContain('focus-visible:ring-ring')
+  expect(retry.className).toContain('focus-visible:ring-accent')
 
   // Enter and Space both reach a native button's activation behaviour.
   fireEvent.click(retry)
@@ -104,13 +104,13 @@ const OFFERED: ConnectionSummary = {
 // is still standing on it. Letting focus fall to `<body>` sends the next Tab back to the top
 // of the document — from a control in the app header, that is the whole page again.
 test('the retry control hands focus to the pill when recovery removes it', () => {
-  const view = render(<ConnectionStatus connection={OFFERED} />)
+  const view = render(<SyncIndicator connection={OFFERED} />)
 
   const retry = screen.getByTestId('connection-retry')
   retry.focus()
   expect(retry).toHaveFocus()
 
-  view.rerender(<ConnectionStatus connection={CONNECTED} />)
+  view.rerender(<SyncIndicator connection={CONNECTED} />)
 
   expect(screen.queryByTestId('connection-retry')).not.toBeInTheDocument()
   expect(screen.getByRole('status')).toHaveFocus()
@@ -119,10 +119,10 @@ test('the retry control hands focus to the pill when recovery removes it', () =>
 test('a retry control nobody was standing on does not steal focus', () => {
   const elsewhere = document.createElement('button')
   document.body.append(elsewhere)
-  const view = render(<ConnectionStatus connection={OFFERED} />)
+  const view = render(<SyncIndicator connection={OFFERED} />)
   elsewhere.focus()
 
-  view.rerender(<ConnectionStatus connection={CONNECTED} />)
+  view.rerender(<SyncIndicator connection={CONNECTED} />)
 
   expect(elsewhere).toHaveFocus()
   elsewhere.remove()
@@ -141,7 +141,7 @@ test('every dot colour comes from a theme token, never a raw palette shade', () 
   for (const state of states) {
     const { unmount } = render(
       <SyncRecoveryContext.Provider value={{ ...RECOVERY_IDLE, retryNow: vi.fn() }}>
-        <ConnectionStatus connection={{ ...CONNECTED, state }} />
+        <SyncIndicator connection={{ ...CONNECTED, state }} />
       </SyncRecoveryContext.Provider>,
     )
     const dot = screen.getByTestId('connection-status').querySelector('[aria-hidden="true"]')

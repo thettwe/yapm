@@ -1,0 +1,123 @@
+import { useQuery } from '@rocicorp/zero/react'
+import {
+  buildTeamFrame,
+  queries,
+  type TeamFrameModel,
+  type TeamHomeCycleRow,
+  type TeamHomeDeploymentRow,
+  type TeamHomeIssueRow,
+  type TeamHomeTriageRow,
+} from '@yapm/schema'
+import { useEffect, useMemo, useState } from 'react'
+
+// Which team the deck points at, and what band 3 is allowed to say about it.
+//
+// The northstar assumes one team ("Acme / Engineering"); yapm is one workspace of many teams, and
+// six routes are workspace-level. The rule this file encodes (design §D3): the deck MAY point at a
+// team — navigation is an offer, and an offer can be wrong without lying — but the statusline may
+// only report the team the reader is actually on. So the anchor drives the six stops everywhere,
+// while the frame model is built only from a team in the route.
+
+export const ANCHOR_STORAGE_KEY = 'yapm.frame.team'
+
+export interface FrameTeam {
+  readonly id: string
+  readonly name: string
+  readonly key: string
+}
+
+// Guarded on `theme.ts`'s pattern: a browser with storage disabled still gets a working frame.
+export function readAnchorTeam(): string | null {
+  try {
+    return localStorage.getItem(ANCHOR_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function writeAnchorTeam(teamId: string): void {
+  try {
+    localStorage.setItem(ANCHOR_STORAGE_KEY, teamId)
+  } catch {
+    // Ignore quota / disabled-storage failures; the anchor falls back to the first team.
+  }
+}
+
+// The route wins, then the remembered team, then the first team the caller can see. The remembered
+// id is validated against the SYNCED list on every read: a team the caller has lost access to would
+// otherwise leave six links pointing at a 404.
+export function resolveAnchorTeam(
+  teams: readonly FrameTeam[],
+  routeTeamId: string | undefined,
+  remembered: string | null,
+): FrameTeam | null {
+  const fromRoute = routeTeamId === undefined ? undefined : teams.find((t) => t.id === routeTeamId)
+  if (fromRoute !== undefined) return fromRoute
+  const fromMemory = remembered === null ? undefined : teams.find((t) => t.id === remembered)
+  if (fromMemory !== undefined) return fromMemory
+  return teams[0] ?? null
+}
+
+export function useAnchorTeam(routeTeamId: string | undefined): FrameTeam | null {
+  const [teams] = useQuery(queries.teams.all())
+  const [remembered, setRemembered] = useState<string | null>(() => readAnchorTeam())
+
+  const anchor = useMemo(
+    () => resolveAnchorTeam(teams as readonly FrameTeam[], routeTeamId, remembered),
+    [teams, routeTeamId, remembered],
+  )
+
+  useEffect(() => {
+    if (routeTeamId === undefined || anchor?.id !== routeTeamId) return
+    setRemembered(routeTeamId)
+    writeAnchorTeam(routeTeamId)
+  }, [routeTeamId, anchor])
+
+  return anchor
+}
+
+// Ages tick at minute granularity — fine enough for the cycle day, coarse enough that the memoized
+// fold is not rebuilt per render. The same discipline `home/team-home.tsx` already applies.
+export function useMinuteNow(): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(id)
+  }, [])
+  return now
+}
+
+// Band 3's facts, from the five team-scoped queries the page mostly holds already. Zero de-dupes
+// the subscriptions, and the fold is pure — nothing in the frame waits on the network.
+//
+// `teamId` is the ROUTE's team, never the anchor: off-team this returns null and the statusline
+// says only what is true.
+export function useTeamFrame(teamId: string | undefined): TeamFrameModel | null {
+  const now = useMinuteNow()
+  const [teams] = useQuery(queries.teams.all())
+  const [cyclesRaw] = useQuery(teamId === undefined ? undefined : queries.cycles.byTeam({ teamId }))
+  const [issuesRaw] = useQuery(teamId === undefined ? undefined : queries.issues.byTeam({ teamId }))
+  const [triageRaw] = useQuery(teamId === undefined ? undefined : queries.triage.inbox({ teamId }))
+  const [deploymentsRaw] = useQuery(
+    teamId === undefined ? undefined : queries.deployments.byTeam({ teamId }),
+  )
+
+  const team = teamId === undefined ? undefined : teams.find((candidate) => candidate.id === teamId)
+
+  return useMemo(
+    () =>
+      team === undefined
+        ? null
+        : buildTeamFrame(
+            {
+              team: { id: team.id, key: team.key, name: team.name },
+              cycles: (cyclesRaw ?? []) as readonly TeamHomeCycleRow[],
+              issues: (issuesRaw ?? []) as unknown as readonly TeamHomeIssueRow[],
+              triage: (triageRaw ?? []) as readonly TeamHomeTriageRow[],
+              deployments: (deploymentsRaw ?? []) as readonly TeamHomeDeploymentRow[],
+            },
+            now,
+          ),
+    [team, cyclesRaw, issuesRaw, triageRaw, deploymentsRaw, now],
+  )
+}

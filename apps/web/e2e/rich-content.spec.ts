@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount } from './support'
+import { ADMIN, ensureAccount, stop } from './support'
 
 // ONE spec, for the two things no other tier can see.
 //
@@ -64,7 +64,7 @@ async function openTeamIssues(page: Page): Promise<void> {
   const teamLink = page.getByRole('link', { name: new RegExp(teamName) })
   await expect(teamLink).toBeVisible({ timeout: 20_000 })
   await teamLink.click()
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await stop(page, 'Issues').click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
 }
 

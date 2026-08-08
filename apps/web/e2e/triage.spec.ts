@@ -1,5 +1,5 @@
 import { expect, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -36,7 +36,7 @@ async function openTeam(page: Page): Promise<string> {
   const teamLink = page.getByRole('link', { name: new RegExp(teamName) })
   await expect(teamLink).toBeVisible({ timeout: 20_000 })
   await teamLink.click()
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await stop(page, 'Issues').click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
   return teamName
 }
@@ -72,7 +72,7 @@ async function sendToTriage(page: Page, title: string): Promise<void> {
 }
 
 async function openTriage(page: Page): Promise<void> {
-  await page.getByRole('link', { name: 'Triage' }).click()
+  await stop(page, 'Triage').click()
   await expect(page.getByRole('heading', { name: /Triage/ })).toBeVisible({ timeout: 20_000 })
 }
 
@@ -98,7 +98,7 @@ test('flag an issue into triage, then accept it back into the list with the keyb
   })
 
   // Accepted issues return to the normal list.
-  await page.getByRole('link', { name: 'List' }).click()
+  await stop(page, 'Issues').click()
   await expect(page.locator(ROW).filter({ hasText: title })).toBeVisible({ timeout: 20_000 })
 })
 
@@ -121,7 +121,7 @@ test('decline a triage issue cancels it and clears the inbox', async ({ page }) 
   })
 
   // The declined issue reappears in the list as Canceled.
-  await page.getByRole('link', { name: 'List' }).click()
+  await stop(page, 'Issues').click()
   const canceled = page.getByRole('region', { name: 'Canceled', exact: true })
   await expect(canceled.locator(ROW).filter({ hasText: title })).toBeVisible({ timeout: 20_000 })
 })
@@ -150,7 +150,7 @@ test('route a triage issue applies fields and clears the inbox', async ({ page }
   })
 
   // The routed issue lands in the list under its new status.
-  await page.getByRole('link', { name: 'List' }).click()
+  await stop(page, 'Issues').click()
   const todo = page.getByRole('region', { name: 'Todo', exact: true })
   await expect(todo.locator(ROW).filter({ hasText: title })).toBeVisible({ timeout: 20_000 })
 })
@@ -171,7 +171,8 @@ test('the Triage view is correct across every preset in light and dark', async (
   // localStorage write loses to the sync override the moment a preference has been persisted
   // (e.g. by theme.spec, which runs first). Mode is device-local and reached by toggling.
   const html = page.locator('html')
-  await page.getByRole('button', { name: 'Appearance settings' }).click()
+  await page.getByRole('button', { name: /account menu for/i }).click()
+  await page.getByRole('menuitem', { name: 'Appearance' }).click()
   const themeSelect = page.getByLabel('Theme')
   await expect(themeSelect).toBeVisible()
   const modeToggle = page.getByRole('button', { name: /^(Dark|Light)$/ })
@@ -231,8 +232,8 @@ test('a viewer sees a read-only triage inbox', async ({ page, browser }) => {
     const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
     await teamCard.getByRole('button', { name: 'Join this team' }).click()
     await vp.getByRole('link', { name: new RegExp(teamName) }).click()
-    await vp.getByRole('link', { name: 'Issues' }).click()
-    await vp.getByRole('link', { name: 'Triage' }).click()
+    await stop(vp, 'Issues').click()
+    await stop(vp, 'Triage').click()
     await expect(vp.getByRole('heading', { name: /Triage/ })).toBeVisible({ timeout: 20_000 })
 
     // The viewer reads the inbox row, but every triage action is absent.

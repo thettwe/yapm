@@ -328,3 +328,76 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
   `packages/ui/src/styles/contrast.test.ts` extends to the frame's pairs.
 - **The one genuinely new IA decision is D3** — the deck may point at a team, the statusline
   may only report one.
+
+### Stage 1 — the derivation and the frame (built)
+
+**The mess, confirmed in the tree at `cc075bd`.** Every claim in §Context held: `app-shell.tsx`
+was 79 lines; ten team-scoped routes hand-rolled
+`<header className="sticky top-0 z-10 …">` with `Switcher` + `ViewSwitch` + `ConnectionStatus` +
+`ThemeControls` + `UserMenu` and dropped `SearchEntry`, `PmDigestsEntry` and `InboxBadge`;
+`view-switch.tsx` was 111 lines of eight pills; and ⌘K was bound by four independent
+`window.addEventListener('keydown')` handlers (`issues/command.tsx:202`, `board/board.tsx:330`,
+`retro/retro-command.tsx:188`, `routes/showcase.tsx:302`). All of it is deleted.
+
+**DI-1 — `buildTeamFrame` shares intermediates, not just a call.** `buildTeamHome` and
+`buildTeamFrame` both call one internal `buildTeamFrameCore`, which walks the issues once, calls
+`buildAttention` once and selects the active cycle once. `TeamHomeModel.attention` IS
+`TeamFrameModel.attention` inside one build; across two calls the test asserts deep equality of
+every class, not just the total. A source-level case asserts exactly two `buildAttention`
+occurrences in the repo (the definition and the one call site), so a second derivation cannot be
+added without turning CI red. `TeamHomeInput` now `extends TeamFrameInput`, whose `retros` is
+optional — the frame never draws the cadence chart's retro ticks.
+
+**DI-2 — the deck's active stop is `--text-1`, not accent ink.** `ia.html` draws the active stop as
+accent text plus a 2px accent underline. `--accent-strong` on `--bg` measures **4.44** in editorial
+light — under AA. The underline stays the accent's (a non-text indicator, 3:1 under WCAG 1.4.11);
+the ink is `--text-1` at semibold. This follows the precedent already recorded in
+`packages/ui/src/styles/contrast.test.ts` for the mention typeahead: a marker a screen reader
+announces but a sighted reader has to squint at is the same bug twice. Asserted in all six themes.
+
+**DI-3 — TanStack's own `aria-current` cannot be overridden, so `Home` is `exact`.** `Link` appends
+`{'aria-current': 'page'}` LAST when it considers itself active, after any explicit prop. Since
+`/teams/$teamId` is a prefix of every other stop, the Home stop would have claimed a second current
+page on every team route. It carries `activeOptions={{ exact: true }}`; every other stop's natural
+prefix match is exactly the frame's own rule (Issues stays current on an issue detail, Retros on a
+retro). Board is the case the router cannot express, and the explicit `aria-current` covers it
+because the router does not consider the Issues link active on `/board`.
+
+**DI-4 — one ⌘K owner, with delegation rather than one palette instance.** The registry owns the
+single `window` listener and a single open/close state. A surface registers either `open` (its own
+palette's opener) or `groups` (rows the registry's palette renders). ⌘K delegates to the
+most-recently-mounted `open`, and falls back to the registry's own palette — the six destinations,
+Inbox, search everything, the workspace overview — when none is registered. Merging the four
+existing palettes into one instance would have been a redesign of palette contents, which this
+change explicitly is not: `issues/command.tsx` alone carries five sub-pages, its own cursor and its
+own server-search seam. Every command reachable before is reachable after, and every imperative API
+(`openStatus`/`openAssign`/`openLabel`/`openProject`/`openCreate`/`setContextIssues`) is untouched.
+
+**DI-5 — Appearance is a dialog, not a popover.** `ThemeControls` folded into the account menu per
+§D8, and a Base UI menu cannot host a popover without the two fighting over dismissal. The fields
+moved verbatim into `frame/appearance-dialog.tsx` behind a menu item, mounted only when opened so
+the account menu does not require a `ThemeProvider` to render. `theme.spec.ts` and `triage.spec.ts`
+open it through the menu; `data-testid="email-notifications"` and every field label survive.
+
+**DI-6 — the responsive fold is CSS, not measurement.** Stops carry `hidden sm:flex` / `md:flex` /
+`lg:flex` and `more▾` carries mirrored `sm:hidden` / `md:hidden` duplicates, so below the deck's
+comfortable width the stops fold from the right — Delivery first, then Cycles, then Triage — with no
+`ResizeObserver` and no layout thrash. The band never wraps; its 48px is a rule.
+
+**DI-7 — the repo guard is narrowed to `<header>`.** Task 6.4's guard fires on a
+`sticky top-0` **`<header>`** outside `apps/web/src/frame/`, not on any sticky element: the inbox's
+sticky group headings and the roadmap's sticky month ruler are a surface's own furniture, not
+chrome. `/showcase` is exempt by name — a dev-only component gallery that deliberately sits outside
+the frame, since the app's chrome would fight the three theme blocks it renders.
+
+**DI-8 — the Masthead migration is partial by design at this stage.** Every hand-rolled *chrome*
+header is gone, and `Masthead` ships and is adopted where a route previously had only chrome
+(`board`, `issues/$issueKey`) plus the Issues toolbar, which now renders through it and carries the
+`List | Board` lens. The other pages' existing in-page headers are band 2 already and are page-owned;
+the three page rebuilds that follow restyle their own mastheads onto the component. The rule
+enforced now is the one that matters: **no page hand-rolls chrome**, by guard.
+
+**DI-9 — `/showcase` is a plain anchor in the account menu.** The showcase route is stripped from
+production builds (`routeFileIgnorePattern`), so a typed `<Link to="/showcase">` would point at a
+destination the production router does not have. It renders behind `import.meta.env.DEV` as an
+`<a href>`.

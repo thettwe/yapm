@@ -117,12 +117,19 @@ export interface TeamHomeNotificationRow {
   readonly createdAt: number
 }
 
-export interface TeamHomeInput {
+// The five reads the app FRAME needs — the subset of Home's eight that every authenticated page
+// can afford to hold (design app-frame §D2). `retros` is optional here because it only sharpens
+// the cadence chart's retro ticks, which the frame never draws.
+export interface TeamFrameInput {
   readonly team: TeamHomeTeamRow
   readonly cycles: readonly TeamHomeCycleRow[]
   readonly issues: readonly TeamHomeIssueRow[]
   readonly triage: readonly TeamHomeTriageRow[]
   readonly deployments: readonly TeamHomeDeploymentRow[]
+  readonly retros?: readonly TeamHomeRetroRow[]
+}
+
+export interface TeamHomeInput extends TeamFrameInput {
   readonly digest?: TeamHomeDigestRow | null
   readonly retros: readonly TeamHomeRetroRow[]
   readonly notifications: readonly TeamHomeNotificationRow[]
@@ -163,6 +170,24 @@ export interface TeamHomeAttention {
   } | null
   readonly waitingReview: { readonly count: number; readonly agesMs: readonly number[] } | null
   readonly triage: { readonly count: number; readonly dotCount: number } | null
+}
+
+export interface TeamFrameCycle {
+  readonly title: string
+  readonly dayIndex: number
+  readonly dayCount: number
+}
+
+// What band 1 and band 3 of the app frame render, on every authenticated page. Every field is
+// nullable so a statusline segment folds rather than asserting a fact that does not exist.
+export interface TeamFrameModel {
+  readonly teamId: string
+  readonly teamName: string
+  readonly teamKey: string
+  readonly attention: TeamHomeAttention | null
+  readonly cycle: TeamFrameCycle | null
+  readonly shipped: number | null
+  readonly deploysThisWeek: number | null
 }
 
 export type DayBandSegment = 'past' | 'today' | 'future'
@@ -424,7 +449,29 @@ function checkTicks(issue: TeamHomeIssueRow): boolean[] {
 // The model.
 // ---------------------------------------------------------------------------
 
-export function buildTeamHome(input: TeamHomeInput, now: number, viewerId: string): TeamHomeModel {
+function cycleTitle(cycle: TeamHomeCycleRow): string {
+  if (cycle.name.trim() !== '') return cycle.name
+  return cycle.number == null ? 'Cycle …' : `Cycle ${cycle.number}`
+}
+
+function cycleDays(cycle: TeamHomeCycleRow, now: number): { dayIndex: number; dayCount: number } {
+  const startDay = utcDayIndex(cycle.startDate)
+  const dayCount = Math.max(1, utcDayIndex(cycle.endDate) - startDay + 1)
+  return { dayCount, dayIndex: Math.min(dayCount, Math.max(1, utcDayIndex(now) - startDay + 1)) }
+}
+
+// The frame model plus the intermediates the digest builds its bands on. One walk over the issues,
+// one `buildAttention` call, one active-cycle selection — shared, so the deck, the statusline and
+// Home's NEEDS ATTENTION cannot disagree because none of them computes anything twice.
+interface TeamFrameCore {
+  readonly frame: TeamFrameModel
+  readonly deliveries: readonly IssueDelivery[]
+  readonly activeCycle: TeamHomeCycleRow | null
+  readonly cycleDeliveries: readonly IssueDelivery[]
+  readonly cadence: TeamHomeCadence | null
+}
+
+function buildTeamFrameCore(input: TeamFrameInput, now: number): TeamFrameCore {
   const team = input.team
   const deployIndex = buildDeploymentIndex(input.deployments)
 
@@ -439,16 +486,59 @@ export function buildTeamHome(input: TeamHomeInput, now: number, viewerId: strin
     [...input.cycles].filter((cycle) => cycle.status === 'active').sort(compareCycles)[0] ?? null
   const cycleDeliveries =
     activeCycle === null ? [] : deliveries.filter((d) => d.issue.cycleId === activeCycle.id)
+  const cadence = buildCadence(input.deployments, input.retros ?? [], now)
+  const currentWeek = cadence === null ? undefined : cadence.weeks[cadence.todayIndex]
+
+  return {
+    frame: {
+      teamId: team.id,
+      teamName: team.name,
+      teamKey: team.key,
+      attention,
+      cycle:
+        activeCycle === null
+          ? null
+          : { title: cycleTitle(activeCycle), ...cycleDays(activeCycle, now) },
+      shipped:
+        activeCycle === null
+          ? null
+          : cycleDeliveries.filter(({ issue }) => issue.status === 'done').length,
+      deploysThisWeek: currentWeek === undefined ? null : currentWeek.deploys,
+    },
+    deliveries,
+    activeCycle,
+    cycleDeliveries,
+    cadence,
+  }
+}
+
+// Bands 1 and 3 of the app frame, over the five reads every page already holds.
+export function buildTeamFrame(input: TeamFrameInput, now: number): TeamFrameModel {
+  return buildTeamFrameCore(input, now).frame
+}
+
+export function buildTeamHome(input: TeamHomeInput, now: number, viewerId: string): TeamHomeModel {
+  const team = input.team
+  const core = buildTeamFrameCore(input, now)
+  const { deliveries, activeCycle, cycleDeliveries, cadence } = core
+  // The identical object the frame renders — not a second derivation, and not a copy.
+  const attention = core.frame.attention
 
   const heroCycle =
-    activeCycle === null
+    activeCycle === null || core.frame.cycle === null
       ? null
-      : buildHeroCycle(activeCycle, cycleDeliveries, input, now, attention?.count ?? 0)
+      : buildHeroCycle(
+          activeCycle,
+          cycleDeliveries,
+          input,
+          core.frame.cycle,
+          core.frame.shipped ?? 0,
+          attention?.count ?? 0,
+        )
   const narrative = buildNarrative(input.digest ?? null, heroCycle, cycleDeliveries, attention)
   const sinceYesterday = buildSinceYesterday(input, deliveries, now, viewerId, team.key)
   const yours = buildYours(deliveries, now, viewerId, team.key)
   const runway = activeCycle === null ? null : buildRunway(activeCycle, cycleDeliveries, team.key)
-  const cadence = buildCadence(input.deployments, input.retros, now)
   const shipped = buildShipped(cycleDeliveries, team.key)
 
   const footline: string[] = []
@@ -530,13 +620,11 @@ function buildHeroCycle(
   cycle: TeamHomeCycleRow,
   cycleDeliveries: readonly IssueDelivery[],
   input: TeamHomeInput,
-  now: number,
+  frame: TeamFrameCycle,
+  shipped: number,
   attentionCount: number,
 ): TeamHomeHeroCycle {
-  const startDay = utcDayIndex(cycle.startDate)
-  const endDay = utcDayIndex(cycle.endDate)
-  const dayCount = Math.max(1, endDay - startDay + 1)
-  const dayIndex = Math.min(dayCount, Math.max(1, utcDayIndex(now) - startDay + 1))
+  const { dayIndex, dayCount } = frame
 
   const dayBand: DayBandSegment[] = Array.from({ length: dayCount }, (_, i) =>
     i + 1 < dayIndex ? 'past' : i + 1 === dayIndex ? 'today' : 'future',
@@ -570,19 +658,16 @@ function buildHeroCycle(
 
   return {
     cycleId: cycle.id,
-    title:
-      cycle.name.trim() !== ''
-        ? cycle.name
-        : cycle.number == null
-          ? 'Cycle …'
-          : `Cycle ${cycle.number}`,
+    title: frame.title,
     dayIndex,
     dayCount,
     endsWeekday: WEEKDAYS[new Date(cycle.endDate).getUTCDay()] as string,
     dayBand,
     daysLeft: dayCount - dayIndex,
     statusWords: {
-      shipped: landed,
+      // Assigned from the frame's numbers, never recomputed — the deck, the statusline and the
+      // hero agree because there is one place each of them is derived.
+      shipped,
       inReview: cycleDeliveries.filter((d) => d.issue.status === 'in_review').length,
       needAttention: attentionCount,
     },

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { AppShell } from '@/components/app-shell'
 import { Authenticated } from '@/components/authenticated'
+import { AppFrame } from '@/frame/app-frame'
 import { SsoSettingsView } from '@/settings/sso-view'
 
 export const Route = createFileRoute('/settings/sso')({ component: SsoSettingsPage })
@@ -8,9 +8,9 @@ export const Route = createFileRoute('/settings/sso')({ component: SsoSettingsPa
 function SsoSettingsPage() {
   return (
     <Authenticated>
-      <AppShell current="Settings">
+      <AppFrame>
         <SsoSettingsView />
-      </AppShell>
+      </AppFrame>
     </Authenticated>
   )
 }

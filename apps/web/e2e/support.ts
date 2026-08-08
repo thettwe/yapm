@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 
 // The Playwright server env pins YAPM_BOOTSTRAP_ADMIN_EMAIL to this address, so this account
 // deterministically becomes the workspace admin regardless of sign-up order. Every other
@@ -61,6 +61,19 @@ export async function ensureAccount(page: Page, credentials: Credentials): Promi
   if (stillOnLogin) {
     await signIn(page, credentials)
   }
+}
+
+// The deck's six destinations (app-frame band 1). Scoped to the nav landmark, because a page may
+// legitimately hold its own doorway with the same label — Home's onward footer links to Issues too,
+// and an unscoped lookup would match both.
+export function stop(page: Page, name: string): Locator {
+  return page.getByRole('navigation', { name: 'Destinations' }).getByRole('link', { name })
+}
+
+// Retros, Projects and Roadmap live behind `more▾`, which is a transient: it has to be opened.
+export async function goToMore(page: Page, name: string): Promise<void> {
+  await page.getByRole('navigation', { name: 'Destinations' }).getByRole('button').click()
+  await page.getByRole('menuitem', { name: new RegExp(`^${name}`, 'u') }).click()
 }
 
 export async function signOut(page: Page): Promise<void> {

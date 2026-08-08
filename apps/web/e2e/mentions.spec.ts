@@ -1,5 +1,5 @@
 import { type Browser, expect, type Page, test } from '@playwright/test'
-import { ADMIN, ensureAccount, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const BADGE = '[data-testid="inbox-badge"]'
@@ -37,7 +37,7 @@ async function openTeam(page: Page): Promise<string> {
   const teamLink = page.getByRole('link', { name: new RegExp(teamName) })
   await expect(teamLink).toBeVisible({ timeout: 20_000 })
   await teamLink.click()
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await stop(page, 'Issues').click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
   return teamName
 }
@@ -96,7 +96,7 @@ async function acceptInvite(browser: Browser, inviteLink: string) {
 async function openTeamIssues(page: Page, teamName: string): Promise<void> {
   await page.goto('/')
   await page.getByRole('link', { name: new RegExp(teamName) }).click()
-  await page.getByRole('link', { name: 'Issues' }).click()
+  await stop(page, 'Issues').click()
   await expect(page.getByRole('button', { name: 'New issue' })).toBeVisible({ timeout: 20_000 })
 }
 

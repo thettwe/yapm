@@ -49,6 +49,13 @@ function mount(component: () => React.ReactNode) {
       component: () => null,
     }),
     createRoute({ getParentRoute: () => rootRoute, path: '/settings/sso', component: () => null }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/teams/$teamId/members',
+      component: () => null,
+    }),
+    createRoute({ getParentRoute: () => rootRoute, path: '/digests', component: () => null }),
+    createRoute({ getParentRoute: () => rootRoute, path: '/showcase', component: () => null }),
   ])
   const router = createRouter({
     routeTree,
@@ -68,6 +75,8 @@ test('the account menu opens and every entry an admin has is reachable', async (
   fireEvent.click(await screen.findByRole('button', { name: /account menu for ada/i }))
 
   expect(await screen.findByRole('menuitem', { name: 'Single sign-on' })).toBeInTheDocument()
+  // Appearance is a setting, so it folded into this menu with the rest of them.
+  expect(screen.getByRole('menuitem', { name: 'Appearance' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Connectors' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'AI' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument()
@@ -85,14 +94,16 @@ test('a non-admin opens the same menu and finds only what they may do', async ()
   expect(screen.queryByRole('menuitem', { name: 'Single sign-on' })).not.toBeInTheDocument()
 })
 
-test('the workspace switcher opens with both of its labelled groups', async () => {
-  mount(() => <Switcher current="Acme" />)
+test('the workspace switcher opens with all three of its labelled groups', async () => {
+  mount(() => <Switcher teamName="Engineering" teamId="team-1" />)
 
   fireEvent.click(await screen.findByRole('button', { name: /switch workspace or team/i }))
 
   expect(await screen.findByRole('menuitem', { name: 'Acme' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Engineering' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: 'Design' })).toBeInTheDocument()
+  expect(screen.getByRole('menuitem', { name: 'Members' })).toBeInTheDocument()
   expect(screen.getByText('Workspace')).toBeInTheDocument()
   expect(screen.getByText('Teams')).toBeInTheDocument()
+  expect(screen.getByText('This team')).toBeInTheDocument()
 })

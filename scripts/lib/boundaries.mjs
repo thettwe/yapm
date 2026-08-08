@@ -100,6 +100,19 @@ const SINGLE_DEFINITION_RULES = [
 const NO_AGENT_FILES = ['apps/server/src/ai/retro-draft.ts', 'apps/server/src/jobs/retro-draft.ts']
 const AGENT_SYMBOLS = ['buildAgentTools', 'runAgent']
 
+// Rule 6, the app frame's chrome rule (`openspec/changes/app-frame` §D7). Bands 1 and 3 belong to
+// `apps/web/src/frame/`; the page owns band 2 and adapts it. Before this change ten routes each
+// hand-rolled a copy of the app header — and each copy silently dropped search, digests and the
+// inbox. A sticky `<header>` outside the frame is that duplication starting again.
+//
+// A `<header>` specifically: a sticky group heading inside a scrolling list, or a sticky month
+// ruler inside a timeline, is a surface's own furniture and not chrome.
+const CHROME_OWNER_PREFIX = 'apps/web/src/frame/'
+// The component gallery is a dev-only surface that deliberately sits OUTSIDE the frame — it renders
+// primitives against three themes, which the app's own chrome would fight.
+const CHROME_EXEMPT = ['apps/web/src/routes/showcase.tsx']
+const STICKY_HEADER = /<header[^>]*className=(?:"|\{`|')[^"`']*\bsticky\s+top-0\b/
+
 /**
  * @param rel POSIX-separated repo-relative path of the file.
  * @param source Its full text.
@@ -166,6 +179,18 @@ export function findViolations(rel, source) {
         )
       }
     }
+  }
+
+  if (
+    rel.startsWith('apps/web/src/') &&
+    !rel.startsWith(CHROME_OWNER_PREFIX) &&
+    !CHROME_EXEMPT.includes(rel) &&
+    !/\.(test|stories)\.tsx?$/.test(rel) &&
+    STICKY_HEADER.test(source)
+  ) {
+    violations.push(
+      `${rel}: a \`sticky top-0\` header outside ${CHROME_OWNER_PREFIX} — bands 1 and 3 are the frame's; no page hand-rolls chrome`,
+    )
   }
 
   if (inSchema(rel)) {

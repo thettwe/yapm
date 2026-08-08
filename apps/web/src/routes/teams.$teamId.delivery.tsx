@@ -1,14 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { DELIVERY_WINDOW_SIZES, type DeliveryWindowSize } from '@yapm/schema'
-import { useSession } from '@/auth/client'
-import { ViewSwitch } from '@/board/view-switch'
 import { Authenticated } from '@/components/authenticated'
-import { ConnectionStatus } from '@/components/connection-status'
-import { Switcher } from '@/components/switcher'
-import { ThemeControls } from '@/components/theme-controls'
-import { UserMenu } from '@/components/user-menu'
 import { DeliveryView } from '@/delivery/delivery-view'
-import { useConnectionSummary } from '@/zero/connection'
+import { AppFrame } from '@/frame/app-frame'
 
 interface DeliverySearch {
   window: DeliveryWindowSize
@@ -37,23 +31,10 @@ function DeliveryPage() {
   const { teamId } = Route.useParams()
   const { window } = Route.useSearch()
   const navigate = useNavigate()
-  const connection = useConnectionSummary()
-  const { data: session } = useSession()
 
   return (
     <Authenticated>
-      <div className="flex min-h-svh flex-col bg-bg">
-        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-bg/95 px-4 py-2.5 backdrop-blur">
-          <Switcher current="Delivery" />
-          <ViewSwitch teamId={teamId} current="delivery" />
-          <div className="flex-1" />
-          <ConnectionStatus connection={connection} />
-          <ThemeControls />
-          <UserMenu
-            {...(session?.user.name ? { name: session.user.name } : {})}
-            {...(session?.user.email ? { email: session.user.email } : {})}
-          />
-        </header>
+      <AppFrame teamId={teamId} current="delivery" measure="full">
         <DeliveryView
           teamId={teamId}
           size={window}
@@ -67,7 +48,7 @@ function DeliveryPage() {
             })
           }}
         />
-      </div>
+      </AppFrame>
     </Authenticated>
   )
 }

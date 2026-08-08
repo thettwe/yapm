@@ -11,6 +11,7 @@ export default defineConfig({
         {
           label: 'Features',
           items: [
+            { label: 'The app frame', slug: 'features/app-frame' },
             { label: 'Team Home', slug: 'features/team-home' },
             { label: 'Board', slug: 'features/board' },
             { label: 'Cycles', slug: 'features/cycles' },

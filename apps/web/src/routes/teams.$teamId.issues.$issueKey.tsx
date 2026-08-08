@@ -3,23 +3,18 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { queries } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { ArrowLeftIcon } from 'lucide-react'
-import { useSession } from '@/auth/client'
 import { Authenticated } from '@/components/authenticated'
-import { ConnectionStatus } from '@/components/connection-status'
-import { Switcher } from '@/components/switcher'
-import { ThemeControls } from '@/components/theme-controls'
-import { UserMenu } from '@/components/user-menu'
+import { AppFrame } from '@/frame/app-frame'
+import { Masthead } from '@/frame/masthead'
 import { IssueDetail } from '@/issues/issue-detail'
-import { useConnectionSummary } from '@/zero/connection'
 
 export const Route = createFileRoute('/teams/$teamId/issues/$issueKey')({
   component: IssueDetailPage,
 })
 
+// A doorway from an Issues row, so the Issues stop stays current.
 function IssueDetailPage() {
   const { teamId, issueKey } = Route.useParams()
-  const connection = useConnectionSummary()
-  const { data: session } = useSession()
   const [issues, result] = useQuery(queries.issues.byTeam({ teamId }))
 
   const wanted = Number.parseInt(issueKey.replace(/^[^\d]*/u, ''), 10)
@@ -27,27 +22,22 @@ function IssueDetailPage() {
 
   return (
     <Authenticated>
-      <div className="flex min-h-svh flex-col bg-bg">
-        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-bg/95 px-4 py-2.5 backdrop-blur">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Back to issues"
-            render={
-              <Link to="/teams/$teamId/issues" params={{ teamId }} search={{}}>
-                <ArrowLeftIcon />
-              </Link>
-            }
-          />
-          <Switcher current="Issues" />
-          <div className="flex-1" />
-          <ConnectionStatus connection={connection} />
-          <ThemeControls />
-          <UserMenu
-            {...(session?.user.name ? { name: session.user.name } : {})}
-            {...(session?.user.email ? { email: session.user.email } : {})}
-          />
-        </header>
+      <AppFrame teamId={teamId} current="issues" measure="full">
+        <Masthead
+          title={issueKey}
+          actions={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Back to issues"
+              render={
+                <Link to="/teams/$teamId/issues" params={{ teamId }} search={{}}>
+                  <ArrowLeftIcon />
+                </Link>
+              }
+            />
+          }
+        />
         {match ? (
           <IssueDetail issueId={match.id} teamId={teamId} />
         ) : (
@@ -57,7 +47,7 @@ function IssueDetailPage() {
               : 'Loading issue…'}
           </p>
         )}
-      </div>
+      </AppFrame>
     </Authenticated>
   )
 }

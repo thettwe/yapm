@@ -5,11 +5,10 @@ import {
   THEME_PRESETS,
 } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
+import { Dialog, DialogContent, DialogTitle } from '@yapm/ui/components/dialog'
 import { Input } from '@yapm/ui/components/input'
 import { Label } from '@yapm/ui/components/label'
-import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@yapm/ui/components/popover'
 import { Select } from '@yapm/ui/components/select'
-import { PaletteIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTheme } from '@/theme/provider'
 import type { Preset } from '@/theme/theme'
@@ -34,7 +33,16 @@ function isHex(value: string): boolean {
   return /^#([0-9a-f]{3}|[0-9a-f]{6})$/iu.test(value.trim())
 }
 
-export function ThemeControls() {
+// Appearance is a SETTING, not a destination, so it lives in the account menu rather than in the
+// deck (design app-frame §D8) — and a menu cannot host a popover without fighting it for dismissal,
+// so the fields moved into a dialog the menu item opens.
+export function AppearanceDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const {
     theme,
     mode,
@@ -63,18 +71,11 @@ export function ThemeControls() {
   const draftInvalid = draft.trim() !== '' && !isParseableColor(draft.trim())
 
   return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <Button variant="ghost" size="icon-sm" aria-label="Appearance settings">
-            <PaletteIcon />
-          </Button>
-        }
-      />
-      <PopoverContent className="w-72">
-        <PopoverTitle>Appearance</PopoverTitle>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogTitle>Appearance</DialogTitle>
 
-        <div className="mt-3 flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
           <Label className="flex-col items-start gap-1.5 text-xs text-text-2">
             Theme
             <Select
@@ -158,7 +159,7 @@ export function ThemeControls() {
             </p>
           </div>
         </div>
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   )
 }

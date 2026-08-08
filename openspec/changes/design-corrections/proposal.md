@@ -86,6 +86,12 @@ None.
 - `component-library`: the status glyph set's `done` drawing, and the issue-row primitive's quiet
   reality-track slot.
 - `app-frame`: the statusline's healthy sync state reads `Synced`.
+- `issue-tracking`: the delivery seam's shipped requirement described the unlinked state as "the
+  quiet 'not linked' placeholder". That placeholder is what this change removes, so the requirement
+  and its scenario now state the reserved, inkless slot and the rail's explicit exception — and
+  state that fact-freeness is read from the signal's axes rather than from the drawn stations.
+- `work-graph`: the same correction where the linked-entities requirement says an unlinked issue
+  "renders the quiet unlinked state exactly as before".
 
 ## Impact
 

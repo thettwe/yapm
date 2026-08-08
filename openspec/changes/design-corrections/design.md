@@ -40,7 +40,8 @@ The three darks already clear both bars comfortably. Only the lights are broken.
 
 - A dense row with no delivery fact draws nothing in its reality slot, while the slot's reserved
   measure is bit-for-bit what a populated row's is.
-- `done` reads as *finished* at 14px, in one family with the arcs and rings.
+- `done` reads as *finished* at the smallest size any surface draws it, in one family with the
+  arcs and rings.
 - Band 3's healthy state says `Synced`, and no other connection state's wording moves.
 - `--status-in-progress` clears the contrast bar appropriate to each way it is actually drawn, in
   all six token blocks, with the measurement pinned in `contrast.test.ts` at the real bar.
@@ -332,11 +333,16 @@ Drawn as `M6.3 10.3 8.9 12.9 13.7 7.3` on the 20-unit grid, `stroke="var(--bg)"`
 round join, `strokeWidth` from the shared `STROKE` constant. D4 permits stepping the stroke up one
 value if 1.6 proves illegible at `size-3.5`; it was **not** stepped, and the reason is a ratio
 rather than a guess: 1.6 on a 20-unit box is a stroke-to-viewBox ratio of 0.080, and the icon set
-this glyph family reads beside (Lucide's `circle-check`, 2 on 24) is 0.083. At 14px both land at
-~1.1 device px, which is the ordinary weight for a check inside a 14px disc. Every vertex sits
-inside r=7.6 with the half-stroke clear of the edge, asserted in `status-glyph.test.tsx`. The
-judgement that survives testing — whether a human reads it as a check at 1.12 device px — is task
-8.4's, and if it fails there the one-step increase is still available with this note to amend.
+this glyph family reads beside (Lucide's `circle-check`, 2 on 24) is 0.083. Every vertex sits
+inside r=7.6 with the half-stroke clear of the edge, asserted in `status-glyph.test.tsx`.
+
+The ratio has to be paid at the **smallest** size the product draws, and that is not the dense
+row's `size-3.5`: `delivery-view.tsx` draws the glyph at `size-[13px]` in the Delivery peek's chip
+and its panel. So the numbers are 1.04 device px for this check against Lucide's 1.08 at 13px
+(1.12 against 1.17 at 14px) — the same ordering, one step smaller. The judgement that survives
+testing — whether a human reads it as a check at 1.04 device px — is task 8.4's, which now steps
+both sizes, and if it fails there the one-step stroke increase is still available with this note to
+amend.
 
 `backlog`, `todo`, `in-progress`, `in-review` and `canceled` are byte-unchanged; confirmed by diff
 and by a test asserting no other status draws a `currentColor`-filled disc.
@@ -434,3 +440,52 @@ no environment variable moved, so the Zod schema and `.env.example` stay in step
 
 No new docs page was needed, so the sidebar in `apps/docs/astro.config.mjs` is unchanged; the three
 pages this change edits were already wired.
+
+### DI-13 — Quietness is read from the FACTS, not from the nodes the drawing filled
+
+D1 states the rule as "every station is `empty` and no segment is `broken`", and the first
+implementation read exactly that off the drawn shape. The two are not the same predicate, and the
+gap is a real row: `prNode` fills `empty` for `pr: 'closed'`, because the node vocabulary has no
+closed kind, and `reviewNode` fills `empty` whenever the PR is not open, approved or merged. A
+change that was closed without merging, with no check runs, therefore drew four empty nodes while
+the strip held two facts — `PR closed` and the review age — both of which `realityTrackLabel`
+states and the age column draws. Read off the nodes, that row went inkless, `aria-hidden` and
+unlabelled: the drawing's blind spot deciding what the row is allowed to say.
+
+So `TrackShape` gained `factless`, recorded by `buildRealityShape` because the builder is the only
+thing that sees the strip: true when the strip is null or all four axes are absent. `isQuietTrack`
+requires it *in addition to* the all-empty and no-break tests, which stay — they are what makes an
+inkless slot safe, and dropping them would let a shape a caller assembled by hand go quiet with ink
+in it. D1's property is unchanged: one predicate, computed once, exported so a test can assert the
+rule rather than re-derive it.
+
+`buildRailShape` states `factless: false`, as do the four hand-built rail shapes in the showcase,
+the stories and the tests. A rail names its own stations rather than handing over a strip, and it
+is excluded from the quiet rule by the surface that draws it, so `false` is both the honest value
+and the safe default: the failure mode of getting it wrong is drawing scaffolding nobody needed,
+not silently discarding a fact.
+
+### DI-14 — Two shipped capability specs asserted the placeholder this change deletes
+
+`openspec/specs/issue-tracking/spec.md`'s delivery-seam requirement says an unlinked issue yields
+"the quiet 'not linked' placeholder", with a scenario whose THEN says the same; and
+`openspec/specs/work-graph/spec.md`'s linked-entities requirement says such a row "renders the
+quiet unlinked state exactly as before". Both are the shipped description of behaviour this change
+removes, and neither is in the proposal's modified-capabilities list — so `openspec/specs/` would
+have contradicted the product from the moment this change archived.
+
+Both now have deltas under this change's `specs/`, restating the full requirement with the reserved
+inkless slot, the rail's exception, and (in `issue-tracking`) the DI-13 rule that fact-freeness is a
+property of the signal's axes rather than of the drawn stations. The delta is the whole requirement
+and its whole scenario list, as `delivery-journalism`'s `MODIFIED Requirements` block does.
+
+### DI-15 — The check's smallest size is 13px, not 14px
+
+The legibility constraint, its test name and task 8.4 were all written against `size-3.5` (14px),
+the dense row's default — but `delivery-view.tsx` draws the same glyph at `size-[13px]` in the
+Delivery peek's chip and panel, and `reality-vocabulary`'s scenario names "the smallest size any
+surface draws it". So the constraint was being argued and checked at a size that is not the one the
+spec asks about. The comment in `status-glyph.tsx`, the test name, §DI-6's ratio and task 8.4 now
+all name 13px and the surface that draws it; the test renders both sizes. Nothing about the drawing
+changed — the stroke argument survives the smaller number (1.04 device px against Lucide's 1.08)
+— and whether a human reads it there is still 8.4's call.

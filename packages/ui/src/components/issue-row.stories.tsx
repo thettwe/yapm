@@ -146,6 +146,7 @@ export function VerticalRail() {
       { id: 'live', node: 'empty-urgent' as const, label: 'Not live yet' },
     ],
     segments: ['solid', 'solid', 'solid', 'solid', 'broken'] as const,
+    factless: false,
   }
   return (
     <PresetGrid>

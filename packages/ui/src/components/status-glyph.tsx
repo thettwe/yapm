@@ -24,8 +24,10 @@ const THREE_QUARTER_ARC = 'M10 3 A7 7 0 1 1 3 10'
 // The check inside `done`, knocked out of the disc. Two constraints the drawing cannot state for
 // itself: its ink must clear the NON-TEXT bar against every hue the glyph is ever inked with —
 // `--status-done` and `--status-urgent`, which the digest applies on an urgent say row —
-// (`styles/contrast.test.ts` measures both), and it must still read as a check at the 14px a dense
-// row draws it, which is why its vertices sit well inside r=7.6 rather than filling the disc.
+// (`styles/contrast.test.ts` measures both), and it must still read as a check at the SMALLEST
+// size any surface draws the glyph: 13px, which is the Delivery peek's chip and panel
+// (`delivery-view.tsx`), a step under the `size-3.5` (14px) of a dense list row. That is why its
+// vertices sit well inside r=7.6 rather than filling the disc.
 const DONE_CHECK = 'M6.3 10.3 8.9 12.9 13.7 7.3'
 
 function Ring({ opacity, dashed = false }: { opacity?: number; dashed?: boolean }) {

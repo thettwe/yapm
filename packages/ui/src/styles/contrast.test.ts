@@ -370,10 +370,11 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
 
   // The empty station is the one part of the track deliberately BELOW the non-text bar:
   // `--border-strong` measures ~1.4 against every surface, and raising it to 3:1 would make "no
-  // pull request yet" the loudest thing in a dense row. It is scaffolding, not a fact — the facts
-  // are the filled nodes asserted above, and the absence is stated in words by the track's
-  // `role="img"` label ("No delivery signal yet", asserted in `reality-track.test.tsx`). What must
-  // hold is that an empty ring can never be mistaken FOR a fact node, which is what this measures.
+  // pull request yet" the loudest thing in a dense row. It is scaffolding, not a fact — and since
+  // the quiet rule shipped, a ring is only ever drawn BETWEEN facts: a track carrying no fact at
+  // all draws no ring, so a sub-3:1 ring is never the only thing communicating an absence. Every
+  // track that does draw one is a `role="img"` naming the facts it draws. What must hold is that
+  // an empty ring can never be mistaken FOR a fact node, which is what this measures.
   it('records that the empty station is scaffolding, distinguishable from every fact node', () => {
     const bg = hex(t, '--bg')
     const ring = over(t['--border-strong'] ?? '', bg)

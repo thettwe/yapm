@@ -95,9 +95,9 @@ distinguishable without color.
 - **WHEN** the status glyph renders done
 - **THEN** it draws a filled disc with a check inside it, drawn on the shared grid with round caps and inked from a theme token, and the check is distinguishable from the disc under every preset in light and dark
 
-#### Scenario: Done reads as done at row density
+#### Scenario: Done reads as done at the smallest size drawn
 
-- **WHEN** the done glyph renders at the smallest size any surface draws it, on a dense list row
+- **WHEN** the done glyph renders at the smallest size any surface draws it — a dense list row's default, and the smaller chip a transient surface draws
 - **THEN** the check is still drawn rather than degrading to a plain disc
 
 #### Scenario: Urgent priority is one tick standing alone

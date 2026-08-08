@@ -33,7 +33,7 @@ test('the check keeps the shared geometry and takes its ink from a token', () =>
   expect(check.getAttribute('stroke-width')).toBe(arc.getAttribute('stroke-width'))
   expect(check.getAttribute('stroke')).toMatch(/^var\(--[\w-]+\)$/)
   // Every vertex sits inside the disc it is knocked out of, which is what keeps it a check rather
-  // than a cross bleeding over the edge at the 14px a dense row draws.
+  // than a cross bleeding over the edge at the smallest size any surface draws.
   const points = (check.getAttribute('d') ?? '').match(/[\d.]+/g)?.map(Number) ?? []
   expect(points.length).toBe(6)
   for (let i = 0; i < points.length; i += 2) {
@@ -43,14 +43,23 @@ test('the check keeps the shared geometry and takes its ink from a token', () =>
   }
 })
 
-// The dense row renders the glyph at its default `size-3.5`, and the check may not degrade to a
-// plain disc there — a surface that needs another size scales this one component.
-test('done still draws its check at the size a dense row renders', () => {
-  const { container } = render(<StatusGlyph status="done" />)
-  const svg = container.querySelector('svg') as SVGSVGElement
+// The dense row renders the glyph at its default `size-3.5` (14px), and the SMALLEST any surface
+// draws it is the Delivery peek's chip and panel at 13px (`delivery-view.tsx`) — the size the
+// legibility argument has to answer for. The check may not degrade to a plain disc at either: a
+// surface that needs another size scales this one component rather than drawing a second glyph.
+test('done still draws its check at 13px, the smallest size any surface draws', () => {
+  const dense = render(<StatusGlyph status="done" />).container.querySelector(
+    'svg',
+  ) as SVGSVGElement
+  expect(dense.getAttribute('class')).toContain('size-3.5')
+  expect(dense.querySelectorAll('path')).toHaveLength(1)
 
-  expect(svg.getAttribute('class')).toContain('size-3.5')
-  expect(svg.querySelectorAll('path')).toHaveLength(1)
+  const peek = render(
+    <StatusGlyph status="done" className="size-[13px]" />,
+  ).container.querySelector('svg') as SVGSVGElement
+  expect(peek.getAttribute('class')).toContain('size-[13px]')
+  expect(peek.querySelectorAll('path')).toHaveLength(1)
+  expect(peek.querySelector('circle[fill="currentColor"]')).not.toBeNull()
 })
 
 test('the other five statuses are unchanged: no disc, and only their own drawing', () => {

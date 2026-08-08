@@ -32,6 +32,16 @@ const MERGED_NOT_LIVE: DeliveryStrip = {
   deployedAt: null,
 }
 
+// The change that ended without merging. Every one of the four stations draws `empty` for it — the
+// node vocabulary has no closed kind — while the strip knows two facts and the label states both.
+const CLOSED_UNREVIEWED: DeliveryStrip = {
+  pr: 'closed',
+  ci: null,
+  reviewAgeMs: 5_000_000,
+  reviewAgeFrom: 'pr-open',
+  deployedAt: null,
+}
+
 function breakIndices(divergence: DivergenceKind): number[] {
   const shape = buildRealityShape(MERGED_NOT_LIVE, { divergence })
   return shape.segments.flatMap((segment, index) => (segment === 'broken' ? [index] : []))
@@ -139,6 +149,11 @@ test('a track is quiet only when it carries no fact and no break', () => {
   expect(isQuietTrack(draftOnly)).toBe(false)
   expect(isQuietTrack(buildRealityShape(MERGED_NOT_LIVE))).toBe(false)
   expect(isQuietTrack(buildRealityShape(null, { divergence: 'status_ahead_of_pr' }))).toBe(false)
+
+  // The case the drawn nodes cannot witness: a pull request CLOSED without merging fills no
+  // station, and neither does a review age with no open PR beside it — so a rule read off the node
+  // kinds would call this row empty and throw both facts away. Quietness is read off the strip.
+  expect(isQuietTrack(buildRealityShape(CLOSED_UNREVIEWED))).toBe(false)
 })
 
 // `issues.png` draws NOTHING in the slot of a row with no linked change, and on a real list that is
@@ -175,6 +190,27 @@ test('a quiet track is not exposed as an image and carries no label', () => {
   expect(realityTrackLabel(null)).toBe('No delivery signal yet')
 })
 
+// The same row, rendered: it is the one a quiet rule derived from the drawn nodes would silence,
+// so it is asserted end to end rather than only over the predicate. The facts are announced, the
+// age is drawn, and the slot is not marked quiet.
+test('a closed, unreviewed change keeps its label and draws its age', () => {
+  const { container } = render(
+    <RealityTrack
+      shape={buildRealityShape(CLOSED_UNREVIEWED)}
+      age={formatReviewAge(CLOSED_UNREVIEWED.reviewAgeMs ?? 0)}
+      label={realityTrackLabel(CLOSED_UNREVIEWED)}
+    />,
+  )
+  const slot = container.querySelector('[data-slot="reality-track"]')
+
+  expect(slot?.hasAttribute('data-quiet')).toBe(false)
+  expect(slot?.getAttribute('aria-hidden')).toBeNull()
+  const label = screen.getByRole('img').getAttribute('aria-label') ?? ''
+  expect(label).toContain('PR closed')
+  expect(label).toContain('unreviewed for 1h')
+  expect(container.querySelector('[data-slot="reality-track-age"]')?.textContent).toBe('1h')
+})
+
 // The hollow ring is scaffolding BETWEEN facts, not a stand-in for their absence: one fact and the
 // whole track draws, exactly as `issues.html` draws ENG-115 and ENG-119.
 test('a partially populated track still draws its empty stations and dotted segments', () => {
@@ -208,6 +244,7 @@ test('the vertical rail keeps its explicit unlinked station', () => {
       shape={{
         stations: [{ id: 'change', node: 'empty', label: 'No change linked yet' }],
         segments: [],
+        factless: false,
       }}
     />,
   )
@@ -326,6 +363,9 @@ test('a rail of any length breaks in the same grammar the four-station track doe
   ).toEqual({
     stations: [{ id: 'idea', node: 'done', label: 'Idea', fact: 'created 9d ago' }],
     segments: [],
+    // A rail names its own stations, so it hands over no strip to be fact-free about, and it is
+    // excluded from the quiet rule regardless.
+    factless: false,
   })
 
   const ahead = buildRailShape(stations, { divergence: 'status_ahead_of_pr' })
@@ -345,6 +385,7 @@ test('the vertical rail reads its stations rather than summarising them', () => 
           { id: 'live', node: 'empty-urgent', label: 'Not live yet' },
         ],
         segments: ['solid', 'broken'],
+        factless: false,
       }}
     />,
   )

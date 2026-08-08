@@ -30,6 +30,12 @@ export interface TrackShape {
   // `segments[i]` joins station `i` to station `i + 1`, so the `//` break is a segment kind and
   // can fall anywhere in a rail of any length rather than at one hardcoded index.
   readonly segments: readonly TrackSegmentKind[]
+  // Whether the shape was built over NO delivery fact at all. Recorded by the builder because the
+  // builder is the only thing that sees the strip, and the drawn nodes are not a faithful witness
+  // to it: a PR closed without merging, or a review age on a change nobody opened a station for,
+  // fills no node and is still a fact the label states. Deciding quietness from the node kinds
+  // would throw both away. A hand-built shape states `false` — see `isQuietTrack`.
+  readonly factless: boolean
 }
 
 // The four synced facts, in the order reality runs them. The CI segment is the one LEAVING the
@@ -112,7 +118,21 @@ export function buildRailShape(
       node: nodes[index] as TrackNodeKind,
     })),
     segments,
+    // A rail is excluded from the quiet rule by the surface that draws it, and a caller names its
+    // own stations rather than handing over a strip, so there is no fact-ness here to record.
+    factless: false,
   }
+}
+
+// A strip carries a fact when ANY of its four axes is populated — including the two the four
+// stations never fill a node for: `pr: 'closed'` (a change that ended without merging) and a review
+// age carried without an open pull request. Both are drawn in the age column and stated in the
+// label, so both take a track out of the quiet rule.
+function isFactless(strip: DeliveryStrip | null): boolean {
+  return (
+    strip === null ||
+    (strip.pr == null && strip.ci == null && strip.reviewAgeMs == null && strip.deployedAt == null)
+  )
 }
 
 // The horizontal track's four stations — change, checks, review, live — over the four facts in
@@ -135,6 +155,7 @@ export function buildRealityShape(
   return {
     stations: nodes.map((node, index) => ({ id: ids[index] as string, node })),
     segments,
+    factless: isFactless(strip),
   }
 }
 
@@ -192,8 +213,14 @@ export function realityTrackLabel(
 // nothing at all. Stated once, over the shape, because three call sites deciding for themselves
 // what "empty" means is how a second empty state starts. A shape with any fact, or with a break,
 // is NOT quiet: its hollow stations and dotted segments join the facts it does draw.
+//
+// `factless` is what carries "no fact", and it comes from the STRIP rather than from the nodes:
+// the drawn stations are a lossy view of the four facts, and a row whose PR was closed without
+// merging draws four empty nodes while genuinely knowing something. The node and break tests stay
+// beside it because they are what makes the slot safe to leave inkless.
 export function isQuietTrack(shape: TrackShape): boolean {
   return (
+    shape.factless &&
     shape.stations.every((station) => station.node === 'empty') &&
     !shape.segments.includes('broken')
   )

@@ -23,7 +23,7 @@ dark.
 
 | Label | Meaning | Reads | Writes |
 |---|---|---|---|
-| **Connected** | Synced. | ✅ | ✅ |
+| **Synced** | Everything on this screen is current. | ✅ | ✅ |
 | **Connecting** | First connection of the session. | ✅ | queued |
 | **Reconnecting…** | Reconnecting after a drop. | ✅ | queued |
 | **Offline — retrying** | The socket is down; the browser is redialling. | ✅ | ❌ |

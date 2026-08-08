@@ -41,13 +41,19 @@ dotted where it has not.
 
 A pull request **closed without merging** leaves the Change station empty — the change never
 landed, and there is no fifth shape for "started and stopped". The fact is not lost: the track's
-accessible label says "PR closed", where an issue with no pull request at all says "No delivery
-signal yet".
+accessible label says "PR closed". An issue with no pull request at all has no fact to state, and
+draws and announces nothing — see below.
 
-An issue with no linked activity still draws the track — four empty stations at exactly the width a
-populated track occupies — so connecting GitHub never shifts a row. The whole track is one image to
-a screen reader, labelled with the facts it actually draws ("PR merged, CI passing, Deployed") or
-"No delivery signal yet".
+An issue with **no linked activity at all** draws nothing in its track slot. The slot is still
+there, at exactly the width a populated track occupies, so connecting GitHub never shifts a row —
+but until there is a fact, no ink is laid down. On a list where most issues have no linked change,
+that keeps delivery ink on the rows that have delivery, instead of repeating the same placeholder
+sixty times. Because such a slot states nothing, it states nothing to a screen reader either: it is
+not announced as an image and carries no label. A track that draws **any** fact is one image to a
+screen reader, labelled with the facts it actually draws ("PR merged, CI passing, Deployed").
+
+The **vertical rail** is the deliberate exception. The issue page's subject *is* the change, so an
+issue with no linked change keeps an explicit station saying so rather than showing a blank rail.
 
 Where the **review age** is written depends on how much room the surface has. On a dense list row
 there is no room for words, so it sits beside the stations in a mono column reserved whether or not
@@ -117,7 +123,7 @@ The status glyph is **one loop, filled as far as the work has run**:
 | Todo | An open ring |
 | In progress | A half arc |
 | In review | A three-quarter arc |
-| Done | A filled disc |
+| Done | A filled disc carrying a check |
 | Canceled | An open ring with a cross through it |
 
 Because the glyphs differ by how much of the loop is drawn, they are distinguishable without

@@ -87,7 +87,10 @@ test('a linked merged PR fills the reality track and breaks it on row and detail
   const target = row(page, title)
   await expect(target.locator('[data-slot="reality-track"]')).toBeVisible({ timeout: 30_000 })
   await expect(target.getByLabel(DIVERGENCE)).toBeVisible({ timeout: 30_000 })
-  await expect(target.getByLabel('No delivery signal yet')).toHaveCount(0)
+  // The slot is no longer the quiet, inkless one an unlinked row draws — which is the assertion
+  // that still fails if the track stops populating. (`No delivery signal yet` is not announced by
+  // a quiet slot at all, so asserting its absence here would be vacuously true.)
+  await expect(target.locator('[data-slot="reality-track"][data-quiet]')).toHaveCount(0)
 
   // Detail shows the linked PR (with a link out to GitHub), states the divergence in the shared
   // dictionary's words, and draws the same `//` break the row does — on the vertical rail, whose
@@ -272,8 +275,10 @@ test('the reality track renders in all three presets, light and dark', async ({ 
         /PR merged/,
         { timeout: 30_000 },
       )
-      // And it is the POPULATED track being drawn in this preset, not the placeholder.
-      await expect(row(page, title).getByLabel('No delivery signal yet')).toHaveCount(0)
+      // And it is the POPULATED track being drawn in this preset, not the quiet reserved slot.
+      await expect(row(page, title).locator('[data-slot="reality-track"][data-quiet]')).toHaveCount(
+        0,
+      )
     }
   }
 })

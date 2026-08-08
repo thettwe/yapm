@@ -34,8 +34,10 @@ export function summarizeConnection(
   }
 
   switch (state.name) {
+    // The healthy label names what the reader HAS, not what the socket is doing. Every other case
+    // below keeps naming its own condition, because "Synced" would be a lie in all of them.
     case 'connected':
-      return { ...shared, state: state.name, label: 'Connected', writable: true }
+      return { ...shared, state: state.name, label: 'Synced', writable: true }
     case 'connecting':
       return {
         ...shared,

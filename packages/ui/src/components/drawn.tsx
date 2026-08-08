@@ -41,8 +41,10 @@ export function ScopeBand({ band }: { band: readonly ScopeBlockKind[] }) {
             block.kind === 'added' && 'border-[1.4px] border-status-in-progress bg-transparent',
           )}
         >
+          {/* 9px type, so the `+` takes the TEXT ink rather than the drawn hue its outline carries:
+              one amber cannot clear both 3:1 as a mark and 4.5:1 as type and stay an amber. */}
           {block.kind === 'added' ? (
-            <span className="text-[9px] font-bold leading-none text-status-in-progress">+</span>
+            <span className="text-[9px] font-bold leading-none text-status-in-progress-ink">+</span>
           ) : null}
         </span>
       ))}

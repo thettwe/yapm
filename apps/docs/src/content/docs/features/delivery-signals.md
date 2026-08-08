@@ -14,8 +14,9 @@ other surface — is [The reality vocabulary](/features/reality-vocabulary/).
 
 The track is dormant until you connect GitHub. See
 [Connect GitHub](/self-hosting/github-connector/) to register the App and map repositories to teams.
-Until then — and for any issue with no linked activity — the track draws four empty stations and
-nothing changes.
+Until then — and for any issue with no linked activity — the track's slot is reserved at its full
+measure and draws nothing at all, so connecting GitHub later fills it in without shifting a single
+row.
 
 ## What the track shows
 

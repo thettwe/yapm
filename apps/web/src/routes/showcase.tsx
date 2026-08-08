@@ -234,6 +234,8 @@ const DELIVERY_RAIL: TrackShape = {
     { id: 'live', node: 'empty-urgent', label: 'Live', fact: 'no deploy carries this commit' },
   ],
   segments: ['solid', 'solid', 'broken'],
+  // A rail is never quiet: the page it is drawn on has the change for its subject.
+  factless: false,
 }
 
 function ShippedPeek() {

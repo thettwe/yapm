@@ -46,7 +46,14 @@ test('a populated row and an unpopulated one reserve the same track width', () =
   expect(widthOf(unlinked.container.firstElementChild)).toBe(width)
 })
 
-test('falls back to the empty track when a row has no delivery signal', () => {
-  render(<IssueRow issueKey="ENG-1" title="Unlinked" status="todo" priority="medium" />)
-  expect(screen.getByLabelText('No delivery signal yet')).toBeDefined()
+// A row with no delivery signal still lays the slot out — that is the alignment guarantee, asserted
+// above — but it draws nothing in it and announces nothing from it.
+test('falls back to a reserved, inkless track when a row has no delivery signal', () => {
+  const { container } = render(
+    <IssueRow issueKey="ENG-1" title="Unlinked" status="todo" priority="medium" />,
+  )
+  const slot = container.querySelector('[data-slot="reality-track"]')
+
+  expect(slot?.getAttribute('data-quiet')).toBe('true')
+  expect(screen.queryByLabelText('No delivery signal yet')).toBeNull()
 })

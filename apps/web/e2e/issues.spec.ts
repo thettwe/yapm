@@ -292,7 +292,18 @@ test('the grouped list renders in all three presets, light and dark', async ({ p
       })
       const created = row(page, title)
       await expect(created).toBeVisible()
-      await expect(created.getByLabel('No delivery signal yet')).toBeVisible()
+      // An unlinked row's reality slot is RESERVED and INKLESS: it holds its measure so a signal
+      // arriving later shifts nothing, and it draws no station, no segment and no age text. The
+      // width bound is read off the element itself rather than hard-coded, because the reserved
+      // measure is a token-driven layout value and not a number this spec gets to assert.
+      const slot = created.locator('[data-slot="reality-track"]')
+      await expect(slot).toHaveAttribute('data-quiet', 'true')
+      await expect(slot).toHaveAttribute('aria-hidden', 'true')
+      expect((await slot.boundingBox())?.width ?? 0).toBeGreaterThan(0)
+      await expect(
+        slot.locator('[class*="bg-status-"], [class*="border-border-strong"]'),
+      ).toHaveCount(0)
+      await expect(created.getByLabel('No delivery signal yet')).toHaveCount(0)
     }
   }
 })

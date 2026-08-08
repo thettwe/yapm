@@ -38,7 +38,7 @@ vi.mock('@/auth/use-membership', () => ({
 const CONNECTED: ConnectionSummary = {
   state: 'connected',
   recovery: 'idle',
-  label: 'Connected',
+  label: 'Synced',
   writable: true,
   retryOffered: false,
 }

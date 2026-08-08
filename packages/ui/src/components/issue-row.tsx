@@ -37,8 +37,10 @@ function initials(name: string): string {
     .join('')
 }
 
-// The unlinked row still draws the track — four empty stations and an empty age column at the same
-// reserved measure — so populating a signal can never shift a row's alignment.
+// The unlinked row reserves the track's measure and its age column and draws nothing in either, so
+// populating a signal can never shift a row's alignment and a page of unlinked rows carries no
+// repeated ornament. The label is composed anyway: it is what the slot would announce the moment
+// it has a fact to draw.
 function EmptyRealityTrack() {
   return <RealityTrack shape={buildRealityShape(null)} age={null} label="No delivery signal yet" />
 }

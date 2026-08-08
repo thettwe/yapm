@@ -9,6 +9,8 @@ Read before writing code. Keep this file short; details live in the linked docs.
 | [VISION.md](VISION.md) | Why yapm exists, who it's for, what it refuses to be |
 | [TECHSTACK.md](TECHSTACK.md) | Every technology choice and its rationale; pinned version baseline |
 | [ROADMAP.md](ROADMAP.md) | Locked v1 scope and the change sequence |
+| [DESIGN.md](DESIGN.md) | The settled design language, and what shipped screens are judged against |
+| [`design-explorations/overhaul-2026-08/northstar/`](design-explorations/overhaul-2026-08/northstar/) | The canonical mocks; `NORTHSTAR.md` records the divergences the build was right to take |
 | [`reference/`](reference/) | **Verified API notes for the stack — read these before writing code** |
 | [`openspec/`](openspec/) | Specs: `changes/<name>/` is in-flight work, `specs/` is current behavior |
 

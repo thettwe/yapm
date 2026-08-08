@@ -12,18 +12,16 @@ code-review health are just views, not a $30/developer/month add-on.
 
 ---
 
-> **Status: pre-alpha, building in the open.** The tracker is real: accounts, teams, and roles;
-> a three-preset theme system; a keyboard-first issue list, command palette, and issue detail; and
-> a kanban board; time-boxed cycles with automatic rollover; a keyboard-first triage inbox for
-> incoming issues; and lightweight projects with a roadmap timeline — all self-hostable in three
-> containers; a first-party GitHub connector that ingests PR, CI, and deploy state into the
-> work graph so every issue row shows delivery reality; a BYO-key, provider-agnostic AI
-> foundation whose first feature is a team-internal, evidence-linked cycle digest; a
-> data-seeded retrospective that opens with the cycle's own delivery facts already gathered; a
-> per-user notification inbox with optional batched email; and `@`-mentions in descriptions and
-> comments that subscribe the person you named to the issue — reversibly.
-> Direction is settled in [VISION.md](VISION.md), [TECHSTACK.md](TECHSTACK.md), and
-> [ROADMAP.md](ROADMAP.md).
+> **Status: pre-alpha, building in the open.** The tracker is real and self-hosts in three
+> containers: issues, board, cycles, triage, projects and a roadmap, all keyboard-first.
+>
+> A first-party GitHub connector puts PR, CI, review and deploy state on every issue, and two
+> surfaces read from it — a team Home that opens as a morning digest, and a Delivery view that
+> reads flow as a story rather than a dashboard. Retrospectives open pre-seeded with the cycle's
+> own facts. AI is BYO-key and off until you turn it on.
+>
+> Direction is settled in [VISION.md](VISION.md), [TECHSTACK.md](TECHSTACK.md) and
+> [ROADMAP.md](ROADMAP.md); the design language in [DESIGN.md](DESIGN.md).
 
 ## Why another one
 
@@ -51,163 +49,241 @@ part of engineering metrics disappears.
 
 ## What works today
 
-Accounts, teams, and roles (admin / member / viewer — viewers free and unlimited) · email,
-GitHub, and **OIDC/SSO** sign-in, all free and unlimited — SSO registered by a workspace admin in
-*Settings → Single sign-on* against an email domain you prove you own by DNS, and offered on the
-login form only once it can actually complete ·
-a keyboard-first issue list whose every row states what git says about it in words as
-well as in a drawing, with a quiet filter bar, a command palette and
-filtering · an issue detail that states one reality in two registers — a plain sentence for a PM
-directly above the mono git facts for an engineer — beside a vertical delivery rail carrying a
-station per moment a real timestamp supports, and, where the board and git disagree, a callout whose
-evidence is the two clocks side by side and whose ⏎ takes the one repair the board can honestly
-make; rich-text descriptions, files and comments intact · a kanban board ·
-time-boxed cycles with a progress view and automatic rollover of unfinished work ·
-a keyboard-first triage inbox for incoming issues (accept / decline / route, without a seventh status) ·
-lightweight, workspace-level projects with computed progress and a keyboard-first roadmap timeline across teams ·
-three switchable themes (Warm, Focused, Editorial) with a custom accent color · a first-party
-**GitHub connector** (admin-configured) that ingests PR, CI, review, and deploy state into the
-work graph, so every issue row's **reality track** shows live PR state, CI health, whether a
-deployment carrying the merge commit actually succeeded, and review
-age — with a **`//` break** in the track when a human status disagrees with git, and **opt-in status
-automation** that closes the loop the break opens: turn it on for a team and a linked pull request
-opening moves its issue to In Review, merging moves it to Done — forward only, never over a canceled
-or untriaged issue, off by default, and enabling it changes no existing issue · a **BYO-key AI
-foundation** (bring your own Anthropic / Gemini / OpenAI key, admin-configured, off until you
-enable it) whose first feature is a team-internal, evidence-linked **cycle digest** — pre-computed
-at cycle close, team-level and blameless, with a raw linked-evidence fallback when AI is off, and
-told in terms of **your product areas**: map path prefixes to area labels once and the digest groups
-the cycle by area, bands each change by size, flags the sensitive areas it touched, and collapses
-tooling churn into one "N internal improvements" line, because yapm converts paths into labels
-*before* the model runs and **never reads a diff** — the file list is fetched under the GitHub
-permission you already granted, used, and thrown away · an off-by-default **product digest** — the
-one thing in yapm whose output crosses a permission boundary, and so the most refusing feature in it:
-four independent switches (an env toggle, a workspace switch, a per-team switch, and an explicit
-reader list) all have to agree, there is **no new role** — being named on a team's reader list *is*
-the entitlement, and it grants that team's product digest and nothing else — the producing team reads
-the exact text and releases it themselves before anybody outside can, evidence is baked as plain-text
-labels rather than links (a reader outside the team can open none of the targets, and only the work
-the summary cites gets a label at all), and the surface is cleanly *absent* rather than empty for
-anyone who has not been sent something — named or not. Retraction stops further reads; it does not
-un-read, and the product says so in those words ·
-a **data-seeded retrospective**, opened automatically when a cycle closes, whose gather-data phase
-is already filled in from the team's own cycles (and from PR/CI data when a connector is
-configured), with **anonymity guaranteed at the storage layer** — the card→author binding lives in
-a server-only table the sync schema cannot name — and actions that become real, numbered issues in
-the next cycle, plus an opt-in, per-team **AI draft** in that retro: at the moment the facilitator
-reveals the board (never before it, so there is nothing to anchor on while people are still writing
-their own cards), the model drafts at most three wins, three losses and three improvements, each one
-*citing* a work-graph entity or one of yapm's own computed metrics — it points at a number, it never
-types one — reading no cards, no comments and nobody's name, and labelled "AI-drafted, not agreed"
-until **the team ratifies it**: each member privately agrees or disagrees (synced to nobody else, not
-even a workspace admin, exactly like their dots), one verdict per proposal is computed once when the
-retro leaves voting, **a single disagreement makes a proposal contested** rather than agreed and sorts
-it to the top of the discussion, and an agreed improvement is one keystroke from a real numbered issue
-— **never with an owner filled in**, because the model has no identity data to invent one from — and
-once a team has run two retros the draft *can* close the loop: a fourth group reporting on up to three
-of the improvements agreed in the team's **most recent previous retro** — with yapm naming which cycle
-they came from — each reported as **shipped, canceled, still open or never tracked**, computed by yapm
-from the live status of the issue it became and stripped of the assignee on both the action and that
-issue ·
-a team **Delivery view** at `/teams/<teamId>/delivery` that lifts those same flow numbers out of the
-one retro they were reachable from and reads them as a story rather than a dashboard: an **annotated
-timeline** of the cycle in progress (one dot per deployment that reached production, the release that
-went out, the retrospective that closed — every annotation derived, none hand-written, and no causal
-claim about any of it), four stat readings each carrying a quiet `how ·` that unfolds its own
-derivation, a **distribution** of open→merged where one dot is one merged change and the median is
-drawn where it falls, a **cycle-flow band** with carryover ribbons between the bars, and
-**review-rhythm** small multiples that name no reviewer at any depth — over a rolling window of 3, 6
-or 12 completed cycles, with the Delivered half populated from cycles alone on an instance with no
-connectors at all. Computed in your browser from rows already synced (no aggregate query, no
-reporting endpoint, instant and correct offline), **team-level only** at every depth because the
-model it renders has nowhere to put a person, and closing with one non-dismissible line naming what
-it genuinely cannot measure — change failure rate, time to restore, deployment frequency as a rate —
-plus the coverage limit that a change linked to no issue is invisible to it ·
-a keyboard-first **notification inbox** at
-`/inbox` with an unread badge, for
-assignments (including triage routing), comments on issues you're involved in, and product digests
-shared with you (that one naming no actor and carrying no content) — written only on
-the server so a rebased optimistic mutation can never duplicate or re-send one, readable **only by
-its recipient with no admin bypass**, and optionally emailed as one batched, debounced digest per
-person through a provider-neutral mailer (SMTP **or** Resend over HTTPS, for hosts that block
-outbound SMTP), cleanly disabled when neither is configured · **`@`-mentions** in descriptions and
-comments — a keyboard-first typeahead over rows the client has *already* synced (it opens on the
-keystroke, and works offline), stored as an id reference so renames propagate and a crafted label
-cannot spoof a colleague, with **eligibility decided server-side** by the same predicate that
-decides who may read the issue, so a mention of someone who cannot read it produces nothing and the
-list says why instead of going quiet — and being mentioned **subscribes you to the issue**, through
-a durable subscription with a sticky, keyboard-operable unfollow on the issue itself and no
-follower list or count for anyone, admins included · **instant-then-complete search** — `⌘K` or a
-full `/search?q=` route, answered in the same frame from rows the browser already holds (no network,
-works offline) and then *extended* by Postgres full-text over comment bodies and every other team
-you can read, shown as two labelled groups that never reorder under the keyboard cursor, adding **no
-container and no `CREATE EXTENSION`**, with the index maintained by a background job so an issue-title
-edit costs exactly what it did before — and **no query is ever recorded**: no search log, no
-analytics, no "popular searches", nothing aggregatable into a per-person record ·
-**attachment storage** — a provider-neutral byte store behind `/api/v1/files` with thumbnails and a
-nightly sweep of abandoned uploads, defaulting to a directory on disk (complete, no fourth container)
-and switchable to any S3-compatible bucket, where **there are no signed or shareable links and no
-setting that turns them on**: an image in a synced document would put a bearer token on every
-teammate's device, so the document stores an opaque id and the app proxies every byte, which is also
-what makes the permission check identical for both providers ·
-**markdown as the interchange format** — type markdown to format, paste markdown in, and copy
-markdown *out* that actually reads correctly in a terminal or a Slack message (no `&lt;` entities,
-and a paragraph that starts with `#` comes back a paragraph), while rich text stays the storage
-format and an in-app copy/paste stays lossless ·
-**images, tables and syntax-highlighted code** in descriptions and comments, reached with a `/`
-insert menu that is fully keyboard-operable (as are table navigation and selecting or removing an
-image), with syntax colours drawn from your theme's tokens rather than a highlighter's stylesheet —
-plus a **Files** section on every issue listing everything attached to it, and a refusal that matters:
-a browser tab left open across an upgrade is shown its issue **read-only** with a "reload to edit"
-notice instead of silently saving back a description with the images and tables it could not
-understand quietly deleted ·
-a team **Home digest** — the team's page is a morning read, not a members roster: the active
-cycle's vitals (day band, committed / landed / added scope, days left), a narrative that is the
-stored cycle digest when one exists and a deterministic two-sentence fallback over real counts
-when it doesn't (never filler, never a model call at page-open), **one attention number** over
-four disjoint exception classes (done in git but not on the board, checks failing, waiting on
-review over a day, new in triage) that agrees with itself everywhere it appears, what went live
-in the last 24 hours with provenance, **your own in-flight work and only yours** (the band ends
-"your work only — never compared"), the unassigned ready-to-start runway, a weekly ship-cadence
-chart, and Live / Built-not-live badges from the deploy fact — every band computed on your device
-from rows already synced, and every empty band folding away rather than apologizing, with members
-management intact behind a Members doorway ·
-**one frame around every page** — three bands: a 48px deck that never adapts to the page (workspace ·
-team · six destinations — Home, Issues, Triage, Cycles, Delivery, `more▾` — plus the `⌘K` pill, the
-attention badge, your inbox and you), the page's own masthead, and a 32px statusline that states the
-team's day and the sync state. Board is a **lens** on Issues, not a rival destination; `⌘K` has a
-single owner that every surface's palette registers with; and the attention count in the deck, in the
-statusline and on Team Home is **one derivation**, absent rather than zeroed when there is nothing to
-attend to.
+### Accounts, teams, and sign-in
+
+- Accounts, teams, and roles — admin / member / viewer. **Viewers are free and unlimited.**
+- Email, GitHub, and **OIDC/SSO** sign-in. All three are free and unlimited, SSO included.
+- SSO is registered by a workspace admin in *Settings → Single sign-on*, against an email domain
+  you prove you own by DNS, and it is offered on the login form only once it can actually complete.
+
+### The frame around every page
+
+One frame, three bands, around every page:
+
+- A **48px deck that never adapts to the page** — workspace · team · six destinations (Home,
+  Issues, Triage, Cycles, Delivery, `more▾`) plus the `⌘K` pill, the attention badge, your inbox
+  and you.
+- The page's own masthead.
+- A 32px statusline stating the team's day and the sync state.
+
+Board is a **lens** on Issues, not a rival destination. `⌘K` has a single owner that every
+surface's palette registers with. The attention count in the deck, in the statusline and on
+Team Home is **one derivation** — and it is absent rather than zeroed when there is nothing
+to attend to.
+
+Three switchable themes (Warm, Focused, Editorial) with a custom accent color.
+
+### Team Home — the morning digest
+
+The team's page is a morning read, not a members roster.
+
+- The active cycle's vitals: day band, committed / landed / added scope, days left.
+- A narrative that is the stored cycle digest when one exists and a deterministic two-sentence
+  fallback over real counts when it doesn't — never filler, never a model call at page-open.
+- **One attention number** over four disjoint exception classes — done in git but not on the
+  board, checks failing, waiting on review over a day, new in triage — that agrees with itself
+  everywhere it appears.
+- What went live in the last 24 hours, with provenance.
+- **Your own in-flight work and only yours.** The band ends "your work only — never compared".
+- The unassigned ready-to-start runway, and a weekly ship-cadence chart.
+- What shipped this cycle, each line carrying a Live or Built-not-live badge read off the deploy
+  fact.
+
+Every band is computed on your device from rows already synced, and every empty band folds away
+rather than apologizing. Members management is intact behind a Members doorway.
+
+### Tracking work
+
+- A **keyboard-first issue list** whose every row states what git says about it in words as well
+  as in a drawing, with a quiet filter bar, a command palette and filtering.
+- An **issue detail that states one reality in two registers** — a plain sentence for a PM
+  directly above the mono git facts for an engineer — beside a vertical delivery rail carrying a
+  station per moment a real timestamp supports. Rich-text descriptions, files and comments intact.
+- Where the board and git disagree, a callout whose evidence is the two clocks side by side, and
+  whose ⏎ takes the one repair the board can honestly make.
+- A kanban board.
+- Time-boxed **cycles** with a progress view and automatic rollover of unfinished work.
+- A keyboard-first **triage inbox** for incoming issues — accept / decline / route, and it works
+  **without a seventh status**.
+- Lightweight, workspace-level projects with computed progress, and a keyboard-first roadmap
+  timeline across teams.
+
+### Writing, editing, and files
+
+**Markdown is the interchange format.** Type markdown to format, paste markdown in, and copy
+markdown *out* that actually reads correctly in a terminal or a Slack message — no `&lt;`
+entities, and a paragraph that starts with `#` comes back a paragraph. Rich text stays the storage
+format, and an in-app copy/paste stays lossless.
+
+Images, tables and syntax-highlighted code in descriptions and comments, reached with a `/` insert
+menu that is fully keyboard-operable — as are table navigation and selecting or removing an image.
+Syntax colours are drawn from your theme's tokens rather than a highlighter's stylesheet. Every
+issue has a **Files** section listing everything attached to it.
+
+A refusal that matters: a browser tab left open across an upgrade is shown its issue **read-only**
+with a "reload to edit" notice, instead of silently saving back a description with the images and
+tables it could not understand quietly deleted.
+
+**Attachment storage** is a provider-neutral byte store behind `/api/v1/files`, with thumbnails and
+a nightly sweep of abandoned uploads. It defaults to a directory on disk — complete, no fourth
+container — and is switchable to any S3-compatible bucket. **There are no signed or shareable links
+and no setting that turns them on.** An image in a synced document would put a bearer token on
+every teammate's device, so the document stores an opaque id and the app proxies every byte. That
+is also what makes the permission check identical for both providers.
+
+### Delivery reality from GitHub
+
+A first-party **GitHub connector**, admin-configured, ingests PR, CI, review and deploy state into
+the work graph. Every issue row's **reality track** then shows live PR state, CI health, whether a
+deployment carrying the merge commit actually succeeded, and review age — with a **`//` break** in
+the track when a human status disagrees with git.
+
+**Opt-in status automation** closes the loop that break opens: turn it on for a team, and a linked
+pull request opening moves its issue to In Review, merging moves it to Done. Forward only. Never
+over a canceled or untriaged issue. Off by default, and enabling it changes no existing issue.
+
+### Delivery — the flow story
+
+A team **Delivery view** at `/teams/<teamId>/delivery` lifts the same flow numbers out of the one
+retro they were reachable from and reads them as a story rather than a dashboard:
+
+- An **annotated timeline** of the cycle in progress — one dot per deployment that reached
+  production, the release that went out, the retrospective that closed. Every annotation derived,
+  none hand-written, and no causal claim about any of it.
+- Four stat readings, each carrying a quiet `how ·` that unfolds its own derivation.
+- A **distribution** of open→merged where one dot is one merged change and the median is drawn
+  where it falls.
+- A **cycle-flow band** with carryover ribbons between the bars.
+- **Review-rhythm** small multiples that name no reviewer at any depth.
+
+The readings and the drawings under them run over a rolling window of 3, 6 or 12 completed cycles,
+and the Delivered half is populated from cycles alone on an instance with no connectors at all. It
+is computed in your browser from rows already synced: no aggregate query, no reporting endpoint,
+instant and correct offline. It is **team-level only** at every depth, because the model it renders
+has nowhere to put a person.
+
+It closes with one non-dismissible line naming what it genuinely cannot measure — change failure
+rate, time to restore, deployment frequency as a rate — plus the coverage limit that a change
+linked to no issue is invisible to it.
+
+### AI with your own key
+
+A **BYO-key AI foundation** — bring your own Anthropic / Gemini / OpenAI key. Admin-configured,
+and off until you enable it.
+
+The first feature is a team-internal, evidence-linked **cycle digest**: pre-computed at cycle
+close, team-level and blameless, with a raw linked-evidence fallback when AI is off. It is told in
+terms of **your product areas** — map path prefixes to area labels once and the digest groups the
+cycle by area, bands each change by size, flags the sensitive areas it touched, and collapses
+tooling churn into one "N internal improvements" line.
+
+That works because yapm converts paths into labels *before* the model runs and **never reads a
+diff**. The file list is fetched under the GitHub permission you already granted, used, and thrown
+away.
+
+### Retrospectives
+
+A **data-seeded retrospective** opens automatically when a cycle closes. Its gather-data phase is
+already filled in from the team's own cycles, and from PR/CI data when a connector is configured.
+**Anonymity is guaranteed at the storage layer** — the card→author binding lives in a server-only
+table the sync schema cannot name. Actions become real, numbered issues in the next cycle.
+
+The **AI draft** in that retro is opt-in, per team. It appears at the moment the facilitator
+reveals the board, never before it, so there is nothing to anchor on while people are still writing
+their own cards. The model drafts at most three wins, three losses and three improvements. Each
+proposal cites a work-graph entity or one of yapm's own computed metrics — it points at a number,
+it never types one. It reads no cards, no comments and nobody's name, and it is labelled
+"AI-drafted, not agreed" until the team ratifies it.
+
+Each member privately agrees or disagrees, synced to nobody else, not even a workspace admin,
+exactly like their dots. One verdict per proposal is computed once, when the retro leaves voting.
+**A single disagreement makes a proposal contested** rather than agreed, and sorts it to the top
+of the discussion. An agreed improvement is one keystroke from a real numbered issue — **never
+with an owner filled in**, because the model has no identity data to invent one from.
+
+Once a team has run two retros the draft can close the loop: a fourth group reporting on up to
+three of the improvements agreed in the team's **most recent previous retro**, with yapm naming
+which cycle they came from. Each is reported as **shipped, canceled, still open or never tracked**,
+computed by yapm from the live status of the issue it became — and stripped of the assignee on both
+the action and that issue.
+
+### The product digest
+
+An **off-by-default product digest**. It is the one thing in yapm whose output crosses a
+permission boundary, and so the most refusing feature in it.
+
+- Four independent switches — an env toggle, a workspace switch, a per-team switch, and an explicit
+  reader list — all have to agree.
+- **There is no new role.** Being named on a team's reader list *is* the entitlement, and it grants
+  that team's product digest and nothing else.
+- The producing team reads the exact text and releases it themselves before anybody outside can.
+- Evidence is baked as plain-text labels rather than links — a reader outside the team can open
+  none of the targets — and only the work the summary cites gets a label at all.
+- The surface is cleanly *absent* rather than empty for anyone who has not been sent something,
+  named or not.
+- Retraction stops further reads. It does not un-read, and the product says so in those words.
+
+It is **governed** rather than merely claimed to be. Every policy change, generation, release and
+retraction is recorded in a server-only table no client can name. A workspace admin can read that
+record in an admin-only view reporting what was disclosed and *to how many readers* — a view with no
+shape in which a read could appear. Those records are **retention-bounded** by a nightly sweep on
+the job runner yapm already has: one year by default, configurable, and running whether or not AI is
+enabled.
+
+A named reader can optionally be emailed when a digest is released, and that message carries **a
+link and nothing else**. A mailed artifact sits outside the kill switch, outside retention and
+outside the audit log at the same time — so the one path that leaves the governed surface carries
+nothing that could survive them.
+
+### Notifications, mentions, and email
+
+A keyboard-first **notification inbox** at `/inbox` with an unread badge, carrying assignments
+(including triage routing), comments on issues you're involved in, and product digests shared with
+you — that last naming no actor and carrying no content. Notifications are written only on the
+server, so a rebased optimistic mutation can never duplicate or re-send one, and a notification is
+readable **only by its recipient, with no admin bypass**.
+
+They are optionally emailed as one batched, debounced digest per person, through a provider-neutral
+mailer — SMTP **or** Resend over HTTPS, for hosts that block outbound SMTP. Email is cleanly
+disabled when neither provider is configured.
+
+**`@`-mentions** in descriptions and comments are a keyboard-first typeahead over rows the client
+has *already* synced: it opens on the keystroke, and works offline. Mentions are stored as an id
+reference, so renames propagate and a crafted label cannot spoof a colleague. Eligibility is
+decided server-side by the same predicate that decides who may read the issue, so a mention of
+someone who cannot read it produces nothing — and the list says why instead of going quiet.
+
+Being mentioned **subscribes you to the issue**, through a durable subscription, with a sticky,
+keyboard-operable unfollow on the issue itself — and no follower list or count for anyone, admins
+included.
+
+### Search
+
+**Instant-then-complete search.** `⌘K` or a full `/search?q=` route, answered in the same frame
+from rows the browser already holds — no network, works offline — and then *extended* by Postgres
+full-text over comment bodies and every other team you can read. The two are shown as labelled
+groups that never reorder under the keyboard cursor.
+
+It adds **no container and no `CREATE EXTENSION`**, and the index is maintained by a background
+job, so an issue-title edit costs exactly what it did before.
+
+**No query is ever recorded**: no search log, no analytics, no "popular searches", nothing
+aggregatable into a per-person record.
 
 ## What's next
 
-**BYO-key AI agents** that read and act through the same permissions as a human —
-the foundation (gateway, agent-as-actor tools, the AI-over-work-graph substrate) is in, and the
-AI-facilitated retro is complete end to end and compounding: the model drafts, the team disposes, an
-agreed improvement lands as a tracked issue, and the next retro reports whether it shipped. The
-governed PM-facing digest — the first AI output in yapm to cross a permission boundary — is now in
-too — and it is now **governed** rather than merely claimed to be: every policy change, generation,
-release and retraction is recorded in a server-only table no client can name, a workspace admin can
-read that record in an admin-only view that reports what was disclosed and *to how many readers* and
-has no shape in which a read could appear, and those records are **retention-bounded** by a nightly
-sweep on the job runner yapm already has — one year by default, configurable, and running whether or
-not AI is enabled. A named reader can optionally be emailed when a digest is released, and that
-message carries **a link and nothing else**: a mailed artifact sits outside the kill switch, outside
-retention and outside the audit log at the same time, so the one path that leaves the governed
-surface carries nothing that could survive them. Retraction still stops further reads without
-un-reading, and the product still says so in those words. The **review-health and CI-health half of
-the metrics story is now a view rather than a promise**: the team Delivery view reads PR cycle time,
-time to first review, review rounds and the CI failing rate over a rolling window as a story rather
-than a dashboard — an annotated timeline of the cycle in progress with the deployments that reached
-production drawn on it, four stat readings, an open→merged distribution, a cycle-flow band and
-review-rhythm small multiples, team-level only and never individual scorecards. It closes with one
-permanent line naming what it genuinely cannot measure — **change failure rate**, **time to restore**
-and **deployment frequency as a rate** — plus the coverage limit that a pull request linked to no
-issue is invisible to it. It deliberately does *not* call merged→live unmeasured: that join is exact
-and is stated per change on the issue's delivery rail. Change failure rate and MTTR wait on an
-incident record that does not exist yet (Phase 3). Next: those. More connectors (GitLab, …) slot into the same framework with no
-feature-code change — inheriting the reality track and the status automation above for free.
+**An incident record.** Change failure rate and time to restore are the two DORA metrics the
+Delivery view names as unmeasured, and both wait on the same missing entity. Until it exists, the
+page says so rather than estimating. (Deployment frequency as a rate waits with them.)
+
+**More connectors.** GitLab and others slot into the same connector framework with no feature-code
+change, inheriting the reality track and the opt-in status automation for free.
+
+**BYO-key AI agents** that read and act through the same permissions as a human. The foundation is
+already in — the gateway, agent-as-actor tools, and the AI-over-work-graph substrate — and the
+AI-facilitated retro already compounds: the model drafts, the team disposes, an agreed improvement
+lands as a tracked issue, and the next retro reports whether it shipped. The agents themselves are
+what remains.
 
 ## Quickstart
 

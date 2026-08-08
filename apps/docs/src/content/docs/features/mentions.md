@@ -124,8 +124,10 @@ you to never emails you at the default preference. (Choosing *Email everything* 
 
 ### The Follow control
 
-Every issue's detail view carries a **Follow / Following** control in its property sidebar, under
-**Updates**. It is a normal keyboard-reachable button, it announces its pressed state, and it
+Every issue carries a **Follow / Following** control. On the full page it sits in the masthead
+beside **Mark Done**, where the mock draws it; in the side panel — which has no masthead of its own
+— it sits in the properties block under **Updates**. It is a normal keyboard-reachable button, it
+announces its pressed state, and it
 toggles optimistically — nothing waits on the network. In the instant before your own subscription
 has arrived on a client that has never seen this issue, it says **Updates** and is inert rather than
 guessing: it would rather tell you nothing than tell you that you are not following something you

@@ -59,8 +59,8 @@ Where the **review age** is written depends on how much room the surface has. On
 there is no room for words, so it sits beside the stations in a mono column reserved whether or not
 there is anything to put in it — "3d", "2h", "now" — and a row with nothing to say still holds
 exactly the space a row with an age takes. The team digest's rows state the age in words beside the
-track instead, and the board card and the issue page state it elsewhere on the surface; none of
-those three draws an age column at all.
+track instead, and the issue page states it in its own two registers ("In review — waiting 16h");
+neither draws an age column. The board card draws no age at all.
 
 ### The same track, on its side
 
@@ -177,8 +177,9 @@ and nothing else. So a provider's mark is:
 - **12–14px**, never larger than the text beside it,
 - placed **after** the fact it sourced, never in place of a status arc or a track node.
 
-GitHub's mark appears after facts sourced from GitHub. Figma's appears on linked design artifacts
-only. **An uploaded file carries no mark** — there is no provider to name.
+GitHub's mark appears after facts sourced from GitHub, and today it is the only mark yapm draws —
+GitHub is the only connector, so it is the only provenance there is to name. **An uploaded file
+carries no mark**: there is no provider behind it.
 
 Which phrases carry a mark is a property of the **dictionary entry** below, not a decision each
 screen makes, so two screens showing the same fact cannot disagree about where it came from.

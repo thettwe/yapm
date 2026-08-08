@@ -21,8 +21,10 @@ The board always has the same six columns, in this order:
 6. **Canceled**
 
 These are the fixed issue statuses — the board never adds, removes, or renames columns, and
-it only ever groups by status. Each card shows the issue's status glyph, priority mark, key,
-title, and assignee, exactly as the list row does.
+it only ever groups by status. Each card shows the issue's status glyph, key, priority mark,
+title, labels and assignee — the identity half of a list row, in the same glyph vocabulary.
+It does **not** carry the delivery half: no reality track, no phrase at rest. Delivery reality
+is read on the list, on the issue page, or on [Team Home](/features/team-home/).
 
 ## Moving a card
 

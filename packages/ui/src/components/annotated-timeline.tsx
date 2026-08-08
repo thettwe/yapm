@@ -65,6 +65,14 @@ const AXIS_LABEL_Y = 136
 const CALLOUT_TOP = 42
 const RETRO_ROW = 30
 const CHIP_Y = 55
+// Half the widest today label the page writes ("today · day 14 of 14 · 6 days over"), at 10.5px
+// semibold. A caret inside this of either end is PINNED there — on the last day of a cycle, and on
+// every overdue one — and a label centred on it would paint outside the viewBox. It hangs from the
+// end instead. Estimated rather than measured: a static drawing has no text metrics.
+const TODAY_LABEL_REACH = 120
+// The days-left note annotates the stretch of track between today and the end. Kept clear of the
+// right edge by half its own widest form.
+const DAYS_LEFT_REACH = 40
 
 function at(position: number): number {
   return LEFT + Math.min(1, Math.max(0, position)) * SPAN
@@ -110,6 +118,19 @@ export function AnnotatedTimeline({
   // the tallest column and the box grows to hold it — the same way an extra retrospective row grows
   // it downward. Left unbounded the dots paint through the call-out and then out of the viewBox,
   // over whatever the page drew above this section.
+  // Where the today label hangs from, and whether the days-left note has any track left to annotate.
+  const todayAnchor =
+    todayX > RIGHT - TODAY_LABEL_REACH
+      ? 'end'
+      : todayX < LEFT + TODAY_LABEL_REACH
+        ? 'start'
+        : 'middle'
+  const todayLabelX = todayAnchor === 'end' ? RIGHT : todayAnchor === 'start' ? LEFT : todayX
+  // A caret sitting ON the end has no remaining stretch to label, and the today label already
+  // states the overrun; anywhere else the note's centre is kept off the edge.
+  const daysLeftX = Math.min((todayX + RIGHT) / 2, RIGHT - DAYS_LEFT_REACH)
+  const daysLeftDrawn = todayX < RIGHT
+
   const stackTop = dots.reduce((top, dot) => Math.min(top, dot.cy - DOT_R), DOT_Y - DOT_R)
   const lift = Math.max(0, CALLOUT_TOP - stackTop)
   const calloutTop = CALLOUT_TOP - lift
@@ -198,24 +219,26 @@ export function AnnotatedTimeline({
             10.5px text may not sit under AA. The app-frame precedent: the mock loses, not the
             reader. */}
         <text
-          x={todayX}
+          x={todayLabelX}
           y={AXIS_LABEL_Y + 14}
-          textAnchor="middle"
+          textAnchor={todayAnchor}
           fontSize={10.5}
           fontWeight={600}
           fill="var(--text-1)"
         >
           {todayLabel}
         </text>
-        <text
-          x={(todayX + RIGHT) / 2}
-          y={TRACK_Y - 10 - lift}
-          textAnchor="middle"
-          fontSize={11}
-          fill="var(--text-2)"
-        >
-          {daysLeftLabel}
-        </text>
+        {daysLeftDrawn ? (
+          <text
+            x={daysLeftX}
+            y={TRACK_Y - 10 - lift}
+            textAnchor="middle"
+            fontSize={11}
+            fill="var(--text-2)"
+          >
+            {daysLeftLabel}
+          </text>
+        ) : null}
 
         {callout === null ? null : (
           <g>

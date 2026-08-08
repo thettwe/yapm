@@ -302,6 +302,15 @@ test('every derived number carries a how · that opens, and Escape folds it and 
   fireEvent.keyDown(trigger, { key: 'Escape' })
   expect(trigger).toHaveAttribute('aria-expanded', 'false')
   expect(document.activeElement).toBe(trigger)
+
+  // The LAST reading sits at the right of the content column, so its 280px panel hangs from its own
+  // right edge — opening it leftward runs it past the column, where the page's scroll container
+  // clips it. The first reading's panel still opens from the left.
+  const last = readings[readings.length - 1] as HTMLElement
+  fireEvent.click(within(last).getByRole('button', { name: /^How .* is derived$/ }))
+  expect(within(last).getByRole('dialog').className).toContain('right-0')
+  fireEvent.click(trigger)
+  expect(within(readings[0] as HTMLElement).getByRole('dialog').className).toContain('left-0')
 })
 
 // The only interactive control on the page. `Number(event.target.value)` is the whole of it, and a

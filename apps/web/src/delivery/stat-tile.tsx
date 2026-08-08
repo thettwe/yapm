@@ -45,7 +45,12 @@ export function StatRow({ readings }: { readings: readonly DeliveryStatReading[]
       className="flex flex-wrap border-t border-b border-row-hairline"
     >
       {readings.map((reading, index) => (
-        <StatTile key={reading.key} reading={reading} first={index === 0} />
+        <StatTile
+          key={reading.key}
+          reading={reading}
+          first={index === 0}
+          last={index === readings.length - 1}
+        />
       ))}
     </div>
   )
@@ -54,9 +59,14 @@ export function StatRow({ readings }: { readings: readonly DeliveryStatReading[]
 export function StatTile({
   reading,
   first = true,
+  last = true,
 }: {
   reading: DeliveryStatReading
   first?: boolean
+  // The last tile sits at the right of the content column, so its 280px `how ·` panel hangs from
+  // its own right edge instead of running past the column and being clipped by whatever scrolls —
+  // the same alignment every section-level `how ·` on this page already takes.
+  last?: boolean
 }) {
   const delta = reading.delta
 
@@ -97,7 +107,11 @@ export function StatTile({
         <StatMini reading={reading} />
       </div>
       <span className="mt-[7px] inline-block">
-        <How label={reading.how.label} constraint={reading.how.constraint}>
+        <How
+          label={reading.how.label}
+          constraint={reading.how.constraint}
+          align={last ? 'end' : 'start'}
+        >
           {reading.how.body}
         </How>
       </span>

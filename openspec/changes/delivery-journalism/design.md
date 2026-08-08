@@ -574,3 +574,51 @@ product-wide "appears exactly once" claim is now backed by a source walk over th
 `metrics/page.test.ts`, on the phrase-dictionary guard's pattern. The timeline's peek chip is
 positioned through the same `LEFT + position * SPAN` arithmetic as the marks it annotates, rather
 than as a raw percentage of a wrapper whose axis is inset.
+
+### Review round 2 — the giants are named once, and one surface is deliberately left alone
+
+Four of the round's findings moved stated behaviour or drawn geometry:
+
+- **A threshold is quoted at the precision it survives.** The distribution stated the median at whole
+  hours everywhere — the standfirst, the median label, the crowd note and the aria label. A median of
+  two minutes rounds to `0h`, so all four quoted "inside 0 hours": a threshold none of the changes
+  the crowd counts satisfies. When the reading's figure rounds to zero and the exact median does not,
+  the page now states that median in **minutes** in all four places. The `isOutlier` guard was
+  already on the exact median, so a median that merely rounds away still calls its giants out — which
+  is what made the old wording contradict itself.
+- **The giants are named once, as an absolute wait.** The standfirst said "waited 4 times that or
+  longer" while the note beside the drawing said "waited 400h or more" — two statements of one fact
+  that disagreed whenever the multiplied median was not the quoted one, and that said "four times
+  zero" when it rounded away. The sentence now interpolates the note's own text, so there is one
+  string and the two cannot drift.
+- **The today label hangs from the axis end when the caret pins there.** The caret pins on the last
+  day of a cycle and on every overdue one — where round 1 made the label ~14 characters longer — and
+  a centred label painted tens of user units outside the `viewBox`. It now takes `end`/`start`
+  anchoring within 120 units of either edge, and the days-left note is not drawn at all when the
+  caret sits ON the end: there is no remaining stretch of track to annotate, and the today label
+  already states the overrun.
+- **The last stat reading's `how ·` hangs from its right edge.** Round 1 fixed this for the
+  section-level triggers only. The fourth tile sits at the right of the content column, so its 280px
+  panel ran past it and was clipped below ~1176px. `StatRow` now passes `last`, and `StatTile`
+  forwards `align`.
+
+`ROADMAP.md`'s Phase 2 bullet still carried the sentence `VISION.md` §Phasing replaced on this
+branch. Both root docs now say the same thing: the deploy half is drawn on the Delivery view, and
+what stays refused is deployment frequency **as a rate**.
+
+### Team Home states an overrun differently, and that is left for its own change
+
+The Delivery timeline stopped clamping an overdue cycle (round 1) and reads `day 14 of 14 · 6 days
+over`. Team Home's `buildTeamHome` keeps the identical clamp, so the same cycle reads `0 days left in
+the cycle` there. Carrying `overdue`/`overdueDays` through the hero's band alone would not fix it: the
+clamped `dayIndex`/`daysLeft` are read in **four** places on that page — the hero's `Day N of M ·
+ends <weekday>` line, the day band itself, the vitals' `N days left`, and the computed narrative's
+`Day N of M — nothing shipped yet, N days left` — plus the app frame's statusline, which says `day N
+of M` on every authenticated page. Fixing one leaves three surfaces of the same page disagreeing with
+each other instead of with this one.
+
+Stating the overrun on all of them is a behaviour change to a shipped capability whose spec writes
+the wording down (`openspec/specs/team-home/spec.md` §"Hero spread with cycle vitals": *"N days
+left"*), so it needs its own spec delta, its own docs pass and its own golden updates. This change's
+subject is the Delivery page; it fixes the lie on the surface it draws and does not half-fix the
+other one. The clamp on Team Home predates this branch and is unchanged by it.

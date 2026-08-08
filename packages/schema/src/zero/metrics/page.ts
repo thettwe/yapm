@@ -411,6 +411,24 @@ function clamp01(value: number): number {
 
 const UNIT_SUFFIX: Record<DeliveryUnit, string> = { count: '', hours: 'h', percent: '%' }
 
+// A duration in the two registers a section speaks: `40h` on a label, `40 hours` in a sentence. A
+// duration that rounds to `0h` is stated in MINUTES instead — a threshold no observation satisfies
+// is not a threshold, and every place the page quotes one has to quote the value the rule was
+// actually read against.
+interface DurationText {
+  readonly short: string
+  readonly long: string
+}
+
+function durationText(hours: number): DurationText {
+  const rounded = round(hours)
+  if (hours > 0 && rounded === 0) {
+    const minutes = Math.max(1, Math.round(hours * 60))
+    return { short: `${minutes}m`, long: `${minutes} ${plural(minutes, 'minute', 'minutes')}` }
+  }
+  return { short: `${rounded}h`, long: `${rounded} ${plural(rounded, 'hour', 'hours')}` }
+}
+
 // A readable linear axis: the smallest step from a fixed ladder that covers the data in at most five
 // intervals, so the ticks are round numbers and the largest observed value is INSIDE the axis. No
 // log scale, no clipping, no "other" bucket — each would hide the shape the section exists to show.
@@ -869,39 +887,49 @@ function buildDistribution(
 
   const inside = exact.filter((entry) => entry.exact <= exactMedian)
   const outliers = exact.filter((entry) => isOutlier(entry.exact))
+
+  // The figure the sentence, the label and the crowd annotation all quote. A median under three
+  // minutes rounds to `0h`, and "merged inside 0 hours" is a threshold none of the changes it
+  // counts satisfies — so below that the page states the same value the rule is read against.
+  const medianText =
+    medianHours === 0 && exactMedian > 0 ? durationText(exactMedian) : durationText(medianHours)
+
   const annotations: DeliveryDistributionAnnotation[] = [
     {
       kind: 'crowd',
       count: inside.length,
       position: clamp01(medianHours / axis.max),
-      text: `${inside.length} of ${entries.length} merged inside ${medianHours}h`,
+      text: `${inside.length} of ${entries.length} merged inside ${medianText.short}`,
     },
   ]
+  // The sentence above the drawing and the note beside it state the giants as the SAME absolute
+  // wait. "Four times that" was a second way of saying it that disagreed with the note whenever the
+  // median it multiplied was not the median the sentence quoted — and said "four times zero" for a
+  // median that rounded away entirely.
+  let outlierClause = ''
   if (outliers.length > 0) {
     const slowest = outliers.reduce((min, entry) => Math.min(min, entry.exact), Number.MAX_VALUE)
+    const text = `${outliers.length} ${plural(outliers.length, 'change', 'changes')} waited ${durationText(slowest).short} or more`
     annotations.push({
       kind: 'outlier',
       count: outliers.length,
       position: clamp01(slowest / axis.max),
-      text: `${outliers.length} ${plural(outliers.length, 'change', 'changes')} waited ${round(slowest)}h or more`,
+      text,
     })
+    outlierClause = ` — ${text}`
   }
 
-  const outlierClause =
-    outliers.length === 0
-      ? ''
-      : ` — ${outliers.length} ${plural(outliers.length, 'change', 'changes')} waited ${DISTRIBUTION_OUTLIER_MULTIPLE} times that or longer`
   return {
-    standfirst: `${inside.length} of the ${entries.length} merged ${plural(entries.length, 'change', 'changes')} in the ${clause} went from open to merged inside ${medianHours} ${plural(medianHours, 'hour', 'hours')}${outlierClause}.`,
+    standfirst: `${inside.length} of the ${entries.length} merged ${plural(entries.length, 'change', 'changes')} in the ${clause} went from open to merged inside ${medianText.long}${outlierClause}.`,
     entries,
     axisMaxHours: axis.max,
     ticks: axis.ticks,
     medianHours,
     medianPosition: clamp01(medianHours / axis.max),
-    medianLabel: `median ${medianHours}h`,
+    medianLabel: `median ${medianText.short}`,
     annotations,
     markUnit: 'one dot is one merged pull request',
-    label: `${entries.length} merged ${plural(entries.length, 'change', 'changes')} by hours from open to merged, on a linear axis to ${axis.max} hours; one dot is one merged pull request; median ${medianHours} hours`,
+    label: `${entries.length} merged ${plural(entries.length, 'change', 'changes')} by hours from open to merged, on a linear axis to ${axis.max} hours; one dot is one merged pull request; median ${medianText.long}`,
     how: {
       label: 'open to merged',
       body: `Median of the ${entries.length} merged ${plural(entries.length, 'change', 'changes')} in the ${clause}, opened → merged, drawn where it falls — not quoted from a summary.`,

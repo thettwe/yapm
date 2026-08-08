@@ -64,7 +64,7 @@ reinforcement, never the carrier.
 
 ## Open to merged
 
-> *Half of the last 26 changes merged inside 46 hours — two waited four times that or longer.*
+> *Half of the last 26 changes merged inside 46 hours — two waited 208h or more.*
 
 One dot is **one merged pull request**, on a linear axis from zero to the slowest change observed.
 The median is drawn **where it falls**, at its own position on that axis, rather than quoted from a
@@ -79,7 +79,14 @@ shape the section exists to show. A change is called an outlier when it took **f
 or longer**, which is a stated rule over the data rather than a hand-picked pair of dots. The rule is
 read against the median's *exact* value, not the rounded figure the sentence quotes — a team whose
 median change merges in two minutes rounds to `0h`, and four times zero would make every change a
-giant. Below a median of zero the rule states nothing and nothing is called out.
+giant. Only an *exact* median of zero states nothing and calls nothing out.
+
+A median that merely **rounds** to `0h` still has giants, and they are still named. What changes is
+the figure the page quotes: the sentence, the median label and the crowd note all state that median
+in **minutes** instead, because "merged inside 0 hours" is a threshold none of the changes it counts
+satisfies. The giants are named the same way in both places — the sentence above the drawing and the
+note beside them state the **same absolute wait** ("two waited 208h or more"), never a multiple in
+one place and an absolute in the other.
 
 ## Cycle flow
 

@@ -122,10 +122,15 @@ test('the distribution draws exactly one dot per merged change and names the uni
 // charts grow the box to hold the tallest column rather than painting through their own annotations
 // and then outside the viewBox, over the section above.
 function viewBoxOf(chart: Element) {
-  const [, minY, , height] = (chart.getAttribute('viewBox') ?? '')
+  const [minX, minY, width, height] = (chart.getAttribute('viewBox') ?? '')
     .split(/\s+/)
     .map((part) => Number(part))
-  return { minY: minY as number, height: height as number }
+  return {
+    minX: minX as number,
+    minY: minY as number,
+    width: width as number,
+    height: height as number,
+  }
 }
 
 test('a crowded column stays inside the box it is drawn in — the timeline', () => {
@@ -162,6 +167,70 @@ test('a crowded column stays inside the box it is drawn in — the timeline', ()
   const headline = screen.getByText('A deployment went out here')
   expect(Number(headline.getAttribute('y'))).toBeLessThan(
     Math.min(...circles.map((circle) => Number(circle.getAttribute('cy')))),
+  )
+})
+
+// The caret pins at the axis end on the last day of a cycle and on EVERY overdue one, where the
+// label is at its longest. Centred there it paints tens of user units past the right edge of the
+// box — the same failure the crowded column had, sideways.
+const OVERDUE_LABEL =
+  'Cycle 2, Jul 30 to Aug 12: 0 deployments reached production and 0 retrospectives closed; one dot is one deployment; today is day 14 of 14, 6 days over'
+
+test('the today label hangs from the axis end when the caret pins there, and never leaves the box', () => {
+  const todayLabel = 'today · day 14 of 14 · 6 days over'
+  render(
+    <AnnotatedTimeline
+      startLabel="Jul 30"
+      endLabel="Aug 12"
+      deploys={[]}
+      retros={[]}
+      callout={null}
+      todayPosition={1}
+      todayLabel={todayLabel}
+      daysLeftLabel="6 days over"
+      label={OVERDUE_LABEL}
+    />,
+  )
+
+  const box = viewBoxOf(screen.getByRole('img', { name: OVERDUE_LABEL }))
+  const text = screen.getByText(todayLabel)
+  const anchor = text.getAttribute('text-anchor')
+  const x = Number(text.getAttribute('x'))
+  // No text metrics in a static drawing or in jsdom, so the span is estimated generously — wider
+  // than the label can actually render at 10.5px.
+  const span = todayLabel.length * 7
+  const left = anchor === 'end' ? x - span : anchor === 'start' ? x : x - span / 2
+  expect(anchor).toBe('end')
+  expect(left).toBeGreaterThanOrEqual(box.minX)
+  expect(left + span).toBeLessThanOrEqual(box.minX + box.width)
+  // A caret ON the end has no remaining stretch of track to annotate, and the today label already
+  // states the overrun — so the days-left note is not drawn on top of it.
+  expect(screen.queryByText('6 days over')).toBeNull()
+})
+
+test('the today label hangs from the axis start when the caret pins there', () => {
+  const todayLabel = 'today · day 1 of 14'
+  render(
+    <AnnotatedTimeline
+      startLabel="Jul 30"
+      endLabel="Aug 12"
+      deploys={[]}
+      retros={[]}
+      callout={null}
+      todayPosition={0}
+      todayLabel={todayLabel}
+      daysLeftLabel="13 days left"
+      label={TIMELINE_LABEL}
+    />,
+  )
+
+  const box = viewBoxOf(screen.getByRole('img', { name: TIMELINE_LABEL }))
+  const text = screen.getByText(todayLabel)
+  expect(text.getAttribute('text-anchor')).toBe('start')
+  expect(Number(text.getAttribute('x'))).toBeGreaterThanOrEqual(box.minX)
+  // The days-left note is drawn, and its centre is kept clear of the right edge.
+  expect(Number(screen.getByText('13 days left').getAttribute('x'))).toBeLessThan(
+    box.minX + box.width,
   )
 })
 

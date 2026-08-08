@@ -537,9 +537,20 @@ describe('buildDeliveryPage — one dot is one merged pull request', () => {
     expect(crowd?.text).toBe('2 of 4 merged inside 40h')
     expect(outlier?.count).toBe(1)
     expect(outlier?.text).toBe('1 change waited 400h or more')
-    expect(distribution?.standfirst).toContain(
-      `${DISTRIBUTION_OUTLIER_MULTIPLE} times that or longer`,
-    )
+    // The sentence above the drawing states the giants as the same absolute wait the note beside
+    // them states, so the two can never disagree about the threshold.
+    expect(distribution?.standfirst).toContain(`— ${outlier?.text}`)
+    expect(distribution?.standfirst).not.toContain('times that')
+    // And the marks called giants are the ones the published multiple calls giants.
+    const drawnOutliers = (distribution?.entries ?? [])
+      .filter((entry) => entry.outlier)
+      .map((entry) => entry.hours)
+    const byTheRule = (distribution?.entries ?? [])
+      .filter(
+        (entry) => entry.hours >= (distribution?.medianHours ?? 0) * DISTRIBUTION_OUTLIER_MULTIPLE,
+      )
+      .map((entry) => entry.hours)
+    expect(drawnOutliers).toEqual(byTheRule)
   })
 
   it('does not render at all when the window holds no merged change', () => {
@@ -579,6 +590,25 @@ describe('buildDeliveryPage — the crowd and the giants are read off the exact 
     expect(model.distribution?.annotations.find((note) => note.kind === 'crowd')?.count).toBe(
       model.distribution?.entries.length,
     )
+  })
+
+  it('quotes minutes rather than a zero nobody merged inside, and still calls the giants out', () => {
+    // A minute each, and one change that took four hundred hours: the median is 0.017h, stated as
+    // `0h` — a threshold none of the three changes the crowd counts satisfies.
+    const model = mergedAfter([1 / 60, 1 / 60, 1 / 60, 400])
+    const distribution = model.distribution
+    const crowd = distribution?.annotations.find((note) => note.kind === 'crowd')
+    const outlier = distribution?.annotations.find((note) => note.kind === 'outlier')
+    expect(distribution?.medianHours).toBe(0)
+    expect(distribution?.medianLabel).toBe('median 1m')
+    expect(crowd?.text).toBe('3 of 4 merged inside 1m')
+    expect(distribution?.standfirst).toContain('inside 1 minute')
+    expect(distribution?.standfirst).not.toContain('0 hours')
+    expect(distribution?.label).toContain('median 1 minute')
+    // The guard is on the EXACT median, which is positive here, so the giant is still called out —
+    // and by the same absolute wait in the sentence and in the note.
+    expect(outlier?.text).toBe('1 change waited 400h or more')
+    expect(distribution?.standfirst).toContain(`— ${outlier?.text}`)
   })
 
   it('counts the crowd against the exact median, not the rounded one it quotes', () => {

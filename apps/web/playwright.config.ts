@@ -29,6 +29,12 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${WEB_PORT}`,
     trace: 'retain-on-failure',
+    // Without this every action inherits `timeout: 0` and is bounded only by the test timeout, so
+    // one action that can never succeed consumes the whole budget and the run reports the
+    // teardown that follows it rather than the action that failed. A bounded action fails where
+    // it happened, naming the selector.
+    actionTimeout: 15_000,
+    navigationTimeout: 30_000,
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
@@ -62,9 +68,15 @@ export default defineConfig({
       },
     },
     {
-      command: `pnpm exec vite dev --port ${WEB_PORT} --strictPort`,
+      // The built bundle, not the dev server. `vite dev` optimizes dependencies lazily, and
+      // `autoCodeSplitting` means a route nobody has visited yet discovers new ones mid-run — which
+      // re-optimizes, changes every `?v=` hash, and can serve one page `react` and `react-dom` from
+      // different bundles. A second client is the one that reaches unvisited routes, which is why
+      // that was always the client that failed. `preview` has no optimizer, and the suite tests the
+      // bundle that ships.
+      command: `pnpm exec vite build && pnpm exec vite preview --port ${WEB_PORT} --strictPort`,
       url: `http://localhost:${WEB_PORT}`,
-      timeout: 60_000,
+      timeout: 180_000,
       reuseExistingServer: !process.env.CI,
       env: {
         SERVER_ORIGIN,

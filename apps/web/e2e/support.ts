@@ -71,9 +71,23 @@ export function stop(page: Page, name: string): Locator {
 }
 
 // Retros, Projects and Roadmap live behind `more▾`, which is a transient: it has to be opened.
+// The deck is drawn on every route, so its button is clickable the instant a route change starts
+// — before the transient behind it can respond. A click that lands in that window opens nothing,
+// and the menu item never enters the DOM. Opening is therefore retried until an item is actually
+// there, which is the only observable that says the transient is live.
+// The retry keys on `aria-expanded` rather than clicking blind: the trigger is a toggle, so a
+// retry that clicks an already-open menu closes it, and the loop then oscillates instead of
+// converging. Opening is idempotent this way, and the item is clicked while the menu is known open.
 export async function goToMore(page: Page, name: string): Promise<void> {
-  await page.getByRole('navigation', { name: 'Destinations' }).getByRole('button').click()
-  await page.getByRole('menuitem', { name: new RegExp(`^${name}`, 'u') }).click()
+  const opener = page.getByRole('navigation', { name: 'Destinations' }).getByRole('button')
+  const item = page.getByRole('menuitem', { name: new RegExp(`^${name}`, 'u') })
+  await expect(async () => {
+    if ((await opener.getAttribute('aria-expanded')) !== 'true') {
+      await opener.click()
+    }
+    await expect(item).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 20_000 })
+  await item.click()
 }
 
 export async function signOut(page: Page): Promise<void> {

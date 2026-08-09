@@ -317,9 +317,12 @@ export function roadmapAxis(input: {
     targets.length > 0 ? Math.min(anchor, startOfMonthUTC(Math.min(...targets))) : anchor
 
   const latest = targets.length > 0 ? Math.max(...targets) : now
+  // The runway is measured forward from the ANCHOR, never from the pulled-back start. Measuring it
+  // from the start would let a workspace whose targets have all gone by close its window before
+  // today: no today caret, no current cycle band, and every current or future issue mark dropped.
   const end = Math.max(
     addMonthsUTC(startOfMonthUTC(latest), 1),
-    addMonthsUTC(startOfMonthUTC(start), MINIMUM_RUNWAY_MONTHS),
+    addMonthsUTC(startOfMonthUTC(anchor), MINIMUM_RUNWAY_MONTHS),
   )
   const span = Math.max(1, end - start)
   const at = (ts: number) => (ts - start) / span

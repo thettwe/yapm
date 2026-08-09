@@ -588,9 +588,10 @@ each case the document's *rule* beat the document's *drawing*:
 The axis anchored its left edge on the current cycle (or the start of the current month) and clamped
 everything earlier to fraction 0 — so every project whose target had already gone by drew its mark
 on the same pixel, and the overdue reading the page exists for collapsed into one dot. The window
-now opens at `min(anchor, startOfMonth(earliest target))`, keeping the ≥3-month runway measured from
-that start. `Scheduled outside this window` (B12) is still the honest phrase for *issue* marks off
-the edge; a *target* is never off the edge, because the window is defined to contain it.
+now opens at `min(anchor, startOfMonth(earliest target))`, with the ≥3-month runway measured forward
+from the **anchor** — never from that pulled-back start. `Scheduled outside this window` (B12) is
+still the honest phrase for *issue* marks off the edge; a *target* is never off the edge, because
+the window is defined to contain it.
 
 The same axis dropped the year main's tick labels carried, so a window spanning twelve months or
 more drew two ticks both reading `Aug` and `formatAxisWindow` collapsed a thirteen-month span to the
@@ -616,12 +617,21 @@ test ported across, including a move that crosses a group boundary and a re-rend
 set. The docs sentence that claimed "focus never falls to the page body" was restated to what the
 code actually guarantees: the roving tab stop always survives on a *mounted* row.
 
-### B23 — The project page's target strip flips its label near the left edge
+### B23 — The project page's target strip places its label from the labels' own extents
 
 `created` is drawn at the origin and the target's label hung end-anchored to the left of its mark,
 so a target early in the created→today run drew the two strings through each other and off the left
-edge of the 400px drawing. Below a quarter of the run the target's label flips to start-anchored on
-the right of its mark — the same flip `RoadmapRow` already makes at the axis's right edge.
+edge of the 400px drawing. The first fix flipped the anchor below a quarter of the run, borrowing
+`RoadmapRow`'s trick at the axis's right edge — and a quarter of the run is a number about the
+*dates*, which knows nothing about how wide `Jun 1 · created` is. At a third of the run the flipped
+label still started inside `created`; the seeded case at ~0.13 overlapped both ways.
+
+Placement is now arithmetic over the two strings, which are fixed-format 10px mono and so measure
+without measuring (~6px an advance). End-anchored left of the mark while that clears `created`'s
+right edge; start-anchored right of the mark while THAT clears it; and when neither does, the target
+label drops to a second baseline beside `today`, mid-anchored on its mark, so the two mono strings
+never share a line at any target. The test asserts the computed extents do not intersect at three
+fractions rather than asserting one anchor value.
 
 One correction: task 1.5 names "the Tailwind 4.3 and TanStack Router references" as if they were
 their own files. They are not — both live in `reference/frontend-build.md` (§6 Tailwind CSS 4.3 +

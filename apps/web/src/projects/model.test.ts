@@ -270,6 +270,26 @@ describe('roadmapAxis', () => {
     expect(built.window.end).toBeGreaterThanOrEqual(Date.UTC(2026, 10, 1))
   })
 
+  // The runway is measured from the anchor, not from the pulled-back left edge: a workspace where
+  // every target has already gone by must still contain today, or the caret, the current band and
+  // every mark in the cycle we are actually in all vanish.
+  it('still reaches past today when every target has gone by', () => {
+    const current = cycle({})
+    const built = axis({
+      cycles: [current],
+      projects: [
+        project({ id: 'old', name: 'Old', targetDate: Date.UTC(2026, 2, 10) }),
+        project({ id: 'older', name: 'Older', targetDate: Date.UTC(2026, 1, 10) }),
+      ],
+      issuesByProject: new Map([['old', [projectIssue({ id: 'a', cycle: current })]]]),
+    })
+    expect(built.window.start).toBe(Date.UTC(2026, 1, 1))
+    expect(built.window.end).toBeGreaterThan(TODAY)
+    expect(built.nowFraction).not.toBeNull()
+    expect(built.cycleBands.some((band) => band.current)).toBe(true)
+    expect(built.rows.find((row) => row.project.id === 'old')?.marks).toHaveLength(1)
+  })
+
   it('orders rows by target date and holds undated ones aside', () => {
     const built = axis({
       projects: [

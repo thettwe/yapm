@@ -419,6 +419,10 @@ function TeamDeploymentFeed({
 
 const STRIP_LEFT = 10
 const STRIP_RUN = 380
+// Where the `created` label starts, and one 10px mono character's advance. Both labels are
+// fixed-format mono strings, so their drawn extents are arithmetic — no measurement needed.
+const STRIP_TEXT_LEFT = 6
+const MONO_ADVANCE = 6
 
 function TargetStripDrawing({
   createdAt,
@@ -438,10 +442,17 @@ function TargetStripDrawing({
   const x = (fraction: number) => STRIP_LEFT + fraction * STRIP_RUN
   const targetX = x(strip.targetFraction)
   const nowX = x(strip.nowFraction)
-  // A target early in the created→today run puts its label, which hangs to the LEFT of the mark,
-  // straight through the `created` label and off the left edge of the drawing. Past that point it
-  // hangs to the right instead — the same flip the roadmap row makes at its own right edge.
-  const flip = strip.targetFraction < 0.25
+  const createdText = `${formatTargetDay(createdAt)} · created`
+  const targetText = `${formatTargetDay(targetDate)} · target`
+  // Placement is decided from the two labels' ACTUAL extents, never from a fraction of the run: a
+  // fraction knows nothing about how wide `Jun 1 · created` is, so any threshold picked that way
+  // draws the two mono strings through each other over most of the range. End-anchored left of the
+  // mark while that clears `created`; start-anchored right of it while THAT clears `created`; and
+  // when neither does, the target label drops to its own baseline so the two never share a line.
+  const createdRight = STRIP_TEXT_LEFT + createdText.length * MONO_ADVANCE
+  const targetW = targetText.length * MONO_ADVANCE
+  const place =
+    targetX - 4 - targetW > createdRight ? 'end' : targetX + 4 > createdRight ? 'start' : 'below'
   return (
     <svg
       data-testid="project-target-strip"
@@ -493,23 +504,23 @@ function TargetStripDrawing({
       />
       {/* `created`, never `started` — the label IS the disclosure that this end is not a start. */}
       <text
-        x="6"
+        x={STRIP_TEXT_LEFT}
         y="19"
         fontSize="10"
         fill="var(--text-2)"
         style={{ fontFamily: 'var(--type-mono)' }}
       >
-        {formatTargetDay(createdAt)} · created
+        {createdText}
       </text>
       <text
-        x={flip ? targetX + 4 : targetX - 4}
-        y="19"
-        textAnchor={flip ? 'start' : 'end'}
+        x={place === 'end' ? targetX - 4 : place === 'start' ? targetX + 4 : targetX}
+        y={place === 'below' ? 52 : 19}
+        textAnchor={place === 'end' ? 'end' : place === 'below' ? 'middle' : 'start'}
         fontSize="10"
         fill="var(--text-2)"
         style={{ fontFamily: 'var(--type-mono)' }}
       >
-        {formatTargetDay(targetDate)} · target
+        {targetText}
       </text>
       <text
         x={nowX + 6}

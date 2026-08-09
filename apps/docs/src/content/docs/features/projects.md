@@ -111,11 +111,13 @@ sit behind a fold stating the true remaining count. Clicking a row (or `Enter`) 
 The roadmap lays every project over a **real time axis**. The axis window is stated as a mono label
 beside the title — it is a reading of the data, not a control, so it carries no chevron.
 
-The window **covers every target it draws**. It opens at the current cycle (or the start of this
-month) and runs at least three months forward, but a target that has already gone by pulls the left
-edge back to the start of its own month — otherwise every overdue project's mark would pile onto the
-same pixel at the left edge and stop being a reading at all. Once the window spans a year change,
-the month ticks and the window label carry the year.
+The window **covers every target it draws**. It is anchored on the current cycle (or the start of
+this month) and runs at least three months forward **from that anchor**, but a target that has
+already gone by pulls the left edge back to the start of its own month — otherwise every overdue
+project's mark would pile onto the same pixel at the left edge and stop being a reading at all.
+Pulling the left edge back never shortens the runway, so a workspace whose targets have all passed
+still draws today, the cycle you are in, and the marks scheduled in it. Once the window spans a year
+change, the month ticks and the window label carry the year.
 
 The axis header carries:
 

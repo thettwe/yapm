@@ -27,7 +27,9 @@
       does, whether it precedes or follows the timeout. Record "does not occur" if that is the
       answer.
 - [ ] 2.7 Pull the last three CI e2e job logs and count `SchemaVersionNotSupported` in their opening
-      minutes, to rule the fresh-volume ordering race (design D3) in or out.
+      minutes, to rule the fresh-volume ordering race (design D3) in or out. PROCESS.md §3 documents
+      "postgres → migrate → zero-cache → vite"; `ci.yml` brings both containers up before anything
+      migrates. One of the two is wrong and this task says which.
 - [ ] 2.8 Write the measured baseline and the ruling on each Open Question into design.md under
       `## Decisions made during implementation`, before changing any code.
 

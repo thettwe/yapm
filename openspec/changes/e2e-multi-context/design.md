@@ -185,6 +185,22 @@ up, every client is told `SchemaVersionNotSupported` and reloads itself. CI does
 `.github/workflows/ci.yml` runs `up -d --wait postgres zero-cache` on fresh volumes and only then
 starts the harness, which boots the server that migrates.
 
+**The documented order and the implemented order disagree, and that is checkable today.** PROCESS.md
+§3 describes the e2e job as "fresh volumes on the e2e port (`YAPM_HOST_PORT=3210`), booting
+postgres → migrate → zero-cache → vite". `.github/workflows/ci.yml` actually runs:
+
+```yaml
+- name: Start Postgres + zero-cache (fresh volumes, e2e port)
+  run: docker compose -f docker/docker-compose.dev.yml up -d --wait --wait-timeout 180 postgres zero-cache
+- name: Run the Playwright suite
+  run: pnpm --filter @yapm/web e2e
+```
+
+There is no migrate step between them. The server that migrates is started by
+`playwright.config.ts`'s `webServer`, i.e. **after** zero-cache is already up and healthy against a
+database with no application tables. The prose says the safe order; the pipeline does the unsafe
+one.
+
 Locally this reproduced as a total, unrecoverable failure of all five `projects.spec.ts` tests. CI
 evidently usually recovers — the suite mostly passes — which means CI is racing it. A race that is
 usually won is the exact shape of "fails on first attempt, passes on re-run".

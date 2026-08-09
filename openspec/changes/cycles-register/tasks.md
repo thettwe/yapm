@@ -3,7 +3,7 @@
 - [x] 1.1 Read `design-explorations/overhaul-2026-08/destinations/cycles.html` end to end **including its closing comment** (§(a) "What folded, and why" 1–9, §(b) "Self-critique", and the set-reconciliation pass), and look at `cycles.png` and `cycles-full.png`
 - [x] 1.2 Read `destinations/DESTINATIONS.md` — the `cycles.html` row, §"What the render showed" 2–4, §"Remaining drift" (the `C10`–`C16` numbering), and the `cycles.html` self-critique
 - [x] 1.3 Read `northstar/ia.html` (the word diet's three tiers, the band-2 anatomy, Cycles' destination subtree with its two artifacts, one-attention-number), `northstar/home-digest-2.html` (the scope band this page reuses at row scale) and `northstar/issues.html` (row anatomy)
-- [ ] 1.4 Read `reference/zero.md` (Zero 1.x — `defineQuery` / `defineQueries` / `createBuilder`; the 0.x names are non-functional) plus the Tailwind 4.3 and TanStack Router references
+- [x] 1.4 Read `reference/zero.md` (Zero 1.x — `defineQuery` / `defineQueries` / `createBuilder`; the 0.x names are non-functional) plus the Tailwind 4.3 and TanStack Router references *(indirect evidence: the merged diff introduces no 0.x name — `git show 00ea4d1 | grep -E 'syncedQuery|PushProcessor|definePermissions'` is empty — and `cycles-view.tsx` consumes the Zero 1.x builders (`useQuery(queries.cycles.byTeam(…))`), TanStack Router's typed `navigate({ to, params, search })`, and Tailwind 4.3 `@theme` tokens (`--carry-soft` declared in all six preset blocks, no raw hex). Green on CI run 31293077737)*
 - [x] 1.5 Read the surfaces this change consumes and must NOT rebuild: `packages/ui/src/components/{status-glyph,drawn,how,door,issue-row,rest-phrase,provenance-mark}.tsx`, `apps/web/src/frame/masthead.tsx`, `packages/ui/src/components/team-home.tsx` (the hero's scope band, drawn)
 - [x] 1.6 Read `packages/schema/src/zero/{queries.ts,cycles.ts,team-home.ts,metrics/scope.ts}` — `cycles.byTeam`, `issues.byTeam`, `retros.byTeam`, `digests.byTeam`, `compareCycles` / `nextCycleId` / `isUnfinished`, and `buildHeroCycle`'s scope-band and chip rules
 - [x] 1.7 Read `openspec/specs/cycles/spec.md` (the requirements this change modifies rather than contradicts) and the "Decisions made during implementation" of `archive/2026-08-09-triage-daylight`, `archive/2026-08-09-design-corrections` and `archive/2026-08-08-delivery-journalism`
@@ -67,9 +67,9 @@
 
 ## 7. Gates
 
-- [x] 7.1 `pnpm turbo lint typecheck test build` (green in CI on PR #43, run 31288746299)
-- [x] 7.2 The compose smoke test (green in CI, 4m41s)
-- [x] 7.3 The full Playwright suite (green in CI, 22m11s — no flake, no re-run needed)
+- [x] 7.1 `pnpm turbo lint typecheck test build` (green in CI on PR #43, run 31288746299) *(that run sits on the intermediate commit 0724ea8; the final PR head 917b0f3 is green on run 31293077737, 2m39s)*
+- [x] 7.2 The compose smoke test (green in CI, 4m41s) *(final head 917b0f3: run 31293077737, 4m24s)*
+- [x] 7.3 The full Playwright suite (green in CI, 22m11s — no flake, no re-run needed) *(final head 917b0f3: run 31293077737, 21m32s)*
 - [ ] 7.4 **Render the built page at 1440×900 over a seeded team, screenshot it, and LOOK at it** against `cycles.png` / `cycles-full.png`. Record every deliberate difference in `design.md`
 - [ ] 7.5 Render and look at each degenerate state (design D8): a workspace with one cycle, a cycle with no issues, a cycle with no carryover, a cycle whose digest was never generated, and a team's very first cycle. Each must read as composed, not as a hole — the triage build shipped an empty box that passed every test and was found only this way
 - [ ] 7.6 Decide the carry chain with the render in front of you: keep the graphic, or fall back to the mono column the mock's own self-critique proposes. Record the decision either way (design D7)

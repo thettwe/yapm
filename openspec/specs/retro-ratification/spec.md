@@ -6,6 +6,7 @@ a fixed knob-free verdict computed once when the retro leaves voting, contested-
 the discussion, and the one-keystroke path from an agreed improvement to a tracked issue that never
 names an owner.
 ## Requirements
+
 ### Requirement: A private per-member reaction, self-scoped with no admin bypass
 
 A member SHALL be able to record exactly one reaction — `agree` or `disagree` — per AI proposal, and
@@ -166,6 +167,11 @@ be correct and AA-contrast in the Warm, Focused and Editorial presets in both li
 or clearing a reaction SHALL render immediately from the optimistic local write and SHALL NOT newly
 wait on the network.
 
+**Neither a verdict nor a reaction SHALL be conveyed by colour alone.** Each verdict SHALL carry its
+word, and each reaction control SHALL carry a drawn mark and a stated accessible name as well as its
+selected treatment, so the surface is legible to a reader who cannot distinguish the hues and to one
+reading through assistive technology.
+
 #### Scenario: Contested sorts to the top
 
 - **WHEN** a retro in `discuss` holds proposals with mixed verdicts
@@ -195,6 +201,11 @@ wait on the network.
 
 - **WHEN** the reaction controls and verdict badges are rendered in Warm, Focused and Editorial, in light and dark
 - **THEN** every colour resolves from a semantic token and meets AA contrast, with no hardcoded colour
+
+#### Scenario: A verdict is readable without colour
+
+- **WHEN** every verdict a retro can hold — agreed, contested, rejected and unrated — is rendered with colour removed
+- **THEN** each is still distinguishable by its word, and each reaction control is still distinguishable by its drawn mark and its accessible name
 
 ### Requirement: An agreed improvement becomes a tracked issue with no pre-filled owner
 
@@ -258,4 +269,3 @@ SHALL remain byte-identical to the retro that ships without any AI capability.
 
 - **WHEN** a retro with no AI draft row advances from `vote` to `discuss`
 - **THEN** the advance performs no ratification work and behaves exactly as it did before this capability
-

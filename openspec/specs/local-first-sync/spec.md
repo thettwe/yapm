@@ -1,8 +1,14 @@
 # local-first-sync Specification
 
 ## Purpose
-TBD - created by archiving change foundation. Update Purpose after archive.
+The sync seam: every read is a server-authorized named query and every write is a shared mutator
+defined once in `packages/schema` and run twice — optimistically on the client, authoritatively on
+the server. Ids are client-minted UUIDv7 at the call site, never inside a mutator body, because a
+mutator re-runs on rebase. Confining ZQL to one package is what keeps the sync layer swappable.
+Archived from change foundation and extended by render-defects-cleanup (PR #49).
+
 ## Requirements
+
 ### Requirement: Server-controlled synced queries
 
 All client reads SHALL flow through Zero synced queries: the client requests named queries defined in `packages/schema`, and the server endpoint validates and authorizes each query with the caller's auth context before zero-cache executes it. Clients MUST NOT be able to widen a query beyond what the server permits.
@@ -44,6 +50,8 @@ All writes SHALL go through custom mutators defined once in `packages/schema` an
 
 Mutator authorization SHALL enforce the workspace role and, where relevant, team membership from the verified `ctx`, and SHALL check authorization BEFORE any existence check so that a rejection never reveals whether a private row exists. A `viewer` (or a non-member / absent context) SHALL be rejected for every write; role-restricted operations (workspace/member/team/invite management) SHALL be rejected for non-admins. Primary keys for created rows SHALL be client-minted UUIDv7 at the mutator call site, never inside a mutator body.
 
+A UUIDv7's **leading characters are a millisecond timestamp**, not entropy. No value whose purpose is uniqueness SHALL be derived from a **prefix** of an id — a prefix repeats for every id minted in the same time bucket, and the bucket widens as the prefix shortens. A short unique value SHALL instead be minted from cryptographic randomness by one shared derivation in `packages/schema`, so a caller cannot reinvent the prefix.
+
 #### Scenario: Optimistic write with server authority
 
 - **WHEN** a user renames the workspace
@@ -63,6 +71,11 @@ Mutator authorization SHALL enforce the workspace role and, where relevant, team
 
 - **WHEN** a user reaches the workspace name via Tab/focus navigation, edits it, and confirms with Enter
 - **THEN** the rename completes without any pointer interaction
+
+#### Scenario: Short unique values survive rapid succession
+
+- **WHEN** many short unique values are minted from the shared derivation inside one millisecond
+- **THEN** every value is distinct, because none of them is a prefix of an id
 
 ### Requirement: Disconnection is visible and lossless
 
@@ -761,4 +774,3 @@ schema.
 
 - **WHEN** the schema-drift test runs against live Postgres
 - **THEN** it asserts the reaction table's compound primary key and columns, and the new proposal and action columns, match the Zero schema and the hand-written `DB` interface, and fails if any of the three drifts
-

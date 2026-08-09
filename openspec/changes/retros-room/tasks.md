@@ -81,7 +81,7 @@
 - [x] 9.8 `packages/ui`: `retro-card` renders no vote node at zero and a stated count above zero
 - [x] 9.9 Update `apps/web/e2e/retro.spec.ts` selectors where the surface moved (the stepper, the budget reading, the anonymity statement, the index's heading). Every existing assertion survives; the budget and stepper assertions gain the drawn readings. **Never weaken an assertion to make a gate pass**
 - [x] 9.10 Update `apps/web/e2e/retro-ai.spec.ts` selectors where the band moved. The absence tests (`ai_off`, opted-out, failed) must still assert absence, not emptiness
-- [ ] 9.11 Re-run any e2e failure once before investigating: `retro.spec.ts:236` ("take a dot back") has a known intermittent, and the multi-context flake (`projects.spec.ts:188`, `:246`, `pm-digest.spec.ts:306`) is tracked separately and is not this change's to fix. Any OTHER failure is
+- [x] 9.11 Re-run any e2e failure once before investigating: `retro.spec.ts:236` ("take a dot back") has a known intermittent, and the multi-context flake (`projects.spec.ts:188`, `:246`, `pm-digest.spec.ts:306`) is tracked separately and is not this change's to fix. Any OTHER failure is *(the condition never fired: PR-head run 31292527587 was green on attempt 1, and the post-merge run 31293424644 failed only the two separately-tracked `projects.spec.ts` multi-context tests (91 passed). No retro spec failed in either run, so no failure was left uninvestigated — this is evidence the policy was never triggered, not a transcript of a re-run)*
 - [x] 9.12 Confirm no test hard-codes a budget encoding e2e fixture size, and no test's premise is what a given Node runtime provides (CI is Node 24; dev machines here run 26)
 
 ## 10. Documentation
@@ -95,8 +95,8 @@
 
 ## 11. Gates
 
-- [ ] 11.1 `pnpm turbo lint typecheck test build`
-- [ ] 11.2 The compose smoke test
-- [ ] 11.3 The full Playwright suite
+- [x] 11.1 `pnpm turbo lint typecheck test build` *(green twice — PR head b7ab059 on run 31292527587, 2m26s; post-merge main cfc3f8b on run 31293424644, 3m8s)*
+- [x] 11.2 The compose smoke test *(pass twice — run 31292527587, 4m32s; post-merge run 31293424644, 4m26s)*
+- [x] 11.3 The full Playwright suite *(pass on run 31292527587, 22m52s, attempt 1, head b7ab059 — a tree differing from the merged commit only in the parallel projects change's files. The post-merge re-run 31293424644 failed only the two tracked `projects.spec.ts` multi-context flakes; every retro spec passed there too)*
 - [x] 11.4 **Render and look** (design D12): bring the room up at 1440×900 over a seeded retro in `vote`, screenshot it, and compare against `retros.html` / its render. Then render and look at each degenerate state — no cards at all; a column with one card; AI off entirely; a draft that `failed`; the index for a team that has never run one — and confirm none of them reserves a measure it cannot fill. Record every deliberate difference in `design.md`
 - [ ] 11.5 Verify in all three presets, light and dark, that no ink on either page is colour-only and that focus is visible on every interactive element

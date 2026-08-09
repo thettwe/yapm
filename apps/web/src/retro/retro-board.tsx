@@ -368,7 +368,7 @@ export function RetroBoard({
     >
       <section
         ref={containerRef}
-        className="flex min-h-0 flex-1 gap-3 overflow-x-auto bg-bg p-3"
+        className="flex min-h-[220px] flex-1 gap-7 overflow-x-auto px-5 pb-2 pt-5"
         aria-label={`${retro.title} board`}
         onKeyDown={onKeyDown}
         onFocusCapture={(event) => {
@@ -426,7 +426,6 @@ export function RetroBoard({
           <RetroCard
             accent={accentOf(activeCard.columnId)}
             body={activeCard.body}
-            anonymous={activeCard.isAnonymous}
             className="shadow-lg"
           />
         ) : null}
@@ -506,15 +505,17 @@ function BoardColumn({
   return (
     <section
       data-retro-column={column.id}
-      className="flex w-80 shrink-0 flex-col rounded-card border border-border bg-bg-sidebar/50"
+      className="flex min-w-[248px] flex-1 basis-0 flex-col"
       aria-label={`${column.title}, ${retro.phase === 'brainstorm' ? mine.length : cardCount} cards`}
     >
-      <header className="flex items-center gap-2 px-3 py-2.5">
-        <RetroAccentBar accent={accent} />
-        <span className="text-[12.5px] font-semibold tracking-[-0.006em] text-text-1">
+      <header className="mb-3 flex items-center gap-2">
+        {/* The column's accent as a dot rather than a rail: on the felt the heading is a label, and
+            the note below it carries the same accent as its own rail. */}
+        <RetroAccentBar accent={accent} className="h-[7px] w-[7px] rounded-full" />
+        <span className="text-[13px] font-semibold tracking-[-0.006em] text-text-1">
           {column.title}
         </span>
-        <span className="font-mono text-xs text-text-3">
+        <span className="font-mono text-[11px] text-text-2">
           {retro.phase === 'brainstorm' ? mine.length : cardCount}
         </span>
         {canDraft ? (
@@ -533,7 +534,7 @@ function BoardColumn({
       </header>
 
       <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-        <div ref={setNodeRef} className="flex min-h-16 flex-1 flex-col gap-2 px-2 pb-3">
+        <div ref={setNodeRef} className="flex flex-1 flex-col gap-3">
           {retro.phase === 'brainstorm' ? (
             <>
               {mine.length === 0 && !composerOpen ? (
@@ -864,7 +865,7 @@ function GroupBlock({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex flex-col gap-2 rounded-card border border-dashed border-border-strong bg-bg/40 p-2',
+        'flex flex-col gap-2 rounded-[7px] border-[1.5px] border-dashed border-accent-line px-2.5 py-2.5',
         isOver && 'border-accent bg-accent-soft/40',
       )}
     >
@@ -911,10 +912,15 @@ function GroupBlock({
               }
             }}
           >
-            <span className="text-[12px] font-semibold text-text-1">
+            {/* NOT `--accent-strong`, which the mock inks it: measured on the felt it lands at
+                4.18 in Editorial light, under AA for text this size. The accent is carried by the
+                dashed box around the cluster; the label keeps the readable pair. */}
+            <span className="text-[11.5px] font-semibold text-text-1">
               {item.label ?? 'Unlabelled cluster'}
             </span>
-            <span className="font-mono text-[11px] text-text-3">{item.cards.length}</span>
+            <span className="font-mono text-[10.5px] text-text-2">
+              {item.cards.length === 1 ? '1 card' : `${item.cards.length} cards`}
+            </span>
           </button>
         )}
         <VoteControl
@@ -1048,7 +1054,9 @@ function SortableRetroCard({
       dragging={isDragging || dimmed}
       accent={accent}
       body={card.body}
-      anonymous={card.isAnonymous}
+      // NOT `anonymous`: the room states the guarantee ONCE, on its own line, in the sentence that
+      // says why it is true. Repeating the bare word on every note is the pill the mock deleted,
+      // drawn eleven times over. The accessible name below still carries it per card.
       evidence={
         card.seedRef === null ? undefined : (
           <EvidenceChip seedRef={card.seedRef} onOpen={onOpenEvidence} />
@@ -1121,24 +1129,24 @@ function VoteControl({
   onCast: () => void
   onRetract: () => void
 }) {
-  if (disabled) {
-    return count === 0 ? null : <RetroVotePips count={count} mine={mine} />
-  }
+  if (disabled) return <RetroVotePips count={count} mine={mine} />
   return (
     <span className="flex shrink-0 items-center gap-1">
-      {/* A natively disabled control that holds focus is blurred to <body> by the browser, which
-          strands a keyboard user after the last dot comes back. This one keeps focus and no-ops. */}
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
-        aria-label={`Retract a dot from ${label}`}
-        aria-disabled={mine === 0}
-        onClick={() => mine > 0 && onRetract()}
-        data-testid="retro-retract-vote"
-      >
-        −
-      </Button>
+      {/* THE RETRACT CONTROL IS ABSENT AT ZERO, not disabled. A control that cannot act and is not
+          the way in is ink for a fact that does not exist — the same rule that keeps the pips from
+          drawing a `0`. The keyboard path (`Shift+V`) is unchanged and is the documented one, so
+          nothing here becomes pointer-dependent. */}
+      {mine > 0 ? (
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          aria-label={`Retract a dot from ${label}`}
+          onClick={onRetract}
+          data-testid="retro-retract-vote"
+        >
+          −
+        </Button>
+      ) : null}
       <RetroVotePips count={count} mine={mine} />
       <Button
         size="icon-xs"

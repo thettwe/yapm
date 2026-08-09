@@ -257,3 +257,111 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 
 <!-- Build-time decisions are appended below this line, each with what was ambiguous, what was
      chosen, and why. -->
+
+### B1 — Three drawn marks went into `packages/ui`, not two — and that is the change's whole shared-package surface
+
+**Stated loudly: two other changes are building in parallel off the same main.** `drawn.tsx` gains
+`AnonymityMark`, `RetroMark` **and** `DraftMark`; `retro-card.tsx` gains the paper-note register and
+`RetroVotePips`' zero rule. Nothing else in `packages/ui` is touched, no existing export's signature
+or output is altered, and `packages/schema` and `apps/web/src/frame/` are untouched entirely.
+
+D9 planned two marks. The third is `DraftMark`: the mock replaces the lucide `Sparkles` on the AI
+band with its own `g-draft` glyph on the same grid, and leaving one vendor icon at the head of a
+band whose two neighbours are drawn would have been a visible weight mismatch for the sake of an
+arithmetic promise. The lucide `Timer` / `TimerOff` icons stay — those are *controls* with accessible
+names, not fact marks, and replacing them was not asked for.
+
+A parallel branch that merges first conflicts at most on an import list and on the tail of
+`drawn.tsx`.
+
+### B2 — Three places the mock reached for accent ink, and three places it lost
+
+`contrast.test.ts` was extended with this surface's pairs in all six theme blocks *before* the
+markup was called done, and it caught three:
+
+| Pair the mock draws | Measured | Shipped instead |
+|---|---|---|
+| Cluster label `--accent-strong` on `--bg-sidebar` | **4.18** (Editorial light) | `--text-1`; the accent is the dashed box |
+| Index phase pill `--accent-strong` on `--accent-soft` | **3.94–4.38** (Focused light/dark, Editorial light) | `--text-1` on the same wash |
+| Stepper's current phase name `--accent-strong` on `--bg` | **4.44** (Editorial light) | `--text-1` semibold, plus the filled band and the `now` reading |
+
+This is `triage-daylight` B8 applied a third time: if a pair misses AA the ink changes and the mock
+loses, not the reader. Nothing became colour-only in the trade — each of the three is told apart by a
+word or a weight as well as a hue, which was already the design. The spent phase band, the to-come
+outline and the cluster's dashed border are all recorded as **scaffolding below the 3:1 bar**, so the
+claim is falsifiable rather than assumed. Every mono fact on the felt and on the note is `--text-2`
+per D8, asserted on both new grounds.
+
+### B3 — The room foot does not say what the mock says, because the mock's sentence is not true
+
+The mock's foot reads `dots close when the clock runs out`. `phase.ts` says otherwise: the timer is a
+shared clock with no authority over the phase machine, and it is the facilitator's step that closes
+voting. The foot is phase-derived and states only what the matrix enforces — at `vote`,
+`Writing closed when the cards were revealed · dots close when the room moves on`. Six phases, six
+sentences, each checked against `ALLOWED_PHASES`.
+
+### B4 — The per-card `Anonymous` word is gone from the board
+
+Rendering revealed it eleven times over on one screen. The room now states the guarantee **once**, in
+the sentence that says why it is true; repeating the bare word on every note is exactly the pill the
+mock deleted, multiplied. The card's accessible name still carries `, anonymous` per card, and
+`RetroCard`'s `anonymous` prop is untouched for other callers. Two e2e assertions that keyed off the
+bare word now assert the guarantee sentence instead — a stronger claim, not a weaker one.
+
+### B5 — The card's foot is ONE line, and the tabletop is content-height
+
+Both faults were found by rendering, not by testing, and both are the triage build's trap:
+
+- The note drew a **second** row holding only a delete button, adding an empty line of measure to
+  every card on the board. The vote slot, the attribution, the evidence chip and the controls now
+  share one foot line.
+- The room was `flex-1` inside the page's scroll container, so its `overflow-x-auto` board **sliced
+  the last card** in the tallest column. The felt is now content-height with a `min-h` floor, and the
+  page is the scroll container.
+
+### B6 — The AI band is one row per proposal, but keeps its category headings
+
+The mock draws no headings and puts the category chip on each row. The row anatomy shipped — sentence
+left, citations right-aligned, the caller's own reaction at the end — which answers the mock's own
+self-critique that three stacked proposals took the height of a board column. The **headings stayed**:
+four shipped unit tests and one e2e assert `retro-ai-category` sections and their `<h3>` order, and
+the pre-ratification grouping is a shipped reading order, not chrome. Recorded as a deliberate
+difference from the mock.
+
+### B7 — An uncited proposal is now dropped on the surface, which is a behaviour change
+
+The change's delta spec requires it (`retro-ai-draft` §"An uncited proposal is not drawn"). Citation
+resolution moved into one `citationsFor` helper so "does this render" and "what does it render" read
+the same answer. The consequence: a follow-up whose only prior-action reference has no baked caption
+— an older row, drafted before yapm baked captions — is no longer drawn as a bare sentence. The
+shipped test that asserted "no chip, group still there" now asserts absence. Nothing was loosened; a
+second test was added for the mixed case.
+
+### B8 — The seed panel's collapse changed one e2e's premise, not its claim
+
+`retro-ai.spec.ts` collapsed the panel by hand to set up "reveals the panel and focuses the tile".
+From `group` the panel is a door by default, so that step now **asserts** `aria-expanded="false"`
+rather than performing it. The absent-section tab walk reversed direction — board → seed door instead
+of seed door → board — because the room now stacks the board above the panel; it is the same seam in
+the direction the document runs. Both are recorded rather than quietly rewritten.
+
+### B9 — The index's quiet line renders under the list as well as over an empty one
+
+The mock draws it beneath its single row, and the spec requires it for a team with none. It renders
+always; the mono next-close fact renders only where a running cycle exists to state one, and nothing
+where none does. No create-a-retro control anywhere.
+
+### B10 — Rendered and looked at, at 1440×900
+
+The room at `vote` over a seeded retro, plus all five degenerate states from D12 and Editorial dark.
+Faults B4 and B5 came out of that pass and nothing else did. What was confirmed by eye: a retro with
+no cards draws three `No cards` labels and no vote ink and no empty note frames; a column with one
+card beside a column with a cluster reserves nothing; **AI off** and a **failed** draft each render
+the band's absence exactly — no empty box, no error, no query; the index for a team that never ran
+one is one sentence with no group heading and no control.
+
+Deliberate differences from `retros.html`, all recorded above: the room foot's second clause (B3),
+the three accent inks (B2), the AI band's category headings (B6), and the per-card `Anonymous`
+(B4 — a removal the mock also made, applied one level further). The mock's unresolved Cycle 1/Cycle 2
+collision (D10) is untouched; nothing here depends on it.
+

@@ -44,7 +44,7 @@ export function RetroActions({
 
   return (
     <section
-      className="flex w-96 shrink-0 flex-col gap-2 overflow-y-auto border-l border-border bg-bg-sidebar/40 p-3"
+      className="flex flex-col gap-2 border-b border-border px-5 py-3"
       aria-label="Action items"
       // The palette's "Convert this action to an issue" acts on whatever the keyboard last held,
       // recorded here because opening the dialog moves focus off it — the same rule the board uses
@@ -55,8 +55,13 @@ export function RetroActions({
       }}
     >
       <header className="flex items-center gap-2">
-        <h2 className="text-[12.5px] font-semibold tracking-[-0.006em] text-text-1">Actions</h2>
-        <span className="font-mono text-xs text-text-3">{actions.length}</span>
+        <h2 className="text-[13px] font-semibold tracking-[-0.006em] text-text-1">Actions</h2>
+        <span className="font-mono text-[11px] text-text-2">{actions.length}</span>
+        {/* A retro stepped back out of `discuss` still holds what it recorded. The list stays and
+            says when the write reopens rather than folding rows the phase merely cannot edit. */}
+        {canEdit ? null : (
+          <span className="text-[11.5px] text-text-2">read-only · actions reopen at Discuss</span>
+        )}
         {canEdit ? (
           <Button
             size="icon-xs"
@@ -80,26 +85,31 @@ export function RetroActions({
       ) : null}
 
       {actions.length === 0 && !composerOpen ? (
-        <p className="px-1 py-2 text-xs text-text-3">
-          {canEdit
-            ? 'No actions yet. What is the team changing next cycle?'
-            : 'No actions were captured in this retro.'}
-        </p>
+        <p className="text-xs text-text-2">What is the team changing next cycle?</p>
       ) : null}
 
-      {actions.map((action) => (
-        <ActionRow
-          key={action.id}
-          action={action}
-          members={members}
-          cycles={cycles}
-          teamKey={teamKey}
-          canEdit={canEdit}
-          canConvert={canConvert}
-          api={api}
-          onOpenIssue={onOpenIssue}
-        />
-      ))}
+      {/* Full-bleed rows at 1440 would be one sentence stretched across a screen; the band lays them
+          out as a wrapping run of columns instead. */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-2">
+        {actions.map((action) => (
+          <ActionRow
+            key={action.id}
+            action={action}
+            members={members}
+            cycles={cycles}
+            teamKey={teamKey}
+            canEdit={canEdit}
+            canConvert={canConvert}
+            api={api}
+            onOpenIssue={onOpenIssue}
+          />
+        ))}
+      </div>
+
+      {/* The loop that stops a retro being a forgotten doc, stated once. An action created from an
+          AI proposal arrives with NO assignee and nothing on that path suggests, defaults or infers
+          one — the model has no identity dimension to invent an owner from. */}
+      <p className="font-mono text-[10.5px] text-text-2">an action becomes a real numbered issue</p>
     </section>
   )
 }

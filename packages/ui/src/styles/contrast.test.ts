@@ -748,4 +748,95 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
       ).toBeGreaterThanOrEqual(AA_NORMAL)
     }
   })
+
+  // ── The retro room ────────────────────────────────────────────────────────────────────────────
+  //
+  // This surface draws on a THIRD ground: the `--bg-sidebar` tabletop, with paper notes on
+  // `--bg-elevated` sitting on it. Every fact the room states — the dot-budget reading, the tally,
+  // the room foot, the seed door's line, the draft band's three sentences, the index's date range —
+  // is `--text-2`, and this is where that claim is falsifiable.
+  it('the room’s stated facts meet AA on the felt and on the note (>= 4.5)', () => {
+    for (const ground of ['--bg-sidebar', '--bg-elevated'] as const) {
+      for (const ink of ['--text-1', '--text-2'] as const) {
+        expect(
+          contrastRatio(hex(t, ink), hex(t, ground)),
+          `${ink} on ${ground}`,
+        ).toBeGreaterThanOrEqual(AA_NORMAL)
+      }
+    }
+  })
+
+  // THE PAIR THE MOCK ASKED FOR, AND WHY IT LOST. `retros.html` inks the cluster label and the
+  // index's phase pill in `--accent-strong`. Measured, that token lands at 4.18 on the felt in
+  // Editorial light and at 3.94–4.38 over the soft-accent wash in Focused light, Focused dark and
+  // Editorial light — under AA for text at 11.5px. Both moved to `--text-1`; the accent stays as
+  // the dashed box and the wash. This records the bound that made the mock lose, so a later token
+  // retune can be seen to have changed it.
+  it('records why the cluster label and the phase pill are not accent ink', () => {
+    const worstFelt = contrastRatio(hex(t, '--accent-strong'), hex(t, '--bg-sidebar'))
+    const wash = over(t['--accent-soft'] ?? '', hex(t, '--bg-elevated'))
+    const worstWash = contrastRatio(hex(t, '--accent-strong'), wash)
+    expect(Math.min(worstFelt, worstWash)).toBeGreaterThanOrEqual(AA_LARGE)
+    // The inks actually shipped, on the two grounds they are drawn on.
+    expect(contrastRatio(hex(t, '--text-1'), hex(t, '--bg-sidebar'))).toBeGreaterThanOrEqual(
+      AA_NORMAL,
+    )
+    expect(contrastRatio(hex(t, '--text-1'), wash)).toBeGreaterThanOrEqual(AA_NORMAL)
+  })
+
+  // The stepper's current phase is the THIRD place the mock reached for accent ink and the third it
+  // lost: `--accent-strong` on the page ground lands at 4.44 in Editorial light, under AA at
+  // 11.5px. The name is `--text-1` and the phase is told by weight, by the filled band and by the
+  // `now` reading — never by hue. Recorded as a bound, so the day the token clears it is visible.
+  it('records that the stepper’s current phase name is not accent ink', () => {
+    expect(contrastRatio(hex(t, '--accent-strong'), hex(t, '--bg'))).toBeGreaterThanOrEqual(
+      AA_LARGE,
+    )
+    expect(contrastRatio(hex(t, '--text-1'), hex(t, '--bg'))).toBeGreaterThanOrEqual(AA_NORMAL)
+  })
+
+  // The phase stepper's NOW band and the index row's left edge are both `--accent` as a MARK on
+  // the page ground — no text inside either — so both answer to the 3:1 non-text bar. Each also
+  // carries a word beside it (`now`, and the row's phase pill), so neither is colour-only; what is
+  // measured here is only that the mark is visible at all.
+  it('the now-band and the index row’s edge are distinguishable marks (>= 3.0)', () => {
+    expect(contrastRatio(hex(t, '--accent'), hex(t, '--bg'))).toBeGreaterThanOrEqual(AA_LARGE)
+    expect(
+      contrastRatio(hex(t, '--accent'), hex(t, '--bg-elevated')),
+      'index row edge on the row ground',
+    ).toBeGreaterThanOrEqual(AA_LARGE)
+  })
+
+  // An UNSPENT dot is `--accent`; a SPENT one is a `--border-strong` ring on the same ground. The
+  // pips on a note make the same split. Both pairs are marks, and both are read against the stated
+  // fraction beside them, which is the channel that actually carries the budget.
+  it('spent and unspent dots separate from each other and from their ground (>= 3.0)', () => {
+    const ring = over(t['--border-strong'] ?? '', hex(t, '--bg'))
+    expect(contrastRatio(hex(t, '--accent'), ring), 'dot vs dot').toBeGreaterThanOrEqual(AA_LARGE)
+    expect(
+      contrastRatio(hex(t, '--accent'), hex(t, '--bg-elevated')),
+      'unspent pip on the note',
+    ).toBeGreaterThanOrEqual(AA_LARGE)
+  })
+
+  // RECORDED AS SCAFFOLDING, not asserted as ink. The spent phase band (`--accent-soft`), the
+  // to-come band's `--border` outline and the cluster box's `--accent-line` dashes all sit BELOW
+  // the 3:1 bar on their own grounds, and that is why every one of them is read through a word:
+  // the phase's name, the `now` reading, the cluster's label and its card count. The day a token
+  // edit lifts one of these over the bar is the day it is loud enough to argue about on its terms.
+  it('records the spent band, the to-come outline and the cluster dashes as scaffolding', () => {
+    expect(
+      contrastRatio(over(t['--accent-soft'] ?? '', hex(t, '--bg')), hex(t, '--bg')),
+      'spent band',
+    ).toBeLessThan(AA_LARGE)
+    const toCome = over(t['--bg-hover'] ?? '', hex(t, '--bg'))
+    expect(
+      contrastRatio(over(t['--border'] ?? '', toCome), toCome),
+      'to-come outline',
+    ).toBeLessThan(AA_LARGE)
+    expect(
+      contrastRatio(over(t['--accent-line'] ?? '', hex(t, '--bg-sidebar')), hex(t, '--bg-sidebar')),
+      'cluster dashes',
+    ).toBeLessThan(AA_LARGE)
+  })
 })

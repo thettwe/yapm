@@ -19,6 +19,43 @@ two can race and still produce exactly one. Any completed cycle that somehow has
 closed before you upgraded, say — offers **Open a retrospective** in the [Cycles](/features/cycles/)
 view, and a completed cycle that has one links straight to it.
 
+## The room, drawn
+
+The retro is one page, read top to bottom, and the order is the argument.
+
+**Band 2** states the retro and the cycle it reflects on — not the team name, which the deck above
+already carries, and not the format, which the column headings already say. To its right: how many
+people are here, the shared timer, and who is facilitating.
+
+**The phase stepper** draws the six phases in the same day-band language the cycle surfaces use for
+time passing — spent, now, and to come — names the phase you are in and marks it `now`. It states
+**no duration for any phase**, because nothing stores one: a retro holds a single running-timer pair
+and there is no per-phase transition log. The facilitator's `[` and `]` are real focusable controls
+carrying those keys.
+
+**The say line** states what the phase asks of the room. During `vote` it also draws your remaining
+dots as spent and unspent marks *and* states them as `2/5 dots left` — the budget is never carried
+by shape or colour alone.
+
+**The anonymity guarantee** sits opposite, in words: *cards are anonymous by design — there is no
+author column*. It renders only on a retro whose stored `is_anonymous` is true; an attributed retro
+states the opposite truth in the same place. It is not a tooltip and not a badge — it is the
+sentence, on the surface, because it is a fact about storage rather than a mood.
+
+**The tabletop** holds the columns as flat paper notes: the column's accent as a rail, one hairline
+of thickness at the foot, no rotation and no illustration. A cluster is a dashed box carrying its
+label, its card count and — because a cluster is the vote target — the only dots in it. Under the
+tabletop, one line states the phase facts the state machine enforces.
+
+**Below the room**, in order: the [data panel](#the-data-panel), then the
+[AI draft](/features/retro-ai-draft/), then the actions. The team's own material is read first, and
+the draft is subordinate by position as well as by label.
+
+A **vote slot with no dots draws nothing at all** — no count, no pip, and no retract control, since
+a control that cannot act and is not the way in is ink for a fact that does not exist. The slot
+keeps its measure, so a column does not shift as dots land, and the `+` that casts your first dot is
+always there. `v` and `Shift+V` are unchanged.
+
 ## Phases
 
 A retro moves through six phases, in order:
@@ -112,8 +149,8 @@ have direct access to your database. On a self-hosted instance, that is the oper
 
 Voting is dot voting. Each participant gets a budget — **three** by default, settable from one to
 ten in the header (or the palette) while the retro is still empty — and may **stack** them: two dots on the thing you
-care most about is a legitimate use of the budget, not a bug. The header reads `2/3 dots left`
-throughout the `vote` phase.
+care most about is a legitimate use of the budget, not a bug. The say line draws your unspent
+dots and reads `2/3 dots left` throughout the `vote` phase.
 
 A dot goes on a card or on a **cluster**, never on a card inside one — a cluster votes as a unit, so
 a dot on a member card would count twice. A clustered card therefore shows no pip of its own, and
@@ -128,9 +165,14 @@ cluster all refund those dots to spend again, rather than leaving them stranded 
 
 ## The data panel
 
-Above the columns sits the seed: what actually happened last cycle, computed from your own work
+Below the tabletop sits the seed: what actually happened last cycle, computed from your own work
 graph. It is not a report to read out — each figure offers **add a card from this**, which opens the
 column composer with the figure attached, so the conversation starts from evidence.
+
+It opens **expanded while a card can still be seeded from it** — that path is `brainstorm`-only —
+and collapses to a one-line door from `group` onward, naming what is behind it (`Cycle 4 data ·
+Delivered · Flow`) and saying that the seed-a-card path closed with brainstorm. Nothing is removed
+by the collapse; one keystroke opens it again, and it stays wherever you leave it.
 
 **Delivered** is always populated, from cycles alone, on an instance with **no connectors at all**:
 shipped, carried out, carried in, carried twice or more, added mid-cycle, canceled, and total in
@@ -168,6 +210,15 @@ focuses the figure it came from, so a card and its number are a two-way link.
 
 ## Actions become issues
 
+The action list is drawn whenever the phase permits an action write **or** at least one action
+already exists — so stepping a retro back from `discuss` never hides what the room recorded. Where
+the phase forbids the write the list is read-only and says when actions reopen. Where neither is
+true it is not drawn at all, rather than promising a write the phase refuses.
+
+An action created from an [AI proposal](/features/retro-ai-draft/) arrives with **no assignee**, and
+nothing on that path suggests, defaults or infers one: the model has no identity data to invent an
+owner from. An action you write yourself keeps its optional assignee — that is a person choosing.
+
 An action from a retro is not a checkbox that rots on a board. Converting one creates a **real
 issue** through the same creation path as any issue you type by hand: the same per-team numbering,
 the same triage defaults, the same permissions, the same [delivery signals](/features/delivery-signals/)
@@ -192,6 +243,19 @@ retro it is simply not there.
 
 Without the AI draft, the loop still closes the plain way — an unfinished action is an unfinished
 issue, and the cycle's rollover puts it in front of you again.
+
+## The index
+
+`more▾ → Retros` (`g r`) is the team's list of retros. Each row states the retro, the phase it has
+reached, its format and the date range of the cycle it reflects on, and is one keyboard-reachable
+link into the room. It states **nothing per-person** — no participant count, no card count, no
+author — because no stored row supports one.
+
+Below the list, a team's completed cycles that have no retrospective are offered one, and that group
+is drawn only when it has rows rather than as an empty heading. A team with no retros yet is met by
+one line — *A retro opens when a cycle closes.* — plus the quiet fact of when the next cycle closes,
+where a cycle exists to state it and nothing where none does. There is no create-a-retro control: a
+retro is opened **for a completed cycle**, from that cycle.
 
 ## Keyboard
 

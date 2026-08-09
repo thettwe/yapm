@@ -15,9 +15,26 @@ the improvements agreed in the team's most recent previous retro, with yapm's ow
 each one shipped — see [Did last cycle's improvements ship?](#did-last-cycles-improvements-ship).
 
 It is a starting point, deliberately, and the surface says so in as many words: *AI-drafted, not
-agreed — the team has not decided any of this.* Nothing the model writes becomes the team's
-conclusion on its own. **The team ratifies it**, privately, one member at a time, and the line above
-stays on screen until they have — see [Agreeing and disagreeing](#agreeing-and-disagreeing).
+agreed*, on the band's own header line until a verdict exists. Nothing the model writes becomes the
+team's conclusion on its own. **The team ratifies it**, privately, one member at a time, and the
+label stays on screen until they have — see [Agreeing and disagreeing](#agreeing-and-disagreeing).
+
+Two more sentences ship on that header line, and both are statements about the pipeline rather than
+about tone. *reads the work graph only — never a card* is the input assembly's
+[table allowlist](#what-the-model-is-given--and-what-it-is-never-given) stated in words: no retro
+content table and no card→author binding is in it, so an anonymous board was never the model's
+input, and a reader has no other way to know that. While the reacting window is open the band's foot
+reads *your own reaction only · verdicts stamp at Discuss*, which is why you see no counts yet.
+
+**The band sits below the room's own cards**, directly under the data panel. The team's material is
+read first; the draft is subordinate by position as well as by label. Each proposal is one row: its
+category, its sentence, the citations it points at, and your own reaction at the end.
+
+**A proposal with no citation you can follow is not drawn at all.** The validators already drop an
+uncited proposal server-side; a reference that survives that and still resolves to nothing your
+client can name is dropped here too, and the proposal goes with it. A sentence you cannot trace to a
+chip would be the model asserting a fact on its own authority. Where a cited value is derived, the
+chip carries the same `how ·` door the rest of yapm puts beside a derived number.
 
 The draft is **off for every team until an admin turns it on**, and it needs a
 [configured AI provider key](/self-hosting/ai-setup/). With either missing, the retro is exactly the
@@ -438,6 +455,7 @@ is still there — it is the raw-evidence fallback, and it was there before the 
 | The workspace has hit its AI spend cap | Nothing. A cap is "off for now", not a failure |
 | The provider errored or returned unusable output | Nothing. The failure is logged server-side, not shown to the team |
 | Every proposal was dropped by a validator | Nothing. Silence is a correct answer for a thin cycle |
+| Every proposal cites only references this client cannot name | Nothing. An untraceable sentence is not drawn |
 | The background pass has not finished yet | One quiet "drafting…" line, replaced by the proposals when they land |
 | The background pass is switched off instance-wide | The drafting line for a minute or two, then nothing — the row is never completed, so the section stands down |
 | The team has never held a retro before this one | The three usual groups and **no follow-up group** — no heading, no placeholder, no reserved space |
@@ -448,7 +466,8 @@ will not see an empty "Follow-ups".
 
 ## Keyboard and theming
 
-The section sits directly below the seeded data panel and is reachable by Tab from it. Every chip
+The section sits directly below the seeded data panel — itself below the room's own cards — and is
+reachable by Tab from it. Every chip
 that *can* be activated is a real focusable control, in the order the proposal cites them: an in-app
 reference is a button, and an external pull request or check is a link, so middle-click, copy-link and
 the screen-reader "link" role all work the way they should. The

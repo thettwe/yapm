@@ -153,6 +153,24 @@ describe('buildCycleRegister rows', () => {
     expect(rowOf(c1.id)?.carriedForward).toBe(0)
   })
 
+  // The other half of the same trap: a carried-out issue's STATUS is the status it has NOW, in the
+  // cycle it moved to. Reading it against the cycle it left credits that cycle with delivering work
+  // it handed forward — a fully-delivered ratio printed beside `1 carried forward`.
+  it('never credits the cycle it left with work that landed after the rollover', () => {
+    const landedLater = threeCycleHistory()
+    const rolled = landedLater.issues.map((issue) =>
+      (issue.rolledOverFromCycleId ?? null) === c2.id
+        ? { ...issue, status: 'done' as const }
+        : issue,
+    )
+    const register = buildCycleRegister({ ...landedLater, issues: rolled })
+    const ledger = register.rows.find((row) => row.cycleId === c2.id)?.ledger
+
+    expect(ledger?.reading).toBe('1/2')
+    expect(ledger?.landed).toBe(1)
+    expect(ledger?.band).toEqual(['landed', 'open', 'added'])
+  })
+
   it('states the ledger in words, so nothing on the row is carried by colour alone', () => {
     const register = buildCycleRegister(threeCycleHistory())
     const rowOf = (id: string) => register.rows.find((row) => row.cycleId === id)
@@ -282,6 +300,23 @@ describe('buildCycleRegister carriedIn', () => {
     expect(carried?.originName).toBeNull()
     // Deepest first, so the row that has travelled furthest leads the band.
     expect(carried?.rows.map((row) => row.depth)).toEqual([2, 1])
+  })
+
+  // A row whose reference names nothing is NOT agreement with the row that names something: the
+  // header would otherwise put an issue with no recorded origin under a cycle's name.
+  it('says nothing about the header origin when one carried row names no origin at all', () => {
+    const partial = input({
+      cycles: [c2, c3],
+      issues: [
+        issue({ status: 'todo', cycleId: c3.id, carryoverCount: 1, rolledOverFromCycleId: c2.id }),
+        issue({ status: 'todo', cycleId: c3.id, carryoverCount: 2, rolledOverFromCycleId: null }),
+      ],
+    })
+    const carried = buildCycleRegister(partial).carriedIn(c3.id)
+
+    expect(carried?.count).toBe(2)
+    expect(carried?.originName).toBeNull()
+    expect(carried?.rows.map((row) => row.originCycleName)).toEqual([null, 'Cycle 2'])
   })
 })
 

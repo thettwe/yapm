@@ -51,24 +51,36 @@ export function ScopeBandScales() {
 const DEEP: CarryNodeKind[] = ['unnamed', 'unnamed', 'origin', 'now']
 const NAMED_ONE_HOP: CarryNodeKind[] = ['origin', 'now']
 const UNNAMED: CarryNodeKind[] = ['unnamed', 'unnamed', 'now']
+// Ten boundaries crossed. The drawing is bounded at four nodes and folds the rest into the dotted
+// lead-in, so the row that has travelled furthest is the one that must NOT overflow its track.
+const RUNAWAY: CarryNodeKind[] = [
+  ...Array.from({ length: 9 }, () => 'unnamed' as CarryNodeKind),
+  'origin',
+  'now',
+]
 
 // The degenerate cases are the point of this story: a single hop draws two nodes and no lead-in,
-// and a chain whose origin the schema can no longer name draws no solid node at all.
+// a chain whose origin the schema can no longer name draws no solid node at all, and a chain ten
+// hops deep draws exactly as wide as one four hops deep.
 export function CarryChains() {
   return (
     <PresetGrid>
       <div className="flex flex-col gap-5">
         <div className="flex items-center gap-4">
-          <CarryChain nodes={DEEP} leadIn originLabel="Cycle 1" labelled />
-          <span className="font-mono text-[11.5px] text-text-2">carried 3×</span>
+          <CarryChain nodes={DEEP} leadIn />
+          <span className="font-mono text-[11.5px] text-text-2">carried 3× · out of Cycle 1</span>
         </div>
         <div className="flex items-center gap-4">
-          <CarryChain nodes={NAMED_ONE_HOP} leadIn={false} originLabel="Cycle 2" />
-          <span className="font-mono text-[11.5px] text-text-2">carried 1×</span>
+          <CarryChain nodes={NAMED_ONE_HOP} leadIn={false} />
+          <span className="font-mono text-[11.5px] text-text-2">carried 1× · out of Cycle 2</span>
         </div>
         <div className="flex items-center gap-4">
           <CarryChain nodes={UNNAMED} leadIn />
           <span className="font-mono text-[11.5px] text-text-2">carried 2×</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <CarryChain nodes={RUNAWAY} leadIn />
+          <span className="font-mono text-[11.5px] text-text-2">carried 10× · out of Cycle 1</span>
         </div>
       </div>
     </PresetGrid>

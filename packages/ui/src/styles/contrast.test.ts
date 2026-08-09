@@ -933,12 +933,18 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   // page may not add a second attention number.
   const carrySoft = (): string => wash(hex(t, '--status-in-progress'), hex(t, '--bg'), 0.1)
 
-  it('the carried row’s ink meets AA on the carry wash (>= 4.5)', () => {
-    const ground = carrySoft()
-    // The title, the mono key, the rest phrase, the `carried N×` count and the chain's two 9.5px
-    // labels — every one of them `--text-1` or `--text-2`.
-    for (const ink of ['--text-1', '--text-2'] as const) {
-      expect(contrastRatio(hex(t, ink), ground), ink).toBeGreaterThanOrEqual(AA_NORMAL)
+  it('the carried row’s ink meets AA on both grounds a carried row is painted on (>= 4.5)', () => {
+    // A carried row is drawn on the page ground, or — from depth 3 — on the wash. The title, the
+    // MONO KEY, the rest phrase, the `carried N× · out of …` fact: every one of them `--text-1` or
+    // `--text-2` on both. The key is what this pins: it is the row's primary identifier, so it
+    // answers to the text bar, and `--text-3` is under it on the page ground (recorded below).
+    const grounds = { bg: hex(t, '--bg'), wash: carrySoft() }
+    for (const [name, ground] of Object.entries(grounds)) {
+      for (const ink of ['--text-1', '--text-2'] as const) {
+        expect(contrastRatio(hex(t, ink), ground), `${ink} on ${name}`).toBeGreaterThanOrEqual(
+          AA_NORMAL,
+        )
+      }
     }
   })
 

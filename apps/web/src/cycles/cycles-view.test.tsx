@@ -226,6 +226,39 @@ test('the carried fact is text beside a drawing that announces nothing', () => {
   expect(harness.navigate).toHaveBeenCalledTimes(1)
 })
 
+// Where the rows left DIFFERENT cycles the header can name none of them, so each row has to name
+// its own — otherwise every row after the first draws a chain whose origin appears nowhere a
+// sighted reader can see it.
+test('each carried row names the cycle it left when the band header cannot name one for all', () => {
+  seedRegister({
+    'issues.byTeam': [
+      issue({
+        status: 'todo',
+        title: 'Left Checkout',
+        cycleId: CYCLE_3.id,
+        carryoverCount: 1,
+        rolledOverFromCycleId: CYCLE_2.id,
+      }),
+      issue({
+        status: 'todo',
+        title: 'Left Groundwork',
+        cycleId: CYCLE_3.id,
+        carryoverCount: 2,
+        rolledOverFromCycleId: CYCLE_1.id,
+      }),
+    ],
+  })
+  render(<CyclesView teamId="team-1" />)
+
+  const band = screen.getByTestId('carried-in')
+  expect(within(band).queryByText(/^out of /)).not.toBeInTheDocument()
+
+  const rows = within(band).getAllByTestId('carried-row')
+  expect(rows).toHaveLength(2)
+  expect(rows[0]).toHaveTextContent(/carried 2×\s*· out of Groundwork/)
+  expect(rows[1]).toHaveTextContent(/carried 1×\s*· out of Checkout/)
+})
+
 test('a cycle that carried nothing in draws no band at all', () => {
   seedRegister({
     'issues.byTeam': [issue({ status: 'todo', cycleId: CYCLE_3.id })],

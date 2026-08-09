@@ -298,9 +298,10 @@ old completed cycle can leave nothing to draw (its remaining pointing set is all
 cell folds rather than drawing a bare `0 landed` beside an empty rail — the same rule as a cycle
 with no issues (D8).
 
-**The chain's named node is labelled with the cycle NAME.** The mock writes `Cycle 1`, which is
+**The chain's named origin is stated with the cycle NAME.** The mock writes `Cycle 1`, which is
 that file's own key lettering. The product renders `cycleNameOf(cycle)` — the cycle's name, falling
 back to `cycleKeyOf` when it is blank — because the name is what the reader selected the row by.
+(Where that name is *drawn* moved in the review pass below.)
 
 **`deep` is depth ≥ 3.** The mock washes exactly one row, the one carried three times; 2× and 1×
 are quiet. Exported as `CARRY_DEEP_DEPTH` so the threshold has one home.
@@ -367,7 +368,8 @@ and a date range is a fact the row states; they take `--text-2`, the trade the r
 fact line already made. (3) The deep-carry count was `--status-in-progress-ink` on the amber wash
 it is drawn in, which measures 4.42 in focused light; the wash and the left rail carry the depth,
 so the count keeps a readable ink. The chain's two 9.5px labels moved off `--text-3` and
-`--accent-strong` for the same reason. Each is pinned as a bound that can fail, not deleted.
+`--accent-strong` for the same reason (and are gone entirely as of the review pass below). Each is
+pinned as a bound that can fail, not deleted.
 
 **`--status-backlog` is recorded as an inherited exemption, not fixed here.** The upcoming cycle's
 dashed ring measures 2.47–4.98 on `--bg` — under 3:1 in the two lightest presets. It is the same
@@ -389,6 +391,54 @@ default activation from a `keydown`, and this repo has no `@testing-library/user
 are real `<button>`s, so `Enter`/`Space` IS the platform's activation and a click is the same code
 path; what the component test can hold on its own is the part the page adds — arrow movement over
 the register's order — and the real key presses are driven in `cycles.spec.ts`.
+
+### Review pass — two ledger inversions, and the chain's name moved into row text
+
+**A carried-out issue's LIVE STATUS may not be read against the cycle it left.** The build pass
+already normalised `cycle_assigned_at` on that set, because the rollover overwrote it; the same
+argument applies to `status` and had been missed. An issue the rollover moved out of C did not land
+in C — that is what being rolled forward means — so reading the status it has *now*, in a later
+cycle, retroactively credits C with delivering it and prints a fully-delivered ratio beside
+`1 carried forward`. `asCommittedCarryOut` now normalises both stamps, which is the same call
+`metrics/scope.ts` makes when it computes `deliveredCounts.shipped` from `within` alone and never
+from `carriedOut`. Pinned by flipping the §5.1 fixture's traveller to `done` and asserting Cycle 2
+still reads `1/2`.
+
+**The carried-in header names an origin only when EVERY row names that same one.** It previously
+named one whenever exactly one *named* origin appeared among the rows, so a band mixing an issue
+whose reference still names Checkout with one whose reference names nothing announced "out of
+Checkout" over both. A row with no recorded origin is not agreement; it is the absence of a fact.
+
+**The chain's origin label became row text, and the drawing became bounded.** Two defects with one
+root: D7's per-chain `<text>` label was drawn under the first row only (to avoid three stacked
+labels), so with mixed origins every row after the first drew a solid "named origin" node whose
+name appeared nowhere on screen; and the SVG's intrinsic width grew 58px per hop inside an `auto`
+track, so the deepest row — the exact row the band exists to surface — pushed its track out of the
+container. So: the labels are gone, `carried N×` is joined by `· out of <cycle>` as row text
+whenever the band header cannot state it for every row, and the drawing renders at most four nodes
+with the dotted lead-in standing for the rest. Nothing is lost — the lead-in already meant "the
+part of the chain before the record begins", the true depth is in text at any length, and every
+row now keeps one height. This is the direction D7's own self-critique pointed at, taken to the
+extent an agent can take it; whether the graphic survives at all remains the task-7.6 judgement
+with the render in front of it, and the recorded fallback (mono column, no graphic) is unchanged.
+
+**The register is O(issues), not O(cycles × issues).** `buildRow` filtered the team's whole issue
+set twice per cycle. `buildCycleRegister` now builds a by-cycle and a by-rolled-over-from index in
+one pass and the rows look up. Identical output; the difference shows on a team with three years of
+cycles, where this derivation re-runs on every synced issue change.
+
+**Both row grids compress rather than overflow.** The register row was seven fixed tracks with a
+~967px min-content width, which put a sideways scrollbar on the page below ~1031px — where the
+shipped issue row folds columns at `lg`/`md`/`sm`. The register row now folds the carry fact and
+the artifact chips below `lg` and the date range below `md`; the carried row folds its rest phrase
+and its chain on the same breakpoints. The ledger, the name and the key are on every row at every
+width, which is the folding order the page's own hierarchy implies.
+
+**The carried row's key takes the row ink.** It was `--text-3` — the token this change measured as
+below the text bar and moved the register's dates off. It is the row's primary identifier and a
+fact the row states, so it is `--text-2`, stepping to `--text-1` on the washed deep row exactly as
+`issue-row.tsx` does. The report band's date range moves for the same reason. The bare counts in
+band headers stay `--text-3`: that is the house `BandHeader`, not this page's invention.
 
 **Not done in this pass, and owed:** the render gates (§7.4–7.6) — the 1440×900 render of the page
 and of each degenerate state, and with it the task-7.6 decision about whether the carry chain

@@ -80,45 +80,51 @@ const CHAIN_GAP = 58
 const CHAIN_PAD = 10
 const CHAIN_LEAD = 36
 const CHAIN_CY = 13
+const CHAIN_HEIGHT = 24
+// The drawing is BOUNDED. Its intrinsic width grows 58px per hop, and the deepest row — the exact
+// one the carry band exists to surface — would push its track past the container. Past four nodes
+// a fifth dot adds no notation the row does not already state: the dotted lead-in already means
+// "the part of the chain before the drawing begins", and `carried N×` states the true depth in
+// text beside it at any length.
+const CHAIN_MAX_NODES = 4
 
 // The carry chain: one node per cycle boundary the issue crossed, drawn from its carry COUNT and
 // nothing else. Two constraints the drawing cannot state for itself — it is `aria-hidden` and the
 // row states `carried N×` in text beside it, because a private notation may never be the only
 // carrier of a fact; and only ONE node can be named, because `rolled_over_from_cycle_id` holds the
-// last origin alone and every earlier one was overwritten. The dotted lead-in is that gap.
+// last origin alone and every earlier one was overwritten. The dotted lead-in is that gap. The
+// origin's NAME is row text, not a label under the drawing: a label the drawing carried would be
+// legible on one row only and squint-sized on all of them.
 export function CarryChain({
   nodes,
   leadIn,
-  originLabel = null,
-  labelled = false,
 }: {
   nodes: readonly CarryNodeKind[]
   leadIn: boolean
-  originLabel?: string | null
-  labelled?: boolean
 }) {
-  const count = Math.max(1, nodes.length)
+  // The TAIL is what is kept: the named origin is the hop immediately before now, so bounding the
+  // drawing never drops the one node the schema can still name.
+  const shown = nodes.slice(-CHAIN_MAX_NODES)
+  const lead = leadIn || shown.length < nodes.length
+  const count = Math.max(1, shown.length)
   const span = (count - 1) * CHAIN_GAP
-  const width = CHAIN_PAD * 2 + span + (leadIn ? CHAIN_LEAD : 0)
-  const height = labelled ? 32 : 24
+  const width = CHAIN_PAD * 2 + span + (lead ? CHAIN_LEAD : 0)
   const first = width - CHAIN_PAD - span
-  const marks = nodes.map((kind, index) => ({
+  const marks = shown.map((kind, index) => ({
     id: `node-${index + 1}`,
     kind,
     x: first + index * CHAIN_GAP,
   }))
-  const origin = marks.find((mark) => mark.kind === 'origin') ?? null
-  const now = marks[marks.length - 1]
 
   return (
     <svg
       aria-hidden="true"
       width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
+      height={CHAIN_HEIGHT}
+      viewBox={`0 0 ${width} ${CHAIN_HEIGHT}`}
       className="block overflow-visible"
     >
-      {leadIn ? (
+      {lead ? (
         <line
           x1={first - CHAIN_LEAD}
           y1={CHAIN_CY}
@@ -157,34 +163,6 @@ export function CarryChain({
           />
         ),
       )}
-      {/* The two labels are 9.5px type, so they answer to the TEXT bar rather than the drawing's:
-          `--text-3` measures 2.80–3.70 on the grounds a row is painted and `--accent-strong` ~4.44
-          on `--bg`, both under AA. The nodes carry the notation in colour and shape; the labels
-          carry it in words, and a word a reader has to squint at is not carrying anything. */}
-      {labelled && origin !== null && originLabel !== null ? (
-        <text
-          x={origin.x}
-          y={CHAIN_CY + 16}
-          textAnchor="middle"
-          fontSize="9.5"
-          fill="var(--text-2)"
-          className="font-mono"
-        >
-          {originLabel}
-        </text>
-      ) : null}
-      {labelled && now !== undefined ? (
-        <text
-          x={now.x}
-          y={CHAIN_CY + 16}
-          textAnchor="middle"
-          fontSize="9.5"
-          fill="var(--text-2)"
-          className="font-mono"
-        >
-          now
-        </text>
-      ) : null}
     </svg>
   )
 }

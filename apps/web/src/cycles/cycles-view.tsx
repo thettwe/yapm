@@ -196,7 +196,10 @@ export function CyclesView({ teamId }: { teamId: string }) {
                       THE LAST REPORT
                     </h2>
                     <span className="font-mono text-xs text-text-3">{selected.name}</span>
-                    <span className="font-mono text-[11px] text-text-3">
+                    {/* The date range is a FACT the band states, on the same measurement the
+                        register's own dates took `--text-2` for. The bare count beside a band
+                        header stays `--text-3` — that is the house BandHeader. */}
+                    <span className="font-mono text-[11px] text-text-2">
                       {formatCycleRange(selected.startDate, selected.endDate)}
                     </span>
                     <span className="ml-auto">
@@ -306,7 +309,12 @@ function RegisterRow({
       onClick={() => onSelect(row.cycleId)}
       onKeyDown={(event) => moveByArrow(event, '[data-register-row]')}
       className={cn(
-        'grid h-11 w-full grid-cols-[16px_78px_minmax(120px,1fr)_128px_190px_130px_200px] items-center gap-x-3.5 border-t border-l-[3px] border-l-transparent border-row-hairline px-3 pl-[9px] text-left outline-none last:border-b hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
+        // The row COMPRESSES rather than overflowing: at full measure it is the mock's seven fixed
+        // tracks, but the carry fact and the artifact chips fold below `lg` and the date range
+        // below `md`, so the page never carries a sideways scrollbar. Same treatment the shipped
+        // issue row uses, and the folding order is least-load-bearing first — the ledger, the name
+        // and the key are on every row at every width.
+        'grid h-11 w-full grid-cols-[16px_78px_minmax(120px,1fr)_190px] items-center gap-x-3.5 border-t border-l-[3px] border-l-transparent border-row-hairline px-3 pl-[9px] text-left outline-none last:border-b hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset md:grid-cols-[16px_78px_minmax(120px,1fr)_128px_190px] lg:grid-cols-[16px_78px_minmax(120px,1fr)_128px_190px_130px_200px]',
         selected && 'border-l-accent bg-bg-selected',
       )}
     >
@@ -323,7 +331,7 @@ function RegisterRow({
       {/* 11px mono dates are a FACT on a dense row, so they take `--text-2` rather than the mock's
           `--text-3`, which measures 2.43–3.70 on the grounds a row is painted. Same trade the
           reality rail's mono fact line already made. */}
-      <span className="font-mono text-[11px] text-text-2">
+      <span className="hidden font-mono text-[11px] text-text-2 md:block">
         {formatCycleRange(row.startDate, row.endDate)}
       </span>
       {row.ledger === null ? (
@@ -343,10 +351,10 @@ function RegisterRow({
           </span>
         </span>
       )}
-      <span className="whitespace-nowrap text-[12.5px] text-text-2">
+      <span className="hidden whitespace-nowrap text-[12.5px] text-text-2 lg:block">
         {row.carriedForward === 0 ? null : `${row.carriedForward} carried forward`}
       </span>
-      <span className="flex items-center justify-end gap-[7px]">
+      <span className="hidden items-center justify-end gap-[7px] lg:flex">
         {row.chips.cycleReport ? (
           <ArtifactChip glyph={<ReportGlyph />} label="Cycle report" />
         ) : null}
@@ -434,23 +442,27 @@ function CarriedInBand({
           <How
             label="the chain"
             align="end"
-            constraint="solid = named origin · hollow = unnamed hop · accent = this cycle · dotted = before the record"
+            constraint="solid = named origin · hollow = unnamed hop · accent = this cycle · dotted = before the drawing"
           >
-            One node per cycle boundary the issue crossed, drawn from its carry count alone. Only
-            the last hop has a named origin: the column that records it is overwritten every time
-            the issue carries again.
+            One node per cycle boundary the issue crossed, drawn from its carry count alone and
+            bounded at four — the dotted lead-in stands for the hops before it, and the row states
+            the true count in words. Only the last hop has a named origin: the column that records
+            it is overwritten every time the issue carries again.
           </How>
         </span>
       </div>
 
       <div className="mt-3">
-        {carriedIn.rows.map((row, index) => (
+        {carriedIn.rows.map((row) => (
           <CarriedRow
             key={row.issueId}
             row={row}
             links={issuesRaw.find((issue) => issue.id === row.issueId)?.issueLinks}
             deployIndex={deployIndex}
-            labelled={index === 0}
+            // The band header states the origin once when EVERY row left the same cycle; where
+            // they did not, each row states its own. Either way the origin a row carries is
+            // readable without the drawing, and every row keeps one height.
+            statesOwnOrigin={carriedIn.originName === null}
             onOpenIssue={onOpenIssue}
           />
         ))}
@@ -463,13 +475,13 @@ function CarriedRow({
   row,
   links,
   deployIndex,
-  labelled,
+  statesOwnOrigin,
   onOpenIssue,
 }: {
   row: CycleCarriedRow
   links: readonly LinkedIssueRow[] | undefined
   deployIndex: ReturnType<typeof buildDeploymentIndex>
-  labelled: boolean
+  statesOwnOrigin: boolean
   onOpenIssue: (issueId: string) => void
 }) {
   const phrase = useMemo(
@@ -486,37 +498,41 @@ function CarriedRow({
       onKeyDown={(event) => moveByArrow(event, '[data-testid="carried-row"]')}
       className={cn(
         // A deeply-carried row is washed, never badged and never inked urgent: it is not one of the
-        // four attention classes, so it may not add a second attention number.
-        'grid h-[46px] w-full grid-cols-[16px_72px_minmax(160px,1fr)_190px_auto_84px] items-center gap-x-3.5 border-t border-l-[3px] border-l-transparent border-row-hairline px-3 pl-[9px] text-left outline-none last:border-b hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
+        // four attention classes, so it may not add a second attention number. Like the register
+        // row above it, the row folds its least load-bearing tracks rather than overflowing.
+        'grid h-[46px] w-full grid-cols-[16px_72px_minmax(140px,1fr)_auto] items-center gap-x-3.5 border-t border-l-[3px] border-l-transparent border-row-hairline px-3 pl-[9px] text-left outline-none last:border-b hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset md:grid-cols-[16px_72px_minmax(140px,1fr)_190px_auto] lg:grid-cols-[16px_72px_minmax(140px,1fr)_190px_auto_auto]',
         row.deep && 'border-l-status-in-progress bg-carry-soft',
       )}
     >
       <span className="flex">
         <StatusGlyph status={STATUS_TO_KIND[row.status]} />
       </span>
-      <span className="font-mono text-xs text-text-3">{row.issueKey}</span>
+      {/* The key is the row's primary identifier and a fact it states, so it takes the register
+          row's own ink rather than `--text-3`, which sits under the text bar on both grounds this
+          row is painted on. On the washed row it steps up, as the issue row's key does. */}
+      <span className={cn('font-mono text-xs', row.deep ? 'text-text-1' : 'text-text-2')}>
+        {row.issueKey}
+      </span>
       <span className="truncate text-[13.5px] text-text-1">{row.title}</span>
-      <span className="truncate text-[12.5px]">
+      <span className="hidden truncate text-[12.5px] md:block">
         <RestPhraseText phrase={phrase} />
       </span>
-      <span className="flex justify-end">
-        <CarryChain
-          nodes={row.chain.nodes}
-          leadIn={row.chain.leadIn}
-          originLabel={row.originCycleName}
-          labelled={labelled}
-        />
+      <span className="hidden justify-end lg:flex">
+        <CarryChain nodes={row.chain.nodes} leadIn={row.chain.leadIn} />
       </span>
       {/* The deep row's count is NOT amber ink on the amber wash: `--status-in-progress-ink`
           measures 4.42 against `--carry-soft` in focused light, under AA. The wash and the left
           rail carry the depth; the count carries the fact, so the count keeps the readable ink. */}
       <span
         className={cn(
-          'text-right font-mono text-[11.5px]',
+          'flex items-baseline justify-end gap-1.5 whitespace-nowrap text-right font-mono text-[11.5px]',
           row.deep ? 'font-medium text-text-1' : 'text-text-2',
         )}
       >
         {row.fact}
+        {statesOwnOrigin && row.originCycleName !== null ? (
+          <span className="font-normal text-text-2">· out of {row.originCycleName}</span>
+        ) : null}
       </span>
       <span className="sr-only">{row.say}</span>
     </button>

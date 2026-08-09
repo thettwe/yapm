@@ -387,3 +387,69 @@ it for CI), so task 7.9 is left unticked until it is verified green.
 Zero API was used — the two edits are `.related(...)` calls beside existing ones — and the band-2
 rules were followed from the mocks and from `masthead.tsx`'s own contract. A later pass should close
 both before the change lands.
+
+---
+
+### B10 — The Roadmap axis is a fixed 1000px measure, not a percentage of the viewport
+
+The shipped roadmap laid its axis out as `flex-1`, so a cycle band would have been a different width
+on a narrow window than on a wide one and the header's bands would have drifted off the rows'
+gridlines at some widths. Chosen: the mock's own measure — a 1000px axis under a 260px name column
+and a 140px Done column — with the whole page scrolling sideways as one drawing. A band is then the
+same width in the header and on every row, and one day is the same distance everywhere on the page.
+
+### B11 — The row's TEXT is HTML, not SVG `<text>`
+
+`Target passed`, `Nothing scheduled`, `No issues yet` and the mono target date are absolutely
+positioned HTML spans over the drawing rather than glyphs inside it. Two reasons, both load-bearing:
+the phrases must be readable by assistive technology even on a row whose drawing carries **no**
+`role="img"` and no label (task 6.6 — an inkless drawing states nothing), and HTML text is measured
+by the browser, so the mock's hand-computed `x` offsets after a date string are unnecessary. The SVG
+draws only marks and rules.
+
+### B12 — A third phrase the mock does not have: `Scheduled outside this window`
+
+The mock has two nothings. The model carries three states, because `scheduledCount` counts issues in
+*some* cycle whether or not that cycle falls inside the drawn window. Drawing `Nothing scheduled`
+over a project whose work is scheduled in a cycle off the edge of the axis would be false. So:
+`No issues yet` (no issues at all) · `Nothing scheduled` (issues, none in any cycle) · `Scheduled
+outside this window` (issues in a cycle the axis does not reach). The third is quiet ink; only the
+middle one is the mock's.
+
+### B13 — Deliberate differences from `destinations/roadmap.html`
+
+- **The axis window is a mono LABEL in the masthead's `lens` slot, not the mock's `Jul – Nov ▾`
+  button.** The page has no window control; a chevron over nothing is a lie about an affordance.
+- **The filter line's left slot states `Cycle bands <team>` instead of the mock's `Status` / `Lead`
+  chips.** Neither chip filters anything on the shipped page, and the slot is the only place the
+  team-vs-workspace scope split can be said where it is read: the bands are this team's cycles, the
+  projects are the workspace's. It carries the one `how ·` that discloses that rule.
+- **The footnote's fold reads `how ·`, not the mock's `more ·`** — precedent B7; `How` is the
+  shipped affordance and its trigger word is part of the language, not per-page copy.
+- **Both edges of every cycle band are ruled, not one line per boundary.** Two consecutive cycles do
+  not share a date (one ends the day before the next starts); merging the two lines, as the mock's
+  hand-drawn grid does, would close a gap the stored dates leave open.
+- **Undated rows draw their phrase too.** The mock leaves its two undated rows silent, which is the
+  gap its own closing note complains about; the two nothings must read differently everywhere, so an
+  undated row states its phrase at the left of the drawing where there is no target mark to hang it
+  from.
+- **The cancelled target mark is a ring carrying an ×**, matching the shared cycle-position family;
+  the mock's fixture has no cancelled project so it draws none.
+- **The mock PNGs are not in the repository** (`destinations/*.png` do not exist on this branch), so
+  tasks 9.4/9.5 cannot compare against them from here. The comparison is against the HTML mock as
+  rendered, and the render sweep is still owed.
+
+### B14 — The Done meter past twenty issues
+
+One tick per readable issue is the drawn fact, and its length encoding issue count is the meter's
+known fault (the mock says so). A 60-issue project would simply overrun the 140px column, so past
+twenty issues the ticks share the track instead of each taking 3px — still exactly one tick per
+issue, never a resampled bar, and the mono `done/total` beside it carries the exact number either
+way.
+
+### B15 — What this stage did NOT do
+
+`packages/ui/src/styles/contrast.test.ts` (task 7.8) is untouched: this stage was scoped away from
+`packages/ui` while two other destination rebuilds are in flight in parallel worktrees. The pairs it
+owes are named in the task. Task 7.10's e2e assertion is written into `projects.spec.ts` but is left
+unticked because Playwright was not run here — CI on the open PR is where it is proved.

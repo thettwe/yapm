@@ -386,6 +386,15 @@ export function roadmapAxis(input: {
   }
 }
 
+// The drawn window, stated as a label — `Jul – Nov`. It is a reading of the axis the page already
+// derived, never a control: nothing on this surface can change the window, and a chevron over
+// nothing is a lie about an affordance.
+export function formatAxisWindow(window: { readonly start: number; readonly end: number }): string {
+  const first = monthLabel(window.start)
+  const last = monthLabel(window.end - DAY)
+  return first === last ? first : `${first} – ${last}`
+}
+
 export function formatTargetDate(targetDate: number | null): string {
   if (targetDate === null) return 'No target'
   return new Date(targetDate).toLocaleDateString(undefined, {

@@ -129,6 +129,11 @@ test('the roadmap places a dated project and is keyboard-navigable', async ({ pa
   const nearRow = page.locator(ROADMAP_ROW).filter({ hasText: nearName })
   await expect(nearRow).toBeVisible({ timeout: 20_000 })
 
+  // The refusal, stated on the built page: a project stores no start, so no bar is drawn.
+  await expect(page.getByTestId('roadmap-refusal')).toContainText(
+    'only a target is stored, so nothing here draws a bar',
+  )
+
   // Roving focus moves between project rows. Focus the near row, then drive the roadmap's own
   // onKeyDown handler (not Playwright's row.focus()) with ArrowDown/'k' to move focus and confirm
   // the roving tabindex follows.

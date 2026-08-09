@@ -92,35 +92,101 @@ second inbox and no second preference. Two things about them are worth reading h
 ## The inbox
 
 `/inbox` lists every notification addressed to you, across every team you belong to, newest first,
-grouped into **Today / Yesterday / Earlier**. Each row shows who did what, and which issue —
-`Ada assigned you ENG-42`, with the issue's title underneath. A released [product
-digest](/features/pm-digest/) reads differently by design: `A cycle digest was shared with you`, with
-the team and cycle underneath and no actor at all.
+grouped into **Today / Yesterday / Earlier**. It is a work list, drawn in the same anatomy as the
+[issue list](/features/issue-list/): one row per notification, one line each, day bands as the
+group header.
+
+### What a row says, left to right
+
+| Column | What it is |
+|---|---|
+| Unread mark | A filled dot for unread, nothing for read |
+| Kind glyph | One of four drawn marks — assigned, commented, mentioned, digest |
+| Key | The issue's key as the notification stored it (`ENG-42`). Blank for a digest, which has none |
+| Title | **The subject** — the issue title as it was stored, or the team and cycle for a digest |
+| Team | The team's name, drawn **only** when the row is not on the team the deck is pointing at |
+| Phrase | The actor and the verb — `Marta commented`, `Ada assigned you`, `Rui mentioned you` |
+| Age | How long ago, in the same measure the rest of the app uses |
+
+**The subject leads and the actor follows.** The thing you are scanning for is the work, so the
+issue title is the row's title and the actor-and-verb sits beside it as a short phrase. The mailed
+version of the same event is unchanged — a message arriving in your inbox has no row beside it, so
+it still reads as the whole sentence, `Marta commented on ENG-42`. Both come from one function, so
+the two can never word the same event differently.
+
+A released [product digest](/features/pm-digest/) reads differently by design: its phrase is
+`Shared with you` and it **names no actor at all**, its title is the team and the cycle, and its
+key column is empty.
 
 **A row shows the issue title as it was when the event happened.** It is a snapshot taken at write
 time, not a live join. If someone renames `ENG-42` an hour later, your notification still reads the
 old title. That is deliberate: a notification is a record of what happened, and a row that silently
 rewrites itself is a worse record than one that does not. Opening it always lands you on the
-current issue.
+current issue. Nothing marks the title as out of date, either — working out that it had gone stale
+would mean reading the live issue, which is exactly what this page does not do.
+
+**Read and unread never rest on colour.** Three things change together: the dot in the gutter, the
+weight of the title, and the ink it is set in. Every one of them survives a greyscale screenshot,
+and each row also states the word `Read` or `Unread` to a screen reader.
+
+### What the inbox deliberately does not draw
+
+**No status, no delivery signals, no assignee, no labels** — nothing about the issue itself beyond
+the title and key the notification stored. This is a permission boundary rather than a
+simplification. A notification is readable only by its recipient, with **no admin bypass**; joining
+the issue beside it would be a second disclosure that the inbox's own permission rule does not
+gate. So the sync schema carries no relationship from a notification to its subject at all, and the
+page opens no query for one. See [Privacy](#privacy).
+
+**No threads and no roll-ups.** Three comments on one issue are three rows. Each notification is
+keyed by the event that caused it and there is no parent record to collapse them back into.
+
+**No per-notification or per-kind switch.** The only notification preference yapm has governs
+[email](#your-preference), and it lives on the preference surface.
 
 **No body content, anywhere.** A row names the actor, the action and the issue. It never carries a
 line of the comment that caused it — not in the inbox, and not in the email. Nothing about a
 comment's contents leaves the app's permission model.
+
+### Lenses, and clearing the list
+
+**All** and **Unread** sit beside the title. The unread lens filters the rows your browser already
+holds — no query, no round trip, nothing to wait for — and the count beside the title keeps
+reading the same number either way.
 
 Opening a notification takes you to its subject — the issue, or your `/digests` page for a released
 product digest — and marks it read. Marking read is optimistic: the row and the badge change in the
 same frame, with nothing waiting on the network.
 
 **Mark all read** means all of them — including notifications your browser has not synced. The
-inbox syncs your 100 most recent; the action reaches the rest on the server.
+inbox syncs your 100 most recent; the action reaches the rest on the server. When nothing is
+unread the control is **not** drawn: a button that cannot do anything is worse than no button.
+
+### An empty inbox
+
+An empty inbox is the state a good one is in most of the time, so it is drawn as a finished surface
+rather than as a hole: a settled mark, the words **Nothing waiting**, the four kinds that arrive
+here, and two doorways onward. The masthead shows the title alone — no `0`, and no lens over
+nothing.
+
+It is never shown before the answer is known. Until your notifications have finished syncing the
+page says it is loading, and the change from loading to empty is announced through the same live
+region, so a screen reader hears the all-clear only once it is true.
 
 ### Keyboard
+
+The keys are stated on the page itself, along the bottom of the list.
 
 | Key | Action |
 |---|---|
 | `j` `k` (or `↓` `↑`) | Move the cursor |
 | `Enter` / `Space` / `→` | Open the subject and mark the notification read |
 | `e` | Toggle the focused notification between read and unread |
+
+The cursor is anchored to the notification, not to a position in the list. A notification arriving
+while you read leaves your cursor on the row it was already on, so the next `Enter` or `e` can
+never act on something that slid underneath it — and switching to the unread lens can never leave
+the cursor on a row the lens has removed from the page.
 
 And from the command palette (`⌘K` / `Ctrl+K`), under **Notifications**:
 
@@ -165,7 +231,9 @@ recipient** covering everything that has accumulated. Four things bound it, and 
   spent, so a re-published digest still reaches them. See [the disclosure
   model](/self-hosting/ai-disclosure/).
 
-Email carries the same words as the inbox row and the same absence of body content, and links back
+Email is worded by the same function as the inbox row, and carries the same absence of body
+content. It states the event as a full sentence — `Marta commented on ENG-42` — because a message
+arriving in a mail client has no row beside it to carry the issue in its own column. It links back
 to the issue — or, for a product digest, to your digests page — on your instance's own public URL.
 The product-digest notice is additionally **off unless your operator turns it on**
 (`AI_PM_DIGEST_READY_EMAIL`), and it carries a link only: never a summary, a highlight, a risk flag,

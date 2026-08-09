@@ -526,7 +526,10 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     await readerPage.goto('/inbox')
     const notice = readerPage.getByTestId('notification-row')
     await expect(notice).toHaveCount(1, { timeout: 30_000 })
-    await expect(notice).toContainText('A cycle digest was shared with you')
+    // The row draws the subject in its own column now, so the notice's phrase is the subject-free
+    // `Shared with you` and the team and cycle are its title. The mailed form still reads
+    // `A cycle digest was shared with you`; `packages/schema`'s copy suite asserts that verbatim.
+    await expect(notice).toContainText('Shared with you')
     await expect(notice).toContainText(team.name)
     await expect(notice).toContainText(cycleName)
     const noticeText = (await notice.innerText()).replace(/\s+/gu, ' ')

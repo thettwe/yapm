@@ -78,14 +78,20 @@ export function InboxView() {
   const focusIndex =
     anchored === -1 ? Math.min(lastIndexRef.current, Math.max(0, visible.length - 1)) : anchored
 
-  // Workspace-wide, so a row's team is worth naming only when the list spans more than one of them
-  // — with one team it is the same tag on every row. Resolved against the already-synced team list
-  // by id; a team this client cannot name draws no tag rather than an id.
+  // Workspace-wide, so a row's team is worth naming only where it is NOT the team the deck is
+  // pointing at — that is the one row a reader could otherwise misplace. Resolved against the
+  // already-synced team list by id; a team this client cannot name draws no tag rather than an id.
+  // With no anchor at all the deck names no team, so the tag falls back to disambiguating a list
+  // that spans more than one.
   const teamNames = useMemo(
     () => new Map((teams as readonly { id: string; name: string }[]).map((t) => [t.id, t.name])),
     [teams],
   )
   const spansTeams = useMemo(() => new Set(rows.map((row) => row.teamId)).size > 1, [rows])
+  const isForeignTeam = useCallback(
+    (teamId: string) => (anchor === null ? spansTeams : teamId !== anchor.id),
+    [anchor, spansTeams],
+  )
 
   const focusRow = useCallback((index: number) => {
     const el = containerRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`)
@@ -206,8 +212,12 @@ export function InboxView() {
         lens={lens}
         onLens={setLens}
         // An unfinished sync has no count to state: a mono `0` over a loading list is band 2
-        // contradicting the body beneath it.
+        // contradicting the body beneath it. An inbox holding NOTHING has none either, and a lens
+        // over nothing is a control that cannot act — so band 2 on the empty state is the title
+        // alone, which is the mock's second frame. The test is `rows`, never the LENS's own view:
+        // clearing the last unread row must not remove the control that gets the reader back.
         loaded={loaded}
+        populated={rows.length > 0}
         unread={unread}
         error={error}
         onMarkAllRead={markAllRead}
@@ -253,7 +263,7 @@ export function InboxView() {
                         index={position}
                         row={row}
                         focused={position === focusIndex}
-                        teamName={spansTeams ? teamNames.get(row.teamId) : undefined}
+                        teamName={isForeignTeam(row.teamId) ? teamNames.get(row.teamId) : undefined}
                         onFocusRow={setFocusedId}
                         onOpen={() => open(row)}
                       />
@@ -276,6 +286,7 @@ function Masthead({
   lens,
   onLens,
   loaded,
+  populated,
   unread,
   error,
   onMarkAllRead,
@@ -283,15 +294,17 @@ function Masthead({
   lens: Lens
   onLens: (next: Lens) => void
   loaded: boolean
+  populated: boolean
   unread: number
   error: string | undefined
   onMarkAllRead: () => void
 }) {
+  const settled = loaded && populated
   return (
     <FrameMasthead
       title="Inbox"
-      {...(loaded ? { count: formatUnreadCount(unread) } : {})}
-      lens={<InboxLens value={lens} onChange={onLens} />}
+      {...(settled ? { count: formatUnreadCount(unread) } : {})}
+      {...(settled ? { lens: <InboxLens value={lens} onChange={onLens} /> } : {})}
       // ABSENT, not disabled: chrome that promises what the product cannot deliver at that moment
       // is worse than no chrome.
       {...(unread === 0

@@ -389,6 +389,37 @@ test('an empty inbox is composed, with the kinds and two doorways and no explana
   expect(screen.getByTestId('inbox-announcement')).toHaveTextContent('Nothing waiting')
   expect(screen.queryByText(/caught up/)).not.toBeInTheDocument()
   expect(screen.queryByText(/land here/)).not.toBeInTheDocument()
+
+  // Band 2 on the mock's second frame is the title alone: no `0` to read, and no lens over
+  // nothing. `Mark all read` is already absent by the same rule.
+  expect(screen.getByRole('heading', { name: 'Inbox' })).toBeInTheDocument()
+  expect(screen.queryByTestId('masthead-count')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Unread' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument()
+  expect(screen.queryByTestId('inbox-mark-all-read')).not.toBeInTheDocument()
+})
+
+// The lens must survive its own success: a reader who clears the last unread row while looking
+// through `Unread` still has the control that gets them back to `All`.
+test('clearing the last unread row under the lens keeps the lens drawn', async () => {
+  const unread = row({ subjectId: 'issue-1', subjectTitle: 'Still unread', createdAt: 5_000 })
+  const read = row({
+    subjectId: 'issue-2',
+    eventKey: '2000',
+    subjectTitle: 'Already read',
+    createdAt: 4_000,
+    readAt: 9_000,
+  })
+  const { sync } = await mount([unread, read])
+
+  fireEvent.click(screen.getByRole('button', { name: 'Unread' }))
+  expect(titles()).toEqual(['Still unread'])
+
+  sync([{ ...unread, readAt: 9_500 }, read])
+
+  expect(screen.getByTestId('inbox-empty')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'All' }))
+  expect(titles()).toEqual(['Still unread', 'Already read'])
 })
 
 // An all-clear announced before the answer is known is a lie, and one live region must carry both
@@ -447,16 +478,30 @@ test('a very long stored title stays on one line and leaves the age column stand
   expect(screen.getByTestId('notification-phrase')).toHaveTextContent('Dana assigned you')
 })
 
-test('a team the client cannot name draws no tag, and one team draws none at all', async () => {
+// The tag names the team the DECK is not pointing at. On the deck's own team it would be the same
+// word on every line, which is the noise the render pass caught.
+test('only a row outside the deck’s team draws the tag', async () => {
+  await show(
+    [
+      row({ subjectId: 'issue-1', teamId: 'team-1', createdAt: 5_000 }),
+      row({ subjectId: 'issue-2', eventKey: '2000', teamId: 'team-2', createdAt: 4_000 }),
+    ],
+    [DEFAULT_TEAM, { id: 'team-2', key: 'DES', name: 'Design' }],
+  )
+
+  const tags = screen.getAllByTestId('notification-team')
+  expect(tags).toHaveLength(1)
+  expect(tags[0]).toHaveTextContent('Design')
+})
+
+test('a team the client cannot name draws no tag rather than an id', async () => {
   await show([
     row({ subjectId: 'issue-1', teamId: 'team-1', createdAt: 5_000 }),
     row({ subjectId: 'issue-2', eventKey: '2000', teamId: 'team-gone', createdAt: 4_000 }),
   ])
 
-  // The list spans two teams, so the tag is worth drawing — but only for the one that can be named.
-  const tags = screen.getAllByTestId('notification-team')
-  expect(tags).toHaveLength(1)
-  expect(tags[0]).toHaveTextContent('Engineering')
+  expect(screen.queryAllByTestId('notification-team')).toHaveLength(0)
+  expect(screen.queryByText('team-gone')).toBeNull()
 })
 
 test('a single-team list draws no team tag on any row', async () => {

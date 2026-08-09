@@ -39,6 +39,11 @@ available as text to assistive technology, so it is never conveyed by a drawing 
 **Read and unread SHALL be distinguishable through at least three channels, none of which is hue
 alone**, and every text channel the distinction is carried on SHALL itself meet the contrast bar.
 
+Because the inbox is workspace-wide and the application frame is not, a row MAY name its team — but
+only where that team is not the one the frame is currently pointing at, and only from the team list
+the client has already synced. A team the client cannot name SHALL draw nothing rather than an
+identifier, and naming a team SHALL NOT require reading the subject.
+
 The surface MAY offer a lens restricting the list to unread notifications. Such a lens SHALL filter
 rows the client has already synced, SHALL issue no additional query and SHALL take no round trip.
 
@@ -107,6 +112,12 @@ Permission story: unchanged — the self-scoped query with no admin bypass is th
 - **THEN** read and unread rows remain distinguishable, by the presence or absence of the gutter
   mark and by the weight of the title, and every text channel carrying the distinction meets the
   contrast bar
+
+#### Scenario: Only a row outside the frame's team names its team
+
+- **WHEN** a member's inbox holds notifications from the team the frame points at and from another
+- **THEN** only the rows from the other team draw a team name, and a team the client cannot name
+  draws nothing rather than an identifier
 
 #### Scenario: The unread lens costs no round trip
 
@@ -212,6 +223,12 @@ whose text changes, never by inserting a region that already contains its messag
 
 The empty state SHALL state no explanatory sentence about what an inbox is.
 
+Where there is nothing to count and nothing to filter, the surface SHALL state no count and SHALL
+draw no lens — the same rule that makes an unusable mark-all-read control absent rather than
+disabled. The test SHALL be the notification set itself rather than the lens's current view, so a
+reader who clears their last unread notification while looking through the unread lens keeps the
+control that returns them to the whole list.
+
 #### Scenario: An empty inbox reads as composed
 
 - **WHEN** a member with no notifications opens the inbox
@@ -223,6 +240,16 @@ The empty state SHALL state no explanatory sentence about what an inbox is.
 - **WHEN** the inbox is opened and its query result is still incomplete
 - **THEN** the surface says it is still loading, does not draw the empty state, and does not
   announce that nothing is waiting
+
+#### Scenario: Band 2 on an empty inbox is the title alone
+
+- **WHEN** a member with no notifications opens the inbox
+- **THEN** the surface states its title and draws no count, no lens and no mark-all-read control
+
+#### Scenario: Clearing the last unread row under the lens keeps the lens
+
+- **WHEN** a member viewing the unread lens marks their last unread notification read
+- **THEN** the lens remains drawn and returns them to the whole list
 
 #### Scenario: The transition from loading to empty is spoken
 

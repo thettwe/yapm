@@ -62,22 +62,23 @@
 - [x] 6.10 Update `apps/web/e2e/notifications.spec.ts` where the surface moved: the row's word assertions become the phrase (`<ADMIN> assigned you`, `<ADMIN> commented`) plus the issue title as the row's title. The `notification-row` / `data-read` / `inbox-badge` contracts and the `confidential`-absent assertion are kept **verbatim**. **Never weaken an assertion to make a gate pass**
 - [ ] 6.11 Re-run any e2e failure once before investigating, and confirm the signature: the known multi-context flake is `browserContext.close: Protocol error (Target.disposeBrowserContext)` at `projects.spec.ts:188`, `:246`, `pm-digest.spec.ts:306` — tracked separately, not this change's to fix or loosen. Any OTHER failure, and any failure that is an assertion disagreeing rather than that timeout, is this change's
 - [x] 6.12 Confirm no test hard-codes a budget encoding e2e fixture size, and no test's premise is what a given Node runtime provides (CI is Node 24; dev machines here run 26)
+- [x] 6.13 Sweep **every** e2e spec that reads an inbox row, not just `notifications.spec.ts`: `pm-digest.spec.ts` asserted the digest row's full sentence and now asserts its phrase, with the team, the cycle, the no-content and the no-actor assertions kept verbatim. `mentions.spec.ts` needed no change — `<actor> mentioned you` is the phrase
 
 ## 7. Render and look
 
-- [ ] 7.1 Bring the app up at 1440×900 over a seeded account and screenshot `/inbox` populated; compare against `inbox.png` frame A and record every deliberate difference in `design.md`
-- [ ] 7.2 Screenshot and **look at** the degenerate states, one image each — an inbox with ONE item, an inbox with FIFTY, an item whose stored title is very long, a `pm_digest_published` item, and the empty state. This is the pass that catches the class of defect Triage shipped (a panel reserving its full measure over nothing); a test passing is not this
-- [ ] 7.3 Screenshot the empty state against `inbox.png` frame B
-- [ ] 7.4 Check the page in all three themes, light and dark, and confirm nothing reads as a hole, a collapsed row or an unfilled reserved slot
-- [ ] 7.5 Confirm the masthead count and the deck badge state the same number on the same screen
+- [x] 7.1 Bring the app up at 1440×900 over a seeded account and screenshot `/inbox` populated; compare against `inbox.png` frame A and record every deliberate difference in `design.md`
+- [x] 7.2 Screenshot and **look at** the degenerate states, one image each — an inbox with ONE item, an inbox with FIFTY, an item whose stored title is very long, a `pm_digest_published` item, and the empty state. This is the pass that catches the class of defect Triage shipped (a panel reserving its full measure over nothing); a test passing is not this
+- [x] 7.3 Screenshot the empty state against `inbox.png` frame B
+- [x] 7.4 Check the page in all three themes, light and dark, and confirm nothing reads as a hole, a collapsed row or an unfilled reserved slot
+- [x] 7.5 Confirm the masthead count and the deck badge state the same number on the same screen
 
 ## 8. Documentation
 
-- [ ] 8.1 Update `apps/docs/src/content/docs/features/notifications.md`: the row anatomy left to right, the four kinds and their glyphs, **why no subject status is drawn** (the permission boundary, not a simplification), the two lenses, the empty state, and the complete keyboard model
-- [ ] 8.2 Update `README.md` where it describes the inbox surface (line ~247)
-- [ ] 8.3 Confirm `.env.example`, `TECHSTACK.md`, `VISION.md`, `DESIGN.md`, `PROCESS.md` and every `reference/` page are untouched by this change and therefore not stale (PROCESS.md §2). **Do NOT edit `ROADMAP.md`** — parallel builds; the maintainer adds the row at archive time
-- [ ] 8.4 `pnpm --filter @yapm/docs build` passes
-- [ ] 8.5 Record every decision taken during the build in `design.md` under "## Decisions made during implementation" — including everything that diverged from `inbox.html` and why, and any deliberate removal of a shipped capability
+- [x] 8.1 Update `apps/docs/src/content/docs/features/notifications.md`: the row anatomy left to right, the four kinds and their glyphs, **why no subject status is drawn** (the permission boundary, not a simplification), the two lenses, the empty state, and the complete keyboard model
+- [x] 8.2 Update `README.md` where it describes the inbox surface (line ~247)
+- [x] 8.3 Confirm `.env.example`, `TECHSTACK.md`, `VISION.md`, `DESIGN.md`, `PROCESS.md` and every `reference/` page are untouched by this change and therefore not stale (PROCESS.md §2). **Do NOT edit `ROADMAP.md`** — parallel builds; the maintainer adds the row at archive time
+- [x] 8.4 `pnpm --filter @yapm/docs build` passes
+- [x] 8.5 Record every decision taken during the build in `design.md` under "## Decisions made during implementation" — including everything that diverged from `inbox.html` and why, and any deliberate removal of a shipped capability
 
 ## 9. Gates
 

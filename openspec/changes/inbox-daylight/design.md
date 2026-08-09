@@ -333,3 +333,75 @@ page costs no new subscription. `notifications.mine` is untouched — no `.relat
 `packages/ui/src/styles/contrast.test.ts` gained a block **appended at the end** of the
 `describe.each`, delimited by a banner comment naming this change, per the cross-branch-conflict
 warning. `@/frame/masthead` and `@/frame/team-context` are imported, not edited.
+
+### B17 — The cross-team tag names the team the DECK is not on (B2, corrected by looking)
+
+B2 chose "draw the tag when the reader's own rows span more than one team". The render pass killed
+it: with twelve rows from Engineering and two from Team A, `Engineering` was stamped on twelve
+consecutive lines — the same word down the whole page, which is exactly the noise the tag exists to
+avoid. Re-reading `inbox.html`'s closing comment, the mock states its own rule outright: the tag
+"appears only where the team differs from the deck's current one, because the inbox is
+workspace-wide and the deck is not." B2 never considered that rule because it was arguing about
+`queries.members.all()`; the deck's anchor team was already on this page, resolved by
+`useAnchorTeam` for the empty state's `Issues` doorway, so the mock's rule costs no query at all.
+
+Built: `row.teamId !== anchor.id` draws the tag; the anchor's own rows draw none. With no anchor
+(a reader the deck can point nowhere for) it falls back to B2's spans-teams rule. A team the synced
+list cannot name still draws no tag rather than an id. Three tests: the foreign row tags and the
+anchor row does not, an unnameable team draws nothing and no id leaks, and a single-team list draws
+none at all.
+
+### B18 — Band 2 on the empty state is the title alone
+
+The mock's frame B draws `Inbox` and nothing else — no mono count, no lens. The build had both, and
+side by side the difference is the point: a `0` above the words `Nothing waiting` states the same
+fact twice, and a two-position lens over zero rows is a control that cannot act, which D7 already
+ruled absent rather than disabled for `Mark all read`.
+
+Built: the count and the lens are drawn only when `loaded && rows.length > 0`. The test is `rows`,
+never the lens's own filtered view — a reader who clears their last unread row while looking
+through `Unread` must keep the control that gets them back to `All`, and a test asserts exactly
+that sequence.
+
+### B19 — The keyboard legend stays pinned to the foot of the surface
+
+The mock draws the legend immediately under the last row. Kept at `mt-auto` instead, so it sits at
+the bottom of the list surface at every length. With one notification the mock's placement would
+leave 650px of nothing below a floating footline; pinned, it reads as the surface's own footer.
+Screenshotted at one row, six rows and fifty to check.
+
+### B20 — Differences from `inbox.html` that remain, all deliberate
+
+Recorded after comparing the running page at 1440×900 against the mock rendered from the same HTML:
+
+- **The cursor row draws a focus ring.** The mock draws only the left rail and the tinted ground.
+  The ring is `focus-visible:ring-2 ring-accent ring-inset`, byte-identical to the shipped
+  `IssueRow`; a mock has no keyboard focus to indicate and the product does.
+- **The focused row's key stays `--text-2`** rather than stepping to the accent (B6).
+- **Read rows' phrase, the key column and the empty state's kind line are `--text-2`**, not the
+  mock's `--text-3` (B4).
+- **Band 3 states no cycle facts.** `/inbox` is workspace-level, so the statusline reports only
+  what is true off a team (frame design D3); the mock's frame draws a team day because it is drawn
+  as one team's screen.
+- **The tag draws `Team A`, not `Design`** — fixture, not a difference.
+
+### B21 — What the render pass looked at
+
+Six states at 1440×900 over a seeded account, each screenshotted and read: twelve rows across all
+three day bands; the same list under the `Unread` lens; one row; fifty rows; a `pm_digest_published`
+row alone (empty key column, no actor, no tag); and the empty state. Plus `focused` dark, `warm`
+dark and `editorial` light over the populated list. Nothing read as a hole, a collapsed row or an
+unfilled reserved slot; the 300-character stored title truncated on one line and left the phrase and
+age columns in place. The masthead count and the deck badge were checked on the same screen after a
+keyboard `e` — both 5.
+
+### B22 — A second e2e spec asserted the old copy, and the sweep found it
+
+`pm-digest.spec.ts` reads the reader's inbox to prove a digest notice names no publisher and carries
+no content, and it asserted the row text contained `A cycle digest was shared with you`. That string
+is now the MAILED form; the row draws `Shared with you` beside the team and cycle in their own
+column. Updated to the phrase, with `team.name`, `cycleName`, the three secret-absence assertions
+and the `not.toContain(ADMIN.name)` assertion kept byte-identical — nothing weakened, one string
+moved. `mentions.spec.ts` needed no change: its `${ADMIN.name} mentioned you` is exactly the new
+phrase. The lesson is the sweep itself: "the e2e that drives this page" was not the only e2e reading
+this page's rows.

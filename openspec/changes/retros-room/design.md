@@ -345,6 +345,11 @@ rather than performing it. The absent-section tab walk reversed direction — bo
 of seed door → board — because the room now stacks the board above the panel; it is the same seam in
 the direction the document runs. Both are recorded rather than quietly rewritten.
 
+Which left the stacking itself — D7's whole argument, and now the premise of that walk — pinned by
+nothing but a Playwright tab count. `retro-room.test.tsx` therefore renders the room with the AI band
+present and asserts document order across all four bands: a card, the seed door, the draft band, the
+action. The claim was falsified before it was kept, by inverting the comparison and watching it fail.
+
 ### B9 — The index's quiet line renders under the list as well as over an empty one
 
 The mock draws it beneath its single row, and the spec requires it for a team with none. It renders

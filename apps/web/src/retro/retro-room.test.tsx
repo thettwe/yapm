@@ -2,6 +2,9 @@ import { render, screen, within } from '@testing-library/react'
 import {
   CYCLES_BY_TEAM_QUERY_NAME,
   ISSUES_BY_TEAM_QUERY_NAME,
+  RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME,
+  RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME,
+  RETRO_AI_REACTIONS_MINE_QUERY_NAME,
   RETRO_DETAIL_QUERY_NAME,
   RETRO_DRAFTS_MINE_QUERY_NAME,
   RETRO_VOTES_MINE_QUERY_NAME,
@@ -104,15 +107,39 @@ interface RoomOptions {
   }[]
   readonly actions?: readonly unknown[]
   readonly groups?: readonly unknown[]
+  readonly ai?: boolean
+}
+
+const CITED_ISSUE = {
+  id: 'issue-1',
+  number: 12,
+  title: 'Fix the reconnect loop',
+  status: 'done',
+  issueLinks: [],
 }
 
 function room(options: RoomOptions = {}) {
   const phase = options.phase ?? 'vote'
+  const ai = options.ai === true
   harness.rows = {
-    [TEAMS_ALL_QUERY_NAME]: [TEAM],
+    [TEAMS_ALL_QUERY_NAME]: [{ ...TEAM, aiRetroDraftSince: ai ? 1 : null }],
     [USERS_ALL_QUERY_NAME]: [],
     [CYCLES_BY_TEAM_QUERY_NAME]: [CYCLE],
-    [ISSUES_BY_TEAM_QUERY_NAME]: [],
+    [ISSUES_BY_TEAM_QUERY_NAME]: ai ? [CITED_ISSUE] : [],
+    [RETRO_AI_DRAFTS_BY_RETRO_QUERY_NAME]: ai ? { status: 'ready', createdAt: 1 } : undefined,
+    [RETRO_AI_PROPOSALS_BY_RETRO_QUERY_NAME]: ai
+      ? [
+          {
+            id: 'proposal-1',
+            category: 'win',
+            summary: 'Work merged faster once reviews started sooner.',
+            confidence: 'high',
+            refs: [{ kind: 'issue', id: 'issue-1' }],
+            rank: 0,
+          },
+        ]
+      : [],
+    [RETRO_AI_REACTIONS_MINE_QUERY_NAME]: [],
     [RETRO_DRAFTS_MINE_QUERY_NAME]: [],
     [RETRO_VOTES_MINE_QUERY_NAME]: options.votes ?? [],
     [RETRO_DETAIL_QUERY_NAME]: {
@@ -273,6 +300,46 @@ test('a retro with no cards at all draws no vote ink and no empty card frames', 
   expect(screen.queryAllByTestId('retro-card')).toHaveLength(0)
   expect(screen.queryAllByTestId('retro-vote-pips')).toHaveLength(0)
   expect(screen.getAllByText('No cards')).toHaveLength(COLUMNS.length)
+})
+
+// The stacking IS the argument, not a layout preference: the team's own cards are read before the
+// seeded figures and both before the model's draft. It is also what the e2e tab walk across the
+// absent-AI seam now depends on, and document order is the only place that is checkable without a
+// browser.
+test('the room reads cards, then the seeded figures, then the AI draft, then the actions', () => {
+  room({
+    cards: TWO_CARDS,
+    ai: true,
+    actions: [
+      {
+        id: 'action-1',
+        body: 'Rotate a review buddy each cycle',
+        assigneeId: null,
+        targetCycleId: null,
+        issueId: null,
+        groupId: null,
+        cardId: null,
+        createdAt: 1,
+        issue: null,
+      },
+    ],
+  })
+
+  const order = [
+    screen.getAllByTestId('retro-card')[0],
+    screen.getByTestId('retro-seed-toggle'),
+    screen.getByTestId('retro-ai-panel'),
+    screen.getByTestId('retro-action'),
+  ]
+  for (const node of order) expect(node).toBeInTheDocument()
+  for (let i = 0; i < order.length - 1; i += 1) {
+    const before = order[i] as HTMLElement
+    const after = order[i + 1] as HTMLElement
+    expect(
+      before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING,
+      `${before.dataset.testid ?? 'card'} precedes ${after.dataset.testid}`,
+    ).toBeTruthy()
+  }
 })
 
 test('the room foot states only what the phase machine enforces', () => {

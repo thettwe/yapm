@@ -20,6 +20,13 @@ export function Authenticated({ children }: { children: ReactNode }) {
   }
 
   if (status === 'logged-out') {
+    // A stale `logged-out` with a failed re-mint on top of it must be a visible retry surface,
+    // not a redirect: `/login` sends a live session straight back here, and two routes that
+    // Navigate at each other starve the renderer so completely that no timer or fetch callback
+    // ever runs again. Only a settled, clean `logged-out` may steer the router.
+    if (unavailable) {
+      return <SyncUnavailable />
+    }
     return <Navigate to="/login" />
   }
 

@@ -338,9 +338,63 @@ marks, drawn inline on the same grid.
 rather than the older `'This team no longer exists.' / 'Loading team…'` pair the un-rebuilt pages
 still carry — task 4.10's label register, matching the most recently rebuilt destination.
 
-**Not done in this pass, and owed:** the tests (§5), the documentation (§6) and the gates (§7) —
-including the 1440×900 render of the page and of each degenerate state, and the task-7.6 decision
-about whether the carry chain survives contact with a real screen. The build ran
-`typecheck`, `biome ci`, the unit/component suites and `check-boundaries` only; `apps/web/e2e/cycles.spec.ts`
-is **known to fail** as written (it drives `cycle-issue-row`, the cycle rail and the progressbar,
-all three of which this change removes) and is §5.10's to rewrite with stronger assertions.
+### Test-and-docs pass — three defects the tests and the contrast file found
+
+**The latest completed cycle's ledger counted its own carried-out work as `added`.** Writing the
+§5.1 fixture surfaced it: `cycle.complete` re-stamps `cycle_assigned_at` with the moment the issue
+LEFT, so an issue read against the cycle it left always satisfies `cycleAssignedAt > startDate` —
+"added after the cycle started", the exact inverse of the truth. A three-cycle fixture printed a
+`2/1` ledger, a fraction above 1. `buildRow` now normalises each carried-out issue's stamp to null
+before the band is built, so it counts as committed. Whether it was committed to that cycle or
+added to it mid-flight is a distinction the overwrite destroyed; committed is the honest reading of
+the pair, and it is the same call `metrics/scope.ts` already makes by excluding carried-out issues
+from `addedMidCycle` entirely — a comment in that file names this trap in so many words.
+
+**The ledger's ratio is now over the committed set alone**, numerator and denominator, which is
+what the mock's `8/12` counts. It was `landed/committed`, mixing an all-origins numerator with a
+committed-only denominator: an added issue that landed pushed the numerator past the denominator
+and made `2/2` mean "one of the two committed issues is still open". The label follows
+(`1 landed of 2 committed, 1 added after the cycle started, of which 1 landed`). And a cycle that
+committed to nothing at all — created already running, then filled, which is what the e2e does —
+reads `3 added` rather than `0/0`, a ratio about nothing.
+
+**Three inks moved, each because `contrast.test.ts` measured them rather than because the mock
+changed its mind.** (1) The selected register row's mono key was `--accent-strong`, which this file
+already records at 3.84–4.38 on `--bg-selected` — the issue row hit exactly this and resolved it
+the same way, so the key takes `--text-1` selected and `--text-2` at rest. (2) The register's mono
+dates were `--text-3`, which measures 2.43 on editorial light's `--bg` — under the NON-text bar,
+and a date range is a fact the row states; they take `--text-2`, the trade the reality rail's mono
+fact line already made. (3) The deep-carry count was `--status-in-progress-ink` on the amber wash
+it is drawn in, which measures 4.42 in focused light; the wash and the left rail carry the depth,
+so the count keeps a readable ink. The chain's two 9.5px labels moved off `--text-3` and
+`--accent-strong` for the same reason. Each is pinned as a bound that can fail, not deleted.
+
+**`--status-backlog` is recorded as an inherited exemption, not fixed here.** The upcoming cycle's
+dashed ring measures 2.47–4.98 on `--bg` — under 3:1 in the two lightest presets. It is the same
+token at the same size the backlog issue glyph has always used, so this page adopts a treatment it
+did not introduce; the assertion records the bound it actually holds and the reason it is
+survivable (the glyph is a distinct SHAPE carrying the text label `Upcoming cycle`). Retuning the
+palette is a product decision with six presets attached, not this change's to take.
+
+**No e2e assertion was weakened.** `cycles.spec.ts` moved because the surface it drives moved: the
+rollover test now asserts the issue appears in CARRIED IN with `carried 1×` and the band naming the
+cycle it left — three claims where there was one; the theme test re-anchors on the register row and
+its glyph label, which is present in every state including the issue-less cycle where the ledger
+correctly folds and the old progressbar probe would have proved nothing; and the keyboard test
+drives register rows (focus, `Enter`, `ArrowDown`, `Space`) plus the carried row, where it drove
+the rail. `retro.spec.ts`, `digest.spec.ts` and `pm-digest.spec.ts` are untouched.
+
+**The component tests activate rows by click, not by `Enter`.** jsdom does not synthesise a button's
+default activation from a `keydown`, and this repo has no `@testing-library/user-event`. The rows
+are real `<button>`s, so `Enter`/`Space` IS the platform's activation and a click is the same code
+path; what the component test can hold on its own is the part the page adds — arrow movement over
+the register's order — and the real key presses are driven in `cycles.spec.ts`.
+
+**Not done in this pass, and owed:** the render gates (§7.4–7.6) — the 1440×900 render of the page
+and of each degenerate state, and with it the task-7.6 decision about whether the carry chain
+survives contact with a real screen. This pass ran `typecheck`, `biome ci`, the unit and component
+suites, `check-boundaries` and the docs build; the full `build`, the compose smoke test and
+Playwright run in CI on the push. Nothing here substitutes for looking at the page: the degenerate
+states are covered by tests (a team with no cycles, a first cycle, an issue-less cycle, a cycle
+that carried nothing, a cycle with no digest) and tests are exactly what the triage build's empty
+decision panel passed.

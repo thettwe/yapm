@@ -313,11 +313,17 @@ function RegisterRow({
       <span className="flex">
         <CycleGlyph kind={row.glyph} className="size-[15px]" />
       </span>
-      <span className={cn('font-mono text-xs', selected ? 'text-accent-strong' : 'text-text-3')}>
+      {/* The mock inks the selected key with the accent; `--accent-strong` measures 3.84–4.38 on
+          `--bg-selected` in two presets, so the key follows the issue row's own resolution — the
+          ink steps to `--text-1` and the rail plus the tint carry the state. */}
+      <span className={cn('font-mono text-xs', selected ? 'text-text-1' : 'text-text-2')}>
         {row.key}
       </span>
       <span className="truncate text-[13.5px] text-text-1">{row.name}</span>
-      <span className="font-mono text-[11px] text-text-3">
+      {/* 11px mono dates are a FACT on a dense row, so they take `--text-2` rather than the mock's
+          `--text-3`, which measures 2.43–3.70 on the grounds a row is painted. Same trade the
+          reality rail's mono fact line already made. */}
+      <span className="font-mono text-[11px] text-text-2">
         {formatCycleRange(row.startDate, row.endDate)}
       </span>
       {row.ledger === null ? (
@@ -501,10 +507,13 @@ function CarriedRow({
           labelled={labelled}
         />
       </span>
+      {/* The deep row's count is NOT amber ink on the amber wash: `--status-in-progress-ink`
+          measures 4.42 against `--carry-soft` in focused light, under AA. The wash and the left
+          rail carry the depth; the count carries the fact, so the count keeps the readable ink. */}
       <span
         className={cn(
           'text-right font-mono text-[11.5px]',
-          row.deep ? 'font-medium text-status-in-progress-ink' : 'text-text-2',
+          row.deep ? 'font-medium text-text-1' : 'text-text-2',
         )}
       >
         {row.fact}

@@ -157,13 +157,17 @@ export function CarryChain({
           />
         ),
       )}
+      {/* The two labels are 9.5px type, so they answer to the TEXT bar rather than the drawing's:
+          `--text-3` measures 2.80–3.70 on the grounds a row is painted and `--accent-strong` ~4.44
+          on `--bg`, both under AA. The nodes carry the notation in colour and shape; the labels
+          carry it in words, and a word a reader has to squint at is not carrying anything. */}
       {labelled && origin !== null && originLabel !== null ? (
         <text
           x={origin.x}
           y={CHAIN_CY + 16}
           textAnchor="middle"
           fontSize="9.5"
-          fill="var(--text-3)"
+          fill="var(--text-2)"
           className="font-mono"
         >
           {originLabel}
@@ -175,7 +179,7 @@ export function CarryChain({
           y={CHAIN_CY + 16}
           textAnchor="middle"
           fontSize="9.5"
-          fill="var(--accent-strong)"
+          fill="var(--text-2)"
           className="font-mono"
         >
           now

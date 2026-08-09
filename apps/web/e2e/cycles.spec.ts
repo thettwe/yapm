@@ -3,7 +3,8 @@ import { ADMIN, ensureAccount, stop } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
-const CYCLE_ROW = '[data-testid="cycle-issue-row"]'
+const REGISTER_ROW = '[data-testid="register-row"]'
+const CARRIED_ROW = '[data-testid="carried-row"]'
 const PRESETS = ['warm', 'focused', 'editorial'] as const
 const MODES = ['light', 'dark'] as const
 
@@ -100,19 +101,20 @@ test('create a cycle, assign an issue, and complete it rolls the issue to the ne
   await page.getByRole('menuitem', { name: new RegExp(cycleA) }).click()
   await page.keyboard.press('Escape')
 
-  // The issue appears under cycle A in the Cycles view.
+  // Cycle A is a row in the register, and the issue assigned to it is counted in its ledger.
   await openCycles(page)
-  await page.getByRole('button', { name: new RegExp(cycleA) }).click()
-  await expect(page.locator(CYCLE_ROW).filter({ hasText: issueTitle })).toBeVisible({
-    timeout: 20_000,
-  })
+  const rowA = page.locator(REGISTER_ROW).filter({ hasText: cycleA })
+  await rowA.click()
+  await expect(rowA.getByTestId('register-ledger')).toBeVisible({ timeout: 20_000 })
 
-  // Complete cycle A: the unfinished issue rolls to cycle B.
+  // Complete cycle A: the unfinished issue rolls to cycle B, and the register is the only surface
+  // that says the issue CROSSED a boundary rather than merely sitting under a different cycle.
   await page.getByTestId('complete-cycle').click()
-  await page.getByRole('button', { name: new RegExp(cycleB) }).click()
-  await expect(page.locator(CYCLE_ROW).filter({ hasText: issueTitle })).toBeVisible({
-    timeout: 20_000,
-  })
+  await page.locator(REGISTER_ROW).filter({ hasText: cycleB }).click()
+  const carried = page.locator(CARRIED_ROW).filter({ hasText: issueTitle })
+  await expect(carried).toBeVisible({ timeout: 20_000 })
+  await expect(carried).toContainText('carried 1×')
+  await expect(page.getByTestId('carried-in')).toContainText(cycleA)
 })
 
 test('the Cycles view is correct across every preset in light and dark', async ({ page }) => {
@@ -136,7 +138,10 @@ test('the Cycles view is correct across every preset in light and dark', async (
       await expect(page.locator('html')).toHaveAttribute('data-theme', preset)
       const isDark = await page.locator('html').evaluate((el) => el.classList.contains('dark'))
       expect(isDark).toBe(mode === 'dark')
-      await expect(page.getByRole('progressbar', { name: 'Cycle progress' })).toBeVisible({
+      // The register row and its status glyph, which are present in EVERY state — including a
+      // cycle holding no issues, where the ledger correctly folds and would probe nothing.
+      await expect(page.locator(REGISTER_ROW).first()).toBeVisible({ timeout: 20_000 })
+      await expect(page.getByRole('img', { name: /cycle$/ }).first()).toBeVisible({
         timeout: 20_000,
       })
     }
@@ -159,38 +164,35 @@ test('the Cycles view is fully keyboard-operable', async ({ page }) => {
 
   await openCycles(page)
 
-  // The rail is keyboard-operable: focus a cycle button and feature it with Enter.
-  const railB = page.getByRole('button', { name: new RegExp(cycleB) })
-  await railB.focus()
+  // The register is keyboard-operable: focus a row and select it with Enter.
+  const rowB = page.locator(REGISTER_ROW).filter({ hasText: cycleB })
+  const rowA = page.locator(REGISTER_ROW).filter({ hasText: cycleA })
+  await rowB.focus()
   await page.keyboard.press('Enter')
-  await expect(railB).toHaveAttribute('aria-current', 'true')
+  await expect(rowB).toHaveAttribute('aria-current', 'true')
 
-  // Space activates a rail button too; feature cycle A (which holds the issue).
-  const railA = page.getByRole('button', { name: new RegExp(cycleA) })
-  await railA.focus()
+  // Arrow keys move between rows over the register's own order (newest first, so cycle A sits
+  // below cycle B), and Space selects the row they land on.
+  await page.keyboard.press('ArrowDown')
+  await expect(rowA).toBeFocused()
   await page.keyboard.press('Space')
-  await expect(railA).toHaveAttribute('aria-current', 'true')
+  await expect(rowA).toHaveAttribute('aria-current', 'true')
 
-  // Keyboard-open a listed issue: focus its cycle row and press Enter — the detail opens.
-  const cycleRow = page.locator(CYCLE_ROW).filter({ hasText: issueTitle })
-  await expect(cycleRow).toBeVisible({ timeout: 20_000 })
-  await cycleRow.focus()
-  await page.keyboard.press('Enter')
-  await expect(page.getByRole('dialog', { name: 'Issue detail' })).toBeVisible({ timeout: 20_000 })
-  await page.keyboard.press('Escape')
-
-  // Complete the featured cycle with the keyboard, then confirm the issue rolled to cycle B.
-  await openCycles(page)
-  await railA.focus()
-  await page.keyboard.press('Enter')
+  // Complete cycle A with the keyboard, then select cycle B and read what carried into it.
   const complete = page.getByTestId('complete-cycle')
   await complete.focus()
   await page.keyboard.press('Enter')
-  await railB.focus()
+  await rowB.focus()
   await page.keyboard.press('Enter')
-  await expect(page.locator(CYCLE_ROW).filter({ hasText: issueTitle })).toBeVisible({
-    timeout: 20_000,
-  })
+
+  // Keyboard-open the carried issue: focus its row and press Enter — the detail opens.
+  const carried = page.locator(CARRIED_ROW).filter({ hasText: issueTitle })
+  await expect(carried).toBeVisible({ timeout: 20_000 })
+  await expect(carried).toContainText('carried 1×')
+  await carried.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('dialog', { name: 'Issue detail' })).toBeVisible({ timeout: 20_000 })
+  await page.keyboard.press('Escape')
 })
 
 test('cycle grouping and filtering in the list are keyboard-operable', async ({ page }) => {

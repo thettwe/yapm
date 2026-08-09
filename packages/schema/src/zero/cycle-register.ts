@@ -180,7 +180,10 @@ function buildRow(
   const pointingIds = new Set(pointing.map((issue) => issue.id))
   const ledgerIssues =
     denominatorKnown && cycle.status === 'completed'
-      ? [...pointing, ...carriedOut.filter((issue) => !pointingIds.has(issue.id))]
+      ? [
+          ...pointing,
+          ...carriedOut.filter((issue) => !pointingIds.has(issue.id)).map(asCommittedCarryOut),
+        ]
       : pointing
 
   const digest = input.digests.find((row) => (row.cycleId ?? null) === cycle.id) ?? null
@@ -202,6 +205,16 @@ function buildRow(
   }
 }
 
+// `cycle.complete` re-stamps `cycle_assigned_at` with the moment the issue LEFT, so read against
+// the cycle it left, every carried-out issue would classify as "added after the cycle started" —
+// the exact inverse of the truth, and a ledger where `landed` can exceed `committed`. Whether it
+// was committed to that cycle or added to it mid-flight is a distinction the overwrite destroyed;
+// committed is the honest reading of the pair, and it is the same call `metrics/scope.ts` makes by
+// excluding carried-out issues from `addedMidCycle` entirely.
+function asCommittedCarryOut(issue: CycleRegisterIssueRow): CycleRegisterIssueRow {
+  return { ...issue, cycleAssignedAt: null }
+}
+
 function buildLedger(
   issues: readonly CycleRegisterIssueRow[],
   cycleStartDate: number,
@@ -216,16 +229,50 @@ function buildLedger(
 
   const addedClause = scope.added === 0 ? '' : `, ${scope.added} added after the cycle started`
 
+  if (!denominatorKnown) {
+    return {
+      denominatorKnown,
+      committed: scope.committed,
+      landed: scope.landed,
+      added: scope.added,
+      band,
+      reading: `${scope.landed} landed`,
+      label: `${scope.landed} landed${addedClause}; the committed total is no longer reconstructible`,
+    }
+  }
+
+  // The ratio is over the COMMITTED set alone, numerator and denominator, which is what the mock's
+  // `8/12` counts. Work added after the cycle started is drawn as its own blocks and named in the
+  // label; folding it into the numerator would credit the cycle with landing work it never
+  // committed to, and can print a fraction above 1.
+  const open = band.filter((block) => block === 'open').length
+  const committedLanded = scope.committed - open
+  const addedLanded = scope.landed - committedLanded
+
+  // A cycle every issue arrived at after it started has no committed set, and `0/0` beside a drawn
+  // block is a ratio about nothing. The row reads the scope it actually has.
+  if (scope.committed === 0) {
+    return {
+      denominatorKnown,
+      committed: 0,
+      landed: scope.landed,
+      added: scope.added,
+      band,
+      reading: `${scope.added} added`,
+      label: `${scope.added} added after the cycle started, ${scope.landed} of them landed`,
+    }
+  }
+
   return {
     denominatorKnown,
     committed: scope.committed,
     landed: scope.landed,
     added: scope.added,
     band,
-    reading: denominatorKnown ? `${scope.landed}/${scope.committed}` : `${scope.landed} landed`,
-    label: denominatorKnown
-      ? `${scope.landed} landed of ${scope.committed} committed${addedClause}`
-      : `${scope.landed} landed; the committed total is no longer reconstructible`,
+    reading: `${committedLanded}/${scope.committed}`,
+    label: `${committedLanded} landed of ${scope.committed} committed${addedClause}${
+      addedLanded === 0 ? '' : `, of which ${addedLanded} landed`
+    }`,
   }
 }
 

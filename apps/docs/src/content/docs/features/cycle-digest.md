@@ -6,7 +6,8 @@ description: A team-internal, evidence-linked AI summary of a completed cycle, w
 The **cycle digest** is a short, team-internal summary of what a just-completed cycle delivered:
 a TL;DR headline, then evidence-linked items grouped into sections (what shipped, carried work,
 notable risks). It appears on the [Cycles](/features/cycles/) view for the team that owns the
-cycle. Every claim links to the exact work-graph entity it came from — the issue, PR, CI check, or
+cycle, under **THE LAST REPORT**, for whichever cycle is selected in the register — and the
+register itself marks a cycle whose digest is ready with a `Cycle report ·` chip. Every claim links to the exact work-graph entity it came from — the issue, PR, CI check, or
 deploy — so you verify it with one click rather than taking it on faith.
 
 The digest is a read-only summary for the **team**, and it never leaves the team boundary. The

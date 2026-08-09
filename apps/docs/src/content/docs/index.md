@@ -24,7 +24,8 @@ runs as three containers you own.
 - [Board](/features/board/) — a keyboard-first kanban of your team's issues, grouped into the six
   fixed status columns. A **lens on Issues**, not a destination of its own, at
   `/teams/<teamId>/board`.
-- [Cycles](/features/cycles/) — time-boxed iterations for a team, with automatic rollover of
+- [Cycles](/features/cycles/) — the register of a team's cycles: one row per cycle with its scope
+  ledger and artifacts, the work that carried across a boundary, and automatic rollover of
   unfinished work when a cycle ends, at `/teams/<teamId>/cycles`.
 - [Triage](/features/triage/) — an inbox for incoming, unsorted issues with keyboard-first
   accept, decline, and route, at `/teams/<teamId>/triage`.

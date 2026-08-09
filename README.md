@@ -102,7 +102,10 @@ rather than apologizing. Members management is intact behind a Members doorway.
 - Where the board and git disagree, a callout whose evidence is the two clocks side by side, and
   whose ⏎ takes the one repair the board can honestly make.
 - A kanban board.
-- Time-boxed **cycles** with a progress view and automatic rollover of unfinished work.
+- Time-boxed **cycles** with automatic rollover of unfinished work, drawn as a **register**: one
+  row per cycle with its scope ledger and its artifacts, and the work that survived a cycle
+  boundary stated as a carry chain. No burndown — a cycle keeps no status history, and the page
+  says so rather than drawing a line it cannot support.
 - A keyboard-first **triage inbox** for incoming issues: one queue with no fold, the issue under
   decision unfolded in place with its own words, and three verdicts as keys — accept, decline, or
   route (status, assignee, cycle, project and labels in one write). All of it **without a seventh

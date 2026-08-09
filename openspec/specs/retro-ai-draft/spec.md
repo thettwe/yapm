@@ -1,8 +1,14 @@
 # retro-ai-draft Specification
 
 ## Purpose
-TBD - created by archiving change retro-ai-draft. Update Purpose after archive.
+An opt-in AI reading of the work graph that arrives beside the team's own retro, never inside it:
+off for every team until that team turns it on, generated lazily at the reveal, and fed an
+identity-free input that reads no retro content. Every proposal is typed, capped by a validator and
+carries a citation to the rows it came from — a proposal that loses its citation is not drawn.
+Archived from change retro-ai-draft and extended by retros-room (PR #45).
+
 ## Requirements
+
 ### Requirement: AI participation in a team's retro is off until that team opts in
 
 The AI retro draft SHALL be disabled for every team by default, including newly created teams, and
@@ -405,6 +411,18 @@ exists and is either in progress or ready with at least one proposal; a run that
 panel as the raw-evidence fallback. The section SHALL state plainly that its content is AI-drafted
 and, until the team has decided, that it has not been agreed by the team.
 
+The section SHALL be placed **below the retro's own cards**, so the team's own material is read
+first and the draft is subordinate by position and not only by label.
+
+The section SHALL state on its own surface what its input was allowed to read — that it reads the
+work graph only and never a card — because that sentence is the table allowlist stated in words,
+and a reader cannot otherwise tell an anonymous board was not the model's input.
+
+Every rendered proposal SHALL draw at least one of its citations on the surface: a work-graph
+entity, or a yapm-computed value carrying the existing explanation affordance where the value is
+derived. A proposal with no surviving citation SHALL NOT be rendered. No figure SHALL be rendered
+as the model's own prose — a proposal points at a computed value, it never states one.
+
 Every proposal's evidence references SHALL be activatable: a work-graph reference SHALL open the
 entity, and a metric reference SHALL reveal the seeded panel and move focus to that metric's tile.
 Where the retro's phase permits it, each proposal SHALL additionally carry the caller's own
@@ -443,6 +461,26 @@ network, and neither SHALL recording a reaction.
 
 - **WHEN** proposals are shown before the team's decision has been recorded
 - **THEN** the section states that they are AI-drafted and not agreed, so no reader mistakes them for a team conclusion; once the decision is recorded, each proposal shows what the team decided
+
+#### Scenario: The draft is read after the room's own cards
+
+- **WHEN** a member reads a retro whose board holds cards and whose draft is ready
+- **THEN** the team's own cards are placed before the draft section on the surface, and the draft carries its unratified label at its head
+
+#### Scenario: The section states what it was allowed to read
+
+- **WHEN** a member reads a ready draft section
+- **THEN** the section states on the surface that it reads the work graph only and never a card, which is the same boundary its input assembly's table allowlist enforces
+
+#### Scenario: A proposal shows its citation, never its own number
+
+- **WHEN** a proposal derived from a computed value is rendered
+- **THEN** the value is drawn as a citation chip carrying its explanation affordance, and the proposal's own sentence contains no figure the reader cannot trace to a citation
+
+#### Scenario: An uncited proposal is not drawn
+
+- **WHEN** a proposal survives to the surface with no reference the reader can activate
+- **THEN** it is not rendered at all, and the remaining proposals render unchanged
 
 ### Requirement: The prior cycle's agreed improvements are reported back, and absent when there are none
 
@@ -568,4 +606,3 @@ anyone.
 
 - **WHEN** a draft is generated for a team with previously rejected proposals
 - **THEN** the proposal table is not among the tables the fact assembly reads and the request contains nothing about a previous verdict
-

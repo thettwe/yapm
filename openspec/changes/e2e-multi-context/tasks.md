@@ -83,7 +83,13 @@
       reason for any difference.
 - [ ] 6.3 Run the full Playwright suite **more than once** and report every run's result, not the
       best one.
-- [ ] 6.4 Run `pnpm turbo lint typecheck test build` and the compose smoke test, quoting the output.
+- [x] 6.4 Run `pnpm turbo lint typecheck test build` and the compose smoke test, quoting the output.
+      *(green on CI run 31296354937, head e824ead: lint/typecheck/test/build 2m32s, compose smoke
+      4m39s. **Read the caveat**: that run gated a docs-only diff — `git diff --stat dde13e5..6aa543d`
+      is six files, all under `openspec/changes/e2e-multi-context/`, zero product or test code. The
+      gate is literally green on the merged head, which is the only reason this box is ticked; it
+      proves nothing about a fix that does not exist. Every other box in this file is genuinely
+      undone — PR #51 merged the proposal only.)*
 
 ## 7. Documentation
 

@@ -1,8 +1,14 @@
 # triage Specification
 
 ## Purpose
-TBD - created by archiving change triage. Update Purpose after archive.
+The inbox where unsorted work is decided, one issue at a time: triage as an orthogonal flag rather
+than a seventh status, a queue whose head arrives unfolded into a decision panel, and three verdicts
+under the fingers. The panel is the height of what it has — a description-less issue folds rather
+than reserving a measure, because the product's grammar for a fact a row does not carry is absence.
+Archived from change triage and extended by triage-daylight and render-defects-cleanup (PR #49).
+
 ## Requirements
+
 ### Requirement: Triage is an orthogonal state, never a seventh status
 
 The system SHALL model triage as an orthogonal boolean `needs_triage` on an issue (`NOT NULL DEFAULT false`), separate from the fixed six statuses, which remain unchanged and non-configurable. An issue awaiting triage SHALL still carry one of the six statuses. No status SHALL be added or made configurable.
@@ -174,6 +180,10 @@ Exactly one waiting issue at a time SHALL unfold, in place and below its own row
 
 The unfolded issue SHALL be the issue the verdict keys act on, so the panel and the keys can never name different issues. On arrival that SHALL be the head of the queue — the oldest waiting issue — and moving the keyboard selection SHALL move the panel with it.
 
+The panel SHALL be **the height of what it has**. When the unfolded issue carries no description, the panel SHALL NOT reserve the prose measure or the height that a description would have occupied: it SHALL fold to a single band carrying the provenance line, any attachment chips, and the verdicts, and SHALL NOT draw an empty region with the verdicts stranded beside it. No placeholder sentence SHALL stand in for the missing description — the product's grammar for a fact a row does not carry is absence, the same grammar the reality track and the vertical rail already follow.
+
+Folding SHALL cost the reader nothing: every verdict, the movement hint and the route transient SHALL remain present, keyboard-reachable and named exactly as they are when a description is drawn.
+
 The panel SHALL render entirely from rows already synced and SHALL introduce no new named query.
 
 Work-graph placement: a rendering surface over the inbox's own rows plus the existing per-issue attachments query. Permission story: read-only; the panel writes nothing.
@@ -192,6 +202,16 @@ Work-graph placement: a rendering surface over the inbox's own rows plus the exi
 
 - **WHEN** the unfolded issue has neither a description nor an attachment
 - **THEN** the panel states no placeholder text for either and the verdicts remain available
+
+#### Scenario: A terse issue folds rather than reserving a measure
+
+- **WHEN** the unfolded issue carries no description
+- **THEN** the panel draws no prose region at all, folds to a single band carrying the provenance line and the verdicts, and its drawn height is the height of that band rather than the height a description would have taken
+
+#### Scenario: Folding takes nothing away
+
+- **WHEN** a member reaches the folded panel of a description-less issue by keyboard
+- **THEN** Accept, Route, Decline, the movement hint and the route transient are all present and operable, each with the same name and key it carries on a panel that draws a description
 
 ### Requirement: The three verdicts are named keys, and Route opens the page's one transient
 
@@ -240,4 +260,3 @@ Work-graph placement: a rendering state of the existing inbox query. Permission 
 
 - **WHEN** a member accepts the last waiting issue
 - **THEN** the empty state that replaces the queue makes no statement about who cleared it or when
-

@@ -87,7 +87,7 @@ async function createProject(page: Page, name: string): Promise<void> {
   await page.getByTestId('new-project').click()
   await page.getByLabel('Project name').fill(name)
   await page.getByRole('button', { name: 'Create project' }).click()
-  await expect(page.getByTestId('project-rail-item').filter({ hasText: name })).toBeVisible({
+  await expect(page.getByTestId('project-row').filter({ hasText: name })).toBeVisible({
     timeout: 20_000,
   })
 }
@@ -182,7 +182,7 @@ test('route a triage issue applies fields, places it in a project, and clears th
 
   // …and in the project the same single write placed it in.
   await goToMore(page, 'Projects')
-  await page.getByTestId('project-rail-item').filter({ hasText: projectName }).click()
+  await page.getByTestId('project-row').filter({ hasText: projectName }).click()
   await expect(page.locator(PROJECT_ISSUE_ROW).filter({ hasText: title })).toBeVisible({
     timeout: 20_000,
   })

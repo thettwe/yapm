@@ -220,11 +220,15 @@ export const queries = defineQueries({
     // `teamScoped` predicate so a workspace-level project query can NEVER widen issue reads past
     // the caller's teams — a member only ever sees (and computes progress over) the project's
     // issues in teams they belong to. `needsTriage` issues are held out, matching the list.
+    //
+    // `cycle` on the related issues (and `labels` + the linked-delivery subtree on `get`) hang off
+    // issues the `teamScoped` predicate has ALREADY admitted, and every one of those rows carries
+    // the issue's own `team_id`, so neither relation widens a read past the team boundary.
     all: defineQuery(({ ctx }) => {
       const q = zql.project
         .related('lead')
         .related('issues', (issues) =>
-          teamScoped(issues.where('needsTriage', false).related('assignee'), ctx),
+          teamScoped(issues.where('needsTriage', false).related('assignee').related('cycle'), ctx),
         )
         .orderBy('createdAt', 'asc')
       return isMember(ctx) ? q : denyAll(q)
@@ -234,7 +238,16 @@ export const queries = defineQueries({
         .where('id', args.id)
         .related('lead')
         .related('issues', (issues) =>
-          teamScoped(issues.where('needsTriage', false).related('assignee').related('team'), ctx),
+          teamScoped(
+            withLinkedDelivery(
+              issues
+                .where('needsTriage', false)
+                .related('assignee')
+                .related('team')
+                .related('labels'),
+            ),
+            ctx,
+          ),
         )
       return (isMember(ctx) ? q : denyAll(q)).one()
     }),

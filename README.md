@@ -107,8 +107,13 @@ rather than apologizing. Members management is intact behind a Members doorway.
   decision unfolded in place with its own words, and three verdicts as keys — accept, decline, or
   route (status, assignee, cycle, project and labels in one write). All of it **without a seventh
   status**.
-- Lightweight, workspace-level projects with computed progress, and a keyboard-first roadmap
-  timeline across teams.
+- Workspace-level **projects** that read as a progress reading rather than a plan: each row's
+  status, the teams its issues came from, a done meter over the issues you can see, and
+  `Past target — N open` where the date has gone by. Nothing is entered; it is all computed from
+  the issues.
+- A **roadmap** over a real time axis carrying the team's stored cycle boundaries — and **no bar**,
+  because a project stores a target and no start, so a left edge would be an invention. The page
+  says so on itself.
 
 ### Writing, editing, and files
 

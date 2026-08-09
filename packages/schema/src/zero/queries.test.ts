@@ -69,6 +69,16 @@ function astOfArgs<A>(
 
 const TEAM_ID = '019f8f00-0000-7000-8000-0000000000aa'
 
+// The relationship names hanging off a project query's related `issues` subquery.
+function issueRelationAliases(ast: QueryAst): string[] {
+  const related = (ast as { related?: { subquery: { alias?: string; related?: unknown } }[] })
+    .related
+  const issues = related?.find((r) => JSON.stringify(r.subquery).includes('needsTriage'))
+  const nested = (issues?.subquery as { related?: { subquery: { alias?: string } }[] } | undefined)
+    ?.related
+  return (nested ?? []).map((r) => r.subquery.alias ?? '')
+}
+
 describe('the synced query registry', () => {
   it('names every query the way the server resolves it', () => {
     for (const [name, query] of [
@@ -159,6 +169,20 @@ describe('projects.all is workspace-level, member-gated', () => {
     )
     expect(issuesRelated).toBeDefined()
     expect(JSON.stringify(issuesRelated?.subquery)).toContain(MEMBER.userID)
+  })
+
+  // The two relations the daylight surfaces read, asserted rather than assumed: the roadmap
+  // positions an issue's mark from its OWN cycle's stored dates, and the project page draws the
+  // shared reality vocabulary. Both hang off issues the team-scoped predicate already admitted.
+  it('relates each issue cycle in projects.all so a mark can be positioned from real dates', () => {
+    expect(issueRelationAliases(astOf(queries.projects.all, MEMBER))).toContain('cycle')
+  })
+
+  it('relates labels and the linked-delivery subtree in projects.get', () => {
+    const id = '019f8f00-0000-7000-8000-0000000000bb'
+    const aliases = issueRelationAliases(astOfArgs(queries.projects.get, { id }, MEMBER))
+    expect(aliases).toContain('labels')
+    expect(aliases).toContain('issueLinks')
   })
 })
 

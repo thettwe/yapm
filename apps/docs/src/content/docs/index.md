@@ -28,8 +28,9 @@ runs as three containers you own.
   unfinished work when a cycle ends, at `/teams/<teamId>/cycles`.
 - [Triage](/features/triage/) — an inbox for incoming, unsorted issues with keyboard-first
   accept, decline, and route, at `/teams/<teamId>/triage`.
-- [Projects & roadmap](/features/projects/) — lightweight, workspace-level projects with
-  computed progress and a keyboard-first roadmap timeline across teams, at
+- [Projects & roadmap](/features/projects/) — workspace-level projects read as a progress
+  reading computed from their issues, and a roadmap over a real time axis carrying the team's
+  stored cycle boundaries — and no bar, because a project stores no start date. At
   `/teams/<teamId>/projects` and `/teams/<teamId>/roadmap`.
 - [The app frame](/features/app-frame/) — every page sits in the same three bands: a 48px deck
   identical everywhere, the page's own masthead, and a 32px statusline. Six destinations, one

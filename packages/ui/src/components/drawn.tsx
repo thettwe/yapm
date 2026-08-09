@@ -1,4 +1,5 @@
 import { cn } from '@yapm/ui/lib/utils'
+import type { ReactNode } from 'react'
 
 // The drawn band vocabulary: static inline drawings, no motion, every color a theme token. These
 // took plain structural props from the day they were written, and now have three consumers rather
@@ -75,6 +76,85 @@ export function TickBar({ ticks }: { ticks: readonly boolean[] }) {
         />
       ))}
     </span>
+  )
+}
+
+// The drawn marks: one 20-unit grid, one 1.6 round-cap stroke, `currentColor` throughout, and
+// `aria-hidden` because every one of them stands beside the word it reinforces. They live here
+// rather than beside their consumer for the reason `reality-vocabulary` gives — one shared module
+// for the drawn primitives — and because the retro mark is the `more▾` menu's own glyph.
+function Mark({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      data-slot="drawn-mark"
+      className={cn('size-4 flex-none', className)}
+    >
+      {children}
+    </svg>
+  )
+}
+
+// Anonymity: a figure whose shoulders are NOT drawn in. The dash is the whole argument — there is
+// no author row behind the card, so the mark refuses to close the shape.
+export function AnonymityMark({ className }: { className?: string }) {
+  return (
+    <Mark className={className}>
+      <circle cx="10" cy="6.8" r="3.2" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M3.6 16.8 C 4.6 13.1, 15.4 13.1, 16.4 16.8"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeDasharray="2.4 3.2"
+      />
+    </Mark>
+  )
+}
+
+// The retro mark: the loop that comes back on itself, `ia.html`'s `g-retro`.
+export function RetroMark({ className }: { className?: string }) {
+  return (
+    <Mark className={className}>
+      <path
+        d="M14.5 4.7 A7 7 0 1 0 16.9 8.8"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M15.4 10.4 L16.9 8.6 L18.6 10.2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Mark>
+  )
+}
+
+// The draft mark: two sparks on the grid, the second quieter. Ours rather than a vendor icon set's,
+// so it sits at the same weight as everything else drawn beside it.
+export function DraftMark({ className }: { className?: string }) {
+  return (
+    <Mark className={className}>
+      <path
+        d="M8 3.4 V8.4 M5 5.4 L11 8.6 M11 5.4 L5 8.6"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M14.4 11.2 V15.4 M12.6 12.4 L16.2 14.2 M16.2 12.4 L12.6 14.2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeOpacity=".55"
+      />
+    </Mark>
   )
 }
 

@@ -52,6 +52,12 @@ sixty times. Because such a slot states nothing, it states nothing to a screen r
 not announced as an image and carries no label. A track that draws **any** fact is one image to a
 screen reader, labelled with the facts it actually draws ("PR merged, CI passing, Deployed").
 
+The same rule holds off the track. A retro card that has received **no dots** draws no count, no
+pip and no retract control during `vote` — its slot keeps its measure so the column does not shift
+as dots land, and the control that casts the first dot is still there. A mono `0` beside five hollow
+pips would be reality ink on a quiet row: it reads as "measured, and none" where the truth is
+"nobody has voted yet".
+
 The **vertical rail** is the deliberate exception. The issue page's subject *is* the change, so an
 issue with no linked change keeps an explicit station saying so rather than showing a blank rail.
 

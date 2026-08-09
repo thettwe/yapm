@@ -344,8 +344,11 @@ test('every evidence chip is a focusable control, in the order the proposal cite
 
   const row = screen.getByTestId('retro-ai-proposal')
   const chips = [...row.querySelectorAll('button, a')]
+  // The metric chip is preceded by its `how ·` door — the derivation affordance the rest of the
+  // product puts beside a derived number, and the reason the chip may state a figure at all.
   expect(chips.map((chip) => chip.getAttribute('data-testid'))).toEqual([
     'retro-ai-evidence-issue',
+    null,
     'retro-ai-evidence-metric',
     'retro-ai-evidence-external',
   ])
@@ -909,17 +912,30 @@ test('a prior-action reference renders yapm’s baked label and does not navigat
   expect(screen.getByTestId('retro-ai-proposal').dataset.bucket).toBe('follow_up')
 })
 
-test('a prior-action reference with no baked label renders no chip at all', () => {
+test('a prior-action reference with no baked label leaves the proposal uncited, and undrawn', () => {
   mount(draftRow('ready'), [followUp({ refs: [{ kind: 'retro_action', id: 'action-1' }] })], {
     canWrite: false,
   })
 
-  // An older proposal, drafted before yapm baked the caption: the group still exists, with nothing
-  // invented to fill the chip and the plain heading rather than a cycle name it does not have.
+  // An older proposal, drafted before yapm baked the caption: nothing is invented to fill the chip,
+  // and the row that would have carried a claim the reader cannot trace is not drawn at all. The
+  // whole section goes with it, because it was the only proposal — absence, not an empty box.
   expect(screen.queryByTestId('retro-ai-evidence-action')).toBeNull()
-  expect(screen.getByTestId('retro-ai-category').querySelector('h3')?.textContent).toBe(
-    'Follow-ups',
-  )
+  expect(screen.queryByTestId('retro-ai-proposal')).toBeNull()
+  expect(screen.queryByTestId('retro-ai-category')).toBeNull()
+  expect(screen.queryByTestId('retro-ai-panel')).toBeNull()
+})
+
+test('an uncited proposal is dropped and the cited ones render unchanged', () => {
+  mount(draftRow('ready'), [
+    proposal({ id: 'uncited', summary: 'Nothing backs this one.', refs: [] }),
+    proposal({ id: 'cited', summary: 'Work merged faster once reviews started sooner.' }),
+  ])
+
+  const rows = screen.getAllByTestId('retro-ai-proposal')
+  expect(rows).toHaveLength(1)
+  expect(rows[0]?.textContent).toContain('Work merged faster')
+  expect(screen.getByTestId('retro-ai-panel').textContent).not.toContain('Nothing backs this one.')
 })
 
 // Change 19's flat contested-first list draws the category chip on every row; a follow-up must read

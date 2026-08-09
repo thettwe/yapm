@@ -18,6 +18,8 @@ import {
   sortContestedFirst,
 } from '@yapm/schema'
 import { Badge } from '@yapm/ui/components/badge'
+import { DraftMark } from '@yapm/ui/components/drawn'
+import { How } from '@yapm/ui/components/how'
 import { cn } from '@yapm/ui/lib/utils'
 import {
   ChartNoAxesColumnIcon,
@@ -26,7 +28,6 @@ import {
   CircleDotIcon,
   ExternalLinkIcon,
   ListChecksIcon,
-  SparklesIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
   XIcon,
@@ -181,10 +182,19 @@ function OptedInRetroAiPanel({
 
   const index = useMemo(() => buildEvidenceIndex(issues as readonly DigestIssueRow[], []), [issues])
 
-  const groups = useMemo(
-    () => groupByBucket(proposalRows as readonly RetroAiProposalRow[]),
-    [proposalRows],
+  // A PROPOSAL WITH NO SURVIVING CITATION IS NOT RENDERED. The validator already drops an uncited
+  // proposal server-side; what survives that and still resolves to nothing here is a reference this
+  // client cannot name from its own rows, and a sentence the reader cannot trace to a chip is the
+  // model asserting a fact on its own authority.
+  const cited = useMemo(
+    () =>
+      (proposalRows as readonly RetroAiProposalRow[]).filter(
+        (row) => citationsFor(row.refs ?? [], index, seed).length > 0,
+      ),
+    [proposalRows, index, seed],
   )
+
+  const groups = useMemo(() => groupByBucket(cited), [cited])
 
   const canReact = retroCan(phase, 'react', { canWrite })
   const canAct = retroCan(phase, 'action', { canWrite })
@@ -388,6 +398,14 @@ function DraftedProposals({
           ))
         )}
       </div>
+      {/* Why the reader sees no counts yet: each member's agree/disagree is private, synced to
+          nobody else, exactly like their dots. There is no query that could return another
+          member's — the absence is the schema, not this file's restraint. */}
+      {ratified ? null : (
+        <p className="mt-2.5 font-mono text-[10.5px] text-text-2" data-testid="retro-ai-reacting">
+          your own reaction only · verdicts stamp at Discuss
+        </p>
+      )}
     </AiSection>
   )
 }
@@ -438,29 +456,29 @@ function ProposalItem({
     bucket === 'follow_up' ? followUpLabel(proposal.refs ?? []) : RETRO_BUCKET_LABEL[bucket]
 
   return (
+    // ONE ROW PER PROPOSAL: the sentence on the left, the citations right-aligned, and the caller's
+    // own reaction at the end. Three proposals stacked as blocks took nearly the height of a whole
+    // board column while carrying nothing the room can act on yet — the fault the mock's own
+    // self-critique names. It wraps rather than truncating, so nothing is lost at a narrow width.
     <li
-      className="flex flex-col gap-1.5 rounded-card border border-border bg-bg-elevated px-3 py-2"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-control border border-border px-3 py-2"
       data-testid="retro-ai-proposal"
       data-category={proposal.category}
       data-bucket={bucket}
       data-verdict={verdict ?? undefined}
       data-retro-ai-proposal={proposal.id}
     >
-      <div className="flex items-start gap-2">
-        <span className="min-w-0 flex-1 text-[13px] leading-relaxed text-text-1">
-          {proposal.summary}
-        </span>
-        {showCategory ? (
-          <Badge variant="outline" data-testid="retro-ai-category-chip">
-            {bucketLabel}
-          </Badge>
-        ) : null}
-        <ConfidenceNote confidence={proposal.confidence} />
-      </div>
+      {showCategory ? (
+        <Badge variant="outline" data-testid="retro-ai-category-chip">
+          {bucketLabel}
+        </Badge>
+      ) : null}
+      <span className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-text-1">
+        {proposal.summary}
+      </span>
+      <ConfidenceNote confidence={proposal.confidence} />
       <EvidenceChips
-        refs={proposal.refs ?? []}
-        index={index}
-        seed={seed}
+        citations={citationsFor(proposal.refs ?? [], index, seed)}
         onOpenIssue={onOpenIssue}
         onOpenMetric={onOpenMetric}
       />
@@ -597,6 +615,11 @@ function VerdictNote({
 // The section chrome, shared by the drafting line and the drafted proposals so the surface does not
 // move under the reader when the background pass finishes. The live region deliberately lives OUTSIDE
 // it — see `OptedInRetroAiPanel` — because this section is itself one of the things being announced.
+//
+// THE READ BOUNDARY IS ON THE SURFACE. `reads the work graph only — never a card` is the input
+// assembly's table allowlist stated in words: it excludes every retro content table and the
+// card→author binding. A reader cannot otherwise tell an anonymous board was not the model's input,
+// and a guarantee nobody can see is a guarantee nobody has.
 function AiSection({
   unratified = false,
   children,
@@ -606,20 +629,26 @@ function AiSection({
 }) {
   return (
     <section
-      className="border-b border-border bg-bg-sidebar/40 px-4 py-3"
+      className="border-b border-border px-5 py-3.5"
       aria-labelledby="retro-ai-heading"
       data-testid="retro-ai-panel"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <SparklesIcon className="size-4 text-text-2" aria-hidden="true" />
+      <div className="flex flex-wrap items-center gap-2.5">
+        <DraftMark className="text-text-2" />
         <h2 id="retro-ai-heading" className="text-[13px] font-semibold text-text-1">
           AI draft
         </h2>
         {unratified ? (
-          <p className="text-[11.5px] text-text-2" data-testid="retro-ai-unratified">
-            AI-drafted, not agreed — the team has not decided any of this.
+          <p className="text-xs text-text-2" data-testid="retro-ai-unratified">
+            AI-drafted, not agreed
           </p>
         ) : null}
+        <span
+          className="ml-auto font-mono text-[10.5px] text-text-2"
+          data-testid="retro-ai-read-boundary"
+        >
+          reads the work graph only — never a card
+        </span>
       </div>
       {children}
     </section>
@@ -706,26 +735,50 @@ function ConfidenceNote({ confidence }: { confidence: DigestConfidence }) {
   )
 }
 
-function EvidenceChips({
-  refs,
-  index,
-  seed,
-  onOpenIssue,
-  onOpenMetric,
-}: {
-  refs: readonly RetroSeedRef[]
-  index: EvidenceIndex
-  seed: RetroSeed | null
-  onOpenIssue: (issueId: string) => void
-  onOpenMetric: (ref: RetroSeedRef) => void
-}) {
-  // In `refs` order: the stored order is the model's citation order, and a reader following the
-  // sentence reads them in the order the sentence implies.
-  const chips = refs.map((ref) => {
+// A CITATION IS WHAT THE READER CAN ACTUALLY SEE, so it is resolved once, in one place, and both
+// "does this proposal draw anything" and "what does it draw" read the same answer. In `refs` order:
+// the stored order is the model's citation order, and a reader following the sentence reads them in
+// the order the sentence implies.
+type Citation =
+  | {
+      readonly kind: 'prior'
+      readonly key: string
+      readonly label: string
+      readonly outcome: RetroSeedRef['outcome']
+      readonly testId: string
+    }
+  | { readonly kind: 'metric'; readonly key: string; readonly metric: RetroSeedMetric }
+  | {
+      readonly kind: 'issue'
+      readonly key: string
+      readonly issueId: string
+      readonly label: string
+    }
+  | {
+      readonly kind: 'external'
+      readonly key: string
+      readonly href: string
+      readonly label: string
+    }
+
+function citationsFor(
+  refs: readonly RetroSeedRef[],
+  index: EvidenceIndex,
+  seed: RetroSeed | null,
+): Citation[] {
+  const out: Citation[] = []
+  for (const ref of refs) {
     if (isRetroActionRef(ref)) {
-      return ref.label === undefined ? null : (
-        <PriorActionChip key={`retro_action-${ref.id}`} label={ref.label} outcome={ref.outcome} />
-      )
+      if (ref.label !== undefined) {
+        out.push({
+          kind: 'prior',
+          key: `retro_action-${ref.id}`,
+          label: ref.label,
+          outcome: ref.outcome,
+          testId: 'retro-ai-evidence-action',
+        })
+      }
+      continue
     }
     if (ref.kind === 'widget') {
       // A prior-retro outcome TOTAL shares the `widget` namespace with the seed's metric keys but has
@@ -733,54 +786,111 @@ function EvidenceChips({
       // yapm's own, baked beside the reference server-side for exactly the reason an action's is, and
       // the chip is inert for the same reason: there is nothing here to navigate to.
       if (retroActionOutcomeFromKey(ref.id) !== null) {
-        return ref.label === undefined ? null : (
-          <PriorActionChip
-            key={`widget-${ref.id}`}
-            label={ref.label}
-            outcome={ref.outcome}
-            testId="retro-ai-evidence-prior-total"
-          />
-        )
+        if (ref.label !== undefined) {
+          out.push({
+            kind: 'prior',
+            key: `widget-${ref.id}`,
+            label: ref.label,
+            outcome: ref.outcome,
+            testId: 'retro-ai-evidence-prior-total',
+          })
+        }
+        continue
       }
       const metric = findSeedMetric(seed, ref.id)
-      return metric === null ? null : (
-        <MetricChip key={`widget-${ref.id}`} metric={metric} onOpen={onOpenMetric} />
-      )
+      if (metric !== null) out.push({ kind: 'metric', key: `widget-${ref.id}`, metric })
+      continue
     }
     const target = evidenceTargetFor(ref, index)
-    if (target === null) return null
-    if (target.kind === 'issue') {
-      return (
-        <button
-          key={`${ref.kind}-${ref.id}`}
-          type="button"
-          className={CHIP}
-          aria-label={`Open issue ${target.label}`}
-          data-testid="retro-ai-evidence-issue"
-          onClick={() => onOpenIssue(target.issueId)}
-        >
-          {target.label}
-        </button>
-      )
-    }
-    return (
-      <a
-        key={`${ref.kind}-${ref.id}`}
-        href={target.href}
-        target="_blank"
-        rel="noreferrer noopener"
-        className={cn(CHIP, 'hover:underline')}
-        data-testid="retro-ai-evidence-external"
-      >
-        {target.label}
-        <ExternalLinkIcon className="size-3" aria-hidden="true" />
-      </a>
+    if (target === null) continue
+    out.push(
+      target.kind === 'issue'
+        ? {
+            kind: 'issue',
+            key: `${ref.kind}-${ref.id}`,
+            issueId: target.issueId,
+            label: target.label,
+          }
+        : {
+            kind: 'external',
+            key: `${ref.kind}-${ref.id}`,
+            href: target.href,
+            label: target.label,
+          },
     )
-  })
+  }
+  return out
+}
 
-  if (chips.every((chip) => chip === null)) return null
-
-  return <div className="flex flex-wrap items-center gap-1.5">{chips}</div>
+function EvidenceChips({
+  citations,
+  onOpenIssue,
+  onOpenMetric,
+}: {
+  citations: readonly Citation[]
+  onOpenIssue: (issueId: string) => void
+  onOpenMetric: (ref: RetroSeedRef) => void
+}) {
+  if (citations.length === 0) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {citations.map((citation) => {
+        if (citation.kind === 'prior') {
+          return (
+            <PriorActionChip
+              key={citation.key}
+              label={citation.label}
+              outcome={citation.outcome}
+              testId={citation.testId}
+            />
+          )
+        }
+        if (citation.kind === 'metric') {
+          // The derivation door beside the derived value, exactly where the rest of the product
+          // puts it: the figure stays, the footnote folds.
+          return (
+            <span key={citation.key} className="flex items-center gap-1.5">
+              <How
+                label={citation.metric.label}
+                align="end"
+                constraint="team-level, from this cycle's own work"
+              >
+                {citation.metric.caption}
+              </How>
+              <MetricChip metric={citation.metric} onOpen={onOpenMetric} />
+            </span>
+          )
+        }
+        if (citation.kind === 'issue') {
+          return (
+            <button
+              key={citation.key}
+              type="button"
+              className={CHIP}
+              aria-label={`Open issue ${citation.label}`}
+              data-testid="retro-ai-evidence-issue"
+              onClick={() => onOpenIssue(citation.issueId)}
+            >
+              {citation.label}
+            </button>
+          )
+        }
+        return (
+          <a
+            key={citation.key}
+            href={citation.href}
+            target="_blank"
+            rel="noreferrer noopener"
+            className={cn(CHIP, 'hover:underline')}
+            data-testid="retro-ai-evidence-external"
+          >
+            {citation.label}
+            <ExternalLinkIcon className="size-3" aria-hidden="true" />
+          </a>
+        )
+      })}
+    </div>
+  )
 }
 
 // `resolveEvidence` is called WITHOUT the ref's label on purpose. The label is model-authored and no

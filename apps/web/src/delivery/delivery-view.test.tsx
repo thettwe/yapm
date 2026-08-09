@@ -499,6 +499,7 @@ test('the retro panel still renders the shared tiles unchanged', () => {
     <RetroSeedPanel
       seed={seed}
       canDraft={true}
+      seedPathOpen={true}
       open={true}
       onOpenChange={vi.fn()}
       onSeedCard={vi.fn()}

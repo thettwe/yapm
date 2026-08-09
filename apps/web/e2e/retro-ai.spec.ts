@@ -265,13 +265,14 @@ test('opted in with nothing configured, the advance succeeds and the section is 
   await expect(page.locator(PANEL)).toHaveCount(0)
   await expect(page.getByTestId('retro-ai-pending')).toHaveCount(0)
 
-  // Tab order from the seed panel through the (absent) section into the board is unbroken: the
-  // panel's own control hands focus onward to a card, with no stranded stop where the section
-  // would have been. The walk is bounded at the board deliberately — Tab past the last control in
-  // the document legitimately puts `activeElement` on the body, which is indistinguishable from
-  // the stranding this exists to catch, so a walk that can run off the end asserts nothing.
-  await page.getByTestId('retro-seed-toggle').focus()
-  await tabTo(page, 'retro-card', 4)
+  // Tab order across the seam where the section would have been is unbroken. The room now stacks
+  // the board ABOVE the seed panel and the (absent) draft section below it, so the walk runs from a
+  // card forward into the panel's own control rather than the other way round; it is the same seam,
+  // in the direction the document now runs. The walk is bounded at the panel deliberately — Tab
+  // past the last control in the document legitimately puts `activeElement` on the body, which is
+  // indistinguishable from the stranding this exists to catch.
+  await page.locator(CARD).first().focus()
+  await tabTo(page, 'retro-seed-toggle', 8)
 
   // Nothing this change's surfaces said on the console, and nothing crashed. Scoped by name rather
   // than asserted empty, following `notifications.spec.ts`: the retro board carries a pre-existing
@@ -304,12 +305,21 @@ test('a drafted section is keyboard-operable end to end and holds in every theme
   await page.keyboard.press('Escape')
 
   // Back on the retro with the data panel COLLAPSED, so "reveals the panel and focuses the tile" is
-  // a real assertion rather than one the default state already satisfies.
+  // a real assertion rather than one the default state already satisfies. From `group` onward the
+  // panel is a door by default — the seed-a-card path is brainstorm-only — so the collapse is now
+  // asserted rather than performed.
   await page.goto(retroUrl)
   await expect(page.locator(PANEL)).toBeVisible({ timeout: 30_000 })
-  await page.getByTestId('retro-seed-toggle').focus()
-  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('retro-seed-toggle')).toHaveAttribute('aria-expanded', 'false')
   await expect(page.getByTestId('retro-seed-widget').first()).toBeHidden()
+
+  // THE ANCHOR IS LOAD-BEARING — do not delete it. `tabTo` counts steps from wherever focus already
+  // is, and a fresh `goto` leaves it on the body, so without this the walk starts at the document
+  // root and spends its budget on the chrome ahead of the panel instead of arriving. Anchoring on
+  // the same control the first walk started from is what makes the step budget describe the distance
+  // across this seam rather than the length of the document. Raising the budget instead would hide
+  // the next regression rather than catch it.
+  await page.getByTestId('retro-seed-toggle').focus()
 
   await tabTo(page, 'retro-ai-evidence-metric')
   await page.keyboard.press('Enter')

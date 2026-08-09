@@ -1,6 +1,8 @@
 import type { RetroSeed, RetroSeedMetric, RetroSeedRef } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
-import { ChevronDownIcon, ChevronRightIcon, PlusIcon } from 'lucide-react'
+import { Door } from '@yapm/ui/components/door'
+import { cn } from '@yapm/ui/lib/utils'
+import { PlusIcon } from 'lucide-react'
 import { MetricSection } from '@/delivery/metric-tiles'
 
 // The panel that makes this a yapm retro rather than a whiteboard: the "gather data" step, already
@@ -16,7 +18,11 @@ import { MetricSection } from '@/delivery/metric-tiles'
 
 export interface RetroSeedPanelProps {
   seed: RetroSeed | null
+  // Role AND phase: whether THIS caller may add a card from a widget, which is what the buttons ask.
   canDraft: boolean
+  // Phase alone: whether the seed path is open to the room at all, which is what the sentence
+  // states. A viewer's ceiling is not a phase fact and must not be reported as one.
+  seedPathOpen: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   onSeedCard: (ref: RetroSeedRef) => void
@@ -34,6 +40,7 @@ export function seedWidgetSelector(metricKey: string): string {
 export function RetroSeedPanel({
   seed,
   canDraft,
+  seedPathOpen,
   open,
   onOpenChange,
   onSeedCard,
@@ -42,33 +49,49 @@ export function RetroSeedPanel({
   // panel at all, rather than a board of zeros pretending to be a finding.
   if (seed === null) return null
 
+  // Collapsed, the panel is ONE LINE that names what is behind it: the cycle whose data this is,
+  // the sections it holds, and — where the phase has shut it — the fact that seeding a card from a
+  // widget closed with brainstorm. No widget, metric or seed path is removed by the collapse.
+  const sections = seed.sections.map((section) => section.title).join(' · ')
+
   return (
     <section
-      className="border-b border-border bg-bg-sidebar/40 px-4 py-3"
+      className={cn('border-b border-border bg-bg-sidebar/40 px-5', open ? 'py-3' : 'py-[9px]')}
       aria-labelledby="retro-seed-heading"
       data-testid="retro-seed-panel"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-expanded={open}
-          aria-controls="retro-seed-sections"
-          aria-label={open ? 'Collapse the cycle data' : 'Expand the cycle data'}
-          data-testid="retro-seed-toggle"
-          onClick={() => onOpenChange(!open)}
-        >
-          {open ? <ChevronDownIcon /> : <ChevronRightIcon />}
-        </Button>
-        <h2 id="retro-seed-heading" className="text-[13px] font-semibold text-text-1">
-          What actually happened
+      <div className="flex flex-wrap items-center gap-2.5">
+        <h2 id="retro-seed-heading" className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls="retro-seed-sections"
+            data-testid="retro-seed-toggle"
+            onClick={() => onOpenChange(!open)}
+            className="flex items-center gap-2 rounded-control text-[12.5px] text-text-1 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <span aria-hidden="true" className="text-[9px] text-text-2">
+              {open ? '▾' : '▸'}
+            </span>
+            <Door>{open ? 'What actually happened' : `${seed.cycleName} data`}</Door>
+          </button>
         </h2>
-        <span className="text-xs text-text-2">{seed.cycleName}</span>
+        {open ? (
+          <span className="text-xs text-text-2">{seed.cycleName}</span>
+        ) : (
+          <span className="text-[12.5px] text-text-2">{sections}</span>
+        )}
         {/* The binding rule itself lives once in the product, on Delivery (`BINDING_TEAM_LEVEL_RULE`).
             This line states the panel's scope in the label register and does not repeat it. */}
-        <p className="ml-auto text-[11.5px] text-text-2">
-          Team-level trends from this cycle's own work
-        </p>
+        {open ? (
+          <p className="ml-auto text-[11.5px] text-text-2">
+            Team-level trends from this cycle's own work
+          </p>
+        ) : seedPathOpen ? null : (
+          <span className="ml-auto font-mono text-[10.5px] text-text-2">
+            seeding a card closed with brainstorm
+          </span>
+        )}
       </div>
 
       {open ? (

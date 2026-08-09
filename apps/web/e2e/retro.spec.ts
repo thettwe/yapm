@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test'
 import { readReplica, replicaHolds } from './replica'
-import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, goToMore, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const DRAFT = '[data-testid="retro-draft"]'
@@ -140,6 +140,12 @@ test('a whole retro runs end to end from the keyboard', async ({ page }) => {
   await page.keyboard.press(']')
   await expect(phaseStep(page, 'vote')).toHaveAttribute('aria-current', 'step', { timeout: 20_000 })
   await expect(page.getByTestId('retro-vote-budget')).toHaveText('3/3 dots left')
+  // The budget is DRAWN as well as read: three unspent dots beside the reading, so neither channel
+  // carries the remaining budget alone.
+  await expect(page.getByTestId('retro-vote-budget').locator('span > span')).toHaveCount(3)
+  // The stepper names the phase it is on and marks it, and states no duration for any spent phase.
+  await expect(phaseStep(page, 'vote')).toContainText('now')
+  await expect(phaseStep(page, 'brainstorm')).toHaveText('Brainstorm')
   await page.getByTestId('retro-group').focus()
   await page.keyboard.press('v')
   await expect(page.getByTestId('retro-vote-budget')).toHaveText('2/3 dots left', {
@@ -150,6 +156,22 @@ test('a whole retro runs end to end from the keyboard', async ({ page }) => {
   await expect(page.getByTestId('retro-vote-budget')).toHaveText('3/3 dots left', {
     timeout: 20_000,
   })
+
+  // The same round trip through the drawn controls. The retract control does not exist at zero, so
+  // taking the LAST dot back unmounts the element that was just activated — focus must land on the
+  // `+` that casts the next dot rather than being stranded on <body>.
+  await page.getByTestId('retro-group').focus()
+  await page.keyboard.press('v')
+  await expect(page.getByTestId('retro-vote-budget')).toHaveText('2/3 dots left', {
+    timeout: 20_000,
+  })
+  await page.getByTestId('retro-retract-vote').first().focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('retro-vote-budget')).toHaveText('3/3 dots left', {
+    timeout: 20_000,
+  })
+  await expect(page.getByTestId('retro-retract-vote')).toHaveCount(0, { timeout: 20_000 })
+  await expect(page.getByTestId('retro-cast-vote').first()).toBeFocused({ timeout: 20_000 })
 
   // `]` into discuss, `a` captures an action, and ⌘/Ctrl+Enter turns it into a real issue.
   await page.keyboard.press(']')
@@ -395,7 +417,40 @@ test('format, dot budget and anonymity are set on an empty retro and close after
   await expect(page.getByTestId('retro-format')).toHaveCount(0)
   await expect(page.getByTestId('retro-vote-budget-set')).toHaveCount(0)
   await expect(page.getByTestId('retro-anonymity-toggle')).toHaveCount(0)
-  await expect(page.getByText('Anonymous', { exact: true }).first()).toBeVisible()
+  // The bare `Anonymous` pill is gone; what remains is the guarantee that says WHY it is true, and
+  // it renders in every phase rather than only where the toggle stood.
+  await expect(
+    page.getByText('cards are anonymous by design — there is no author column'),
+  ).toBeVisible()
+})
+
+// The second frame: the index the `more▾` menu lands on. It is the surface a reader meets FIRST out
+// of that menu, and until now no e2e had ever opened it.
+test('the retros index lists the team\u2019s retros and names no person', async ({ page }) => {
+  await enterApp(page)
+  await openTeam(page)
+  await completedCycleWithRetro(page)
+
+  await goToMore(page, 'Retros')
+  await expect(page.getByRole('heading', { name: 'Retros', exact: true })).toBeVisible({
+    timeout: 20_000,
+  })
+  await expect(page.getByTestId('masthead-count')).toHaveText('1')
+
+  const row = page.getByTestId('retro-link').first()
+  await expect(row).toBeVisible({ timeout: 20_000 })
+  await expect(row).toContainText('Brainstorm')
+  await expect(row).toContainText('Went well')
+  // Nothing per-person on the row, and no create-a-retro control anywhere on the page.
+  await expect(row).not.toContainText(/participant|author|facilitat/i)
+  await expect(page.getByRole('button', { name: /new retro/i })).toHaveCount(0)
+
+  // The row is the way in, from the keyboard alone.
+  await row.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('navigation', { name: 'Retro phase' })).toBeVisible({
+    timeout: 20_000,
+  })
 })
 
 test('the retro is correct across every preset in light and dark', async ({ page }) => {
@@ -486,7 +541,9 @@ test('two clients: brainstorm stays private and advancing reveals a card with no
 
     await second.goto(retroUrl)
     await expect(second.locator('[data-retro-column]')).toHaveCount(3, { timeout: 20_000 })
-    await expect(second.getByText('Anonymous')).toBeVisible({ timeout: 20_000 })
+    await expect(
+      second.getByText('cards are anonymous by design — there is no author column'),
+    ).toBeVisible({ timeout: 20_000 })
 
     const facilitatorCard = 'I did not feel safe raising this in standup'
     const participantCard = 'Our estimates were fantasy again'

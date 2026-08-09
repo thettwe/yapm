@@ -15,6 +15,7 @@ import { createServerMutators } from '@yapm/schema/server'
 import type { Kysely } from 'kysely'
 import { describe, expect, it } from 'vitest'
 import { runRetroAiDraftTail } from '../jobs/retro-draft.js'
+import { RETRO_DRAFT_TEST_DATABASE, withDatabase } from '../testing/database-url.js'
 import { createZeroDatabase } from '../zero/db-provider.js'
 import type { AiGateway } from './gateway.js'
 
@@ -478,8 +479,15 @@ describe.skipIf(DATABASE_URL === undefined)('the retro AI draft, end to end', ()
     }
   }
 
+  // A DATABASE OF ITS OWN, and why the recording cannot share one. The tail sweeps every `pending`
+  // row in its database with no workspace or team filter — correct for a job runner draining one
+  // instance's queue — so a pending row another suite has in flight is processed INSIDE the recording
+  // below, and that team's facts join a set asserted equal to the D2 allowlist. Isolating the
+  // recording keeps the sweep global and the assertion exact; see database-url.ts.
   async function withDb<T>(run: (database: Database) => Promise<T>): Promise<T> {
-    const database = createDatabase({ connectionString: DATABASE_URL ?? '' })
+    const database = createDatabase({
+      connectionString: withDatabase(DATABASE_URL ?? '', RETRO_DRAFT_TEST_DATABASE),
+    })
     try {
       await migrateToLatest(database.db)
       return await run(database)

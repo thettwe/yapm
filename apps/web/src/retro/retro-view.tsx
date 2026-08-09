@@ -1,6 +1,7 @@
 import { useQuery } from '@rocicorp/zero/react'
 import { useNavigate } from '@tanstack/react-router'
 import {
+  isRetroWriteAllowed,
   MAX_VOTES_PER_PARTICIPANT,
   MIN_VOTES_PER_PARTICIPANT,
   queries,
@@ -14,9 +15,10 @@ import {
 } from '@yapm/schema'
 import { Avatar, AvatarFallback } from '@yapm/ui/components/avatar'
 import { Button } from '@yapm/ui/components/button'
+import { AnonymityMark } from '@yapm/ui/components/drawn'
 import { Select } from '@yapm/ui/components/select'
 import { cn } from '@yapm/ui/lib/utils'
-import { ArrowLeftIcon, ArrowRightIcon, TimerIcon, TimerOffIcon, UserIcon } from 'lucide-react'
+import { TimerIcon, TimerOffIcon, UserIcon } from 'lucide-react'
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import { Masthead } from '@/frame/masthead'
@@ -246,9 +248,7 @@ export function RetroView({ teamId, retroId }: { teamId: string; retroId: string
   if (!retro || !team) {
     return (
       <p className="p-6 text-sm text-text-3" role="status">
-        {detailResult.type === 'complete'
-          ? 'This retrospective no longer exists.'
-          : 'Loading retrospective…'}
+        {detailResult.type === 'complete' ? 'No such retro.' : 'Loading…'}
       </p>
     )
   }
@@ -319,7 +319,23 @@ function RetroShell(props: RetroShellProps) {
   const [composerColumnId, setComposerColumnId] = useState<string | null>(null)
   const [composerSeed, setComposerSeed] = useState<RetroSeedRef | null>(null)
   const [actionComposer, setActionComposer] = useState(false)
-  const [seedOpen, setSeedOpen] = useState(true)
+  // Expanded while a card can still be seeded from it, a door afterwards. The "add a card from this
+  // widget" path is brainstorm-only, so from `group` the panel is a read-only wall of ten figures
+  // over a room whose live business is elsewhere.
+  //
+  // DERIVED AT EVERY RENDER, not once at mount: the facilitator's advance reaches every client in
+  // the room, and a mount-time initial value would leave everyone already here with the full panel
+  // for the rest of the retro. The reader's own toggle wins WITHIN a phase and is dropped the
+  // moment the phase changes. The role is deliberately not part of this — a viewer reads the same
+  // room as everyone else.
+  const phaseCanSeed = isRetroWriteAllowed(retro.phase, 'draft')
+  const [seedOverride, setSeedOverride] = useState<boolean | null>(null)
+  const seedPhase = useRef(retro.phase)
+  if (seedPhase.current !== retro.phase) {
+    seedPhase.current = retro.phase
+    setSeedOverride(null)
+  }
+  const seedOpen = seedOverride ?? phaseCanSeed
   const focusColumnRef = useRef<string | null>(null)
 
   const openComposerIn = useCallback(
@@ -346,7 +362,7 @@ function RetroShell(props: RetroShellProps) {
 
   // The other half of the join: a card's chip reveals the panel and focuses the tile it came from.
   const openEvidence = useCallback((seedRef: RetroSeedRef) => {
-    setSeedOpen(true)
+    setSeedOverride(true)
     requestAnimationFrame(() => {
       const tile = document.querySelector<HTMLElement>(seedWidgetSelector(seedRef.id))
       tile?.scrollIntoView({ block: 'nearest' })
@@ -388,7 +404,7 @@ function RetroShell(props: RetroShellProps) {
         onOpenActionComposer={() => setActionComposer(true)}
         onCloseActionComposer={() => setActionComposer(false)}
         seedOpen={seedOpen}
-        onSeedOpenChange={setSeedOpen}
+        onSeedOpenChange={setSeedOverride}
         onSeedCard={seedCardFrom}
         onOpenEvidence={openEvidence}
       />
@@ -573,31 +589,46 @@ function RetroSurface({
   const seconds = countdownSeconds(retro.timerEndsAt, now)
   const live = livePresence(presence, now)
   const remaining = remainingVotes(retro.votesPerParticipant, votes)
+  // Band 1's deck already carries the team, so band 2 states the retro and the cycle it reflects
+  // on and nothing else. The stored title is the fallback for a retro with no cycle behind it.
+  const cycleName = cycles.find((cycle) => cycle.id === retro.cycleId)?.name ?? null
+  const actionsVisible = canAct || actions.length > 0
 
   return (
     <>
       <Masthead
         className="border-b-0 pb-0"
-        title={retro.title}
-        meta={
+        title={
           <>
-            <FormatControl
-              format={retro.format}
-              canConfigure={configurable}
-              onChange={(next) => void api.setFormat(next)}
-            />
-            <AnonymityControl
-              anonymous={retro.isAnonymous}
-              canConfigure={configurable}
-              onToggle={(next) => void api.setAnonymous(next)}
-            />
-            <BudgetControl
-              budget={retro.votesPerParticipant}
-              canConfigure={configurable}
-              onChange={(next) => void api.setVoteBudget(next)}
-            />
+            Retro
+            <span className="ml-2.5 text-[14px] font-normal text-text-2">
+              {cycleName ?? retro.title}
+            </span>
           </>
         }
+        {...(configurable
+          ? {
+              meta: (
+                <>
+                  <FormatControl
+                    format={retro.format}
+                    canConfigure={configurable}
+                    onChange={(next) => void api.setFormat(next)}
+                  />
+                  <AnonymityControl
+                    anonymous={retro.isAnonymous}
+                    canConfigure={configurable}
+                    onToggle={(next) => void api.setAnonymous(next)}
+                  />
+                  <BudgetControl
+                    budget={retro.votesPerParticipant}
+                    canConfigure={configurable}
+                    onChange={(next) => void api.setVoteBudget(next)}
+                  />
+                </>
+              ),
+            }
+          : {})}
         actions={
           <>
             <PresenceStrip presence={live} />
@@ -621,24 +652,32 @@ function RetroSurface({
       />
 
       {/* The phase machine is the retro's own furniture, not band 2: it moves the session on. */}
-      <div className="flex flex-col gap-3 border-b border-border px-5 pb-3 pt-2">
-        <PhaseStepper
-          phase={retro.phase}
-          canFacilitate={canFacilitate}
-          onStep={(to) => void api.setPhase(to)}
-        />
+      <div className="flex flex-col gap-3.5 border-b border-border px-5 pb-3.5 pt-2">
+        <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
+          <PhaseStepper
+            phase={retro.phase}
+            canFacilitate={canFacilitate}
+            onStep={(to) => void api.setPhase(to)}
+          />
 
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="text-xs text-text-2">{PHASE_HINT[retro.phase]}</p>
-          {retro.phase === 'vote' ? (
-            <span className="font-mono text-xs text-text-2" data-testid="retro-vote-budget">
-              {remaining}/{retro.votesPerParticipant} dots left
-            </span>
-          ) : null}
+          <div className="flex flex-col gap-1">
+            <p className="text-[13px] font-semibold text-text-1">{PHASE_HINT[retro.phase]}</p>
+            {retro.phase === 'vote' ? (
+              <p
+                className="flex items-center gap-2 font-mono text-[11px] text-text-2"
+                data-testid="retro-vote-budget"
+              >
+                <VoteBudgetDots spent={retro.votesPerParticipant - remaining} left={remaining} />
+                {remaining}/{retro.votesPerParticipant} dots left
+              </p>
+            ) : null}
+          </div>
+
+          <AnonymityNote anonymous={retro.isAnonymous} />
         </div>
 
         {error !== undefined ? (
-          <div className="flex items-center gap-2 text-xs text-status-urgent" role="alert">
+          <div className="flex items-center gap-2 text-xs text-status-urgent-ink" role="alert">
             {error}
             <Button size="xs" variant="ghost" onClick={clearError}>
               Dismiss
@@ -647,86 +686,154 @@ function RetroSurface({
         ) : null}
       </div>
 
-      <RetroSeedPanel
-        seed={seed}
-        canDraft={retroCan(retro.phase, 'draft', { canWrite })}
-        open={seedOpen}
-        onOpenChange={onSeedOpenChange}
-        onSeedCard={onSeedCard}
-      />
+      {/* The stacking below band 2 is the argument: the team's own cards on the tabletop, then the
+          seeded figures, then the AI's draft, then what the room decided to do. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {/* Content-height, not `flex-1`: the board scrolls SIDEWAYS for a fourth column, and a
+            vertically constrained tabletop slices the last card in the tallest column instead. The
+            page is the scroll container; the felt is as tall as the cards on it. */}
+        <div className="flex shrink-0 flex-col border-b border-border bg-bg-sidebar">
+          <RetroBoard
+            retro={retro}
+            columns={columns}
+            cards={cards}
+            groups={groups}
+            tallies={tallies}
+            drafts={drafts}
+            votes={votes}
+            ownCardIds={ownCardIds}
+            authorOf={authorOf}
+            canWrite={canWrite}
+            facilitator={facilitator}
+            api={api}
+            composerColumnId={composerColumnId}
+            composerSeed={composerSeed}
+            onComposerColumn={onComposerColumn}
+            onOpenEvidence={onOpenEvidence}
+            onFocusColumn={onFocusColumn}
+            onFocusChange={command.setFocused}
+            onGroupWith={command.openGroupWith}
+            onActionFrom={(item) => {
+              if (!canAct) return
+              const body =
+                item.kind === 'group'
+                  ? (item.label ?? item.cards[0]?.body ?? 'Cluster')
+                  : item.card.body
+              void api.createAction(
+                body,
+                item.kind === 'group' ? { groupId: item.id } : { cardId: item.id },
+              )
+            }}
+          />
+          <p className="px-5 pb-3 pt-3.5 text-center text-xs text-text-2">
+            {ROOM_FOOT[retro.phase]}
+          </p>
+        </div>
 
-      {/* Beside the seed panel, never inside the board: the AI's categories are Wins/Losses/
-          Improvements and two of the four retro formats have no such columns. Draws nothing at all
-          unless a draft row exists and has something to say — only the empty live region that has to
-          predate the first thing it announces. */}
-      <RetroAiPanel
-        retroId={retro.id}
-        teamId={teamId}
-        aiRetroDraftSince={aiRetroDraftSince}
-        seed={seed}
-        phase={retro.phase}
-        canWrite={canWrite}
-        onOpenIssue={openIssue}
-        onOpenMetric={onOpenEvidence}
-        onReact={(proposalId, value) => void api.setAiReaction(proposalId, value)}
-        onClearReaction={(proposalId) => void api.clearAiReaction(proposalId)}
-        onAddAction={(proposal) => {
-          if (!canAct) return
-          void api.createAction(proposal.summary, { aiProposalId: proposal.id })
-        }}
-        onFocusProposal={command.setFocusedAiProposal}
-      />
-
-      <div className="flex min-h-0 flex-1">
-        <RetroBoard
-          retro={retro}
-          columns={columns}
-          cards={cards}
-          groups={groups}
-          tallies={tallies}
-          drafts={drafts}
-          votes={votes}
-          ownCardIds={ownCardIds}
-          authorOf={authorOf}
-          canWrite={canWrite}
-          facilitator={facilitator}
-          api={api}
-          composerColumnId={composerColumnId}
-          composerSeed={composerSeed}
-          onComposerColumn={onComposerColumn}
-          onOpenEvidence={onOpenEvidence}
-          onFocusColumn={onFocusColumn}
-          onFocusChange={command.setFocused}
-          onGroupWith={command.openGroupWith}
-          onActionFrom={(item) => {
-            if (!canAct) return
-            const body =
-              item.kind === 'group'
-                ? (item.label ?? item.cards[0]?.body ?? 'Cluster')
-                : item.card.body
-            void api.createAction(
-              body,
-              item.kind === 'group' ? { groupId: item.id } : { cardId: item.id },
-            )
-          }}
+        <RetroSeedPanel
+          seed={seed}
+          canDraft={retroCan(retro.phase, 'draft', { canWrite })}
+          seedPathOpen={isRetroWriteAllowed(retro.phase, 'draft')}
+          open={seedOpen}
+          onOpenChange={onSeedOpenChange}
+          onSeedCard={onSeedCard}
         />
 
-        <RetroActions
-          retro={retro}
-          actions={actions}
-          members={members}
-          cycles={cycles}
-          teamKey={teamKey}
+        {/* Below the room's own cards and adjacent to the seeded panel, never inside the board: the
+            AI's categories are Wins/Losses/Improvements and two of the four retro formats have no
+            such columns. Draws nothing at all unless a draft row exists and has something to say —
+            only the empty live region that has to predate the first thing it announces. */}
+        <RetroAiPanel
+          retroId={retro.id}
+          teamId={teamId}
+          aiRetroDraftSince={aiRetroDraftSince}
+          seed={seed}
+          phase={retro.phase}
           canWrite={canWrite}
-          composerOpen={actionComposerOpen}
-          onFocusAction={command.setFocusedAction}
-          onOpenComposer={onOpenActionComposer}
-          onCloseComposer={onCloseActionComposer}
-          api={api}
           onOpenIssue={openIssue}
+          onOpenMetric={onOpenEvidence}
+          onReact={(proposalId, value) => void api.setAiReaction(proposalId, value)}
+          onClearReaction={(proposalId) => void api.clearAiReaction(proposalId)}
+          onAddAction={(proposal) => {
+            if (!canAct) return
+            void api.createAction(proposal.summary, { aiProposalId: proposal.id })
+          }}
+          onFocusProposal={command.setFocusedAiProposal}
         />
+
+        {/* A phase that can neither hold nor write an action draws no rail — but a retro stepped
+            BACK from `discuss` still holds the actions it recorded, and hiding those would lose
+            data the mock's fixture simply never had. */}
+        {actionsVisible ? (
+          <RetroActions
+            retro={retro}
+            actions={actions}
+            members={members}
+            cycles={cycles}
+            teamKey={teamKey}
+            canWrite={canWrite}
+            composerOpen={actionComposerOpen}
+            onFocusAction={command.setFocusedAction}
+            onOpenComposer={onOpenActionComposer}
+            onCloseComposer={onCloseActionComposer}
+            api={api}
+            onOpenIssue={openIssue}
+          />
+        ) : null}
       </div>
     </>
+  )
+}
+
+// What the state machine actually enforces in the phase being drawn, and nothing else. The mock's
+// "dots close when the clock runs out" is not true of `phase.ts` — the timer is a shared clock, not
+// an authority; it is the facilitator's step that closes voting — so the room says that instead.
+const ROOM_FOOT: Record<RetroPhase, string> = {
+  brainstorm: 'Cards stay private until the room moves on · dots open at Vote',
+  group: 'Writing closed when the cards were revealed · dots open at Vote',
+  vote: 'Writing closed when the cards were revealed · dots close when the room moves on',
+  discuss: 'Cards and dots are settled · actions are written from here',
+  actions: 'Cards and dots are settled · actions are written from here',
+  closed: 'Closed · an action can still become a numbered issue',
+}
+
+// Spent and unspent, drawn — beside the reading, never instead of it. A budget carried by shape
+// alone is a budget a reader who cannot see the shapes does not have.
+function VoteBudgetDots({ spent, left }: { spent: number; left: number }) {
+  const dots = [
+    ...Array.from({ length: left }, (_, index) => ({ id: `left-${index}`, unspent: true })),
+    ...Array.from({ length: spent }, (_, index) => ({ id: `spent-${index}`, unspent: false })),
+  ]
+  return (
+    <span aria-hidden="true" className="flex items-center gap-[5px]">
+      {dots.map((dot) => (
+        <span
+          key={dot.id}
+          className={cn(
+            'size-[9px] rounded-full',
+            dot.unspent ? 'bg-accent' : 'border-[1.4px] border-border-strong',
+          )}
+        />
+      ))}
+    </span>
+  )
+}
+
+// The warm sentence that is also a storage fact: `retro_card_author` is a server-only table the
+// sync schema cannot name, so an anonymous retro's card has no author on any synced row. It renders
+// only where it is TRUE — an attributed retro states the opposite truth in the same slot, because a
+// warm lie is worse than no warmth. It is a statement, not a control, and carries no tooltip: the
+// shipped tooltip text is now the visible text.
+function AnonymityNote({ anonymous }: { anonymous: boolean }) {
+  return (
+    <p className="ml-auto flex items-center gap-2" data-testid="retro-anonymity-note">
+      <AnonymityMark className="text-text-2" />
+      <span className="font-mono text-[10.5px] text-text-2">
+        {anonymous
+          ? 'cards are anonymous by design — there is no author column'
+          : 'cards carry their author'}
+      </span>
+    </p>
   )
 }
 
@@ -743,89 +850,136 @@ function PhaseStepper({
   const forward = nextPhase(phase)
   const back = previousPhase(phase)
 
-  // At either end of the machine one arrow stops being usable. Natively disabling it while it holds
-  // focus makes the browser blur it to <body>, stranding a keyboard user at the top of the
-  // document — so the arrow stays focusable, states its unavailability with `aria-disabled`, and
-  // no-ops. Focus never moves as a side effect of stepping.
-  const unavailable = 'aria-disabled:pointer-events-none aria-disabled:opacity-50'
-
+  // A retro's phases ARE its time passing, so they take the cycle surfaces' day-band grammar:
+  // spent, now, to come. `packages/ui`'s `DayBand` itself is deliberately not reused — its segment
+  // union is past/today/future and it stretches to fill, where the stepper needs six fixed-width
+  // labelled columns, and widening a shared primitive's union for one caller is the thing
+  // `reality-vocabulary` exists to prevent.
+  //
+  // NO SPENT PHASE CARRIES A DURATION. Nothing stores one: `retro` holds a single running-timer
+  // pair and there is no per-phase transition log anywhere.
   return (
-    <nav className="flex items-center gap-1" aria-label="Retro phase">
-      {canFacilitate ? (
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          className={unavailable}
-          aria-label={back ? `Step back to ${PHASE_LABEL[back]}` : 'Step back'}
-          aria-keyshortcuts="["
-          aria-disabled={back === null}
-          data-testid="retro-phase-back"
-          onClick={() => back && onStep(back)}
-        >
-          <ArrowLeftIcon />
-        </Button>
-      ) : null}
-      <ol className="flex items-center gap-0.5 rounded-control bg-bg-sidebar p-0.5">
+    <nav className="flex flex-none items-start gap-3" aria-label="Retro phase">
+      <ol className="flex flex-none items-start gap-1.5">
         {RETRO_PHASES.map((entry, index) => (
-          <li key={entry}>
+          <li key={entry} className="w-[74px]">
             <span
               data-testid="retro-phase-step"
               data-phase={entry}
               aria-current={entry === phase ? 'step' : undefined}
-              className={cn(
-                'flex items-center gap-1.5 rounded-control px-2.5 py-1 text-xs font-medium transition-colors',
-                entry === phase
-                  ? 'bg-bg-elevated text-text-1 shadow-sm'
-                  : index < current
-                    ? 'text-text-2'
-                    : 'text-text-3',
-              )}
+              className="block"
             >
-              {PHASE_LABEL[entry]}
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'block h-2 rounded-[2.5px]',
+                  entry === phase
+                    ? 'bg-accent'
+                    : index < current
+                      ? 'bg-accent-soft'
+                      : 'border border-border bg-bg-hover',
+                )}
+              />
+              {/* The current phase is named in `--text-1` rather than the mock's accent ink, which
+                  lands at 4.44 on the page ground in Editorial light — under AA at 11.5px. It is
+                  told apart by weight, by the filled band above it and by the `now` reading, so
+                  nothing here was ever carried by hue alone. */}
+              <span
+                className={cn(
+                  'mt-1.5 block text-[11.5px]',
+                  entry === phase ? 'font-semibold text-text-1' : 'text-text-2',
+                )}
+              >
+                {PHASE_LABEL[entry]}
+              </span>
+              {entry === phase ? (
+                <span className="block font-mono text-[10px] text-text-2">now</span>
+              ) : null}
             </span>
           </li>
         ))}
       </ol>
       {canFacilitate ? (
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          className={unavailable}
-          aria-label={forward ? `Advance to ${PHASE_LABEL[forward]}` : 'Advance'}
-          aria-keyshortcuts="]"
-          aria-disabled={forward === null}
-          data-testid="retro-phase-forward"
-          onClick={() => forward && onStep(forward)}
-        >
-          <ArrowRightIcon />
-        </Button>
+        <span className="flex flex-none items-center gap-1">
+          <PhaseKey
+            cap="["
+            testId="retro-phase-back"
+            label={back ? `Step back to ${PHASE_LABEL[back]}` : 'Step back'}
+            unavailable={back === null}
+            onStep={() => back && onStep(back)}
+          />
+          <PhaseKey
+            cap="]"
+            testId="retro-phase-forward"
+            label={forward ? `Advance to ${PHASE_LABEL[forward]}` : 'Advance'}
+            unavailable={forward === null}
+            onStep={() => forward && onStep(forward)}
+          />
+        </span>
       ) : null}
     </nav>
+  )
+}
+
+// The mock draws the two moves as keycaps. They are real focusable buttons with the keycap drawn
+// INSIDE them: the accessible name stays the sentence and the key rides on `aria-keyshortcuts`, the
+// `triage-daylight` B2 precedent.
+//
+// At either end of the machine one move stops being usable. Natively disabling it while it holds
+// focus makes the browser blur it to <body>, stranding a keyboard user at the top of the document —
+// so it stays focusable, states its unavailability with `aria-disabled`, and no-ops.
+function PhaseKey({
+  cap,
+  testId,
+  label,
+  unavailable,
+  onStep,
+}: {
+  cap: string
+  testId: string
+  label: string
+  unavailable: boolean
+  onStep: () => void
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      aria-label={label}
+      aria-keyshortcuts={cap}
+      aria-disabled={unavailable}
+      onClick={onStep}
+      className="rounded-[4px] border border-border-strong bg-bg-elevated px-[5px] py-px font-mono text-[10px] text-text-2 outline-none transition-colors hover:text-text-1 focus-visible:ring-2 focus-visible:ring-accent aria-disabled:pointer-events-none aria-disabled:opacity-50"
+    >
+      <span aria-hidden="true">{cap}</span>
+    </button>
   )
 }
 
 function PresenceStrip({ presence }: { presence: readonly RetroPresenceData[] }) {
   if (presence.length === 0) return null
   return (
-    <ul
-      className="flex items-center gap-1"
-      aria-label={`${presence.length} here`}
-      data-testid="retro-presence"
-    >
-      {presence.slice(0, 5).map((row) => (
-        <li key={row.userId}>
-          <Avatar size="xs" title={row.name}>
-            <AvatarFallback aria-label={row.name}>
-              {row.name
-                .split(/\s+/u)
-                .slice(0, 2)
-                .map((part) => part.charAt(0).toUpperCase())
-                .join('')}
-            </AvatarFallback>
-          </Avatar>
-        </li>
-      ))}
-    </ul>
+    <span className="flex items-center gap-2" data-testid="retro-presence">
+      <ul className="flex items-center" aria-label={`${presence.length} here`}>
+        {presence.slice(0, 4).map((row) => (
+          <li key={row.userId} className="-ml-[5px] first:ml-0">
+            <Avatar size="xs" className="outline outline-[1.5px] outline-bg" title={row.name}>
+              <AvatarFallback aria-label={row.name}>
+                {row.name
+                  .split(/\s+/u)
+                  .slice(0, 2)
+                  .map((part) => part.charAt(0).toUpperCase())
+                  .join('')}
+              </AvatarFallback>
+            </Avatar>
+          </li>
+        ))}
+      </ul>
+      {/* The count is already the list's accessible name; the drawn reading is for the eye. */}
+      <span aria-hidden="true" className="text-[12px] text-text-2">
+        {presence.length} here
+      </span>
+    </span>
   )
 }
 
@@ -887,13 +1041,9 @@ function FormatControl({
   canConfigure: boolean
   onChange: (next: RetroFormat) => void
 }) {
-  if (!canConfigure) {
-    return (
-      <span className="rounded-full bg-bg-sidebar px-2 py-0.5 text-[11px] font-medium text-text-2">
-        {RETRO_FORMAT_LABEL[format]}
-      </span>
-    )
-  }
+  // NO RESTING PILL. The format's own column headings already say what the format is, so a pill
+  // repeating it is band 2 restating the body beneath it. The control itself survives untouched.
+  if (!canConfigure) return null
   // `Select` fills its wrapper, so the header bounds it rather than letting it claim a whole row.
   return (
     <span className="w-52">
@@ -949,8 +1099,10 @@ function BudgetControl({
 }
 
 // Anonymity is a storage fact, not a display option, and it is fixed BEFORE any card exists — so
-// the control only exists while `configure` is allowed (brainstorm, nothing published yet) and
-// only for the facilitator. After that the badge remains as a statement of what the retro is.
+// the control only exists while `configure` is allowed (brainstorm, nothing published yet) and only
+// for the facilitator. The BARE PILL that used to remain afterwards is gone: `AnonymityNote` states
+// the guarantee itself, in words, in every phase. The toggle keeps its place beside that sentence
+// while the choice is still open, because it is the thing that makes the sentence true.
 function AnonymityControl({
   anonymous,
   canConfigure,
@@ -960,20 +1112,7 @@ function AnonymityControl({
   canConfigure: boolean
   onToggle: (next: boolean) => void
 }) {
-  const title = anonymous
-    ? 'Cards in this retro carry no author on any synced row.'
-    : 'Cards in this retro are attributed to whoever wrote them.'
-  if (!canConfigure) {
-    if (!anonymous) return null
-    return (
-      <span
-        className="rounded-full bg-bg-sidebar px-2 py-0.5 text-[11px] font-medium text-text-2"
-        title={title}
-      >
-        Anonymous
-      </span>
-    )
-  }
+  if (!canConfigure) return null
   return (
     <Button
       size="xs"
@@ -981,7 +1120,6 @@ function AnonymityControl({
       data-testid="retro-anonymity-toggle"
       data-anonymous={anonymous}
       aria-pressed={anonymous}
-      title={title}
       onClick={() => onToggle(!anonymous)}
     >
       {anonymous ? 'Anonymous' : 'Attributed'}

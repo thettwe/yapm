@@ -607,23 +607,29 @@ function TargetMark({
 }
 
 // One tick per readable issue, filled for done. Its LENGTH encodes issue count, which is the
-// meter's known fault; the mono `done/total` beside it is the exact fact. Past twenty issues the
-// ticks share the track rather than overrunning the column — still one tick per issue.
-const DENSE_AT = 20
+// meter's known fault; the mono `done/total` beside it is the exact fact. Sixteen 3px ticks and
+// their gaps are exactly the track, so past sixteen the ticks share it instead of overrunning the
+// column into the count — still one element per issue, never a resampled bar.
+const METER_TRACK = 86
+const DENSE_AT = 16
 
 function DoneMeter({ done, total }: { done: number; total: number }) {
   const dense = total > DENSE_AT
   return (
     <span
       aria-hidden="true"
-      className="flex h-2 w-[86px] items-center"
-      style={{ gap: dense ? 1 : 2.5 }}
+      className="flex h-2 items-center overflow-hidden rounded-[1px]"
+      style={{ width: METER_TRACK, gap: dense ? 0 : 2.5 }}
     >
       {Array.from({ length: total }, (_, index) => (
         <span
           key={index}
-          className={cn('h-2 rounded-[1px]', index < done ? 'bg-status-done' : 'bg-border-strong')}
-          style={dense ? { flex: '1 1 0', minWidth: 0.5, maxWidth: 3 } : { width: 3, flex: 'none' }}
+          className={cn(
+            'h-2',
+            dense ? '' : 'rounded-[1px]',
+            index < done ? 'bg-status-done' : 'bg-border-strong',
+          )}
+          style={dense ? { flex: '1 1 0', minWidth: 0 } : { width: 3, flex: 'none' }}
         />
       ))}
     </span>

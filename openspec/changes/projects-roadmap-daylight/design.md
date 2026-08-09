@@ -442,10 +442,11 @@ middle one is the mock's.
 ### B14 — The Done meter past twenty issues
 
 One tick per readable issue is the drawn fact, and its length encoding issue count is the meter's
-known fault (the mock says so). A 60-issue project would simply overrun the 140px column, so past
-twenty issues the ticks share the track instead of each taking 3px — still exactly one tick per
-issue, never a resampled bar, and the mono `done/total` beside it carries the exact number either
-way.
+known fault (the mock says so). Sixteen 3px ticks plus their 2.5px gaps are exactly the 86px track,
+so past sixteen issues the ticks share the track instead of each taking 3px and overrunning into the
+count. Still exactly one element per issue at any count — never a resampled bar — and the mono
+`done/total` beside it carries the exact number either way. The mock's widest meter is 14 ticks, so
+nothing in its fixture crosses the threshold.
 
 ### B15 — What this stage did NOT do
 

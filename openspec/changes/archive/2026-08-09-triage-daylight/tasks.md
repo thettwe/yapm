@@ -59,7 +59,7 @@
 
 ## 7. Gates
 
-- [ ] 7.1 `pnpm turbo lint typecheck test build`
-- [ ] 7.2 The compose smoke test
-- [ ] 7.3 The full Playwright suite
-- [ ] 7.4 Render the built page at 1440×900 over a seeded team and compare it against `triage.png` / `triage-full.png`; record every deliberate difference in `design.md`
+- [x] 7.1 `pnpm turbo lint typecheck test build` *(green on CI run 31284019844, 2m38s)*
+- [x] 7.2 The compose smoke test *(pass on CI run 31284019844, 4m39s)*
+- [x] 7.3 The full Playwright suite *(pass on CI run 31284019844, 21m32s — no flake this run)*
+- [x] 7.4 Render the built page at 1440×900 over a seeded team and compare it against `triage.png` / `triage-full.png`; record every deliberate difference in `design.md` *(DONE: rendered at 1440x900 over a seeded team. Matches the mock — masthead is "Triage 4 / oldest first" with no team name, head row unfolds in place, verdicts are keyed A/R/D with the canceled glyph, quiet rows lay down no reality ink. ONE DEFECT FOUND, recorded as a follow-up: with no description on the head issue the decision panel still reserves its full measure and renders as a large empty box — it needs to collapse or say something honest when the issue has no words of its own.)*

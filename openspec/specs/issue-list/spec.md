@@ -26,13 +26,13 @@ Work-graph placement: the list is a view over team-scoped `issue` rows and intro
 
 ### Requirement: The reality track in every row
 
-Each issue row in the list SHALL render the reality-track slot fed by the delivery-signal computation seam and by the divergence computation. A row whose issue is linked to a pull request SHALL draw live PR state, CI health, review age and the deployment fact as the reality track defined in the reality-vocabulary capability; a row whose issue has no linked entities SHALL draw the track's quiet empty state.
+Each issue row in the list SHALL render the reality-track slot fed by the delivery-signal computation seam and by the divergence computation. A row whose issue is linked to a pull request SHALL draw live PR state, CI health, review age and the deployment fact as the reality track defined in the reality-vocabulary capability; a row whose issue has no linked entities SHALL render that slot **reserved and blank** — no station, no segment, no age text, and no placeholder of any kind.
 
 Divergence SHALL be drawn as the `//` break on that row's track, positioned by which divergence fired. The list SHALL NOT render a separate warning symbol for divergence, and SHALL NOT draw delivery reality as a strip of provider icons.
 
 The strip's four facts are unchanged. A row whose merged change reached production — a deployment carrying the linked pull request's merge commit that recorded a success — SHALL say so through the track's deployment station; a row whose change did not SHALL leave that station empty rather than drawing an absence-of-deployment marker, because "no deployment recorded" and "not deployed" are not distinguishable from stored data. The deployment fact SHALL be carried by the station's own shape and by the track's accessible label, never by hue alone.
 
-The empty track SHALL reserve the same space as a populated track, so a row whose signal arrives — including the deployment signal arriving minutes after a merge — SHALL alter no row structure or alignment. All of it SHALL render strictly from theme tokens, correct in all three presets in light and dark.
+The blank slot SHALL reserve the same space as a populated track, so a row whose signal arrives — including the deployment signal arriving minutes after a merge — SHALL alter no row structure or alignment. All of it SHALL render strictly from theme tokens, correct in all three presets in light and dark.
 
 Work-graph placement: rendering surface for the computation seam defined in issue-tracking, now fed by the linked delivery entities and the team's deployments. Permission story: renders only over already-permitted, team-scoped synced rows.
 
@@ -44,7 +44,12 @@ Work-graph placement: rendering surface for the computation seam defined in issu
 #### Scenario: Rows show the unlinked reality state
 
 - **WHEN** the list renders issues with no linked git entities
-- **THEN** every such row draws the track's quiet empty state and no break, without disturbing row alignment
+- **THEN** every such row's reality slot is reserved and blank — no node, no segment, no dotted placeholder and no age text — and the row's alignment is identical to a row whose track is populated
+
+#### Scenario: A list of mostly-unlinked issues carries no repeated ornament
+
+- **WHEN** most rows on a page of the list have no linked change
+- **THEN** the page draws delivery ink only on the rows that have a delivery fact
 
 #### Scenario: The `//` break renders on a diverged row
 

@@ -106,6 +106,15 @@ only such indicator. It SHALL report the sync state, announce reconnection to as
 technology via a polite live region, and offer a keyboard-operable retry control once the
 backoff delay has stretched. No second connection indicator SHALL be rendered anywhere.
 
+The indicator's label SHALL name what the reader has, not what the socket is doing: the
+healthy state SHALL read **`Synced`**. Every other state SHALL keep naming its own
+condition specifically — connecting, reconnecting, offline, an expired sign-in, a sync
+error, and closed are each distinct and SHALL NOT be collapsed into one word. The label
+SHALL be produced by the single function that turns a connection state into words, and the
+indicator's `data-testid`, its connection-state attribute, its recovery-phase attribute and
+its retry control SHALL be unchanged by any wording change, because they are the contract
+the end-to-end suite reads.
+
 The statusline SHALL contain no sentences.
 
 #### Scenario: The team's day in one line
@@ -114,6 +123,16 @@ The statusline SHALL contain no sentences.
   this week and 4 exceptions opens any page of that team
 - **THEN** the statusline reads the cycle and day, 8 shipped, 3 deploys this week and 4
   needing attention, with the sync state right-aligned
+
+#### Scenario: The healthy sync state says Synced
+
+- **WHEN** the sync connection is established on any authenticated page
+- **THEN** the statusline's indicator reads `Synced`
+
+#### Scenario: An unhealthy state still says what is wrong
+
+- **WHEN** the connection is connecting, offline, has an expired sign-in, has a sync error or is closed
+- **THEN** the indicator names that specific condition rather than the healthy word
 
 #### Scenario: Segments fold rather than placehold
 

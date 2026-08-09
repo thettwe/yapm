@@ -254,7 +254,9 @@ A keyboard-first **notification inbox** at `/inbox` with an unread badge, carryi
 (including triage routing), comments on issues you're involved in, and product digests shared with
 you — that last naming no actor and carrying no content. Notifications are written only on the
 server, so a rebased optimistic mutation can never duplicate or re-send one, and a notification is
-readable **only by its recipient, with no admin bypass**.
+readable **only by its recipient, with no admin bypass**. The inbox draws each row from that row
+alone — the issue title as it was stored, never the issue's live status — because joining the
+subject beside it would be a second disclosure that the no-admin-bypass rule does not gate.
 
 They are optionally emailed as one batched, debounced digest per person, through a provider-neutral
 mailer — SMTP **or** Resend over HTTPS, for hosts that block outbound SMTP. Email is cleanly

@@ -92,12 +92,15 @@ and the summary will read like it. The area map is what gives a product digest s
 ## The reader is told, with a link and nothing else
 
 A named reader does not have to keep checking. When a team releases a product digest, every named
-reader who is still in the workspace gets an [**inbox row**](/features/notifications/) in yapm: *"A
-cycle digest was shared with you"*, with the team's name and the cycle's name. It names no publisher — telling somebody outside the team which individual
-released a digest is accountability pointed the wrong way — and it carries no content.
+reader who is still in the workspace gets an [**inbox row**](/features/notifications/) in yapm. The
+row's title is the team's name and the cycle's name, its key column is empty — a digest has no issue
+key — and the phrase beside it reads *"Shared with you"*. It names no publisher — telling somebody
+outside the team which individual released a digest is accountability pointed the wrong way — and it
+carries no content.
 
-Optionally, and **off by default**, they also get one email. That message carries the team's name,
-the cycle's name and **a link**. Never the digest itself, and that is a decision rather than an
+Optionally, and **off by default**, they also get one email. Outside the app there is no row to read
+the subject from, so the mailed notice states the whole sentence: *"A cycle digest was shared with
+you"*. That message carries the team's name, the cycle's name and **a link**. Never the digest itself, and that is a decision rather than an
 oversight: a mailed message sits outside the kill switch, outside retention and outside the audit
 record at the same time. An admin who stops all sharing stops every further read in yapm and cannot
 reach an inbox. So the notice carries a link, and a reader who is no longer entitled follows it into

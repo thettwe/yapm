@@ -16,10 +16,15 @@ export interface NotificationCopyInput {
 }
 
 export interface NotificationCopy {
-  // The actor-and-verb line: what happened, and who did it.
+  // FOR A READER OUTSIDE THE APP. The full sentence, subject interpolated, because a mailed message
+  // has no row beside it to draw the subject in — it is the whole notification.
   readonly title: string
   // The subject it happened to, as it was at the time (design D3).
   readonly summary: string
+  // FOR A SURFACE THAT DRAWS THE SUBJECT BESIDE IT. The actor and the verb with NO subject
+  // interpolated, because the inbox row already carries `subjectKey` and `subjectTitle` in their
+  // own columns and a second copy of the subject in the phrase would be the same fact twice.
+  readonly phrase: string
 }
 
 const UNKNOWN_ACTOR = 'Someone'
@@ -42,11 +47,26 @@ function titleFor(kind: NotificationKind, actor: string, subject: string): strin
   }
 }
 
+function phraseFor(kind: NotificationKind, actor: string): string {
+  switch (kind) {
+    case 'issue_assigned':
+      return `${actor} assigned you`
+    case 'issue_commented':
+      return `${actor} commented`
+    case 'mention':
+      return `${actor} mentioned you`
+    case 'pm_digest_published':
+      return PM_DIGEST_PUBLISHED_PHRASE
+  }
+}
+
 // ACTOR-FREE, and that is the point rather than an omission. A PM outside the team learning WHICH
 // individual released a digest is accountability in the wrong direction — the same refusal that kept
-// `published_by` out of the Zero schema. The fan-out writes the system principal, and because the
-// title never interpolates an actor the `'Someone'` fallback can never render here either.
+// `published_by` out of the Zero schema. The fan-out writes the system principal, and because
+// neither the title nor the phrase interpolates an actor the `'Someone'` fallback can never render
+// here either.
 const PM_DIGEST_PUBLISHED_TITLE = 'A cycle digest was shared with you'
+const PM_DIGEST_PUBLISHED_PHRASE = 'Shared with you'
 
 export function notificationCopy(input: NotificationCopyInput): NotificationCopy {
   const actor = actorLabel(input.actorName)
@@ -54,5 +74,6 @@ export function notificationCopy(input: NotificationCopyInput): NotificationCopy
   return {
     title: titleFor(input.kind, actor, subject),
     summary: input.subjectTitle,
+    phrase: phraseFor(input.kind, actor),
   }
 }

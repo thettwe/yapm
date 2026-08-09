@@ -10,7 +10,7 @@ export const Route = createFileRoute('/inbox')({ component: InboxPage })
 function InboxPage() {
   return (
     <Authenticated>
-      <AppFrame>
+      <AppFrame measure="full">
         <InboxView />
       </AppFrame>
     </Authenticated>

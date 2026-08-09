@@ -1,4 +1,9 @@
-import { type NotificationKind, type NotificationSubjectType, notificationCopy } from '@yapm/schema'
+import {
+  NOTIFICATION_KINDS,
+  type NotificationKind,
+  type NotificationSubjectType,
+  notificationCopy,
+} from '@yapm/schema'
 
 // The inbox's read model: synced notification rows in, rendered rows out. Pure — no Zero, no
 // React — so the unread count, its cap and the day grouping are unit-testable without a client.
@@ -46,11 +51,38 @@ export interface NotificationRowData {
   readonly eventKey: string
   readonly actorId: string
   readonly actorName: string | null
+  // The full sentence, unchanged: what a reader outside the app is sent, and what the palette and
+  // the email seam still address the event by.
   readonly title: string
   readonly summary: string
+  // The actor and the verb alone. The row draws this beside `subjectKey` / `subjectTitle`, which
+  // carry the subject in their own columns.
+  readonly phrase: string
   readonly read: boolean
   readonly createdAt: number
 }
+
+// The kind as a word, for the row's assistive-technology text. The glyph is a drawing and a drawing
+// is not a name, so every row states its kind here as well.
+export const KIND_LABEL: Record<NotificationKind, string> = {
+  issue_assigned: 'Assigned',
+  issue_commented: 'Commented',
+  mention: 'Mentioned',
+  pm_digest_published: 'Digest',
+}
+
+// The same kinds as the empty state names them — lower case, and the digest pluralised because that
+// line reads as a list of what arrives here rather than as four row labels. Keyed by the union and
+// projected through `NOTIFICATION_KINDS`, so a fifth kind is a compile error here exactly as it is
+// on `KIND_LABEL`, rather than silently dropping out of the empty state.
+const KIND_WORD: Record<NotificationKind, string> = {
+  issue_assigned: 'assigned',
+  issue_commented: 'commented',
+  mention: 'mentioned',
+  pm_digest_published: 'digests',
+}
+
+export const KIND_WORDS: readonly string[] = NOTIFICATION_KINDS.map((kind) => KIND_WORD[kind])
 
 const ID_SEPARATOR = '\u0000'
 
@@ -91,6 +123,7 @@ export function toNotificationRow(row: NotificationSyncedRow): NotificationRowDa
     actorName,
     title: copy.title,
     summary: copy.summary,
+    phrase: copy.phrase,
     read: row.readAt != null,
     createdAt: row.createdAt,
   }
@@ -106,6 +139,12 @@ export function toNotificationRows(
     .sort((a, b) =>
       b.createdAt !== a.createdAt ? b.createdAt - a.createdAt : a.id.localeCompare(b.id),
     )
+}
+
+// The unread lens, as a pure filter over rows the client already holds: no query, no argument, no
+// round trip. Kept here rather than inline in the view so the lens is testable without a client.
+export function unreadRows(rows: readonly NotificationRowData[]): readonly NotificationRowData[] {
+  return rows.filter((row) => !row.read)
 }
 
 export function unreadCount(rows: readonly NotificationRowData[]): number {

@@ -548,7 +548,10 @@ function BoardBody({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-bg">
-      <CommandProvider teamId={teamId} issues={ordered}>
+      {/* The UNFILTERED rows, as the list hands them over: the composer mints the new issue's
+          rank after the current maximum in Todo, and a filter hiding that maximum would mint a
+          key that lands the new card in the middle of a column the reader cannot see. */}
+      <CommandProvider teamId={teamId} issues={cards}>
         <BoardMasthead
           count={count}
           filter={filter}

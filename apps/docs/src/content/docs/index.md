@@ -21,9 +21,11 @@ runs as three containers you own.
   that states a fact twice on purpose: a plain line a product manager reads directly above a mono
   line an engineer reads, a vertical delivery rail, and — when the board and git disagree — a
   callout carrying both clocks as evidence.
-- [Board](/features/board/) — a keyboard-first kanban of your team's issues, grouped into the six
-  fixed status columns. A **lens on Issues**, not a destination of its own, at
-  `/teams/<teamId>/board`.
+- [Board](/features/board/) — a keyboard-first kanban of your team's issues in six fixed status
+  columns that all fit the width. A card carries the same facts as a list row in a different shape,
+  including the reality track and its `//` break, and a move is **drawn** rather than animated, so
+  it reads with a keyboard and with motion off. A **lens on Issues**, not a destination of its own,
+  sharing the list's filter bar, at `/teams/<teamId>/board`.
 - [Cycles](/features/cycles/) — the register of a team's cycles: one row per cycle with its scope
   ledger and artifacts, the work that carried across a boundary, and automatic rollover of
   unfinished work when a cycle ends, at `/teams/<teamId>/cycles`.

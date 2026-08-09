@@ -45,10 +45,12 @@
 - [x] 5.5 `apps/web` component: a viewer gets no hole, no landing slot and no pick-up, and the card is still an operable button that opens the issue
 - [x] 5.6 `apps/web` component (`issue-list.test.tsx`): the list's filter axes, search, saved views, grouping and sort survive the extraction unchanged
 - [x] 5.7 Extend `packages/ui/src/styles/contrast.test.ts` with the board's pairs in **every** theme block, light and dark (design D8): urgent and neutral phrase ink on the card ground at 4.5:1; the reserved slot's border on the column ground at 3:1; the drop slot's accent border on its tint at 3:1; the in-flight ring on the card ground at 3:1; and the column ground against the page ground recorded as measured scaffolding below 3:1, so the claim can be falsified
-- [x] 5.8 Update `apps/web/e2e/board.spec.ts` selectors where the surface moved, and add one assertion that the board region's `scrollWidth` equals its `clientWidth` at the suite's viewport. The viewer, keyboard-move, palette, reorder, virtualization and theme tests keep their claims **verbatim**. **Never weaken an assertion to make a gate pass**
+- [x] 5.8 Update `apps/web/e2e/board.spec.ts` selectors where the surface moved, and add one assertion that the board region's `scrollWidth` equals its `clientWidth` — measured at 1440×900, the width the spec's scenario names, **and** at the suite's own, because the claim is that it holds without a breakpoint. The viewer, keyboard-move, palette, reorder, virtualization and theme tests keep their claims **verbatim**. **Never weaken an assertion to make a gate pass**
 - [ ] 5.9 Re-run any e2e failure once before investigating: the known multi-context flake (`projects.spec.ts:188`, `:246`, `pm-digest.spec.ts:306`, signature `browserContext.close: Protocol error`) is tracked separately and is not this change's to fix. Any OTHER failure is
 - [x] 5.10 Confirm no test hard-codes a budget encoding e2e fixture size, and no test's premise is what a given Node runtime provides (CI is Node 24; dev machines here run 26)
 - [x] 5.11 No pg test is added: this change touches no schema, mutator or permission surface (design D10). Confirm that is still true when the build is done
+- [x] 5.12 `packages/ui/src/components/board-card.test.tsx` — the card primitive's three new registers proven from props alone, with no board and no drag library: a card handed no track draws and announces nothing while still reserving the measure, the phrase and the footer appear only when supplied, a long title wraps with every other fact intact, the hole is the same box emptied, and the in-flight card is raised and states its keys. All six cases were run against main's card and all six fail there
+- [x] 5.13 Component-tier degenerate states (the triage lesson, at the tier that runs without a stack): a board with nothing on it is six drawn columns rather than a blank page; a board with exactly one card reserves the other five columns; a column of forty cards states its true total, draws all forty, and scrolls rather than folding. These do not replace 7.5 — a component test cannot see a hole
 
 ## 6. Documentation
 
@@ -57,6 +59,7 @@
 - [x] 6.3 Update `README.md` if it describes the board; confirm `.env.example`, `TECHSTACK.md`, `VISION.md`, `DESIGN.md`, `PROCESS.md` and the `reference/` pages are untouched by this change and therefore not stale (PROCESS.md §2). **Do not edit `ROADMAP.md`** — parallel builds share it and the maintainer adds the row at archive time
 - [x] 6.4 `pnpm --filter @yapm/docs build` passes
 - [x] 6.5 Record every decision taken during the build in `design.md` under "## Decisions made during implementation" — including anything that had to diverge from `board.html` and why
+- [x] 6.6 Sweep the docs this change made stale beyond its own page: the reality vocabulary's list of the surfaces that draw the track (a board card is now one of them), the docs index's Board entry, and the app frame's ⌘K account of what answers when the board declines
 
 ## 7. Gates
 

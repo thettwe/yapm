@@ -263,6 +263,58 @@ test('an empty column draws one reserved slot and no words', () => {
 })
 
 // ---------------------------------------------------------------------------
+// The degenerate states, which are where a reserved measure turns into a hole. (The triage panel
+// reserved its full measure over an issue with no description, read as a large empty box, and
+// passed every test it had.) These are the four shapes a real board takes at its extremes.
+// ---------------------------------------------------------------------------
+
+test('a board with nothing on it is six drawn columns, not a blank page', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': [] }
+  mount()
+
+  expect(screen.queryAllByTestId('board-card')).toHaveLength(0)
+  expect(document.querySelectorAll('[data-slot="board-rest-slot"]')).toHaveLength(6)
+  expect(screen.getByTestId('masthead-count')).toHaveTextContent('0')
+  for (const label of COLUMN_LABELS) {
+    const section = column(label)
+    expect(section).toHaveAccessibleName(`${label}, 0 issues`)
+    // The header still states which column this is and that it holds nothing — the reserved slot
+    // below it is a measure, never the only thing drawn.
+    const header = section.querySelector('header')
+    expect(header?.textContent).toContain(label)
+    expect(header?.textContent).toContain('0')
+  }
+  expect(screen.queryByText('No issues')).toBeNull()
+})
+
+test('a board with exactly one card reserves the five columns it is not in', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': [QUIET] }
+  mount()
+
+  expect(cards()).toHaveLength(1)
+  expect(document.querySelectorAll('[data-slot="board-rest-slot"]')).toHaveLength(5)
+  const host = column('In Progress')
+  expect(host.querySelectorAll('[data-slot="board-rest-slot"]')).toHaveLength(0)
+  expect(within(host).getByText('Focus lost after closing the palette')).toBeInTheDocument()
+})
+
+test('a column of forty cards states its true total, draws them all, and scrolls rather than folding', () => {
+  const many = Array.from({ length: 40 }, (_, i) =>
+    issue({ id: `i-${i}`, number: 200 + i, title: `Card ${i}`, status: 'todo' }),
+  )
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': many }
+  mount()
+
+  const todo = column('Todo')
+  expect(todo).toHaveAccessibleName('Todo, 40 issues')
+  expect(within(todo).getAllByTestId('board-card')).toHaveLength(40)
+  // No fold: a folded remainder hides drop targets, so the column scrolls to reach the fortieth.
+  expect(within(todo).getByText('Card 39')).toBeInTheDocument()
+  expect(todo.querySelector('.overflow-y-auto')).not.toBeNull()
+  expect(within(todo).queryByText(/more$/)).toBeNull()
+})
+
+// ---------------------------------------------------------------------------
 // Band 2 — the list's own filter bar, with the board's one difference.
 // ---------------------------------------------------------------------------
 

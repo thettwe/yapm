@@ -332,11 +332,70 @@ which column.
 `This team no longer exists.` and `Loading team…` became `Team not found` and `Loading…` — the same
 two labels the list uses, and the only sentence on the page is gone (task 4.9).
 
+### DI-10 — The card primitive gets its own test, because the board tier cannot fail for it
+
+`BoardCard` is a `packages/ui` primitive with three registers this change invents (the quiet card,
+the hole, the card in flight) and one it removes (the default track labelled
+`No delivery signal yet`). The board's component test drives all of them, but only through the
+board: a regression in the primitive would surface there as a confusing board failure, and the
+package that owns the file would have no test at all — `packages/ui` had none for this component
+before this change.
+
+**Decided: `packages/ui/src/components/board-card.test.tsx`, six cases, props only** — no board, no
+dnd-kit, no Zero. A card handed no track draws nothing in its slot and exposes no image role while
+still reserving the 86px; the phrase and the footer are absent rather than blank when nothing is
+supplied; a long title is stated in full with the labels, the assignee and the track slot still
+under it and no fixed card height; the hole is the same box with its content hidden; the in-flight
+card is raised and carries its keys. **Run against main's `board-card.tsx` all six fail**, which is
+the check that they are not describing the framework instead of the change.
+
+### DI-11 — The degenerate states are covered at the tier that can be run here, and the render is still owed
+
+The triage lesson is that a reserved measure over nothing reads as a hole and passes every test.
+Three of the five degenerate states are now asserted in `board.test.tsx`: a board with **nothing**
+on it (six drawn columns with their labels and a mono `0`, six reserved slots, no words, and a
+count of zero — not a blank page), a board with **exactly one** card (the five columns it is not in
+each reserve one slot; the column it is in reserves none), and a **forty-card** column (all forty
+drawn, the true total in the header and the accessible name, a vertical scroller, and no fold).
+The long title is asserted on the primitive (DI-10).
+
+This is not a substitute for task 7.5 and should not be read as one: **a component test cannot see
+a hole.** It can prove that the ink exists and that nothing was dropped; whether the composition
+reads is a question only the render answers. 7.4 and 7.5 remain unrun and unticked.
+
+### DI-12 — The no-sideways-scroll e2e is measured at 1440, not only at the suite's default
+
+The spec's scenario names 1440 and the Playwright project runs Desktop Chrome at 1280, so an
+assertion "at the suite's viewport" would have proven a width the requirement does not mention.
+The test now sets 1440×900, measures `scrollWidth === clientWidth` and that Canceled is in the
+viewport, then does the same at 1280×720 — the claim is that the promise holds **without a
+breakpoint**, so it is asserted at two widths rather than one.
+
+### DI-13 — Three docs outside this surface had gone stale, and a sibling build may be in two of them
+
+Beyond `features/board.md` and `features/issue-list.md`:
+
+- `features/reality-vocabulary.md` opened by listing the surfaces that draw one vocabulary — "an
+  issue row, an issue page, the team's morning digest and the Delivery view". A board card is now
+  one of them, and that sentence is the page's whole premise.
+- `index.md`'s Board entry described the pre-overhaul board (columns and nothing else).
+- `features/app-frame.md` says a surface palette that is about something you have not selected
+  hands `⌘K` back. True, and now incomplete: on the Board lens what answers next is the Issues
+  palette (DI-2), not the frame's own.
+
+`app-frame.md` and `reality-vocabulary.md` are pages a **sibling parallel build may also be
+editing**; both edits here are a single sentence and local to the board's claim.
+
 ### Still outstanding at the end of this pass
 
 The **render task (7.4) and the degenerate-state renders (7.5) have not been run**: no screenshot
 of the built page at 1440×900 has been compared against `board.png`, and the one-card /
-all-columns-empty / 40-card / long-title / phrase-without-track states have not been looked at.
-Everything recorded above as a difference from the mock was decided from the code and the token
-measurements, not from a render. Nothing in this section should be read as "the page was looked
-at".
+all-columns-empty / 40-card / long-title / phrase-without-track states have not been *looked* at —
+three of them are asserted at the component tier (DI-11) and that is a different claim. Everything
+recorded above as a difference from the mock was decided from the code and the token measurements,
+not from a render. Nothing in this section should be read as "the page was looked at".
+
+The full build, the compose smoke test and the Playwright suite (7.1–7.3) were **not run locally**
+on this pass; the PR is open, so CI runs them on the push. What was run here and is green: the
+typecheck, Biome, the whole Vitest suite for every package downstream of main (`@yapm/web` 621,
+`@yapm/ui` 489), the boundary check, and the docs build.

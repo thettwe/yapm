@@ -1,5 +1,4 @@
-import { type CycleStatus, compareCycles, isUnfinished } from '@yapm/schema'
-import type { IssueRowData } from '@/issues/model'
+import { type CycleStatus, compareCycles, cycleKeyOf } from '@yapm/schema'
 
 export const CYCLE_STATUS_LABEL: Record<CycleStatus, string> = {
   upcoming: 'Upcoming',
@@ -16,24 +15,10 @@ export interface CycleRowData {
   readonly endDate: number
 }
 
-// The human key for a cycle. Before the server-assigned number replicates it renders pending.
+// The human key for a cycle, resolved through the schema seam so the register, the issue list and
+// triage cannot spell the same cycle two ways.
 export function cycleKey(cycle: { number: number | null }): string {
-  return cycle.number == null ? 'Cycle …' : `Cycle ${cycle.number}`
-}
-
-export interface CycleProgress {
-  readonly total: number
-  readonly done: number
-  readonly percent: number
-}
-
-// Simple progress over a cycle's issues: how many have reached a finished status (done or
-// canceled) out of the total assigned. Percent is 0 for an empty cycle (never NaN).
-export function cycleProgress(issues: readonly IssueRowData[]): CycleProgress {
-  const total = issues.length
-  const done = issues.filter((issue) => !isUnfinished(issue.status)).length
-  const percent = total === 0 ? 0 : Math.round((done / total) * 100)
-  return { total, done, percent }
+  return cycleKeyOf(cycle)
 }
 
 export interface PartitionedCycles {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { IssueRowData } from '@/issues/model'
-import { type CycleRowData, currentCycle, cycleKey, cycleProgress, partitionCycles } from './model'
+import { type CycleRowData, currentCycle, cycleKey, partitionCycles } from './model'
 
 const cycle = (over: Partial<CycleRowData> & { id: string }): CycleRowData => ({
   number: null,
@@ -9,27 +8,6 @@ const cycle = (over: Partial<CycleRowData> & { id: string }): CycleRowData => ({
   startDate: 0,
   endDate: 1,
   ...over,
-})
-
-const issue = (status: IssueRowData['status']): IssueRowData => ({
-  id: `i-${Math.random()}`,
-  title: 't',
-  status,
-  priority: 'medium',
-  assigneeId: null,
-  updatedAt: 0,
-  createdAt: 0,
-})
-
-describe('cycleProgress', () => {
-  it('counts finished issues and rounds the percentage', () => {
-    const issues = [issue('todo'), issue('done'), issue('canceled'), issue('in_progress')]
-    expect(cycleProgress(issues)).toEqual({ total: 4, done: 2, percent: 50 })
-  })
-
-  it('is 0 percent for an empty cycle, never NaN', () => {
-    expect(cycleProgress([])).toEqual({ total: 0, done: 0, percent: 0 })
-  })
 })
 
 describe('partitionCycles', () => {

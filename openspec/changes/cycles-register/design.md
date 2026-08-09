@@ -247,3 +247,100 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 
 <!-- Build-time decisions are appended below this line, each with what was ambiguous, what was
      chosen, and why. -->
+
+### Build pass — the derivation, the vocabulary and the page (tasks 2–4)
+
+**`buildCycleRegister(input)` takes no `now`.** The brief asked for the clock as an argument,
+following `buildTeamHome`. Every fact the register publishes is a stored status, a stored count or
+a stored timestamp rendered by the page — glyph kind is `cycle.status`, the ledger is a count of
+rows, the chain is `carryover_count`, the chips are stored artifact rows. There is no derivation in
+this file that a clock would change, so an unused `now` parameter would have been a false claim
+about what the function depends on. `buildTeamHome` takes one because its day band, its ages and
+its 24-hour window genuinely need it. If a later requirement makes this page time-dependent, the
+argument arrives with the requirement.
+
+**Three rules moved into `packages/schema/src/zero/cycles.ts` rather than being copied.** D1 named
+the scope band; the build found two more shared rules and gave each one home:
+
+- `buildScopeBand(issues, cycleStartDate)` (in `team-home.ts`, beside the `TeamHomeScope` type it
+  returns) — `buildHeroCycle` now calls it, so Home and the register are one rule.
+- `cycleKeyOf(cycle)` — `apps/web/src/cycles/model.ts`'s `cycleKey` now delegates to it, so the
+  register, the issue list and triage cannot spell one cycle two ways.
+- `hasCycleReport(digest)` / `isCycleWrapped(retros, cycleId)` — D5's "extracted, not copied",
+  taken literally. `buildHeroCycle` and `buildRow` both call them.
+
+**The carry wash is a token, not an arbitrary class.** The mock writes
+`color-mix(in srgb, var(--status-in-progress) 10%, transparent)` inline. The shipped palette's
+house pattern for a derived wash is a preset-level token (`--urgent-soft`), so `--carry-soft` is
+declared in all six theme blocks of `globals.css` and mapped as `--color-carry-soft`, and the row
+uses `bg-carry-soft`. Same value, but the wash is now a ground `contrast.test.ts` can measure by
+name (task 5.9) instead of a string buried in a `className`.
+
+**`PmDigestShareCard` sits outside THE LAST REPORT's gate.** The report band folds when the panel
+inside it would render nothing (a running cycle with no digest row). `pm-digest.spec.ts` asserts
+`pm-digest-share` is visible on exactly that cycle — a running one, seeded with a *pm* digest and
+no cycle digest — so gating the share card behind the report band would have broken a spec this
+change may not touch. The card follows the report and folds itself when the workspace shares
+nothing, which is the behaviour it already had.
+
+**The footnote's affordance reads `how ·`, not the mock's `more ·`.** `How` is the product's one
+mechanism for "the explanation is one keystroke away and folds again", and its trigger word is part
+of that vocabulary. Teaching it a second word for the same gesture buys the mock's exact string at
+the cost of a synonym the reader has to learn. The panel content is the mock's.
+
+**`carriedForward` is published only where the denominator is known.** `rolled_over_from_cycle_id`
+is overwritten on the next rollover, so an older completed cycle's carried set undercounts by
+however many of its issues moved again. A row that cannot count it says nothing rather than
+printing a number that shrinks over time. This matches the mock, where only C13 carries the phrase.
+
+**A degraded ledger whose visible band is empty folds entirely.** Dropping the `open` blocks from an
+old completed cycle can leave nothing to draw (its remaining pointing set is all `canceled`). The
+cell folds rather than drawing a bare `0 landed` beside an empty rail — the same rule as a cycle
+with no issues (D8).
+
+**The chain's named node is labelled with the cycle NAME.** The mock writes `Cycle 1`, which is
+that file's own key lettering. The product renders `cycleNameOf(cycle)` — the cycle's name, falling
+back to `cycleKeyOf` when it is blank — because the name is what the reader selected the row by.
+
+**`deep` is depth ≥ 3.** The mock washes exactly one row, the one carried three times; 2× and 1×
+are quiet. Exported as `CARRY_DEEP_DEPTH` so the threshold has one home.
+
+**Arrow keys move focus; every row stays tabbable.** Not a roving-tabindex listbox: these are
+buttons in a list (D6's contract, kept), so `Tab` reaches each row as it always did and `ArrowUp` /
+`ArrowDown` are a shortcut over the same order. `Enter` / `Space` is the button's own activation,
+which is what makes the selection.
+
+**The register is not folded.** The mock's `↓ 9 more` is left unbuilt in this pass; whether it is
+needed is a question for the render (task 7.4), and a fold added before then is a control over a
+list nobody has looked at yet.
+
+**`cycleProgress` is deleted from `apps/web/src/cycles/model.ts`.** The progress bar was its only
+consumer (checked: `triage-view.tsx` and `issue-list.tsx` import `cycleKey`, `retros-view.tsx`
+imports `CYCLE_STATUS_LABEL` / `formatCycleRange` / `CycleRowData`, and nothing else imports the
+module). Its two unit assertions go with it.
+
+**`new-cycle` becomes a labelled `+ New cycle` button.** The mock draws the word; the shipped
+control was an icon button. `aria-label="New cycle"` is preserved verbatim, so
+`getByRole('button', { name: 'New cycle' })` — which `retro.spec.ts`, `digest.spec.ts` and
+`pm-digest.spec.ts` all wait on — resolves exactly as before.
+
+**How the three untouched specs keep working.** They select a cycle with
+`getByRole('button', { name: new RegExp(cycleName) })`, which used to resolve the rail button. The
+register row is a button whose accessible name contains the cycle name, so the same locator resolves
+the register row and `complete-cycle` (now acting on the selection) acts on the cycle they clicked.
+Verified by reading each spec, not assumed.
+
+**Lucide is gone from this page** (mock §7): `CircleDashedIcon`, `FlagIcon`, `MessagesSquareIcon`
+and `PlusIcon` are removed. The two artifact chips carry the northstar's `g-cycles` and `g-retro`
+marks, drawn inline on the same grid.
+
+**The loading / team-missing states follow the triage precedent** (`'No such team.'` / `'Loading…'`)
+rather than the older `'This team no longer exists.' / 'Loading team…'` pair the un-rebuilt pages
+still carry — task 4.10's label register, matching the most recently rebuilt destination.
+
+**Not done in this pass, and owed:** the tests (§5), the documentation (§6) and the gates (§7) —
+including the 1440×900 render of the page and of each degenerate state, and the task-7.6 decision
+about whether the carry chain survives contact with a real screen. The build ran
+`typecheck`, `biome ci`, the unit/component suites and `check-boundaries` only; `apps/web/e2e/cycles.spec.ts`
+is **known to fail** as written (it drives `cycle-issue-row`, the cycle rail and the progressbar,
+all three of which this change removes) and is §5.10's to rewrite with stronger assertions.

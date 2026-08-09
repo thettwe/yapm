@@ -8,7 +8,7 @@ import type {
   RetroPhase,
   ReviewState,
 } from './context.js'
-import { compareCycles, isUnfinished } from './cycles.js'
+import { compareCycles, hasCycleReport, isCycleWrapped, isUnfinished } from './cycles.js'
 import {
   assembleLinkedEntities,
   buildDeploymentIndex,
@@ -617,6 +617,40 @@ function buildAttention(
   }
 }
 
+export interface ScopeBandIssueRow {
+  readonly status: IssueStatus
+  readonly cycleAssignedAt?: number | null
+}
+
+// §D3 scope, per `metrics/scope.ts` semantics: added = assigned after the cycle started
+// (carry-ins stay committed), landed = done. Each issue draws exactly one block, in the order
+// landed…open…added.
+//
+// Home's hero and the Cycles register both call THIS — the rule lives once so the two surfaces
+// are incapable of disagreeing about the same cycle.
+export function buildScopeBand(
+  issues: readonly ScopeBandIssueRow[],
+  cycleStartDate: number,
+): TeamHomeScope {
+  let committed = 0
+  let landed = 0
+  let added = 0
+  const landedBlocks: 'landed'[] = []
+  const openBlocks: 'open'[] = []
+  const addedBlocks: 'added'[] = []
+  for (const issue of issues) {
+    const isAdded = issue.cycleAssignedAt != null && issue.cycleAssignedAt > cycleStartDate
+    if (isAdded) added += 1
+    else committed += 1
+    if (issue.status === 'done') {
+      landed += 1
+      landedBlocks.push('landed')
+    } else if (isAdded) addedBlocks.push('added')
+    else openBlocks.push('open')
+  }
+  return { committed, landed, added, band: [...landedBlocks, ...openBlocks, ...addedBlocks] }
+}
+
 function buildHeroCycle(
   cycle: TeamHomeCycleRow,
   cycleDeliveries: readonly IssueDelivery[],
@@ -631,28 +665,13 @@ function buildHeroCycle(
     i + 1 < dayIndex ? 'past' : i + 1 === dayIndex ? 'today' : 'future',
   )
 
-  // §D3 scope, per `metrics/scope.ts` semantics: added = assigned after the cycle started
-  // (carry-ins stay committed), landed = done. Each issue draws exactly one band block.
-  let committed = 0
-  let landed = 0
-  let added = 0
-  const landedBlocks: 'landed'[] = []
-  const openBlocks: 'open'[] = []
-  const addedBlocks: 'added'[] = []
-  for (const { issue } of cycleDeliveries) {
-    const isAdded = issue.cycleAssignedAt != null && issue.cycleAssignedAt > cycle.startDate
-    if (isAdded) added += 1
-    else committed += 1
-    if (issue.status === 'done') {
-      landed += 1
-      landedBlocks.push('landed')
-    } else if (isAdded) addedBlocks.push('added')
-    else openBlocks.push('open')
-  }
+  const scope = buildScopeBand(
+    cycleDeliveries.map(({ issue }) => issue),
+    cycle.startDate,
+  )
 
-  const digest = input.digest ?? null
-  const cycleReport = digest?.status === 'ready' && digest.content != null
-  const wrapped = input.retros.some((r) => r.cycleId === cycle.id && r.closedAt != null)
+  const cycleReport = hasCycleReport(input.digest)
+  const wrapped = isCycleWrapped(input.retros, cycle.id)
   const next = input.retros
     .filter((r) => r.closedAt == null)
     .map((r) => ({ retroId: r.id, title: r.title, phase: r.phase }))
@@ -672,7 +691,7 @@ function buildHeroCycle(
       inReview: cycleDeliveries.filter((d) => d.issue.status === 'in_review').length,
       needAttention: attentionCount,
     },
-    scope: { committed, landed, added, band: [...landedBlocks, ...openBlocks, ...addedBlocks] },
+    scope,
     chips: { cycleReport, wrapped },
     next,
   }

@@ -30,6 +30,17 @@ const THREE_QUARTER_ARC = 'M10 3 A7 7 0 1 1 3 10'
 // vertices sit well inside r=7.6 rather than filling the disc.
 const DONE_CHECK = 'M6.3 10.3 8.9 12.9 13.7 7.3'
 
+// A CYCLE is a loop too — one filled as far as it has run — so its three positions are drawn on
+// the same 20-grid, at the same 1.6 stroke, from the same three shapes as the issue statuses. No
+// second geometry and no icon family: a reader who has learnt the issue glyph has learnt this one.
+const CYCLE_STATUS = {
+  upcoming: { label: 'Upcoming cycle', color: 'text-status-backlog' },
+  active: { label: 'Active cycle', color: 'text-status-in-progress' },
+  completed: { label: 'Completed cycle', color: 'text-status-done' },
+} as const
+
+export type CycleGlyphKind = keyof typeof CYCLE_STATUS
+
 function Ring({ opacity, dashed = false }: { opacity?: number; dashed?: boolean }) {
   return (
     <circle
@@ -70,21 +81,52 @@ function StatusGlyph({
       {/* The product's sixth status; the northstar's set is five, so it is redrawn on the same
           grid and stroke rather than borrowed from another family. */}
       {status === 'canceled' ? <Arc d="M6.9 6.9 13.1 13.1M13.1 6.9 6.9 13.1" /> : null}
-      {status === 'done' ? (
-        <>
-          <circle cx="10" cy="10" r="7.6" fill="currentColor" />
-          <path
-            d={DONE_CHECK}
-            fill="none"
-            stroke="var(--bg)"
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </>
-      ) : null}
+      {status === 'done' ? <DoneDisc /> : null}
     </svg>
   )
 }
 
-export { STATUS, StatusGlyph }
+function DoneDisc() {
+  return (
+    <>
+      <circle cx="10" cy="10" r="7.6" fill="currentColor" />
+      <path
+        d={DONE_CHECK}
+        fill="none"
+        stroke="var(--bg)"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  )
+}
+
+function CycleGlyph({
+  kind,
+  className,
+  ...props
+}: { kind: CycleGlyphKind } & Omit<SVGProps<SVGSVGElement>, 'children'>) {
+  const { label, color } = CYCLE_STATUS[kind]
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      role="img"
+      aria-label={label}
+      className={cn('size-3.5 shrink-0', color, className)}
+      {...props}
+    >
+      <title>{label}</title>
+      {kind === 'upcoming' ? <Ring dashed /> : null}
+      {kind === 'active' ? (
+        <>
+          <Ring opacity={GHOST_OPACITY} />
+          <Arc d={HALF_ARC} />
+        </>
+      ) : null}
+      {kind === 'completed' ? <DoneDisc /> : null}
+    </svg>
+  )
+}
+
+export { CYCLE_STATUS, CycleGlyph, STATUS, StatusGlyph }

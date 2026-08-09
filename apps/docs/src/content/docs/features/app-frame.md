@@ -109,4 +109,5 @@ is the frame's own: the six destinations, the inbox, search everything, appearan
 is recovering — `Retry sync now`, so the one control that gets you writing again is never a long
 page's worth of `Tab` away. A surface palette that is about something you have not selected (the
 board's is about the focused card) hands the binding back rather than swallowing it, so `⌘K` always
-opens something: that is the point of advertising it on every page.
+opens something: that is the point of advertising it on every page. Whatever registered before it
+answers instead — on the Board lens that is the Issues palette, which the lens shares with the list.

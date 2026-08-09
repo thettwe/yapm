@@ -92,6 +92,31 @@ test('issues seeded in the list appear as cards in the board Todo column', async
   await expect(card(column(page, 'Todo'), title)).toBeVisible({ timeout: 20_000 })
 })
 
+test('all six columns share the measure and the board never scrolls sideways', async ({ page }) => {
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  await openBoard(page, [unique('Measure card')])
+
+  // The promise, measured rather than eyeballed: six fluid columns inside the page gutter, so the
+  // last one is on screen instead of past the right edge. Six fixed 288px columns in a
+  // horizontally scrolling strip measure ~1790px and fail this. Asserted at the width the design
+  // names AND at the suite's own, because the claim is that it holds without a breakpoint.
+  const board = page.getByTestId('board')
+  for (const size of [
+    { width: 1440, height: 900 },
+    { width: 1280, height: 720 },
+  ]) {
+    await page.setViewportSize(size)
+    const [scrollWidth, clientWidth] = await board.evaluate((el) => [
+      el.scrollWidth,
+      el.clientWidth,
+    ])
+    expect(scrollWidth, `no sideways scroll at ${size.width}`).toBe(clientWidth)
+    await expect(column(page, 'Canceled')).toBeInViewport()
+  }
+})
+
 test('the command palette moves a focused card to another column and it persists', async ({
   page,
 }) => {

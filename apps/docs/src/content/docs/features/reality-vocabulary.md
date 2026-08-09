@@ -3,8 +3,9 @@ title: The reality vocabulary
 description: How yapm draws delivery reality — the track and its stations, the divergence break, status as cycle position, priority as weight, the peek, the how, and the provenance mark.
 ---
 
-yapm draws the same things the same way everywhere. An issue row, an issue page, the team's morning
-digest and the Delivery view all render delivery reality with **one vocabulary**: a track of nodes,
+yapm draws the same things the same way everywhere. An issue row, a board card, an issue page, the
+team's morning digest and the Delivery view all render delivery reality with **one vocabulary**: a
+track of nodes,
 a `//` break where the board and git disagree, an arc for status, ticks for priority. Learning it on
 one surface means you already know it on the next.
 

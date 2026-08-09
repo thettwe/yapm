@@ -101,7 +101,10 @@ rather than apologizing. Members management is intact behind a Members doorway.
   station per moment a real timestamp supports. Rich-text descriptions, files and comments intact.
 - Where the board and git disagree, a callout whose evidence is the two clocks side by side, and
   whose ⏎ takes the one repair the board can honestly make.
-- A kanban board.
+- A kanban **board** as the second lens on the same issues, sharing the list's filter bar: six
+  fixed status columns that all fit the width, a card carrying the same facts as a row — including
+  the reality track and its `//` break — and a move that is drawn rather than animated, so it
+  reads with a keyboard and with motion off.
 - Time-boxed **cycles** with automatic rollover of unfinished work, drawn as a **register**: one
   row per cycle with its scope ledger and its artifacts, and the work that survived a cycle
   boundary stated as a carry chain. No burndown — a cycle keeps no status history, and the page

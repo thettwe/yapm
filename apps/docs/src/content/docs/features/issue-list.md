@@ -89,6 +89,13 @@ The bar is drawn quietly on purpose: a filter mark, then the axes as plain text,
 grouping and sort stated at the trailing edge. Nothing in it competes with the work for attention.
 Everything in it still works.
 
+It is also the **Board** lens's bar — one implementation, imported by both, so an axis cannot mean
+one thing here and another there. The **List | Board** toggle beside the page name switches which
+lens draws the results; the Board lens offers the same axes, the same search, the same saved views
+and the same **Save view** and **New issue** actions, and states `Order · Manual` where this one
+states its grouping and sort. Filters are per-lens: switching starts the other lens unfiltered.
+See [the board](/features/board/).
+
 **Filter axes** — Status, Priority, Assignee, Delivery, Label, Cycle, Project. Each opens a menu of
 options with the selected count shown beside the axis. Multiple values within an axis are OR'd;
 different axes are AND'd.

@@ -1110,4 +1110,77 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
       expect(contrastRatio(hex(t, '--text-2'), ground)).toBeGreaterThanOrEqual(AA_NORMAL)
     }
   })
+
+  // THE BOARD's two grounds, which no other daylight surface draws on: the CARD (`--bg-elevated`)
+  // and the COLUMN (`--bg-sidebar` at 50% over `--bg`). A card phrase is TEXT in two registers and
+  // the in-flight card's keyboard contract is a third, so all three answer to AA normal on the
+  // card. The rest is drawn: the reserved slot's dashed border is the WHOLE drawing of an empty
+  // column and of the hole a picked-up card leaves, and the landing slot and the in-flight border
+  // are the other two states a move is read from — all non-text, all 3:1 (WCAG 1.4.11). If a pair
+  // misses its bar the ink moves and the mock loses.
+  it('the board’s card and column grounds carry their ink and their drawn states', () => {
+    const bg = hex(t, '--bg')
+    const card = hex(t, '--bg-elevated')
+    const columnGround = wash(hex(t, '--bg-sidebar'), bg, 0.5)
+
+    for (const ink of ['--text-2', '--status-urgent-ink'] as const) {
+      expect(contrastRatio(hex(t, ink), card), `${ink} on the card`).toBeGreaterThanOrEqual(
+        AA_NORMAL,
+      )
+    }
+    // The in-flight footer states the keys that actually work while a card is carried — it is the
+    // one instruction on the page, set in 10.5px mono, which is not large text. It is inked
+    // `--text-2` (5.56-6.60 here) for that reason. `--text-3`, the quieter ink it was drawn in
+    // first, lands at 2.88-3.36 and is kept below the bar rather than as a sentence.
+    expect(
+      contrastRatio(hex(t, '--text-2'), card),
+      'the in-flight footer’s keys on the card',
+    ).toBeGreaterThanOrEqual(AA_NORMAL)
+    expect(
+      contrastRatio(hex(t, '--text-3'), card),
+      'the footer’s quieter ink, were it used',
+    ).toBeLessThan(AA_NORMAL)
+    expect(
+      contrastRatio(hex(t, '--text-2'), columnGround),
+      'reserved slot on the column',
+    ).toBeGreaterThanOrEqual(AA_LARGE)
+    // Why the slot is NOT inked with the mock's `--border-strong`, kept as the measurement rather
+    // than as a sentence: that token lands at 1.31-1.44 against this ground in all six presets, so
+    // an empty column and the hole a picked-up card leaves would both be drawn in a line the
+    // reader cannot see. `--text-3` was the next candidate and misses too (2.73 in editorial
+    // light). The day a retune makes `--border-strong` clear the bar, the quieter ink is available
+    // again and someone should look at the drawing.
+    expect(
+      contrastRatio(over(t['--border-strong'] ?? '', columnGround), columnGround),
+      'the mock’s slot ink, were it used',
+    ).toBeLessThan(AA_LARGE)
+    expect(
+      contrastRatio(hex(t, '--accent'), over(t['--accent-soft'] ?? '', columnGround)),
+      'landing slot on its tint',
+    ).toBeGreaterThanOrEqual(AA_LARGE)
+    expect(contrastRatio(hex(t, '--accent'), card), 'in-flight border').toBeGreaterThanOrEqual(
+      AA_LARGE,
+    )
+    // The card in flight draws TWO accent lines: the `--accent` border above, which is what states
+    // "this card is being carried" and clears 3:1 in all six presets, and a `--accent-line` ring
+    // outside it. That ring is a translucent halo — 1.40-2.05 composited on the card ground — and
+    // is recorded here as scaffolding rather than moved to `--accent`, which would draw a 3px
+    // accent outline where the mock draws a border and a glow. The precedent is the column tint
+    // below: the bound that can actually fail, so the day a retune pushes the halo over it,
+    // someone looks at the drawing instead of finding this reason quietly untrue.
+    expect(
+      contrastRatio(over(t['--accent-line'] ?? '', card), card),
+      'the in-flight halo, which is scaffolding around the border',
+    ).toBeLessThan(AA_LARGE)
+  })
+
+  // The column tint is SCAFFOLDING — it separates six regions on one page and carries no fact, so
+  // it is not required to clear 3:1 against the page. Recorded as the bound that can actually fail,
+  // the precedent being the carryover ribbon and the resting keycap above: the day a retune pushes
+  // it over, the tint has started to look like a state and someone should look at the drawing again
+  // rather than find this reason quietly untrue.
+  it('records that the board’s column tint is scaffolding, not a fact-carrying surface', () => {
+    const bg = hex(t, '--bg')
+    expect(contrastRatio(wash(hex(t, '--bg-sidebar'), bg, 0.5), bg)).toBeLessThan(AA_LARGE)
+  })
 })

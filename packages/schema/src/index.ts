@@ -1,4 +1,4 @@
-export { newId } from './id.js'
+export { newId, newKey } from './id.js'
 export type { MentionRenderMode, RichTextToPlainTextOptions } from './rich-text/plaintext.js'
 export {
   extractMentionIds,

@@ -1,6 +1,6 @@
 import { sql } from 'kysely'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { newId } from '../id.js'
+import { newId, newKey } from '../id.js'
 import { richTextToPlainText } from '../rich-text/plaintext.js'
 import { SNIPPET_START_DELIMITER, SNIPPET_STOP_DELIMITER } from '../search/snippet.js'
 import { createDatabase, type Database } from './client.js'
@@ -83,8 +83,8 @@ describe.skipIf(DATABASE_URL === undefined)('search over live Postgres', () => {
   const memberId = newId()
   const adminId = newId()
   const outsiderId = newId()
-  const teamOneKey = `Q${newId().slice(0, 4)}`
-  const teamTwoKey = `R${newId().slice(0, 4)}`
+  const teamOneKey = `Q${newKey(4)}`
+  const teamTwoKey = `R${newKey(4)}`
   const alphaIssueId = newId()
   const alphaCommentId = newId()
   const bravoIssueId = newId()

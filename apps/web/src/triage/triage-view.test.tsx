@@ -443,3 +443,46 @@ test('a viewer reads the facts and is offered no verdict and no transient', () =
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   expect(harness.mutate).not.toHaveBeenCalled()
 })
+
+// A test cannot prove the visual composition: jsdom lays nothing out, so no assertion here can
+// show that the panel READS as one band rather than as a large empty box. What it can pin is that
+// the panel stops reserving the prose measure and the vertical verdict rail, and that folding
+// takes nothing away. The render is the real check.
+test('an issue with no words of its own folds the panel rather than reserving its measure', () => {
+  seedQueue()
+  const inbox = harness.rows['triage.inbox'] as readonly Record<string, unknown>[]
+  harness.rows['triage.inbox'] = [{ ...inbox[0], description: null }, ...inbox.slice(1)]
+  render(<TriageView teamId="team-1" />)
+
+  const panel = screen.getByTestId('triage-decision')
+
+  // No prose region and no reserved prose measure.
+  expect(panel.querySelector('.ProseMirror')).toBeNull()
+  expect(panel.querySelector('[class*="max-w-[660px]"]')).toBeNull()
+  // The verdicts are a band beside the provenance line, not a fixed-width column stacked beside
+  // an empty region.
+  expect(panel.querySelector('[class*="w-[214px]"]')).toBeNull()
+  expect(panel.className).toContain('items-center')
+  expect(panel.className).not.toContain('items-start')
+
+  // No placeholder sentence stands in for the description.
+  expect(panel).not.toHaveTextContent(/no description/i)
+  expect(panel).not.toHaveTextContent(DESCRIPTION_TEXT)
+
+  // Folding takes nothing away.
+  expect(within(panel).getByTestId('triage-provenance')).toHaveTextContent(
+    `Priya Raman · ${formatStamp(HEAD_CREATED_AT)}`,
+  )
+  expect(within(panel).getByTestId('triage-attachment')).toHaveTextContent('checkout-hang.png')
+  expect(screen.getByTestId('triage-accept')).toHaveAccessibleName('Accept')
+  expect(screen.getByTestId('triage-route')).toHaveAccessibleName('Route')
+  expect(screen.getByTestId('triage-decline')).toHaveAccessibleName('Decline')
+  expect(screen.getByTestId('triage-decline')).toHaveAttribute('aria-keyshortcuts', 'd')
+  expect(screen.getByTestId('triage-open')).toHaveAccessibleName('Open issue')
+  expect(screen.getByTestId('triage-open')).toHaveAttribute('aria-keyshortcuts', 'Enter')
+
+  // The route transient still mounts inside the folded panel, positioned against it.
+  fireEvent.keyDown(screen.getAllByTestId('triage-row')[0] as HTMLElement, { key: 'r' })
+  const transient = screen.getByRole('dialog')
+  expect(panel.contains(transient)).toBe(true)
+})

@@ -524,14 +524,18 @@ function DecisionPanel({
   const chips = attachments as readonly AttachmentChipRow[]
   const declineTargetId = `${issue.id}-decline-target`
   const decisionRef = useRef<HTMLDivElement>(null)
+  // The panel is the height of what it HAS. An issue with no description of its own gets no prose
+  // measure and no vertical verdict rail — reserving either would be reserving the shape of a fact
+  // the row does not carry, which is the same absence grammar the reality track already follows.
+  const folded = issue.description === null
 
   return (
     <div
       ref={decisionRef}
       data-testid="triage-decision"
-      className="relative flex items-start gap-10 border-row-hairline border-y border-l-[3px] border-l-accent bg-bg-selected py-[17px] pr-10 pl-[34px]"
+      className={`relative flex gap-10 border-row-hairline border-y border-l-[3px] border-l-accent bg-bg-selected py-[17px] pr-10 pl-[34px] ${folded ? 'items-center' : 'items-start'}`}
     >
-      <div className="min-w-0 max-w-[660px] flex-1">
+      <div className={folded ? 'min-w-0 flex-1' : 'min-w-0 max-w-[660px] flex-1'}>
         {issue.description === null ? null : (
           <RichTextRenderer
             value={issue.description}
@@ -545,7 +549,7 @@ function DecisionPanel({
             which is under the bar a 10.5px fact may sit at. `contrast.test.ts` holds the number. */}
         <div
           data-testid="triage-provenance"
-          className="mt-[11px] flex flex-wrap items-center gap-2.5 font-mono text-[10.5px] text-text-2"
+          className={`flex flex-wrap items-center gap-2.5 font-mono text-[10.5px] text-text-2 ${folded ? '' : 'mt-[11px]'}`}
         >
           <span>
             {issue.reporter ?? 'Unknown reporter'} · {formatStamp(issue.createdAt)}
@@ -565,7 +569,13 @@ function DecisionPanel({
         </div>
       </div>
 
-      <div className="ml-auto flex w-[214px] flex-none flex-col gap-2.5">
+      <div
+        className={
+          folded
+            ? 'ml-auto flex flex-none items-center gap-5'
+            : 'ml-auto flex w-[214px] flex-none flex-col gap-2.5'
+        }
+      >
         {canWrite ? (
           <>
             <VerdictKey
@@ -604,7 +614,9 @@ function DecisionPanel({
         ) : null}
         {/* The movement hint, drawn as the mock draws it — but Open is a real control, because a
             pointer-only reader has no other way off this page into the issue itself. */}
-        <span className="mt-[3px] flex items-center gap-1.5 border-border-strong border-t pt-2.5 text-xs text-text-2">
+        <span
+          className={`flex items-center gap-1.5 border-border-strong text-xs text-text-2 ${folded ? 'border-l pl-5' : 'mt-[3px] border-t pt-2.5'}`}
+        >
           <button
             type="button"
             data-testid="triage-open"

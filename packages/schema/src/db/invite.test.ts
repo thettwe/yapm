@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { newId } from '../id.js'
+import { newId, newKey } from '../id.js'
 import type { WorkspaceRole } from '../zero/context.js'
 import { createDatabase, type Database } from './client.js'
 import { acceptInvite } from './invite.js'
@@ -177,7 +177,7 @@ describe.skipIf(DATABASE_URL === undefined)('acceptInvite', () => {
     const teamId = newId()
     await database.db
       .insertInto('team')
-      .values({ id: teamId, workspace_id: workspaceId, name: 'Platform', key: newId().slice(0, 8) })
+      .values({ id: teamId, workspace_id: workspaceId, name: 'Platform', key: newKey() })
       .execute()
     const token = await seedInvite({ teamId })
     const userId = newId()
@@ -197,5 +197,31 @@ describe.skipIf(DATABASE_URL === undefined)('acceptInvite', () => {
       .where('user_id', '=', userId)
       .executeTakeFirst()
     expect(membership).toBeDefined()
+  })
+
+  // `team.key` is unique across the whole database. Derived from a UUIDv7 prefix these all landed
+  // in one time bucket and the insert violated `team_key_key`.
+  it('creates many teams in rapid succession without a key collision', async () => {
+    const teams = Array.from({ length: 200 }, () => ({
+      id: newId(),
+      workspace_id: workspaceId,
+      name: 'Rapid',
+      key: newKey(),
+    }))
+
+    for (const team of teams) {
+      await database.db.insertInto('team').values(team).execute()
+    }
+
+    const stored = await database.db
+      .selectFrom('team')
+      .select('key')
+      .where(
+        'id',
+        'in',
+        teams.map((team) => team.id),
+      )
+      .execute()
+    expect(stored).toHaveLength(teams.length)
   })
 })

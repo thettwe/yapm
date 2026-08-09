@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { newId } from '../id.js'
+import { newId, newKey } from '../id.js'
 import { createDatabase, type Database } from './client.js'
 import { migrateToLatest } from './migrate.js'
 
@@ -29,7 +29,7 @@ describe.skipIf(DATABASE_URL === undefined)('project delete unassigns its issues
       .execute()
     await database.db
       .insertInto('team')
-      .values({ id: teamId, workspace_id: workspaceId, name: 'Platform', key: newId().slice(0, 8) })
+      .values({ id: teamId, workspace_id: workspaceId, name: 'Platform', key: newKey() })
       .execute()
   }, 30_000)
 

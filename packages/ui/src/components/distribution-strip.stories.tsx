@@ -85,3 +85,36 @@ export function HeavyOutliers() {
     </PresetGrid>
   )
 }
+
+// The shape that shipped the run-together callouts: 57 changes, a median of 26h and giants at
+// 110h on a 240h axis put the two notes ten pixels apart, which read as one sentence.
+export function CollidingCallouts() {
+  const AXIS_240 = 240
+  return (
+    <PresetGrid>
+      <DistributionStrip
+        dots={dots([...HOURS, 110, 118, 131, 147, 168, 193, 214, 236], 110, AXIS_240)}
+        ticks={[0, 48, 96, 144, 192, 240]}
+        axisMax={AXIS_240}
+        tickSuffix="h"
+        medianPosition={26 / AXIS_240}
+        medianLabel="median 26h"
+        notes={[
+          {
+            id: 'crowd',
+            kind: 'crowd',
+            position: 26 / AXIS_240,
+            text: '29 of 57 merged inside 26h',
+          },
+          {
+            id: 'outlier',
+            kind: 'outlier',
+            position: 110 / AXIS_240,
+            text: '8 changes waited 110h or more',
+          },
+        ]}
+        label="57 merged changes by hours from open to merged, on a linear axis to 240 hours; one dot is one merged pull request; median 26 hours"
+      />
+    </PresetGrid>
+  )
+}

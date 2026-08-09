@@ -1,4 +1,4 @@
-import { newId, richTextToPlainText } from '@yapm/schema'
+import { newId, newKey, richTextToPlainText } from '@yapm/schema'
 import type { DB, SearchDocumentRow } from '@yapm/schema/db'
 import {
   createDatabase,
@@ -109,13 +109,13 @@ describe.skipIf(DATABASE_URL === undefined)('GET /api/v1/search', () => {
           id: teamOneId,
           workspace_id: workspaceId,
           name: 'One',
-          key: `S${newId().slice(0, 4)}`,
+          key: `S${newKey(4)}`,
         },
         {
           id: teamTwoId,
           workspace_id: workspaceId,
           name: 'Two',
-          key: `T${newId().slice(0, 4)}`,
+          key: `T${newKey(4)}`,
         },
       ])
       .execute()

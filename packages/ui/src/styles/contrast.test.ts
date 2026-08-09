@@ -1020,4 +1020,94 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
       contrastRatio(hex(t, '--status-urgent-ink'), composite(t, '--urgent-soft')),
     ).toBeGreaterThanOrEqual(AA_NORMAL)
   })
+
+  // THE CYCLE REGISTER (cycles-register §D4/D7). The register's own rows are painted on `--bg`,
+  // `--bg-hover` and `--bg-selected` in `--text-1` and `--text-2`, which the row block above
+  // already pins — including the reason the selected row's mono key is `--text-1` rather than the
+  // mock's accent. What is NEW on this page is one ground nothing else paints: `--carry-soft`, the
+  // wash a deeply-carried row takes. It is `--status-in-progress` at 10% over the surface, and it
+  // is deliberately NOT `--urgent-soft`: carrying is not one of the four attention classes, so the
+  // page may not add a second attention number.
+  const carrySoft = (): string => wash(hex(t, '--status-in-progress'), hex(t, '--bg'), 0.1)
+
+  it('the carried row’s ink meets AA on both grounds a carried row is painted on (>= 4.5)', () => {
+    // A carried row is drawn on the page ground, or — from depth 3 — on the wash. The title, the
+    // MONO KEY, the rest phrase, the `carried N× · out of …` fact: every one of them `--text-1` or
+    // `--text-2` on both. The key is what this pins: it is the row's primary identifier, so it
+    // answers to the text bar, and `--text-3` is under it on the page ground (recorded below).
+    const grounds = { bg: hex(t, '--bg'), wash: carrySoft() }
+    for (const [name, ground] of Object.entries(grounds)) {
+      for (const ink of ['--text-1', '--text-2'] as const) {
+        expect(contrastRatio(hex(t, ink), ground), `${ink} on ${name}`).toBeGreaterThanOrEqual(
+          AA_NORMAL,
+        )
+      }
+    }
+  })
+
+  // Why the deep row's count is NOT inked with the amber it is washed in, kept as the measurement
+  // rather than as an opinion: the TEXT half of the amber split lands at 4.42 on its own wash in
+  // focused light. A count a reader has to squint at is the same bug as one a screen reader cannot
+  // hear, so the wash and the left rail carry the depth and the count keeps a readable ink. A
+  // bound, not an equality, so a token edit that FIXES the pair does not fail this file.
+  it('records that the amber ink cannot carry text on its own wash, which is why the count is not amber', () => {
+    expect(contrastRatio(hex(t, '--status-in-progress-ink'), carrySoft())).toBeGreaterThanOrEqual(
+      AA_LARGE,
+    )
+  })
+
+  it('every mark drawn on the carry wash stays distinguishable (>= 3.0)', () => {
+    const ground = carrySoft()
+    // The row's status glyph (every hue an issue can take), the deep row's amber left rail, and
+    // the chain's accent now-node. Non-text drawing, so 1.4.11's bar.
+    const marks = [
+      '--status-done',
+      '--status-in-review',
+      '--status-in-progress',
+      '--status-urgent',
+      '--accent',
+    ] as const
+    for (const mark of marks) {
+      expect(contrastRatio(hex(t, mark), ground), mark).toBeGreaterThanOrEqual(AA_LARGE)
+    }
+  })
+
+  // The cycle-status glyph is drawn on the issue glyph's grid and takes three of its hues. Two of
+  // them — the amber and the green — are pinned on every row ground above; the third,
+  // `--status-backlog`, carries the UPCOMING cycle's dashed ring, exactly as it carries the
+  // backlog issue's, at the same size. It measures 2.47–4.98 on the page ground, so it is UNDER
+  // the non-text bar in the two lightest presets — an inherited treatment this page adopts rather
+  // than one it introduces, and the reason the glyph is a distinct SHAPE carrying a text label
+  // (`Upcoming cycle`) rather than a hue. Recorded as the bound it actually holds, so the day the
+  // palette lifts it someone re-reads this rather than finding the reason quietly untrue.
+  it('records that the upcoming ring is the quietest mark in the language, never the sole carrier', () => {
+    expect(contrastRatio(hex(t, '--status-backlog'), hex(t, '--bg'))).toBeGreaterThanOrEqual(2.4)
+  })
+
+  // The artifact chips (`Cycle report ·`, `Wrapped ·`). Their ink is `--text-1` on `--bg-elevated`,
+  // pinned by the transient block above; their glyph is `--text-2` on the same ground, pinned
+  // beside it. What this records is the chip's OUTLINE: like the verdict keycap and the track's
+  // empty station it is scaffolding, under the non-text bar against the row it sits on, which is
+  // exactly why the chip carries a WORD and appears only where its artifact exists.
+  it('records that the artifact chip’s outline is scaffolding, not the carrier of the artifact', () => {
+    const bg = hex(t, '--bg')
+    expect(
+      contrastRatio(over(t['--border-strong'] ?? '', hex(t, '--bg-elevated')), bg),
+      'chip border',
+    ).toBeLessThan(AA_LARGE)
+  })
+
+  // Why the register's mono date range is `--text-2` and not the mock's `--text-3`: on the page
+  // ground and on the selected row's tint that token measures 2.43–3.70, under the NON-text bar in
+  // every light preset — and a date range is a fact the row states, not scaffolding. Same trade
+  // the reality rail's mono fact line already made. Recorded as the bound that can FAIL: the claim
+  // is that `--text-3` is BELOW the bar there, so the day a retune lifts it is the day this
+  // reason should be re-read rather than found quietly untrue.
+  it('records that --text-3 could not carry the register’s dates on either row ground', () => {
+    const grounds = [hex(t, '--bg'), over(t['--bg-selected'] ?? '', hex(t, '--bg'))]
+    for (const ground of grounds) {
+      expect(contrastRatio(hex(t, '--text-3'), ground)).toBeLessThan(AA_NORMAL)
+      expect(contrastRatio(hex(t, '--text-2'), ground)).toBeGreaterThanOrEqual(AA_NORMAL)
+    }
+  })
 })

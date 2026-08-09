@@ -53,6 +53,9 @@
   --color-row-hairline: var(--row-hairline);
   --color-statusline-bg: var(--statusline-bg);
   --color-urgent-soft: var(--urgent-soft);
+  /* The carry wash: a deeply-carried row is drawn on it, and it is deliberately NOT an urgent
+     ground — a carried issue is not one of the four attention classes. */
+  --color-carry-soft: var(--carry-soft);
 
   /* The only elevation in this language. Transients — the peek, the how, the menu — are the sole
      surfaces allowed to lift off the page, so there is exactly one shadow token and each preset
@@ -156,6 +159,7 @@
   --row-hairline: #efe9dd;
   --statusline-bg: #f4efe5;
   --urgent-soft: rgba(204, 90, 64, 0.08);
+  --carry-soft: color-mix(in srgb, var(--status-in-progress) 10%, transparent);
   --elevation-transient: 0 10px 26px rgba(43, 38, 32, 0.14);
 
   /* Syntax colours. Each is one of this preset's own hues — the in-review violet, the done green,
@@ -222,6 +226,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --carry-soft: color-mix(in srgb, var(--status-in-progress) 10%, transparent);
   --elevation-transient: 0 10px 26px rgba(23, 24, 26, 0.12);
 
   --code-keyword: #5860d5;
@@ -283,6 +288,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --carry-soft: color-mix(in srgb, var(--status-in-progress) 10%, transparent);
   --elevation-transient: 0 10px 26px rgba(20, 19, 15, 0.13);
 
   --code-keyword: #6253de;
@@ -347,6 +353,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --carry-soft: color-mix(in srgb, var(--status-in-progress) 10%, transparent);
   --elevation-transient: 0 10px 26px rgba(0, 0, 0, 0.52);
 
   --code-keyword: #9089da;
@@ -391,6 +398,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --carry-soft: color-mix(in srgb, var(--status-in-progress) 10%, transparent);
   --elevation-transient: 0 10px 26px rgba(0, 0, 0, 0.6);
 
   --code-keyword: #6e79f0;
@@ -435,6 +443,7 @@
   --row-hairline: color-mix(in oklch, var(--border), var(--bg) 50%);
   --statusline-bg: color-mix(in oklch, var(--bg), var(--bg-sidebar) 60%);
   --urgent-soft: color-mix(in srgb, var(--status-urgent) 8%, transparent);
+  --carry-soft: color-mix(in srgb, var(--status-in-progress) 10%, transparent);
   --elevation-transient: 0 10px 26px rgba(0, 0, 0, 0.58);
 
   --code-keyword: #9b8cf5;

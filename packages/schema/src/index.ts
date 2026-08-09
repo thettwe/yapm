@@ -218,10 +218,29 @@ export type {
   WithCycleAreasInput,
 } from './zero/cycle-facts.js'
 export { buildCycleFacts, withCycleAreas } from './zero/cycle-facts.js'
+export type {
+  CycleCarriedIn,
+  CycleCarriedRow,
+  CycleCarryChain,
+  CycleCarryNodeKind,
+  CycleGlyphKind,
+  CycleLedger,
+  CycleRegister,
+  CycleRegisterCycleRow,
+  CycleRegisterDigestRow,
+  CycleRegisterInput,
+  CycleRegisterIssueRow,
+  CycleRegisterRetroRow,
+  CycleRegisterRow,
+} from './zero/cycle-register.js'
+export { buildCycleRegister, CARRY_DEEP_DEPTH } from './zero/cycle-register.js'
 export type { CycleOrderRow } from './zero/cycles.js'
 export {
   compareCycles,
+  cycleKeyOf,
   FINISHED_ISSUE_STATUSES,
+  hasCycleReport,
+  isCycleWrapped,
   isUnfinished,
   nextCycleId,
 } from './zero/cycles.js'
@@ -792,6 +811,7 @@ export type {
   AttentionChecksRow,
   AttentionDivergenceRow,
   DayBandSegment,
+  ScopeBandIssueRow,
   TeamFrameCycle,
   TeamFrameInput,
   TeamFrameModel,
@@ -826,6 +846,7 @@ export type {
   TeamHomeYoursRow,
 } from './zero/team-home.js'
 export {
+  buildScopeBand,
   buildTeamFrame,
   buildTeamHome,
   CADENCE_WEEK_COUNT,

@@ -172,7 +172,10 @@ column composer with the figure attached, so the conversation starts from eviden
 It opens **expanded while a card can still be seeded from it** — that path is `brainstorm`-only —
 and collapses to a one-line door from `group` onward, naming what is behind it (`Cycle 4 data ·
 Delivered · Flow`) and saying that the seed-a-card path closed with brainstorm. Nothing is removed
-by the collapse; one keystroke opens it again, and it stays wherever you leave it.
+by the collapse; one keystroke opens it again, and your own expand or collapse holds for as long as
+the phase does — the next phase change drops it, so a client already in the room when the
+facilitator advances follows the room out of `brainstorm` instead of keeping the full panel of
+figures for the rest of the retro.
 
 **Delivered** is always populated, from cycles alone, on an instance with **no connectors at all**:
 shipped, carried out, carried in, carried twice or more, added mid-cycle, canceled, and total in
@@ -212,8 +215,12 @@ focuses the figure it came from, so a card and its number are a two-way link.
 
 The action list is drawn whenever the phase permits an action write **or** at least one action
 already exists — so stepping a retro back from `discuss` never hides what the room recorded. Where
-the phase forbids the write the list is read-only and says when actions reopen. Where neither is
-true it is not drawn at all, rather than promising a write the phase refuses.
+the phase forbids the write the list is read-only and states what the phase itself makes true:
+before `discuss` it says actions reopen at Discuss, and on a `closed` retro it says the retro is
+closed, because there actions never reopen and converting one into a numbered issue is still live
+beside the words. A reader whose **role** rather than the phase is the ceiling is told none of
+this — a role is not a fact about the phase, and the room reads the same for everyone in it. Where
+neither is true the list is not drawn at all, rather than promising a write the phase refuses.
 
 An action created from an [AI proposal](/features/retro-ai-draft/) arrives with **no assignee**, and
 nothing on that path suggests, defaults or infers one: the model has no identity data to invent an

@@ -1,4 +1,4 @@
-import type { IssueStatus } from '@yapm/schema'
+import { type IssueStatus, isRetroWriteAllowed, type RetroPhase } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { Select } from '@yapm/ui/components/select'
 import { StatusGlyph } from '@yapm/ui/components/status-glyph'
@@ -41,6 +41,12 @@ export function RetroActions({
 }: RetroActionsProps) {
   const canEdit = retroCan(retro.phase, 'action', { canWrite })
   const canConvert = retroCan(retro.phase, 'convert', { canWrite })
+  // The sentence is about the PHASE, so it is derived from the phase alone — folding the role in
+  // made it claim "actions reopen at Discuss" at `closed` (they never do, and Convert is still live
+  // beside the word "read-only") and told a viewer at `discuss` to wait for the phase it is already
+  // in. A viewer's ceiling is a role fact and states nothing here, so the note is a writer's.
+  const phaseNote =
+    canWrite && !isRetroWriteAllowed(retro.phase, 'action') ? ACTION_PHASE_NOTE[retro.phase] : null
 
   return (
     <section
@@ -59,9 +65,7 @@ export function RetroActions({
         <span className="font-mono text-[11px] text-text-2">{actions.length}</span>
         {/* A retro stepped back out of `discuss` still holds what it recorded. The list stays and
             says when the write reopens rather than folding rows the phase merely cannot edit. */}
-        {canEdit ? null : (
-          <span className="text-[11.5px] text-text-2">read-only · actions reopen at Discuss</span>
-        )}
+        {phaseNote === null ? null : <span className="text-[11.5px] text-text-2">{phaseNote}</span>}
         {canEdit ? (
           <Button
             size="icon-xs"
@@ -112,6 +116,19 @@ export function RetroActions({
       <p className="font-mono text-[10.5px] text-text-2">an action becomes a real numbered issue</p>
     </section>
   )
+}
+
+// What each phase says about writing an action, in the phase's own words — the same grammar the
+// room foot uses. `discuss` and `actions` permit the write, so their entries are never read; at
+// `closed` the word "read-only" would be a lie, because converting an action into a numbered issue
+// is still live.
+const ACTION_PHASE_NOTE: Record<RetroPhase, string> = {
+  brainstorm: 'read-only · actions reopen at Discuss',
+  group: 'read-only · actions reopen at Discuss',
+  vote: 'read-only · actions reopen at Discuss',
+  discuss: '',
+  actions: '',
+  closed: 'this retro is closed',
 }
 
 function ActionComposer({

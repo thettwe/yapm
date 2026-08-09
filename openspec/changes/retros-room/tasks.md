@@ -47,8 +47,8 @@
 ## 6. The seed door and the action list
 
 - [x] 6.1 `retro-seed-panel.tsx`: the collapsed register is the mock's one-line door — `Cycle n data` · `Delivered · Flow` · the mono note that seeding a card closed with brainstorm. Expandable, keyboard-reachable, every widget and every seed path intact
-- [x] 6.2 `retro-view.tsx`: `seedOpen` initialises from `retroCan(phase, 'draft')` (design D5) and stays user-controlled thereafter
-- [x] 6.3 `retro-actions.tsx`: the list renders when the phase permits an action write **or** an action exists (design D6); read-only in the latter case, stating when actions reopen
+- [x] 6.2 `retro-view.tsx`: `seedOpen` is derived from `isRetroWriteAllowed(phase, 'draft')` **at every render** (design D5), so a client already in the room follows the facilitator's advance; the reader's own toggle overrides it within a phase and is dropped when the phase changes
+- [x] 6.3 `retro-actions.tsx`: the list renders when the phase permits an action write **or** an action exists (design D6); read-only in the latter case, with the sentence derived from the phase — when the write reopens where it does, `this retro is closed` where it does not, and nothing at all for a viewer
 - [x] 6.4 The list's foot states that an action becomes a real numbered issue; the AI-origin path still creates actions with **no assignee** and nothing on it suggests, defaults or infers one. The human-created action keeps its optional assignee control
 - [x] 6.5 Every action test id (`retro-action`, `retro-new-action`, `retro-action-composer`, `retro-convert-action`, `retro-action-issue`) unchanged
 
@@ -65,7 +65,7 @@
 
 - [x] 8.1 Masthead: `Retros` + the mono count. The word `Retrospectives` and the lucide `MessagesSquare` both go
 - [x] 8.2 The row: accent left edge, the drawn retro mark, title, phase pill, format, and the cycle's date range on the right. One keyboard-reachable link; `retro-link` test id unchanged
-- [x] 8.3 The `completed without a retrospective` group kept (design D11), rendered only when it has rows, with `retro-open-for-cycle` unchanged and absent for a viewer
+- [x] 8.3 The `completed without a retrospective` group kept (design D11), rendered only when it has rows — for a viewer too, since the owed cycle is a team fact — with `retro-open-for-cycle` unchanged and absent for a viewer
 - [x] 8.4 The empty state: `A retro opens when a cycle closes.` plus the mono fact of when the next cycle closes **where a cycle exists to state one**, and nothing where none does. No create-a-retro control
 - [x] 8.5 No per-person figure and no card/participant count on any row
 
@@ -74,8 +74,8 @@
 - [x] 9.1 `apps/web/src/retro/retro-room.test.tsx` (new) — **the falsifiable check**: a retro rendered at `vote` states the anonymity guarantee verbatim; the stepper draws six phases with `vote` current and no duration text; the budget renders dots **and** its reading; a card with a zero tally renders no count, no pip and no retract control while a card with a tally renders all three
 - [x] 9.2 Same file: the attributed retro renders the attributed sentence and **not** the anonymity guarantee; the room's masthead does not contain the team name or a resting format pill
 - [x] 9.3 Same file: a retro at `vote` that already holds an action still lists it, read-only; a retro at `vote` with no actions renders no action list (design D6)
-- [x] 9.4 Same file: `seedOpen` starts expanded at `brainstorm` and collapsed at `vote`, and the door names what is behind it (design D5)
-- [x] 9.5 `apps/web/src/retro/retros-view.test.tsx` (new): the index's masthead reads `Retros` + count; a row states title, phase, format and the cycle range and nothing per-person; the never-run-one state renders the quiet line with no create control and no empty group heading; the owed-cycle group appears only with rows and is absent for a viewer
+- [x] 9.4 Same file: `seedOpen` starts expanded at `brainstorm` and collapsed at `vote`, the door names what is behind it, and re-rendering the SAME tree one phase on collapses it — the client already in the room (design D5)
+- [x] 9.5 `apps/web/src/retro/retros-view.test.tsx` (new): the index's masthead reads `Retros` + count; a row states title, phase, format and the cycle range and nothing per-person; the never-run-one state renders the quiet line with no create control and no empty group heading; the owed-cycle group appears only with rows, and a viewer reads the group with the open control absent
 - [x] 9.6 Extend `retro-ai-panel.test.tsx`: the band states its read boundary and its unratified label; a proposal with no citation is not rendered; verdict words and reaction marks are present independent of colour. **Update assertions to the new surface; never weaken one**
 - [x] 9.7 Extend `packages/ui/src/styles/contrast.test.ts` with this surface's pairs in **every** theme block, light and dark: the paper note's ink on `--bg-elevated` over `--bg-sidebar`, the mono fact ink on the felt, the accent-soft spent band and the accent now-band as non-text marks, the group's dashed accent-line border, the index row's accent edge, and the pip pair. Record the pairs that are non-text scaffolding as such, so the claim can be falsified
 - [x] 9.8 `packages/ui`: `retro-card` renders no vote node at zero and a stated count above zero

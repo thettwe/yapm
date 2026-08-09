@@ -157,6 +157,22 @@ test('a whole retro runs end to end from the keyboard', async ({ page }) => {
     timeout: 20_000,
   })
 
+  // The same round trip through the drawn controls. The retract control does not exist at zero, so
+  // taking the LAST dot back unmounts the element that was just activated — focus must land on the
+  // `+` that casts the next dot rather than being stranded on <body>.
+  await page.getByTestId('retro-group').focus()
+  await page.keyboard.press('v')
+  await expect(page.getByTestId('retro-vote-budget')).toHaveText('2/3 dots left', {
+    timeout: 20_000,
+  })
+  await page.getByTestId('retro-retract-vote').first().focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('retro-vote-budget')).toHaveText('3/3 dots left', {
+    timeout: 20_000,
+  })
+  await expect(page.getByTestId('retro-retract-vote')).toHaveCount(0, { timeout: 20_000 })
+  await expect(page.getByTestId('retro-cast-vote').first()).toBeFocused({ timeout: 20_000 })
+
   // `]` into discuss, `a` captures an action, and ⌘/Ctrl+Enter turns it into a real issue.
   await page.keyboard.press(']')
   await expect(phaseStep(page, 'discuss')).toHaveAttribute('aria-current', 'step', {

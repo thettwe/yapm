@@ -189,7 +189,10 @@ export function RetrosView({ teamId }: { teamId: string }) {
           )}
         </p>
 
-        {canWrite && withoutRetro.length > 0 ? (
+        {/* A cycle owed a retro is a team fact, so a viewer reads the group like everyone else; only
+            the control that opens one is a writer's. Hiding the group from a viewer would hide the
+            debt itself. */}
+        {withoutRetro.length > 0 ? (
           <section className="flex flex-col gap-1.5" aria-label="Cycles without a retrospective">
             <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-2">
               {CYCLE_STATUS_LABEL.completed} without a retrospective
@@ -203,16 +206,18 @@ export function RetrosView({ teamId }: { teamId: string }) {
                 <span className="font-mono text-[11px] text-text-2">
                   {formatCycleRange(cycle.startDate, cycle.endDate)}
                 </span>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  className="ml-auto"
-                  data-testid="retro-open-for-cycle"
-                  onClick={() => void open(cycle)}
-                >
-                  <PlusIcon />
-                  Open a retrospective
-                </Button>
+                {canWrite ? (
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    className="ml-auto"
+                    data-testid="retro-open-for-cycle"
+                    onClick={() => void open(cycle)}
+                  >
+                    <PlusIcon />
+                    Open a retrospective
+                  </Button>
+                ) : null}
               </div>
             ))}
           </section>

@@ -1129,19 +1129,26 @@ function VoteControl({
   onCast: () => void
   onRetract: () => void
 }) {
+  const castRef = useRef<HTMLButtonElement>(null)
   if (disabled) return <RetroVotePips count={count} mine={mine} />
   return (
     <span className="flex shrink-0 items-center gap-1">
       {/* THE RETRACT CONTROL IS ABSENT AT ZERO, not disabled. A control that cannot act and is not
           the way in is ink for a fact that does not exist — the same rule that keeps the pips from
           drawing a `0`. The keyboard path (`Shift+V`) is unchanged and is the documented one, so
-          nothing here becomes pointer-dependent. */}
+          nothing here becomes pointer-dependent.
+          Taking the LAST dot back therefore unmounts the element that was just activated, which
+          would drop focus to <body>. Focus moves to the `+` that casts the next dot BEFORE the
+          retraction lands, so the keyboard stays where the reader left it. */}
       {mine > 0 ? (
         <Button
           size="icon-xs"
           variant="ghost"
           aria-label={`Retract a dot from ${label}`}
-          onClick={onRetract}
+          onClick={() => {
+            if (mine === 1) castRef.current?.focus()
+            onRetract()
+          }}
           data-testid="retro-retract-vote"
         >
           −
@@ -1149,6 +1156,7 @@ function VoteControl({
       ) : null}
       <RetroVotePips count={count} mine={mine} />
       <Button
+        ref={castRef}
         size="icon-xs"
         variant="ghost"
         aria-label={`Vote for ${label}`}

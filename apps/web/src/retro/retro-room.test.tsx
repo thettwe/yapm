@@ -20,7 +20,7 @@ import { beforeEach, expect, test, vi } from 'vitest'
 // `reality-vocabulary` says a slot with no fact draws none; the budget is drawn AND read because
 // neither channel may carry it alone.
 
-const harness = vi.hoisted(() => ({ rows: {} as Record<string, unknown> }))
+const harness = vi.hoisted(() => ({ rows: {} as Record<string, unknown>, canWrite: true }))
 
 vi.mock('@rocicorp/zero/react', () => ({
   useQuery: (request: unknown) => {
@@ -45,9 +45,9 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/auth/use-membership', () => ({
   useMembership: () => ({
     userId: 'user-1',
-    canWrite: true,
-    canManage: true,
-    role: 'admin',
+    canWrite: harness.canWrite,
+    canManage: harness.canWrite,
+    role: harness.canWrite ? 'admin' : 'viewer',
   }),
 }))
 
@@ -118,7 +118,7 @@ const CITED_ISSUE = {
   issueLinks: [],
 }
 
-function room(options: RoomOptions = {}) {
+function rows(options: RoomOptions = {}) {
   const phase = options.phase ?? 'vote'
   const ai = options.ai === true
   harness.rows = {
@@ -165,6 +165,10 @@ function room(options: RoomOptions = {}) {
       presence: [],
     },
   }
+}
+
+function room(options: RoomOptions = {}) {
+  rows(options)
   return render(<RetroView teamId="team-1" retroId="retro-1" />)
 }
 
@@ -172,6 +176,17 @@ const VOTED = card({ id: 'card-voted', body: 'Shipping every day felt calm.' })
 const QUIET = card({ id: 'card-quiet', body: 'We cut refund scope early instead of late.' })
 const TWO_CARDS = [VOTED, QUIET]
 const TALLY_OF_TWO = [{ targetId: 'card-voted', count: 2 }]
+const RECORDED_ACTION = {
+  id: 'action-1',
+  body: 'Rotate a review buddy each cycle',
+  assigneeId: null,
+  targetCycleId: null,
+  issueId: null,
+  groupId: null,
+  cardId: null,
+  createdAt: 1,
+  issue: null,
+}
 const THREE_SPENT = [
   { id: 'v1', targetType: 'card', targetId: 'card-voted', createdAt: 1 },
   { id: 'v2', targetType: 'card', targetId: 'card-voted', createdAt: 2 },
@@ -180,6 +195,7 @@ const THREE_SPENT = [
 
 beforeEach(() => {
   harness.rows = {}
+  harness.canWrite = true
   // The board reads the reduced-motion preference at render; jsdom ships no `matchMedia`.
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
@@ -255,25 +271,31 @@ test('band 2 states the retro and its cycle, with no team name and no resting fo
 
 // Stepping back out of `discuss` must not hide what the room already recorded.
 test('a retro at vote that already holds an action lists it read-only', () => {
-  room({
-    cards: TWO_CARDS,
-    actions: [
-      {
-        id: 'action-1',
-        body: 'Rotate a review buddy each cycle',
-        assigneeId: null,
-        targetCycleId: null,
-        issueId: null,
-        groupId: null,
-        cardId: null,
-        createdAt: 1,
-        issue: null,
-      },
-    ],
-  })
+  room({ cards: TWO_CARDS, actions: [RECORDED_ACTION] })
   expect(screen.getByTestId('retro-action')).toBeInTheDocument()
   expect(screen.queryByTestId('retro-new-action')).toBeNull()
   expect(screen.getByText('read-only · actions reopen at Discuss')).toBeInTheDocument()
+})
+
+// The note is a PHASE fact. At `closed` actions never reopen and converting one is still live, so
+// the word "read-only" beside a live Convert would be the falsehood.
+test('a closed retro says it is closed, not that actions reopen, and still offers Convert', () => {
+  room({ phase: 'closed', cards: TWO_CARDS, actions: [RECORDED_ACTION] })
+  const list = screen.getByRole('region', { name: 'Action items' })
+  expect(within(list).getByText('this retro is closed')).toBeInTheDocument()
+  expect(within(list).queryByText(/read-only/)).toBeNull()
+  expect(within(list).queryByText(/reopen/)).toBeNull()
+  expect(screen.getByTestId('retro-convert-action')).toBeInTheDocument()
+})
+
+// A viewer's ceiling is a role fact; pointing them at a phase that would not help them is not.
+test('a viewer reading a retro is told nothing about when the action write reopens', () => {
+  harness.canWrite = false
+  room({ phase: 'discuss', cards: TWO_CARDS, actions: [RECORDED_ACTION] })
+  const list = screen.getByRole('region', { name: 'Action items' })
+  expect(within(list).getByTestId('retro-action')).toBeInTheDocument()
+  expect(within(list).queryByText(/read-only/)).toBeNull()
+  expect(screen.queryByTestId('retro-new-action')).toBeNull()
 })
 
 test('a retro at vote with no actions draws no action list at all', () => {
@@ -293,6 +315,26 @@ test('the seed door is open while a card can be seeded from it and a door afterw
   expect(door?.textContent).toContain('Cycle 1 data')
 })
 
+// The facilitator's advance reaches every client already in the room, so the door has to be derived
+// at every render rather than read once at mount — the SAME tree, one phase later.
+test('the seed panel becomes a door for a client that was already in the room', () => {
+  const view = room({ phase: 'brainstorm' })
+  expect(screen.getByTestId('retro-seed-toggle')).toHaveAttribute('aria-expanded', 'true')
+
+  rows({ phase: 'group', cards: TWO_CARDS })
+  view.rerender(<RetroView teamId="team-1" retroId="retro-1" />)
+  expect(screen.getByTestId('retro-seed-toggle')).toHaveAttribute('aria-expanded', 'false')
+})
+
+// The door is a phase fact, not a role one: a viewer reads brainstorm's panel like everyone else,
+// and the sentence about the seed path having closed only appears once the phase has closed it.
+test('a viewer reads the seed panel open during brainstorm and is told no phase falsehood', () => {
+  harness.canWrite = false
+  room({ phase: 'brainstorm' })
+  expect(screen.getByTestId('retro-seed-toggle')).toHaveAttribute('aria-expanded', 'true')
+  expect(screen.queryByText('seeding a card closed with brainstorm')).toBeNull()
+})
+
 // The arrival state of every retro: no cards anywhere, and nothing reserving a measure it cannot
 // fill. The triage build shipped a panel that reserved its full measure over an empty issue.
 test('a retro with no cards at all draws no vote ink and no empty card frames', () => {
@@ -307,23 +349,7 @@ test('a retro with no cards at all draws no vote ink and no empty card frames', 
 // absent-AI seam now depends on, and document order is the only place that is checkable without a
 // browser.
 test('the room reads cards, then the seeded figures, then the AI draft, then the actions', () => {
-  room({
-    cards: TWO_CARDS,
-    ai: true,
-    actions: [
-      {
-        id: 'action-1',
-        body: 'Rotate a review buddy each cycle',
-        assigneeId: null,
-        targetCycleId: null,
-        issueId: null,
-        groupId: null,
-        cardId: null,
-        createdAt: 1,
-        issue: null,
-      },
-    ],
-  })
+  room({ cards: TWO_CARDS, ai: true, actions: [RECORDED_ACTION] })
 
   const order = [
     screen.getAllByTestId('retro-card')[0],

@@ -1,6 +1,7 @@
 import { useQuery } from '@rocicorp/zero/react'
 import { useNavigate } from '@tanstack/react-router'
 import {
+  isRetroWriteAllowed,
   MAX_VOTES_PER_PARTICIPANT,
   MIN_VOTES_PER_PARTICIPANT,
   queries,
@@ -318,10 +319,23 @@ function RetroShell(props: RetroShellProps) {
   const [composerColumnId, setComposerColumnId] = useState<string | null>(null)
   const [composerSeed, setComposerSeed] = useState<RetroSeedRef | null>(null)
   const [actionComposer, setActionComposer] = useState(false)
-  // Expanded while a card can still be seeded from it, a door afterwards — and user-controlled
-  // from then on. The "add a card from this widget" path is brainstorm-only, so from `group` the
-  // panel is a read-only wall of ten figures over a room whose live business is elsewhere.
-  const [seedOpen, setSeedOpen] = useState(() => retroCan(retro.phase, 'draft', { canWrite }))
+  // Expanded while a card can still be seeded from it, a door afterwards. The "add a card from this
+  // widget" path is brainstorm-only, so from `group` the panel is a read-only wall of ten figures
+  // over a room whose live business is elsewhere.
+  //
+  // DERIVED AT EVERY RENDER, not once at mount: the facilitator's advance reaches every client in
+  // the room, and a mount-time initial value would leave everyone already here with the full panel
+  // for the rest of the retro. The reader's own toggle wins WITHIN a phase and is dropped the
+  // moment the phase changes. The role is deliberately not part of this — a viewer reads the same
+  // room as everyone else.
+  const phaseCanSeed = isRetroWriteAllowed(retro.phase, 'draft')
+  const [seedOverride, setSeedOverride] = useState<boolean | null>(null)
+  const seedPhase = useRef(retro.phase)
+  if (seedPhase.current !== retro.phase) {
+    seedPhase.current = retro.phase
+    setSeedOverride(null)
+  }
+  const seedOpen = seedOverride ?? phaseCanSeed
   const focusColumnRef = useRef<string | null>(null)
 
   const openComposerIn = useCallback(
@@ -348,7 +362,7 @@ function RetroShell(props: RetroShellProps) {
 
   // The other half of the join: a card's chip reveals the panel and focuses the tile it came from.
   const openEvidence = useCallback((seedRef: RetroSeedRef) => {
-    setSeedOpen(true)
+    setSeedOverride(true)
     requestAnimationFrame(() => {
       const tile = document.querySelector<HTMLElement>(seedWidgetSelector(seedRef.id))
       tile?.scrollIntoView({ block: 'nearest' })
@@ -390,7 +404,7 @@ function RetroShell(props: RetroShellProps) {
         onOpenActionComposer={() => setActionComposer(true)}
         onCloseActionComposer={() => setActionComposer(false)}
         seedOpen={seedOpen}
-        onSeedOpenChange={setSeedOpen}
+        onSeedOpenChange={setSeedOverride}
         onSeedCard={seedCardFrom}
         onOpenEvidence={openEvidence}
       />
@@ -719,6 +733,7 @@ function RetroSurface({
         <RetroSeedPanel
           seed={seed}
           canDraft={retroCan(retro.phase, 'draft', { canWrite })}
+          seedPathOpen={isRetroWriteAllowed(retro.phase, 'draft')}
           open={seedOpen}
           onOpenChange={onSeedOpenChange}
           onSeedCard={onSeedCard}

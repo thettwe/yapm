@@ -17,9 +17,9 @@ The room SHALL be drawn to one anatomy, correct in every phase:
 
 The surface SHALL state its anonymity guarantee in words whenever the retro is anonymous — that cards are anonymous by design and no author column exists — and SHALL state the opposite truth when the retro is attributed. This sentence SHALL NOT render on a retro whose stored state does not make it true.
 
-The auto-seeded data panel SHALL open expanded while a card can still be seeded from it and SHALL collapse to a labelled door naming what is behind it once the phase can no longer take a card, remaining expandable by the reader; no widget, metric or seed path SHALL be removed by that collapse.
+The auto-seeded data panel SHALL open expanded while the phase can still take a card seeded from it and SHALL collapse to a labelled door naming what is behind it once the phase can no longer take one, for every reader in the room including one who was already there when the phase advanced; the reader's own expand or collapse SHALL hold within a phase, and no widget, metric or seed path SHALL be removed by that collapse.
 
-The action list SHALL render whenever the current phase permits an action write **or** at least one action already exists, so stepping the retro back never hides a recorded action; where the phase forbids the write, the list SHALL render read-only and say when actions reopen.
+The action list SHALL render whenever the current phase permits an action write **or** at least one action already exists, so stepping the retro back never hides a recorded action. Where the phase forbids the write, the list SHALL render read-only and SHALL state what the phase itself makes true — when the write reopens where it does reopen, and that the retro is closed where it does not — and SHALL NOT describe a phase's rule to a reader whose own role is what forbids the write.
 
 #### Scenario: A whole retro can be run from the keyboard
 
@@ -68,8 +68,13 @@ The action list SHALL render whenever the current phase permits an action write 
 
 #### Scenario: The data panel becomes a door once it cannot seed a card
 
-- **WHEN** a retro advances out of `brainstorm`
-- **THEN** the seeded data panel is collapsed to a labelled door naming what it holds, every widget survives behind it, and the reader can expand it again
+- **WHEN** a retro advances out of `brainstorm` while a member is reading it with the panel expanded
+- **THEN** that member's seeded data panel collapses to a labelled door naming what it holds, every widget survives behind it, and the reader can expand it again
+
+#### Scenario: A closed retro is not told that its actions reopen
+
+- **WHEN** a member reads a `closed` retro that holds actions
+- **THEN** the list states that the retro is closed rather than that actions reopen, and the control that converts an action into a numbered issue is still offered
 
 ## ADDED Requirements
 

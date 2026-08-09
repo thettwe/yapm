@@ -35,9 +35,9 @@ export function AllPresets() {
         {/* A group is the vote target, so the notes inside it carry no pips of their own. */}
         <div className="flex flex-col gap-2 rounded-[7px] border-[1.5px] border-dashed border-accent-line p-2">
           <div className="flex items-center gap-2 px-1">
-            <span className="text-[11.5px] font-semibold text-accent-strong">
-              Waiting on review
-            </span>
+            {/* `--text-1`, as the board inks it: `--accent-strong` on the felt lands at 4.18 in
+                Editorial light, under AA at this size. The dashed box carries the accent. */}
+            <span className="text-[11.5px] font-semibold text-text-1">Waiting on review</span>
             <span className="font-mono text-[10.5px] text-text-2">2 cards</span>
             <span className="ml-auto">
               <RetroVotePips count={5} mine={1} />

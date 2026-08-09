@@ -71,7 +71,8 @@ may only state a fact some stored row supports, and a warm sentence must be a tr
   reveal, dots close when the clock runs out.
 - **The seeded data panel** keeps every widget and every seed-a-card path, and collapses to the
   mock's one-line door (`Cycle n data · Delivered · Flow`) whenever the phase cannot take a card —
-  which is the shipped `seedOpen` state, defaulted by phase rather than always-open.
+  which is the shipped `seedOpen` state, derived from the phase at every render rather than
+  always-open, with the reader's own toggle winning within a phase.
 - **The AI draft band** moves below the tabletop, beside the seed door: `AI draft` ·
   `AI-drafted, not agreed` · `reads the work graph only — never a card`, then one line per
   proposal — category chip, the sentence, its citation chips (a work-graph entity or a yapm

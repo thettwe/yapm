@@ -128,9 +128,11 @@ test('a completed cycle owed a retro is offered one', () => {
   expect(screen.getByTestId('retro-open-for-cycle')).toBeInTheDocument()
 })
 
-test('the open-a-retro control is absent for a viewer, and so is its heading', () => {
+// A viewer reads the owed cycle — it is a team fact — and only the control that opens one is gone.
+test('a viewer sees the owed cycle listed and no control to open a retro for it', () => {
   harness.canWrite = false
   index({ cycles: [cycle()] })
+  const group = screen.getByRole('region', { name: 'Cycles without a retrospective' })
+  expect(group.textContent).toContain('Cycle 1')
   expect(screen.queryByTestId('retro-open-for-cycle')).toBeNull()
-  expect(screen.queryByRole('region', { name: 'Cycles without a retrospective' })).toBeNull()
 })

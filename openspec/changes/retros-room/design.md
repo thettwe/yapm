@@ -108,16 +108,25 @@ cards.
 - The tally reading stays as text beside the dots wherever dots are drawn, so the count is never
   shape- or colour-only.
 
-## D5 — The seed panel's open-ness is derived from the phase, once
+## D5 — The seed panel's open-ness is derived from the phase, at every render
 
 The mock draws the panel collapsed to a door during `vote`, and its comment gives the reason: the
 "add a card from this widget" path is `brainstorm`-only, so from `group` onward the panel is a
 read-only wall of ten figures over a room whose live business is elsewhere.
 
-**Decided:** the initial value of the existing `seedOpen` state is `retroCan(phase, 'draft')` —
-open while a card can still be seeded from it, a door afterwards. It stays a user-controlled
-toggle from then on, and the door states what is behind it (`Cycle n data · Delivered · Flow`) so
-opening it is one keystroke away. No widget, no metric and no seed path is removed.
+**Decided:** the panel is open when `isRetroWriteAllowed(phase, 'draft')` — open while a card can
+still be seeded from it, a door afterwards — and that is **re-derived on every render**, not read
+once as a mount-time initial value. The facilitator's advance reaches every client in the room, and
+a mount-time value would leave everyone already here with the full ten-widget panel for the rest of
+the retro. The reader's own toggle overrides the derivation **within** a phase and is dropped the
+moment the phase changes (the derive-state-during-render pattern: a `useRef` on the last phase, a
+`boolean | null` override beside it). The door states what is behind it (`Cycle n data · Delivered
+· Flow`) so opening it is one keystroke away. No widget, no metric and no seed path is removed.
+
+The derivation is from the **phase alone**, never the role: a viewer reads the same room as
+everyone else, so their panel opens in `brainstorm` too. Only the "Add a card from this" buttons
+are gated on role *and* phase, and the collapsed note that the seed path closed with `brainstorm`
+is a phase fact stated only once the phase has really closed it.
 
 ## D6 — The action rail renders when the phase can write one, OR when one exists
 
@@ -132,6 +141,13 @@ phase alone would hide real rows.
 **Decided:** the rail renders when `retroCan(phase, 'action')` **or** `actions.length > 0`. At
 `vote` with actions present it renders read-only, stating that actions reopen at Discuss. This
 follows the mock everywhere the mock has an opinion and refuses to lose data where it does not.
+
+That sentence is derived from the **phase**, from a `Record<RetroPhase, string>` the way `ROOM_FOOT`
+is, never from `canEdit` (phase *and* role). Folding the role in made it lie twice: at `closed`
+actions never reopen and Convert is still live beside the word "read-only", and a viewer at
+`discuss` was pointed at the phase they were already in. `closed` therefore says *this retro is
+closed* and drops the word "read-only", and a viewer — whose ceiling is a role fact, not a phase
+one — is told nothing about when the write reopens.
 
 Its foot keeps the one fact that matters and the mock has no room for: an action becomes a **real
 numbered issue** through the shipped conversion path. Actions created from an AI proposal are
@@ -210,6 +226,10 @@ retro — a ghost group would have drawn a list that team cannot have.
 That is a statement about the fixture. The section is a shipped capability (it is the only way to
 open a retro for a cycle that closed without one) and it stays, rendering exactly when it has
 rows. A team with none sees the mock's frame verbatim.
+
+A cycle owed a retro is a **team** fact, so the group renders for a viewer too and only the
+`retro-open-for-cycle` control is a writer's. Gating the whole group on the role would hide the debt
+from the people most likely to be reading the index for it.
 
 The index's empty state is the mock's: `A retro opens when a cycle closes.` plus the mono fact
 about the next boundary where a cycle exists to state one — and nothing where no cycle does, which
@@ -370,3 +390,31 @@ the three accent inks (B2), the AI band's category headings (B6), and the per-ca
 (B4 — a removal the mock also made, applied one level further). The mock's unresolved Cycle 1/Cycle 2
 collision (D10) is untouched; nothing here depends on it.
 
+
+### B11 — Three sentences and one door were derived from role-plus-phase, and are now derived from one or the other
+
+Review found the same shape three times: a phase fact computed through `retroCan`, which folds the
+role ceiling into the phase and therefore states the phase's rule to a reader whose *role* is what
+stopped them.
+
+- **The seed door** (D5, amended) was a `useState` initialiser — a mount-time value. A client already
+  in the room when the facilitator advanced kept the ten-widget panel for the rest of the retro, and
+  a viewer got a door in `brainstorm` claiming the seed path had closed while `brainstorm` was the
+  live phase. It is now re-derived from `isRetroWriteAllowed(phase, 'draft')` on every render, with a
+  `boolean | null` reader override reset by a phase-change ref; the "Add a card from this" buttons
+  keep the role gate, because that is genuinely a role question.
+- **The action list's caption** (D6, amended) said `read-only · actions reopen at Discuss` at
+  `closed`, where they never reopen and Convert is still live beside the word "read-only". It is now
+  a `Record<RetroPhase, string>` read only when the phase forbids the write, and a viewer is told
+  nothing about a phase whose rule is not what is stopping them.
+- **The index's owed-cycle group** (D11, amended) was gated on `canWrite` whole. A cycle owed a retro
+  is a team fact and the change's own scenario lists it for a viewer; only the control is a writer's.
+
+### B12 — Taking the last dot back hands focus to the `+`, not to the body
+
+The retract control is absent at zero by design, so activating it on the caller's last dot unmounts
+the focused element — the exact stranding the `aria-disabled` phase keys exist to prevent, arriving
+by a different route. `VoteControl` holds a ref on its sibling cast button and focuses it before the
+retraction lands when `mine === 1`, so the keyboard ends on the control that casts the next dot.
+`retro.spec.ts` walks that round trip through the drawn controls and asserts the focused element
+rather than the budget alone.

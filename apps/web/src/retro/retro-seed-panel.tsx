@@ -18,7 +18,11 @@ import { MetricSection } from '@/delivery/metric-tiles'
 
 export interface RetroSeedPanelProps {
   seed: RetroSeed | null
+  // Role AND phase: whether THIS caller may add a card from a widget, which is what the buttons ask.
   canDraft: boolean
+  // Phase alone: whether the seed path is open to the room at all, which is what the sentence
+  // states. A viewer's ceiling is not a phase fact and must not be reported as one.
+  seedPathOpen: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
   onSeedCard: (ref: RetroSeedRef) => void
@@ -36,6 +40,7 @@ export function seedWidgetSelector(metricKey: string): string {
 export function RetroSeedPanel({
   seed,
   canDraft,
+  seedPathOpen,
   open,
   onOpenChange,
   onSeedCard,
@@ -82,7 +87,7 @@ export function RetroSeedPanel({
           <p className="ml-auto text-[11.5px] text-text-2">
             Team-level trends from this cycle's own work
           </p>
-        ) : canDraft ? null : (
+        ) : seedPathOpen ? null : (
           <span className="ml-auto font-mono text-[10.5px] text-text-2">
             seeding a card closed with brainstorm
           </span>

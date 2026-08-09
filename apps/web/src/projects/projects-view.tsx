@@ -168,7 +168,7 @@ function ProjectsIndex({ teamId }: { teamId: string }) {
           {ordered.length === 0 ? (
             // Labels, never sentences — and the two states are distinguishable, so a premature
             // "no projects" is never announced over an unfinished sync.
-            <p className="px-10 py-8 text-sm text-text-3" role="status">
+            <p className="px-10 py-8 text-sm text-text-2" role="status">
               {complete ? 'No projects' : 'Loading…'}
             </p>
           ) : (
@@ -313,7 +313,7 @@ function ProjectIndexRow({
       <span
         className={cn(
           TEAM_SLOT,
-          'flex items-center gap-1.5 truncate font-mono text-[11px] text-text-3',
+          'flex items-center gap-1.5 truncate font-mono text-[11px] text-text-2',
         )}
       >
         {split.map((entry, position) => (

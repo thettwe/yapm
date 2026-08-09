@@ -150,7 +150,7 @@ export function RoadmapView({ teamId }: { teamId: string }) {
         <Masthead title="Roadmap" {...(complete ? { count: 0 } : {})} />
         {/* Two different nothings, two different labels: an unfinished sync must never announce an
             empty workspace. Neither is a sentence. */}
-        <p className="p-8 text-sm text-text-3" role="status">
+        <p className="p-8 text-sm text-text-2" role="status">
           {complete ? 'No projects' : 'Loading…'}
         </p>
       </>
@@ -325,7 +325,7 @@ function AxisHeader({ axis, teamName }: { axis: RoadmapAxis; teamName: string | 
                 x={x(tick.fraction) + 3}
                 y="18"
                 fontSize="10"
-                fill="var(--text-3)"
+                fill="var(--text-2)"
                 style={{ fontFamily: 'var(--type-mono)' }}
               >
                 {tick.label}
@@ -368,7 +368,7 @@ function AxisHeader({ axis, teamName }: { axis: RoadmapAxis; teamName: string | 
               x={tailX}
               y="36"
               fontSize="10"
-              fill="var(--text-3)"
+              fill="var(--text-2)"
               style={{ fontFamily: 'var(--type-mono)' }}
             >
               {tail}
@@ -379,7 +379,7 @@ function AxisHeader({ axis, teamName }: { axis: RoadmapAxis; teamName: string | 
               x="12"
               y="36"
               fontSize="10"
-              fill="var(--text-3)"
+              fill="var(--text-2)"
               style={{ fontFamily: 'var(--type-mono)' }}
             >
               no cycles in this window
@@ -402,7 +402,7 @@ function AxisHeader({ axis, teamName }: { axis: RoadmapAxis; teamName: string | 
                 textAnchor="middle"
                 fontSize="10"
                 fontWeight="600"
-                fill="var(--accent-strong)"
+                fill="var(--text-1)"
                 style={{ fontFamily: 'var(--type-mono)' }}
               >
                 today
@@ -485,7 +485,7 @@ function RoadmapRow({
         {row.total === 0 ? null : (
           <>
             <DoneMeter done={row.done} total={row.total} />
-            <span className="font-mono text-[11px] text-text-3">{`${row.done}/${row.total}`}</span>
+            <span className="font-mono text-[11px] text-text-2">{`${row.done}/${row.total}`}</span>
           </>
         )}
       </span>
@@ -550,13 +550,13 @@ function RoadmapRow({
           }
         >
           {targetDay === null ? null : (
-            <span className="font-mono text-[10px] text-text-3">{targetDay}</span>
+            <span className="font-mono text-[10px] text-text-2">{targetDay}</span>
           )}
           {row.targetPassed ? (
             <span className="font-semibold text-[12px] text-status-urgent-ink">Target passed</span>
           ) : null}
           {phrase === null ? null : (
-            <span className={cn('text-[12px]', phrase.quiet ? 'text-text-3' : 'text-text-2')}>
+            <span className={cn('text-[12px] text-text-2', phrase.quiet ? '' : 'font-medium')}>
               {phrase.text}
             </span>
           )}
@@ -584,7 +584,7 @@ function TargetMark({
       ? 'var(--status-done)'
       : status === 'active'
         ? 'var(--status-in-progress)'
-        : 'var(--text-3)'
+        : 'var(--text-2)'
 
   if (status === 'cancelled') {
     return (

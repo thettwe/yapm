@@ -112,7 +112,7 @@ export function ProjectPage({ teamId, projectId }: { teamId: string; projectId: 
 
   const publish = useCallback((team: string, rows: readonly TeamDeploymentRow[]) => {
     setDeployments((prev) => {
-      if (prev.get(team) === rows) return prev
+      if (sameRows(prev.get(team), rows)) return prev
       const next = new Map(prev)
       next.set(team, rows)
       return next
@@ -162,7 +162,7 @@ export function ProjectPage({ teamId, projectId }: { teamId: string; projectId: 
 
   if (!row) {
     return (
-      <p className="p-8 text-sm text-text-3" role="status">
+      <p className="p-8 text-sm text-text-2" role="status">
         {result.type === 'complete' ? 'No such project' : 'Loading…'}
       </p>
     )
@@ -193,7 +193,7 @@ export function ProjectPage({ teamId, projectId }: { teamId: string; projectId: 
         <TeamDeploymentFeed key={id} teamId={id} publish={publish} />
       ))}
 
-      <div className="px-10 pt-5 font-mono text-[11px] text-text-3">
+      <div className="px-10 pt-5 font-mono text-[11px] text-text-2">
         <Link
           to="/teams/$teamId/projects"
           params={{ teamId }}
@@ -264,7 +264,7 @@ export function ProjectPage({ teamId, projectId }: { teamId: string; projectId: 
             </span>
           </div>
           {progress.total === 0 ? (
-            <p className="mt-3 text-sm text-text-3" data-testid="project-no-issues">
+            <p className="mt-3 text-sm text-text-2" data-testid="project-no-issues">
               No issues yet
             </p>
           ) : (
@@ -370,6 +370,19 @@ export function ProjectPage({ teamId, projectId }: { teamId: string; projectId: 
       </div>
     </div>
   )
+}
+
+// The published rows are lifted into state, so this comparison is what stands between a sync tick
+// and a render loop. It is element-wise rather than a reference check on the array: a query result
+// that arrives at a fresh identity on every render — which a subscription is free to do — would
+// otherwise publish, re-render, publish again, forever.
+function sameRows(
+  a: readonly TeamDeploymentRow[] | undefined,
+  b: readonly TeamDeploymentRow[],
+): boolean {
+  if (a === b) return true
+  if (a === undefined || a.length !== b.length) return false
+  return a.every((row, index) => row === b[index])
 }
 
 // One subscription, one team, no drawing: the rows are lifted so every issue's track is computed
@@ -484,7 +497,7 @@ function TargetStripDrawing({
         textAnchor="end"
         fontSize="10.5"
         fontWeight="600"
-        fill="var(--accent-strong)"
+        fill="var(--text-1)"
       >
         today
       </text>

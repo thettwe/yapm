@@ -448,9 +448,118 @@ count. Still exactly one element per issue at any count — never a resampled ba
 `done/total` beside it carries the exact number either way. The mock's widest meter is 14 ticks, so
 nothing in its fixture crosses the threshold.
 
-### B15 — What this stage did NOT do
+### B15 — What the roadmap stage did NOT do
 
 `packages/ui/src/styles/contrast.test.ts` (task 7.8) is untouched: this stage was scoped away from
 `packages/ui` while two other destination rebuilds are in flight in parallel worktrees. The pairs it
 owes are named in the task. Task 7.10's e2e assertion is written into `projects.spec.ts` but is left
 unticked because Playwright was not run here — CI on the open PR is where it is proved.
+
+---
+
+### B16 — Task 7.8 measured the change's inks, and eleven of them moved
+
+The rule the task sets is that where a mock ink misses its bar the **ink moves and the mock loses**
+(precedent: `issue-list-daylight` DI-2, `triage-daylight` B8). Measuring every pair this change
+draws, in all six theme blocks, moved these:
+
+| Ink | Was | Is | Measured, why |
+|---|---|---|---|
+| the target mark for a planned or cancelled project | `--text-3` | `--text-2` | 2.43–3.43 on the three row grounds — under the 3:1 non-text bar in **five of six** blocks, and on most rows it is the only mark in the drawing |
+| the axis's month labels, `no cycles past <date>`, `no cycles in this window` | `--text-3` | `--text-2` | axis labels are TEXT, so the bar is 4.5; `--text-3` is 2.80–3.70 on `--bg` in every block |
+| the roadmap row's mono `done/total` | `--text-3` | `--text-2` | the meter is `aria-hidden`, so this string is the **only** carrier of the count |
+| the roadmap row's mono target day | `--text-3` | `--text-2` | the only textual carrier of the date |
+| `No issues yet` / `Nothing scheduled` / `Scheduled outside this window` | `--text-3` for the quiet two | `--text-2`, with `font-medium` carrying the emphasis the hue used to | on a row that draws nothing, the phrase is the whole row |
+| the index's team-split counts | `--text-3` | `--text-2` | `ENG 11` is a fact, not an ornament |
+| the project page's breadcrumb link | `--text-3` | `--text-2` | it is a control; triage's doorways already carry `--text-2` |
+| the project page's `No issues yet` | `--text-3` | `--text-2` | same rule as the roadmap's |
+| the three `role="status"` labels (`No projects` / `Loading…` / `No such project`) | `--text-3` | `--text-2` | on an empty workspace this is the only content on the page |
+| the `today` label on the roadmap axis | `--accent-strong` | `--text-1` | 4.00–4.72 on the header's hover ground — under AA in editorial light. The `--accent` caret keeps the colour; delivery's median rule made this exact trade first |
+| the `today` label on the project page's target strip | `--accent-strong` | `--text-1` | 4.44 on `--bg` in editorial light, same reason |
+
+Four things are recorded as **scaffolding** instead — each a bound that can fail, each with the
+fact it defers to stated in text: the meter's unfilled tick and the index's meter track (1.07–1.40
+against the row; the count is the mono `done/total`), the cycle band's stroke (the band is NAMED
+inside it), the row gridlines, and the per-row now line (the header's `--accent` caret and the word
+`today`).
+
+The one genuine exemption is the **state bar's quiet segments**. `--status-backlog`,
+`--status-todo` and the canceled segment's `--text-3` measure 2.43–6.02 — over the non-text bar in
+the darks, under it in the lights — and the palette's quiet family cannot be lifted without
+`--status-backlog` colliding with `--status-todo`. Retuning two shared status tokens is a change of
+its own with three parallel builds in flight, so instead the bar is not the carrier: every segment
+is restated beneath it as `<glyph> <count> <label>` in `--text-2` and the bar is a `role="img"`
+enumerating them. **That premise is asserted in `project-page.test.tsx`**, not merely written in a
+comment, and the contrast file pins the floor at 2.4 with the measurement and the reason. The three
+hues that carry work in flight (done, in-progress, in-review) are asserted at the real 3:1 bar.
+
+Two of the pairs the task named turned out to be **already pinned** and are recorded rather than
+duplicated: `--status-urgent-ink` on the three row grounds (`the phrase at rest`) and on the urgent
+wash (`the urgent text ink`). The delta pill did get a new assertion, because reading the DECLARED
+`--urgent-soft` token catches an edit to the wash that reconstructing it from `--status-urgent`
+cannot. `packages/ui/src/styles/contrast.test.ts` gained a `composite()` helper for that; no
+existing assertion changed.
+
+**This is the change's only edit to `packages/ui`,** and it is confined to the test file — no
+component, no token, no style. Two other destination rebuilds are in flight in parallel worktrees.
+
+### B17 — The project page could spin forever, and the component test is what found it
+
+`project-page.test.tsx` hung a vitest worker at 100% CPU on its first run. The cause was product
+code, not the harness: `ProjectPage` lifts one `deployments.byTeam` subscription per contributing
+team into state (B5), and its publish guard was `prev.get(team) === rows` — a reference check. A
+query result that arrives at a **fresh array identity on each render** therefore publishes,
+re-renders, publishes again, forever. The guard is now `sameRows(...)`, element-wise over the
+array, so an identity-unstable subscription cannot loop.
+
+The test harness deliberately keeps returning a fresh `[]`, which is what makes this a test failure
+rather than a field report. Nothing else about the page changed. Worth naming plainly: the surface
+passed every gate the previous pass ran, and the defect was invisible until something rendered it.
+
+### B18 — The tiers this change actually earned, and the one that is still owed
+
+PROCESS.md §3's big-feature rule counts {synced entity/schema, mutator, permission surface,
+signature UI}; this change touches **one**, signature UI (D12). So: unit + component + contrast,
+and `apps/web/e2e/projects.spec.ts` UPDATED rather than joined by a new spec file.
+
+- **Unit** — `model.test.ts`, 26 tests, including the structural refusal asserted over the returned
+  object keys (no `start`, `span`, `duration` or per-project `width` anywhere in the module).
+- **Component** — `projects-view.test.tsx` (5), `roadmap-view.test.tsx` (8), `project-page.test.tsx`
+  (10, new this pass). Between them every row of D10's degenerate table renders and is asserted.
+- **Contrast** — six new assertions × six theme blocks (B16).
+- **E2E** — the spec's selectors were migrated with the surface and one claim added (the refusal
+  sentence). No assertion was weakened. `projects.spec.ts:188` and `:246` are the known
+  `Target.disposeBrowserContext` flake; they are untouched.
+
+**Still owed: the render sweep, tasks 9.4–9.7.** Nobody has looked at either page rendered at
+1440×900, at the five degenerate states one screenshot each, or at all six theme blocks. The
+lesson this change wrote into its own D10 — the triage panel that reserved a full measure over
+nothing and passed every test — is exactly the class of defect no assertion above can catch, and
+B17 is a second instance of the same lesson from a different direction. The mock PNGs are still not
+in the repository (B13), so the comparison is against the HTML mocks as rendered.
+
+### B19 — Docs, and one correction to a reference the task assumed
+
+`apps/docs/src/content/docs/features/projects.md` is rewritten end to end: the index's row anatomy
+and grouping, what a quiet row means, the past-target reading and why it joins no attention count,
+the project page's two vitals and exactly what the created→target strip does and does not claim,
+the roadmap's axis and its `no cycles past` statement, the **complete table of what neither surface
+draws and why**, the workspace-vs-team rule, the keyboard model for all three surfaces, and the two
+spellings. It was already in the sidebar, so no `astro.config.mjs` edit was needed. `README.md`'s
+one-line feature bullet and `apps/docs/.../index.md`'s summary both described the pre-overhaul
+shape ("a progress bar", "computed progress") and were rewritten to the built one.
+
+`.env.example`, `TECHSTACK.md`, `VISION.md`, `DESIGN.md`, `CLAUDE.md`, `PROCESS.md` and every
+`reference/` page are untouched by this change — no new dependency, no new env var, no new service —
+so none of them is made stale. **`ROADMAP.md` was deliberately not edited** (parallel builds; the
+maintainer adds the row at archive time).
+
+One correction: task 1.5 names "the Tailwind 4.3 and TanStack Router references" as if they were
+their own files. They are not — both live in `reference/frontend-build.md` (§6 Tailwind CSS 4.3 +
+shadcn/ui, §5 TanStack Router 1.170), and there is no `reference/tailwind.md` or
+`reference/tanstack-router.md` on this branch. Task 1.4 is now closed (`northstar/ia.html` read: the
+three bands, the word diet's three tiers, the destination tree holding Projects `g p` and Roadmap
+`g m` under `more▾`, the ONE attention number's four exception classes, and the peek / `how ·`
+patterns — all of which the built surfaces follow). Task 1.5 stays open: `reference/zero.md` was
+not read in any pass, which is defensible only because no pass wrote a Zero API — the two edits are
+`.related(...)` calls beside existing ones — but it should be closed before the change lands.

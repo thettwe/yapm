@@ -135,6 +135,35 @@ function mix(value: string, tokens: Record<string, string>): string | null {
   return wash(hex(tokens, m[2]), hex(tokens, m[1]), Number(m[3]) / 100)
 }
 
+// A surface token as the browser actually paints it, whatever form the preset declared it in: a
+// hex, an alpha over the base surface, the oklch `color-mix` `--row-hairline` uses (whose first
+// argument may itself be an alpha, which `mix` above cannot take), or the sRGB
+// `color-mix(..., transparent)` five presets define `--urgent-soft` with. Reading the DECLARED
+// token matters: an assertion that reconstructs a wash from its ingredients cannot see an edit to
+// the wash itself.
+function composite(tokens: Record<string, string>, name: string): string {
+  const declared = tokens[name] ?? ''
+  const base = tokens['--bg'] ?? ''
+  if (HEX.test(declared)) return declared
+  const oklch = declared.match(
+    /^color-mix\(in oklch,\s*var\((--[\w-]+)\),\s*var\((--[\w-]+)\)\s*([\d.]+)%\s*\)$/,
+  )
+  if (oklch?.[1] !== undefined && oklch[2] !== undefined && oklch[3] !== undefined) {
+    return wash(
+      over(tokens[oklch[2]] ?? '', base),
+      over(tokens[oklch[1]] ?? '', base),
+      Number(oklch[3]) / 100,
+    )
+  }
+  const srgb = declared.match(
+    /^color-mix\(in srgb,\s*var\((--[\w-]+)\)\s*([\d.]+)%,\s*transparent\s*\)$/,
+  )
+  if (srgb?.[1] !== undefined && srgb[2] !== undefined) {
+    return wash(over(tokens[srgb[1]] ?? '', base), base, Number(srgb[2]) / 100)
+  }
+  return over(declared, base)
+}
+
 describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   const surfaces = ['--bg', '--bg-elevated', '--bg-sidebar'] as const
 
@@ -747,5 +776,151 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
         ground,
       ).toBeGreaterThanOrEqual(AA_NORMAL)
     }
+  })
+
+  // THE PROJECTS INDEX, ONE PROJECT'S PAGE AND THE ROADMAP (projects-roadmap-daylight §D8). All
+  // three are rows, and a row is painted on three grounds: the page surface, the hover wash, and
+  // the tint the focused roadmap row takes. Every mark below is measured on all three, because a
+  // mark that reads on a plain row and not on the focused one reads in the screenshot and not in
+  // use — the same lesson `--status-in-review` taught on the track.
+  const rowGrounds = (): ReadonlyArray<readonly [string, string]> => {
+    const bg = hex(t, '--bg')
+    return [
+      ['--bg', bg],
+      ['--bg-hover', over(t['--bg-hover'] ?? '', bg)],
+      ['--bg-selected', over(t['--bg-selected'] ?? '', bg)],
+    ]
+  }
+
+  // The Done meter — one tick per readable issue on the roadmap, a filled track on the index —
+  // draws exactly one fact: issues at done over readable issues. The FILL is what carries it, so
+  // it answers to the 3:1 non-text bar (WCAG 1.4.11) on every ground a row is painted.
+  it('the done meter’s fill is distinguishable on every ground a project row is drawn on (>= 3.0)', () => {
+    for (const [name, ground] of rowGrounds()) {
+      expect(
+        contrastRatio(hex(t, '--status-done'), ground),
+        `meter fill on ${name}`,
+      ).toBeGreaterThanOrEqual(AA_LARGE)
+    }
+  })
+
+  // The other half of the meter is deliberately below that bar and this records it as the bound
+  // that can FAIL: the unfilled tick (`--border-strong`) and the index track (`--row-hairline`)
+  // measure 1.07–1.40 against the row they sit on. They are the extent of the track, not the
+  // count — the meter is `aria-hidden` and the exact fact is the mono `done/total` beside it in
+  // `--text-2`, which the block's first assertion already holds at AA. The day a token edit lifts
+  // either over 3:1 is the day the meter is loud enough to argue about on its own terms.
+  it('records that the meter’s unfilled tick and its track are scaffolding, never the count', () => {
+    for (const [name, ground] of rowGrounds()) {
+      expect(
+        contrastRatio(over(t['--border-strong'] ?? '', ground), ground),
+        `unfilled tick on ${name}`,
+      ).toBeLessThan(AA_LARGE)
+    }
+    expect(
+      contrastRatio(composite(t, '--row-hairline'), hex(t, '--bg')),
+      'index meter track',
+    ).toBeLessThan(AA_LARGE)
+  })
+
+  // The target mark — the ONE point in time the roadmap draws per project, and on most rows the
+  // only mark in the drawing. It is inked by the project's own status and shaped by it too (filled
+  // disc · done disc · × ring · hollow urgent ring), so hue is never the sole channel, but a mark
+  // nobody can see is still a mark nobody can see: 3:1 on all three row grounds.
+  //
+  // `--text-2` is in this list because the mock inks a PLANNED target `--text-3`, which measures
+  // 2.43–3.43 across the six blocks on these grounds — under the non-text bar in five of them. The
+  // ink moved and the mock lost (issue-list-daylight DI-2, triage-daylight B8). The same move
+  // carried the axis's month labels, its `no cycles past <date>` statement, the row's mono
+  // `done/total` and target day, and both "nothing" phrases off `--text-3`: those are TEXT, so
+  // their bar is 4.5, which `--text-3` misses on `--bg` in every block.
+  it('every target mark ink is distinguishable on every ground a roadmap row is drawn on (>= 3.0)', () => {
+    const inks = ['--status-urgent', '--status-done', '--status-in-progress', '--text-2'] as const
+    for (const [name, ground] of rowGrounds()) {
+      for (const ink of inks) {
+        expect(contrastRatio(hex(t, ink), ground), `${ink} on ${name}`).toBeGreaterThanOrEqual(
+          AA_LARGE,
+        )
+      }
+    }
+    // A future target is a filled disc stroked with the page ground and a passed one is a ring
+    // filled with it, so the knockout is load-bearing in both directions — the same claim the done
+    // glyph's check makes, at a different radius.
+    for (const ink of inks) {
+      expect(
+        contrastRatio(hex(t, '--bg'), hex(t, ink)),
+        `knockout vs ${ink}`,
+      ).toBeGreaterThanOrEqual(AA_LARGE)
+    }
+  })
+
+  // The project page's state bar — the one place an issue status is drawn as AREA rather than as a
+  // glyph. Three of its six hues carry work that is moving and clear the non-text bar on the page
+  // ground.
+  it('the state bar’s moving segments are distinguishable on the page ground (>= 3.0)', () => {
+    const bg = hex(t, '--bg')
+    for (const ink of ['--status-done', '--status-in-progress', '--status-in-review'] as const) {
+      expect(contrastRatio(hex(t, ink), bg), ink).toBeGreaterThanOrEqual(AA_LARGE)
+    }
+  })
+
+  // The other three — backlog, todo and the canceled segment's `--text-3` — are the palette's QUIET
+  // family, and they cannot reach 3:1 on a light ground without colliding with each other
+  // (`--status-backlog` would have to land on `--status-todo`'s value in warm light). They measure
+  // 2.43–6.02 across the six blocks: over the bar in the darks, under it in the lights.
+  //
+  // That is allowed here and nowhere else in this file because the bar is not the carrier. Every
+  // segment is restated directly beneath it as `<glyph> <count> <label>` in `--text-2`, and the bar
+  // itself is a `role="img"` whose label enumerates them — both asserted in
+  // `apps/web/src/projects/project-page.test.tsx`, so this exemption's premise is enforced by a
+  // test rather than by this comment. What is pinned is the floor: a segment may never fade so far
+  // that the composition stops reading as a bar at all.
+  it('records that the state bar’s quiet segments are a composition over facts stated in text', () => {
+    const bg = hex(t, '--bg')
+    for (const ink of ['--status-backlog', '--status-todo', '--text-3'] as const) {
+      expect(contrastRatio(hex(t, ink), bg), ink).toBeGreaterThanOrEqual(2.4)
+    }
+  })
+
+  // The axis's scaffolding, recorded as bounds that can FAIL rather than left unmeasured. The
+  // cycle band's stroke, the row gridlines under it and the per-row now line all sit at 1.07–2.07
+  // against the ground they are drawn on. Each is a rule joining facts stated elsewhere: the band
+  // is NAMED in `--text-1`/`--text-2` inside it, the gridlines repeat that band's edges, and the
+  // now line repeats the header's `--accent` caret — which is pinned at 3:1 by the delivery block
+  // above and labelled `today` in `--text-1`, not `--accent-strong` (4.00–4.72 on the header's
+  // hover ground, under AA in editorial light: the same trade the delivery page's median made).
+  it('records that the axis rules are scaffolding, not the carriers of the cycle', () => {
+    const bg = hex(t, '--bg')
+    const header = over(t['--bg-hover'] ?? '', bg)
+    expect(
+      contrastRatio(over(t['--border-strong'] ?? '', header), header),
+      'cycle band stroke',
+    ).toBeLessThan(AA_LARGE)
+    expect(contrastRatio(composite(t, '--row-hairline'), bg), 'row gridline').toBeLessThan(AA_LARGE)
+    expect(contrastRatio(over(t['--accent-line'] ?? '', bg), bg), 'row now line').toBeLessThan(
+      AA_LARGE,
+    )
+    // What the reader is actually meant to read on the header, at the bar text answers to.
+    for (const ink of ['--text-1', '--text-2'] as const) {
+      expect(contrastRatio(hex(t, ink), header), `band name ${ink}`).toBeGreaterThanOrEqual(
+        AA_NORMAL,
+      )
+    }
+  })
+
+  // The delta pill on the project page — `N days past` on `--urgent-soft`. The urgent ink over an
+  // 8% urgent wash is pinned by the digest assertion above; what is NEW here is that this reads the
+  // DECLARED `--urgent-soft` token rather than reconstructing the wash from `--status-urgent`, so
+  // an edit to the wash itself (8% → 14%, or a change of hue) fails here and nowhere else.
+  //
+  // The two urgent inks the index and the roadmap add — `Past target — N open` and `Target passed`
+  // — are `--status-urgent-ink` on the three row grounds, and the passed target's ring is
+  // `--status-urgent` on the same three. Both pairs are already pinned, by 'the phrase at rest' and
+  // by the track block; recorded here rather than duplicated, because two assertions over one pair
+  // is how one of them quietly stops being maintained.
+  it('the delta pill’s ink meets AA on the urgent wash as the preset declares it (>= 4.5)', () => {
+    expect(
+      contrastRatio(hex(t, '--status-urgent-ink'), composite(t, '--urgent-soft')),
+    ).toBeGreaterThanOrEqual(AA_NORMAL)
   })
 })

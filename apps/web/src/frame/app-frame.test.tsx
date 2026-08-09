@@ -86,9 +86,19 @@ vi.mock('@/issues/issue-detail', () => ({
   IssueDetail: () => null,
   IssueDetailPanel: () => null,
 }))
-vi.mock('@/board/board', () => ({
-  Board: () => <div data-testid="board" />,
-}))
+// Band 2 belongs to the LENS, not to the route — the Board's masthead states the filtered count,
+// so only the surface holding the filter can draw it. The stub therefore draws the real `Masthead`
+// with the lens the route hands it, which is the whole of what this file asserts about that band.
+vi.mock('@/board/board', async () => {
+  const { Masthead } = await import('@/frame/masthead')
+  return {
+    Board: ({ lens }: { lens?: React.ReactNode }) => (
+      <div data-testid="board">
+        <Masthead title="Issues" lens={lens} />
+      </div>
+    ),
+  }
+})
 
 import { routeTree } from '@/routeTree.gen'
 

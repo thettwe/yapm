@@ -237,3 +237,106 @@ reorder, virtualization and theme tests keep their claims verbatim.
 <!-- Build-time decisions are appended below this line, each with what was ambiguous, what was
      chosen, and why. The render task's findings — every deliberate difference from board.png,
      and the four degenerate states — are recorded here too. -->
+
+### DI-1 — The reserved slot's ink is `--text-2`, not the mock's `--border-strong`
+
+D8 asked for `--border-strong` on the column ground at 3:1. **Measured, it is 1.31–1.44 in all six
+theme blocks** — the dashed outline that is the whole drawing of an empty column, and of the hole a
+picked-up card leaves, would be a line the reader cannot see. `--text-3` was the next candidate and
+misses too (2.73 warm light, 2.73 editorial light). `--text-2` measures 5.25–7.28 and is what
+shipped, in both places the outline is drawn (`board-card.tsx`'s hole and `board.tsx`'s
+`ReservedSlot`).
+
+This is D8's own rule applied — if a pair misses its bar the ink moves and the mock loses — and it
+is the third time the precedent has been exercised (`issue-list-daylight` DI-2,
+`triage-daylight` B8). `contrast.test.ts` keeps BOTH numbers: the bar the shipped ink clears, and
+the mock's ink recorded **below** the bar, so the day a palette retune makes `--border-strong`
+legible the quieter ink is available again and someone will see it.
+
+The drop slot's accent border (3.73–5.43 on its tint over the column) and the in-flight ring
+(4.55–5.83 on the card) needed no change. The column tint against the page ground measures
+1.00–1.05, recorded as scaffolding below 3:1 exactly as D8 asked.
+
+### DI-2 — `CommandProvider` is mounted BELOW `BoardBody`, and the reason is ⌘K precedence
+
+Band 2 needs `New issue`, which reaches the ambient composer through `CommandProvider` — the
+provider the board never mounted before. But that provider registers a ⌘K opener that **never
+declines**, and the frame's registry consults the most recently registered source first. React runs
+effects children-before-parents, so a provider wrapping the board would always register after the
+board's own opener and swallow the card move (D0: `m`/⌘K open "Move to status…").
+
+**Decided: `CommandProvider` wraps band 2 only**, as a child of the component that registers the
+board's opener. The board therefore gets first refusal, declines with no card focused / mid-drag /
+for a viewer, and the issues palette answers instead — which is a better fallback than the frame's
+bare group palette the board fell through to before. The ordering is load-bearing and invisible, so
+it is stated in a comment at the registration site and guarded by a component test that mounts the
+real `CommandRegistryProvider` and a stub provider registering exactly as the real one does.
+
+### DI-3 — Saving a view from the board persists the default grouping and sort
+
+`savedView.create` stores filter + grouping + sort, and the board has no grouping or sort to store.
+It writes `DEFAULT_GROUPING` / `DEFAULT_SORT`, so a view saved on the board opens on the list
+grouped by status — the list's own default — rather than inventing a third state. Applying a saved
+view **on the board** applies its filter and ignores its grouping and sort, because neither has
+anything to act on here.
+
+### DI-4 — The page gutter is the frame's `px-5`, not the mock's 40px
+
+`board.html` draws a 40px gutter because its own masthead uses one. The shipped `Masthead` is
+`px-5`, and a board indented twice as far as the band above it reads as a second page. The columns
+stay fluid either way and the no-horizontal-scroll promise is unaffected — it is measured, not
+assumed. **Recorded as a deliberate difference from `board.png`.**
+
+### DI-5 — A virtualized column draws no landing slot
+
+The three drawn drag states hold for every column except the append position of a column past the
+~100-card virtualization threshold, where the landing site sits a hundred cards below the rendered
+window. A slot drawn there would be a promise the reader cannot see, so it is not drawn; the hole,
+the in-flight card and the live-region announcement still carry the move. Cross-column moves INTO a
+virtualized column still work exactly as before.
+
+### DI-6 — A move made under a filter ranks against the visible neighbours
+
+`rankForSlot` reads the destination column's cards, and under a filter those are the cards that
+matched. A card dropped between two visible neighbours therefore takes a rank between THEM, which
+can place it anywhere among the hidden rows in between. The alternative — ranking against the
+unfiltered column — would put the card somewhere the reader did not drop it. Neither is wrong; the
+drawn one wins, and no sibling is renumbered either way.
+
+### DI-7 — Two files outside the surface had to move, and both are flagged for the parallel builds
+
+- `apps/web/src/routes/teams.$teamId.board.tsx` no longer draws band 2: the masthead states the
+  FILTERED count, so only the surface that owns the filter can draw it. The route now hands the
+  lens toggle to `Board`, exactly as the issues route hands it to `IssueList`.
+- **`apps/web/src/frame/app-frame.test.tsx`** — the one file under `frame/` this change touches,
+  and only its `Board` stub. That stub used to render an empty div while the ROUTE drew the
+  masthead the test asserts against; it now renders the real `Masthead` with the lens it is handed.
+  The assertion is unchanged, byte for byte. **A sibling parallel build touching that file will
+  conflict here.**
+
+`packages/ui` is touched in three files, not D9's two: `board-card.tsx`, `styles/contrast.test.ts`
+and `components/board-card.stories.tsx` (tasks 3.4). Same conflict warning applies.
+
+### DI-8 — What the component tier could not prove, and who proves it instead
+
+dnd-kit's keyboard sensor drives a pick-up and an arrow move under jsdom, so the hole, the
+in-flight card's footer and the cross-column landing slot are all asserted there with motion
+reduced. Its **Escape cancel** does not fire under jsdom, so the "cancel puts every drawn state
+away" claim is not asserted at that tier; `board.spec.ts`'s `Escape cancels a pick-up and writes no
+change` keeps the claim verbatim at the e2e tier. Which column an arrow key reaches is geometry and
+jsdom has none, so the component test asserts that a FOREIGN column draws exactly one slot, never
+which column.
+
+### DI-9 — Loading and missing-team states now read as the list's do
+
+`This team no longer exists.` and `Loading team…` became `Team not found` and `Loading…` — the same
+two labels the list uses, and the only sentence on the page is gone (task 4.9).
+
+### Still outstanding at the end of this pass
+
+The **render task (7.4) and the degenerate-state renders (7.5) have not been run**: no screenshot
+of the built page at 1440×900 has been compared against `board.png`, and the one-card /
+all-columns-empty / 40-card / long-title / phrase-without-track states have not been looked at.
+Everything recorded above as a difference from the mock was decided from the code and the token
+measurements, not from a render. Nothing in this section should be read as "the page was looked
+at".

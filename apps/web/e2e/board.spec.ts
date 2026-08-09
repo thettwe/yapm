@@ -92,6 +92,21 @@ test('issues seeded in the list appear as cards in the board Todo column', async
   await expect(card(column(page, 'Todo'), title)).toBeVisible({ timeout: 20_000 })
 })
 
+test('all six columns share the measure and the board never scrolls sideways', async ({ page }) => {
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  await openBoard(page, [unique('Measure card')])
+
+  // The promise, measured rather than eyeballed, at whatever width the suite runs: six fluid
+  // columns inside the page gutter, so the last one is on screen instead of past the right edge.
+  // Six fixed 288px columns in a horizontally scrolling strip measure ~1790px and fail this.
+  const board = page.getByTestId('board')
+  const [scrollWidth, clientWidth] = await board.evaluate((el) => [el.scrollWidth, el.clientWidth])
+  expect(scrollWidth).toBe(clientWidth)
+  await expect(column(page, 'Canceled')).toBeInViewport()
+})
+
 test('the command palette moves a focused card to another column and it persists', async ({
   page,
 }) => {

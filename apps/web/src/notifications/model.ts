@@ -46,11 +46,28 @@ export interface NotificationRowData {
   readonly eventKey: string
   readonly actorId: string
   readonly actorName: string | null
+  // The full sentence, unchanged: what a reader outside the app is sent, and what the palette and
+  // the email seam still address the event by.
   readonly title: string
   readonly summary: string
+  // The actor and the verb alone. The row draws this beside `subjectKey` / `subjectTitle`, which
+  // carry the subject in their own columns.
+  readonly phrase: string
   readonly read: boolean
   readonly createdAt: number
 }
+
+// The kind as a word, for the row's assistive-technology text. The glyph is a drawing and a drawing
+// is not a name, so every row states its kind here as well.
+export const KIND_LABEL: Record<NotificationKind, string> = {
+  issue_assigned: 'Assigned',
+  issue_commented: 'Commented',
+  mention: 'Mentioned',
+  pm_digest_published: 'Digest',
+}
+
+// The four kinds as the empty state names them, in the order `NOTIFICATION_KINDS` declares.
+export const KIND_WORDS: readonly string[] = ['assigned', 'commented', 'mentioned', 'digests']
 
 const ID_SEPARATOR = '\u0000'
 
@@ -91,6 +108,7 @@ export function toNotificationRow(row: NotificationSyncedRow): NotificationRowDa
     actorName,
     title: copy.title,
     summary: copy.summary,
+    phrase: copy.phrase,
     read: row.readAt != null,
     createdAt: row.createdAt,
   }
@@ -106,6 +124,12 @@ export function toNotificationRows(
     .sort((a, b) =>
       b.createdAt !== a.createdAt ? b.createdAt - a.createdAt : a.id.localeCompare(b.id),
     )
+}
+
+// The unread lens, as a pure filter over rows the client already holds: no query, no argument, no
+// round trip. Kept here rather than inline in the view so the lens is testable without a client.
+export function unreadRows(rows: readonly NotificationRowData[]): readonly NotificationRowData[] {
+  return rows.filter((row) => !row.read)
 }
 
 export function unreadCount(rows: readonly NotificationRowData[]): number {

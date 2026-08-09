@@ -1183,4 +1183,70 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
     const bg = hex(t, '--bg')
     expect(contrastRatio(wash(hex(t, '--bg-sidebar'), bg, 0.5), bg)).toBeLessThan(AA_LARGE)
   })
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+  // inbox-daylight — appended as one block at the END of the file rather than edited into the
+  // middle: this file has already produced a cross-branch conflict in this series.
+  // ══════════════════════════════════════════════════════════════════════════════════════════
+
+  // The unread gutter disc. It is the ONLY non-text channel carrying read/unread, so it answers to
+  // the 3:1 non-text bar on both grounds a row is drawn on — the plain list and the cursor's tint.
+  // The other two channels (the title's weight, the title's ink) are text and are pinned below.
+  it('the inbox’s unread disc reads as a mark on both row grounds (>= 3.0)', () => {
+    const bg = hex(t, '--bg')
+    const cursor = over(t['--bg-selected'] ?? '', bg)
+    for (const [ground, name] of [
+      [bg, 'plain row'],
+      [cursor, 'cursor row'],
+    ] as const) {
+      expect(contrastRatio(hex(t, '--accent'), ground), name).toBeGreaterThanOrEqual(AA_LARGE)
+    }
+  })
+
+  // The read row's title and its phrase. The mock inks the READ row's phrase `--text-3`, which
+  // measures 2.9:1 on `--bg` in warm light — under AA for 12.5px text, and the mock's own
+  // self-critique names that ink as the weakest channel carrying the most load. Following
+  // `issue-list-daylight` DI-2 and `triage-daylight` B8, the ink moved to `--text-2` and the token
+  // did not: a channel that misses AA is not a channel. This is the assertion that holds it there.
+  it('the inbox’s read row keeps its title and phrase above AA on both grounds (>= 4.5)', () => {
+    const bg = hex(t, '--bg')
+    const cursor = over(t['--bg-selected'] ?? '', bg)
+    for (const ground of [bg, cursor]) {
+      expect(
+        contrastRatio(hex(t, '--text-2'), ground),
+        'read title / phrase',
+      ).toBeGreaterThanOrEqual(AA_NORMAL)
+      expect(contrastRatio(hex(t, '--text-1'), ground), 'unread title').toBeGreaterThanOrEqual(
+        AA_NORMAL,
+      )
+    }
+  })
+
+  // The day band. It is the list's group header on `--bg-hover`, and its label is the only text on
+  // it — nothing else states the bucket, so it carries the full bar.
+  it('the inbox’s day band label meets AA on the band’s ground (>= 4.5)', () => {
+    const band = over(t['--bg-hover'] ?? '', hex(t, '--bg'))
+    expect(contrastRatio(hex(t, '--text-1'), band)).toBeGreaterThanOrEqual(AA_NORMAL)
+  })
+
+  // The two places `--text-3` survives on this surface, recorded honestly against the bar rather
+  // than exempted silently: the mono age column (the shipped `IssueRow` inks its date the same way,
+  // and the day band above it states the same fact coarsely) and — no longer — the empty state's
+  // kind line, which moved to `--text-2` because nothing else on that surface states the four
+  // kinds. The age is allowed BELOW AA; the kind line is not, and that asymmetry is the point.
+  it('records the inbox’s quiet inks: the age may sit under the bar, the kind line may not', () => {
+    const bg = hex(t, '--bg')
+    expect(contrastRatio(hex(t, '--text-3'), bg), 'mono age').toBeGreaterThanOrEqual(AA_LARGE - 0.5)
+    expect(contrastRatio(hex(t, '--text-2'), bg), 'empty kind line').toBeGreaterThanOrEqual(
+      AA_NORMAL,
+    )
+  })
+
+  // The empty state's settled loop. It is a composition mark, not a carrier — `Nothing waiting` is
+  // stated in `--text-1` directly beneath it — so it is recorded BELOW the non-text bar, as a bound
+  // that can fail if the border token is ever pushed to where it starts competing with the words.
+  it('records the inbox’s settled loop as a composition mark rather than a carrier', () => {
+    const bg = hex(t, '--bg')
+    expect(contrastRatio(over(t['--border-strong'] ?? '', bg), bg)).toBeLessThan(AA_LARGE)
+  })
 })

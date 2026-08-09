@@ -292,8 +292,13 @@ test('the palette reaches the inbox and marks it read, and no comment body follo
     await expect(bee.locator(NOTIFICATION_ROW)).toHaveCount(2, { timeout: 30_000 })
     await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 2 unread', { timeout: 20_000 })
     const list = bee.getByRole('region', { name: 'Notifications' })
-    await expect(list).toContainText(`${ADMIN.name} commented on`)
+    // The row's phrase is the actor and the verb, with the subject drawn beside it in its own
+    // columns — so the comment row now reads `<ADMIN> commented` rather than `… commented on
+    // ENG-1`. The claim is identical: this row names this actor and this verb.
+    await expect(list).toContainText(`${ADMIN.name} commented`)
     await expect(list).toContainText(`${ADMIN.name} assigned you`)
+    // And the subject is drawn, once, as the row's title.
+    await expect(list).toContainText(issueTitle)
 
     // The whole point of cutting excerpts: the comment reached the inbox as an event, and its
     // text did not reach it at all.

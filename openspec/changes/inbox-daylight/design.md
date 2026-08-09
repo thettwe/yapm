@@ -190,3 +190,146 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 
 <!-- Build-time decisions are appended below this line, each with what was ambiguous, what was
      chosen, and why. -->
+
+### B1 — `phrase` shipped on `notificationCopy`; the email seam is provably untouched
+
+`NotificationCopy` gained a third string. `title` and `summary` did not move, and the copy suite now
+asserts the mailed pair verbatim for all four kinds — so "the email renders byte-identically" is a
+test rather than a claim. The two consumers were grepped: `apps/server/src/jobs/notifications.ts`
+(the delivery sweep) reads `copy.title` / `copy.summary`, and `packages/email` takes them as
+`NotificationDigestItem`; neither knows the new field exists. Which string is for which reader is
+stated on the interface, because the code cannot express it.
+
+### B2 — The cross-team tag is drawn when the LIST spans teams, not when the READER does
+
+D5 said "drawn only when the reader belongs to more than one team". Built literally that is wrong on
+two counts. `queries.teams.all()` returns every non-archived team **in the workspace**, not the
+reader's — `isMember(ctx) ? q : denyAll(q)` — so its length answers a different question; and
+learning the reader's own memberships means `queries.members.all()` through `useMembership`, a
+second query on a page whose whole promise was that it opens none beyond the inbox.
+
+Chosen: the tag is drawn when the reader's own **rows** span more than one team, resolved against
+the already-synced team list by id. That is a purely local derivation over data the page already
+holds, and it is the rule that actually decides whether the tag disambiguates anything: with every
+row from one team the tag is the same word on every line. Named cost: a reader who belongs to two
+teams but whose inbox currently holds only Design's rows sees no tag, where D5 would have put
+`Design` on every row. On a surface that carries no route team, that context was weak anyway.
+
+A team the synced list cannot name draws no tag rather than an id (D5, kept). Asserted both ways.
+
+### B3 — The tag draws the team's NAME, truncated, in `--text-2`
+
+The mock draws `Design`, which is the team name rather than its key, so the build follows it —
+capped at `max-w-[110px] truncate` because team names are free text and `Platform Infrastructure`
+would otherwise push the phrase and the age off the row. The ink is `--text-2`, not the mock's
+`--text-3`, for the reason B4 gives.
+
+### B4 — Three inks moved off `--text-3`, and the token did not move
+
+`DESTINATIONS.md` §"What the render showed" item 4 measures `--text-3` at **2.9:1** on `--bg` and
+names `inbox.html`'s read rows as one of the two places the destinations lean on it hardest. Per
+`issue-list-daylight` DI-2 and `triage-daylight` B8 — *if a pair misses AA the ink changes and the
+mock loses, not the reader* — three of the mock's `--text-3` uses moved to `--text-2`:
+
+- the **read row's phrase** (design D3, already decided);
+- the **key column**, which the shipped `IssueRow` already inks `--text-2` — one row anatomy, one
+  ink for the same column;
+- the empty state's **mono kind line**, because nothing else on that surface states the four kinds,
+  so it is the carrier rather than a restatement.
+
+`--text-3` survives in exactly one place on this page: the mono age column, which is what the
+shipped `IssueRow` inks its date column, and whose fact the day band above it already states
+coarsely. `contrast.test.ts` records that asymmetry as two assertions with different bars, so it can
+fail rather than being exempted in a comment.
+
+### B5 — The kind glyph does not dim on a read row
+
+The mock inks `.row.read .kind` at `--text-3`. Refused: the glyph is the only pre-verbal carrier of
+the **kind**, the spec requires the kind be distinguishable before its words are read, and 2.9:1 is
+under the 3:1 non-text bar. Read/unread already has its three channels (disc, weight, title ink) and
+does not need a fourth that costs the kind its legibility. The glyph is `--text-2` on every row.
+
+### B6 — The focused row's key does not step to the accent
+
+The mock inks `.row.focused .id` with `--accent-strong`, which measures 3.84–4.38 on `--bg-selected`
+in two presets — the exact pair `IssueRow` already refused, with the measurement held in
+`contrast.test.ts`. The cursor is carried by the 3px accent rail and the tint, as it is on the issue
+list.
+
+### B7 — The empty state's `Issues` doorway resolves through the deck's anchor team
+
+The mock draws `Issues ›` and `Home ›`. `/inbox` is workspace-wide and carries no route team, and
+there is no workspace-level issues route. Chosen: `useAnchorTeam(undefined)` — the same read-only
+resolution the deck already performs from the same synced query, so the doorway lands where the
+deck's own Issues stop lands. With no team at all (a workspace with none), only `Home` is drawn
+rather than a link to a 404.
+
+### B8 — The live region follows the DRAWN list
+
+`Loading…` → `Nothing waiting` → `N notifications, M unread`, in one persistent `sr-only`
+`role="status"` outside the conditional (`triage-daylight` B13). The count in that sentence is the
+**visible** list, so switching to the unread lens over nothing announces `Nothing waiting` — which
+is what the surface then draws. The masthead count stays the **unread** total in both lenses,
+because that is the number the deck's badge carries and the two may not disagree (D4).
+
+### B9 — The lens needs no cursor reset, because the cursor was never a position
+
+Every derivation — the groups, the flat index map, `move`, the key handler — reads the VISIBLE list.
+The cursor is a row id; when the lens removes that row the anchor misses and the existing clamped
+fallback lands on a drawn row. So "moving through a filtered list must not point at a row that is
+not drawn" needed no new mechanism, only the discipline of filtering before deriving. Asserted: with
+the cursor on a read row, switching to `Unread` leaves it on the one drawn row, and `e` then acts on
+that row.
+
+### B10 — The failure line moved to `--status-urgent-ink`
+
+The shipped masthead `meta` inked a refused write with `--status-urgent`, the MARK hue, which misses
+AA normal in every light preset. `triage-daylight` B14 settled this: a refused write is a sentence,
+so it takes the ink. One-word change, already-pinned pair.
+
+### B11 — `Mark all read` became an outline button
+
+The mock draws a bordered control; the shipped one was `ghost`. `variant="outline"`, `size="sm"`,
+`data-testid="inbox-mark-all-read"` verbatim — and it is **absent** at zero unread (D7), which is
+the assertion that replaced `toBeDisabled()`.
+
+### B12 — Four new test ids, and the two the e2e drives kept byte-identical
+
+Added: `notification-title`, `notification-key`, `notification-phrase`, `notification-team`,
+`inbox-empty`, `inbox-announcement`. Unchanged: `notification-row`, `data-read`, `inbox-badge`,
+`inbox-mark-all-read`, `masthead-count`. The column ids exist because the falsifiable check has to
+name the row's TITLE element specifically — asserting on the row's text content would pass against
+the shipped full sentence.
+
+### B13 — The e2e's one moved assertion
+
+`notifications.spec.ts` asserted `${ADMIN.name} commented on`. The phrase interpolates no subject, so
+it becomes `${ADMIN.name} commented`, and an assertion that the row draws `issueTitle` was **added**
+beside it. The claim is identical and the test gained one; `${ADMIN.name} assigned you`, the
+`data-read` / `notification-row` / `inbox-badge` contracts and the `confidential`-absent assertion
+are untouched.
+
+### B14 — Deliberate removals, all four named
+
+The `BellIcon` (mock; `issues.html` puts no glyph beside `Issues`). The two-sentence empty-state
+paragraph (the word diet; the four kind words carry it). `formatReviewAge` on this surface, replaced
+by `formatRelative` from `@/issues/model` — one age measure across the set, `triage-daylight` B4's
+rule. And the disabled state of `Mark all read`, which is now absence. **No shipped capability was
+removed**: the inventory table above is unchanged in its `Fate` column, and the legend footline is
+drawn only where the mock draws it — under a populated list, never over the empty state.
+
+### B15 — One extra query, and it was already open
+
+The page opens `queries.teams.all()` for the tag's names. The frame already subscribes to it
+(`useAnchorTeam` / `useTeamFrame` / the switcher), so Zero serves the existing active query and the
+page costs no new subscription. `notifications.mine` is untouched — no `.related('team')`, no
+`.related('issue')`, no second read of the subject. A test asserts the surface opens exactly
+`notifications.mine` and `teams.all` and nothing else, so a join arriving later fails there.
+
+### B16 — What was NOT touched
+
+`packages/ui` components, `apps/web/src/frame/*`, `inbox-badge.tsx`,
+`packages/schema/src/zero/{schema.ts,queries.ts}` and `ROADMAP.md` are unmodified.
+`packages/ui/src/styles/contrast.test.ts` gained a block **appended at the end** of the
+`describe.each`, delimited by a banner comment naming this change, per the cross-branch-conflict
+warning. `@/frame/masthead` and `@/frame/team-context` are imported, not edited.

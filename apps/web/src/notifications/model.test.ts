@@ -3,11 +3,14 @@ import {
   formatUnreadCount,
   groupNotifications,
   inboxBadgeLabel,
+  KIND_LABEL,
+  KIND_WORDS,
   type NotificationRowData,
   type NotificationSyncedRow,
   toNotificationRows,
   UNREAD_DISPLAY_CAP,
   unreadCount,
+  unreadRows,
 } from './model'
 
 const DAY = 86_400_000
@@ -44,6 +47,54 @@ test('a shaped row names the actor, the action and the issue', () => {
   expect(row?.read).toBe(false)
 })
 
+// The row draws `subjectKey` / `subjectTitle` in their own columns, so the phrase beside them
+// carries the actor and the verb and no copy of the subject.
+test('a shaped row carries the subject-free phrase beside the full sentence', () => {
+  const [row] = toNotificationRows([synced()])
+
+  expect(row?.phrase).toBe('Dana assigned you')
+  expect(row?.subjectKey).toBe('ENG-42')
+  expect(row?.subjectTitle).toBe('Fix the reconnect loop')
+})
+
+test('the digest row names no actor and keeps its stored title', () => {
+  const [row] = toNotificationRows([
+    synced({
+      kind: 'pm_digest_published',
+      subjectType: 'pm_digest',
+      subjectKey: null,
+      subjectTitle: 'Engineering · Cycle 2',
+      actor: null,
+    }),
+  ])
+
+  expect(row?.phrase).toBe('Shared with you')
+  expect(row?.subjectKey).toBeNull()
+  expect(row?.subjectTitle).toBe('Engineering · Cycle 2')
+})
+
+test('every kind reaches assistive technology as a word', () => {
+  expect(KIND_LABEL).toEqual({
+    issue_assigned: 'Assigned',
+    issue_commented: 'Commented',
+    mention: 'Mentioned',
+    pm_digest_published: 'Digest',
+  })
+  expect(KIND_WORDS).toEqual(['assigned', 'commented', 'mentioned', 'digests'])
+})
+
+test('the unread lens is a pure filter that preserves order and leaves the input alone', () => {
+  const rows = toNotificationRows([
+    synced({ subjectId: 'issue-1', createdAt: NOON, readAt: NOON }),
+    synced({ subjectId: 'issue-2', createdAt: NOON - 1_000 }),
+    synced({ subjectId: 'issue-3', createdAt: NOON - 2_000 }),
+  ])
+
+  expect(unreadRows(rows).map((row) => row.subjectId)).toEqual(['issue-2', 'issue-3'])
+  expect(rows).toHaveLength(3)
+  expect(unreadRows([])).toEqual([])
+})
+
 test('the shaped row carries no body text of any kind, only the snapshotted subject', () => {
   const rendered = JSON.stringify(toNotificationRows([synced()]))
 
@@ -56,6 +107,7 @@ test('the shaped row carries no body text of any kind, only the snapshotted subj
     'eventKey',
     'id',
     'kind',
+    'phrase',
     'read',
     'subjectId',
     'subjectKey',

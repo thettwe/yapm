@@ -72,6 +72,11 @@ Work-graph placement: a status and/or ordering change on one `issue`. Permission
 - **WHEN** a member narrows the board with a filter and then moves a card to a status that filter hides
 - **THEN** the card leaves the board, focus goes to the destination column rather than to the document body, and the live region states the column it moved to and that the filter hides it
 
+#### Scenario: A second move to the same hidden status is announced again
+
+- **WHEN** a member moves a second card to the same status that filter hides
+- **THEN** the live region is emptied as the move starts and states the sentence again once the move lands, so an identical sentence is a genuine change rather than a silent rewrite of the same text
+
 #### Scenario: Drag reorders within a column
 
 - **WHEN** a member drags a card above another card in the same column and drops it

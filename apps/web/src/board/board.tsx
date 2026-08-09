@@ -340,6 +340,12 @@ function BoardBody({
 
   const move = useCallback(
     (id: string, status: IssueStatus, rank: string) => {
+      // Empty FIRST, so the sentence the effect writes next is always a real text change. Two
+      // moves to the same hidden status produce the same string, and a live region that is
+      // re-assigned an identical value mutates no DOM and is never spoken again; clearing here
+      // also drops the previous move's sentence the moment this one starts, so the region never
+      // states something that stopped being true.
+      setAnnouncement('')
       setPendingFocus({ id, status })
       void runMutation(
         zero.mutate(mutators.issue.move({ id, status, rank, updatedAt: Date.now() })),

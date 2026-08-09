@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 // THE FALSIFIABLE CHECK for the Board lens. On main every card is handed `buildRealityShape(null)`
@@ -148,6 +148,18 @@ function cardFor(title: string): HTMLElement {
 
 function column(label: string): HTMLElement {
   return screen.getByRole('region', { name: new RegExp(`^${label}, `) })
+}
+
+// The focus restore runs on animation frames; a test that hands focus somewhere else has to let
+// that run end first.
+async function advanceFrames(count: number): Promise<void> {
+  for (let i = 0; i < count; i += 1) {
+    await act(async () => {
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => resolve(undefined))
+      })
+    })
+  }
 }
 
 beforeEach(() => {
@@ -442,45 +454,63 @@ test('carrying a card into another column draws exactly one landing slot there',
 // the restore window and leave focus on <body>.
 test('a move that leaves the filter hands focus to the destination column and says where the card went', async () => {
   const bravo = issue({ id: 'i-b', number: 11, title: 'Bravo card', status: 'in_review' })
-  harness.rows = {
-    'teams.all': [TEAM],
-    'issues.byTeam': [issue({ id: 'i-a', number: 10, title: 'Alpha card', status: 'todo' }), bravo],
-  }
+  const rows = (...issues: unknown[]) => ({ 'teams.all': [TEAM], 'issues.byTeam': [...issues] })
+  const alpha = (status: string) => issue({ id: 'i-a', number: 10, title: 'Alpha card', status })
+  const charlie = (status: string) =>
+    issue({ id: 'i-c', number: 12, title: 'Charlie card', status })
+
+  harness.rows = rows(alpha('todo'), charlie('todo'), bravo)
   const view = mount()
 
   fireEvent.click(screen.getByRole('button', { name: 'Filter by Status' }))
   fireEvent.click(screen.getByRole('menuitem', { name: /Todo$/ }))
-  expect(cards()).toHaveLength(1)
+  expect(cards()).toHaveLength(2)
 
-  // The optimistic row the mutator lands: the same issue, now In Review — which this filter hides.
-  harness.mutate.mockImplementation(() => {
-    harness.rows = {
-      'teams.all': [TEAM],
-      'issues.byTeam': [
-        issue({ id: 'i-a', number: 10, title: 'Alpha card', status: 'in_review' }),
-        bravo,
-      ],
-    }
-    return { client: Promise.resolve({ type: 'ok' }), server: Promise.resolve({ type: 'ok' }) }
-  })
-
-  cardFor('Alpha card').focus()
-  fireEvent.keyDown(window, { key: 'm' })
-  fireEvent.click(await screen.findByRole('option', { name: /Move to In Review/ }))
+  const region = screen.getByTestId('board-announcement')
+  const SENTENCE = 'Moved to In Review, which the current filter hides.'
 
   // The sync layer pushing the optimistic row back: the stubbed `useQuery` has no subscription of
   // its own, so the re-render the real one would cause is asked for here.
-  view.rerender(
-    <CommandRegistryProvider>
-      <Board teamId="team-1" />
-    </CommandRegistryProvider>,
-  )
+  const settle = () =>
+    view.rerender(
+      <CommandRegistryProvider>
+        <Board teamId="team-1" />
+      </CommandRegistryProvider>,
+    )
+
+  async function moveToInReview(title: string, landed: readonly unknown[]): Promise<void> {
+    harness.mutate.mockImplementation(() => {
+      harness.rows = rows(...landed)
+      return { client: Promise.resolve({ type: 'ok' }), server: Promise.resolve({ type: 'ok' }) }
+    })
+    cardFor(title).focus()
+    fireEvent.keyDown(window, { key: 'm' })
+    fireEvent.click(await screen.findByRole('option', { name: /Move to In Review/ }))
+  }
+
+  await moveToInReview('Alpha card', [alpha('in_review'), charlie('todo'), bravo])
+  settle()
+
+  expect(screen.queryAllByTestId('board-card')).toHaveLength(1)
+  expect(cards()[0]?.dataset.cardId).toBe('i-c')
+  expect(region).toHaveTextContent(SENTENCE)
+  // Focus lands on the column the card went to, never on <body>.
+  const inReview = screen.getByRole('region', { name: /^In Review, / })
+  await waitFor(() => expect(document.activeElement).toBe(inReview))
+  // The restore loop settles on the frame AFTER it sees focus stuck, so let it finish before the
+  // next card is focused — otherwise it would steal focus back mid-test.
+  await advanceFrames(3)
+
+  // A SECOND move to the same hidden status. The sentence is byte-identical, so a region that is
+  // merely re-assigned it mutates no DOM and is never spoken again: the region has to be emptied
+  // first, and that empty frame is the proof the next write is a real change.
+  await moveToInReview('Charlie card', [alpha('in_review'), charlie('in_review'), bravo])
+  expect(region.textContent).toBe('')
+
+  settle()
 
   expect(screen.queryAllByTestId('board-card')).toHaveLength(0)
-  expect(screen.getByTestId('board-announcement')).toHaveTextContent(
-    'Moved to In Review, which the current filter hides.',
-  )
-  // Focus lands on the column the card went to, never on <body>.
+  expect(region).toHaveTextContent(SENTENCE)
   await waitFor(() =>
     expect(document.activeElement).toBe(screen.getByRole('region', { name: /^In Review, / })),
   )

@@ -313,6 +313,14 @@ test('a drafted section is keyboard-operable end to end and holds in every theme
   await expect(page.getByTestId('retro-seed-toggle')).toHaveAttribute('aria-expanded', 'false')
   await expect(page.getByTestId('retro-seed-widget').first()).toBeHidden()
 
+  // THE ANCHOR IS LOAD-BEARING — do not delete it. `tabTo` counts steps from wherever focus already
+  // is, and a fresh `goto` leaves it on the body, so without this the walk starts at the document
+  // root and spends its budget on the chrome ahead of the panel instead of arriving. Anchoring on
+  // the same control the first walk started from is what makes the step budget describe the distance
+  // across this seam rather than the length of the document. Raising the budget instead would hide
+  // the next regression rather than catch it.
+  await page.getByTestId('retro-seed-toggle').focus()
+
   await tabTo(page, 'retro-ai-evidence-metric')
   await page.keyboard.press('Enter')
   const tile = page.locator(`[data-metric="${METRIC_KEY}"]`)

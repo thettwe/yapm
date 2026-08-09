@@ -62,7 +62,10 @@ issues: the first states its count, the second states nothing.
 The system SHALL state, on a project whose `target_date` is earlier than today **and** whose status
 is not `completed`, that the target has passed, together with the number of its readable issues not
 yet done. The statement SHALL be real text in the urgent register, never a colour alone. A project
-whose status is `completed` SHALL NOT carry it, whatever its target date.
+whose status is `completed` SHALL NOT carry it, whatever its target date. A project with **no
+readable issues** SHALL state the passed target alone and SHALL NOT draw the count as a zero: the
+row draws no zero anywhere, and `0 open` would assert that nothing is open over work the reader may
+not be able to see.
 
 This fact SHALL NOT be added to the product's one attention number, which counts exactly its four
 exception classes; no count of past-target projects SHALL appear anywhere.
@@ -74,6 +77,11 @@ the target is a single stored field and that nothing records whether it was re-a
 
 - **WHEN** an active project's target date has passed and two of its readable issues are not done
 - **THEN** the row states that the target has passed together with `2 open`, as text, in the urgent ink
+
+#### Scenario: A project past its target with nothing to count states the target alone
+
+- **WHEN** an active project's target date has passed and it has no readable issues
+- **THEN** the row states that the target has passed and renders no `0` anywhere
 
 #### Scenario: A completed project past its date says nothing
 
@@ -173,9 +181,10 @@ target has passed and whose status is not `completed` SHALL say so beside its ma
 SHALL state a percent, because a percent over a project with no issues reads as zero and is a lie
 about a project nobody has broken down yet.
 
-Each row's drawn axis SHALL be exposed to assistive technology as one labelled image whose label
-states the marks it actually drew; a row that draws no mark SHALL NOT be exposed as an image at
-all.
+Each row SHALL announce **one** label stating the marks its axis actually drew. The drawing itself
+SHALL NOT carry a second label: a row is one control, and a control's children are presentational,
+so a label nested inside it is announced to nobody. A row that draws no mark SHALL claim no schedule
+in that label rather than inventing one.
 
 Work-graph placement: a temporal view over workspace projects, their team-scoped issues, and those
 issues' cycles. Permission story: reads via the same `isMember` project query with the unchanged
@@ -221,10 +230,10 @@ issues' cycles. Permission story: reads via the same `isMember` project query wi
 - **WHEN** a user moves focus with the keyboard and presses Enter on a project
 - **THEN** focus moves between project rows and Enter opens the focused project's page
 
-#### Scenario: The drawn axis announces what it drew
+#### Scenario: The row announces what its axis drew
 
-- **WHEN** a screen reader reaches a project row's axis that drew a target mark and two issue marks
-- **THEN** it announces one label naming the target, how it stands against today, the done-over-total, and where the issue marks sit; and a row that drew no mark is not announced as an image
+- **WHEN** a screen reader reaches a project row whose axis drew a target mark and two issue marks
+- **THEN** the row announces one label naming the target, how it stands against today, the done-over-total, and where the issue marks sit; the drawing inside it carries no second label; and a row with no issues claims no schedule at all
 
 ### Requirement: A workspace-level project query never widens issue reads
 

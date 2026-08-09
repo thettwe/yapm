@@ -554,6 +554,75 @@ shape ("a progress bar", "computed progress") and were rewritten to the built on
 so none of them is made stale. **`ROADMAP.md` was deliberately not edited** (parallel builds; the
 maintainer adds the row at archive time).
 
+### B20 — Two of D8's own rules were applied against D8's own drawing, and D2 was honoured rather than quietly dropped
+
+The review round turned up four things where the built surface disagreed with this document, and in
+each case the document's *rule* beat the document's *drawing*:
+
+- **The roadmap row's drawing no longer carries its own `role="img"` label.** D8 asked for one on
+  every axis SVG. The row is a `<button>`, and WAI-ARIA gives `role=button` presentational
+  children — the nested `role="img"` is stripped and its label is announced to nobody. So the
+  drawing's facts (target vs today, done-over-total, the per-cycle placement, and the `no issues
+  scheduled in a cycle` clause) were folded into the button's own `aria-label` and the SVG is
+  `aria-hidden`. One voice, and it is the voice that is actually read. D8's *rule* — the drawn
+  things say what they draw, nothing by colour alone — is exactly what this preserves; only the
+  element carrying the sentence moved. The inkless-row rule survives in the same place it always
+  did: a row with no issues says `no issues yet` and claims no schedule.
+- **The not-done issue mark is stroked `--text-2`, not `--border-strong`.** D8's closing rule is
+  that where a mock ink misses its bar the ink moves and the mock loses; B16 already pinned
+  `--border-strong` *under* the 3:1 non-text bar in all six blocks as scaffolding. A mark that
+  carries a per-cycle fact is not scaffolding, so it moved to the token the target mark already
+  uses, and it is measured in the same block. Filled-vs-ring stays the done/not-done channel.
+- **The project page's band 2 is the shared `Masthead`,** as D2 said and as the index already did.
+  The page had grown its own breadcrumb / title / pill / chip / actions header, which is precisely
+  what `app-frame` deleted from ten routes. The mock's 23px `p-head` hero loses to the shared band:
+  the breadcrumb is the `kicker`, the status pill and the scope chip are the `lens`, Edit is the
+  `actions` slot and the LEAD/TEAMS line is `meta`.
+- **`Past target` with no count over a project with no readable issues.** D10's whole row about the
+  empty project is "draws nothing — not a zero, not an empty track", and `Past target — 0 open`
+  broke it while also asserting "nothing open" over work the reader may not be able to see. It now
+  matches the roadmap's pairing of `Target passed` with `No issues yet`.
+
+### B21 — The roadmap window covers the data it draws
+
+The axis anchored its left edge on the current cycle (or the start of the current month) and clamped
+everything earlier to fraction 0 — so every project whose target had already gone by drew its mark
+on the same pixel, and the overdue reading the page exists for collapsed into one dot. The window
+now opens at `min(anchor, startOfMonth(earliest target))`, keeping the ≥3-month runway measured from
+that start. `Scheduled outside this window` (B12) is still the honest phrase for *issue* marks off
+the edge; a *target* is never off the edge, because the window is defined to contain it.
+
+The same axis dropped the year main's tick labels carried, so a window spanning twelve months or
+more drew two ticks both reading `Aug` and `formatAxisWindow` collapsed a thirteen-month span to the
+single word `Aug`. `monthLabel` takes a `withYear`, passed whenever the drawn window crosses a
+calendar year, and the window label compares year *and* month before collapsing to one label.
+
+### B22 — Two keyboard defects the component tier had not been asked about
+
+- **The index row swallowed its own `how ·`.** The row is the open target and it *carries* a real
+  disclosure control (B4). Its `onClick` and its own `onKeyDown` had no target guard, so clicking —
+  or pressing Space on — the trigger navigated to the project page before the derivation could be
+  read. Both handlers now guard the way the section-level handler at the top of the file already
+  did. The panel the change's own spec requires that affordance to carry is reachable for the first
+  time.
+- **The project page's `↓ N done` fold dropped focus to `<body>`.** The fold unmounts itself, so
+  focus has to land somewhere deliberate. It follows `issue-list.tsx`'s shipped pattern: the ids on
+  screen when the fold was pressed are recorded in a ref, and an effect focuses the first row that
+  was not among them.
+
+The index's roving-focus model — added by this change and, until now, untested at every tier while
+the roadmap's near-identical one had both a component test and e2e — is now covered by the roadmap's
+test ported across, including a move that crosses a group boundary and a re-render with a shrunk
+set. The docs sentence that claimed "focus never falls to the page body" was restated to what the
+code actually guarantees: the roving tab stop always survives on a *mounted* row.
+
+### B23 — The project page's target strip flips its label near the left edge
+
+`created` is drawn at the origin and the target's label hung end-anchored to the left of its mark,
+so a target early in the created→today run drew the two strings through each other and off the left
+edge of the 400px drawing. Below a quarter of the run the target's label flips to start-anchored on
+the right of its mark — the same flip `RoadmapRow` already makes at the axis's right edge.
+
 One correction: task 1.5 names "the Tailwind 4.3 and TanStack Router references" as if they were
 their own files. They are not — both live in `reference/frontend-build.md` (§6 Tailwind CSS 4.3 +
 shadcn/ui, §5 TanStack Router 1.170), and there is no `reference/tailwind.md` or
@@ -563,3 +632,11 @@ three bands, the word diet's three tiers, the destination tree holding Projects 
 patterns — all of which the built surfaces follow). Task 1.5 stays open: `reference/zero.md` was
 not read in any pass, which is defensible only because no pass wrote a Zero API — the two edits are
 `.related(...)` calls beside existing ones — but it should be closed before the change lands.
+
+**Task 1.5 is now closed.** `reference/zero.md` was read in the review-fix pass: Zero 1.x is
+`defineQuery` / `defineQueries` / `defineMutator` / `defineMutators` / `createBuilder` /
+`handleQueryRequest` / `handleMutateRequest`, and its own worked example (`issueDetail`) chains
+`.related('project').related('labels').related(…, q => …)` inside one query exactly as this change's
+two edits do. Nothing in this change writes a Zero API the reference contradicts, and no 0.x name
+(`syncedQuery`, `PushProcessor`, `definePermissions`) appears anywhere in it. The Tailwind 4.3 and
+TanStack Router material is `reference/frontend-build.md` §6 and §5, as B19 corrected.

@@ -107,6 +107,11 @@ function mount() {
   return render(<ProjectPage teamId={ENG.id} projectId="p-1" />)
 }
 
+// One of the strip's two mono end labels, found by the word that IS its disclosure.
+function stripLabel(strip: HTMLElement, word: 'created' | 'target'): SVGTextElement | undefined {
+  return [...strip.querySelectorAll('text')].find((node) => node.textContent?.includes(word))
+}
+
 function rowFor(title: string): HTMLElement {
   const found = screen
     .getAllByTestId('project-issue-row')
@@ -172,6 +177,50 @@ test('the target vital states the delta and labels its left end `created`, never
   // The one left edge in this change, and the label IS the disclosure.
   expect(strip.textContent).toContain(`${formatTargetDay(CREATED)} · created`)
   expect(strip.textContent).not.toMatch(/start/i)
+  // A target late in the run hangs its label to the LEFT of the mark, away from the right edge.
+  expect(stripLabel(strip, 'target')?.getAttribute('text-anchor')).toBe('end')
+})
+
+test('a target early in the run flips its label rather than running through `created`', () => {
+  // Created Jun 1, target Jun 10, today Aug 7: the target sits in the first quarter of the run, so
+  // an end-anchored label would be drawn straight through `created` and off the left edge.
+  seed({ targetDate: Date.UTC(2026, 5, 10), issues: [issue({ id: 'i1', status: 'todo' })] })
+  mount()
+
+  const strip = screen.getByTestId('project-target-strip')
+  const created = stripLabel(strip, 'created')
+  const target = stripLabel(strip, 'target')
+  expect(created?.textContent).toContain(formatTargetDay(CREATED))
+  expect(target?.textContent).toContain(formatTargetDay(Date.UTC(2026, 5, 10)))
+
+  // Both are present and they do not cross: the target's label starts to the RIGHT of its mark and
+  // grows away from `created`, which starts at the origin.
+  expect(target?.getAttribute('text-anchor')).toBe('start')
+  expect(Number(target?.getAttribute('x'))).toBeGreaterThan(Number(created?.getAttribute('x')))
+})
+
+test('opening the done fold lands focus on the first newly revealed row', () => {
+  seed({
+    issues: [
+      issue({ id: 'i1', title: 'Still open', status: 'todo' }),
+      issue({ id: 'i2', title: 'Shipped one', status: 'done' }),
+      issue({ id: 'i3', title: 'Shipped two', status: 'done' }),
+    ],
+  })
+  mount()
+
+  const fold = screen.getByTestId('project-done-fold')
+  fold.focus()
+  fireEvent.click(fold)
+
+  // The fold unmounts itself, so focus has to land somewhere deliberate: the first row that was
+  // not already on screen. Dropping to <body> is what the shipped issue-list fold avoids.
+  expect(document.activeElement).not.toBe(document.body)
+  const landed = (document.activeElement as HTMLElement).closest(
+    '[data-testid="project-issue-row"]',
+  )
+  expect(landed).not.toBeNull()
+  expect(within(landed as HTMLElement).getByText('Shipped one')).toBeTruthy()
 })
 
 test('an undated project draws no strip and no delta', () => {

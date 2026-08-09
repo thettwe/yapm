@@ -834,7 +834,13 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
   // carried the axis's month labels, its `no cycles past <date>` statement, the row's mono
   // `done/total` and target day, and both "nothing" phrases off `--text-3`: those are TEXT, so
   // their bar is 4.5, which `--text-3` misses on `--bg` in every block.
-  it('every target mark ink is distinguishable on every ground a roadmap row is drawn on (>= 3.0)', () => {
+  //
+  // The per-cycle ISSUE mark is measured in this same block for the same reason: it is a filled
+  // `--status-done` disc when the issue is done and a ring when it is not, and that ring was
+  // stroked `--border-strong` — the token the assertion below this one pins UNDER the bar in all
+  // six blocks. Shape stays the channel; the ring's stroke moved to `--text-2`, which is already
+  // in this list, so both marks answer to the same measurement.
+  it('every target and issue mark ink is distinguishable on every ground a roadmap row is drawn on (>= 3.0)', () => {
     const inks = ['--status-urgent', '--status-done', '--status-in-progress', '--text-2'] as const
     for (const [name, ground] of rowGrounds()) {
       for (const ink of inks) {

@@ -180,7 +180,7 @@ test('no issues and no schedule are different kinds of nothing', () => {
   expect(within(row('Notifications overhaul')).queryByText('0/0')).toBeNull()
 })
 
-test('a row that draws no mark states nothing to assistive technology', () => {
+test('the row speaks with one voice: the drawing’s facts ride the button’s own name', () => {
   seed([
     project({ id: 'p-blank', name: 'Data retention', issues: [] }),
     project({
@@ -192,18 +192,27 @@ test('a row that draws no mark states nothing to assistive technology', () => {
   ])
   render(<RoadmapView teamId={TEAM.id} />)
 
-  const blank = within(row('Data retention')).getByTestId('roadmap-row-drawing')
-  expect(blank.getAttribute('role')).toBeNull()
-  expect(blank.getAttribute('aria-label')).toBeNull()
-  expect(blank.getAttribute('aria-hidden')).toBe('true')
+  // The row is a <button>, and role=button gives its children presentational — a nested
+  // `role="img"` on the drawing would be stripped and its label never announced. So the SVG is
+  // hidden and carries no name of its own.
+  for (const name of ['Data retention', 'Checkout rebuild']) {
+    const drawing = within(row(name)).getByTestId('roadmap-row-drawing')
+    expect(drawing.getAttribute('role')).toBeNull()
+    expect(drawing.getAttribute('aria-label')).toBeNull()
+    expect(drawing.getAttribute('aria-hidden')).toBe('true')
+  }
 
-  const drawn = within(row('Checkout rebuild')).getByTestId('roadmap-row-drawing')
-  expect(drawn.getAttribute('role')).toBe('img')
-  const label = drawn.getAttribute('aria-label') ?? ''
-  expect(label).toContain(`Target ${formatTargetDay(Date.UTC(2026, 7, 20))}`)
-  expect(label).toContain('ahead of today')
-  expect(label).toContain('0 of 1 issues done')
-  expect(label).toContain('1 in Cycle 2')
+  const drawn = row('Checkout rebuild').getAttribute('aria-label') ?? ''
+  expect(drawn).toContain(`target ${formatTargetDay(Date.UTC(2026, 7, 20))}`)
+  expect(drawn).toContain('ahead of today')
+  expect(drawn).toContain('0 of 1 issues done')
+  expect(drawn).toContain('1 in Cycle 2')
+
+  // A row with no issues at all says exactly that and claims no schedule either way.
+  const blank = row('Data retention').getAttribute('aria-label') ?? ''
+  expect(blank).toContain('no target date')
+  expect(blank).toContain('no issues yet')
+  expect(blank).not.toContain('scheduled')
 })
 
 test('undated projects sit under one group header and keep their marks', () => {
@@ -213,9 +222,8 @@ test('undated projects sit under one group header and keep their marks', () => {
   const headers = screen.getAllByTestId('roadmap-undated-header')
   expect(headers).toHaveLength(1)
   expect(headers[0]?.textContent).toContain('No target date')
-  expect(
-    within(row('Data retention')).getByTestId('roadmap-row-drawing').getAttribute('role'),
-  ).toBe('img')
+  // An undated row still draws its issue marks, and still says where they sit.
+  expect(row('Data retention').getAttribute('aria-label')).toContain('1 in Cycle 3')
 })
 
 test('the page states the bar it refuses to draw', () => {

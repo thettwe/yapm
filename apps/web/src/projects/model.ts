@@ -278,8 +278,19 @@ function addMonthsUTC(ts: number, months: number): number {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 1)
 }
 
-function monthLabel(ts: number): string {
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' })
+// The year is carried whenever the drawn window crosses one: without it a thirteen-month axis
+// renders two ticks reading `Aug` and a window label collapsing to the single word `Aug`, neither
+// of which says which August.
+function monthLabel(ts: number, withYear = false): string {
+  return new Date(ts).toLocaleDateString(undefined, {
+    month: 'short',
+    ...(withYear ? { year: 'numeric' } : {}),
+    timeZone: 'UTC',
+  })
+}
+
+function crossesYear(start: number, end: number): boolean {
+  return new Date(start).getUTCFullYear() !== new Date(end - DAY).getUTCFullYear()
 }
 
 // The whole roadmap reading, over an injected `now`. NOTHING here returns a start date, a span, a
@@ -293,12 +304,18 @@ export function roadmapAxis(input: {
 }): RoadmapAxis {
   const { projects, issuesByProject, cycles, now } = input
 
-  const currentCycle = cycles.find((cycle) => cycle.startDate <= now && now <= cycle.endDate)
-  const start = currentCycle ? currentCycle.startDate : startOfMonthUTC(now)
-
   const targets = projects
     .map((project) => project.targetDate)
     .filter((target): target is number => target !== null)
+
+  // The window covers the data it draws. Anchoring it on the current cycle (or this month) and
+  // clamping everything earlier would stack every passed target on the same pixel at fraction 0,
+  // so a target already behind us pulls the left edge back to the start of its own month.
+  const currentCycle = cycles.find((cycle) => cycle.startDate <= now && now <= cycle.endDate)
+  const anchor = currentCycle ? currentCycle.startDate : startOfMonthUTC(now)
+  const start =
+    targets.length > 0 ? Math.min(anchor, startOfMonthUTC(Math.min(...targets))) : anchor
+
   const latest = targets.length > 0 ? Math.max(...targets) : now
   const end = Math.max(
     addMonthsUTC(startOfMonthUTC(latest), 1),
@@ -308,11 +325,12 @@ export function roadmapAxis(input: {
   const at = (ts: number) => (ts - start) / span
   const clamped = (ts: number) => Math.min(1, Math.max(0, at(ts)))
 
+  const dated = crossesYear(start, end)
   const monthTicks: RoadmapMonthTick[] = []
   let tick = startOfMonthUTC(start)
   if (tick < start) tick = addMonthsUTC(tick, 1)
   while (tick < end && monthTicks.length <= 60) {
-    monthTicks.push({ ts: tick, label: monthLabel(tick), fraction: at(tick) })
+    monthTicks.push({ ts: tick, label: monthLabel(tick, dated), fraction: at(tick) })
     tick = addMonthsUTC(tick, 1)
   }
 
@@ -390,9 +408,14 @@ export function roadmapAxis(input: {
 // derived, never a control: nothing on this surface can change the window, and a chevron over
 // nothing is a lie about an affordance.
 export function formatAxisWindow(window: { readonly start: number; readonly end: number }): string {
-  const first = monthLabel(window.start)
-  const last = monthLabel(window.end - DAY)
-  return first === last ? first : `${first} – ${last}`
+  const lastDay = window.end - DAY
+  const dated = crossesYear(window.start, window.end)
+  const first = monthLabel(window.start, dated)
+  const last = monthLabel(lastDay, dated)
+  // Month AND year decide whether the window is one label: a thirteen-month axis running Aug to
+  // Aug is two ends that happen to share a month name, not one month.
+  const sameMonth = startOfMonthUTC(window.start) === startOfMonthUTC(lastDay)
+  return sameMonth ? first : `${first} – ${last}`
 }
 
 export function formatTargetDate(targetDate: number | null): string {

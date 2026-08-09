@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 // What only a rendered index can prove: that the Projects surface is a status-grouped PROGRESS
@@ -124,6 +124,94 @@ test('an active project past its target states the open count and a completed on
   expect(headers[0]?.textContent).toContain('1')
   expect(headers[1]?.textContent).toContain('Completed')
   expect(headers.some((header) => header.textContent?.includes('Cancelled'))).toBe(false)
+})
+
+test('a past target over a project with no readable issues draws no zero', () => {
+  seed([
+    project({
+      id: 'p-blank-late',
+      name: 'Data retention',
+      status: 'active',
+      targetDate: YESTERDAY,
+      issues: [],
+    }),
+  ])
+  render(<ProjectsView teamId={TEAM.id} />)
+
+  const late = screen.getByText('Data retention').closest('[data-testid="project-row"]')
+  // The date has gone by and the row says so — but `0 open` would assert "nothing open" over work
+  // the reader may simply not be able to see, and the rest of the row draws no zero either.
+  expect(within(late as HTMLElement).getByText('Past target')).toBeTruthy()
+  expect(within(late as HTMLElement).queryByText(/Past target — /)).toBeNull()
+  expect(within(late as HTMLElement).queryByText(/\b0\b/)).toBeNull()
+})
+
+test('the row’s `how ·` opens its derivation instead of navigating away', () => {
+  seed([
+    project({
+      id: 'p-late',
+      name: 'Checkout rebuild',
+      status: 'active',
+      targetDate: YESTERDAY,
+      issues: [issue({ id: 'i1', status: 'todo' })],
+    }),
+  ])
+  render(<ProjectsView teamId={TEAM.id} />)
+
+  const late = screen.getByText('Checkout rebuild').closest('[data-testid="project-row"]')
+  const trigger = within(late as HTMLElement).getByRole('button', {
+    name: /How past target is derived/,
+  })
+
+  // The row is the open target and it CARRIES the disclosure. If the row swallowed the trigger the
+  // panel could never be read at all.
+  fireEvent.keyDown(trigger, { key: ' ' })
+  expect(harness.navigate).not.toHaveBeenCalled()
+
+  fireEvent.click(trigger)
+  expect(harness.navigate).not.toHaveBeenCalled()
+  expect((late as HTMLElement).querySelector('[data-slot="how-panel"]')).not.toBeNull()
+})
+
+test('the roving-focus keyboard model moves across groups, opens and survives a shrinking set', () => {
+  const fixture = [
+    project({ id: 'p-a', name: 'Alpha', status: 'active', targetDate: NOW + DAY }),
+    project({ id: 'p-b', name: 'Bravo', status: 'active', targetDate: NOW + 2 * DAY }),
+    project({ id: 'p-c', name: 'Charlie', status: 'completed', targetDate: NOW + 3 * DAY }),
+  ]
+  seed(fixture)
+  const view = render(<ProjectsView teamId={TEAM.id} />)
+
+  const rows = screen.getAllByTestId('project-row')
+  expect(rows).toHaveLength(3)
+
+  rows[0]?.focus()
+  fireEvent.keyDown(rows[0] as HTMLElement, { key: 'ArrowDown' })
+  expect(document.activeElement).toBe(rows[1])
+  expect(rows[1]?.getAttribute('tabindex')).toBe('0')
+  expect(rows[0]?.getAttribute('tabindex')).toBe('-1')
+
+  // Down again crosses the Active → Completed group boundary: the roving index is over the ordered
+  // rows, not over one group's rows.
+  fireEvent.keyDown(rows[1] as HTMLElement, { key: 'j' })
+  expect(document.activeElement).toBe(rows[2])
+
+  fireEvent.keyDown(rows[2] as HTMLElement, { key: 'k' })
+  expect(document.activeElement).toBe(rows[1])
+
+  fireEvent.keyDown(rows[1] as HTMLElement, { key: 'Enter' })
+  expect(harness.navigate).toHaveBeenCalledWith(
+    expect.objectContaining({ search: { open: 'p-b' } }),
+  )
+
+  // The ordered set shrinks under the roving index; the tab stop must stay on a MOUNTED row so
+  // Tab returns the reader to the list rather than to <body>.
+  fireEvent.keyDown(rows[1] as HTMLElement, { key: 'ArrowDown' })
+  seed([fixture[0]])
+  view.rerender(<ProjectsView teamId={TEAM.id} />)
+  const remaining = screen.getAllByTestId('project-row')
+  expect(remaining).toHaveLength(1)
+  expect(remaining[0]?.getAttribute('tabindex')).toBe('0')
 })
 
 test('a project with no issues reserves its slots and draws no ink in them', () => {

@@ -1,11 +1,23 @@
-import type { ProjectStatus } from '@yapm/schema'
-import type { IssueRowData } from '@/issues/model'
+import { ISSUE_STATUSES, type IssueStatus, type ProjectStatus } from '@yapm/schema'
+import type { StatusKind } from '@yapm/ui/components/status-glyph'
+import { type IssueRowData, STATUS_LABEL } from '@/issues/model'
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
   planned: 'Planned',
   active: 'Active',
   completed: 'Completed',
   cancelled: 'Cancelled',
+}
+
+// A project's status is cycle position at a coarser grain, so it borrows the issue glyph family
+// rather than inventing a second one. The two enums spell their terminal state differently —
+// `project.status` is `cancelled` (migrations/0008) and `issue.status` is `canceled`
+// (migrations/0004) — and this map is the only place the two spellings meet.
+export const PROJECT_STATUS_TO_KIND: Record<ProjectStatus, StatusKind> = {
+  planned: 'todo',
+  active: 'in-progress',
+  completed: 'done',
+  cancelled: 'canceled',
 }
 
 // The order projects list in: active first (the work in flight), then planned, then the two
@@ -17,6 +29,12 @@ const PROJECT_STATUS_ORDER: Record<ProjectStatus, number> = {
   cancelled: 3,
 }
 
+const STATUS_SEQUENCE: readonly ProjectStatus[] = ['active', 'planned', 'completed', 'cancelled']
+
+const DAY = 24 * 60 * 60 * 1000
+// Three months of runway so a single near-term project is not crammed against the axis edge.
+const MINIMUM_RUNWAY_MONTHS = 3
+
 export interface ProjectRowData {
   readonly id: string
   readonly name: string
@@ -24,6 +42,22 @@ export interface ProjectRowData {
   readonly leadId: string | null
   readonly targetDate: number | null
   readonly createdAt: number
+}
+
+// A cycle as the axis reads it: a real start and a real end, both stored columns.
+export interface ProjectCycleRow {
+  readonly id: string
+  readonly name: string
+  readonly startDate: number
+  readonly endDate: number
+}
+
+// A project's readable issue: which team it came from (a project spans several) and which cycle
+// it is scheduled in, carried as the cycle's OWN row so a mark is positioned from stored dates
+// rather than from whichever team's grid happens to be drawn.
+export interface ProjectIssueRow extends IssueRowData {
+  readonly teamId: string
+  readonly cycle: ProjectCycleRow | null
 }
 
 export interface ProjectProgress {
@@ -36,6 +70,8 @@ export interface ProjectProgress {
 // toward the total (they are scope that was cut, not shipped) but not toward done. Percent is 0
 // for an empty project (never NaN). Note the issues are only those the caller can read
 // (team-scoped), so for a cross-team project a viewer not in every team sees partial progress.
+// No surface renders the percent — the drawn meter and `done/total` carry the fact, because a
+// percent over a project nobody has broken down yet reads 0%, which is a lie.
 export function projectProgress(issues: readonly IssueRowData[]): ProjectProgress {
   const total = issues.length
   const done = issues.filter((issue) => issue.status === 'done').length
@@ -46,6 +82,12 @@ export function projectProgress(issues: readonly IssueRowData[]): ProjectProgres
 export function compareProjects(a: ProjectRowData, b: ProjectRowData): number {
   const byStatus = PROJECT_STATUS_ORDER[a.status] - PROJECT_STATUS_ORDER[b.status]
   if (byStatus !== 0) return byStatus
+  return compareByTarget(a, b)
+}
+
+// Target order, undated last, name as the tiebreak — the order inside a status group and the
+// order the roadmap's axis lists its rows in.
+export function compareByTarget(a: ProjectRowData, b: ProjectRowData): number {
   const at = a.targetDate ?? Number.POSITIVE_INFINITY
   const bt = b.targetDate ?? Number.POSITIVE_INFINITY
   if (at !== bt) return at - bt
@@ -56,14 +98,174 @@ export function sortProjects(projects: readonly ProjectRowData[]): ProjectRowDat
   return [...projects].sort(compareProjects)
 }
 
-export function formatTargetDate(targetDate: number | null): string {
-  if (targetDate === null) return 'No target'
-  return new Date(targetDate).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
+export interface ProjectStatusGroup {
+  readonly status: ProjectStatus
+  readonly label: string
+  readonly projects: readonly ProjectRowData[]
+}
+
+// A status with no projects yields NO group: a header is a container for rows, not a legend for
+// the enum, and an empty one would assert a project this workspace does not have.
+export function groupProjectsByStatus(
+  projects: readonly ProjectRowData[],
+): readonly ProjectStatusGroup[] {
+  const groups: ProjectStatusGroup[] = []
+  for (const status of STATUS_SEQUENCE) {
+    const inStatus = projects.filter((project) => project.status === status)
+    if (inStatus.length === 0) continue
+    groups.push({
+      status,
+      label: PROJECT_STATUS_LABEL[status],
+      projects: [...inStatus].sort(compareByTarget),
+    })
+  }
+  return groups
+}
+
+export interface TeamSplitEntry {
+  readonly teamId: string
+  readonly teamKey: string
+  readonly count: number
+}
+
+// Which teams a project's READABLE issues came from. It sums to the project's issue total by
+// construction — it is a partition of the same rows, never a second count — and it names only the
+// teams whose issues arrived: issues from teams the reader is not in never sync, so the client
+// cannot count them and cannot even prove they exist.
+export function teamSplit(
+  issues: readonly { readonly teamId: string }[],
+  teamKeys: ReadonlyMap<string, string>,
+): readonly TeamSplitEntry[] {
+  const counts = new Map<string, number>()
+  for (const issue of issues) counts.set(issue.teamId, (counts.get(issue.teamId) ?? 0) + 1)
+  return [...counts.entries()]
+    .map(([teamId, count]) => ({ teamId, teamKey: teamKeys.get(teamId) ?? '', count }))
+    .sort((a, b) => b.count - a.count || a.teamKey.localeCompare(b.teamKey))
+}
+
+export interface PastTargetReading {
+  readonly passed: boolean
+  // Readable issues not at Done — the work the passed date is passed WITH.
+  readonly openCount: number
+  readonly daysPast: number
+}
+
+function startOfDayUTC(ts: number): number {
+  const d = new Date(ts)
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+}
+
+// `target_date < startOfToday AND status !== 'completed'`. A project whose target is exactly today
+// has NOT passed it. A completed project never reads as past its target however old the date is.
+//
+// The comparison is honest about being softer than its ink: `target_date` is a single stored
+// field and nothing records whether it was ever re-agreed. That disclosure rides the `how ·`
+// beside the phrase, and this reading deliberately joins no attention count.
+export function pastTargetReading(
+  project: ProjectRowData,
+  issues: readonly IssueRowData[],
+  now: number,
+): PastTargetReading {
+  const openCount = issues.filter((issue) => issue.status !== 'done').length
+  const today = startOfDayUTC(now)
+  const target = project.targetDate
+  if (target === null || project.status === 'completed' || startOfDayUTC(target) >= today) {
+    return { passed: false, openCount, daysPast: 0 }
+  }
+  return { passed: true, openCount, daysPast: Math.round((today - startOfDayUTC(target)) / DAY) }
+}
+
+export interface IssueStateSegment {
+  readonly status: IssueStatus
+  readonly label: string
+  readonly count: number
+  readonly fraction: number
+}
+
+// The project page's state bar: what the issues ARE now, in the shared status order. A status
+// nobody's issue is in yields no segment, and a project with no issues yields no segments at all
+// — never a zero-width rect, never NaN.
+export function issueStateSegments(issues: readonly IssueRowData[]): readonly IssueStateSegment[] {
+  const total = issues.length
+  if (total === 0) return []
+  const segments: IssueStateSegment[] = []
+  for (const status of ISSUE_STATUSES) {
+    const count = issues.filter((issue) => issue.status === status).length
+    if (count === 0) continue
+    segments.push({ status, label: STATUS_LABEL[status], count, fraction: count / total })
+  }
+  return segments
+}
+
+export interface TargetStrip {
+  // Positions along the created→(target or today) run, in 0..1. There is no `start` here and no
+  // width per project: the left end is the CREATED dot, labelled as exactly that on the surface.
+  readonly targetFraction: number
+  readonly nowFraction: number
+  readonly overrun: { readonly from: number; readonly to: number } | null
+}
+
+// Undated project → no strip at all. Drawing one would need a second date the entity does not
+// have.
+export function targetStrip(project: ProjectRowData, now: number): TargetStrip | null {
+  const target = project.targetDate
+  if (target === null) return null
+  const end = Math.max(target, now)
+  const run = Math.max(1, end - project.createdAt)
+  const at = (ts: number) => Math.min(1, Math.max(0, (ts - project.createdAt) / run))
+  const targetFraction = at(target)
+  const nowFraction = at(now)
+  return {
+    targetFraction,
+    nowFraction,
+    overrun: now > target ? { from: targetFraction, to: nowFraction } : null,
+  }
+}
+
+export interface RoadmapMonthTick {
+  readonly ts: number
+  readonly label: string
+  readonly fraction: number
+}
+
+export interface RoadmapCycleBand {
+  readonly id: string
+  readonly name: string
+  readonly startFraction: number
+  readonly endFraction: number
+  readonly current: boolean
+}
+
+export interface RoadmapIssueMark {
+  readonly id: string
+  readonly fraction: number
+  readonly done: boolean
+  readonly cycleName: string
+}
+
+export interface RoadmapRowModel {
+  readonly project: ProjectRowData
+  readonly dated: boolean
+  // One point in time, or nothing. NOT a left edge, NOT a span, NOT a width.
+  readonly targetFraction: number | null
+  readonly targetPassed: boolean
+  readonly done: number
+  readonly total: number
+  // Issues that sit in SOME cycle, whether or not that cycle falls inside the drawn window —
+  // so `Nothing scheduled` can be told apart from "scheduled off the edge of the axis".
+  readonly scheduledCount: number
+  readonly marks: readonly RoadmapIssueMark[]
+}
+
+export interface RoadmapAxis {
+  readonly window: { readonly start: number; readonly end: number }
+  readonly monthTicks: readonly RoadmapMonthTick[]
+  readonly cycleBands: readonly RoadmapCycleBand[]
+  readonly nowFraction: number | null
+  // Where the stored cycles run out, so the surface can state `no cycles past <date>` instead of
+  // ruling columns over months nobody has planned.
+  readonly lastCycleEnd: number | null
+  readonly rows: readonly RoadmapRowModel[]
 }
 
 function startOfMonthUTC(ts: number): number {
@@ -76,68 +278,130 @@ function addMonthsUTC(ts: number, months: number): number {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 1)
 }
 
-export interface TimelineMonth {
-  readonly ts: number
-  readonly label: string
-  readonly leftPercent: number
+function monthLabel(ts: number): string {
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' })
 }
 
-export interface TimelineMarker {
-  readonly project: ProjectRowData
-  readonly leftPercent: number
-}
+// The whole roadmap reading, over an injected `now`. NOTHING here returns a start date, a span, a
+// duration or a per-project width — the absence is structural, not stylistic, because a project
+// stores no start and every bar has a left edge.
+export function roadmapAxis(input: {
+  readonly projects: readonly ProjectRowData[]
+  readonly issuesByProject: ReadonlyMap<string, readonly ProjectIssueRow[]>
+  readonly cycles: readonly ProjectCycleRow[]
+  readonly now: number
+}): RoadmapAxis {
+  const { projects, issuesByProject, cycles, now } = input
 
-export interface RoadmapTimeline {
-  readonly start: number
-  readonly end: number
-  readonly months: readonly TimelineMonth[]
-  readonly nowPercent: number | null
-  readonly scheduled: readonly TimelineMarker[]
-  readonly unscheduled: readonly ProjectRowData[]
-}
+  const currentCycle = cycles.find((cycle) => cycle.startDate <= now && now <= cycle.endDate)
+  const start = currentCycle ? currentCycle.startDate : startOfMonthUTC(now)
 
-// A tokenized, dependency-free timeline layout: a horizontal axis from the start of the current
-// month (or the earliest target, whichever is earlier) to the end of the latest target, split
-// into month gridlines, with each dated project positioned by a left-percent. Projects with no
-// target date are returned separately so the view can list them off the axis. Pure and
-// deterministic so it is unit-testable and renders sub-100ms.
-export function roadmapTimeline(projects: readonly ProjectRowData[], now: number): RoadmapTimeline {
-  const dated = projects.filter((p) => p.targetDate !== null)
-  const unscheduled = sortProjects(projects.filter((p) => p.targetDate === null))
+  const targets = projects
+    .map((project) => project.targetDate)
+    .filter((target): target is number => target !== null)
+  const latest = targets.length > 0 ? Math.max(...targets) : now
+  const end = Math.max(
+    addMonthsUTC(startOfMonthUTC(latest), 1),
+    addMonthsUTC(startOfMonthUTC(start), MINIMUM_RUNWAY_MONTHS),
+  )
+  const span = Math.max(1, end - start)
+  const at = (ts: number) => (ts - start) / span
+  const clamped = (ts: number) => Math.min(1, Math.max(0, at(ts)))
 
-  const targets = dated.map((p) => p.targetDate as number)
-  const earliest = Math.min(now, ...(targets.length > 0 ? targets : [now]))
-  const latest = Math.max(now, ...(targets.length > 0 ? targets : [now]))
-
-  const start = startOfMonthUTC(earliest)
-  // At least three months of runway so a single near-term project is not crammed at the edge.
-  const rawEnd = addMonthsUTC(startOfMonthUTC(latest), 1)
-  const end = Math.max(rawEnd, addMonthsUTC(start, 3))
-  const span = end - start
-
-  const pct = (ts: number) => Math.min(100, Math.max(0, ((ts - start) / span) * 100))
-
-  const months: TimelineMonth[] = []
-  for (let ts = start; ts < end; ts = addMonthsUTC(ts, 1)) {
-    months.push({
-      ts,
-      label: new Date(ts).toLocaleDateString(undefined, {
-        month: 'short',
-        year: '2-digit',
-        timeZone: 'UTC',
-      }),
-      leftPercent: pct(ts),
-    })
-    // Guard against pathological spans (should never trigger for month steps).
-    if (months.length > 60) break
+  const monthTicks: RoadmapMonthTick[] = []
+  let tick = startOfMonthUTC(start)
+  if (tick < start) tick = addMonthsUTC(tick, 1)
+  while (tick < end && monthTicks.length <= 60) {
+    monthTicks.push({ ts: tick, label: monthLabel(tick), fraction: at(tick) })
+    tick = addMonthsUTC(tick, 1)
   }
 
-  const scheduled = sortProjects(dated).map((project) => ({
-    project,
-    leftPercent: pct(project.targetDate as number),
-  }))
+  const cycleBands: RoadmapCycleBand[] = cycles
+    .filter((cycle) => cycle.endDate >= start && cycle.startDate <= end)
+    .map((cycle) => ({
+      id: cycle.id,
+      name: cycle.name,
+      startFraction: clamped(cycle.startDate),
+      endFraction: clamped(cycle.endDate),
+      current: cycle.startDate <= now && now <= cycle.endDate,
+    }))
 
-  const nowPercent = now >= start && now <= end ? pct(now) : null
+  const lastCycleEnd =
+    cycles.length === 0 ? null : cycles.reduce((max, cycle) => Math.max(max, cycle.endDate), 0)
 
-  return { start, end, months, nowPercent, scheduled, unscheduled }
+  const ordered = [...projects].sort(compareByTarget)
+  const rows = ordered.map((project) => {
+    const issues = issuesByProject.get(project.id) ?? []
+    const progress = projectProgress(issues)
+    const cycled = issues.filter(
+      (issue): issue is ProjectIssueRow & { cycle: ProjectCycleRow } => issue.cycle !== null,
+    )
+    const perCycle = new Map<string, (ProjectIssueRow & { cycle: ProjectCycleRow })[]>()
+    for (const issue of cycled) {
+      const bucket = perCycle.get(issue.cycle.id)
+      if (bucket) bucket.push(issue)
+      else perCycle.set(issue.cycle.id, [issue])
+    }
+    const marks: RoadmapIssueMark[] = []
+    for (const bucket of perCycle.values()) {
+      const cycle = bucket[0]?.cycle
+      if (!cycle) continue
+      bucket.forEach((issue, index) => {
+        // Inside its OWN cycle's stored run, spread so several issues in one cycle stay legible.
+        const within =
+          cycle.startDate + ((index + 1) / (bucket.length + 1)) * (cycle.endDate - cycle.startDate)
+        const fraction = at(within)
+        if (fraction < 0 || fraction > 1) return
+        marks.push({
+          id: issue.id,
+          fraction,
+          done: issue.status === 'done',
+          cycleName: cycle.name,
+        })
+      })
+    }
+    marks.sort((a, b) => a.fraction - b.fraction)
+
+    const targetFraction =
+      project.targetDate === null ? null : Math.min(1, Math.max(0, at(project.targetDate)))
+    return {
+      project,
+      dated: project.targetDate !== null,
+      targetFraction,
+      targetPassed: pastTargetReading(project, issues, now).passed,
+      done: progress.done,
+      total: progress.total,
+      scheduledCount: cycled.length,
+      marks,
+    }
+  })
+
+  return {
+    window: { start, end },
+    monthTicks,
+    cycleBands,
+    nowFraction: now >= start && now <= end ? at(now) : null,
+    lastCycleEnd,
+    rows,
+  }
+}
+
+export function formatTargetDate(targetDate: number | null): string {
+  if (targetDate === null) return 'No target'
+  return new Date(targetDate).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
+// The mono date a row states: `Aug 1`. The year is dropped because the axis and the group it sits
+// in already place it, and the column is 76px.
+export function formatTargetDay(ts: number): string {
+  return new Date(ts).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
 }

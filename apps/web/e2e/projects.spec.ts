@@ -68,7 +68,7 @@ async function createProject(page: Page, name: string, targetOffset?: number): P
     await page.getByLabel('Target date').fill(isoDate(targetOffset))
   }
   await page.getByRole('button', { name: 'Create project' }).click()
-  await expect(page.getByTestId('project-rail-item').filter({ hasText: name })).toBeVisible({
+  await expect(page.getByTestId('project-row').filter({ hasText: name })).toBeVisible({
     timeout: 20_000,
   })
 }
@@ -101,11 +101,14 @@ test('create a project, assign an issue, and see it and its progress in the proj
   await moveIssueToProject(page, issueTitle, projectName)
 
   await openProjects(page)
-  await page.getByTestId('project-rail-item').filter({ hasText: projectName }).click()
+  await page.getByTestId('project-row').filter({ hasText: projectName }).click()
   await expect(page.locator(PROJECT_ISSUE_ROW).filter({ hasText: issueTitle })).toBeVisible({
     timeout: 20_000,
   })
-  await expect(page.getByRole('progressbar', { name: 'Project progress' })).toBeVisible()
+  // The project's progress reading: done over total, drawn as a labelled state bar. The one
+  // assigned issue is not done, so the page reads 0 of 1.
+  await expect(page.getByTestId('project-done-count')).toHaveText('0')
+  await expect(page.getByTestId('project-state-bar')).toBeVisible()
 })
 
 test('the roadmap places a dated project and is keyboard-navigable', async ({ page }) => {
@@ -149,11 +152,7 @@ test('the roadmap places a dated project and is keyboard-navigable', async ({ pa
 
   // Enter keyboard-opens the focused (near) project from the roadmap.
   await page.keyboard.press('Enter')
-  await expect(page.getByTestId('project-rail-item').filter({ hasText: nearName })).toHaveAttribute(
-    'aria-current',
-    'true',
-    { timeout: 20_000 },
-  )
+  await expect(page.getByRole('heading', { name: nearName })).toBeVisible({ timeout: 20_000 })
 })
 
 test('the projects view is correct across every preset in light and dark', async ({ page }) => {
@@ -161,7 +160,7 @@ test('the projects view is correct across every preset in light and dark', async
   await openTeam(page)
   await openProjects(page)
   await createProject(page, unique('Theme project'), 10)
-  await page.getByTestId('project-rail-item').first().click()
+  await page.getByTestId('project-row').first().click()
 
   for (const preset of PRESETS) {
     for (const mode of MODES) {
@@ -178,9 +177,7 @@ test('the projects view is correct across every preset in light and dark', async
       await expect(page.locator('html')).toHaveAttribute('data-theme', preset)
       const isDark = await page.locator('html').evaluate((el) => el.classList.contains('dark'))
       expect(isDark).toBe(mode === 'dark')
-      await expect(page.getByRole('progressbar', { name: 'Project progress' })).toBeVisible({
-        timeout: 20_000,
-      })
+      await expect(page.getByTestId('project-scope')).toBeVisible({ timeout: 20_000 })
     }
   }
 })
@@ -232,7 +229,7 @@ test('a viewer reads the workspace-level projects but cannot create one', async 
     // by any member, including a viewer.
     await stop(vp, 'Issues').click()
     await goToMore(vp, 'Projects')
-    await expect(vp.getByTestId('project-rail-item').filter({ hasText: projectName })).toBeVisible({
+    await expect(vp.getByTestId('project-row').filter({ hasText: projectName })).toBeVisible({
       timeout: 20_000,
     })
 
@@ -269,9 +266,9 @@ test('a project created in one client converges to another without a reload', as
     await createProject(editor, projectName, 30)
 
     // The new project reaches the watcher over sync without a reload.
-    await expect(
-      watcher.getByTestId('project-rail-item').filter({ hasText: projectName }),
-    ).toBeVisible({ timeout: 20_000 })
+    await expect(watcher.getByTestId('project-row').filter({ hasText: projectName })).toBeVisible({
+      timeout: 20_000,
+    })
   } finally {
     await editorCtx.close()
     await watcherCtx.close()

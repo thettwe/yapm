@@ -21,7 +21,7 @@ function ProjectsPage() {
   return (
     <Authenticated>
       <AppFrame teamId={teamId} current="projects" measure="full">
-        <ProjectsView {...(open ? { openProjectId: open } : {})} />
+        <ProjectsView teamId={teamId} {...(open ? { openProjectId: open } : {})} />
       </AppFrame>
     </Authenticated>
   )

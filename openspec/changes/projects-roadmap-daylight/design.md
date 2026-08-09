@@ -294,3 +294,96 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 - **Accessibility**: truthful `role="img"` labels on every drawn axis, nothing conveyed by colour
   alone, contrast asserted in every theme block.
 - **`ROADMAP.md` is not edited** — parallel builds; the maintainer adds the row at archive time.
+
+---
+
+### B1 — Both query extensions landed inside their existing predicates
+
+`projects.all`'s related issues gained `.related('cycle')`; `projects.get`'s gained
+`.related('labels')` and the shared `withLinkedDelivery(...)` wrapper. Both sit **inside** the
+existing `teamScoped(...)` call, so the relations hang off issues the predicate has already
+admitted and every related row carries the issue's own `team_id`. No predicate, ordering, table,
+migration, mutator or named query changed. `queries.test.ts` now asserts the relation **aliases**
+on the issues subquery (`cycle` on `all`; `labels` and `issueLinks` on `get`) rather than assuming
+them, beside the two existing team-scoping assertions, which are untouched.
+
+### B2 — The roadmap view was RE-WIRED in this pass, not redrawn
+
+Task 3.7 requires deleting `roadmapTimeline` rather than leaving it beside its replacement, and
+`roadmap-view.tsx` was its only caller — so leaving the old function would have been the one thing
+the task forbids, and deleting it without touching the view would have broken the build. Chosen:
+delete `roadmapTimeline` and port `roadmap-view.tsx` onto `roadmapAxis` **without redrawing it** —
+same rows, same roving-focus model, same `roadmap-row` / `data-roadmap-index` contract the e2e
+drives. Three things changed along the way because leaving them would have contradicted the
+change's own constraints in an intermediate state: `{n}% done` became `done/total` (no percent
+anywhere), the four status dots became the shared cycle-position glyph family, and the refusal
+footnote and the `Target passed` phrase are now on the surface. **Task group 6 still owns the
+redrawing** — the cycle bands, the issue marks, the `no cycles past <date>` statement, the
+`role="img"` labels and the axis-window label are computed by `roadmapAxis` but not yet drawn.
+
+### B3 — `?open=` is dispatched inside `ProjectsView`, and the route file gained one prop
+
+`ProjectsView` now takes `teamId` and returns `ProjectPage` when `openProjectId` is present, the
+index otherwise. The route file's only edit is passing `teamId` through; no new route file, and the
+roadmap's navigation contract and both e2e flows are unchanged. `ProjectsView` itself calls no
+hooks before the branch, so the two surfaces are separate hook trees.
+
+### B4 — The index row is a focusable `div`, not a `button`
+
+Ambiguous: the row must be the keyboard target AND carry a real `how ·` control, and an interactive
+element cannot nest inside a `<button>`. Chosen: the shipped `IssueRow` shape — a focusable element
+with `data-slot`, a roving `tabIndex`, `onClick` and a container-level `onKeyDown` that only acts on
+events whose target is a row (so the `how ·` panel keeps its own `Enter` and `Escape`). The status
+glyph on a row is `aria-hidden`: the group header above it already states the status in words, and
+`StatusGlyph`'s own label speaks the ISSUE vocabulary (`Todo`), which would be wrong over a project.
+
+### B5 — The project page subscribes deployments per contributing team, lifted through one index
+
+One `deployments.byTeam` subscription per team that actually contributes an issue, each in its own
+zero-drawing subscriber component (hooks cannot be called in a loop), publishing its rows into a
+`Map` keyed by team id that is merged through the shared `buildDeploymentIndex`. The publish guard
+compares row identity, so a stable sync tick cannot loop. `teamScoped` denies any team the reader is
+not in, so the set is bounded by their own memberships and no read widens.
+
+### B6 — `targetStrip` returns no `createdFraction`, because it would always be 0
+
+The left end of the strip is the created dot at position zero by construction, so returning a
+number for it would have put a per-project *left edge* in the model's vocabulary for no information.
+The view draws the dot at the origin and **labels it `created`** — the label is the disclosure. The
+model returns only `{ targetFraction, nowFraction, overrun }`, and the roadmap's row shapes carry no
+start, span, duration or width at all, asserted over the returned object keys in `model.test.ts`
+rather than by reading the source.
+
+### B7 — Deliberate differences from the mocks (this pass)
+
+- **The `how ·` on the project page's footline** reads `how ·`, not the mock's `more ·`: `How` is
+  the shipped affordance and its trigger word is part of the language, not per-page copy.
+- **The state bar's `todo` segment** is drawn at full token opacity, not the mock's `fill-opacity
+  .45`: a wash cannot be measured against the contrast bar, and 7.8 has to measure it.
+- **Segment order** on the state bar is the shared `ISSUE_STATUSES` order (backlog → canceled), so
+  the bar reads left-to-right as cycle position; the mock draws done-first for its one fixture.
+- **The `+ New project` control** is a text button carrying its own accessible name (`+ New
+  project`), replacing the shipped icon-only `PlusIcon`. The `new-project` test id is unchanged.
+- **The `Cancelled` label** stays correct for a cancelled project; the header is simply never drawn
+  over zero rows. Neither enum spelling was touched (`PROJECT_STATUS_TO_KIND` is the single place
+  the project's `cancelled` meets the issue glyph family's `canceled`).
+- The mock PNGs were **not** compared in this pass — the render comparison is tasks 9.4/9.5.
+
+### B8 — Capabilities: every shipped one survives, one shape changed
+
+Create / edit / delete a project (same dialogs, moved verbatim into `project-controls.tsx` so the
+index and the project page can both mount them without a circular import), read a project's issues,
+open an issue into its own team's list, the viewer reading everything with no write control, the
+roadmap's roving-focus keyboard model, undated projects held aside. **Removed:** the 256px
+`project-rail-item` rail and the percent readings, both by the mock's fold-list item 13/9; the
+`Project progress` `role="progressbar"`, whose fact is now the `done/total` reading over a labelled
+state bar. `apps/web/e2e/projects.spec.ts` and `triage.spec.ts` were migrated to the new selectors
+with no assertion weakened — but Playwright was **not run in this pass** (the orchestration reserves
+it for CI), so task 7.9 is left unticked until it is verified green.
+
+### B9 — What this pass did not read
+
+`northstar/ia.html` and `reference/zero.md` were not re-read (tasks 1.4/1.5 left unticked). No new
+Zero API was used — the two edits are `.related(...)` calls beside existing ones — and the band-2
+rules were followed from the mocks and from `masthead.tsx`'s own contract. A later pass should close
+both before the change lands.

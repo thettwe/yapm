@@ -1,6 +1,7 @@
 import { useQuery } from '@rocicorp/zero/react'
 import { useNavigate } from '@tanstack/react-router'
-import { type ProjectStatus, queries } from '@yapm/schema'
+import { queries } from '@yapm/schema'
+import { StatusGlyph } from '@yapm/ui/components/status-glyph'
 import { cn } from '@yapm/ui/lib/utils'
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -14,56 +15,38 @@ import { Masthead } from '@/frame/masthead'
 import {
   formatTargetDate,
   PROJECT_STATUS_LABEL,
+  PROJECT_STATUS_TO_KIND,
+  type ProjectCycleRow,
   type ProjectRowData,
-  projectProgress,
-  roadmapTimeline,
-  sortProjects,
+  type RoadmapRowModel,
+  roadmapAxis,
 } from '@/projects/model'
-
-const PROJECT_STATUS_DOT: Record<ProjectStatus, string> = {
-  planned: 'bg-text-3',
-  active: 'bg-status-in-progress',
-  completed: 'bg-status-done',
-  cancelled: 'bg-text-3',
-}
+import { useProjectRows } from '@/projects/use-project-rows'
 
 export function RoadmapView({ teamId }: { teamId: string }) {
   const navigate = useNavigate()
-  const [projectsRaw, projectsResult] = useQuery(queries.projects.all())
+  const { projects, issuesByProject, complete } = useProjectRows()
+  // The deck team's cycles rule the GRID. An issue's own mark is still positioned from its own
+  // cycle's stored dates, which is why the axis needs both.
+  const [cycles] = useQuery(queries.cycles.byTeam({ teamId }))
 
-  const projects = useMemo<ProjectRowData[]>(
+  const axis = useMemo(
     () =>
-      sortProjects(
-        projectsRaw.map((project) => ({
-          id: project.id,
-          name: project.name,
-          status: project.status,
-          leadId: project.leadId ?? null,
-          targetDate: project.targetDate ?? null,
-          createdAt: project.createdAt,
-        })),
-      ),
-    [projectsRaw],
+      roadmapAxis({
+        projects,
+        issuesByProject,
+        cycles: cycles as readonly ProjectCycleRow[],
+        now: Date.now(),
+      }),
+    [projects, issuesByProject, cycles],
   )
 
-  const progressById = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const project of projectsRaw) {
-      map.set(project.id, projectProgress((project.issues ?? []) as never).percent)
-    }
-    return map
-  }, [projectsRaw])
-
-  const timeline = useMemo(() => roadmapTimeline(projects, Date.now()), [projects])
-
-  // A single flat, keyboard-navigable order: scheduled projects (by target) then unscheduled.
-  const ordered = useMemo(
-    () => [...timeline.scheduled.map((m) => m.project), ...timeline.unscheduled],
-    [timeline],
-  )
+  const ordered = useMemo(() => axis.rows.map((row) => row.project), [axis])
+  const dated = axis.rows.filter((row) => row.dated)
+  const undated = axis.rows.filter((row) => !row.dated)
 
   const [focusIndex, setFocusIndex] = useState(0)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLElement>(null)
 
   // Keep the roving tabindex pointed at a valid, mounted row when the ordered set shrinks,
   // so focus never falls to <body> and keyboard navigation keeps working (CLAUDE.md #10).
@@ -87,7 +70,7 @@ export function RoadmapView({ teamId }: { teamId: string }) {
   )
 
   const onKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    (event: ReactKeyboardEvent<HTMLElement>) => {
       if (ordered.length === 0) return
       switch (event.key) {
         // Compute the next index from the closed-over focusIndex and move focus as an explicit
@@ -124,14 +107,12 @@ export function RoadmapView({ teamId }: { teamId: string }) {
     [ordered, focusIndex, focusRow, openProject],
   )
 
-  if (projects.length === 0) {
+  if (ordered.length === 0) {
     return (
       <>
-        <Masthead title="Roadmap" count={0} />
-        <p className="p-8 text-center text-sm text-text-3" role="status">
-          {projectsResult.type === 'complete'
-            ? 'No projects yet. Create a project to see it on the roadmap.'
-            : 'Loading roadmap…'}
+        <Masthead title="Roadmap" {...(complete ? { count: 0 } : {})} />
+        <p className="p-8 text-sm text-text-3" role="status">
+          {complete ? 'No projects' : 'Loading…'}
         </p>
       </>
     )
@@ -139,7 +120,7 @@ export function RoadmapView({ teamId }: { teamId: string }) {
 
   return (
     <>
-      <Masthead title="Roadmap" count={projects.length} />
+      <Masthead title="Roadmap" count={ordered.length} />
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         <section
           ref={containerRef}
@@ -147,63 +128,61 @@ export function RoadmapView({ teamId }: { teamId: string }) {
           onKeyDown={onKeyDown}
           aria-label="Project roadmap timeline"
         >
-          {/* Month ruler */}
-          <div className="sticky top-0 z-10 flex border-b border-border bg-bg/95 backdrop-blur">
-            <div className="w-56 shrink-0 border-r border-border px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+          <div className="sticky top-0 z-10 flex border-border border-b bg-bg/95 backdrop-blur">
+            <div className="w-56 shrink-0 border-border border-r px-4 py-2 font-semibold text-[11px] text-text-3 uppercase tracking-wide">
               Project
             </div>
             <div className="relative h-8 flex-1">
-              {timeline.months.map((month) => (
+              {axis.monthTicks.map((tick) => (
                 <span
-                  key={month.ts}
+                  key={tick.ts}
                   className="absolute top-2 -translate-x-1/2 whitespace-nowrap font-mono text-[11px] text-text-3"
-                  style={{ left: `${month.leftPercent}%` }}
+                  style={{ left: `${tick.fraction * 100}%` }}
                 >
-                  {month.label}
+                  {tick.label}
                 </span>
               ))}
             </div>
           </div>
 
-          {timeline.scheduled.map((marker, index) => (
+          {dated.map((row) => (
             <RoadmapRow
-              key={marker.project.id}
-              index={index}
-              project={marker.project}
-              leftPercent={marker.leftPercent}
-              nowPercent={timeline.nowPercent}
-              progress={progressById.get(marker.project.id) ?? 0}
-              focused={index === focusIndex}
-              months={timeline.months}
-              onFocus={() => setFocusIndex(index)}
-              onOpen={() => openProject(marker.project)}
+              key={row.project.id}
+              index={ordered.indexOf(row.project)}
+              row={row}
+              nowFraction={axis.nowFraction}
+              monthTicks={axis.monthTicks}
+              focused={ordered.indexOf(row.project) === focusIndex}
+              onFocus={() => setFocusIndex(ordered.indexOf(row.project))}
+              onOpen={() => openProject(row.project)}
             />
           ))}
 
-          {timeline.unscheduled.length > 0 ? (
-            <div className="border-t border-border">
-              <div className="bg-bg-sidebar/60 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+          {undated.length > 0 ? (
+            <div className="border-border border-t">
+              <div className="bg-bg-sidebar/60 px-4 py-1.5 font-semibold text-[11px] text-text-3 uppercase tracking-wide">
                 No target date
               </div>
-              {timeline.unscheduled.map((project, offset) => {
-                const index = timeline.scheduled.length + offset
-                return (
-                  <RoadmapRow
-                    key={project.id}
-                    index={index}
-                    project={project}
-                    leftPercent={null}
-                    nowPercent={timeline.nowPercent}
-                    progress={progressById.get(project.id) ?? 0}
-                    focused={index === focusIndex}
-                    months={timeline.months}
-                    onFocus={() => setFocusIndex(index)}
-                    onOpen={() => openProject(project)}
-                  />
-                )
-              })}
+              {undated.map((row) => (
+                <RoadmapRow
+                  key={row.project.id}
+                  index={ordered.indexOf(row.project)}
+                  row={row}
+                  nowFraction={axis.nowFraction}
+                  monthTicks={axis.monthTicks}
+                  focused={ordered.indexOf(row.project) === focusIndex}
+                  onFocus={() => setFocusIndex(ordered.indexOf(row.project))}
+                  onOpen={() => openProject(row.project)}
+                />
+              ))}
             </div>
           ) : null}
+
+          {/* The refusal, stated on the surface rather than merely obeyed. */}
+          <p className="max-w-[760px] px-10 pt-6 pb-10 text-[12.5px] text-text-2 leading-relaxed">
+            <b className="text-text-1">What this page won't guess:</b> a project's start — only a
+            target is stored, so nothing here draws a bar.
+          </p>
         </section>
       </div>
     </>
@@ -212,86 +191,86 @@ export function RoadmapView({ teamId }: { teamId: string }) {
 
 function RoadmapRow({
   index,
-  project,
-  leftPercent,
-  nowPercent,
-  progress,
+  row,
+  nowFraction,
+  monthTicks,
   focused,
-  months,
   onFocus,
   onOpen,
 }: {
   index: number
-  project: ProjectRowData
-  leftPercent: number | null
-  nowPercent: number | null
-  progress: number
+  row: RoadmapRowModel
+  nowFraction: number | null
+  monthTicks: readonly { ts: number; fraction: number }[]
   focused: boolean
-  months: readonly { ts: number; leftPercent: number }[]
   onFocus: () => void
   onOpen: () => void
 }) {
+  const { project } = row
   return (
     <button
       type="button"
       data-roadmap-index={index}
       data-testid="roadmap-row"
       tabIndex={focused ? 0 : -1}
-      aria-label={`${project.name}, ${PROJECT_STATUS_LABEL[project.status]}, target ${formatTargetDate(project.targetDate)}`}
+      aria-label={`${project.name}, ${PROJECT_STATUS_LABEL[project.status]}, target ${formatTargetDate(project.targetDate)}, ${row.done} of ${row.total} issues done`}
       onFocus={onFocus}
       onClick={onOpen}
       className={cn(
-        'flex w-full cursor-pointer items-stretch border-b border-border text-left outline-none transition-colors hover:bg-bg-sidebar focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
+        'flex w-full cursor-pointer items-stretch border-border border-b text-left outline-none transition-colors hover:bg-bg-sidebar focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
         focused ? 'bg-bg-elevated' : '',
       )}
     >
-      <div className="flex w-56 shrink-0 flex-col justify-center gap-0.5 border-r border-border px-4 py-2">
-        <span className="flex items-center gap-1.5 text-sm font-medium text-text-1">
-          <span
-            className={cn('size-2 rounded-full', PROJECT_STATUS_DOT[project.status])}
+      <div className="flex w-56 shrink-0 flex-col justify-center gap-0.5 border-border border-r px-4 py-2">
+        <span className="flex items-center gap-1.5 font-medium text-sm text-text-1">
+          <StatusGlyph
+            status={PROJECT_STATUS_TO_KIND[project.status]}
             aria-hidden="true"
+            className="size-3.5"
           />
           {project.name}
         </span>
-        <span className="pl-3.5 font-mono text-[11px] text-text-3">{progress}% done</span>
+        <span className="pl-5 font-mono text-[11px] text-text-3">
+          {row.total === 0 ? null : `${row.done}/${row.total}`}
+        </span>
       </div>
       <div className="relative flex-1">
-        {/* Month gridlines */}
-        {months.map((month) => (
+        {monthTicks.map((tick) => (
           <span
-            key={month.ts}
+            key={tick.ts}
             className="absolute inset-y-0 w-px bg-border/60"
-            style={{ left: `${month.leftPercent}%` }}
+            style={{ left: `${tick.fraction * 100}%` }}
             aria-hidden="true"
           />
         ))}
-        {nowPercent !== null ? (
+        {nowFraction !== null ? (
           <span
             className="absolute inset-y-0 w-px bg-accent/60"
-            style={{ left: `${nowPercent}%` }}
+            style={{ left: `${nowFraction * 100}%` }}
             aria-hidden="true"
           />
         ) : null}
-        {leftPercent !== null ? (
+        {row.targetFraction !== null ? (
           <span
             className="absolute top-1/2 flex -translate-y-1/2 items-center gap-1.5"
-            style={{ left: `${leftPercent}%` }}
+            style={{ left: `${row.targetFraction * 100}%` }}
           >
             <span
               className={cn(
                 'size-2.5 rounded-full ring-2 ring-bg',
-                PROJECT_STATUS_DOT[project.status],
+                row.targetPassed ? 'bg-status-urgent' : 'bg-text-3',
               )}
             />
             <span className="whitespace-nowrap font-mono text-[11px] text-text-3">
               {formatTargetDate(project.targetDate)}
             </span>
+            {row.targetPassed ? (
+              <span className="whitespace-nowrap font-semibold text-[12px] text-status-urgent-ink">
+                Target passed
+              </span>
+            ) : null}
           </span>
-        ) : (
-          <span className="flex h-full items-center pl-4 text-[11px] italic text-text-3">
-            No target date
-          </span>
-        )}
+        ) : null}
       </div>
     </button>
   )

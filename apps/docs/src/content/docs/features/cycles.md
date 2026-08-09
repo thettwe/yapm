@@ -41,8 +41,12 @@ The cycle glyph is a **shape with a word**. It carries a text label (`Active cyc
 The ledger is the same three-segment encoding Team Home's hero draws, at row scale, from one
 shared rule — so the two surfaces cannot disagree about a cycle:
 
-- **Landed** — a filled block per issue that reached **Done**.
-- **Still open** — a hollow outlined block per committed issue that has not.
+- **Landed** — a filled block per issue that reached **Done** *while this cycle held it*. An issue
+  the cycle rolled forward did not land in it, by construction, so it never draws filled here
+  however far it has travelled since.
+- **Still open** — a hollow outlined block per committed issue that has not. The set a cycle
+  carried **out** is always counted open against the cycle it left, including issues that have
+  since reached **Done** somewhere later.
 - **Added** — an outlined block carrying a `+` per issue assigned **after the cycle started**.
   An issue that carried in from an earlier cycle is *not* an add: it stays committed.
 
@@ -79,23 +83,28 @@ Below the register, the work that persisted across a boundary into the selected 
 the fact no other surface in yapm states.
 
 Each carried row states the issue's status glyph, its key, its title, its delivery phrase, a
-drawn chain, and the count in words: `carried 2×`. Activating a row opens that issue, by
-pointer or by keyboard. Where the selected cycle carried nothing in, **the whole band is
-absent** — no header, no zero, no empty frame.
+drawn chain, and the count in words: `carried 2×`. The band's header names the origin once where
+**every** row left the same cycle; where they did not, each row names its own beside the count.
+Activating a row opens that issue, by pointer or by keyboard. Where the selected cycle carried
+nothing in, **the whole band is absent** — no header, no zero, no empty frame.
 
 **The chain has exactly one nameable hop.** yapm stores a monotone carryover count and a single
 rolled-over-from reference, and that reference holds the *last* origin only — every earlier one
 was overwritten. So the chain is drawn from the count alone:
 
-- one node per boundary the issue crossed, plus a node for now;
+- one node per boundary the issue crossed, plus a node for now — **bounded at four nodes**, so the
+  drawing keeps a fixed width however long the issue has been carried;
+- a **dotted lead-in** standing for the part of the chain before the record begins, *and* for every
+  hop past that bound. It is the **tail** of the chain that is kept, so the one hop yapm can still
+  name is never the one dropped;
 - a **solid** node for the one origin the record still names;
 - **hollow** nodes for hops yapm cannot name;
-- an **accent** node for the cycle the issue is in now;
-- a **dotted lead-in** standing for the part of the chain before the record begins.
+- an **accent** node for the cycle the issue is in now.
 
-Nothing on the chain is inferred from cycle ordering. The drawing is hidden from assistive
-technology and the same fact is stated in text beside it (`carried 3×`, and a sentence naming
-the cycle it last left), because a private notation may never be the only carrier of a fact.
+Nothing on the chain is inferred from cycle ordering, and the bound hides nothing: the true count
+is always beside the drawing in words. The drawing is hidden from assistive technology and the same
+fact is stated in text (`carried 6×`, and a sentence naming the cycle it last left), because a
+private notation may never be the only carrier of a fact.
 
 An issue carried three times or more takes a quiet amber wash and a left rail. It is **not**
 urgent ink and **not** a badge: carrying is not one of the four attention classes, so it never

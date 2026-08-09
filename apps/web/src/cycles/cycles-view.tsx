@@ -314,7 +314,13 @@ function RegisterRow({
         // below `md`, so the page never carries a sideways scrollbar. Same treatment the shipped
         // issue row uses, and the folding order is least-load-bearing first — the ledger, the name
         // and the key are on every row at every width.
-        'grid h-11 w-full grid-cols-[16px_78px_minmax(120px,1fr)_190px] items-center gap-x-3.5 border-t border-l-[3px] border-l-transparent border-row-hairline px-3 pl-[9px] text-left outline-none last:border-b hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset md:grid-cols-[16px_78px_minmax(120px,1fr)_128px_190px] lg:grid-cols-[16px_78px_minmax(120px,1fr)_128px_190px_130px_200px]',
+        //
+        // The name track has NO floor. It is the only elastic track, so a floor on it is a floor on
+        // the whole grid's min-content: at `lg` the six fixed tracks plus gaps plus a 120px floor
+        // measure 967px against the 960px the 1024px viewport leaves, which turned the fold back on
+        // exactly where it still did not fit. The name truncates, so it absorbs the last few pixels
+        // instead of the page growing a sideways scrollbar for seven viewport widths.
+        'grid h-11 w-full grid-cols-[16px_78px_minmax(0,1fr)_190px] items-center gap-x-3.5 border-t border-l-[3px] border-l-transparent border-row-hairline px-3 pl-[9px] text-left outline-none last:border-b hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset md:grid-cols-[16px_78px_minmax(0,1fr)_128px_190px] lg:grid-cols-[16px_78px_minmax(0,1fr)_128px_190px_130px_200px]',
         selected && 'border-l-accent bg-bg-selected',
       )}
     >
@@ -500,7 +506,13 @@ function CarriedRow({
         // A deeply-carried row is washed, never badged and never inked urgent: it is not one of the
         // four attention classes, so it may not add a second attention number. Like the register
         // row above it, the row folds its least load-bearing tracks rather than overflowing.
-        'grid h-[46px] w-full grid-cols-[16px_72px_minmax(140px,1fr)_auto] items-center gap-x-3.5 border-t border-l-[3px] border-l-transparent border-row-hairline px-3 pl-[9px] text-left outline-none last:border-b hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset md:grid-cols-[16px_72px_minmax(140px,1fr)_190px_auto] lg:grid-cols-[16px_72px_minmax(140px,1fr)_190px_auto_auto]',
+        //
+        // The fact track is `minmax(0,auto)`, not `auto`: it carries a cycle NAME, which is free
+        // text of any length, and a bare `auto` track takes its min-content — the whole unwrapped
+        // name — as a floor and pushes the grid past its container. The same overflow the chain's
+        // four-node bound was closing, moved from the drawing to the label beside it. The track
+        // still grows to fit a short name; a long one truncates.
+        'grid h-[46px] w-full grid-cols-[16px_72px_minmax(0,1fr)_minmax(0,auto)] items-center gap-x-3.5 border-t border-l-[3px] border-l-transparent border-row-hairline px-3 pl-[9px] text-left outline-none last:border-b hover:bg-bg-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset md:grid-cols-[16px_72px_minmax(0,1fr)_190px_minmax(0,auto)] lg:grid-cols-[16px_72px_minmax(0,1fr)_190px_auto_minmax(0,auto)]',
         row.deep && 'border-l-status-in-progress bg-carry-soft',
       )}
     >
@@ -525,13 +537,17 @@ function CarriedRow({
           rail carry the depth; the count carries the fact, so the count keeps the readable ink. */}
       <span
         className={cn(
-          'flex items-baseline justify-end gap-1.5 whitespace-nowrap text-right font-mono text-[11.5px]',
+          'flex min-w-0 items-baseline justify-end gap-1.5 whitespace-nowrap text-right font-mono text-[11.5px]',
           row.deep ? 'font-medium text-text-1' : 'text-text-2',
         )}
       >
-        {row.fact}
+        <span className="shrink-0">{row.fact}</span>
+        {/* The count is the fact; the origin is its qualifier, so the origin is what gives way when
+            the name is long. Nothing is lost — the row's `say` states the full name in text. */}
         {statesOwnOrigin && row.originCycleName !== null ? (
-          <span className="font-normal text-text-2">· out of {row.originCycleName}</span>
+          <span className="min-w-0 truncate font-normal text-text-2">
+            · out of {row.originCycleName}
+          </span>
         ) : null}
       </span>
       <span className="sr-only">{row.say}</span>

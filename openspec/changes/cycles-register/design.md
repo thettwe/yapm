@@ -448,3 +448,29 @@ Playwright run in CI on the push. Nothing here substitutes for looking at the pa
 states are covered by tests (a team with no cycles, a first cycle, an issue-less cycle, a cycle
 that carried nothing, a cycle with no digest) and tests are exactly what the triage build's empty
 decision panel passed.
+
+### Second review pass — the overflow moved, and the docs kept the old legend
+
+**A track with a floor is a floor on the grid.** The last pass folded columns at `lg`/`md` but left
+`minmax(120px,1fr)` on the register row's name and `minmax(140px,1fr)` on the carried row's title.
+The elastic track is the only one that can absorb a shortfall, so a floor on it is a floor on the
+whole grid's min-content: at `lg` the register row measured 967px against the 960px a 1024px
+viewport leaves, which turned the seven-track layout back on across a seven-pixel band where it
+still did not fit. Both name tracks are now `minmax(0,1fr)`. They already truncate, so the row
+gives up characters rather than the page giving up its width.
+
+**The carried row's origin clause is bounded too.** Moving `· out of <cycle>` out of the SVG and
+into an `auto` grid track reintroduced the overflow the four-node chain bound had just closed, in a
+worse form: a cycle name is free text of any length, and an `auto` track takes its unwrapped
+min-content as a floor. The track is `minmax(0,auto)` and the clause truncates; the count keeps
+`shrink-0`, because the count is the fact and the origin is its qualifier. The full name is
+unaffected in the row's `say`, which is where assistive technology reads it.
+
+**The docs page carried the pre-bound legend.** `features/cycles.md` still asserted one node per
+boundary crossed, with no bound and a lead-in that only meant "before the record begins" — a legend
+the product no longer draws. It now states the four-node bound, that the lead-in absorbs the hops
+past it, and that the tail is what is kept so the one nameable hop is never the one dropped. The
+ledger section had the matching gap: `asCommittedCarryOut` normalises a carried-out issue's status,
+so the set a cycle handed forward is always counted open against the cycle it left, however far it
+has travelled since — the "a filled block per issue that reached Done" bullet now says so, and the
+band header's origin rule is documented beside the per-row one.

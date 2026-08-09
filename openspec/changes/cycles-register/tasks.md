@@ -53,8 +53,8 @@
 - [x] 5.8 `apps/web` component: nothing on the page is conveyed by colour alone — the ledger cell's label states the counts, the chain is `aria-hidden` with `carried N×` as text, and each glyph carries its status word
 - [x] 5.9 Extend `packages/ui/src/styles/contrast.test.ts` with this page's pairs in **every** theme block, light and dark: the selected register row's ground and its ink, the mono key on the selected row, the carry band's amber wash and the ink drawn on it, the chain's node strokes, and the chip border and chip ink
 - [x] 5.10 Update `apps/web/e2e/cycles.spec.ts` where the surface moved — the rollover test asserts the carried issue appears in the CARRIED IN band with `carried 1×` (**stronger** than "the issue appears under cycle B", not weaker); the theme test re-anchors on the register row and its glyph label, which is present in every state including a cycle with no issues; the keyboard test drives the register rows instead of the rail. **Never weaken an assertion to make a gate pass**
-- [ ] 5.11 Confirm `retro.spec.ts`, `digest.spec.ts` and `pm-digest.spec.ts` still pass **untouched** — if one needs an edit, that is a preserved-test-id failure, not a spec to change
-- [ ] 5.12 Re-run any e2e failure once before investigating: the known multi-context flake (`projects.spec.ts:188`, `:246`, `pm-digest.spec.ts:306`, signature `browserContext.close: Protocol error`) is tracked separately and is not this change's to fix. Any OTHER failure is
+- [x] 5.11 Confirm `retro.spec.ts`, `digest.spec.ts` and `pm-digest.spec.ts` still pass **untouched** — if one needs an edit, that is a preserved-test-id failure, not a spec to change
+- [x] 5.12 Re-run any e2e failure once before investigating: the known multi-context flake (`projects.spec.ts:188`, `:246`, `pm-digest.spec.ts:306`, signature `browserContext.close: Protocol error`) is tracked separately and is not this change's to fix. Any OTHER failure is
 - [x] 5.13 Confirm no test hard-codes a budget encoding e2e fixture size (cycles accumulate across specs — derive the row count from the page), and no test's premise is what a given Node runtime provides (CI is Node 24; dev machines here run 26)
 
 ## 6. Documentation
@@ -67,9 +67,9 @@
 
 ## 7. Gates
 
-- [ ] 7.1 `pnpm turbo lint typecheck test build`
-- [ ] 7.2 The compose smoke test
-- [ ] 7.3 The full Playwright suite
+- [x] 7.1 `pnpm turbo lint typecheck test build` (green in CI on PR #43, run 31288746299)
+- [x] 7.2 The compose smoke test (green in CI, 4m41s)
+- [x] 7.3 The full Playwright suite (green in CI, 22m11s — no flake, no re-run needed)
 - [ ] 7.4 **Render the built page at 1440×900 over a seeded team, screenshot it, and LOOK at it** against `cycles.png` / `cycles-full.png`. Record every deliberate difference in `design.md`
 - [ ] 7.5 Render and look at each degenerate state (design D8): a workspace with one cycle, a cycle with no issues, a cycle with no carryover, a cycle whose digest was never generated, and a team's very first cycle. Each must read as composed, not as a hole — the triage build shipped an empty box that passed every test and was found only this way
 - [ ] 7.6 Decide the carry chain with the render in front of you: keep the graphic, or fall back to the mono column the mock's own self-critique proposes. Record the decision either way (design D7)

@@ -80,18 +80,14 @@ export function InboxView() {
 
   // Workspace-wide, so a row's team is worth naming only where it is NOT the team the deck is
   // pointing at — that is the one row a reader could otherwise misplace. Resolved against the
-  // already-synced team list by id; a team this client cannot name draws no tag rather than an id.
-  // With no anchor at all the deck names no team, so the tag falls back to disambiguating a list
-  // that spans more than one.
+  // already-synced team list by id; a team this client cannot name draws no tag rather than an id,
+  // which is also the whole of the no-anchor case: the anchor is null only when that same list is
+  // empty, so every lookup misses and no row can draw a tag anyway.
   const teamNames = useMemo(
     () => new Map((teams as readonly { id: string; name: string }[]).map((t) => [t.id, t.name])),
     [teams],
   )
-  const spansTeams = useMemo(() => new Set(rows.map((row) => row.teamId)).size > 1, [rows])
-  const isForeignTeam = useCallback(
-    (teamId: string) => (anchor === null ? spansTeams : teamId !== anchor.id),
-    [anchor, spansTeams],
-  )
+  const isForeignTeam = useCallback((teamId: string) => teamId !== anchor?.id, [anchor])
 
   const focusRow = useCallback((index: number) => {
     const el = containerRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`)
@@ -442,14 +438,22 @@ function InboxRow({
         </span>
       )}
 
+      {/* Capped like the team tag: the actor's name is free text and falls back to a full email
+          address, which unbounded would squeeze the stored title — the row's primary content —
+          off the line. */}
       <span
         data-testid="notification-phrase"
-        className="shrink-0 whitespace-nowrap text-[12.5px] text-text-2"
+        className="max-w-[200px] shrink-0 truncate text-[12.5px] text-text-2"
       >
         {row.phrase}
       </span>
 
-      <span className="w-[30px] shrink-0 text-right font-mono text-[11px] tabular-nums text-text-3">
+      {/* The shipped list's age column, byte-for-byte: past seven days `formatRelative` emits a
+          locale date (`Aug 9`), which needs the width and the nowrap or it stacks two lines. */}
+      <span
+        data-testid="notification-age"
+        className="w-[42px] shrink-0 whitespace-nowrap text-right font-mono text-[10.5px] tabular-nums text-text-3"
+      >
         {formatRelative(row.createdAt)}
       </span>
     </button>
@@ -464,15 +468,17 @@ function Key({ children }: { children: ReactNode }) {
   )
 }
 
-// The keys, drawn. `aria-hidden` because each one is a real binding the row already announces
-// through `aria-keyshortcuts` — the footline is the sighted reader's copy of it.
+// The keys, drawn — and READ. `j` and `k` are bindings no `aria-keyshortcuts` on this page states,
+// so hiding the footline would leave them stated to sighted readers only. Only the dividers, which
+// are punctuation rather than words, are hidden.
 function Legend() {
-  const divider = <span className="text-border-strong">·</span>
+  const divider = (
+    <span aria-hidden="true" className="text-border-strong">
+      ·
+    </span>
+  )
   return (
-    <div
-      aria-hidden="true"
-      className="mt-auto flex items-center gap-[7px] px-5 pt-3 pb-3.5 text-[11.5px] text-text-2"
-    >
+    <div className="mt-auto flex items-center gap-[7px] px-5 pt-3 pb-3.5 text-[11.5px] text-text-2">
       <Key>j</Key>
       <Key>k</Key>
       <span>move</span>

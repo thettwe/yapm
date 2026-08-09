@@ -51,10 +51,11 @@ Three rules apply to every row in that table:
   the notification is written, and the same check is made again when it is emailed.
 
 The last row is the one exception to the shape of all the others, and deliberately so. It **names no
-actor** — it reads "A cycle digest was shared with you", never who released it, because telling a
-reader outside the producing team which individual pressed publish is accountability in the wrong
-direction. It carries the team's name and the cycle's name and **nothing of the digest**, and opening
-it goes to your `/digests` page rather than to any of that team's work. Its recipients are not an
+actor**, never who released it, because telling a reader outside the producing team which individual
+pressed publish is accountability in the wrong direction — so the mailed form of it reads "A cycle
+digest was shared with you" and the [inbox row](#the-inbox) reads `Shared with you` beside the team
+and the cycle. It carries the team's name and the cycle's name and **nothing of the digest**, and
+opening it goes to your `/digests` page rather than to any of that team's work. Its recipients are not an
 involvement rule at all: they are the named audience an admin configured, intersected with current
 workspace membership, resolved at the moment of release. See [Product
 digests](/features/pm-digest/) and [the disclosure model](/self-hosting/ai-disclosure/).

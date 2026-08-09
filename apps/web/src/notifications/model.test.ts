@@ -1,3 +1,4 @@
+import { NOTIFICATION_KINDS } from '@yapm/schema'
 import { expect, test } from 'vitest'
 import {
   formatUnreadCount,
@@ -81,6 +82,10 @@ test('every kind reaches assistive technology as a word', () => {
     pm_digest_published: 'Digest',
   })
   expect(KIND_WORDS).toEqual(['assigned', 'commented', 'mentioned', 'digests'])
+  // Pinned to the kind set rather than to itself: a fifth kind must not be able to drop out of the
+  // empty state's line while its `KIND_LABEL` sibling is a compile error.
+  expect(KIND_WORDS).toHaveLength(NOTIFICATION_KINDS.length)
+  expect(Object.keys(KIND_LABEL)).toEqual([...NOTIFICATION_KINDS])
 })
 
 test('the unread lens is a pure filter that preserves order and leaves the input alone', () => {

@@ -224,6 +224,13 @@ capped at `max-w-[110px] truncate` because team names are free text and `Platfor
 would otherwise push the phrase and the age off the row. The ink is `--text-2`, not the mock's
 `--text-3`, for the reason B4 gives.
 
+**The phrase is capped the same way, and that is a deviation from the mock.** `inbox.html` gives
+`.phrase` a bare `flex:none`, which is right for a mock whose fixture actors are called `Marta`.
+In the product the phrase interpolates an actor name that falls back to the signed-in user's full
+email address, and unbounded it squeezes the stored issue title — the row's primary content and the
+one thing a reader is scanning for — off the line. Built at `max-w-[200px] truncate`, so an
+unbounded name truncates and the title keeps its column.
+
 ### B4 — Three inks moved off `--text-3`, and the token did not move
 
 `DESTINATIONS.md` §"What the render showed" item 4 measures `--text-3` at **2.9:1** on `--bg` and
@@ -345,9 +352,12 @@ workspace-wide and the deck is not." B2 never considered that rule because it wa
 `queries.members.all()`; the deck's anchor team was already on this page, resolved by
 `useAnchorTeam` for the empty state's `Issues` doorway, so the mock's rule costs no query at all.
 
-Built: `row.teamId !== anchor.id` draws the tag; the anchor's own rows draw none. With no anchor
-(a reader the deck can point nowhere for) it falls back to B2's spans-teams rule. A team the synced
-list cannot name still draws no tag rather than an id. Three tests: the foreign row tags and the
+Built: `row.teamId !== anchor?.id` draws the tag; the anchor's own rows draw none. The no-anchor
+fallback to B2's spans-teams rule was written and then **removed as unreachable**: `resolveAnchorTeam`
+returns `teams[0] ?? null`, so the anchor is null only when the synced team list is empty — and that
+is the same list the tag's names come from, so every lookup misses and no row can draw a tag whatever
+the fallback decides. A team the synced list cannot name still draws no tag rather than an id, and
+that one guard now covers the whole case. Three tests: the foreign row tags and the
 anchor row does not, an unnameable team draws nothing and no id leaks, and a single-team list draws
 none at all.
 
@@ -405,3 +415,48 @@ and the `not.toContain(ADMIN.name)` assertion kept byte-identical — nothing we
 moved. `mentions.spec.ts` needed no change: its `${ADMIN.name} mentioned you` is exactly the new
 phrase. The lesson is the sweep itself: "the e2e that drives this page" was not the only e2e reading
 this page's rows.
+
+### B23 — The keyboard legend is read, not hidden
+
+The footline was built `aria-hidden`, on the reasoning that every key it draws is already announced
+by the row's `aria-keyshortcuts`. That reasoning was wrong by inspection: the row states `Enter e`,
+and `j` / `k` — the two keys the legend leads with — are handled on the list container and stated
+nowhere in the accessibility tree. Hiding the footline therefore left the movement keys visible to
+sighted readers only, on a surface whose whole claim is keyboard-first.
+
+Built: the wrapper is no longer hidden, so the footline reads as text; only the `·` dividers keep
+`aria-hidden`, because they are punctuation rather than words. `aria-keyshortcuts` on the row is
+left naming what the row itself binds.
+
+### B24 — The age column is the shipped list's, including its width
+
+Built at `w-[30px]` with no nowrap, which holds for `now` / `41m` / `6h` / `3d` and breaks at seven
+days: `formatRelative` switches to a locale date (`Aug 9`) past that, and two words in a 30px box
+stack into two lines, growing the row under every column beside it. Matched to `IssueRow`'s age
+column instead — `w-[42px] … text-[10.5px] tabular-nums text-text-3` — plus `whitespace-nowrap`,
+which `IssueRow` gets away with omitting only because its own dates sit under a wider cap. One row
+anatomy, one age column. Asserted over a ten-day-old row.
+
+### B25 — `kind-glyph.tsx` is tested for distinctness, not just for presence
+
+Every kind assertion in the view suite reads the row's `sr-only` word, which comes from `KIND_LABEL`
+and never touches the drawing — so a `MARK` map resolving two kinds, or all four, to the same path
+would have passed the entire suite. `kind-glyph.test.tsx` renders all four, collects each `svg`'s
+markup and asserts the set of drawings has four members, plus `aria-hidden` on every one including
+the empty state's loop.
+
+### B26 — `KIND_WORDS` is projected from the kind set
+
+It was a hand-written `readonly string[]`. Its sibling `KIND_LABEL` is a `Record<NotificationKind,
+string>`, so a fifth kind is a compile error there and was a silent omission from the empty state's
+line here. Built as `NOTIFICATION_KINDS.map((kind) => KIND_WORD[kind])` over a keyed record, so both
+fail the same way, with a length assertion in `model.test.ts` pinning the projection to the union
+rather than to itself.
+
+### B27 — The digest's two forms, split in the docs
+
+`pm-digest.md` still told the reader the inbox row reads "A cycle digest was shared with you", which
+this change made the MAILED form (B1, B22), and `notifications.md` then said both things in two
+sections. Both re-worded to name which reader gets which: outside the app there is no row to carry
+the subject, so the mailed notice states the whole sentence; in the inbox the title is the team and
+the cycle, the key column is empty and the phrase is `Shared with you`.

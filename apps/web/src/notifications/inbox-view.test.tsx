@@ -467,6 +467,19 @@ test('one row draws one row, with the keys stated on the surface', async () => {
   expect(screen.getByText('read')).toBeInTheDocument()
 })
 
+// Past seven days `formatRelative` stops emitting `6d` and emits a locale date — two words wide.
+// The column has to be sized and nowrapped for that form, or it stacks into two lines and the row
+// grows a second line under everything beside it.
+test('an age older than a week draws its date form on one line', async () => {
+  await show([row({ subjectId: 'issue-1', createdAt: Date.now() - 10 * 86_400_000 })])
+
+  const age = screen.getByTestId('notification-age')
+  expect(age).toHaveTextContent(/\w/)
+  expect(age).not.toHaveTextContent(/^\d+[mhd]$/)
+  expect(age.className).toContain('whitespace-nowrap')
+  expect(age.className).toContain('w-[42px]')
+})
+
 test('a very long stored title stays on one line and leaves the age column standing', async () => {
   const long = 'A'.repeat(300)
   await show([row({ subjectId: 'issue-1', subjectTitle: long })])

@@ -1,4 +1,9 @@
-import { type NotificationKind, type NotificationSubjectType, notificationCopy } from '@yapm/schema'
+import {
+  NOTIFICATION_KINDS,
+  type NotificationKind,
+  type NotificationSubjectType,
+  notificationCopy,
+} from '@yapm/schema'
 
 // The inbox's read model: synced notification rows in, rendered rows out. Pure — no Zero, no
 // React — so the unread count, its cap and the day grouping are unit-testable without a client.
@@ -66,8 +71,18 @@ export const KIND_LABEL: Record<NotificationKind, string> = {
   pm_digest_published: 'Digest',
 }
 
-// The four kinds as the empty state names them, in the order `NOTIFICATION_KINDS` declares.
-export const KIND_WORDS: readonly string[] = ['assigned', 'commented', 'mentioned', 'digests']
+// The same kinds as the empty state names them — lower case, and the digest pluralised because that
+// line reads as a list of what arrives here rather than as four row labels. Keyed by the union and
+// projected through `NOTIFICATION_KINDS`, so a fifth kind is a compile error here exactly as it is
+// on `KIND_LABEL`, rather than silently dropping out of the empty state.
+const KIND_WORD: Record<NotificationKind, string> = {
+  issue_assigned: 'assigned',
+  issue_commented: 'commented',
+  mention: 'mentioned',
+  pm_digest_published: 'digests',
+}
+
+export const KIND_WORDS: readonly string[] = NOTIFICATION_KINDS.map((kind) => KIND_WORD[kind])
 
 const ID_SEPARATOR = '\u0000'
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 // THE FALSIFIABLE CHECK for the Board lens. On main every card is handed `buildRealityShape(null)`
@@ -228,6 +228,23 @@ test('a quiet card draws no reality ink, announces nothing, and states no phrase
   expect(trackSlot(quiet).style.width).toBe('86px')
 })
 
+// The card is a role=button carrying an explicit aria-label, and an explicit name SUPPRESSES
+// everything drawn inside it — the phrase and the track's own role=img label included. The
+// divergence this lens exists to surface would then be drawn and never spoken.
+test('the card speaks its delivery register, and says nothing extra when it has none', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': [DIVERGED, QUIET] }
+  mount()
+
+  const name = cardFor('Apple Pay in the payment sheet').getAttribute('aria-label') ?? ''
+  expect(name).toContain('Done in git, not on the board')
+  expect(name).toContain('PR merged but this issue is not marked done')
+
+  // A quiet card draws no phrase and no ink, so its name ends where the facts end.
+  expect(cardFor('Focus lost after closing the palette')).toHaveAccessibleName(
+    'ENG-1: Focus lost after closing the palette, In Progress, Medium',
+  )
+})
+
 // ---------------------------------------------------------------------------
 // The six columns, and the one an empty column draws.
 // ---------------------------------------------------------------------------
@@ -392,7 +409,7 @@ test('a picked-up card becomes a hole that keeps its own measure, and the carrie
 
   // The card in flight wears the elevation and states the contract that actually works.
   const flying = document.querySelector<HTMLElement>('[data-slot="board-card"][data-in-flight]')
-  expect(flying).toBeDefined()
+  expect(flying).not.toBeNull()
   expect(flying?.className).toContain('shadow-elevated')
   expect(flying?.querySelector('[data-slot="board-card-footer"]')?.textContent).toContain(
     'space drop',
@@ -420,6 +437,55 @@ test('carrying a card into another column draws exactly one landing slot there',
   expect(host).toMatch(/, \d+ issues$/)
 })
 
+// A move can take its own card out of the filtered set — the row is still there, this board just
+// stops drawing it. Focus has nowhere to return to, and retrying the card's selector would spend
+// the restore window and leave focus on <body>.
+test('a move that leaves the filter hands focus to the destination column and says where the card went', async () => {
+  const bravo = issue({ id: 'i-b', number: 11, title: 'Bravo card', status: 'in_review' })
+  harness.rows = {
+    'teams.all': [TEAM],
+    'issues.byTeam': [issue({ id: 'i-a', number: 10, title: 'Alpha card', status: 'todo' }), bravo],
+  }
+  const view = mount()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Filter by Status' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: /Todo$/ }))
+  expect(cards()).toHaveLength(1)
+
+  // The optimistic row the mutator lands: the same issue, now In Review — which this filter hides.
+  harness.mutate.mockImplementation(() => {
+    harness.rows = {
+      'teams.all': [TEAM],
+      'issues.byTeam': [
+        issue({ id: 'i-a', number: 10, title: 'Alpha card', status: 'in_review' }),
+        bravo,
+      ],
+    }
+    return { client: Promise.resolve({ type: 'ok' }), server: Promise.resolve({ type: 'ok' }) }
+  })
+
+  cardFor('Alpha card').focus()
+  fireEvent.keyDown(window, { key: 'm' })
+  fireEvent.click(await screen.findByRole('option', { name: /Move to In Review/ }))
+
+  // The sync layer pushing the optimistic row back: the stubbed `useQuery` has no subscription of
+  // its own, so the re-render the real one would cause is asked for here.
+  view.rerender(
+    <CommandRegistryProvider>
+      <Board teamId="team-1" />
+    </CommandRegistryProvider>,
+  )
+
+  expect(screen.queryAllByTestId('board-card')).toHaveLength(0)
+  expect(screen.getByTestId('board-announcement')).toHaveTextContent(
+    'Moved to In Review, which the current filter hides.',
+  )
+  // Focus lands on the column the card went to, never on <body>.
+  await waitFor(() =>
+    expect(document.activeElement).toBe(screen.getByRole('region', { name: /^In Review, / })),
+  )
+})
+
 test('a viewer is offered no pick-up and no hole, and the card still opens', () => {
   harness.canWrite = false
   harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': FILTER_FIXTURE }
@@ -428,7 +494,7 @@ test('a viewer is offered no pick-up and no hole, and the card still opens', () 
   pickUp('Alpha card')
   expect(cards().some((card) => card.dataset.dragging === 'true')).toBe(false)
   expect(document.querySelector('[data-slot="board-card"][data-in-flight]')).toBeNull()
-  expect(screen.queryByTestId('board-drop-slot')).toBeNull()
+  expect(document.querySelectorAll('[data-slot="board-drop-slot"]')).toHaveLength(0)
 
   const card = cardFor('Alpha card')
   expect(card).not.toHaveAttribute('aria-disabled')

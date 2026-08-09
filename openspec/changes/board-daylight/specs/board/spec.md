@@ -6,7 +6,7 @@ The system SHALL present a team's issues as a kanban board of six fixed columns 
 
 The six columns SHALL share the page's measure fluidly — each column an equal fraction of the available width, none fixed — so that **all six are readable at 1440 with no horizontal scrolling**, and the promise holds at other widths without a breakpoint. A column whose cards exceed its height SHALL scroll vertically, and SHALL NOT fold its remainder behind a "more" control: a folded remainder would hide drop targets from a move. The column header SHALL state the column's true total.
 
-A card SHALL carry the **same facts as a list row in a different shape**: the status glyph, the mono issue key, the priority mark, the title, the rest phrase, the labels, the reserved reality-track slot, and the assignee. The phrase and the track SHALL be derived from the same delivery seam the list row derives them from, so a card and a row describing one issue can never disagree. The track SHALL carry the `//` divergence break when the board and git disagree — no separate divergence slot is laid out — and an issue with no linked change SHALL draw **no reality ink at all**: the slot reserves its measure, draws nothing, and states nothing to assistive technology. The phrase SHALL render nothing when the register has nothing true to say, rather than reserving an empty line.
+A card SHALL carry the **same facts as a list row in a different shape**: the status glyph, the mono issue key, the priority mark, the title, the rest phrase, the labels, the reserved reality-track slot, and the assignee. The phrase and the track SHALL be derived from the same delivery seam the list row derives them from, so a card and a row describing one issue can never disagree. The track SHALL carry the `//` divergence break when the board and git disagree — no separate divergence slot is laid out — and an issue with no linked change SHALL draw **no reality ink at all**: the slot reserves its measure, draws nothing, and states nothing to assistive technology. The phrase SHALL render nothing when the register has nothing true to say, rather than reserving an empty line. A card carries an explicit accessible name, which suppresses everything drawn inside it, so that name SHALL carry the delivery register too: the phrase when there is one, and the divergence in words when the board and git disagree.
 
 A column with no cards SHALL draw one reserved slot and no words; the column's accessible name SHALL continue to state its count.
 
@@ -27,7 +27,7 @@ Work-graph placement: a view over team-scoped `issue` rows and the linked `pull_
 #### Scenario: A card states its delivery reality
 
 - **WHEN** a card renders an issue whose linked pull request is merged while the issue is not marked done
-- **THEN** the card draws the reality track with the `//` break on the segment where the board and git parted, and states the divergence in words in its phrase
+- **THEN** the card draws the reality track with the `//` break on the segment where the board and git parted, states the divergence in words in its phrase, and carries both the phrase and the divergence in its accessible name
 
 #### Scenario: A quiet card draws no reality ink
 
@@ -56,7 +56,7 @@ Work-graph placement: a view over team-scoped `issue` rows and the linked `pull_
 
 ### Requirement: Move a card by drag or keyboard within and across columns
 
-The board SHALL let a card be moved with a pointer (drag and drop) and, equivalently, without a pointer: a focused card SHALL be picked up with Space or Enter, moved within its column and to adjacent columns with the arrow keys, dropped with Space or Enter, and the move cancelled with Escape restoring the original position. A move that lands the card in a different column SHALL change the issue's status to that column; a move within a column SHALL reorder it. Each move SHALL be announced to assistive technology via a live region, and focus SHALL return to the moved card in its new location.
+The board SHALL let a card be moved with a pointer (drag and drop) and, equivalently, without a pointer: a focused card SHALL be picked up with Space or Enter, moved within its column and to adjacent columns with the arrow keys, dropped with Space or Enter, and the move cancelled with Escape restoring the original position. A move that lands the card in a different column SHALL change the issue's status to that column; a move within a column SHALL reorder it. Each move SHALL be announced to assistive technology via a live region, and focus SHALL return to the moved card in its new location. WHERE the move takes the card out of the board's current filter there is no card to return to, and focus SHALL go to the destination column while the live region states which column the card moved to and that the filter hides it.
 
 A move in progress SHALL be legible **without motion** — that is, from a single still frame and under `prefers-reduced-motion: reduce` — through three drawn states: the **hole** the picked-up card leaves, holding that card's own measure; the **landing position** in the destination column, drawn where the card will come to rest; and the **card in flight**, which SHALL carry the page's elevation and SHALL state the keyboard contract (drop, cancel, and move-by-column) while the move is live. None of the three SHALL depend on animation to be understood, and the same three SHALL be drawn whether the move is driven by a pointer or by the keyboard.
 
@@ -66,6 +66,11 @@ Work-graph placement: a status and/or ordering change on one `issue`. Permission
 
 - **WHEN** a member focuses a card, picks it up with Space, presses ArrowRight to an adjacent column, and drops it with Space
 - **THEN** the issue's status changes to the target column optimistically with no pointer interaction, and focus returns to the moved card
+
+#### Scenario: A move out of the filtered set keeps focus on the board
+
+- **WHEN** a member narrows the board with a filter and then moves a card to a status that filter hides
+- **THEN** the card leaves the board, focus goes to the destination column rather than to the document body, and the live region states the column it moved to and that the filter hides it
 
 #### Scenario: Drag reorders within a column
 

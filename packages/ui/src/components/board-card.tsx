@@ -158,7 +158,7 @@ function BoardCard({
         {footer === undefined || footer === null ? null : (
           <div
             data-slot="board-card-footer"
-            className="flex flex-wrap items-center gap-x-2 gap-y-1 border-row-hairline border-t pt-1.5 font-mono text-[10.5px] text-text-3"
+            className="flex flex-wrap items-center gap-x-2 gap-y-1 border-row-hairline border-t pt-1.5 font-mono text-[10.5px] text-text-2"
           >
             {footer}
           </div>

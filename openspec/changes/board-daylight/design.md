@@ -253,9 +253,17 @@ is the third time the precedent has been exercised (`issue-list-daylight` DI-2,
 the mock's ink recorded **below** the bar, so the day a palette retune makes `--border-strong`
 legible the quieter ink is available again and someone will see it.
 
-The drop slot's accent border (3.73–5.43 on its tint over the column) and the in-flight ring
-(4.55–5.83 on the card) needed no change. The column tint against the page ground measures
-1.00–1.05, recorded as scaffolding below 3:1 exactly as D8 asked.
+The drop slot's accent border (3.73–5.43 on its tint over the column) and the in-flight card's
+`--accent` **border** (4.55–5.83 on the card) needed no change. The `--accent-line` **ring** drawn
+outside that border is a translucent halo and composites to 1.40–2.05 on the card: the border is
+what states "this card is being carried", so the halo is recorded below 3:1 as scaffolding rather
+than promoted to `--accent`, which would draw a 3px accent outline where the mock draws a border
+and a glow. The column tint against the page ground measures 1.00–1.05, recorded as scaffolding
+below 3:1 exactly as D8 asked.
+
+The in-flight card's keyboard-contract footer is `--text-2`, not `--text-3`: it is the one
+instruction on the page, set in 10.5px mono (not large text), and `--text-3` measures 2.88–3.36 on
+the card ground. Both numbers are kept in `contrast.test.ts`.
 
 ### DI-2 — `CommandProvider` is mounted BELOW `BoardBody`, and the reason is ⌘K precedence
 

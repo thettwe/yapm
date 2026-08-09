@@ -322,7 +322,11 @@ function BoardBody({
   const [activeId, setActiveId] = useState<string | null>(null)
   const [landing, setLanding] = useState<Landing | null>(null)
   const [paletteFor, setPaletteFor] = useState<string | null>(null)
-  const [pendingFocus, setPendingFocus] = useState<string | null>(null)
+  // The card a move is waiting to hand focus back to, WITH where it was sent: a move that takes the
+  // card out of the current filter has no card to return focus to, and the destination column is
+  // the only thing left standing where the reader left off.
+  const [pendingFocus, setPendingFocus] = useState<{ id: string; status: IssueStatus } | null>(null)
+  const [announcement, setAnnouncement] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
 
@@ -336,7 +340,7 @@ function BoardBody({
 
   const move = useCallback(
     (id: string, status: IssueStatus, rank: string) => {
-      setPendingFocus(id)
+      setPendingFocus({ id, status })
       void runMutation(
         zero.mutate(mutators.issue.move({ id, status, rank, updatedAt: Date.now() })),
       )
@@ -367,15 +371,29 @@ function BoardBody({
   // re-focus and clears pendingFocus itself; this effect returns early for those targets so the
   // two never co-drive (and race to clear) the same pendingFocus. The attempt counter is local to
   // each effect run, mirroring VirtualColumnList, so a mid-window `cards` re-render resets both.
+  //
+  // A move can also make the card fail the board's own FILTER — send a card the reader has
+  // narrowed to Todo into In Review and the row is still there, but this board no longer draws it.
+  // Retrying a card selector that can never match again would spend the whole window and leave
+  // focus on <body>, so the target becomes the DESTINATION COLUMN (whose accessible name already
+  // states the label and the count) and the live region says where the card went. Same bounded
+  // run of frames either way: the column has to outlast the same competing handoffs the card does.
   useEffect(() => {
     if (pendingFocus === null) return
-    if (virtualizedIds.has(pendingFocus)) return
+    const filteredOut = !cardById.has(pendingFocus.id)
+    if (!filteredOut && virtualizedIds.has(pendingFocus.id)) return
+    if (filteredOut) {
+      setAnnouncement(
+        `Moved to ${STATUS_LABEL[pendingFocus.status]}, which the current filter hides.`,
+      )
+    }
+    const selector = filteredOut
+      ? `[data-column-status="${pendingFocus.status}"]`
+      : `[data-card-id="${pendingFocus.id}"]`
     let frame = 0
     let attempts = 0
     const step = () => {
-      const el = containerRef.current?.querySelector<HTMLElement>(
-        `[data-card-id="${pendingFocus}"]`,
-      )
+      const el = containerRef.current?.querySelector<HTMLElement>(selector)
       if (el && document.activeElement === el) {
         setPendingFocus(null)
         return
@@ -390,7 +408,7 @@ function BoardBody({
     }
     frame = requestAnimationFrame(step)
     return () => cancelAnimationFrame(frame)
-  }, [cards, pendingFocus, virtualizedIds])
+  }, [cardById, cards, pendingFocus, virtualizedIds])
 
   const onDragStart = useCallback((event: DragStartEvent) => {
     draggingRef.current = true
@@ -548,6 +566,13 @@ function BoardBody({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-bg">
+      {/* ONE live region, mounted empty before it ever has anything to say — a `role="status"` node
+          inserted with its message already inside it is not reliably spoken. dnd-kit owns the
+          announcements for a live drag; this carries what happens AFTER a move lands, which only
+          this component knows: the card is no longer in the filtered set. */}
+      <p className="sr-only" role="status" aria-live="polite" data-testid="board-announcement">
+        {announcement}
+      </p>
       {/* The UNFILTERED rows, as the list hands them over: the composer mints the new issue's
           rank after the current maximum in Todo, and a filter hiding that maximum would mint a
           key that lands the new card in the middle of a column the reader cannot see. */}
@@ -601,7 +626,7 @@ function BoardBody({
               reducedMotion={reducedMotion}
               activeId={activeId}
               landing={landing !== null && landing.status === column.status ? landing : null}
-              pendingFocusId={pendingFocus}
+              pendingFocusId={pendingFocus?.id ?? null}
               onFocusRestored={clearPendingFocus}
               onOpenCard={openCard}
             />
@@ -617,7 +642,7 @@ function BoardBody({
               priority={PRIORITY_TO_KIND[activeCard.priority]}
               labels={(activeCard.labels ?? []).map((l) => ({ name: l.name, color: l.color }))}
               {...assigneeProps(activeCard)}
-              {...deliveryProps(activeCard)}
+              {...deliveryRender(activeCard).props}
               inFlight
               footer={<MoveKeys />}
             />
@@ -694,20 +719,32 @@ function assigneeProps(card: BoardCardData): { assignee?: { name: string; src?: 
 // The card's delivery register, derived from the same seam the list row derives it from — one
 // `deliveryView` per card, never two. A silent phrase is OMITTED rather than passed as an element
 // that renders nothing: an element would reserve the line the register has nothing to put in.
-function deliveryProps(card: BoardCardData): { phrase?: ReactNode; realityTrack: ReactNode } {
+//
+// `spoken` exists because the card is a `role="button"` carrying an EXPLICIT `aria-label`, and an
+// explicit name suppresses everything inside it — the phrase and the track's own `role="img"`
+// label included. The list row has no such label and is read whole; here the register has to be
+// composed back into the name, from this same derivation and the same dictionaries.
+function deliveryRender(card: BoardCardData): {
+  props: { phrase?: ReactNode; realityTrack: ReactNode }
+  spoken: string
+} {
   const view = deliveryView(card, card.linked ?? {})
+  const divergence = view.divergence ? DIVERGENCE_LABEL[view.divergence] : null
   const track = (
     <RealityTrack
       shape={buildRealityShape(view.strip, { divergence: view.divergence })}
       width={CARD_TRACK_WIDTH}
-      label={realityTrackLabel(
-        view.strip,
-        view.divergence ? DIVERGENCE_LABEL[view.divergence] : null,
-      )}
+      label={realityTrackLabel(view.strip, divergence)}
     />
   )
-  if (view.phrase.text === null) return { realityTrack: track }
-  return { phrase: <RestPhraseText phrase={view.phrase} />, realityTrack: track }
+  const spoken = [view.phrase.text, divergence].filter((part) => part !== null).join(', ')
+  return {
+    props:
+      view.phrase.text === null
+        ? { realityTrack: track }
+        : { phrase: <RestPhraseText phrase={view.phrase} />, realityTrack: track },
+    spoken,
+  }
 }
 
 // The drawing of an absence, in the two places the board draws one: the slot an empty column rests
@@ -769,7 +806,11 @@ function Column({
 
   return (
     <section
-      className="flex min-w-0 flex-1 flex-col rounded-card border border-border bg-bg-sidebar/50"
+      // Focusable only programmatically, never in the tab order: it is where focus lands when a
+      // move takes its card out of the filtered set and there is no card left to return to.
+      tabIndex={-1}
+      data-column-status={column.status}
+      className="flex min-w-0 flex-1 flex-col rounded-card border border-border bg-bg-sidebar/50 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
       aria-label={`${column.label}, ${column.cards.length} issues`}
     >
       <header className="flex items-center gap-2 px-3 py-2.5">
@@ -871,6 +912,8 @@ export function SortableCard({
       }
     : undefined
 
+  const delivery = deliveryRender(card)
+
   return (
     <BoardCard
       ref={setNodeRef}
@@ -888,8 +931,8 @@ export function SortableCard({
       priority={PRIORITY_TO_KIND[card.priority]}
       labels={(card.labels ?? []).map((l) => ({ name: l.name, color: l.color }))}
       {...assigneeProps(card)}
-      {...deliveryProps(card)}
-      aria-label={`${issueKey(teamKey, card)}: ${card.title}, ${STATUS_LABEL[card.status]}, ${PRIORITY_LABEL[card.priority]}`}
+      {...delivery.props}
+      aria-label={`${issueKey(teamKey, card)}: ${card.title}, ${STATUS_LABEL[card.status]}, ${PRIORITY_LABEL[card.priority]}${delivery.spoken === '' ? '' : `, ${delivery.spoken}`}`}
       aria-keyshortcuts="o"
       onClick={() => onOpenCard(card.id)}
       {...dragA11y}

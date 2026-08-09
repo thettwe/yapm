@@ -7,11 +7,16 @@
 > copying the quoted signatures over writing DnD code from memory.
 >
 > **What actually shipped.** Board is a **lens on Issues, not a destination**:
-> `apps/web/src/routes/teams.$teamId.board.tsx` renders `<AppFrame current="issues">` with
-> `<Masthead title="Issues" lens={<IssuesLens current="board" />}>`, so the deck's Issues stop stays
-> lit. Its palette does **not** bind its own `⌘K`: it registers with the frame's single global
-> command owner (`useCommandSource`, `apps/web/src/frame/command-registry.tsx`) and may hand the
-> shortcut back by returning `false` when no card is focused (`board.tsx`).
+> `apps/web/src/routes/teams.$teamId.board.tsx` renders `<AppFrame current="issues">` and hands the
+> lens toggle to `Board` (`lens={<IssuesLens current="board" />}`), so the deck's Issues stop stays
+> lit. The route draws **no masthead of its own**: band 2 is the shared
+> `apps/web/src/issues/filter-bar.tsx`, drawn by the board because it states the **filtered** count,
+> which only the surface owning the filter can know. Its palette does **not** bind its own `⌘K`: it
+> registers with the frame's single global command owner (`useCommandSource`,
+> `apps/web/src/frame/command-registry.tsx`) and may hand the shortcut back by returning `false`
+> when no card is focused — whereupon the **ambient Issues palette** answers, because `board-daylight`
+> DI-2 mounts `CommandProvider` **below** `BoardBody` (wrapping band 2 only) so the board keeps
+> first refusal; hoisting it above would silently swallow the card move (`board.tsx`).
 >
 > Context anchors from the repo:
 > - Statuses are a **fixed** enum `backlog | todo | in_progress | in_review | done | canceled`

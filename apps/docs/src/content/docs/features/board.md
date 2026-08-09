@@ -85,7 +85,9 @@ The board is fully operable without a pointer. With a card focused:
 - Press **Escape** to cancel — the card returns to where it started and nothing is written.
 
 Each step is announced to assistive technology through a live region, and focus returns to
-the card in its new location after the drop.
+the card in its new location after the drop. If the move sends the card to a status your
+current filter hides, there is no card to return to: focus goes to the destination column
+and the live region says where the card went.
 
 :::tip
 With a card focused, press **o** to open the issue (or click the card). **Enter** and
@@ -116,8 +118,9 @@ focus a card and open the board's **Move to status…** palette:
 Then choose **Move to Backlog**, **Move to In Review**, and so on. The card moves to that
 column's status and is appended to the bottom of the column.
 
-With **no** card focused, **⌘K** is not about a card, so it opens the ordinary Issues palette —
-search, create, and the bulk actions — exactly as it does on the list.
+With **no** card focused, **⌘K** is not about a card, so it opens the ordinary Issues palette:
+search, create, and the destinations. The bulk actions need a selection, and the board has none —
+a card's own **Move to status…** is the board's equivalent.
 
 ## Large columns
 

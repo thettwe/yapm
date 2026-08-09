@@ -1,4 +1,4 @@
-import { newId } from '@yapm/schema'
+import { newId, newKey } from '@yapm/schema'
 import type { Database } from '@yapm/schema/db'
 import { claimSsoProvider, createDatabase, migrateToLatest } from '@yapm/schema/db'
 import { Hono } from 'hono'
@@ -22,7 +22,7 @@ const silent = pino({ level: 'silent' })
 const ORIGIN = 'http://localhost'
 
 // Short enough that `_better-auth-token-<providerId>` stays inside the 63-character DNS label limit.
-const suffix = newId().replaceAll('-', '').slice(0, 12)
+const suffix = newKey(12)
 const PROVIDER_ID = `acme-${suffix}`
 const ABSENT_PROVIDER_ID = `ghost-${suffix}`
 const DOMAIN = `${suffix}.example.test`

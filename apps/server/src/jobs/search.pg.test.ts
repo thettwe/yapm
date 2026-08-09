@@ -1,4 +1,4 @@
-import { newId } from '@yapm/schema'
+import { newId, newKey } from '@yapm/schema'
 import { createDatabase, type Database, migrateToLatest } from '@yapm/schema/db'
 import { sql } from 'kysely'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -64,7 +64,7 @@ describe.skipIf(DATABASE_URL === undefined)('search index jobs over live Postgre
         id: teamId,
         workspace_id: workspaceId,
         name: 'Indexing',
-        key: `J${newId().slice(0, 4)}`,
+        key: `J${newKey(4)}`,
       })
       .execute()
     await db

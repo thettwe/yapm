@@ -21,7 +21,8 @@ import {
 import { RestPhraseText } from '@yapm/ui/components/rest-phrase'
 import { StatusGlyph } from '@yapm/ui/components/status-glyph'
 import { cn } from '@yapm/ui/lib/utils'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Masthead } from '@/frame/masthead'
 import {
   DIVERGENCE_LABEL,
   deliveryView,
@@ -188,187 +189,202 @@ export function ProjectPage({ teamId, projectId }: { teamId: string; projectId: 
   const strip = targetStrip(project, Date.now())
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-bg" data-testid="project-page">
-      {contributingTeams.map((id) => (
-        <TeamDeploymentFeed key={id} teamId={id} publish={publish} />
-      ))}
-
-      <div className="px-10 pt-5 font-mono text-[11px] text-text-2">
-        <Link
-          to="/teams/$teamId/projects"
-          params={{ teamId }}
-          search={{}}
-          data-testid="project-breadcrumb"
-          className="rounded-control outline-none hover:text-accent-strong focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <Door>Projects</Door>
-        </Link>
-        <span aria-hidden="true"> ›</span>
-      </div>
-
-      <div className="flex items-center gap-2.5 px-10 pt-2">
-        <StatusGlyph
-          status={PROJECT_STATUS_TO_KIND[project.status]}
-          aria-hidden="true"
-          className="size-4 flex-none"
-        />
-        <h1 className="font-heading font-bold text-[23px] tracking-[-0.015em] text-text-1">
-          {project.name}
-        </h1>
-        <span className="inline-flex h-[21px] items-center rounded-pill bg-bg-hover px-2.5 font-semibold text-[11.5px] text-text-2">
-          {PROJECT_STATUS_LABEL[project.status]}
-        </span>
-        <ScopeChip workspaceName={workspace?.name ?? null} />
-        <span className="ml-auto">
+    // Band 2 is the shared `Masthead`, adapted — never hand-rolled. `app-frame` deleted a
+    // hand-rolled header from ten routes and the rule holds here: the breadcrumb is the kicker,
+    // the status pill and the scope chip are the lens, Edit is the action, LEAD/TEAMS is the meta.
+    <>
+      <Masthead
+        kicker={
+          <span className="font-mono text-[11px] text-text-2">
+            <Link
+              to="/teams/$teamId/projects"
+              params={{ teamId }}
+              search={{}}
+              data-testid="project-breadcrumb"
+              className="rounded-control outline-none hover:text-accent-strong focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <Door>Projects</Door>
+            </Link>
+            <span aria-hidden="true"> ›</span>
+          </span>
+        }
+        title={
+          <span className="flex items-center gap-2">
+            <StatusGlyph
+              status={PROJECT_STATUS_TO_KIND[project.status]}
+              aria-hidden="true"
+              className="size-4 flex-none"
+            />
+            {project.name}
+          </span>
+        }
+        lens={
+          <>
+            <span className="inline-flex h-[21px] items-center rounded-pill bg-bg-hover px-2.5 font-semibold text-[11.5px] text-text-2">
+              {PROJECT_STATUS_LABEL[project.status]}
+            </span>
+            <ScopeChip workspaceName={workspace?.name ?? null} />
+          </>
+        }
+        actions={
           <EditProjectButton
             project={project}
             users={users as readonly UserOption[]}
             onDeleted={back}
           />
-        </span>
-      </div>
-
-      <div className="flex items-center gap-6 px-10 pt-2.5 text-[12.5px] text-text-2">
-        <span className="flex items-center gap-1.5">
-          <span className="font-mono text-[11px] tracking-[0.06em] text-text-2">LEAD</span>
-          {leadName === null ? (
-            <span className="size-5" aria-hidden="true" />
-          ) : (
-            <>
-              <Avatar size="xs" title={leadName}>
-                {leadImage ? <AvatarImage src={leadImage} alt={leadName} /> : null}
-                <AvatarFallback aria-hidden="true">{initials(leadName)}</AvatarFallback>
-              </Avatar>
-              {leadName}
-            </>
-          )}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="font-mono text-[11px] tracking-[0.06em] text-text-2">TEAMS</span>
-          <span className="font-mono text-[11.5px] text-text-2">
-            {split.map((entry) => `${entry.teamKey} ${entry.count}`).join(' · ')}
-          </span>
-        </span>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-14 border-row-hairline border-t px-10 pt-5">
-        <section className="min-w-0 max-w-[660px] flex-1 pt-4" aria-label="Issues">
-          <div className="flex items-baseline gap-2.5">
-            <span className="font-bold text-[11px] tracking-[0.09em] text-text-1">ISSUES</span>
-            <span className="font-mono text-[12px] text-text-2">{progress.total}</span>
-            <span className="ml-auto">
-              <How label="issues" align="end" constraint="teamScoped over this project's issues">
-                Every issue pointing at this project that is in a team you belong to. Done is the
-                issue's own status; canceled work counts toward the total, never toward done.
-              </How>
-            </span>
-          </div>
-          {progress.total === 0 ? (
-            <p className="mt-3 text-sm text-text-2" data-testid="project-no-issues">
-              No issues yet
-            </p>
-          ) : (
-            <>
-              <div className="mt-2.5 flex items-baseline gap-2.5">
-                <span
-                  data-testid="project-done-count"
-                  className="font-bold text-[28px] leading-none tracking-[-0.02em] text-text-1"
-                >
-                  {progress.done}
-                </span>
-                <span className="font-semibold text-[15px] text-text-2">
-                  /{progress.total} done
-                </span>
-              </div>
-              <div
-                data-testid="project-state-bar"
-                role="img"
-                aria-label={segments
-                  .map((segment) => `${segment.count} ${segment.label.toLowerCase()}`)
-                  .join(', ')}
-                className="mt-3.5 flex h-2 gap-1 overflow-hidden"
-              >
-                {segments.map((segment) => (
-                  <span
-                    key={segment.status}
-                    className={cn('h-2 rounded-full', STATUS_FILL[segment.status])}
-                    style={{ width: `${segment.fraction * 100}%` }}
-                  />
-                ))}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-5 text-[11.5px] text-text-2">
-                {segments.map((segment) => (
-                  <span key={segment.status} className="inline-flex items-center gap-1.5">
-                    <StatusGlyph
-                      status={STATUS_TO_KIND[segment.status]}
-                      aria-hidden="true"
-                      className="size-3"
-                    />
-                    <span className="font-medium font-mono text-text-1">{segment.count}</span>
-                    {segment.label.toLowerCase()}
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
-
-        <section className="w-[440px] flex-none pt-4" aria-label="Target">
-          <div className="flex items-baseline gap-2.5">
-            <span className="font-bold text-[11px] tracking-[0.09em] text-text-1">TARGET</span>
-            <span className="ml-auto">
-              <How
-                label="target"
-                align="end"
-                constraint="target_date is one stored field; nothing records whether it was re-agreed."
-              >
-                The one date a project stores. There is no start date, so the line below runs from
-                when the project was CREATED — not from when work began.
-              </How>
-            </span>
-          </div>
-          {project.targetDate === null ? (
-            <p className="mt-3 font-mono text-[12px] text-text-2" data-testid="project-no-target">
-              No target date
-            </p>
-          ) : (
-            <>
-              <div className="mt-2.5 flex items-baseline gap-2.5">
-                <span className="font-bold text-[28px] leading-none tracking-[-0.02em] text-text-1">
-                  {formatTargetDay(project.targetDate)}
-                </span>
-                {past.passed ? (
-                  <span className="rounded-pill bg-urgent-soft px-2 py-0.5 font-semibold text-[11px] text-status-urgent-ink">
-                    {past.daysPast} {past.daysPast === 1 ? 'day' : 'days'} past
-                  </span>
-                ) : null}
-              </div>
-              {strip === null ? null : (
-                <TargetStripDrawing
-                  createdAt={project.createdAt}
-                  targetDate={project.targetDate}
-                  strip={strip}
-                  daysPast={past.passed ? past.daysPast : 0}
-                />
+        }
+        meta={
+          <span className="flex items-center gap-6 text-[12.5px] text-text-2">
+            <span className="flex items-center gap-1.5">
+              <span className="font-mono text-[11px] tracking-[0.06em] text-text-2">LEAD</span>
+              {leadName === null ? (
+                <span className="size-5" aria-hidden="true" />
+              ) : (
+                <>
+                  <Avatar size="xs" title={leadName}>
+                    {leadImage ? <AvatarImage src={leadImage} alt={leadName} /> : null}
+                    <AvatarFallback aria-hidden="true">{initials(leadName)}</AvatarFallback>
+                  </Avatar>
+                  {leadName}
+                </>
               )}
-            </>
-          )}
-        </section>
-      </div>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="font-mono text-[11px] tracking-[0.06em] text-text-2">TEAMS</span>
+              <span className="font-mono text-[11.5px] text-text-2">
+                {split.map((entry) => `${entry.teamKey} ${entry.count}`).join(' · ')}
+              </span>
+            </span>
+          </span>
+        }
+      />
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-bg"
+        data-testid="project-page"
+      >
+        {contributingTeams.map((id) => (
+          <TeamDeploymentFeed key={id} teamId={id} publish={publish} />
+        ))}
 
-      <ProjectIssueList issues={issues} teamId={teamId} />
+        <div className="mt-4 flex flex-wrap gap-14 px-10 pt-5">
+          <section className="min-w-0 max-w-[660px] flex-1 pt-4" aria-label="Issues">
+            <div className="flex items-baseline gap-2.5">
+              <span className="font-bold text-[11px] tracking-[0.09em] text-text-1">ISSUES</span>
+              <span className="font-mono text-[12px] text-text-2">{progress.total}</span>
+              <span className="ml-auto">
+                <How label="issues" align="end" constraint="teamScoped over this project's issues">
+                  Every issue pointing at this project that is in a team you belong to. Done is the
+                  issue's own status; canceled work counts toward the total, never toward done.
+                </How>
+              </span>
+            </div>
+            {progress.total === 0 ? (
+              <p className="mt-3 text-sm text-text-2" data-testid="project-no-issues">
+                No issues yet
+              </p>
+            ) : (
+              <>
+                <div className="mt-2.5 flex items-baseline gap-2.5">
+                  <span
+                    data-testid="project-done-count"
+                    className="font-bold text-[28px] leading-none tracking-[-0.02em] text-text-1"
+                  >
+                    {progress.done}
+                  </span>
+                  <span className="font-semibold text-[15px] text-text-2">
+                    /{progress.total} done
+                  </span>
+                </div>
+                <div
+                  data-testid="project-state-bar"
+                  role="img"
+                  aria-label={segments
+                    .map((segment) => `${segment.count} ${segment.label.toLowerCase()}`)
+                    .join(', ')}
+                  className="mt-3.5 flex h-2 gap-1 overflow-hidden"
+                >
+                  {segments.map((segment) => (
+                    <span
+                      key={segment.status}
+                      className={cn('h-2 rounded-full', STATUS_FILL[segment.status])}
+                      style={{ width: `${segment.fraction * 100}%` }}
+                    />
+                  ))}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-5 text-[11.5px] text-text-2">
+                  {segments.map((segment) => (
+                    <span key={segment.status} className="inline-flex items-center gap-1.5">
+                      <StatusGlyph
+                        status={STATUS_TO_KIND[segment.status]}
+                        aria-hidden="true"
+                        className="size-3"
+                      />
+                      <span className="font-medium font-mono text-text-1">{segment.count}</span>
+                      {segment.label.toLowerCase()}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
 
-      <div className="flex items-baseline gap-3.5 px-10 pt-4 pb-6 font-mono text-[10.5px] text-text-2">
-        <span>workspace project · counted over the issues in your teams</span>
-        <How
-          label="the counting rule"
-          constraint="isMember on the project · teamScoped on its issues"
-        >
-          A project belongs to the workspace, not to the team in the deck above. Its issues are only
-          the ones in teams you belong to — issues from other teams never sync here.
-        </How>
+          <section className="w-[440px] flex-none pt-4" aria-label="Target">
+            <div className="flex items-baseline gap-2.5">
+              <span className="font-bold text-[11px] tracking-[0.09em] text-text-1">TARGET</span>
+              <span className="ml-auto">
+                <How
+                  label="target"
+                  align="end"
+                  constraint="target_date is one stored field; nothing records whether it was re-agreed."
+                >
+                  The one date a project stores. There is no start date, so the line below runs from
+                  when the project was CREATED — not from when work began.
+                </How>
+              </span>
+            </div>
+            {project.targetDate === null ? (
+              <p className="mt-3 font-mono text-[12px] text-text-2" data-testid="project-no-target">
+                No target date
+              </p>
+            ) : (
+              <>
+                <div className="mt-2.5 flex items-baseline gap-2.5">
+                  <span className="font-bold text-[28px] leading-none tracking-[-0.02em] text-text-1">
+                    {formatTargetDay(project.targetDate)}
+                  </span>
+                  {past.passed ? (
+                    <span className="rounded-pill bg-urgent-soft px-2 py-0.5 font-semibold text-[11px] text-status-urgent-ink">
+                      {past.daysPast} {past.daysPast === 1 ? 'day' : 'days'} past
+                    </span>
+                  ) : null}
+                </div>
+                {strip === null ? null : (
+                  <TargetStripDrawing
+                    createdAt={project.createdAt}
+                    targetDate={project.targetDate}
+                    strip={strip}
+                    daysPast={past.passed ? past.daysPast : 0}
+                  />
+                )}
+              </>
+            )}
+          </section>
+        </div>
+
+        <ProjectIssueList issues={issues} teamId={teamId} />
+
+        <div className="flex items-baseline gap-3.5 px-10 pt-4 pb-6 font-mono text-[10.5px] text-text-2">
+          <span>workspace project · counted over the issues in your teams</span>
+          <How
+            label="the counting rule"
+            constraint="isMember on the project · teamScoped on its issues"
+          >
+            A project belongs to the workspace, not to the team in the deck above. Its issues are
+            only the ones in teams you belong to — issues from other teams never sync here.
+          </How>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
@@ -403,6 +419,10 @@ function TeamDeploymentFeed({
 
 const STRIP_LEFT = 10
 const STRIP_RUN = 380
+// Where the `created` label starts, and one 10px mono character's advance. Both labels are
+// fixed-format mono strings, so their drawn extents are arithmetic — no measurement needed.
+const STRIP_TEXT_LEFT = 6
+const MONO_ADVANCE = 6
 
 function TargetStripDrawing({
   createdAt,
@@ -422,6 +442,17 @@ function TargetStripDrawing({
   const x = (fraction: number) => STRIP_LEFT + fraction * STRIP_RUN
   const targetX = x(strip.targetFraction)
   const nowX = x(strip.nowFraction)
+  const createdText = `${formatTargetDay(createdAt)} · created`
+  const targetText = `${formatTargetDay(targetDate)} · target`
+  // Placement is decided from the two labels' ACTUAL extents, never from a fraction of the run: a
+  // fraction knows nothing about how wide `Jun 1 · created` is, so any threshold picked that way
+  // draws the two mono strings through each other over most of the range. End-anchored left of the
+  // mark while that clears `created`; start-anchored right of it while THAT clears `created`; and
+  // when neither does, the target label drops to its own baseline so the two never share a line.
+  const createdRight = STRIP_TEXT_LEFT + createdText.length * MONO_ADVANCE
+  const targetW = targetText.length * MONO_ADVANCE
+  const place =
+    targetX - 4 - targetW > createdRight ? 'end' : targetX + 4 > createdRight ? 'start' : 'below'
   return (
     <svg
       data-testid="project-target-strip"
@@ -473,23 +504,23 @@ function TargetStripDrawing({
       />
       {/* `created`, never `started` — the label IS the disclosure that this end is not a start. */}
       <text
-        x="6"
+        x={STRIP_TEXT_LEFT}
         y="19"
         fontSize="10"
         fill="var(--text-2)"
         style={{ fontFamily: 'var(--type-mono)' }}
       >
-        {formatTargetDay(createdAt)} · created
+        {createdText}
       </text>
       <text
-        x={targetX - 4}
-        y="19"
-        textAnchor="end"
+        x={place === 'end' ? targetX - 4 : place === 'start' ? targetX + 4 : targetX}
+        y={place === 'below' ? 52 : 19}
+        textAnchor={place === 'end' ? 'end' : place === 'below' ? 'middle' : 'start'}
         fontSize="10"
         fill="var(--text-2)"
         style={{ fontFamily: 'var(--type-mono)' }}
       >
-        {formatTargetDay(targetDate)} · target
+        {targetText}
       </text>
       <text
         x={nowX + 6}
@@ -508,10 +539,24 @@ function TargetStripDrawing({
 function ProjectIssueList({ issues, teamId }: { issues: readonly PageIssue[]; teamId: string }) {
   const navigate = useNavigate()
   const [showDone, setShowDone] = useState(false)
+  const listRef = useRef<HTMLDivElement>(null)
+  // The issues on screen when the fold was pressed. The fold unmounts itself, so focus has to land
+  // somewhere deliberate — on the first row that was not already there. An index cannot stand in
+  // for that: a done issue's slot sits wherever its status group does, which can be ABOVE the fold.
+  const revealedRef = useRef<ReadonlySet<string> | null>(null)
 
   const open = issues.filter((issue) => issue.status !== 'done')
   const done = issues.filter((issue) => issue.status === 'done')
   const shown = showDone ? issues : open
+
+  useEffect(() => {
+    const previous = revealedRef.current
+    if (previous === null) return
+    revealedRef.current = null
+    const target = shown.find((issue) => !previous.has(issue.id))
+    if (target === undefined) return
+    listRef.current?.querySelector<HTMLElement>(`[data-issue-id="${target.id}"]`)?.focus()
+  }, [shown])
 
   const groups = ISSUE_STATUSES.map((status) => ({
     status,
@@ -529,7 +574,7 @@ function ProjectIssueList({ issues, teamId }: { issues: readonly PageIssue[]; te
   if (issues.length === 0) return null
 
   return (
-    <div className="mt-6">
+    <div className="mt-6" ref={listRef}>
       {groups.map((group) => (
         <section key={group.status} aria-label={STATUS_LABEL[group.status]}>
           <div className="flex h-[35px] items-center gap-2.5 border-row-hairline border-t bg-bg-hover px-10">
@@ -594,7 +639,10 @@ function ProjectIssueList({ issues, teamId }: { issues: readonly PageIssue[]; te
         <button
           type="button"
           data-testid="project-done-fold"
-          onClick={() => setShowDone(true)}
+          onClick={() => {
+            revealedRef.current = new Set(shown.map((issue) => issue.id))
+            setShowDone(true)
+          }}
           className="w-full border-row-hairline border-t px-10 py-3.5 text-left font-mono text-[11.5px] text-text-2 hover:text-text-1 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
         >
           ↓ {done.length} done

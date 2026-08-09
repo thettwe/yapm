@@ -107,6 +107,22 @@ function mount() {
   return render(<ProjectPage teamId={ENG.id} projectId="p-1" />)
 }
 
+// One of the strip's two mono end labels, found by the word that IS its disclosure.
+function stripLabel(strip: HTMLElement, word: 'created' | 'target'): SVGTextElement | undefined {
+  return [...strip.querySelectorAll('text')].find((node) => node.textContent?.includes(word))
+}
+
+// jsdom measures no text, so the drawn extent is computed the same way the drawing places it: a
+// fixed-format 10px mono string at ~6px a character, resolved against its own anchor.
+function extent(node: SVGTextElement | undefined): { left: number; right: number; y: number } {
+  if (node === undefined) throw new Error('no such strip label')
+  const width = (node.textContent ?? '').length * 6
+  const x = Number(node.getAttribute('x'))
+  const anchor = node.getAttribute('text-anchor') ?? 'start'
+  const left = anchor === 'end' ? x - width : anchor === 'middle' ? x - width / 2 : x
+  return { left, right: left + width, y: Number(node.getAttribute('y')) }
+}
+
 function rowFor(title: string): HTMLElement {
   const found = screen
     .getAllByTestId('project-issue-row')
@@ -172,6 +188,59 @@ test('the target vital states the delta and labels its left end `created`, never
   // The one left edge in this change, and the label IS the disclosure.
   expect(strip.textContent).toContain(`${formatTargetDay(CREATED)} · created`)
   expect(strip.textContent).not.toMatch(/start/i)
+  // A target late in the run hangs its label to the LEFT of the mark, away from the right edge.
+  expect(stripLabel(strip, 'target')?.getAttribute('text-anchor')).toBe('end')
+})
+
+// The two mono strings never share a line. Where along the run the target sits decides HOW they are
+// kept apart — left of the mark, right of it, or on a second baseline — but never whether they are.
+// A placement rule written as a fraction of the run cannot promise this: the run knows nothing about
+// how wide `Jun 1 · created` is, and at ~0.13 and ~0.28 an anchor picked that way draws one label
+// straight through the other.
+test.each([
+  ['a target crowded against `created`', Date.UTC(2026, 5, 10)],
+  ['a target just past it', Date.UTC(2026, 5, 20)],
+  ['a target late in the run', Date.UTC(2026, 6, 31)],
+])('%s keeps both strip labels legible', (_name, targetDate) => {
+  seed({ targetDate, issues: [issue({ id: 'i1', status: 'todo' })] })
+  mount()
+
+  const strip = screen.getByTestId('project-target-strip')
+  const created = stripLabel(strip, 'created')
+  const target = stripLabel(strip, 'target')
+  expect(created?.textContent).toContain(formatTargetDay(CREATED))
+  expect(target?.textContent).toContain(formatTargetDay(targetDate))
+
+  const a = extent(created)
+  const b = extent(target)
+  const separated = a.y !== b.y || b.left >= a.right || a.left >= b.right
+  expect(separated).toBe(true)
+  // Nothing is drawn off the left edge of the 400px viewBox either.
+  expect(b.left).toBeGreaterThanOrEqual(0)
+})
+
+test('opening the done fold lands focus on the first newly revealed row', () => {
+  seed({
+    issues: [
+      issue({ id: 'i1', title: 'Still open', status: 'todo' }),
+      issue({ id: 'i2', title: 'Shipped one', status: 'done' }),
+      issue({ id: 'i3', title: 'Shipped two', status: 'done' }),
+    ],
+  })
+  mount()
+
+  const fold = screen.getByTestId('project-done-fold')
+  fold.focus()
+  fireEvent.click(fold)
+
+  // The fold unmounts itself, so focus has to land somewhere deliberate: the first row that was
+  // not already on screen. Dropping to <body> is what the shipped issue-list fold avoids.
+  expect(document.activeElement).not.toBe(document.body)
+  const landed = (document.activeElement as HTMLElement).closest(
+    '[data-testid="project-issue-row"]',
+  )
+  expect(landed).not.toBeNull()
+  expect(within(landed as HTMLElement).getByText('Shipped one')).toBeTruthy()
 })
 
 test('an undated project draws no strip and no delta', () => {

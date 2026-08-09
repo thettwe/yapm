@@ -444,7 +444,6 @@ function RoadmapRow({
   // A label at the far right runs off the drawing, so it hangs from the mark's left instead.
   const flip = targetX !== null && targetX > AXIS_W - 150
   const phrase = emptyNote(row)
-  const draws = targetX !== null || row.marks.length > 0
 
   return (
     <button
@@ -497,11 +496,11 @@ function RoadmapRow({
           viewBox={`0 0 ${AXIS_W} ${ROW_H}`}
           className="block"
           data-testid="roadmap-row-drawing"
-          // An inkless drawing states nothing to assistive technology either — the reality
-          // track's rule, applied to the axis.
-          role={draws ? 'img' : undefined}
-          aria-label={draws ? drawingLabel(row) : undefined}
-          aria-hidden={draws ? undefined : true}
+          // The row is a `<button>`, and WAI-ARIA gives role=button presentational children — a
+          // nested `role="img"` is stripped and its label is never announced. So the drawing's
+          // facts ride the button's OWN name (`rowLabel`) and the SVG is hidden: one voice, not a
+          // second one that no screen reader can reach.
+          aria-hidden="true"
         >
           {gridlines.map((fraction) => (
             <line
@@ -524,6 +523,10 @@ function RoadmapRow({
               strokeWidth="1"
             />
           )}
+          {/* Filled for done, a ring for not — shape is the channel. The ring is stroked in
+              `--text-2` rather than `--border-strong`, which this change's own contrast file pins
+              UNDER the 3:1 non-text bar in all six blocks: where a mock ink misses its bar the ink
+              moves and the mock loses (D8). */}
           {row.marks.map((mark) => (
             <circle
               key={mark.id}
@@ -531,7 +534,7 @@ function RoadmapRow({
               cy={MARK_Y}
               r="3.2"
               fill={mark.done ? 'var(--status-done)' : 'var(--bg)'}
-              {...(mark.done ? {} : { stroke: 'var(--border-strong)', strokeWidth: 1.4 })}
+              {...(mark.done ? {} : { stroke: 'var(--text-2)', strokeWidth: 1.4 })}
             />
           ))}
           {targetX === null ? null : (
@@ -649,27 +652,10 @@ function issueCountPhrase(row: RoadmapRowModel): string {
   return row.total === 0 ? 'no issues yet' : `${row.done} of ${row.total} issues done`
 }
 
-function rowLabel(row: RoadmapRowModel): string {
-  const { project } = row
-  const target =
-    project.targetDate === null
-      ? 'no target date'
-      : `target ${formatTargetDay(project.targetDate)}${row.targetPassed ? ', target passed' : ''}`
-  return `${project.name}, ${PROJECT_STATUS_LABEL[project.status]}, ${target}, ${issueCountPhrase(row)}`
-}
-
-// What the drawing actually shows: the target, how it stands against today, the done-over-total,
-// and which cycles the issue marks sit in. Nothing here is carried by colour.
-function drawingLabel(row: RoadmapRowModel): string {
-  const parts: string[] = []
-  if (row.project.targetDate !== null) {
-    parts.push(
-      `Target ${formatTargetDay(row.project.targetDate)}, ${
-        row.targetPassed ? 'past today' : 'ahead of today'
-      }`,
-    )
-  }
-  parts.push(issueCountPhrase(row))
+// Where the drawing's issue marks actually sit, in words. A row with issues and no mark says so
+// rather than staying silent about a schedule nobody has made; a row with no issues at all adds
+// nothing, because `issueCountPhrase` has already said there is nothing to schedule.
+function schedulePhrase(row: RoadmapRowModel): string | null {
   const perCycle: { name: string; count: number }[] = []
   for (const mark of row.marks) {
     const seen = perCycle.find((entry) => entry.name === mark.cycleName)
@@ -677,11 +663,31 @@ function drawingLabel(row: RoadmapRowModel): string {
     else perCycle.push({ name: mark.cycleName, count: 1 })
   }
   if (perCycle.length > 0) {
-    parts.push(`scheduled ${perCycle.map((entry) => `${entry.count} in ${entry.name}`).join(', ')}`)
-  } else if (row.total > 0) {
-    parts.push('no issues scheduled in a cycle')
+    return `scheduled ${perCycle.map((entry) => `${entry.count} in ${entry.name}`).join(', ')}`
   }
-  return `${parts.join('; ')}.`
+  return row.total > 0 ? 'no issues scheduled in a cycle' : null
+}
+
+// The row's ONE accessible name, carrying everything the drawing beside it draws: the target and
+// how it stands against today, the done-over-total, and which cycles the marks sit in. Nothing
+// here is carried by colour, and nothing is carried by a nested label a button would swallow.
+function rowLabel(row: RoadmapRowModel): string {
+  const { project } = row
+  const target =
+    project.targetDate === null
+      ? 'no target date'
+      : `target ${formatTargetDay(project.targetDate)}, ${
+          row.targetPassed ? 'past today' : 'ahead of today'
+        }`
+  const schedule = schedulePhrase(row)
+  const parts = [
+    project.name,
+    PROJECT_STATUS_LABEL[project.status],
+    target,
+    issueCountPhrase(row),
+    ...(schedule === null ? [] : [schedule]),
+  ]
+  return parts.join(', ')
 }
 
 // The filter row's shared mark, drawn once at its head. Decorative — the axes name themselves.

@@ -62,7 +62,9 @@ lead or date arrives.
 A project reads as past its target when `target_date` is **earlier than today** and its status is
 **not Completed**. A project whose target is exactly today has not passed it, and a completed
 project never reads as past its target however old the date is. `N` is its readable issues **not**
-at Done.
+at Done. Over a project with **no readable issues** the row reads `Past target` alone: `0 open`
+would assert "nothing open" over work you may simply not be able to see, and no other slot on the
+row draws a zero either.
 
 This reading deliberately **does not** join the attention count in the deck. That badge carries
 exactly four exception classes — done in git but not on the board, waiting on review over a day,
@@ -109,6 +111,14 @@ sit behind a fold stating the true remaining count. Clicking a row (or `Enter`) 
 The roadmap lays every project over a **real time axis**. The axis window is stated as a mono label
 beside the title — it is a reading of the data, not a control, so it carries no chevron.
 
+The window **covers every target it draws**. It is anchored on the current cycle (or the start of
+this month) and runs at least three months forward **from that anchor**, but a target that has
+already gone by pulls the left edge back to the start of its own month — otherwise every overdue
+project's mark would pile onto the same pixel at the left edge and stop being a reading at all.
+Pulling the left edge back never shortens the runway, so a workspace whose targets have all passed
+still draws today, the cycle you are in, and the marks scheduled in it. Once the window spans a year
+change, the month ticks and the window label carry the year.
+
 The axis header carries:
 
 - **month ticks and labels**;
@@ -131,9 +141,11 @@ but none in any cycle, `Scheduled outside this window` where its work sits in a 
 not reach, and `No issues yet` where there are none. Undated projects sit under one **No target
 date** header and keep their meter and their marks.
 
-A row that draws a mark carries a spoken label naming the target, how it stands against today, the
-done-over-total, and which cycles its marks sit in. A row that draws **nothing** carries no label at
-all — an inkless drawing states nothing to a screen reader either.
+Each row is one control with **one** spoken name, and that name carries everything the drawing beside
+it draws: the project, its status, the target and how it stands against today, the done-over-total,
+and which cycles its marks sit in. The drawing itself is hidden from screen readers rather than
+labelled separately — a row is a button, and a button's children are presentational, so a second
+label inside it would never be announced at all.
 
 ### What this page won't guess
 
@@ -169,8 +181,10 @@ All three surfaces use the same roving-focus model:
   index.
 - **Roadmap** — `j`/`k` or ↑/↓ move between rows, `Enter` opens the focused project.
 
-Focus never falls to the page body when the set of rows shrinks under it, and every `how ·` is a
-real control you can open with `Enter` and close with `Escape`.
+The roving tab stop always survives on a **mounted** row when the set of rows shrinks under it, so
+`Tab` returns you to the list rather than to the top of the page. Every `how ·` is a real control
+you can open with `Enter` and close with `Escape` — including the ones that sit inside a row, which
+never steal the row's own click.
 
 ## Creating and editing projects
 

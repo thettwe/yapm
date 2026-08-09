@@ -271,8 +271,17 @@ function ProjectIndexRow({
       data-project-id={project.id}
       tabIndex={focused ? 0 : -1}
       onFocus={onFocus}
-      onClick={onOpen}
+      // The row is the open target AND carries a real `how ·`. Both handlers guard the same way
+      // the section's handler does: a click or a key inside the disclosure is a request to READ
+      // the derivation, and swallowing it into a navigation would make the panel unreachable.
+      onClick={(event) => {
+        if (event.target instanceof HTMLElement && event.target.closest('[data-slot="how"]')) return
+        onOpen()
+      }}
       onKeyDown={(event) => {
+        if (!(event.target instanceof HTMLElement) || event.target.dataset.slot !== 'project-row') {
+          return
+        }
         if (event.key === ' ') {
           event.preventDefault()
           onOpen()
@@ -294,8 +303,11 @@ function ProjectIndexRow({
 
       {past.passed ? (
         <span className="flex flex-none items-center gap-1.5 whitespace-nowrap text-[12.5px]">
+          {/* Over a project with no readable issues the count is dropped rather than drawn as a
+              zero: `0 open` would assert "nothing open" over work the reader may not be able to
+              see, and the rest of the row is built to draw no zero at all. */}
           <span className="font-semibold text-status-urgent-ink">
-            {`Past target — ${past.openCount} open`}
+            {progress.total === 0 ? 'Past target' : `Past target — ${past.openCount} open`}
           </span>
           <How
             label="past target"

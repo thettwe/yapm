@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { IssueRowData } from '@/issues/model'
 import {
   compareProjects,
+  formatAxisWindow,
   groupProjectsByStatus,
   issueStateSegments,
   type ProjectCycleRow,
@@ -246,9 +247,47 @@ describe('roadmapAxis', () => {
     expect(built.lastCycleEnd).toBe(Date.UTC(2026, 8, 23))
   })
 
+  // A window anchored on today clamps every passed target to fraction 0, which stacks every
+  // overdue mark on the same pixel — the reading the roadmap exists to make. The window covers the
+  // data it draws.
+  it('extends the window left to cover targets that have already gone by', () => {
+    const built = axis({
+      cycles: [cycle({})],
+      projects: [
+        project({ id: 'old', name: 'Old', targetDate: Date.UTC(2026, 3, 10) }),
+        project({ id: 'older', name: 'Older', targetDate: Date.UTC(2026, 2, 10) }),
+      ],
+    })
+    expect(built.window.start).toBe(Date.UTC(2026, 2, 1))
+    const fractions = built.rows.map((row) => row.targetFraction)
+    expect(fractions).toHaveLength(2)
+    expect(fractions[0]).not.toBe(fractions[1])
+    for (const fraction of fractions) expect(fraction ?? -1).toBeGreaterThan(0)
+  })
+
   it('runs at least three months even for one near-term project', () => {
     const built = axis({ projects: [project({ targetDate: TODAY + DAY })] })
     expect(built.window.end).toBeGreaterThanOrEqual(Date.UTC(2026, 10, 1))
+  })
+
+  // The runway is measured from the anchor, not from the pulled-back left edge: a workspace where
+  // every target has already gone by must still contain today, or the caret, the current band and
+  // every mark in the cycle we are actually in all vanish.
+  it('still reaches past today when every target has gone by', () => {
+    const current = cycle({})
+    const built = axis({
+      cycles: [current],
+      projects: [
+        project({ id: 'old', name: 'Old', targetDate: Date.UTC(2026, 2, 10) }),
+        project({ id: 'older', name: 'Older', targetDate: Date.UTC(2026, 1, 10) }),
+      ],
+      issuesByProject: new Map([['old', [projectIssue({ id: 'a', cycle: current })]]]),
+    })
+    expect(built.window.start).toBe(Date.UTC(2026, 1, 1))
+    expect(built.window.end).toBeGreaterThan(TODAY)
+    expect(built.nowFraction).not.toBeNull()
+    expect(built.cycleBands.some((band) => band.current)).toBe(true)
+    expect(built.rows.find((row) => row.project.id === 'old')?.marks).toHaveLength(1)
   })
 
   it('orders rows by target date and holds undated ones aside', () => {
@@ -315,6 +354,19 @@ describe('roadmapAxis', () => {
     expect(built.rows.find((row) => row.project.id === 'shipped')?.targetPassed).toBe(false)
   })
 
+  // Two ticks reading `Aug` twelve months apart name the same month and mean different ones.
+  it('carries the year on its month ticks once the window crosses one', () => {
+    const built = axis({
+      projects: [
+        project({ id: 'old', targetDate: Date.UTC(2026, 2, 10) }),
+        project({ id: 'far', targetDate: Date.UTC(2027, 4, 10) }),
+      ],
+    })
+    const labels = built.monthTicks.map((tick) => tick.label)
+    expect(new Set(labels).size).toBe(labels.length)
+    expect(labels.every((label) => /\d{4}/.test(label))).toBe(true)
+  })
+
   // The structural refusal, asserted over the returned shapes rather than by reading the source:
   // a project stores no start, so nothing on a row may carry one, or a span, or a width.
   it('returns no start, span, duration or width on any row', () => {
@@ -330,5 +382,25 @@ describe('roadmapAxis', () => {
         expect(Object.keys(mark).filter((key) => forbidden.test(key))).toEqual([])
       }
     }
+  })
+})
+
+describe('formatAxisWindow', () => {
+  it('states a single drawn month once', () => {
+    expect(formatAxisWindow({ start: Date.UTC(2026, 7, 1), end: Date.UTC(2026, 8, 1) })).toBe('Aug')
+  })
+
+  // Two ends that share a month NAME are not one month when they are a year apart.
+  it('never collapses a thirteen-month window to one month name', () => {
+    const label = formatAxisWindow({ start: Date.UTC(2026, 7, 1), end: Date.UTC(2027, 8, 1) })
+    expect(label).not.toBe('Aug')
+    expect(label).toContain('2026')
+    expect(label).toContain('2027')
+  })
+
+  it('leaves a window inside one year unadorned', () => {
+    expect(formatAxisWindow({ start: Date.UTC(2026, 6, 1), end: Date.UTC(2026, 10, 1) })).toBe(
+      'Jul – Oct',
+    )
   })
 })

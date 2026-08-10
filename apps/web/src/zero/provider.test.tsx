@@ -91,6 +91,7 @@ function Probe() {
       <span data-testid="offered">{String(recovery.retryOffered)}</span>
       <span data-testid="role">{session.role ?? 'none'}</span>
       <span data-testid="status">{session.status}</span>
+      <span data-testid="unavailable">{String(session.unavailable)}</span>
       <button type="button" data-testid="retry" onClick={recovery.retryNow}>
         retry
       </button>
@@ -642,4 +643,40 @@ test('a settled logged-out session does not poll', async () => {
 
   await advance(BACKOFF_CAP_MS * 4)
   expect(remintCount()).toBe(afterRefusal)
+})
+
+// The regression the merge gate caught on PR #53's first review fix. On a reload against a hung
+// token route, the mount mints flight #1; the auth session resolving milliseconds later counts as
+// an identity change, and the fresh re-mint CHAINS flight #2 behind the hung #1 while superseding
+// it. When #1 finally settles `unavailable` at the client's own timeout, a settle that dropped
+// everything from a superseded flight dropped the outage too — pushing the retry surface a full
+// second timeout later than the moment the outage was known. An outage is identity-independent;
+// only a superseded flight's SESSION answer is stale.
+test('a superseded flight still surfaces an outage at the first timeout, not the second', async () => {
+  let resolveFirst!: (result: SyncCredentialResult) => void
+  mocks.fetchSyncCredential
+    .mockImplementationOnce(
+      () =>
+        new Promise<SyncCredentialResult>((resolve) => {
+          resolveFirst = resolve
+        }),
+    )
+    // The outage is real, so the chained fresh flight hangs too.
+    .mockImplementation(() => new Promise<SyncCredentialResult>(() => {}))
+
+  await mount()
+  expect(remintCount()).toBe(1)
+
+  // The identity changes while flight #1 is still in the air.
+  await act(async () => {
+    mocks.setAuthUser('user-2')
+  })
+  expect(screen.getByTestId('unavailable')).toHaveTextContent('false')
+
+  // Flight #1 settles unavailable — superseded, but the outage must surface NOW.
+  await act(async () => {
+    resolveFirst({ kind: 'unavailable', reason: 'TimeoutError' })
+  })
+  expect(screen.getByTestId('unavailable')).toHaveTextContent('true')
+  expect(remintCount()).toBe(2)
 })

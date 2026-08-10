@@ -403,7 +403,17 @@ export function ZeroRoot({ cacheUrl, children }: ZeroRootProps) {
     // exists to prevent. Clear the slot on both paths. A superseded flight applies nothing:
     // its answer predates the change the newer request exists to observe.
     const settle = (result: SyncCredentialResult) => {
-      if (flightId.current !== id) return result
+      if (flightId.current !== id) {
+        // A superseded flight's SESSION answer applies nothing: it predates the change the
+        // newer request exists to observe. Its `unavailable`, though, is identity-independent —
+        // the server being unreachable is as true for the new identity as the old — and the
+        // newer flight is CHAINED behind this one, so dropping it would push the outage surface
+        // a full timeout later than the moment the outage was actually known.
+        if (result.kind === 'unavailable') {
+          setSession((previous) => applyCredential(previous, result, Date.now()))
+        }
+        return result
+      }
       inFlight.current = null
       setSession((previous) => applyCredential(previous, result, Date.now()))
       return result

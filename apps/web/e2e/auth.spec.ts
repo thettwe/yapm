@@ -1,4 +1,5 @@
-import { type BrowserContext, expect, type Page, test } from '@playwright/test'
+import type { BrowserContext, Page } from '@playwright/test'
+import { expect, test } from './fixtures'
 import { ADMIN, ensureAccount, uniqueEmail } from './support'
 
 const NAME = '[data-testid="workspace-name"]'
@@ -61,68 +62,56 @@ test.describe
       expect(inviteLink).toContain('/invite?token=')
     })
 
-    test('a second user accepts the link and lands as a viewer', async ({ browser }) => {
+    test('a second user accepts the link and lands as a viewer', async ({ newContext }) => {
       expect(inviteLink).not.toBe('')
-      const context = await browser.newContext()
-      try {
-        const page = await context.newPage()
-        await page.goto(inviteLink)
+      const context = await newContext()
+      const page = await context.newPage()
+      await page.goto(inviteLink)
 
-        // Not signed in yet: the invite page offers the sign-in surface inline.
-        await expect(page.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
-        await page.getByRole('button', { name: 'Create one' }).click()
-        await page.getByLabel('Name').fill(viewer.name)
-        await page.getByLabel('Email').fill(viewer.email)
-        await page.getByLabel('Password', { exact: true }).fill(viewer.password)
-        await page.getByTestId('login-submit').click()
+      // Not signed in yet: the invite page offers the sign-in surface inline.
+      await expect(page.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
+      await page.getByRole('button', { name: 'Create one' }).click()
+      await page.getByLabel('Name').fill(viewer.name)
+      await page.getByLabel('Email').fill(viewer.email)
+      await page.getByLabel('Password', { exact: true }).fill(viewer.password)
+      await page.getByTestId('login-submit').click()
 
-        // Acceptance runs automatically once signed in, then the app loads.
-        await expectInApp(page)
-        await expect(page.getByTestId('members-list')).toContainText(viewer.name)
-      } finally {
-        await context.close()
-      }
+      // Acceptance runs automatically once signed in, then the app loads.
+      await expectInApp(page)
+      await expect(page.getByTestId('members-list')).toContainText(viewer.name)
     })
 
     test('the viewer can read but cannot write, and sees no admin surfaces', async ({
-      browser,
+      newContext,
     }) => {
-      const context = await browser.newContext()
-      try {
-        const page = await context.newPage()
-        await signInViewer(context, page, viewer)
-        await expectInApp(page)
+      const context = await newContext()
+      const page = await context.newPage()
+      await signInViewer(context, page, viewer)
+      await expectInApp(page)
 
-        await expect(page.getByRole('heading', { name: 'Invitations' })).toHaveCount(0)
-        await expect(page.getByTestId('create-team')).toHaveCount(0)
+      await expect(page.getByRole('heading', { name: 'Invitations' })).toHaveCount(0)
+      await expect(page.getByTestId('create-team')).toHaveCount(0)
 
-        await page.locator(NAME).click()
-        await page.locator(INPUT).fill(unique('Viewer rename attempt'))
-        await page.keyboard.press('Enter')
-        await expect(page.locator(ERROR)).toContainText('Not authorized')
-      } finally {
-        await context.close()
-      }
+      await page.locator(NAME).click()
+      await page.locator(INPUT).fill(unique('Viewer rename attempt'))
+      await page.keyboard.press('Enter')
+      await expect(page.locator(ERROR)).toContainText('Not authorized')
     })
 
-    test('keyboard-only sign-in reaches the app', async ({ browser }) => {
-      const context = await browser.newContext()
-      try {
-        const page = await context.newPage()
-        await page.goto('/login')
-        // No verified SSO provider on this instance, so the form advertises no SSO control at all
-        // — absence, not a button that cannot complete.
-        await expect(page.getByTestId('login-sso')).toHaveCount(0)
-        await page.getByLabel('Email').focus()
-        await page.keyboard.type(viewer.email)
-        await page.keyboard.press('Tab')
-        await page.keyboard.type(viewer.password)
-        await page.keyboard.press('Enter')
+    test('keyboard-only sign-in reaches the app', async ({ newContext }) => {
+      const context = await newContext()
+      const page = await context.newPage()
+      await page.goto('/login')
+      // No verified SSO provider on this instance, so the form advertises no SSO control at all
+      // — absence, not a button that cannot complete.
+      await expect(page.getByTestId('login-sso')).toHaveCount(0)
+      await page.getByLabel('Email').focus()
+      await page.keyboard.type(viewer.email)
+      await page.keyboard.press('Tab')
+      await page.keyboard.type(viewer.password)
+      await page.keyboard.press('Enter')
 
-        await expectInApp(page)
-      } finally {
-        await context.close()
-      }
+      await expectInApp(page)
     })
 
     test('admin changes the viewer role and can remove the member', async ({ page }) => {

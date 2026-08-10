@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page, test } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
+import { expect, test } from './fixtures'
 import { ADMIN, ensureAccount } from './support'
 
 const NAME = '[data-testid="workspace-name"]'
@@ -60,25 +61,20 @@ test('a rejected write rolls back and surfaces the rejection', async ({ page }) 
   await expect(page.locator(NAME)).toHaveText(before)
 })
 
-test('a rename in one client propagates to another without a reload', async ({ browser }) => {
-  const first = await browser.newContext()
-  const second = await browser.newContext()
+test('a rename in one client propagates to another without a reload', async ({ newContext }) => {
+  const first = await newContext()
+  const second = await newContext()
 
-  try {
-    const watcher = await first.newPage()
-    const editor = await second.newPage()
-    await openWorkspace(watcher)
-    await openWorkspace(editor)
+  const watcher = await first.newPage()
+  const editor = await second.newPage()
+  await openWorkspace(watcher)
+  await openWorkspace(editor)
 
-    const next = unique('Propagated')
-    await renameWithKeyboard(editor, next)
-    await expect(editor.locator(NAME)).toHaveText(next)
+  const next = unique('Propagated')
+  await renameWithKeyboard(editor, next)
+  await expect(editor.locator(NAME)).toHaveText(next)
 
-    await expect(watcher.locator(NAME)).toHaveText(next)
-  } finally {
-    await first.close()
-    await second.close()
-  }
+  await expect(watcher.locator(NAME)).toHaveText(next)
 })
 
 test('reads keep working while disconnected and writes are refused, not dropped', async ({

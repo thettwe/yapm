@@ -1,4 +1,5 @@
-import { expect, type Page, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from './fixtures'
 import { ADMIN, ensureAccount, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
@@ -112,7 +113,7 @@ test('an admin turns status automation on with the keyboard and the setting surv
   ).toHaveAttribute('data-enabled', 'false', { timeout: 30_000 })
 })
 
-test('a member cannot reach the status-automation control', async ({ page, browser }) => {
+test('a member cannot reach the status-automation control', async ({ page, newContext }) => {
   await enterApp(page)
   await createTeam(page)
 
@@ -126,27 +127,23 @@ test('a member cannot reach the status-automation control', async ({ page, brows
     password: 'member-password-1234',
     name: `Automation Member ${Date.now().toString(36)}`,
   }
-  const context = await browser.newContext()
-  try {
-    const mp = await context.newPage()
-    await mp.goto(inviteLink)
-    await expect(mp.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
-    await mp.getByRole('button', { name: 'Create one' }).click()
-    await mp.getByLabel('Name').fill(member.name)
-    await mp.getByLabel('Email').fill(member.email)
-    await mp.getByLabel('Password', { exact: true }).fill(member.password)
-    await mp.getByTestId('login-submit').click()
-    await expect(mp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  const context = await newContext()
+  const mp = await context.newPage()
+  await mp.goto(inviteLink)
+  await expect(mp.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
+  await mp.getByRole('button', { name: 'Create one' }).click()
+  await mp.getByLabel('Name').fill(member.name)
+  await mp.getByLabel('Email').fill(member.email)
+  await mp.getByLabel('Password', { exact: true }).fill(member.password)
+  await mp.getByTestId('login-submit').click()
+  await expect(mp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
 
-    await mp.goto('/settings/connectors')
-    await expect(mp.getByText(/available to workspace admins only/)).toBeVisible({
-      timeout: 20_000,
-    })
-    await expect(mp.getByTestId('status-automation')).toHaveCount(0)
-    await expect(mp.locator(TOGGLE)).toHaveCount(0)
-  } finally {
-    await context.close()
-  }
+  await mp.goto('/settings/connectors')
+  await expect(mp.getByText(/available to workspace admins only/)).toBeVisible({
+    timeout: 20_000,
+  })
+  await expect(mp.getByTestId('status-automation')).toHaveCount(0)
+  await expect(mp.locator(TOGGLE)).toHaveCount(0)
 })
 
 test('the status-automation section renders in all three presets, light and dark', async ({

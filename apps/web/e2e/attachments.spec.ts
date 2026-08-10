@@ -1,6 +1,7 @@
-import { type APIResponse, expect, type Page, test } from '@playwright/test'
+import type { APIResponse, Page } from '@playwright/test'
 import type { Database } from '@yapm/schema/db'
 import { findTeamId, openDb } from './db'
+import { expect, test } from './fixtures'
 import { ADMIN, ensureAccount, uniqueEmail } from './support'
 
 // ONE spec, deliberately, and it exists for the things a vitest process cannot reach.
@@ -95,7 +96,7 @@ test.describe('attachments', () => {
 
   test('bytes round-trip for the owning team, and another team gets the byte-identical refusal', async ({
     page,
-    browser,
+    newContext,
   }) => {
     test.slow()
 
@@ -124,73 +125,64 @@ test.describe('attachments', () => {
     expect(adminUpload.status()).toBe(201)
     const foreign = (await adminUpload.json()) as { id: string }
 
-    const teammateContext = await browser.newContext()
-    try {
-      const teammate = await teammateContext.newPage()
-      await teammate.goto(inviteLink)
-      await teammate.getByRole('button', { name: 'Create one' }).click()
-      await teammate.getByLabel('Name').fill('Files Teammate')
-      await teammate.getByLabel('Email').fill(uniqueEmail('files-teammate'))
-      await teammate.getByLabel('Password', { exact: true }).fill('teammate-password-1234')
-      await teammate.getByTestId('login-submit').click()
-      await expect(teammate.locator('[data-testid="workspace-name"]')).toBeVisible({
-        timeout: 20_000,
-      })
+    const teammateContext = await newContext()
+    const teammate = await teammateContext.newPage()
+    await teammate.goto(inviteLink)
+    await teammate.getByRole('button', { name: 'Create one' }).click()
+    await teammate.getByLabel('Name').fill('Files Teammate')
+    await teammate.getByLabel('Email').fill(uniqueEmail('files-teammate'))
+    await teammate.getByLabel('Password', { exact: true }).fill('teammate-password-1234')
+    await teammate.getByTestId('login-submit').click()
+    await expect(teammate.locator('[data-testid="workspace-name"]')).toBeVisible({
+      timeout: 20_000,
+    })
 
-      // 1. A plain member uploads through the real multipart pipe.
-      const response = await upload(teammate, ownTeamId, 'pasted.png')
-      expect(response.status()).toBe(201)
-      const uploaded = (await response.json()) as {
-        id: string
-        contentType: string
-        byteSize: number
-        hasThumbnail: boolean
-      }
-      expect(uploaded.contentType).toBe('image/png')
-      expect(uploaded.byteSize).toBe(PNG.byteLength)
-      // `sharp` really ran, in this process, against these bytes.
-      expect(uploaded.hasThumbnail).toBe(true)
-      // The response is a name and four facts. NOTHING in it is a URL — the client computes the
-      // path from the id. A `url`/`src`/`href` key here would be the capability-at-rest this whole
-      // design exists to prevent, replicated into every teammate's IndexedDB the moment change 17
-      // writes it into a document.
-      expect(Object.keys(uploaded).sort()).toEqual([
-        'byteSize',
-        'contentType',
-        'hasThumbnail',
-        'id',
-      ])
-
-      // 2. The same bytes come back, over HTTP, from the real filesystem.
-      const fetched = await teammate.request.get(`/api/v1/files/${uploaded.id}`)
-      expect(fetched.status()).toBe(200)
-      expect(Buffer.compare(await fetched.body(), PNG)).toBe(0)
-      const headers = fetched.headers()
-      expect(headers['content-type']).toBe('image/png')
-      expect(headers['cache-control']).toBe('private, max-age=300')
-      expect(headers['content-disposition']).toContain('inline')
-      expect(headers['x-content-type-options']).toBe('nosniff')
-      expect(headers['content-security-policy']).toContain("default-src 'none'")
-
-      const thumb = await teammate.request.get(`/api/v1/files/${uploaded.id}/thumb`)
-      expect(thumb.status()).toBe(200)
-      expect(thumb.headers()['content-type']).toBe('image/webp')
-
-      // 3. THE FALSIFIABLE CHECK. The teammate names a real attachment in a team they are not in,
-      // and names an id that was never uploaded. The two responses must be indistinguishable.
-      const refusedReal = await captureRefusal(teammate, `/api/v1/files/${foreign.id}`)
-      const refusedGhost = await captureRefusal(teammate, `/api/v1/files/${NEVER_UPLOADED}`)
-      expect(refusedReal).toEqual(refusedGhost)
-      expect(refusedReal.status).toBe(404)
-      expect(refusedReal.body).toBe(JSON.stringify({ error: 'not_found' }))
-
-      // Not a row nobody can read: the admin who uploaded it still gets the bytes. Without this the
-      // leg above would pass against a route that refuses everyone.
-      const adminRead = await page.request.get(`/api/v1/files/${foreign.id}`)
-      expect(adminRead.status()).toBe(200)
-      expect(Buffer.compare(await adminRead.body(), PNG)).toBe(0)
-    } finally {
-      await teammateContext.close()
+    // 1. A plain member uploads through the real multipart pipe.
+    const response = await upload(teammate, ownTeamId, 'pasted.png')
+    expect(response.status()).toBe(201)
+    const uploaded = (await response.json()) as {
+      id: string
+      contentType: string
+      byteSize: number
+      hasThumbnail: boolean
     }
+    expect(uploaded.contentType).toBe('image/png')
+    expect(uploaded.byteSize).toBe(PNG.byteLength)
+    // `sharp` really ran, in this process, against these bytes.
+    expect(uploaded.hasThumbnail).toBe(true)
+    // The response is a name and four facts. NOTHING in it is a URL — the client computes the
+    // path from the id. A `url`/`src`/`href` key here would be the capability-at-rest this whole
+    // design exists to prevent, replicated into every teammate's IndexedDB the moment change 17
+    // writes it into a document.
+    expect(Object.keys(uploaded).sort()).toEqual(['byteSize', 'contentType', 'hasThumbnail', 'id'])
+
+    // 2. The same bytes come back, over HTTP, from the real filesystem.
+    const fetched = await teammate.request.get(`/api/v1/files/${uploaded.id}`)
+    expect(fetched.status()).toBe(200)
+    expect(Buffer.compare(await fetched.body(), PNG)).toBe(0)
+    const headers = fetched.headers()
+    expect(headers['content-type']).toBe('image/png')
+    expect(headers['cache-control']).toBe('private, max-age=300')
+    expect(headers['content-disposition']).toContain('inline')
+    expect(headers['x-content-type-options']).toBe('nosniff')
+    expect(headers['content-security-policy']).toContain("default-src 'none'")
+
+    const thumb = await teammate.request.get(`/api/v1/files/${uploaded.id}/thumb`)
+    expect(thumb.status()).toBe(200)
+    expect(thumb.headers()['content-type']).toBe('image/webp')
+
+    // 3. THE FALSIFIABLE CHECK. The teammate names a real attachment in a team they are not in,
+    // and names an id that was never uploaded. The two responses must be indistinguishable.
+    const refusedReal = await captureRefusal(teammate, `/api/v1/files/${foreign.id}`)
+    const refusedGhost = await captureRefusal(teammate, `/api/v1/files/${NEVER_UPLOADED}`)
+    expect(refusedReal).toEqual(refusedGhost)
+    expect(refusedReal.status).toBe(404)
+    expect(refusedReal.body).toBe(JSON.stringify({ error: 'not_found' }))
+
+    // Not a row nobody can read: the admin who uploaded it still gets the bytes. Without this the
+    // leg above would pass against a route that refuses everyone.
+    const adminRead = await page.request.get(`/api/v1/files/${foreign.id}`)
+    expect(adminRead.status()).toBe(200)
+    expect(Buffer.compare(await adminRead.body(), PNG)).toBe(0)
   })
 })

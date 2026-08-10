@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page, test } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
+import { expect, test } from './fixtures'
 import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
@@ -383,7 +384,7 @@ test('the board renders in all three presets, light and dark', async ({ page }) 
   }
 })
 
-test('a viewer sees the board but cannot move cards', async ({ page, browser }) => {
+test('a viewer sees the board but cannot move cards', async ({ page, newContext }) => {
   await enterApp(page)
   const teamName = await openTeamIssues(page)
 
@@ -402,35 +403,31 @@ test('a viewer sees the board but cannot move cards', async ({ page, browser }) 
     password: 'viewer-password-1234',
     name: `Board Viewer ${Date.now().toString(36)}`,
   }
-  const context = await browser.newContext()
-  try {
-    const vp = await context.newPage()
-    await vp.goto(inviteLink)
-    await vp.getByRole('button', { name: 'Create one' }).click()
-    await vp.getByLabel('Name').fill(viewer.name)
-    await vp.getByLabel('Email').fill(viewer.email)
-    await vp.getByLabel('Password', { exact: true }).fill(viewer.password)
-    await vp.getByTestId('login-submit').click()
-    await expect(vp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
-    await expect(vp.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
-      timeout: 30_000,
-    })
+  const context = await newContext()
+  const vp = await context.newPage()
+  await vp.goto(inviteLink)
+  await vp.getByRole('button', { name: 'Create one' }).click()
+  await vp.getByLabel('Name').fill(viewer.name)
+  await vp.getByLabel('Email').fill(viewer.email)
+  await vp.getByLabel('Password', { exact: true }).fill(viewer.password)
+  await vp.getByTestId('login-submit').click()
+  await expect(vp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await expect(vp.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+    timeout: 30_000,
+  })
 
-    const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
-    await teamCard.getByRole('button', { name: 'Join this team' }).click()
-    await vp.getByRole('link', { name: new RegExp(teamName) }).click()
-    // Board is a LENS in the Issues masthead now, not a bar stop, so it is reached through Issues.
-    await stop(vp, 'Issues').click()
-    await vp.getByRole('link', { name: 'Board' }).click()
+  const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
+  await teamCard.getByRole('button', { name: 'Join this team' }).click()
+  await vp.getByRole('link', { name: new RegExp(teamName) }).click()
+  // Board is a LENS in the Issues masthead now, not a bar stop, so it is reached through Issues.
+  await stop(vp, 'Issues').click()
+  await vp.getByRole('link', { name: 'Board' }).click()
 
-    // The viewer reads the card.
-    await expect(card(vp, issueTitle).first()).toBeVisible({ timeout: 20_000 })
+  // The viewer reads the card.
+  await expect(card(vp, issueTitle).first()).toBeVisible({ timeout: 20_000 })
 
-    // The move palette offers nothing to write: 'm' does not open a move dialog for a viewer.
-    await card(vp, issueTitle).first().focus()
-    await vp.keyboard.press('m')
-    await expect(vp.getByRole('dialog', { name: 'Move issue' })).toHaveCount(0)
-  } finally {
-    await context.close()
-  }
+  // The move palette offers nothing to write: 'm' does not open a move dialog for a viewer.
+  await card(vp, issueTitle).first().focus()
+  await vp.keyboard.press('m')
+  await expect(vp.getByRole('dialog', { name: 'Move issue' })).toHaveCount(0)
 })

@@ -24,9 +24,30 @@ Audiences: evaluators (why / the work-graph wedge), self-hosters (install, 3-con
 - **Integration** (Vitest against live Postgres + zero-cache): migrations, schema-drift, synced-query permission **scoping**, mutator authz end-to-end, per-team numbering. Self-gated by `describe.skipIf(DATABASE_URL === undefined)`, with an in-CI guard that fails if the DB is absent.
 - **E2E** (Playwright against the real 3-container stack): keyboard flows, multi-client sync convergence, offline read / blocked-write, sync **reconnection and recovery** (a refused socket, the protocol errors zero-cache really sends, and a failing or hung sync-credential request — each asserting the visible reconnecting state and recovery *without* a page reload), theme persistence.
 
+**The E2E lifecycle contract** (`apps/web/e2e/README.md` is the full text): every spec imports
+`test` from `./fixtures`; second browser contexts come from the `newContext` fixture (a direct
+`browser.newContext()` fails the boundaries gate — hand-rolled `finally` teardown races
+Playwright's own and misreports the failure); a page that reloads without the test asking fails
+the test that saw it, naming the reload; every spec file passes **alone** against a freshly
+bootstrapped database, building its own fixtures; and a transient (menu, popover, dialog) is
+asserted open before anything inside it is clicked. Budgets are measured, and raising one takes
+the measured distribution in the PR that raises it.
+
 **Big-feature rule** — a change needs all three tiers iff it touches **≥2 of** {synced entity/schema, mutator, permission surface, signature UI}. Otherwise it is small: unit + integration only; do not add E2E reflexively.
 
-> CI runs the full Playwright E2E suite as a dedicated `e2e` job (added with `connectors`) alongside the compose smoke test: fresh volumes on the e2e port (`YAPM_HOST_PORT=3210`), booting postgres → migrate → zero-cache → vite. **CI is where e2e runs** — the PR-review flow no longer duplicates it locally; it blocks the merge on the `e2e` and `smoke` checks instead, so merges stay gated on it either way.
+> CI runs the full Playwright E2E suite as a dedicated `e2e` job (added with `connectors`)
+> alongside the compose smoke test, on fresh volumes on the e2e port (`YAPM_HOST_PORT=3210`).
+> The actual startup order is the workflow's: **postgres and zero-cache come up together
+> (`--wait` on both healthchecks), then the Playwright webServer builds the SPA and boots the
+> app server, which migrates at boot.** An earlier revision of this section documented
+> "postgres → migrate → zero-cache → vite" and the workflow never did that; the disagreement was
+> investigated rather than papered over, and the measured answer is that the suspected race does
+> not occur — `SchemaVersionNotSupported` is zero across audited CI runs, because zero-cache
+> follows the migrations through logical replication after its initial snapshot
+> (`openspec/changes/e2e-determinism/design.md` §2.7). **CI is where e2e runs** — the PR-review
+> flow no longer duplicates it locally; it blocks the merge on the `e2e` and `smoke` checks
+> instead, so merges stay gated on it either way. For a trustworthy local run (isolated
+> `yapm-e2e` compose project, fresh volumes per run, Node 24), follow `apps/web/e2e/README.md`.
 
 ## 4. Every feature ships via a reviewed PR
 

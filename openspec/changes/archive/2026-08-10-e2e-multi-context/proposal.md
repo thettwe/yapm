@@ -1,3 +1,12 @@
+> **Superseded by [`e2e-determinism`](../../e2e-determinism/) — archived as the record of a
+> falsified hypothesis.** The reload chain this proposal names as the cause was ruled out by the
+> measurement it asked for: every reload marker counted zero, locally and across three CI runs
+> (e2e-determinism design.md, "The measured baseline"). The failing tests' actual cause was an
+> unopened transient behind an unbounded action, plus the latent product races DI-6 classifies.
+> What this proposal got right is carried forward there with credit: the sync-recovery handlers
+> (real gap, wrong culprit), the fixture-owned lifecycle, the reload watcher — reclassified as a
+> tripwire — and the measurement-first discipline itself. Kept unedited below.
+
 ## Why
 
 The Playwright suite fails on changes that cannot have caused the failure, and the team has learned

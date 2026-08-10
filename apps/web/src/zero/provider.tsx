@@ -1,4 +1,4 @@
-import type { ZeroOptions } from '@rocicorp/zero'
+import type { UpdateNeededReason, ZeroOptions } from '@rocicorp/zero'
 import { useConnectionState, useZero, ZeroProvider } from '@rocicorp/zero/react'
 import { type AuthContext, mutators, schema, type WorkspaceRole } from '@yapm/schema'
 import {
@@ -13,6 +13,7 @@ import {
 } from 'react'
 import { useSession } from '@/auth/client'
 import { atBackoffCeiling, backoffDelay } from '@/zero/backoff'
+import { SYNC_CONDITION_NONE, type SyncCondition, SyncConditionContext } from '@/zero/condition'
 import {
   CONNECTION_SETTLED_MS,
   RECOVERY_IDLE,
@@ -279,6 +280,19 @@ function SyncRecovery({ token, enabled, remint, children }: SyncRecoveryProps) {
   return <SyncRecoveryContext.Provider value={value}>{children}</SyncRecoveryContext.Provider>
 }
 
+// Must render inside `ZeroProvider` (it reads the connection context). A `client-reset` is over
+// the moment the replacement client connects; `update-needed` is deliberately never cleared here —
+// only the user's own refresh resolves it.
+function ClientResetSettled({ active, onSettled }: { active: boolean; onSettled: () => void }) {
+  const { name } = useConnectionState()
+
+  useEffect(() => {
+    if (active && name === 'connected') onSettled()
+  }, [active, name, onSettled])
+
+  return null
+}
+
 function useDocumentHidden(): boolean {
   const [hidden, setHidden] = useState(() => document.visibilityState === 'hidden')
 
@@ -472,6 +486,61 @@ export function ZeroRoot({ cacheUrl, children }: ZeroRootProps) {
   useProactiveRefresh(session, remint)
   useUnavailableRetry(session, retry)
 
+  // The conditions Zero's client would otherwise resolve with `location.reload()` — which
+  // discards whatever the user was in the middle of, without the product having said anything.
+  // Supplying BOTH handlers makes the library's reload path unreachable; what each condition
+  // then gets is the product's own answer, surfaced through `SyncConditionContext`.
+  const [condition, setCondition] = useState<SyncCondition>(SYNC_CONDITION_NONE)
+  const [clientEpoch, setClientEpoch] = useState(0)
+
+  // An unknown client cannot reconnect — the instance is dead and must be replaced
+  // (`options.d.ts`: "treated as dead and replaced, not reconnected"). Supplying this handler
+  // suppresses `ZeroProvider`'s silent internal rotation, so the epoch bump below performs the
+  // same in-place replacement through the provider's `key` — visibly, through the statusline.
+  //
+  // The bump is paced by the same backoff as every other recovery: a server that persistently
+  // answers `ClientStateNotFound` would otherwise drive a construct → dial → die remount loop
+  // bounded only by the connect round trip — exactly the hot loop the replaced default handler
+  // (500ms → 60s) existed to prevent. The counter resets when a replacement actually connects
+  // (`ClientResetSettled` below), so a genuine one-off reset stays near-immediate.
+  const clientResetAttemptRef = useRef(0)
+  const clientResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const onClientStateNotFound = useCallback(() => {
+    setCondition((current) =>
+      current.kind === 'client-reset' ? current : { kind: 'client-reset' },
+    )
+    if (clientResetTimerRef.current !== null) return
+    const attempt = clientResetAttemptRef.current
+    clientResetAttemptRef.current = attempt + 1
+    clientResetTimerRef.current = setTimeout(() => {
+      clientResetTimerRef.current = null
+      setClientEpoch((epoch) => epoch + 1)
+    }, backoffDelay(attempt))
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (clientResetTimerRef.current !== null) clearTimeout(clientResetTimerRef.current)
+    },
+    [],
+  )
+
+  // Never reloads — not mid-write, not otherwise. The user is told and chooses when to refresh.
+  // Zero can repeat the callback on every failed connect attempt, so an unchanged reason must
+  // not churn state identity.
+  const onUpdateNeeded = useCallback((reason: UpdateNeededReason) => {
+    setCondition((current) =>
+      current.kind === 'update-needed' && current.reason === reason.type
+        ? current
+        : { kind: 'update-needed', reason: reason.type },
+    )
+  }, [])
+
+  const clearClientReset = useCallback(() => {
+    clientResetAttemptRef.current = 0
+    setCondition((current) => (current.kind === 'client-reset' ? SYNC_CONDITION_NONE : current))
+  }, [])
+
   const { userID, token, role, pmAudienceKey } = session
 
   // Rebuilt from the joined key so both memos below depend on a VALUE. Advisory: the server
@@ -501,8 +570,10 @@ export function ZeroRoot({ cacheUrl, children }: ZeroRootProps) {
         context,
         kvStore: 'idb',
         disconnectTimeoutMs: DISCONNECT_TIMEOUT_MS,
+        onClientStateNotFound,
+        onUpdateNeeded,
       }) satisfies ZeroOptions,
-    [cacheUrl, userID, token, context],
+    [cacheUrl, userID, token, context, onClientStateNotFound, onUpdateNeeded],
   )
 
   const control = useMemo<SyncControl>(() => ({ refresh, retry }), [refresh, retry])
@@ -520,11 +591,20 @@ export function ZeroRoot({ cacheUrl, children }: ZeroRootProps) {
   return (
     <SyncControlContext.Provider value={control}>
       <SyncSessionContext.Provider value={sessionState}>
-        <ZeroProvider {...options}>
-          <SyncRecovery token={token} enabled={session.status !== 'logged-out'} remint={remint}>
-            {children}
-          </SyncRecovery>
-        </ZeroProvider>
+        <SyncConditionContext.Provider value={condition}>
+          {/* `key`: a client-state-not-found instance is dead; remounting the provider constructs
+              a replacement in place — the same recovery the provider's internal rotation performs,
+              done here so the statusline can say it is happening. */}
+          <ZeroProvider key={clientEpoch} {...options}>
+            <ClientResetSettled
+              active={condition.kind === 'client-reset'}
+              onSettled={clearClientReset}
+            />
+            <SyncRecovery token={token} enabled={session.status !== 'logged-out'} remint={remint}>
+              {children}
+            </SyncRecovery>
+          </ZeroProvider>
+        </SyncConditionContext.Provider>
       </SyncSessionContext.Provider>
     </SyncControlContext.Provider>
   )

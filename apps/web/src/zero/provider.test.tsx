@@ -18,6 +18,10 @@ const mocks = vi.hoisted(() => {
   return {
     connect: vi.fn(() => Promise.resolve()),
     fetchSyncCredential: vi.fn(),
+    // What `ZeroRoot` actually hands the provider — the handler assertions read these — and how
+    // many times the provider mounted, which is how a `key`-driven client replacement shows up.
+    zeroProviderProps: null as Record<string, unknown> | null,
+    zeroProviderMounts: 0,
     getState: () => state,
     subscribe: (listener: () => void) => {
       listeners.add(listener)
@@ -41,14 +45,22 @@ const mocks = vi.hoisted(() => {
       listeners.clear()
       authData = { user: { id: 'user-1' } }
       authListeners.clear()
+      this.zeroProviderProps = null
+      this.zeroProviderMounts = 0
     },
   }
 })
 
 vi.mock('@rocicorp/zero/react', async () => {
-  const { useSyncExternalStore } = await import('react')
+  const { useSyncExternalStore, useEffect } = await import('react')
   return {
-    ZeroProvider: ({ children }: { children: React.ReactNode }) => children,
+    ZeroProvider: ({ children, ...props }: { children: React.ReactNode }) => {
+      mocks.zeroProviderProps = props
+      useEffect(() => {
+        mocks.zeroProviderMounts += 1
+      }, [])
+      return children
+    },
     // Deliberately a fresh object per call: the scheduler must not key off the Zero
     // instance's identity, or it re-runs on every render and becomes the hot loop.
     useZero: () => ({ connection: { connect: mocks.connect } }),
@@ -68,6 +80,7 @@ vi.mock('@/zero/session', async (importOriginal) => ({
   fetchSyncCredential: mocks.fetchSyncCredential,
 }))
 
+import { useSyncCondition } from './condition'
 import { useSyncControl, useSyncSession, ZeroRoot } from './provider'
 
 const SESSION: SyncCredentialResult = {
@@ -82,9 +95,11 @@ const SESSION: SyncCredentialResult = {
 function Probe() {
   const recovery = useSyncRecovery()
   const session = useSyncSession()
+  const condition = useSyncCondition()
   const { refresh, retry } = useSyncControl()
   return (
     <div>
+      <span data-testid="condition">{condition.kind}</span>
       <span data-testid="phase">{recovery.phase}</span>
       <span data-testid="attempt">{String(recovery.attempt)}</span>
       <span data-testid="delay">{String(Math.round(recovery.delayMs))}</span>
@@ -679,4 +694,117 @@ test('a superseded flight still surfaces an outage at the first timeout, not the
   })
   expect(screen.getByTestId('unavailable')).toHaveTextContent('true')
   expect(remintCount()).toBe(2)
+})
+
+// ---- The sync-recovery handlers (e2e-determinism section 4) -------------------------------------
+
+// The library's default for BOTH conditions is `location.reload()` — the page taken out from
+// under whoever is using it. Supplying both handlers is what makes that path unreachable; this
+// asserts the wiring so a refactor cannot silently drop one and reopen it.
+test('ZeroRoot supplies both sync-recovery handlers, so the library reload path is unreachable', async () => {
+  await mount()
+
+  expect(typeof mocks.zeroProviderProps?.onClientStateNotFound).toBe('function')
+  expect(typeof mocks.zeroProviderProps?.onUpdateNeeded).toBe('function')
+})
+
+test('an unknown client routes into recovery: a replacement client, a surfaced condition, no reload', async () => {
+  await mount()
+  const mountsBefore = mocks.zeroProviderMounts
+  const handler = mocks.zeroProviderProps?.onClientStateNotFound as () => void
+
+  await act(async () => {
+    handler()
+  })
+
+  // The condition is on the statusline's wire immediately; the dead client is replaced in
+  // place — a remount, which is the React provider's own recovery, made visible — once the
+  // first backoff window (jitter pinned to its 1s ceiling) has passed.
+  expect(screen.getByTestId('condition')).toHaveTextContent('client-reset')
+  await advance(1_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 1)
+
+  // The moment the replacement connects, the condition clears — it was a repair, not a state.
+  await transition({ name: 'connected' })
+  expect(screen.getByTestId('condition')).toHaveTextContent('none')
+})
+
+// The shipped spec's SHALL: a persistent server-side fault degrades to a calm bounded retry.
+// A server that answers every replacement with `ClientStateNotFound` must not drive a
+// construct → dial → die remount loop paced only by the connect round trip.
+test('a persistently unknown client degrades to bounded backoff, not a remount hot loop', async () => {
+  await mount()
+  const mountsBefore = mocks.zeroProviderMounts
+  const die = async () => {
+    const handler = mocks.zeroProviderProps?.onClientStateNotFound as () => void
+    await act(async () => {
+      handler()
+    })
+  }
+
+  // Each replacement dies on arrival; each next one waits out a growing window (1s, 2s, 4s —
+  // the jitter roll is pinned to the ceiling).
+  await die()
+  await advance(1_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 1)
+
+  await die()
+  await advance(1_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 1)
+  await advance(1_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 2)
+
+  await die()
+  await advance(2_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 2)
+  await advance(2_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 3)
+
+  // A handler repeating while a replacement is already scheduled joins it, it does not stack.
+  await die()
+  await die()
+  await die()
+  await advance(8_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 4)
+
+  // A replacement that actually connects resets the schedule: the next genuine reset is
+  // near-immediate again, and the condition has cleared in between.
+  await transition({ name: 'connected' })
+  expect(screen.getByTestId('condition')).toHaveTextContent('none')
+  await die()
+  await advance(1_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 5)
+})
+
+test('a version mismatch surfaces to the user and never reloads — not even with a write in flight', async () => {
+  // A write in flight: the credential fetch that would carry its refreshed role never settles,
+  // exactly the moment a library-initiated reload would discard the optimistic write.
+  mocks.fetchSyncCredential
+    .mockResolvedValueOnce(SESSION)
+    .mockImplementation(() => new Promise<SyncCredentialResult>(() => {}))
+  await mount()
+  const mountsBefore = mocks.zeroProviderMounts
+  const handler = mocks.zeroProviderProps?.onUpdateNeeded as (reason: {
+    type: string
+    message?: string
+  }) => void
+
+  await act(async () => {
+    handler({ type: 'VersionNotSupported' })
+  })
+
+  // Surfaced, not acted on: the client is left untouched (no remount tears down its queued
+  // writes) and nothing navigated. The refresh is the user's, offered in the statusline.
+  expect(screen.getByTestId('condition')).toHaveTextContent('update-needed')
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore)
+
+  // Zero repeats the callback on every failed connect attempt; an unchanged reason must not churn.
+  await act(async () => {
+    handler({ type: 'VersionNotSupported' })
+  })
+  expect(screen.getByTestId('condition')).toHaveTextContent('update-needed')
+
+  // A connect alone does not clear it — only the user's refresh resolves an update condition.
+  await transition({ name: 'connected' })
+  expect(screen.getByTestId('condition')).toHaveTextContent('update-needed')
 })

@@ -1,5 +1,6 @@
-import { expect, type Page, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { deleteSsoProvider, findUserId, openDb, seedSsoProvider } from './db'
+import { expect, test } from './fixtures'
 import { ADMIN, ensureAccount, uniqueEmail } from './support'
 
 // The SSO settings surface end to end: reachable by keyboard from the user menu, operable by
@@ -165,7 +166,7 @@ test('an unverified provider shows the DNS record an admin has to publish', asyn
 
 test('a member and a viewer get the admins-only absence, not an error or a form', async ({
   page,
-  browser,
+  newContext,
 }) => {
   await enterApp(page)
 
@@ -177,24 +178,20 @@ test('a member and a viewer get the admins-only absence, not an error or a form'
       name: `SSO ${role} ${Date.now().toString(36)}`,
     }
 
-    const context = await browser.newContext()
-    try {
-      const other = await context.newPage()
-      await other.goto(link)
-      await expect(other.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
-      await other.getByRole('button', { name: 'Create one' }).click()
-      await other.getByLabel('Name').fill(account.name)
-      await other.getByLabel('Email').fill(account.email)
-      await other.getByLabel('Password', { exact: true }).fill(account.password)
-      await other.getByTestId('login-submit').click()
-      await expect(other.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+    const context = await newContext()
+    const other = await context.newPage()
+    await other.goto(link)
+    await expect(other.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
+    await other.getByRole('button', { name: 'Create one' }).click()
+    await other.getByLabel('Name').fill(account.name)
+    await other.getByLabel('Email').fill(account.email)
+    await other.getByLabel('Password', { exact: true }).fill(account.password)
+    await other.getByTestId('login-submit').click()
+    await expect(other.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
 
-      await other.goto('/settings/sso')
-      await expect(other.getByTestId('sso-admin-only')).toBeVisible({ timeout: 20_000 })
-      await expect(other.getByTestId('sso-register-form')).toHaveCount(0)
-      await expect(other.getByRole('alert')).toHaveCount(0)
-    } finally {
-      await context.close()
-    }
+    await other.goto('/settings/sso')
+    await expect(other.getByTestId('sso-admin-only')).toBeVisible({ timeout: 20_000 })
+    await expect(other.getByTestId('sso-register-form')).toHaveCount(0)
+    await expect(other.getByRole('alert')).toHaveCount(0)
   }
 })

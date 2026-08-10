@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page, test } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import type { StoredPmDigestContent } from '@yapm/schema'
 import {
   countPolicyAudit,
@@ -9,6 +9,7 @@ import {
   readDisclosureAudit,
   seedPmDigest,
 } from './db'
+import { expect, test } from './fixtures'
 import { readReplica } from './replica'
 import { ADMIN, ensureAccount, signIn, stop, uniqueEmail } from './support'
 
@@ -224,7 +225,9 @@ async function expectPmDigestIds(page: Page, expected: readonly string[]): Promi
 test('with the default policy the PM reader surface does not exist, and only the team can read the row', async ({
   page,
 }) => {
-  test.slow()
+  // The inherited test.slow() was removed by e2e-determinism task 5.7: with the hang gone this
+  // test measures 2.9s alone on a fresh database — a tripled 180s budget was hiding failures,
+  // not absorbing slowness.
   const crashes: string[] = []
   page.on('pageerror', (error) => crashes.push(error.message))
 
@@ -305,9 +308,9 @@ test('with the default policy the PM reader surface does not exist, and only the
 
 test('a named reader reads only what a human released, keyboard-only, and loses it on retraction', async ({
   page,
-  browser,
+  newContext,
 }) => {
-  test.slow()
+  // test.slow() removed (task 5.7): 5.9s measured alone on a fresh database.
   await enterApp(page)
   const team = await createTeam(page)
   const cycleName = unique('Shared cycle')
@@ -342,323 +345,315 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
     name: 'Product Manager',
   }
 
-  const readerContext = await browser.newContext()
-  try {
-    const readerPage = await readerContext.newPage()
-    await readerPage.goto(inviteLink)
-    await readerPage.getByRole('button', { name: 'Create one' }).click()
-    await readerPage.getByLabel('Name').fill(reader.name)
-    await readerPage.getByLabel('Email').fill(reader.email)
-    await readerPage.getByLabel('Password', { exact: true }).fill(reader.password)
-    await readerPage.getByTestId('login-submit').click()
-    await expect(readerPage.locator('[data-testid="workspace-name"]')).toBeVisible({
-      timeout: 20_000,
-    })
-    await expect(readerPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
-      timeout: 30_000,
-    })
+  const readerContext = await newContext()
+  const readerPage = await readerContext.newPage()
+  await readerPage.goto(inviteLink)
+  await readerPage.getByRole('button', { name: 'Create one' }).click()
+  await readerPage.getByLabel('Name').fill(reader.name)
+  await readerPage.getByLabel('Email').fill(reader.email)
+  await readerPage.getByLabel('Password', { exact: true }).fill(reader.password)
+  await readerPage.getByTestId('login-submit').click()
+  await expect(readerPage.locator('[data-testid="workspace-name"]')).toBeVisible({
+    timeout: 20_000,
+  })
+  await expect(readerPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+    timeout: 30_000,
+  })
 
-    // The producing team is visible to them as a team they could join, which is the workspace-wide
-    // read every member has — and it is what makes the replica assertion below meaningful: this
-    // client holds rows, just none of this team's work.
-    await expect(readerPage.getByRole('listitem').filter({ hasText: team.name })).toBeVisible({
-      timeout: 20_000,
-    })
+  // The producing team is visible to them as a team they could join, which is the workspace-wide
+  // read every member has — and it is what makes the replica assertion below meaningful: this
+  // client holds rows, just none of this team's work.
+  await expect(readerPage.getByRole('listitem').filter({ hasText: team.name })).toBeVisible({
+    timeout: 20_000,
+  })
 
-    // One reload before the replica is read: a client that has only ever soft-navigated may not
-    // have flushed anything to IndexedDB yet, and the guard above would then fail on a client that
-    // is behaving perfectly.
-    await readerPage.reload()
-    await expect(readerPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
-      timeout: 30_000,
-    })
+  // One reload before the replica is read: a client that has only ever soft-navigated may not
+  // have flushed anything to IndexedDB yet, and the guard above would then fail on a client that
+  // is behaving perfectly.
+  await readerPage.reload()
+  await expect(readerPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+    timeout: 30_000,
+  })
 
-    // Before the policy names them: no entry, no surface, nothing in the replica.
-    await expect(await accountMenuDigestsEntry(readerPage)).toHaveCount(0)
-    await readerPage.keyboard.press('Escape')
-    await expectPmDigestIds(readerPage, [])
+  // Before the policy names them: no entry, no surface, nothing in the replica.
+  await expect(await accountMenuDigestsEntry(readerPage)).toHaveCount(0)
+  await readerPage.keyboard.press('Escape')
+  await expectPmDigestIds(readerPage, [])
 
-    const readerId = await (async () => {
-      const lookup = openDb()
-      try {
-        return await findUserId(lookup, reader.email)
-      } finally {
-        await lookup.close()
-      }
-    })()
-
-    const policyBefore = await (async () => {
-      const lookup = openDb()
-      try {
-        return await countPolicyAudit(lookup)
-      } finally {
-        await lookup.close()
-      }
-    })()
-
-    // THE ADMIN NAMES THEM, through the shipped surface and from the keyboard alone. Four switches,
-    // every one of them off until this moment.
-    await page.goto('/settings/ai')
-    // Settle on the loaded page before reading whether the block is there: an absent block and a
-    // page that has not finished loading look identical, and only one of them means "configure AI".
-    await expect(page.getByTestId('ai-toggle')).toBeVisible({ timeout: 20_000 })
-    const block = page.getByTestId('pm-disclosure-settings')
-    if ((await block.count()) === 0) {
-      // The policy lives in the AI config blob, which does not exist until AI is configured at all.
-      await page.getByTestId('ai-toggle').click()
-    }
-    await expect(block).toBeVisible({ timeout: 20_000 })
-
-    if ((await block.getAttribute('data-enabled')) !== 'true') {
-      await press(page.getByTestId('pm-disclosure-enabled'))
-    }
-    await expect(block).toHaveAttribute('data-enabled', 'true', { timeout: 20_000 })
-    await expect(block).toHaveAttribute('data-killed', 'false')
-
-    const teamRow = page.locator(
-      `[data-testid="pm-disclosure-team-row"][data-team-key="${team.key}"]`,
-    )
-    await expect(teamRow).toBeVisible({ timeout: 20_000 })
-    await expect(teamRow).toHaveAttribute('data-visible', 'false')
-    await press(teamRow.getByTestId('pm-disclosure-team-toggle'))
-    await expect(teamRow).toHaveAttribute('data-visible', 'true', { timeout: 20_000 })
-
-    const readersToggle = teamRow.getByTestId('pm-disclosure-readers-toggle')
-    await press(readersToggle)
-    // A tokenized toggle rather than a native checkbox — the user agent paints a checkbox from its
-    // own color scheme, which made it the one control in the product that stayed light in every dark
-    // preset. `aria-pressed` carries the state.
-    const readerBox = teamRow.locator(
-      `[data-testid="pm-disclosure-reader"][data-user-id="${readerId}"]`,
-    )
-    await press(readerBox)
-    await expect(readerBox).toHaveAttribute('aria-pressed', 'true', { timeout: 20_000 })
-
-    // Every policy write left a record.
-    const policyAfter = await (async () => {
-      const lookup = openDb()
-      try {
-        return await countPolicyAudit(lookup)
-      } finally {
-        await lookup.close()
-      }
-    })()
-    expect(policyAfter).toBeGreaterThan(policyBefore)
-
-    // THE GATE. Named, entitled, switched on — and STILL NO SURFACE, because no human has released
-    // anything. Being named is not being told something: an empty state here would announce that a
-    // channel exists and that the team on the other side has chosen not to use it.
-    await readerPage.goto('/')
-    await readerPage.reload()
-    await expect(readerPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
-      timeout: 30_000,
-    })
-    await expect(await accountMenuDigestsEntry(readerPage)).toHaveCount(0)
-    await readerPage.keyboard.press('Escape')
-    await expectPmDigestIds(readerPage, [])
-
-    await readerPage.goto('/digests')
-    await expect(readerPage.getByRole('heading', { name: 'Product digests' })).toHaveCount(0)
-    await expect(readerPage.getByTestId('pm-digests-empty')).toHaveCount(0)
-    await expect(readerPage.getByTestId('pm-digest-card')).toHaveCount(0)
-
-    // A HUMAN ON THE PRODUCING TEAM RELEASES IT, from the keyboard.
-    await openCyclePanel(page, team.name, cycleName)
-    await expect(page.getByTestId('pm-digest-share')).toBeVisible({ timeout: 30_000 })
-    await press(page.getByTestId('pm-digest-publish'))
-
-    // What the producing team is told afterwards: a count, snapshotted at release, and never a name.
-    // The count is stamped by the server override, so seeing it here proves that ran.
-    const readers = page.getByTestId('pm-digest-share-readers')
-    await expect(readers).toContainText('Shared with 1 reader outside this team', {
-      timeout: 30_000,
-    })
-    await expect(readers).toContainText('not a running count')
-    await expect(page.getByTestId('pm-digest-share')).toHaveAttribute('data-published', 'true')
-    await expect(page.getByTestId('pm-digest-share')).not.toContainText(reader.name)
-
-    const published = await (async () => {
-      const lookup = openDb()
-      try {
-        return {
-          row: await findPmDigest(lookup, digestId),
-          audit: await readDisclosureAudit(lookup, digestId),
-        }
-      } finally {
-        await lookup.close()
-      }
-    })()
-    expect(published.row.publishedAt).not.toBeNull()
-    expect(published.row.audienceSize).toBe(1)
-    expect(published.row.publishedBy).not.toBeNull()
-    expect(published.audit.map((entry) => entry.event)).toContain('published')
-
-    // AND NOW, AND ONLY NOW, THE READER READS IT — and only now does the shell offer a way in.
-    await readerPage.goto('/')
-    await readerPage.reload()
-    const entry = await accountMenuDigestsEntry(readerPage)
-    await expect(entry).toBeVisible({ timeout: 30_000 })
-    await press(entry)
-    await expect(readerPage).toHaveURL(/\/digests$/u)
-    await expect(readerPage.getByRole('heading', { name: 'Product digests' })).toBeVisible({
-      timeout: 30_000,
-    })
-    const card = readerPage.getByTestId('pm-digest-card')
-    await expect(card).toBeVisible({ timeout: 30_000 })
-    await expect(card.getByTestId('pm-digest-headline')).toHaveText(HEADLINE)
-    await expect(card.getByTestId('pm-digest-item')).toContainText(SUMMARY)
-    // Evidence is a baked plain-text label. The reader can open none of these targets, so there is
-    // no link to open — asserted structurally rather than by reading the copy.
-    await expect(card.getByTestId('pm-digest-evidence')).toHaveText(EVIDENCE_LABEL)
-    expect(await card.locator('a, img, iframe').count()).toBe(0)
-    await expect(card.getByTestId('pm-digest-framing')).toContainText('AI-generated')
-    await expect(card.getByTestId('pm-digest-framing')).toContainText('mock-model-1')
-    // The subject line is the only way this reader learns whose cycle it was.
-    await expect(card).toContainText(team.name)
-    await expect(card).toContainText(cycleName)
-
-    // THE INBOX HALF. The reader also learns a digest was released without opening the app on
-    // spec — and the notice is worded so that a person outside the producing team learns WHICH team
-    // and WHICH cycle, and nothing else. Not who released it (the actor is the system principal,
-    // because telling a PM which individual released a digest is accountability in the wrong
-    // direction) and not a syllable of the content: the mailed form of this notice carries a link
-    // only, and the in-app row it is derived from is held to the same line.
-    await readerPage.goto('/inbox')
-    const notice = readerPage.getByTestId('notification-row')
-    await expect(notice).toHaveCount(1, { timeout: 30_000 })
-    // The row draws the subject in its own column now, so the notice's phrase is the subject-free
-    // `Shared with you` and the team and cycle are its title. The mailed form still reads
-    // `A cycle digest was shared with you`; `packages/schema`'s copy suite asserts that verbatim.
-    await expect(notice).toContainText('Shared with you')
-    await expect(notice).toContainText(team.name)
-    await expect(notice).toContainText(cycleName)
-    const noticeText = (await notice.innerText()).replace(/\s+/gu, ' ')
-    for (const secret of [HEADLINE, SUMMARY, EVIDENCE_LABEL]) {
-      expect(noticeText).not.toContain(secret)
-    }
-    expect(noticeText).not.toContain(ADMIN.name)
-    // And it is not a dead end: opening it lands on the reader's own surface, keyboard-only.
-    await press(notice)
-    await expect(readerPage).toHaveURL(/\/digests$/u)
-    await expect(readerPage.getByTestId('pm-digest-card')).toBeVisible({ timeout: 30_000 })
-
-    // The reader holds the disclosed row and NOTHING ELSE of that team's: the audience axis carries
-    // one table, and widening `teamScoped` would have shown up here as issues and cycles arriving.
-    await expectPmDigestIds(readerPage, [digestId])
-    const replica = await readReplica(readerPage)
-    // The disclosure record replicates to nobody. `pm_digest` reached this client through
-    // zero-cache, which is what makes this the running-stack half of the omission assertion the
-    // drift test makes statically: one new table is in the Zero schema and arrived, the other is in
-    // Postgres only and cannot be named by any query, so no client holds a row of it.
-    expect(replica.rows.filter((row) => row.table === 'ai_disclosure_audit')).toEqual([])
-    expect(replica.raw).not.toContain('ai_disclosure_audit')
-    for (const table of ['issue', 'cycle', 'cycle_digest', 'label', 'saved_view', 'retro']) {
-      expect(
-        replica.rows.filter((row) => row.table === table && row.json.includes(cycleName)),
-        `${table} rows for the producing team reached a reader outside it`,
-      ).toEqual([])
-    }
-
-    // THE OTHER TWO SURFACES THIS CHANGE ADDS, in every preset, light and dark. The producing
-    // team's card is swept by the first test; these two are only reachable here — the reader's view
-    // needs a published row and a named principal, and the admin block needs the policy configured.
-    const readerDressings = new Set<string>()
-    for (const preset of PRESETS) {
-      for (const mode of MODES) {
-        await setPreset(readerPage, preset, mode)
-        await expect(readerPage.getByTestId('pm-digest-card')).toBeVisible({ timeout: 30_000 })
-        await expect(readerPage.getByTestId('pm-digest-evidence')).toHaveText(EVIDENCE_LABEL)
-        readerDressings.add(await painted(readerPage.getByTestId('pm-digest-card')))
-      }
-    }
-    expect(readerDressings.size).toBe(6)
-
-    await page.goto('/settings/ai')
-    const policyDressings = new Set<string>()
-    // The audit section is the THIRD surface this feature family adds to this page, and it is swept
-    // in the same pass. By now the log cannot be empty — a policy write and a publication have both
-    // happened — so its absence here would be a failure rather than the clean absence D9 describes.
-    const auditDressings = new Set<string>()
-    for (const preset of PRESETS) {
-      for (const mode of MODES) {
-        await setPreset(page, preset, mode)
-        const settings = page.getByTestId('pm-disclosure-settings')
-        await expect(settings).toBeVisible({ timeout: 30_000 })
-        const auditLog = page.getByTestId('ai-disclosure-log')
-        await expect(auditLog).toBeVisible({ timeout: 30_000 })
-        await expect(page.getByTestId('ai-disclosure-recent')).toBeVisible({ timeout: 20_000 })
-        auditDressings.add(await painted(auditLog))
-        // Scoped to THIS team's row, never document-wide: the two per-team controls exist once per
-        // team in the workspace, so an unscoped locator is a strict-mode violation, and `.first()`
-        // would sample another team's row — whose readers fieldset is still collapsed, and whose
-        // paint therefore says nothing about the control this sweep exists to check.
-        await expect(teamRow).toBeVisible({ timeout: 20_000 })
-        for (const control of [
-          settings.getByTestId('pm-disclosure-enabled'),
-          settings.getByTestId('pm-disclosure-killed'),
-          teamRow.getByTestId('pm-disclosure-team-toggle'),
-          teamRow.getByTestId('pm-disclosure-readers-toggle'),
-        ]) {
-          await expect(control).toBeVisible({ timeout: 20_000 })
-        }
-        // The audience picker included: it is the control that was painted by the user agent rather
-        // than by the theme, so a sweep that skipped it would have missed exactly that. The reload
-        // `setPreset` does resets the row's open state, so the fieldset needs reopening every pass.
-        await press(readersToggle)
-        await expect(readerBox).toBeVisible({ timeout: 20_000 })
-        policyDressings.add(await painted(readerBox))
-      }
-    }
-    expect(policyDressings.size).toBe(6)
-    expect(auditDressings.size).toBe(6)
-
-    // RETRACTION STOPS FURTHER READS.
-    await openCyclePanel(page, team.name, cycleName)
-    await expect(page.getByTestId('pm-digest-share')).toBeVisible({ timeout: 30_000 })
-    await press(page.getByTestId('pm-digest-retract'))
-    await expect(page.getByTestId('pm-digest-share')).toHaveAttribute('data-published', 'false', {
-      timeout: 30_000,
-    })
-
-    // `data-published="false"` above flips on the OPTIMISTIC apply; the `unpublished` audit row
-    // is written by the server's authoritative pass, some tens of milliseconds later. The read is
-    // therefore polled until the server's write lands — the same assertion, awaiting the
-    // authority that makes it true, not a weakened one.
-    await expect(async () => {
-      const lookup = openDb()
-      try {
-        const retracted = await readDisclosureAudit(lookup, digestId)
-        expect(retracted.map((entry) => entry.event)).toContain('unpublished')
-      } finally {
-        await lookup.close()
-      }
-    }).toPass({ timeout: 20_000 })
-
-    // Proven on a FRESH client rather than on the one that already holds the row: what matters is
-    // that a reader arriving after the retraction gets nothing, not that a warm replica dropped it.
-    const afterContext = await browser.newContext()
+  const readerId = await (async () => {
+    const lookup = openDb()
     try {
-      const afterPage = await afterContext.newPage()
-      await signIn(afterPage, reader)
-      await expect(afterPage.locator('[data-testid="workspace-name"]')).toBeVisible({
-        timeout: 20_000,
-      })
-      await expect(afterPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
-        timeout: 30_000,
-      })
-      // No way in, and no surface behind it: a retracted digest returns this reader to the state
-      // they were in before anything was ever released.
-      await expect(await accountMenuDigestsEntry(afterPage)).toHaveCount(0)
-      await afterPage.keyboard.press('Escape')
-      await expectPmDigestIds(afterPage, [])
-      await afterPage.goto('/digests')
-      await expect(afterPage.getByRole('heading', { name: 'Product digests' })).toHaveCount(0)
-      await expect(afterPage.getByTestId('pm-digests-empty')).toHaveCount(0)
-      await expect(afterPage.getByTestId('pm-digest-card')).toHaveCount(0)
+      return await findUserId(lookup, reader.email)
     } finally {
-      await afterContext.close()
+      await lookup.close()
     }
-  } finally {
-    await readerContext.close()
+  })()
+
+  const policyBefore = await (async () => {
+    const lookup = openDb()
+    try {
+      return await countPolicyAudit(lookup)
+    } finally {
+      await lookup.close()
+    }
+  })()
+
+  // THE ADMIN NAMES THEM, through the shipped surface and from the keyboard alone. Four switches,
+  // every one of them off until this moment.
+  await page.goto('/settings/ai')
+  // Settle on the loaded page before reading whether the block is there: an absent block and a
+  // page that has not finished loading look identical, and only one of them means "configure AI".
+  await expect(page.getByTestId('ai-toggle')).toBeVisible({ timeout: 20_000 })
+  const block = page.getByTestId('pm-disclosure-settings')
+  if ((await block.count()) === 0) {
+    // The policy lives in the AI config blob, which does not exist until AI is configured at all.
+    await page.getByTestId('ai-toggle').click()
   }
+  await expect(block).toBeVisible({ timeout: 20_000 })
+
+  if ((await block.getAttribute('data-enabled')) !== 'true') {
+    await press(page.getByTestId('pm-disclosure-enabled'))
+  }
+  await expect(block).toHaveAttribute('data-enabled', 'true', { timeout: 20_000 })
+  await expect(block).toHaveAttribute('data-killed', 'false')
+
+  const teamRow = page.locator(
+    `[data-testid="pm-disclosure-team-row"][data-team-key="${team.key}"]`,
+  )
+  await expect(teamRow).toBeVisible({ timeout: 20_000 })
+  await expect(teamRow).toHaveAttribute('data-visible', 'false')
+  await press(teamRow.getByTestId('pm-disclosure-team-toggle'))
+  await expect(teamRow).toHaveAttribute('data-visible', 'true', { timeout: 20_000 })
+
+  const readersToggle = teamRow.getByTestId('pm-disclosure-readers-toggle')
+  await press(readersToggle)
+  // A tokenized toggle rather than a native checkbox — the user agent paints a checkbox from its
+  // own color scheme, which made it the one control in the product that stayed light in every dark
+  // preset. `aria-pressed` carries the state.
+  const readerBox = teamRow.locator(
+    `[data-testid="pm-disclosure-reader"][data-user-id="${readerId}"]`,
+  )
+  await press(readerBox)
+  await expect(readerBox).toHaveAttribute('aria-pressed', 'true', { timeout: 20_000 })
+
+  // Every policy write left a record.
+  const policyAfter = await (async () => {
+    const lookup = openDb()
+    try {
+      return await countPolicyAudit(lookup)
+    } finally {
+      await lookup.close()
+    }
+  })()
+  expect(policyAfter).toBeGreaterThan(policyBefore)
+
+  // THE GATE. Named, entitled, switched on — and STILL NO SURFACE, because no human has released
+  // anything. Being named is not being told something: an empty state here would announce that a
+  // channel exists and that the team on the other side has chosen not to use it.
+  await readerPage.goto('/')
+  await readerPage.reload()
+  await expect(readerPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+    timeout: 30_000,
+  })
+  await expect(await accountMenuDigestsEntry(readerPage)).toHaveCount(0)
+  await readerPage.keyboard.press('Escape')
+  await expectPmDigestIds(readerPage, [])
+
+  await readerPage.goto('/digests')
+  await expect(readerPage.getByRole('heading', { name: 'Product digests' })).toHaveCount(0)
+  await expect(readerPage.getByTestId('pm-digests-empty')).toHaveCount(0)
+  await expect(readerPage.getByTestId('pm-digest-card')).toHaveCount(0)
+
+  // A HUMAN ON THE PRODUCING TEAM RELEASES IT, from the keyboard.
+  await openCyclePanel(page, team.name, cycleName)
+  await expect(page.getByTestId('pm-digest-share')).toBeVisible({ timeout: 30_000 })
+  await press(page.getByTestId('pm-digest-publish'))
+
+  // What the producing team is told afterwards: a count, snapshotted at release, and never a name.
+  // The count is stamped by the server override, so seeing it here proves that ran.
+  const readers = page.getByTestId('pm-digest-share-readers')
+  await expect(readers).toContainText('Shared with 1 reader outside this team', {
+    timeout: 30_000,
+  })
+  await expect(readers).toContainText('not a running count')
+  await expect(page.getByTestId('pm-digest-share')).toHaveAttribute('data-published', 'true')
+  await expect(page.getByTestId('pm-digest-share')).not.toContainText(reader.name)
+
+  const published = await (async () => {
+    const lookup = openDb()
+    try {
+      return {
+        row: await findPmDigest(lookup, digestId),
+        audit: await readDisclosureAudit(lookup, digestId),
+      }
+    } finally {
+      await lookup.close()
+    }
+  })()
+  expect(published.row.publishedAt).not.toBeNull()
+  expect(published.row.audienceSize).toBe(1)
+  expect(published.row.publishedBy).not.toBeNull()
+  expect(published.audit.map((entry) => entry.event)).toContain('published')
+
+  // AND NOW, AND ONLY NOW, THE READER READS IT — and only now does the shell offer a way in.
+  await readerPage.goto('/')
+  await readerPage.reload()
+  const entry = await accountMenuDigestsEntry(readerPage)
+  await expect(entry).toBeVisible({ timeout: 30_000 })
+  await press(entry)
+  await expect(readerPage).toHaveURL(/\/digests$/u)
+  await expect(readerPage.getByRole('heading', { name: 'Product digests' })).toBeVisible({
+    timeout: 30_000,
+  })
+  const card = readerPage.getByTestId('pm-digest-card')
+  await expect(card).toBeVisible({ timeout: 30_000 })
+  await expect(card.getByTestId('pm-digest-headline')).toHaveText(HEADLINE)
+  await expect(card.getByTestId('pm-digest-item')).toContainText(SUMMARY)
+  // Evidence is a baked plain-text label. The reader can open none of these targets, so there is
+  // no link to open — asserted structurally rather than by reading the copy.
+  await expect(card.getByTestId('pm-digest-evidence')).toHaveText(EVIDENCE_LABEL)
+  expect(await card.locator('a, img, iframe').count()).toBe(0)
+  await expect(card.getByTestId('pm-digest-framing')).toContainText('AI-generated')
+  await expect(card.getByTestId('pm-digest-framing')).toContainText('mock-model-1')
+  // The subject line is the only way this reader learns whose cycle it was.
+  await expect(card).toContainText(team.name)
+  await expect(card).toContainText(cycleName)
+
+  // THE INBOX HALF. The reader also learns a digest was released without opening the app on
+  // spec — and the notice is worded so that a person outside the producing team learns WHICH team
+  // and WHICH cycle, and nothing else. Not who released it (the actor is the system principal,
+  // because telling a PM which individual released a digest is accountability in the wrong
+  // direction) and not a syllable of the content: the mailed form of this notice carries a link
+  // only, and the in-app row it is derived from is held to the same line.
+  await readerPage.goto('/inbox')
+  const notice = readerPage.getByTestId('notification-row')
+  await expect(notice).toHaveCount(1, { timeout: 30_000 })
+  // The row draws the subject in its own column now, so the notice's phrase is the subject-free
+  // `Shared with you` and the team and cycle are its title. The mailed form still reads
+  // `A cycle digest was shared with you`; `packages/schema`'s copy suite asserts that verbatim.
+  await expect(notice).toContainText('Shared with you')
+  await expect(notice).toContainText(team.name)
+  await expect(notice).toContainText(cycleName)
+  const noticeText = (await notice.innerText()).replace(/\s+/gu, ' ')
+  for (const secret of [HEADLINE, SUMMARY, EVIDENCE_LABEL]) {
+    expect(noticeText).not.toContain(secret)
+  }
+  expect(noticeText).not.toContain(ADMIN.name)
+  // And it is not a dead end: opening it lands on the reader's own surface, keyboard-only.
+  await press(notice)
+  await expect(readerPage).toHaveURL(/\/digests$/u)
+  await expect(readerPage.getByTestId('pm-digest-card')).toBeVisible({ timeout: 30_000 })
+
+  // The reader holds the disclosed row and NOTHING ELSE of that team's: the audience axis carries
+  // one table, and widening `teamScoped` would have shown up here as issues and cycles arriving.
+  await expectPmDigestIds(readerPage, [digestId])
+  const replica = await readReplica(readerPage)
+  // The disclosure record replicates to nobody. `pm_digest` reached this client through
+  // zero-cache, which is what makes this the running-stack half of the omission assertion the
+  // drift test makes statically: one new table is in the Zero schema and arrived, the other is in
+  // Postgres only and cannot be named by any query, so no client holds a row of it.
+  expect(replica.rows.filter((row) => row.table === 'ai_disclosure_audit')).toEqual([])
+  expect(replica.raw).not.toContain('ai_disclosure_audit')
+  for (const table of ['issue', 'cycle', 'cycle_digest', 'label', 'saved_view', 'retro']) {
+    expect(
+      replica.rows.filter((row) => row.table === table && row.json.includes(cycleName)),
+      `${table} rows for the producing team reached a reader outside it`,
+    ).toEqual([])
+  }
+
+  // THE OTHER TWO SURFACES THIS CHANGE ADDS, in every preset, light and dark. The producing
+  // team's card is swept by the first test; these two are only reachable here — the reader's view
+  // needs a published row and a named principal, and the admin block needs the policy configured.
+  const readerDressings = new Set<string>()
+  for (const preset of PRESETS) {
+    for (const mode of MODES) {
+      await setPreset(readerPage, preset, mode)
+      await expect(readerPage.getByTestId('pm-digest-card')).toBeVisible({ timeout: 30_000 })
+      await expect(readerPage.getByTestId('pm-digest-evidence')).toHaveText(EVIDENCE_LABEL)
+      readerDressings.add(await painted(readerPage.getByTestId('pm-digest-card')))
+    }
+  }
+  expect(readerDressings.size).toBe(6)
+
+  await page.goto('/settings/ai')
+  const policyDressings = new Set<string>()
+  // The audit section is the THIRD surface this feature family adds to this page, and it is swept
+  // in the same pass. By now the log cannot be empty — a policy write and a publication have both
+  // happened — so its absence here would be a failure rather than the clean absence D9 describes.
+  const auditDressings = new Set<string>()
+  for (const preset of PRESETS) {
+    for (const mode of MODES) {
+      await setPreset(page, preset, mode)
+      const settings = page.getByTestId('pm-disclosure-settings')
+      await expect(settings).toBeVisible({ timeout: 30_000 })
+      const auditLog = page.getByTestId('ai-disclosure-log')
+      await expect(auditLog).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByTestId('ai-disclosure-recent')).toBeVisible({ timeout: 20_000 })
+      auditDressings.add(await painted(auditLog))
+      // Scoped to THIS team's row, never document-wide: the two per-team controls exist once per
+      // team in the workspace, so an unscoped locator is a strict-mode violation, and `.first()`
+      // would sample another team's row — whose readers fieldset is still collapsed, and whose
+      // paint therefore says nothing about the control this sweep exists to check.
+      await expect(teamRow).toBeVisible({ timeout: 20_000 })
+      for (const control of [
+        settings.getByTestId('pm-disclosure-enabled'),
+        settings.getByTestId('pm-disclosure-killed'),
+        teamRow.getByTestId('pm-disclosure-team-toggle'),
+        teamRow.getByTestId('pm-disclosure-readers-toggle'),
+      ]) {
+        await expect(control).toBeVisible({ timeout: 20_000 })
+      }
+      // The audience picker included: it is the control that was painted by the user agent rather
+      // than by the theme, so a sweep that skipped it would have missed exactly that. The reload
+      // `setPreset` does resets the row's open state, so the fieldset needs reopening every pass.
+      await press(readersToggle)
+      await expect(readerBox).toBeVisible({ timeout: 20_000 })
+      policyDressings.add(await painted(readerBox))
+    }
+  }
+  expect(policyDressings.size).toBe(6)
+  expect(auditDressings.size).toBe(6)
+
+  // RETRACTION STOPS FURTHER READS.
+  await openCyclePanel(page, team.name, cycleName)
+  await expect(page.getByTestId('pm-digest-share')).toBeVisible({ timeout: 30_000 })
+  await press(page.getByTestId('pm-digest-retract'))
+  await expect(page.getByTestId('pm-digest-share')).toHaveAttribute('data-published', 'false', {
+    timeout: 30_000,
+  })
+
+  // `data-published="false"` above flips on the OPTIMISTIC apply; the `unpublished` audit row
+  // is written by the server's authoritative pass, some tens of milliseconds later. The read is
+  // therefore polled until the server's write lands — the same assertion, awaiting the
+  // authority that makes it true, not a weakened one.
+  await expect(async () => {
+    const lookup = openDb()
+    try {
+      const retracted = await readDisclosureAudit(lookup, digestId)
+      expect(retracted.map((entry) => entry.event)).toContain('unpublished')
+    } finally {
+      await lookup.close()
+    }
+  }).toPass({ timeout: 20_000 })
+
+  // Proven on a FRESH client rather than on the one that already holds the row: what matters is
+  // that a reader arriving after the retraction gets nothing, not that a warm replica dropped it.
+  const afterContext = await newContext()
+  const afterPage = await afterContext.newPage()
+  await signIn(afterPage, reader)
+  await expect(afterPage.locator('[data-testid="workspace-name"]')).toBeVisible({
+    timeout: 20_000,
+  })
+  await expect(afterPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
+    timeout: 30_000,
+  })
+  // No way in, and no surface behind it: a retracted digest returns this reader to the state
+  // they were in before anything was ever released.
+  await expect(await accountMenuDigestsEntry(afterPage)).toHaveCount(0)
+  await afterPage.keyboard.press('Escape')
+  await expectPmDigestIds(afterPage, [])
+  await afterPage.goto('/digests')
+  await expect(afterPage.getByRole('heading', { name: 'Product digests' })).toHaveCount(0)
+  await expect(afterPage.getByTestId('pm-digests-empty')).toHaveCount(0)
+  await expect(afterPage.getByTestId('pm-digest-card')).toHaveCount(0)
 })

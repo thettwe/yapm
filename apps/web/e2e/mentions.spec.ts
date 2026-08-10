@@ -1,4 +1,5 @@
-import { type Browser, expect, type Page, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, type NewContext, test } from './fixtures'
 import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
@@ -70,7 +71,7 @@ interface Teammate {
   name: string
 }
 
-async function acceptInvite(browser: Browser, inviteLink: string) {
+async function acceptInvite(newContext: NewContext, inviteLink: string) {
   const credentials = {
     email: uniqueEmail('mentioned'),
     password: 'mentioned-password-1234',
@@ -78,7 +79,7 @@ async function acceptInvite(browser: Browser, inviteLink: string) {
     // exercised by the same account the notification assertions use rather than by a fixture.
     name: `Zoë Mentionee ${Date.now().toString(36)}`,
   }
-  const context = await browser.newContext()
+  const context = await newContext()
   const page = await context.newPage()
   await page.goto(inviteLink)
   await page.getByRole('button', { name: 'Create one' }).click()
@@ -104,21 +105,20 @@ interface Fixture {
   teamName: string
   issueTitle: string
   teammate: Teammate
-  close: () => Promise<void>
 }
 
 // One team with exactly two people on it, which is what makes the unfiltered `@` list
 // deterministic: the author is excluded from their own list, workspace members who are not on the
 // team are held back until a query names them, so pressing `@` offers exactly one option.
-async function twoClients(page: Page, browser: Browser): Promise<Fixture> {
+async function twoClients(page: Page, newContext: NewContext): Promise<Fixture> {
   await enterApp(page)
   const teamName = await openTeam(page)
   const issueTitle = unique('Reconnect loop freezes the board')
   await createNumberedIssue(page, issueTitle)
   const inviteLink = await inviteToTeam(page, teamName)
-  const { context, teammate } = await acceptInvite(browser, inviteLink)
+  const { teammate } = await acceptInvite(newContext, inviteLink)
   await openTeamIssues(page, teamName)
-  return { teamName, issueTitle, teammate, close: () => context.close() }
+  return { teamName, issueTitle, teammate }
 }
 
 async function openIssueDetail(page: Page, issueTitle: string) {
@@ -158,90 +158,86 @@ async function activeDescendantIsInsideEditor(page: Page, ariaLabel: string): Pr
 // browser can say whether pressing Escape on an open typeahead destroys a half-written comment.
 test('the @ typeahead is keyboard-operable and Escape dismisses only the popup', async ({
   page,
-  browser,
+  newContext,
 }) => {
   test.slow()
-  const { issueTitle, teammate, close } = await twoClients(page, browser)
+  const { issueTitle, teammate } = await twoClients(page, newContext)
 
-  try {
-    const panel = await openIssueDetail(page, issueTitle)
-    const composer = panel.getByRole('textbox', { name: 'Add a comment' })
-    await composer.click()
-    await page.keyboard.type(`${DRAFT_PREFIX} `)
+  const panel = await openIssueDetail(page, issueTitle)
+  const composer = panel.getByRole('textbox', { name: 'Add a comment' })
+  await composer.click()
+  await page.keyboard.type(`${DRAFT_PREFIX} `)
 
-    // 12.1 — the popup opens, inside the editor, with a resolvable active option.
-    await page.keyboard.type('@')
-    const listbox = page.getByRole('listbox', { name: 'Mention a teammate' })
-    await expect(listbox).toBeVisible({ timeout: 20_000 })
-    await expect(listbox).toHaveCount(1)
-    await expect(composer).toHaveAttribute('aria-expanded', 'true')
-    // Exactly one teammate, because the author is not offered their own name.
-    const options = listbox.getByRole('option')
-    await expect(options).toHaveCount(1)
-    await expect(options.first()).toHaveText(new RegExp(teammate.name))
-    expect(await activeDescendantIsInsideEditor(page, 'Add a comment')).toBe(true)
+  // 12.1 — the popup opens, inside the editor, with a resolvable active option.
+  await page.keyboard.type('@')
+  const listbox = page.getByRole('listbox', { name: 'Mention a teammate' })
+  await expect(listbox).toBeVisible({ timeout: 20_000 })
+  await expect(listbox).toHaveCount(1)
+  await expect(composer).toHaveAttribute('aria-expanded', 'true')
+  // Exactly one teammate, because the author is not offered their own name.
+  const options = listbox.getByRole('option')
+  await expect(options).toHaveCount(1)
+  await expect(options.first()).toHaveText(new RegExp(teammate.name))
+  expect(await activeDescendantIsInsideEditor(page, 'Add a comment')).toBe(true)
 
-    // Arrow then Enter, with focus never leaving the editor — the reason this is a bespoke listbox
-    // rather than the command palette, whose input would take the caret away.
-    await page.keyboard.press('ArrowDown')
-    expect(await activeDescendantIsInsideEditor(page, 'Add a comment')).toBe(true)
-    await page.keyboard.press('Enter')
-    await expect(listbox).toBeHidden({ timeout: 10_000 })
-    await expect(composer).toContainText(`@${teammate.name}`)
-    await expect(composer).toHaveAttribute('aria-expanded', 'false')
+  // Arrow then Enter, with focus never leaving the editor — the reason this is a bespoke listbox
+  // rather than the command palette, whose input would take the caret away.
+  await page.keyboard.press('ArrowDown')
+  expect(await activeDescendantIsInsideEditor(page, 'Add a comment')).toBe(true)
+  await page.keyboard.press('Enter')
+  await expect(listbox).toBeHidden({ timeout: 10_000 })
+  await expect(composer).toContainText(`@${teammate.name}`)
+  await expect(composer).toHaveAttribute('aria-expanded', 'false')
 
-    // 12.2 — THE NON-NEGOTIABLE ASSERTION. Escape dismisses the popup and NOTHING else: the draft
-    // survives whole and the Sheet holding it stays open. Measured failing before the fix, at the
-    // route nobody predicted — the wrapper stood down and Base UI's dialog dismissal, which reads
-    // neither the prevented flag nor the event's origin, closed the panel anyway.
-    await page.keyboard.type(' and also @')
-    await expect(listbox).toBeVisible({ timeout: 20_000 })
-    await page.keyboard.press('Escape')
-    await expect(listbox).toBeHidden({ timeout: 10_000 })
-    await expect(composer).toContainText(DRAFT_PREFIX)
-    await expect(composer).toContainText(`@${teammate.name}`)
-    await expect(panel).toBeVisible()
+  // 12.2 — THE NON-NEGOTIABLE ASSERTION. Escape dismisses the popup and NOTHING else: the draft
+  // survives whole and the Sheet holding it stays open. Measured failing before the fix, at the
+  // route nobody predicted — the wrapper stood down and Base UI's dialog dismissal, which reads
+  // neither the prevented flag nor the event's origin, closed the panel anyway.
+  await page.keyboard.type(' and also @')
+  await expect(listbox).toBeVisible({ timeout: 20_000 })
+  await page.keyboard.press('Escape')
+  await expect(listbox).toBeHidden({ timeout: 10_000 })
+  await expect(composer).toContainText(DRAFT_PREFIX)
+  await expect(composer).toContainText(`@${teammate.name}`)
+  await expect(panel).toBeVisible()
 
-    // Cmd/Ctrl+Enter is the same collision with a worse outcome: it must accept the highlighted
-    // option, not post a half-written comment. A dismissed suggestion stays dismissed for its own
-    // range, so this opens a NEW one rather than reviving the one Escape just closed.
-    await page.keyboard.type(' @Ment')
-    await expect(listbox).toBeVisible({ timeout: 20_000 })
-    await page.keyboard.press('ControlOrMeta+Enter')
-    await expect(listbox).toBeHidden({ timeout: 10_000 })
-    // Nothing was posted: the comment list is still empty and the draft is still in the composer.
-    await expect(panel.getByText('No comments yet.')).toBeVisible()
-    await expect(composer).toContainText(DRAFT_PREFIX)
+  // Cmd/Ctrl+Enter is the same collision with a worse outcome: it must accept the highlighted
+  // option, not post a half-written comment. A dismissed suggestion stays dismissed for its own
+  // range, so this opens a NEW one rather than reviving the one Escape just closed.
+  await page.keyboard.type(' @Ment')
+  await expect(listbox).toBeVisible({ timeout: 20_000 })
+  await page.keyboard.press('ControlOrMeta+Enter')
+  await expect(listbox).toBeHidden({ timeout: 10_000 })
+  // Nothing was posted: the comment list is still empty and the draft is still in the composer.
+  await expect(panel.getByText('No comments yet.')).toBeVisible()
+  await expect(composer).toContainText(DRAFT_PREFIX)
 
-    // THE CONTROL, and what makes every assertion above non-vacuous. The comment EDITOR — unlike
-    // the composer — has a cancel of its own, so Escape there is genuinely destructive: it throws
-    // the edit away. The pair is the whole contract in one surface: with the popup open Escape
-    // dismisses only the popup, and with it closed the very same key cancels the edit.
-    await panel.getByRole('button', { name: 'Comment', exact: true }).click()
-    await expect(panel.getByText('No comments yet.')).toHaveCount(0, { timeout: 20_000 })
-    await panel.getByRole('button', { name: 'Edit' }).first().click()
-    const editor = panel.getByRole('textbox', { name: 'Edit comment' })
-    await expect(editor).toBeVisible({ timeout: 20_000 })
-    await editor.click()
-    await page.keyboard.press('End')
-    await page.keyboard.type(' @')
-    await expect(listbox).toBeVisible({ timeout: 20_000 })
+  // THE CONTROL, and what makes every assertion above non-vacuous. The comment EDITOR — unlike
+  // the composer — has a cancel of its own, so Escape there is genuinely destructive: it throws
+  // the edit away. The pair is the whole contract in one surface: with the popup open Escape
+  // dismisses only the popup, and with it closed the very same key cancels the edit.
+  await panel.getByRole('button', { name: 'Comment', exact: true }).click()
+  await expect(panel.getByText('No comments yet.')).toHaveCount(0, { timeout: 20_000 })
+  await panel.getByRole('button', { name: 'Edit' }).first().click()
+  const editor = panel.getByRole('textbox', { name: 'Edit comment' })
+  await expect(editor).toBeVisible({ timeout: 20_000 })
+  await editor.click()
+  await page.keyboard.press('End')
+  await page.keyboard.type(' @')
+  await expect(listbox).toBeVisible({ timeout: 20_000 })
 
-    await page.keyboard.press('Escape')
-    await expect(listbox).toBeHidden({ timeout: 10_000 })
-    // Still editing, and still holding the text — the edit was not cancelled.
-    await expect(editor).toBeVisible()
-    await expect(editor).toContainText(DRAFT_PREFIX)
-    await expect(panel).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(listbox).toBeHidden({ timeout: 10_000 })
+  // Still editing, and still holding the text — the edit was not cancelled.
+  await expect(editor).toBeVisible()
+  await expect(editor).toContainText(DRAFT_PREFIX)
+  await expect(panel).toBeVisible()
 
-    // The same key, with no popup open, does cancel — and takes nothing else with it.
-    await page.keyboard.press('Escape')
-    await expect(editor).toHaveCount(0, { timeout: 10_000 })
-    await expect(panel).toBeVisible()
-    await expect(panel.getByText(DRAFT_PREFIX)).toBeVisible()
-  } finally {
-    await close()
-  }
+  // The same key, with no popup open, does cancel — and takes nothing else with it.
+  await page.keyboard.press('Escape')
+  await expect(editor).toHaveCount(0, { timeout: 10_000 })
+  await expect(panel).toBeVisible()
+  await expect(panel.getByText(DRAFT_PREFIX)).toBeVisible()
 })
 
 // 12.3 — the mention crosses the wire as a notification, subscribes the person it named, and the
@@ -249,73 +245,69 @@ test('the @ typeahead is keyboard-operable and Escape dismisses only the popup',
 // is a mail trap, so "there is an unfollow" and "the unfollow works" are one assertion here.
 test('a mention reaches the teammate’s inbox and its subscription is reversible', async ({
   page,
-  browser,
+  newContext,
 }) => {
   test.slow()
-  const { teamName, issueTitle, teammate, close } = await twoClients(page, browser)
+  const { teamName, issueTitle, teammate } = await twoClients(page, newContext)
   const bee = teammate.page
 
-  try {
-    // The baseline matters: without it, "1 unread" could be a badge that was always wrong.
-    await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 0 unread', { timeout: 20_000 })
+  // The baseline matters: without it, "1 unread" could be a badge that was always wrong.
+  await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 0 unread', { timeout: 20_000 })
 
-    const panel = await openIssueDetail(page, issueTitle)
-    const composer = panel.getByRole('textbox', { name: 'Add a comment' })
-    await composer.click()
-    await page.keyboard.type('over to @')
-    const listbox = page.getByRole('listbox', { name: 'Mention a teammate' })
-    await expect(listbox).toBeVisible({ timeout: 20_000 })
-    await page.keyboard.press('Enter')
-    await expect(composer).toContainText(`@${teammate.name}`)
-    await panel.getByRole('button', { name: 'Comment', exact: true }).click()
+  const panel = await openIssueDetail(page, issueTitle)
+  const composer = panel.getByRole('textbox', { name: 'Add a comment' })
+  await composer.click()
+  await page.keyboard.type('over to @')
+  const listbox = page.getByRole('listbox', { name: 'Mention a teammate' })
+  await expect(listbox).toBeVisible({ timeout: 20_000 })
+  await page.keyboard.press('Enter')
+  await expect(composer).toContainText(`@${teammate.name}`)
+  await panel.getByRole('button', { name: 'Comment', exact: true }).click()
 
-    // No reload and no interaction in the teammate's browser.
-    await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 1 unread', { timeout: 30_000 })
-    await bee.locator(BADGE).focus()
-    await bee.keyboard.press('Enter')
-    await expect(bee.getByRole('heading', { name: 'Inbox' })).toBeVisible({ timeout: 20_000 })
+  // No reload and no interaction in the teammate's browser.
+  await expect(bee.locator(BADGE)).toHaveAccessibleName('Inbox, 1 unread', { timeout: 30_000 })
+  await bee.locator(BADGE).focus()
+  await bee.keyboard.press('Enter')
+  await expect(bee.getByRole('heading', { name: 'Inbox' })).toBeVisible({ timeout: 20_000 })
 
-    // ONE row, not two: the mention and the ambient "commented" notification collapse rather than
-    // telling the same person about the same comment twice.
-    const row = bee.locator(NOTIFICATION_ROW)
-    await expect(row).toHaveCount(1)
-    await expect(row).toContainText(`${ADMIN.name} mentioned you`)
-    await expect(row).toContainText(issueTitle)
+  // ONE row, not two: the mention and the ambient "commented" notification collapse rather than
+  // telling the same person about the same comment twice.
+  const row = bee.locator(NOTIFICATION_ROW)
+  await expect(row).toHaveCount(1)
+  await expect(row).toContainText(`${ADMIN.name} mentioned you`)
+  await expect(row).toContainText(issueTitle)
 
-    // Being mentioned subscribed them. The control that proves it is theirs and not the author's:
-    // the author never followed this issue, so their own copy of the same surface says Follow.
-    await bee.keyboard.press('Enter')
-    const beePanel = bee.getByRole('dialog', { name: 'Issue detail' })
-    await expect(beePanel).toBeVisible({ timeout: 20_000 })
-    const follow = beePanel.getByRole('button', { name: /^Follow(ing)?$/u })
-    await expect(follow).toHaveAccessibleName('Following', { timeout: 20_000 })
-    await expect(follow).toHaveAttribute('aria-pressed', 'true')
+  // Being mentioned subscribed them. The control that proves it is theirs and not the author's:
+  // the author never followed this issue, so their own copy of the same surface says Follow.
+  await bee.keyboard.press('Enter')
+  const beePanel = bee.getByRole('dialog', { name: 'Issue detail' })
+  await expect(beePanel).toBeVisible({ timeout: 20_000 })
+  const follow = beePanel.getByRole('button', { name: /^Follow(ing)?$/u })
+  await expect(follow).toHaveAccessibleName('Following', { timeout: 20_000 })
+  await expect(follow).toHaveAttribute('aria-pressed', 'true')
 
-    // Reversible, by keyboard alone, from the thing that created it.
-    await follow.focus()
-    await bee.keyboard.press('Enter')
-    await expect(follow).toHaveAccessibleName('Follow', { timeout: 20_000 })
-    await expect(follow).toHaveAttribute('aria-pressed', 'false')
+  // Reversible, by keyboard alone, from the thing that created it.
+  await follow.focus()
+  await bee.keyboard.press('Enter')
+  await expect(follow).toHaveAccessibleName('Follow', { timeout: 20_000 })
+  await expect(follow).toHaveAttribute('aria-pressed', 'false')
 
-    // And it stays off across a reload — a durable row, not component state. The URL already names
-    // the issue, so this reloads straight back onto the surface being asserted.
-    await bee.reload()
-    await expect(beePanel).toBeVisible({ timeout: 30_000 })
-    await expect(beePanel.getByRole('button', { name: /^Follow(ing)?$/u })).toHaveAccessibleName(
-      'Follow',
-      { timeout: 20_000 },
-    )
+  // And it stays off across a reload — a durable row, not component state. The URL already names
+  // the issue, so this reloads straight back onto the surface being asserted.
+  await bee.reload()
+  await expect(beePanel).toBeVisible({ timeout: 30_000 })
+  await expect(beePanel.getByRole('button', { name: /^Follow(ing)?$/u })).toHaveAccessibleName(
+    'Follow',
+    { timeout: 20_000 },
+  )
 
-    // NO WATCHER LIST, for anybody. The author is a workspace admin and holds the widest read in
-    // this workspace, and the control on their copy of the issue reports THEIR OWN subscription —
-    // which they never made — rather than anyone else's. It is also the control that makes
-    // "Following" above a fact about the mention and not about the surface.
-    await openTeamIssues(page, teamName)
-    const authorPanel = await openIssueDetail(page, issueTitle)
-    await expect(authorPanel.getByRole('button', { name: /^Follow(ing)?$/u })).toHaveAccessibleName(
-      'Follow',
-    )
-  } finally {
-    await close()
-  }
+  // NO WATCHER LIST, for anybody. The author is a workspace admin and holds the widest read in
+  // this workspace, and the control on their copy of the issue reports THEIR OWN subscription —
+  // which they never made — rather than anyone else's. It is also the control that makes
+  // "Following" above a fact about the mention and not about the surface.
+  await openTeamIssues(page, teamName)
+  const authorPanel = await openIssueDetail(page, issueTitle)
+  await expect(authorPanel.getByRole('button', { name: /^Follow(ing)?$/u })).toHaveAccessibleName(
+    'Follow',
+  )
 })

@@ -3,7 +3,6 @@ import { defineConfig, devices } from '@playwright/test'
 const DATABASE_URL = process.env.DATABASE_URL
 const ZERO_CACHE_URL = process.env.E2E_ZERO_CACHE_URL ?? 'http://localhost:4848'
 const SERVER_PORT = Number(process.env.E2E_SERVER_PORT ?? 3210)
-const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 5174)
 
 if (DATABASE_URL === undefined) {
   throw new Error(
@@ -27,17 +26,35 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
   use: {
-    baseURL: `http://localhost:${WEB_PORT}`,
+    // One origin. In every shipped deployment the app server serves the built SPA *and* the API
+    // from the same origin (`mountSpa`, `WEB_DIST_DIR`); a separate web server on a second port
+    // exists only in the dev loop. Pointing the suite at the server is therefore both simpler and
+    // closer to production than either `vite dev` or `vite preview` — and it deletes the proxy,
+    // which is where the preview experiment broke `/api/zero/token`.
+    baseURL: SERVER_ORIGIN,
     trace: 'retain-on-failure',
+    // Without this every action inherits `timeout: 0` and is bounded only by the test timeout, so
+    // one action that can never succeed consumes the whole budget and the run reports the
+    // teardown that follows it rather than the action that failed. A bounded action fails where
+    // it happened, naming the selector.
+    actionTimeout: 15_000,
+    navigationTimeout: 30_000,
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      command: 'pnpm --filter @yapm/server exec tsx src/index.ts',
+      // Build the SPA, then boot the server that serves it. One command so Playwright waits for
+      // `/readyz` only once the bundle `mountSpa` needs is on disk.
+      command:
+        'pnpm --filter @yapm/web exec vite build && pnpm --filter @yapm/server exec tsx src/index.ts',
       url: `${SERVER_ORIGIN}/readyz`,
       cwd: '../..',
-      timeout: 60_000,
-      reuseExistingServer: !process.env.CI,
+      timeout: 240_000,
+      // Never adopt a listener that happens to hold the port: under this harness an adopted
+      // server means `vite build` silently did not run and the suite is asserting against an
+      // arbitrary OLD bundle — the worst failure mode a harness can have, because every result
+      // is about code that is not the checked-out code.
+      reuseExistingServer: false,
       env: {
         DATABASE_URL,
         PORT: String(SERVER_PORT),
@@ -50,24 +67,18 @@ export default defineConfig({
         // The shipped default is `/var/lib/yapm/files`, which is where the container writes and
         // which no developer machine will let a normal user create. `/readyz` probes the directory
         // at boot (gating, deliberately — a read-only mount must not take traffic), so this env is
-        // what keeps the harness reaching `ready` at all. `data/` is gitignored.
+        // what keeps the harness reaching `ready` at all. Relative to the SERVER package — the
+        // `pnpm --filter` in the command above runs there — so uploads land in
+        // `apps/server/data/e2e-files/`, which `.gitignore` covers by that exact path (the
+        // root-anchored `/data/` rule does not reach it).
         STORAGE_LOCAL_DIR: 'data/e2e-files',
-        // The SPA reads this back through `GET /api/config` (Vite proxies `/api` to this server),
-        // which is the only way it learns where to open its sync socket.
+        // The SPA reads this back through `GET /api/config`, which is the only way it learns where
+        // to open its sync socket. Same origin now, so there is no proxy in the path.
         ZERO_CACHE_PUBLIC_URL: ZERO_CACHE_URL,
         BETTER_AUTH_SECRET: process.env.E2E_BETTER_AUTH_SECRET ?? 'e2e-development-secret-value',
         BETTER_AUTH_URL: SERVER_ORIGIN,
-        WEB_ORIGIN: `http://localhost:${WEB_PORT}`,
+        WEB_ORIGIN: SERVER_ORIGIN,
         YAPM_BOOTSTRAP_ADMIN_EMAIL: 'admin@example.test',
-      },
-    },
-    {
-      command: `pnpm exec vite dev --port ${WEB_PORT} --strictPort`,
-      url: `http://localhost:${WEB_PORT}`,
-      timeout: 60_000,
-      reuseExistingServer: !process.env.CI,
-      env: {
-        SERVER_ORIGIN,
       },
     },
   ],

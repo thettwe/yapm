@@ -13,6 +13,8 @@ import type { SyncCredentialResult } from './session'
 const mocks = vi.hoisted(() => {
   let state: ConnectionState = { name: 'connecting' }
   const listeners = new Set<() => void>()
+  let authData: { user: { id: string } } | null = { user: { id: 'user-1' } }
+  const authListeners = new Set<() => void>()
   return {
     connect: vi.fn(() => Promise.resolve()),
     fetchSyncCredential: vi.fn(),
@@ -25,9 +27,20 @@ const mocks = vi.hoisted(() => {
       state = next
       for (const listener of listeners) listener()
     },
+    getAuth: () => authData,
+    subscribeAuth: (listener: () => void) => {
+      authListeners.add(listener)
+      return () => authListeners.delete(listener)
+    },
+    setAuthUser(id: string | null) {
+      authData = id === null ? null : { user: { id } }
+      for (const listener of authListeners) listener()
+    },
     reset() {
       state = { name: 'connecting' }
       listeners.clear()
+      authData = { user: { id: 'user-1' } }
+      authListeners.clear()
     },
   }
 })
@@ -43,9 +56,12 @@ vi.mock('@rocicorp/zero/react', async () => {
   }
 })
 
-vi.mock('@/auth/client', () => ({
-  useSession: () => ({ data: { user: { id: 'user-1' } } }),
-}))
+vi.mock('@/auth/client', async () => {
+  const { useSyncExternalStore } = await import('react')
+  return {
+    useSession: () => ({ data: useSyncExternalStore(mocks.subscribeAuth, mocks.getAuth) }),
+  }
+})
 
 vi.mock('@/zero/session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/zero/session')>()),
@@ -74,6 +90,8 @@ function Probe() {
       <span data-testid="delay">{String(Math.round(recovery.delayMs))}</span>
       <span data-testid="offered">{String(recovery.retryOffered)}</span>
       <span data-testid="role">{session.role ?? 'none'}</span>
+      <span data-testid="status">{session.status}</span>
+      <span data-testid="unavailable">{String(session.unavailable)}</span>
       <button type="button" data-testid="retry" onClick={recovery.retryNow}>
         retry
       </button>
@@ -547,4 +565,118 @@ test('a wake early in the token lifetime does not re-mint', async () => {
   })
 
   expect(remintCount()).toBe(1)
+})
+
+// THE FALSIFIABLE CHECK for the sign-up wedge. The sequence is the one a real trace recorded:
+// the anonymous mount mints once and is answered 401 — which is CORRECT, nobody is signed in —
+// and that sets `logged-out`. Signing up re-mints, and if THAT request fails (it is bounded by
+// the client's own 10s timeout, and a cold server can exceed it), `applyCredential` preserves the
+// previous status. The session therefore sits at `logged-out` with `unavailable` set. While the
+// retry was scoped to `pending`, nothing was scheduled to ask again and the client stayed wedged
+// until the tab was reloaded — invisible to this suite because it only ever ran the dev server,
+// which is slow enough to boot that the server is always warm by the first mint.
+test('a failed mint after a 401 keeps asking — a logged-out session is not a settled one', async () => {
+  mocks.fetchSyncCredential.mockResolvedValue({ kind: 'no-session' })
+  await mount()
+  expect(remintCount()).toBe(1)
+
+  // Sign-up happens — which re-mints, exactly as the identity change does in the app — and the
+  // next answer is a transient failure rather than a refusal.
+  mocks.fetchSyncCredential.mockResolvedValue({ kind: 'unavailable', reason: 'TimeoutError' })
+  await act(async () => {
+    screen.getByTestId('refresh').click()
+  })
+  const afterFailure = remintCount()
+
+  await advance(BACKOFF_CAP_MS * 3)
+  expect(remintCount()).toBeGreaterThan(afterFailure)
+})
+
+// The other identity-change hazard, both ways in one sequence: sign-up flips the identity while
+// the anonymous mount's mint is still in flight. That flight was asked about NOBODY — if the
+// identity change coalesced onto it, its `no-session` answer would settle over the pending reset
+// as a clean, settled logged-out, which neither RC1 guard can catch (the reset is overwritten;
+// the retry surface keys on `unavailable`, which is false) — and the redirect cycle is back. The
+// stale answer must be DISCARDED, and the post-identity answer must be the one APPLIED.
+test('an identity change mid-flight discards the stale answer and applies the fresh one', async () => {
+  const releases: ((result: SyncCredentialResult) => void)[] = []
+  mocks.fetchSyncCredential.mockImplementation(
+    () =>
+      new Promise<SyncCredentialResult>((resolve) => {
+        releases.push(resolve)
+      }),
+  )
+  mocks.setAuthUser(null)
+  await mount()
+  expect(remintCount()).toBe(1)
+
+  // Sign-up: the identity flips while the anonymous mint is open. The new request chains behind
+  // the open one rather than racing a second token onto the same connection.
+  await act(async () => {
+    mocks.setAuthUser('user-1')
+  })
+  expect(remintCount()).toBe(1)
+
+  // The pre-identity flight settles with the answer to a question nobody is asking anymore.
+  await act(async () => {
+    releases[0]?.({ kind: 'no-session' })
+  })
+  expect(screen.getByTestId('status'), 'the stale refusal is discarded').toHaveTextContent(
+    'pending',
+  )
+  expect(remintCount()).toBe(2)
+
+  // The post-identity answer is the one applied.
+  await act(async () => {
+    releases[1]?.(SESSION)
+  })
+  expect(screen.getByTestId('status')).toHaveTextContent('ready')
+  expect(screen.getByTestId('role')).toHaveTextContent('member')
+})
+
+// The other half of the same rule: a definitive refusal still settles. Otherwise the fix above
+// would turn every signed-out tab into a polling loop against `/api/zero/token`.
+test('a settled logged-out session does not poll', async () => {
+  mocks.fetchSyncCredential.mockResolvedValue({ kind: 'no-session' })
+  await mount()
+  const afterRefusal = remintCount()
+
+  await advance(BACKOFF_CAP_MS * 4)
+  expect(remintCount()).toBe(afterRefusal)
+})
+
+// The regression the merge gate caught on PR #53's first review fix. On a reload against a hung
+// token route, the mount mints flight #1; the auth session resolving milliseconds later counts as
+// an identity change, and the fresh re-mint CHAINS flight #2 behind the hung #1 while superseding
+// it. When #1 finally settles `unavailable` at the client's own timeout, a settle that dropped
+// everything from a superseded flight dropped the outage too — pushing the retry surface a full
+// second timeout later than the moment the outage was known. An outage is identity-independent;
+// only a superseded flight's SESSION answer is stale.
+test('a superseded flight still surfaces an outage at the first timeout, not the second', async () => {
+  let resolveFirst!: (result: SyncCredentialResult) => void
+  mocks.fetchSyncCredential
+    .mockImplementationOnce(
+      () =>
+        new Promise<SyncCredentialResult>((resolve) => {
+          resolveFirst = resolve
+        }),
+    )
+    // The outage is real, so the chained fresh flight hangs too.
+    .mockImplementation(() => new Promise<SyncCredentialResult>(() => {}))
+
+  await mount()
+  expect(remintCount()).toBe(1)
+
+  // The identity changes while flight #1 is still in the air.
+  await act(async () => {
+    mocks.setAuthUser('user-2')
+  })
+  expect(screen.getByTestId('unavailable')).toHaveTextContent('false')
+
+  // Flight #1 settles unavailable — superseded, but the outage must surface NOW.
+  await act(async () => {
+    resolveFirst({ kind: 'unavailable', reason: 'TimeoutError' })
+  })
+  expect(screen.getByTestId('unavailable')).toHaveTextContent('true')
+  expect(remintCount()).toBe(2)
 })

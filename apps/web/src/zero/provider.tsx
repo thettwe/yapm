@@ -328,13 +328,19 @@ function useProactiveRefresh(
 // loop is keyed on `revision` — bumped by every settled request — so each failure schedules
 // the next attempt on the same bounded backoff.
 //
-// Scoped to `pending` on purpose, to keep one owner per fault: once a session exists, a
-// failed refresh already reschedules itself through the proactive refresher's `revision`
+// Scoped to "no credential yet" on purpose, to keep one owner per fault: once a session exists,
+// a failed refresh already reschedules itself through the proactive refresher's `revision`
 // dependency, and a broken connection is `SyncRecovery`'s. A third scheduler on the same
 // endpoint would double the traffic this change exists to bound.
+//
+// `logged-out` is a no-credential state too, and excluding it wedged every sign-up that raced a
+// slow first mint: the anonymous mount mints once and is answered 401, which is CORRECT and sets
+// `logged-out`; signing up re-mints; if that one fails, `applyCredential` preserves the previous
+// status, so the session stays `logged-out` with `unavailable` set and nothing was scheduled to
+// ask again. The client sat there until the tab was reloaded. Only `ready` is somebody else's.
 function useUnavailableRetry(session: SyncSessionRecord, remint: () => void): void {
   const { status, unavailable, revision } = session
-  const retrying = status === 'pending' && unavailable
+  const retrying = unavailable && status !== 'ready'
   const attemptRef = useRef(0)
 
   useEffect(() => {
@@ -397,7 +403,17 @@ export function ZeroRoot({ cacheUrl, children }: ZeroRootProps) {
     // exists to prevent. Clear the slot on both paths. A superseded flight applies nothing:
     // its answer predates the change the newer request exists to observe.
     const settle = (result: SyncCredentialResult) => {
-      if (flightId.current !== id) return result
+      if (flightId.current !== id) {
+        // A superseded flight's SESSION answer applies nothing: it predates the change the
+        // newer request exists to observe. Its `unavailable`, though, is identity-independent —
+        // the server being unreachable is as true for the new identity as the old — and the
+        // newer flight is CHAINED behind this one, so dropping it would push the outage surface
+        // a full timeout later than the moment the outage was actually known.
+        if (result.kind === 'unavailable') {
+          setSession((previous) => applyCredential(previous, result, Date.now()))
+        }
+        return result
+      }
       inFlight.current = null
       setSession((previous) => applyCredential(previous, result, Date.now()))
       return result
@@ -426,9 +442,31 @@ export function ZeroRoot({ cacheUrl, children }: ZeroRootProps) {
     void remint()
   }, [remint])
 
-  // Re-mint the sync token on mount and whenever the signed-in identity changes.
+  // Re-mint the sync token on mount and whenever the signed-in identity changes — and FIRST
+  // return the session to `pending`, because the previous answer was about a different identity
+  // and must stop steering the router before the new request settles. Concretely: sign-up flips
+  // `session` immediately while sync still says `logged-out`; in that window `/login` renders
+  // `<Navigate to="/">` (session exists) and `Authenticated` renders `<Navigate to="/login">`
+  // (logged-out) — a reciprocal redirect cycle that starves the renderer so thoroughly that no
+  // timer, fetch callback or paint ever runs again. The server was measured answering the
+  // post-sign-up token in 29ms; the page locked anyway. `pending` renders the sync gate instead
+  // of a redirect, which breaks the cycle by construction.
+  //
+  // An identity CHANGE must also not coalesce onto a still-in-flight pre-identity request: that
+  // flight was asked about the previous identity, and its answer settling over the reset above
+  // would stand as a clean, settled `logged-out` — bypassing both guards (the pending reset is
+  // overwritten; the retry surface keys on `unavailable`, which is false) and resurrecting the
+  // redirect cycle. `fresh` discards the stale flight's answer and chains the new request behind
+  // it — the same semantics `refresh()` uses, for the same reason: the caller changed what the
+  // server bakes into the credential. The mount itself (including StrictMode's dev re-run of the
+  // effect) observes no change, so it still joins an open flight rather than queueing a second.
+  const observedAuthUserId = useRef<string | null | undefined>(undefined)
   useEffect(() => {
-    void remint()
+    const changed =
+      observedAuthUserId.current !== undefined && observedAuthUserId.current !== authUserId
+    observedAuthUserId.current = authUserId
+    setSession((previous) => ({ ...PENDING, revision: previous.revision + 1 }))
+    void remint({ fresh: changed })
   }, [remint, authUserId])
 
   useProactiveRefresh(session, remint)

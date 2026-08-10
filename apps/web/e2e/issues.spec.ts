@@ -200,7 +200,11 @@ test('the full page answers to the issue’s key, and to no other team’s', asy
 
   const title = unique('Address issue')
   await createIssue(page, title)
-  await expect(row(page, title)).not.toHaveAttribute('data-pending', '', { timeout: 20_000 })
+  // The row renders `data-pending={pending || undefined}` — the attribute is "true" or ABSENT,
+  // never "". The old guard negated equality with "", which "true" satisfies trivially, so the
+  // key read below raced the server-assigned number. Negating a match on ANY value waits for the
+  // attribute to actually leave.
+  await expect(row(page, title)).not.toHaveAttribute('data-pending', /.+/, { timeout: 20_000 })
 
   const panel = await openIssue(page, title)
   const key = (await panel.getByTestId('detail-key').innerText()).trim()

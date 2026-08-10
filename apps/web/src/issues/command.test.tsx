@@ -7,6 +7,7 @@ import type { ConnectionSummary } from '@/zero/connection'
 const harness = vi.hoisted(() => ({
   rows: {} as Record<string, readonly unknown[]>,
   navigate: vi.fn(),
+  mutate: vi.fn(),
 }))
 
 vi.mock('@rocicorp/zero/react', () => ({
@@ -17,7 +18,7 @@ vi.mock('@rocicorp/zero/react', () => ({
     const name = (request as { query: { queryName: string } }).query.queryName
     return [harness.rows[name] ?? [], { type: 'complete' }]
   },
-  useZero: () => ({ mutate: vi.fn(() => Promise.resolve()) }),
+  useZero: () => ({ mutate: harness.mutate }),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -92,6 +93,10 @@ beforeEach(() => {
   pending = []
   harness.rows = { 'teams.all': [TEAM] }
   harness.navigate.mockClear()
+  harness.mutate.mockReset().mockImplementation(() => ({
+    client: Promise.resolve({ type: 'ok' }),
+    server: Promise.resolve({ type: 'ok' }),
+  }))
   Element.prototype.scrollIntoView = vi.fn()
   // jsdom ships neither; `cmdk` observes its list and Base UI measures its popup.
   vi.stubGlobal(
@@ -126,9 +131,14 @@ afterEach(() => {
 function Opener() {
   const api = useCommand()
   return (
-    <button type="button" onClick={() => api.openLabel(['issue-1'])}>
-      open label page
-    </button>
+    <>
+      <button type="button" onClick={() => api.openLabel(['issue-1'])}>
+        open label page
+      </button>
+      <button type="button" onClick={() => api.openStatus(['issue-1'])}>
+        open status page
+      </button>
+    </>
   )
 }
 
@@ -514,6 +524,87 @@ test('closing on a moved cursor does not carry it into the next visit', async ()
   // deliberately rather than fall back because its row vanished.
   expect(itemValues()).toContain(moved)
   expect(activeValue()).toBe('action:create-issue')
+})
+
+// ---------------------------------------------------------------------------
+// The batch runner's session guard (RC3 family A). A batch completes on the SERVER's schedule,
+// 50–500ms after the optimistic apply — long enough for the palette to have been reopened for
+// something else. Its completion may act only on the session it was launched in: an unguarded
+// close() was closing a palette the user had reopened and was typing into, and a stale rejection
+// must not be scribbled onto an unrelated session either.
+// ---------------------------------------------------------------------------
+
+type ServerAck = { type: 'ok' } | { type: 'error'; error: { type: 'app'; message: string } }
+
+function deferServerAck(): (details: ServerAck) => void {
+  let ack: ((details: ServerAck) => void) | undefined
+  harness.mutate.mockImplementation(() => ({
+    client: Promise.resolve({ type: 'ok' }),
+    server: new Promise<ServerAck>((resolve) => {
+      ack = resolve
+    }),
+  }))
+  return (details) => ack?.(details)
+}
+
+function launchStatusBatch(): (details: ServerAck) => void {
+  const ack = deferServerAck()
+  render(tree())
+  act(() => {
+    fireEvent.click(screen.getByText('open status page'))
+  })
+  fireEvent.click(screen.getByText('Set status: Done'))
+  return ack
+}
+
+async function settleAck(ack: (details: ServerAck) => void, details: ServerAck): Promise<void> {
+  await act(async () => {
+    ack(details)
+    await vi.advanceTimersByTimeAsync(0)
+  })
+}
+
+test('a batch completing after the palette was reopened closes nothing', async () => {
+  const ack = launchStatusBatch()
+
+  // Reopened for something else before the server has answered — a new session.
+  act(() => {
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+  })
+  expect(input()).toBeInTheDocument()
+
+  await settleAck(ack, { type: 'ok' })
+  expect(input()).toBeInTheDocument()
+})
+
+test('a batch completing in its own session still closes the palette', async () => {
+  const ack = launchStatusBatch()
+  expect(screen.getByPlaceholderText(/^Set status of/)).toBeInTheDocument()
+
+  await settleAck(ack, { type: 'ok' })
+  expect(screen.queryByPlaceholderText(/^Set status of/)).not.toBeInTheDocument()
+})
+
+// Zero rebases the rejected optimistic apply away, so the surface the batch acted on visibly
+// reverts — which is the rejection surfacing where the user is actually looking.
+test('a late rejection is not written into the session the reader reopened', async () => {
+  const ack = launchStatusBatch()
+
+  act(() => {
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+  })
+
+  await settleAck(ack, { type: 'error', error: { type: 'app', message: 'Not allowed' } })
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(input()).toBeInTheDocument()
+})
+
+test('a same-session rejection surfaces as the palette’s own error line', async () => {
+  const ack = launchStatusBatch()
+
+  await settleAck(ack, { type: 'error', error: { type: 'app', message: 'Not allowed' } })
+  expect(screen.getByRole('alert')).toHaveTextContent('Not allowed')
+  expect(screen.getByPlaceholderText(/^Set status of/)).toBeInTheDocument()
 })
 
 // A sub-page is a new list under the same provider, so it gets a new session too.

@@ -79,6 +79,7 @@ vi.mock('@/issues/command', async () => {
   }
 })
 
+import { FOCUS_RESTORE_FRAMES } from '@/board/model'
 import { CommandRegistryProvider } from '@/frame/command-registry'
 import { Board } from './board'
 
@@ -514,6 +515,86 @@ test('a move that leaves the filter hands focus to the destination column and sa
   await waitFor(() =>
     expect(document.activeElement).toBe(screen.getByRole('region', { name: /^In Review, / })),
   )
+})
+
+// ---------------------------------------------------------------------------
+// The focus-restore loop's guard (RC3 family B): recover dropped focus, never take held focus.
+// A server-ack rebase re-runs the restore effect mid-window, and an unguarded loop re-stole
+// focus from wherever the reader had moved on to — so `m` opened the Move palette for the card
+// the reader had already left.
+// ---------------------------------------------------------------------------
+
+const REFOCUS_ROWS = (alphaStatus: string) => ({
+  'teams.all': [TEAM],
+  'issues.byTeam': [
+    issue({ id: 'i-a', number: 10, title: 'Alpha card', status: alphaStatus }),
+    issue({ id: 'i-c', number: 12, title: 'Charlie card', status: 'todo' }),
+  ],
+})
+
+// Move Alpha out of Todo through the `m` palette, leaving `pendingFocus` armed on it. The stubbed
+// `useQuery` has no subscription of its own, so the server-ack rebase is the caller's `settle`.
+async function moveAlphaToInReview(): Promise<void> {
+  harness.mutate.mockImplementation(() => {
+    harness.rows = REFOCUS_ROWS('in_review')
+    return { client: Promise.resolve({ type: 'ok' }), server: Promise.resolve({ type: 'ok' }) }
+  })
+  cardFor('Alpha card').focus()
+  fireEvent.keyDown(window, { key: 'm' })
+  fireEvent.click(await screen.findByRole('option', { name: /Move to In Review/ }))
+}
+
+function settleRebase(view: ReturnType<typeof render>): void {
+  view.rerender(
+    <CommandRegistryProvider>
+      <Board teamId="team-1" />
+    </CommandRegistryProvider>,
+  )
+}
+
+test('a move restores focus dropped to body onto the card in its new column', async () => {
+  harness.rows = REFOCUS_ROWS('todo')
+  const view = mount()
+
+  await moveAlphaToInReview()
+  settleRebase(view)
+
+  // The remount dropped focus; nobody holds it, so the loop recovers it onto the moved card.
+  await waitFor(() =>
+    expect((document.activeElement as HTMLElement | null)?.dataset.cardId).toBe('i-a'),
+  )
+  expect(cardFor('Alpha card').closest('section')).toHaveAccessibleName(/^In Review, /)
+  await advanceFrames(FOCUS_RESTORE_FRAMES + 1)
+})
+
+test('the restore never steals focus the reader already moved to another card', async () => {
+  harness.rows = REFOCUS_ROWS('todo')
+  const view = mount()
+
+  await moveAlphaToInReview()
+  settleRebase(view)
+  // The reader has moved on before the restore window runs out: held focus is not a handoff.
+  cardFor('Charlie card').focus()
+
+  await advanceFrames(FOCUS_RESTORE_FRAMES + 1)
+  expect((document.activeElement as HTMLElement | null)?.dataset.cardId).toBe('i-c')
+})
+
+test('the restore never steals focus out of an open dialog', async () => {
+  harness.rows = REFOCUS_ROWS('todo')
+  mount()
+
+  await moveAlphaToInReview()
+  // Synchronously — no frame may run in between, or the loop would settle against a card first:
+  // the reader opens the Move palette for the OTHER card and is typing into it.
+  cardFor('Charlie card').focus()
+  fireEvent.keyDown(window, { key: 'm' })
+  const dialogInput = screen.getByPlaceholderText('Move Charlie card to…')
+  dialogInput.focus()
+
+  await advanceFrames(FOCUS_RESTORE_FRAMES + 1)
+  expect(document.activeElement).toBe(dialogInput)
+  expect(screen.getByRole('dialog', { name: 'Move issue' })).toBeInTheDocument()
 })
 
 test('a viewer is offered no pick-up and no hole, and the card still opens', () => {

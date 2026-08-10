@@ -90,8 +90,18 @@ export async function goToMore(page: Page, name: string): Promise<void> {
   await item.click()
 }
 
+// The account menu is the same transient shape as `more▾` — a Base UI menu whose trigger is
+// clickable before the menu can respond — so it takes the same aria-expanded-keyed retry:
+// opening is idempotent, and the item is clicked only while the menu is known open.
 export async function signOut(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /account menu/i }).click()
-  await page.getByRole('menuitem', { name: 'Sign out' }).click()
+  const opener = page.getByRole('button', { name: /account menu/i })
+  const item = page.getByRole('menuitem', { name: 'Sign out' })
+  await expect(async () => {
+    if ((await opener.getAttribute('aria-expanded')) !== 'true') {
+      await opener.click()
+    }
+    await expect(item).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 20_000 })
+  await item.click()
   await expect(page.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
 }

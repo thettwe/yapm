@@ -26,6 +26,9 @@ apps/web/.tanstack/
 
 # Local data
 /data/
+# The e2e harness boots the server from `apps/server` (`pnpm --filter` runs there), so its
+# `STORAGE_LOCAL_DIR: data/e2e-files` lands here — a path the anchored `/data/` above misses.
+apps/server/data/
 *.sqlite
 *.sqlite-journal
 

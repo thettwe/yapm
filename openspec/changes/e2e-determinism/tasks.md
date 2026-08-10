@@ -39,8 +39,11 @@
       recorded beside them (design D1).
 - [x] 3.2 Make `goToMore` assert the transient opened before clicking into it, retrying the opener
       until an item is in the DOM (design D2).
-- [ ] 3.3 Audit `support.ts` for the same shape elsewhere — any helper that clicks a transient and
+- [x] 3.3 Audit `support.ts` for the same shape elsewhere — any helper that clicks a transient and
       then clicks inside it without asserting it opened. `signOut` is the known second case.
+      *(Fixed: `signOut` now keys on `aria-expanded` exactly as `goToMore` does — the account menu
+      is the same Base UI transient shape. No other helper clicks into a transient it did not
+      first observe open.)*
 - [x] 3.4 Prove 3.1 and 3.2 against the pre-fix commit: run the reproduction at the parent commit and
       record the failure output beside the fixed output. *(The three-run control on unmodified main:
       2/2/2 failures, all the 60s two-client class; the branch: those tests 0/9 across every
@@ -97,6 +100,31 @@
       side-effects) or a test bug, each fixed at its mechanism in section 5c. Nothing was loosened.)*
 - [ ] 5b.6 Assert the invariant mechanically: a test that leaves the workspace materially larger than
       it found it should be visible, not discovered three changes later.
+
+## 5c. The four product fixes and two test-bug fixes DI-6 forced (RC1 and RC3)
+
+- [x] 5c.1 RC1 guard one: `ZeroRoot` returns the session to `pending` on an identity change, and an
+      identity change while a mint is in flight re-mints `fresh` — the stale pre-identity answer is
+      discarded rather than settling over the pending reset as a clean `logged-out`
+      (`provider.tsx`; unit-tested both ways in `provider.test.tsx`).
+- [x] 5c.2 RC1 guard two: `Authenticated` renders the retry surface instead of the `/login`
+      redirect when `logged-out` carries `unavailable`, so the reciprocal redirect cycle is
+      unreachable from a failed re-mint (`authenticated.tsx`).
+- [x] 5c.3 Retry gate: a failed mint after a 401 keeps asking — only `ready` is somebody else's;
+      a settled `logged-out` still does not poll (`useUnavailableRetry` in `provider.tsx`;
+      unit-tested both ways).
+- [x] 5c.4 RC3 family A: the command palette's batch runner acts only on the session it was
+      launched in — a completion or rejection arriving after the palette was reopened neither
+      closes it nor writes an error into it (`command.tsx`; unit-tested both ways in
+      `command.test.tsx`).
+- [x] 5c.5 RC3 family B: the board's focus-restore loop recovers dropped focus but never takes held
+      focus — focus on another card or inside an open dialog cancels the restore (`board.tsx`;
+      unit-tested both ways in `board.test.tsx`).
+- [x] 5c.6 RC3 family C, the test bugs at their mechanism: `issues.spec.ts`'s vacuous
+      `data-pending` guard now waits for the attribute to actually leave; `retro.spec.ts`'s Escape
+      probe holds the LIVE dialog and treats a transition-free close as its own outcome; and
+      `pm-digest.spec.ts` polls the disclosure-audit read until the server's authoritative write
+      lands rather than racing it.
 
 ## 6. Freeze the dep optimizer for the e2e run — SUPERSEDED by the one-origin harness
 

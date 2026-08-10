@@ -13,6 +13,8 @@ import type { SyncCredentialResult } from './session'
 const mocks = vi.hoisted(() => {
   let state: ConnectionState = { name: 'connecting' }
   const listeners = new Set<() => void>()
+  let authData: { user: { id: string } } | null = { user: { id: 'user-1' } }
+  const authListeners = new Set<() => void>()
   return {
     connect: vi.fn(() => Promise.resolve()),
     fetchSyncCredential: vi.fn(),
@@ -25,9 +27,20 @@ const mocks = vi.hoisted(() => {
       state = next
       for (const listener of listeners) listener()
     },
+    getAuth: () => authData,
+    subscribeAuth: (listener: () => void) => {
+      authListeners.add(listener)
+      return () => authListeners.delete(listener)
+    },
+    setAuthUser(id: string | null) {
+      authData = id === null ? null : { user: { id } }
+      for (const listener of authListeners) listener()
+    },
     reset() {
       state = { name: 'connecting' }
       listeners.clear()
+      authData = { user: { id: 'user-1' } }
+      authListeners.clear()
     },
   }
 })
@@ -43,9 +56,12 @@ vi.mock('@rocicorp/zero/react', async () => {
   }
 })
 
-vi.mock('@/auth/client', () => ({
-  useSession: () => ({ data: { user: { id: 'user-1' } } }),
-}))
+vi.mock('@/auth/client', async () => {
+  const { useSyncExternalStore } = await import('react')
+  return {
+    useSession: () => ({ data: useSyncExternalStore(mocks.subscribeAuth, mocks.getAuth) }),
+  }
+})
 
 vi.mock('@/zero/session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/zero/session')>()),
@@ -74,6 +90,7 @@ function Probe() {
       <span data-testid="delay">{String(Math.round(recovery.delayMs))}</span>
       <span data-testid="offered">{String(recovery.retryOffered)}</span>
       <span data-testid="role">{session.role ?? 'none'}</span>
+      <span data-testid="status">{session.status}</span>
       <button type="button" data-testid="retry" onClick={recovery.retryNow}>
         retry
       </button>
@@ -572,6 +589,48 @@ test('a failed mint after a 401 keeps asking — a logged-out session is not a s
 
   await advance(BACKOFF_CAP_MS * 3)
   expect(remintCount()).toBeGreaterThan(afterFailure)
+})
+
+// The other identity-change hazard, both ways in one sequence: sign-up flips the identity while
+// the anonymous mount's mint is still in flight. That flight was asked about NOBODY — if the
+// identity change coalesced onto it, its `no-session` answer would settle over the pending reset
+// as a clean, settled logged-out, which neither RC1 guard can catch (the reset is overwritten;
+// the retry surface keys on `unavailable`, which is false) — and the redirect cycle is back. The
+// stale answer must be DISCARDED, and the post-identity answer must be the one APPLIED.
+test('an identity change mid-flight discards the stale answer and applies the fresh one', async () => {
+  const releases: ((result: SyncCredentialResult) => void)[] = []
+  mocks.fetchSyncCredential.mockImplementation(
+    () =>
+      new Promise<SyncCredentialResult>((resolve) => {
+        releases.push(resolve)
+      }),
+  )
+  mocks.setAuthUser(null)
+  await mount()
+  expect(remintCount()).toBe(1)
+
+  // Sign-up: the identity flips while the anonymous mint is open. The new request chains behind
+  // the open one rather than racing a second token onto the same connection.
+  await act(async () => {
+    mocks.setAuthUser('user-1')
+  })
+  expect(remintCount()).toBe(1)
+
+  // The pre-identity flight settles with the answer to a question nobody is asking anymore.
+  await act(async () => {
+    releases[0]?.({ kind: 'no-session' })
+  })
+  expect(screen.getByTestId('status'), 'the stale refusal is discarded').toHaveTextContent(
+    'pending',
+  )
+  expect(remintCount()).toBe(2)
+
+  // The post-identity answer is the one applied.
+  await act(async () => {
+    releases[1]?.(SESSION)
+  })
+  expect(screen.getByTestId('status')).toHaveTextContent('ready')
+  expect(screen.getByTestId('role')).toHaveTextContent('member')
 })
 
 // The other half of the same rule: a definitive refusal still settles. Otherwise the fix above

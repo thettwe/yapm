@@ -67,7 +67,10 @@ export default defineConfig({
         // The shipped default is `/var/lib/yapm/files`, which is where the container writes and
         // which no developer machine will let a normal user create. `/readyz` probes the directory
         // at boot (gating, deliberately — a read-only mount must not take traffic), so this env is
-        // what keeps the harness reaching `ready` at all. `data/` is gitignored.
+        // what keeps the harness reaching `ready` at all. Relative to the SERVER package — the
+        // `pnpm --filter` in the command above runs there — so uploads land in
+        // `apps/server/data/e2e-files/`, which `.gitignore` covers by that exact path (the
+        // root-anchored `/data/` rule does not reach it).
         STORAGE_LOCAL_DIR: 'data/e2e-files',
         // The SPA reads this back through `GET /api/config`, which is the only way it learns where
         // to open its sync socket. Same origin now, so there is no proxy in the path.

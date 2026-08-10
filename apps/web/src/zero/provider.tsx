@@ -441,9 +441,22 @@ export function ZeroRoot({ cacheUrl, children }: ZeroRootProps) {
   // timer, fetch callback or paint ever runs again. The server was measured answering the
   // post-sign-up token in 29ms; the page locked anyway. `pending` renders the sync gate instead
   // of a redirect, which breaks the cycle by construction.
+  //
+  // An identity CHANGE must also not coalesce onto a still-in-flight pre-identity request: that
+  // flight was asked about the previous identity, and its answer settling over the reset above
+  // would stand as a clean, settled `logged-out` — bypassing both guards (the pending reset is
+  // overwritten; the retry surface keys on `unavailable`, which is false) and resurrecting the
+  // redirect cycle. `fresh` discards the stale flight's answer and chains the new request behind
+  // it — the same semantics `refresh()` uses, for the same reason: the caller changed what the
+  // server bakes into the credential. The mount itself (including StrictMode's dev re-run of the
+  // effect) observes no change, so it still joins an open flight rather than queueing a second.
+  const observedAuthUserId = useRef<string | null | undefined>(undefined)
   useEffect(() => {
+    const changed =
+      observedAuthUserId.current !== undefined && observedAuthUserId.current !== authUserId
+    observedAuthUserId.current = authUserId
     setSession((previous) => ({ ...PENDING, revision: previous.revision + 1 }))
-    void remint()
+    void remint({ fresh: changed })
   }, [remint, authUserId])
 
   useProactiveRefresh(session, remint)

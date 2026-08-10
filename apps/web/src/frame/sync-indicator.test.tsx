@@ -7,9 +7,11 @@ import { SyncIndicator } from './sync-indicator'
 const CONNECTED: ConnectionSummary = {
   state: 'connected',
   recovery: 'idle',
+  condition: 'none',
   label: 'Synced',
   writable: true,
   retryOffered: false,
+  refreshOffered: false,
 }
 
 function show(connection: ConnectionSummary, retryNow = vi.fn()) {
@@ -126,6 +128,74 @@ test('a retry control nobody was standing on does not steal focus', () => {
 
   expect(elsewhere).toHaveFocus()
   elsewhere.remove()
+})
+
+const UPDATE_NEEDED: ConnectionSummary = {
+  ...CONNECTED,
+  state: 'error',
+  condition: 'update-needed',
+  label: 'Update required',
+  writable: false,
+  refreshOffered: true,
+  detail: 'VersionNotSupported',
+}
+
+test('a sync condition is rendered distinctly from an ordinary outage', () => {
+  const { pill } = show(UPDATE_NEEDED)
+
+  expect(pill).toHaveAttribute('data-sync-condition', 'update-needed')
+  expect(screen.getByText('Update required')).toBeInTheDocument()
+  // The reason reaches assistive tech the same way an outage's detail does.
+  expect(screen.getByText('VersionNotSupported')).toHaveClass('sr-only')
+  // No retry: retrying cannot end this state, only the user's refresh can.
+  expect(screen.queryByTestId('connection-retry')).not.toBeInTheDocument()
+})
+
+test('the refresh escape hatch is a real button, reachable by keyboard alone', () => {
+  show(UPDATE_NEEDED)
+
+  const refresh = screen.getByTestId('connection-refresh')
+  expect(refresh.tagName).toBe('BUTTON')
+  expect(refresh).toHaveAttribute('type', 'button')
+  expect(refresh).not.toHaveAttribute('tabindex')
+  expect(refresh).toHaveAccessibleName('Refresh')
+
+  refresh.focus()
+  expect(refresh).toHaveFocus()
+  expect(refresh.className).toContain('focus-visible:ring-accent')
+})
+
+test('a client reset shows work in progress, not an outage, and offers nothing to press', () => {
+  const { pill } = show({
+    ...CONNECTED,
+    state: 'disconnected',
+    condition: 'client-reset',
+    label: 'Restoring local data',
+    writable: false,
+  })
+
+  expect(pill).toHaveAttribute('data-sync-condition', 'client-reset')
+  expect(screen.getByText('Restoring local data')).toBeInTheDocument()
+  const dot = pill.querySelector('[aria-hidden="true"]')
+  expect(dot?.className).toContain('bg-status-in-progress')
+  expect(screen.queryByTestId('connection-retry')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('connection-refresh')).not.toBeInTheDocument()
+})
+
+test('condition dot colours come from theme tokens too', () => {
+  for (const connection of [UPDATE_NEEDED, { ...CONNECTED, condition: 'client-reset' as const }]) {
+    const { unmount } = render(
+      <SyncRecoveryContext.Provider value={{ ...RECOVERY_IDLE, retryNow: vi.fn() }}>
+        <SyncIndicator connection={connection} />
+      </SyncRecoveryContext.Provider>,
+    )
+    const dot = screen.getByTestId('connection-status').querySelector('[aria-hidden="true"]')
+    expect(dot?.className).toMatch(/bg-status-[a-z-]+\b/)
+    expect(dot?.className).not.toMatch(
+      /bg-(emerald|amber|red|green|yellow|blue|orange|slate|gray)-\d/,
+    )
+    unmount()
+  }
 })
 
 test('every dot colour comes from a theme token, never a raw palette shade', () => {

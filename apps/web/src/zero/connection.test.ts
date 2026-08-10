@@ -112,3 +112,43 @@ test('every Zero state times every recovery phase produces a usable summary', ()
     }
   }
 })
+
+test('a client reset overrides the outage story: the wait is deliberate, not a fault', () => {
+  for (const state of STATES) {
+    const summary = summarizeConnection(state, RECOVERY_IDLE, { kind: 'client-reset' })
+    expect(summary.condition).toBe('client-reset')
+    expect(summary.label).toBe('Restoring local data')
+    expect(summary.writable).toBe(false)
+    expect(summary.refreshOffered).toBe(false)
+  }
+})
+
+test('update-needed surfaces to the user and offers a refresh, never a retry', () => {
+  const required = summarizeConnection({ name: 'error', reason: 'x' }, recovery('waiting', true), {
+    kind: 'update-needed',
+    reason: 'VersionNotSupported',
+  })
+  expect(required.condition).toBe('update-needed')
+  expect(required.label).toBe('Update required')
+  expect(required.writable).toBe(false)
+  expect(required.refreshOffered).toBe(true)
+  expect(required.retryOffered).toBe(false)
+  expect(required.detail).toBe('VersionNotSupported')
+
+  // Another tab moved first; this tab still syncs, so writes stay accepted.
+  const newGroup = summarizeConnection({ name: 'connected' }, RECOVERY_IDLE, {
+    kind: 'update-needed',
+    reason: 'NewClientGroup',
+  })
+  expect(newGroup.label).toBe('New version available')
+  expect(newGroup.writable).toBe(true)
+  expect(newGroup.refreshOffered).toBe(true)
+})
+
+test('no condition leaves every summary exactly as the socket tells it', () => {
+  for (const state of STATES) {
+    const bare = summarizeConnection(state, RECOVERY_IDLE)
+    expect(bare.condition).toBe('none')
+    expect(bare.refreshOffered).toBe(false)
+  }
+})

@@ -19,9 +19,17 @@ const DOT_CLASS: Record<ConnectionSummary['state'], string> = {
   closed: 'bg-muted-foreground',
 }
 
+// A condition is not an outage, so it does not borrow the outage's dot: `client-reset` is work in
+// progress, `update-needed` is a state waiting on the user — the review hue, not the urgent one.
+const CONDITION_DOT_CLASS: Partial<Record<ConnectionSummary['condition'], string>> = {
+  'client-reset': 'bg-status-in-progress',
+  'update-needed': 'bg-status-in-review',
+}
+
 export function SyncIndicator({ connection }: { connection: ConnectionSummary }) {
   const { retryNow } = useSyncRecovery()
   const statusRef = useRef<HTMLParagraphElement>(null)
+  const dotClass = CONDITION_DOT_CLASS[connection.condition] ?? DOT_CLASS[connection.state]
 
   return (
     <div
@@ -29,6 +37,7 @@ export function SyncIndicator({ connection }: { connection: ConnectionSummary })
       data-testid="connection-status"
       data-connection={connection.state}
       data-recovery={connection.recovery}
+      data-sync-condition={connection.condition}
     >
       <p
         ref={statusRef}
@@ -37,10 +46,7 @@ export function SyncIndicator({ connection }: { connection: ConnectionSummary })
         role="status"
         aria-live="polite"
       >
-        <span
-          aria-hidden="true"
-          className={`size-1.5 rounded-full ${DOT_CLASS[connection.state]}`}
-        />
+        <span aria-hidden="true" className={`size-1.5 rounded-full ${dotClass}`} />
         <span>{connection.label}</span>
         {connection.detail ? <span className="sr-only">{connection.detail}</span> : null}
       </p>
@@ -54,6 +60,18 @@ export function SyncIndicator({ connection }: { connection: ConnectionSummary })
           className="text-text-1 focus-visible:ring-accent rounded-sm"
         >
           Retry now
+        </RetryButton>
+      ) : null}
+      {/* The refresh Zero would have performed silently, handed to the user instead: taking it is
+          their act, at their moment — never the library's, never with a write in flight. */}
+      {connection.refreshOffered ? (
+        <RetryButton
+          onRetry={() => window.location.reload()}
+          fallbackRef={statusRef}
+          testId="connection-refresh"
+          className="text-text-1 focus-visible:ring-accent rounded-sm"
+        >
+          Refresh
         </RetryButton>
       ) : null}
     </div>

@@ -1,6 +1,12 @@
 import type { ConnectionState } from '@rocicorp/zero'
 import { useConnectionState } from '@rocicorp/zero/react'
 import {
+  SYNC_CONDITION_NONE,
+  type SyncCondition,
+  type SyncConditionKind,
+  useSyncCondition,
+} from '@/zero/condition'
+import {
   type RecoveryPhase,
   recoveryPlan,
   type SyncRecoveryStatus,
@@ -10,9 +16,16 @@ import {
 export interface ConnectionSummary {
   state: ConnectionState['name']
   recovery: RecoveryPhase
+  // A condition is not an outage: `client-reset` is the client being replaced on purpose, and
+  // `update-needed` is one only the user's own refresh can end. The indicator renders each
+  // distinctly from a disconnection.
+  condition: SyncConditionKind
   label: string
   writable: boolean
   retryOffered: boolean
+  // Offered instead of retry when only a refresh can resolve the state; taking it is always the
+  // user's act, never the library's.
+  refreshOffered: boolean
   detail?: string
 }
 
@@ -26,11 +39,34 @@ function isRecovering(name: ConnectionState['name'], phase: RecoveryPhase): bool
 export function summarizeConnection(
   state: ConnectionState,
   recovery: SyncRecoveryStatus,
+  condition: SyncCondition = SYNC_CONDITION_NONE,
 ): ConnectionSummary {
   const recovering = isRecovering(state.name, recovery.phase)
   const shared = {
     recovery: recovery.phase,
+    condition: condition.kind,
     retryOffered: recovering && recovery.retryOffered,
+    refreshOffered: false,
+  }
+
+  // A condition overrides the socket's own story: while the client is being replaced, or the
+  // running code can no longer sync, "Offline — retrying" would be the wrong sentence — the wait
+  // is not a network fault and a retry will not end it.
+  if (condition.kind === 'client-reset') {
+    return { ...shared, state: state.name, label: 'Restoring local data', writable: false }
+  }
+  if (condition.kind === 'update-needed') {
+    return {
+      ...shared,
+      state: state.name,
+      // `NewClientGroup`: another tab already runs newer code; this tab still syncs but should
+      // move when convenient. The other two reasons mean this tab cannot sync at all.
+      label: condition.reason === 'NewClientGroup' ? 'New version available' : 'Update required',
+      writable: condition.reason === 'NewClientGroup',
+      retryOffered: false,
+      refreshOffered: true,
+      detail: condition.reason,
+    }
   }
 
   switch (state.name) {
@@ -81,5 +117,5 @@ export function summarizeConnection(
 }
 
 export function useConnectionSummary(): ConnectionSummary {
-  return summarizeConnection(useConnectionState(), useSyncRecovery())
+  return summarizeConnection(useConnectionState(), useSyncRecovery(), useSyncCondition())
 }

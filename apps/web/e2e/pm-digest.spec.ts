@@ -225,7 +225,9 @@ async function expectPmDigestIds(page: Page, expected: readonly string[]): Promi
 test('with the default policy the PM reader surface does not exist, and only the team can read the row', async ({
   page,
 }) => {
-  test.slow()
+  // The inherited test.slow() was removed by e2e-determinism task 5.7: with the hang gone this
+  // test measures 2.9s alone on a fresh database — a tripled 180s budget was hiding failures,
+  // not absorbing slowness.
   const crashes: string[] = []
   page.on('pageerror', (error) => crashes.push(error.message))
 
@@ -308,7 +310,7 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
   page,
   newContext,
 }) => {
-  test.slow()
+  // test.slow() removed (task 5.7): 5.9s measured alone on a fresh database.
   await enterApp(page)
   const team = await createTeam(page)
   const cycleName = unique('Shared cycle')

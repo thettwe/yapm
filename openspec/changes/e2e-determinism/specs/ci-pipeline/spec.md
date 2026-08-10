@@ -74,15 +74,18 @@ each other's leftovers cannot be bisected, and a failure in it cannot be attribu
 - **WHEN** any single spec file is run against a freshly bootstrapped database
 - **THEN** it passes, without a sibling having run first
 
-### Requirement: The stack starts in an order the sync layer survives
+### Requirement: The documented startup order is the order CI actually uses
 
-The documented startup order — Postgres, then migrations, then `zero-cache`, then the web server —
-SHALL be the order CI actually uses, so the sync cache never snapshots a schema-less database.
-Where the documentation and the workflow disagree, the disagreement SHALL be resolved rather than
-recorded.
+The documentation SHALL describe the startup order the E2E workflow actually performs. Where the
+two disagree, the disagreement SHALL be resolved rather than recorded — and it was resolved by
+measurement: the workflow brings Postgres and `zero-cache` up together and lets the app server
+migrate at boot, the suspected snapshot race does not occur (`SchemaVersionNotSupported` is zero
+across the audited CI runs, because `zero-cache` follows migrations through logical replication
+after its initial snapshot), so the workflow stands and the documentation that claimed a
+migrate-before-zero-cache order was the defect.
 
-#### Scenario: The sync cache never snapshots an unmigrated database
+#### Scenario: The documentation and the workflow agree
 
-- **WHEN** the E2E job starts its containers
-- **THEN** the schema is in place before `zero-cache` begins replicating, and the job asserts this
-  rather than assuming it
+- **WHEN** a reader compares the documented E2E startup order with the workflow's actual order
+- **THEN** they are the same order, and the documentation records why that order is safe for the
+  sync layer rather than asserting an order the job never performs

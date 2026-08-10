@@ -361,3 +361,86 @@ permanently-dead target; nothing slow-but-real was truncated; it converts 60s bu
 attributed 16s failures. The one-origin harness stays — production-shaped, ~2× faster, and it
 surfaced RC1 and RC3 — with `reuseExistingServer: false`, because an adopted server means
 `vite build` silently did not run and the suite asserts an arbitrary old bundle.
+
+### DI-7 — What "carrying PR #41's per-test isolation" means under this change's model (2026-08-10)
+
+Task 5b.4 says "carry PR #41's per-test isolation over". PR #41's branch carried three things: a
+`newContext` fixture whose teardown Playwright owns, a per-test `resetToBaseline` database reset
+with `zz-isolation.spec.ts` as its falsifiable check, and the accumulation diagnosis. This change
+carries the fixture verbatim (with credit), carries `zz-isolation.spec.ts` adapted, restores the
+diagnosis — and does **not** carry the per-test reset. The reasons are this change's own
+measurements: the delta specs (the acceptance criteria) require **file-level** self-containment
+("a spec file passes alone"), not per-test emptiness; DI-6's forensic audit showed the cross-run
+degradation that made per-test reset look necessary was a reused-database artifact of the
+measurement protocol, while CI's fresh-volumes-per-run already provides the isolation boundary
+that matters; and a per-test reset would rewrite every spec that builds state in one test and
+reads it in the next, for a defect the fresh-database protocol already rules out. What replaces
+the reset is visibility (5b.6): a `workspaceGrowth` auto-fixture that annotates any test leaving
+the workspace larger than it found it, and `zz-isolation.spec.ts` asserting the run-end
+population against measured ceilings — so the 533-team failure mode cannot recur silently, which
+was the property the reset was actually bought for.
+
+### DI-8 — The startup-order requirement is reconciled to the measurement, in the delta spec too
+
+The ci-pipeline delta requirement "The stack starts in an order the sync layer survives" was
+drafted (inherited from `e2e-multi-context`) before task 2.7's measurement and demanded
+migrate-before-zero-cache as CI's actual order. The measurement ruled the race out —
+`SchemaVersionNotSupported` is 0 across the audited CI runs; zero-cache follows migrations
+through logical replication after its initial snapshot — and tasks.md 2.7 already recorded the
+contradiction as a documentation defect. The delta spec is updated to say what is true (the
+documented order SHALL be the workflow's actual order, with the safety argument recorded), rather
+than archiving a requirement the change deliberately declined to implement. PROCESS.md §3 now
+describes the real order and names the measurement.
+
+### DI-9 — `onClientStateNotFound` under the React provider: a supplied handler must replace the client itself
+
+The installed 1.8.0 `ZeroProvider` wraps `onClientStateNotFound`: with no handler supplied it
+rotates the client in place; with one supplied, **the rotation is skipped** (unless the handler
+throws). So a handler that only surfaced a status would leave a dead client running forever —
+"the current Zero instance should be treated as dead and replaced, not reconnected"
+(options.d.ts). `ZeroRoot`'s handler therefore performs the replacement itself, by bumping a
+`key` on `ZeroProvider` — the same in-place construction the provider's own rotation does — and
+surfaces `client-reset` through `SyncConditionContext` until the replacement connects. Recorded
+because the wrapper's suppress-on-supply behaviour is invisible in the type signature and is
+exactly the kind of post-cutoff fact the next reader would guess wrong.
+
+### The coverage delta (task 8.3)
+
+Counted mechanically — `expect(` occurrences per spec file at the pre-change commit (`3b02308`)
+against this branch:
+
+- **Every one of the 21 pre-existing spec files has an identical assertion count before and
+  after** (967 textual `expect(` sites in total; per-file table in the PR). The lifecycle
+  migration deleted only `try`/`finally` scaffolding and `close()` plumbing, which contained no
+  assertions; per-file `test(` counts are also identical, so no test was dropped or merged.
+- **The delta is purely additive.** `harness.spec.ts` adds 12 assertion sites across 4 tests (the
+  reload watcher proven both ways, `goToMore` proven both ways). `zz-isolation.spec.ts` adds 3
+  textual sites, one of which is a loop asserting 10 tables against their ceilings — 12 runtime
+  assertions plus the live-app checks. Unit tier: 3 new tests in `provider.test.tsx` (both
+  handlers supplied; client-state-not-found routes into recovery; update-needed never reloads),
+  3 in `connection.test.ts` and 4 in `sync-indicator.test.tsx` (the condition summaries and their
+  rendering, tokens only).
+- **Reason for the difference:** the new files are the self-tests sections 5 and 7 demanded — the
+  instruments proven both ways — and the run-end population gate. Nothing was weakened, loosened,
+  or re-homed; the non-goal "weakening any assertion" held by construction, and the per-file
+  equality is the proof.
+
+### The completion measurement (2026-08-10, sections 4–10 on top of the merged first half)
+
+Node 24.19.0, isolated `yapm-e2e` compose project, fresh volumes per run (`down -v` between),
+postgres+zero-cache up together per the reconciled CI order, the suite serving its own built
+bundle.
+
+| protocol | result |
+|---|---|
+| full suite, fresh DB, run 1 | **99 passed / 0 failed**, 6.4m |
+| full suite, fresh DB, run 2 | **99 passed / 0 failed**, 6.6m |
+| full suite, fresh DB, run 3 | **99 passed / 0 failed**, 6.5m |
+| every spec file alone, each on its own fresh DB | **23/23 green** (durations in tasks 5.5) |
+| `reconnect.spec.ts` ×3 (it was touched by the migration; `:322` once flaked on CI) | 5/5, 5/5, 5/5 (2.3m / 2.2m / 2.2m) |
+
+The 99 is the pre-change suite's tests — per-file `test(` counts byte-identical — plus
+`harness.spec.ts` (4, one an expected-failure proving the reload tripwire fires) and
+`zz-isolation.spec.ts` (1). Run-1 end population, the basis for the zz ceilings: team 76,
+invite 17, project 7, issue 164, cycle 36, retro 14, comment 6, notification 6, attachment 3,
+pull_request 7.

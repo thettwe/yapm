@@ -29,6 +29,9 @@ dark.
 | **Offline — retrying** | The socket is down; the browser is redialling. | ✅ | ❌ |
 | **Sign-in expired — reconnecting** | The sync token was refused; a fresh one is being minted. | ✅ | ❌ |
 | **Sync error — retrying** | `zero-cache` returned a protocol error; recovery is running. | ✅ | ❌ |
+| **Restoring local data** | The server no longer recognises this browser's sync state (idle for a long time, or state discarded server-side); the local replica is being rebuilt. Clears itself. | ✅ | queued |
+| **Update required** | This tab's app version can no longer talk to your `zero-cache` — typically mid-upgrade. A **Refresh** button appears; nothing reloads on its own. | ✅ | ❌ |
+| **New version available** | Another tab already runs newer app code. This tab still syncs; refresh when convenient. | ✅ | ✅ |
 
 Reads never stop: everything already synced keeps rendering and navigating. Writes are refused
 while disconnected rather than silently queued and lost — that is Zero's model, and the statusline is
@@ -71,6 +74,22 @@ doubling, **capped at 30 seconds** — and the schedule only resets once a conne
 a few seconds. So an instance that is genuinely down (a deploy, a stopped container) degrades to a
 calm ~30-second poll per tab rather than a hot loop, and it comes back on its own the moment the
 server does. The jitter matters when a laptop wakes and every tab retries at once.
+
+## What changes during an upgrade
+
+Zero's client library would, by default, answer a version mismatch or lost client state with a
+silent `location.reload()` — the page taken out from under whoever is using it, half-typed edit
+included. yapm overrides both defaults, so **the app never reloads itself**:
+
+- While you deploy a new app image, a tab still running the old code shows **Update required**
+  with a keyboard-reachable **Refresh** button. Whoever is in the tab chooses the moment; an
+  in-flight write is never discarded by a reload they did not ask for.
+- A browser that has been away long enough for its server-side sync state to be discarded shows
+  **Restoring local data** briefly while the replica rebuilds, then returns to **Synced** on its
+  own. No action needed, yours or theirs.
+
+Both states are rendered distinctly from an outage — they are not fixed by waiting for a
+reconnect, and the statusline does not pretend they are. There is still nothing to configure.
 
 ## What you will see in the logs
 

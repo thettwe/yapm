@@ -2641,6 +2641,27 @@ Previews (Vercel-style per-branch hostnames): set `ZERO_QUERY_URL`/`ZERO_MUTATE_
 - **`defineQueries` / `defineMutators` exactly once at top level** — they assign the wire names.
 - **Zero types are registered globally with `declare module '@rocicorp/zero'`** (`DefaultTypes.schema`, `.context`, `.dbProvider`). Forgetting these produces confusing type errors; the `*WithType` variants are the escape hatch.
 - **Auth errors need a manual reconnect** — Zero will not retry out of `needs-auth` or `error` by itself.
+- **The client's default answer to two whole error classes is `location.reload()`.** On
+  `UpdateNeeded` and on `ClientStateNotFound` the bare client reloads the page out from under the
+  user — mid-write included — after writing its reason into
+  `sessionStorage['_zeroReloadReason']` (as `JSON [reason, message]`, with reload backoff state
+  beside it in `_zeroReloadBackoffState`; 500ms→60s backoff, from `reload-error-handler.ts`,
+  1.8.0 verbatim). Two options override it, and supplying **both** is what makes the reload path
+  unreachable:
+  - `onUpdateNeeded?: (reason: UpdateNeededReason) => void` — where `UpdateNeededReason` is
+    `{type: 'NewClientGroup' | 'VersionNotSupported' | 'SchemaVersionNotSupported', message?: string}`.
+    `NewClientGroup`: another tab loaded newer code; **this tab can still sync** and merely cannot
+    share a client group. The other two: this client cannot connect at all until its code updates.
+  - `onClientStateNotFound?: () => void` — sync state garbage-collected or rejected; the instance
+    is dead and must be **replaced, not reconnected**. The React/Solid `ZeroProvider`s replace the
+    client in place by default — but a supplied handler **suppresses** that rotation, so a handler
+    that only records the event leaves a dead client running; it must itself trigger replacement
+    (in this repo: `ZeroRoot` bumps the provider's `key`).
+  This default is undocumented in Zero's own docs and two yapm changes were scoped without knowing
+  it existed — and it was **not** the cause of the E2E failures those changes chased: the reload
+  markers (`reloading in`, `Zero reloaded the page.`, `_zeroReloadReason`) measured **zero** in
+  every environment. Closing it fixed a real user-facing gap (`ZeroRoot` supplies both handlers;
+  the E2E reload watcher fails any test whose page reloads unrequested), not the flake.
 - **`connected` means "socket open", not "credential accepted".** The state flips as soon as the websocket opens, *before* zero-cache's validating `/query` round trip. A refused credential therefore produces `needs-auth → connecting → connected → needs-auth` on a loop, so any backoff that resets on arrival at `connected` never advances past its first step. Reset only after the connection has *held*. Measured, not inferred — see §10.7.
 - **Never answer a rejected credential with `200 … userID: null` from `/query` or `/mutate`.** zero-cache reads a present `userID` as the authoritative identity of the socket, so a null one contradicts the connection's claimed user, drops it from the client group, and can take every client on that view-syncer down with `InvalidConnectionRequest`. Return **401/403** instead. §10.7 has the source chain.
 - **Queries must be optimized.** From llms.txt: "The query plan commonly has `TEMP B-TREE` when it is not optimized... `zero-cache` derives indexes from upstream" — so add the index in **Postgres**, not in Zero.

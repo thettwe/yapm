@@ -21,17 +21,20 @@ import { ADMIN, ensureAccount } from './support'
 // visible in the run that introduced it, not three changes later. Raising a ceiling is fine when
 // the suite legitimately grows; the evidence it takes is the annotated growth trail, and the raise
 // belongs in the same change that adds the tests.
+// Measured on this branch's first fresh-database full run (2026-08-10, 99/99): team 76,
+// invite 17, project 7, issue 164, cycle 36, retro 14, comment 6, notification 6, attachment 3,
+// pull_request 7.
 const RUN_POPULATION_CEILING: GrowthCounts = {
   team: 120,
-  invite: 60,
-  project: 60,
-  issue: 220,
-  cycle: 400,
-  retro: 40,
-  comment: 60,
-  notification: 60,
-  attachment: 20,
-  pull_request: 20,
+  invite: 30,
+  project: 15,
+  issue: 250,
+  cycle: 60,
+  retro: 25,
+  comment: 15,
+  notification: 15,
+  attachment: 10,
+  pull_request: 15,
 }
 
 test('the run ends inside its measured population budget, and the app is live on that state', async ({

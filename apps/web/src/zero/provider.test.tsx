@@ -548,3 +548,39 @@ test('a wake early in the token lifetime does not re-mint', async () => {
 
   expect(remintCount()).toBe(1)
 })
+
+// THE FALSIFIABLE CHECK for the sign-up wedge. The sequence is the one a real trace recorded:
+// the anonymous mount mints once and is answered 401 — which is CORRECT, nobody is signed in —
+// and that sets `logged-out`. Signing up re-mints, and if THAT request fails (it is bounded by
+// the client's own 10s timeout, and a cold server can exceed it), `applyCredential` preserves the
+// previous status. The session therefore sits at `logged-out` with `unavailable` set. While the
+// retry was scoped to `pending`, nothing was scheduled to ask again and the client stayed wedged
+// until the tab was reloaded — invisible to this suite because it only ever ran the dev server,
+// which is slow enough to boot that the server is always warm by the first mint.
+test('a failed mint after a 401 keeps asking — a logged-out session is not a settled one', async () => {
+  mocks.fetchSyncCredential.mockResolvedValue({ kind: 'no-session' })
+  await mount()
+  expect(remintCount()).toBe(1)
+
+  // Sign-up happens — which re-mints, exactly as the identity change does in the app — and the
+  // next answer is a transient failure rather than a refusal.
+  mocks.fetchSyncCredential.mockResolvedValue({ kind: 'unavailable', reason: 'TimeoutError' })
+  await act(async () => {
+    screen.getByTestId('refresh').click()
+  })
+  const afterFailure = remintCount()
+
+  await advance(BACKOFF_CAP_MS * 3)
+  expect(remintCount()).toBeGreaterThan(afterFailure)
+})
+
+// The other half of the same rule: a definitive refusal still settles. Otherwise the fix above
+// would turn every signed-out tab into a polling loop against `/api/zero/token`.
+test('a settled logged-out session does not poll', async () => {
+  mocks.fetchSyncCredential.mockResolvedValue({ kind: 'no-session' })
+  await mount()
+  const afterRefusal = remintCount()
+
+  await advance(BACKOFF_CAP_MS * 4)
+  expect(remintCount()).toBe(afterRefusal)
+})

@@ -144,7 +144,10 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
   const [error, setError] = useState<string | undefined>(undefined)
   // Bumped by every `start`, and read by the cursor as its session key. The provider outlives the
   // dialog, so a cursor left behind by the last visit is state the next visit must not inherit.
+  // The ref mirrors it for the batch runner below, whose completion arrives on the SERVER's
+  // schedule — an async callback needs the session as of now, not as of its own creation.
   const [session, setSession] = useState(0)
+  const sessionRef = useRef(0)
   const contextRef = useRef<readonly string[]>([])
 
   const isRoot = page === 'root'
@@ -174,7 +177,8 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
     setPage(next)
     setSearch('')
     setError(undefined)
-    setSession((previous) => previous + 1)
+    sessionRef.current += 1
+    setSession(sessionRef.current)
     setOpen(true)
   }, [])
 
@@ -209,16 +213,27 @@ export function CommandProvider({ teamId, issues, children }: CommandProviderPro
     setOpen(false)
   }, [])
 
+  // The batch completes on the server's schedule, 50–500ms after the optimistic apply — long
+  // enough for the palette to have been reopened for something else. A completion may therefore
+  // act only on the session it was launched in: an unguarded close() here was closing a palette
+  // the user had reopened and was typing into. A stale rejection is likewise not scribbled onto
+  // an unrelated session — Zero rebases the optimistic apply away, so the surface it acted on
+  // visibly reverts, which is the rejection surfacing where the user is actually looking.
   const runAll = useCallback(
     async (writes: ReturnType<typeof zero.mutate>[]) => {
+      const launched = sessionRef.current
       for (const write of writes) {
         const failure = await runMutation(write)
         if (failure !== undefined) {
-          setError(failure)
+          if (sessionRef.current === launched) {
+            setError(failure)
+          }
           return
         }
       }
-      close()
+      if (sessionRef.current === launched) {
+        close()
+      }
     },
     [close],
   )

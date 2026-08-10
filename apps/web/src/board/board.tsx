@@ -404,6 +404,20 @@ function BoardBody({
         setPendingFocus(null)
         return
       }
+      // The handoffs this loop exists to override are both aimed at the MOVED card — Radix's
+      // stale trigger and dnd-kit's activator. Focus on a DIFFERENT card, or inside an open
+      // dialog, is not a handoff: it is the reader having moved on, and a server-ack rebase
+      // re-running this effect mid-window was re-stealing it — so `m` opened the Move palette
+      // for the card the reader had already left. Recover dropped focus; never take held focus.
+      const active = document.activeElement
+      if (active instanceof HTMLElement && active !== el) {
+        const onAnotherCard =
+          active.dataset.cardId !== undefined && active.dataset.cardId !== pendingFocus.id
+        if (onAnotherCard || active.closest('[role="dialog"]') !== null) {
+          setPendingFocus(null)
+          return
+        }
+      }
       el?.focus()
       attempts += 1
       if (attempts >= FOCUS_RESTORE_FRAMES) {

@@ -347,26 +347,38 @@ test('the retro command palette reaches every retro action', async ({ page }) =>
   // the defect only sometimes, which is worth nothing as a regression guard.
   await page.keyboard.press('ControlOrMeta+k')
   await expect(palette).toBeVisible({ timeout: 20_000 })
+  // Two blindspots the first probe had: it took the FIRST [role=dialog] in DOM order, which can
+  // be the PREVIOUS command's still-dying popup — Escape then lands in a dead dialog, the live
+  // palette never closes, and the probe reports "never entered its closing state" — and it could
+  // not tell "unmounted before ever showing a closing state" apart from "never closed". The live
+  // dialog is picked by its open state and HELD as a reference, and an exit skipped entirely is
+  // its own distinct outcome rather than a failure.
   const dispatch = await page.evaluate(async () => {
-    const closingPopup = (): Element | null => {
-      const popup = document.querySelector('[role="dialog"]')
-      if (popup === null) return null
-      const closing = popup.hasAttribute('data-ending-style') || popup.hasAttribute('data-closed')
-      return closing ? popup : null
-    }
-    const input = document.querySelector('[role="dialog"] input')
-    if (input === null) return 'the palette has no input to hold focus'
+    const live = Array.from(document.querySelectorAll('[role="dialog"]')).find(
+      (candidate) =>
+        !candidate.hasAttribute('data-ending-style') && !candidate.hasAttribute('data-closed'),
+    )
+    const input = live?.querySelector('input') ?? null
+    if (live === undefined || input === null) return 'the palette has no input to hold focus'
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    for (let frame = 0; frame < 60 && closingPopup() === null; frame += 1) {
+    for (let frame = 0; frame < 60; frame += 1) {
+      if (!live.isConnected) return 'the palette closed without a transition'
+      if (live.hasAttribute('data-ending-style') || live.hasAttribute('data-closed')) {
+        const target = live.querySelector('input') ?? live
+        target.dispatchEvent(new KeyboardEvent('keydown', { key: ']', bubbles: true }))
+        return 'dispatched into the closing palette'
+      }
       await new Promise((resolve) => requestAnimationFrame(resolve))
     }
-    const popup = closingPopup()
-    if (popup === null) return 'the palette never entered its closing state'
-    const target = popup.querySelector('input') ?? popup
-    target.dispatchEvent(new KeyboardEvent('keydown', { key: ']', bubbles: true }))
-    return 'dispatched into the closing palette'
+    return 'the palette never entered its closing state'
   })
-  expect(dispatch).toBe('dispatched into the closing palette')
+  if (dispatch === 'the palette closed without a transition') {
+    // No dying window existed on this run, so the swallowing defect under guard cannot occur —
+    // but the keystroke still has to reach the retro through the ordinary path.
+    await page.keyboard.press(']')
+  } else {
+    expect(dispatch).toBe('dispatched into the closing palette')
+  }
   await expect(phaseStep(page, 'actions')).toHaveAttribute('aria-current', 'step', {
     timeout: 20_000,
   })

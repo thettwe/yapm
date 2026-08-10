@@ -620,15 +620,19 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
       timeout: 30_000,
     })
 
-    const retracted = await (async () => {
+    // `data-published="false"` above flips on the OPTIMISTIC apply; the `unpublished` audit row
+    // is written by the server's authoritative pass, some tens of milliseconds later. The read is
+    // therefore polled until the server's write lands — the same assertion, awaiting the
+    // authority that makes it true, not a weakened one.
+    await expect(async () => {
       const lookup = openDb()
       try {
-        return await readDisclosureAudit(lookup, digestId)
+        const retracted = await readDisclosureAudit(lookup, digestId)
+        expect(retracted.map((entry) => entry.event)).toContain('unpublished')
       } finally {
         await lookup.close()
       }
-    })()
-    expect(retracted.map((entry) => entry.event)).toContain('unpublished')
+    }).toPass({ timeout: 20_000 })
 
     // Proven on a FRESH client rather than on the one that already holds the row: what matters is
     // that a reader arriving after the retraction gets nothing, not that a warm replica dropped it.

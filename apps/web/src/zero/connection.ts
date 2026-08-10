@@ -41,32 +41,57 @@ export function summarizeConnection(
   recovery: SyncRecoveryStatus,
   condition: SyncCondition = SYNC_CONDITION_NONE,
 ): ConnectionSummary {
+  const base = baseSummary(state, recovery, condition)
+
+  // A condition OVERLAYS the socket's own story, it does not replace it: a condition is sticky
+  // (`update-needed` only clears on the user's refresh), so letting it override the state outright
+  // would report "New version available" — writable, no retry — straight through a genuine outage.
+  if (condition.kind === 'client-reset') {
+    // The wait is deliberate, not a fault: no outage label, and no retry — a retry cannot end a
+    // replacement that is already underway.
+    return { ...base, label: 'Restoring local data', writable: false, retryOffered: false }
+  }
+  if (condition.kind === 'update-needed') {
+    const socketUp = state.name === 'connected' || state.name === 'connecting'
+    // `NewClientGroup`: another tab already runs newer code; this tab still syncs, so the base
+    // summary stands — writes, outage labels and the retry affordance included — and only the
+    // healthy "Synced" is upgraded to the nudge. The other two reasons mean this tab cannot sync
+    // at all: writes are refused everywhere, but an independent outage keeps its own label and
+    // retry, because ending the outage is still worth offering even though only a refresh ends
+    // the condition. `data-sync-condition` keeps the rendering distinct throughout.
+    if (condition.reason === 'NewClientGroup') {
+      return {
+        ...base,
+        refreshOffered: true,
+        ...(state.name === 'connected'
+          ? { label: 'New version available', detail: condition.reason }
+          : {}),
+      }
+    }
+    return {
+      ...base,
+      writable: false,
+      refreshOffered: true,
+      ...(socketUp
+        ? { label: 'Update required', retryOffered: false, detail: condition.reason }
+        : {}),
+    }
+  }
+
+  return base
+}
+
+function baseSummary(
+  state: ConnectionState,
+  recovery: SyncRecoveryStatus,
+  condition: SyncCondition,
+): ConnectionSummary {
   const recovering = isRecovering(state.name, recovery.phase)
   const shared = {
     recovery: recovery.phase,
     condition: condition.kind,
     retryOffered: recovering && recovery.retryOffered,
     refreshOffered: false,
-  }
-
-  // A condition overrides the socket's own story: while the client is being replaced, or the
-  // running code can no longer sync, "Offline — retrying" would be the wrong sentence — the wait
-  // is not a network fault and a retry will not end it.
-  if (condition.kind === 'client-reset') {
-    return { ...shared, state: state.name, label: 'Restoring local data', writable: false }
-  }
-  if (condition.kind === 'update-needed') {
-    return {
-      ...shared,
-      state: state.name,
-      // `NewClientGroup`: another tab already runs newer code; this tab still syncs but should
-      // move when convenient. The other two reasons mean this tab cannot sync at all.
-      label: condition.reason === 'NewClientGroup' ? 'New version available' : 'Update required',
-      writable: condition.reason === 'NewClientGroup',
-      retryOffered: false,
-      refreshOffered: true,
-      detail: condition.reason,
-    }
   }
 
   switch (state.name) {

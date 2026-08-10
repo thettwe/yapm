@@ -115,16 +115,21 @@ test('every Zero state times every recovery phase produces a usable summary', ()
 
 test('a client reset overrides the outage story: the wait is deliberate, not a fault', () => {
   for (const state of STATES) {
-    const summary = summarizeConnection(state, RECOVERY_IDLE, { kind: 'client-reset' })
-    expect(summary.condition).toBe('client-reset')
-    expect(summary.label).toBe('Restoring local data')
-    expect(summary.writable).toBe(false)
-    expect(summary.refreshOffered).toBe(false)
+    for (const rec of [RECOVERY_IDLE, recovery('waiting', true)]) {
+      const summary = summarizeConnection(state, rec, { kind: 'client-reset' })
+      expect(summary.condition).toBe('client-reset')
+      expect(summary.label).toBe('Restoring local data')
+      expect(summary.writable).toBe(false)
+      expect(summary.refreshOffered).toBe(false)
+      // No retry either: a retry cannot end a replacement that is already underway, and the
+      // state's own docs say the wait clears itself.
+      expect(summary.retryOffered).toBe(false)
+    }
   }
 })
 
 test('update-needed surfaces to the user and offers a refresh, never a retry', () => {
-  const required = summarizeConnection({ name: 'error', reason: 'x' }, recovery('waiting', true), {
+  const required = summarizeConnection({ name: 'connected' }, RECOVERY_IDLE, {
     kind: 'update-needed',
     reason: 'VersionNotSupported',
   })
@@ -143,6 +148,52 @@ test('update-needed surfaces to the user and offers a refresh, never a retry', (
   expect(newGroup.label).toBe('New version available')
   expect(newGroup.writable).toBe(true)
   expect(newGroup.refreshOffered).toBe(true)
+})
+
+// The condition is sticky — only the user's refresh clears it — so it must not mask a genuine
+// outage that arrives underneath it: `data-sync-condition` keeps the rendering distinct, but the
+// label, writability and retry affordance stay honest about the socket.
+test('an update condition overlays the socket story, it does not replace an outage', () => {
+  const down = STATES.filter((s) => s.name !== 'connected' && s.name !== 'connecting')
+
+  for (const state of down) {
+    const base = summarizeConnection(state, recovery('waiting', true))
+
+    for (const reason of ['VersionNotSupported', 'SchemaVersionNotSupported'] as const) {
+      const summary = summarizeConnection(state, recovery('waiting', true), {
+        kind: 'update-needed',
+        reason,
+      })
+      expect(summary.condition).toBe('update-needed')
+      expect(summary.writable, state.name).toBe(false)
+      // The outage keeps its own label and its retry: ending the outage is still worth offering,
+      // even though only a refresh ends the condition.
+      expect(summary.label, state.name).toBe(base.label)
+      expect(summary.retryOffered, state.name).toBe(base.retryOffered)
+      expect(summary.refreshOffered).toBe(true)
+    }
+
+    // Another tab moved first, but THIS socket is down: the base outage stands in full — its
+    // writability included — with only the refresh offer added.
+    const newGroup = summarizeConnection(state, recovery('waiting', true), {
+      kind: 'update-needed',
+      reason: 'NewClientGroup',
+    })
+    expect(newGroup.label, state.name).toBe(base.label)
+    expect(newGroup.writable, state.name).toBe(base.writable)
+    expect(newGroup.retryOffered, state.name).toBe(base.retryOffered)
+    expect(newGroup.refreshOffered).toBe(true)
+  }
+
+  // While connecting, writes queue as they would without the nudge; "New version available" is
+  // reserved for the state whose base story would have been "Synced".
+  const connecting = summarizeConnection({ name: 'connecting' }, RECOVERY_IDLE, {
+    kind: 'update-needed',
+    reason: 'NewClientGroup',
+  })
+  expect(connecting.label).toBe('Connecting')
+  expect(connecting.writable).toBe(true)
+  expect(connecting.refreshOffered).toBe(true)
 })
 
 test('no condition leaves every summary exactly as the socket tells it', () => {

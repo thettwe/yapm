@@ -85,6 +85,13 @@ export const test = base.extend<E2eFixtures, E2eWorkerFixtures>({
           return originalReload(options)
         }
         page.on('load', () => {
+          // The credit is consumed synchronously here, BEFORE the probe: the evaluate below can
+          // lose a race with a second navigation and throw, and a credit left behind by that race
+          // would silently absorb a later Zero-initiated reload on the same page. Consumed up
+          // front, the credit is tied to the first load after the deliberate `page.reload()` —
+          // and restored only if that load proves not to have been a reload at all.
+          const credited = allowedReloads > 0
+          if (credited) allowedReloads -= 1
           void (async () => {
             try {
               const nav = await page.evaluate(() => {
@@ -97,16 +104,17 @@ export const test = base.extend<E2eFixtures, E2eWorkerFixtures>({
                   url: location.href,
                 }
               })
-              if (nav.type !== 'reload') return
-              if (allowedReloads > 0) {
-                allowedReloads -= 1
+              if (nav.type !== 'reload') {
+                if (credited) allowedReloads += 1
                 return
               }
+              if (credited) return
               violations.push(
                 `unrequested reload at ${nav.url} — reason: ${nav.reason ?? 'none recorded (not a Zero reload)'}`,
               )
             } catch {
               // The page navigated again or closed under the probe; the next load reports itself.
+              // A consumed credit stays consumed — the load it paid for was this one.
             }
           })()
         })

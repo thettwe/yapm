@@ -497,10 +497,33 @@ export function ZeroRoot({ cacheUrl, children }: ZeroRootProps) {
   // (`options.d.ts`: "treated as dead and replaced, not reconnected"). Supplying this handler
   // suppresses `ZeroProvider`'s silent internal rotation, so the epoch bump below performs the
   // same in-place replacement through the provider's `key` — visibly, through the statusline.
+  //
+  // The bump is paced by the same backoff as every other recovery: a server that persistently
+  // answers `ClientStateNotFound` would otherwise drive a construct → dial → die remount loop
+  // bounded only by the connect round trip — exactly the hot loop the replaced default handler
+  // (500ms → 60s) existed to prevent. The counter resets when a replacement actually connects
+  // (`ClientResetSettled` below), so a genuine one-off reset stays near-immediate.
+  const clientResetAttemptRef = useRef(0)
+  const clientResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const onClientStateNotFound = useCallback(() => {
-    setCondition({ kind: 'client-reset' })
-    setClientEpoch((epoch) => epoch + 1)
+    setCondition((current) =>
+      current.kind === 'client-reset' ? current : { kind: 'client-reset' },
+    )
+    if (clientResetTimerRef.current !== null) return
+    const attempt = clientResetAttemptRef.current
+    clientResetAttemptRef.current = attempt + 1
+    clientResetTimerRef.current = setTimeout(() => {
+      clientResetTimerRef.current = null
+      setClientEpoch((epoch) => epoch + 1)
+    }, backoffDelay(attempt))
   }, [])
+
+  useEffect(
+    () => () => {
+      if (clientResetTimerRef.current !== null) clearTimeout(clientResetTimerRef.current)
+    },
+    [],
+  )
 
   // Never reloads — not mid-write, not otherwise. The user is told and chooses when to refresh.
   // Zero can repeat the callback on every failed connect attempt, so an unchanged reason must
@@ -514,6 +537,7 @@ export function ZeroRoot({ cacheUrl, children }: ZeroRootProps) {
   }, [])
 
   const clearClientReset = useCallback(() => {
+    clientResetAttemptRef.current = 0
     setCondition((current) => (current.kind === 'client-reset' ? SYNC_CONDITION_NONE : current))
   }, [])
 

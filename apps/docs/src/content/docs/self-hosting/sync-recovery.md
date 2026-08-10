@@ -29,7 +29,7 @@ dark.
 | **Offline — retrying** | The socket is down; the browser is redialling. | ✅ | ❌ |
 | **Sign-in expired — reconnecting** | The sync token was refused; a fresh one is being minted. | ✅ | ❌ |
 | **Sync error — retrying** | `zero-cache` returned a protocol error; recovery is running. | ✅ | ❌ |
-| **Restoring local data** | The server no longer recognises this browser's sync state (idle for a long time, or state discarded server-side); the local replica is being rebuilt. Clears itself. | ✅ | queued |
+| **Restoring local data** | The server no longer recognises this browser's sync state (idle for a long time, or state discarded server-side); the local replica is being rebuilt. Clears itself. | ✅ | ❌ |
 | **Update required** | This tab's app version can no longer talk to your `zero-cache` — typically mid-upgrade. A **Refresh** button appears; nothing reloads on its own. | ✅ | ❌ |
 | **New version available** | Another tab already runs newer app code. This tab still syncs; refresh when convenient. | ✅ | ✅ |
 

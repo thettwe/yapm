@@ -717,14 +717,63 @@ test('an unknown client routes into recovery: a replacement client, a surfaced c
     handler()
   })
 
-  // The condition is on the statusline's wire, and the dead client was replaced in place —
-  // a remount, which is the React provider's own recovery, made visible.
+  // The condition is on the statusline's wire immediately; the dead client is replaced in
+  // place — a remount, which is the React provider's own recovery, made visible — once the
+  // first backoff window (jitter pinned to its 1s ceiling) has passed.
   expect(screen.getByTestId('condition')).toHaveTextContent('client-reset')
+  await advance(1_000)
   expect(mocks.zeroProviderMounts).toBe(mountsBefore + 1)
 
   // The moment the replacement connects, the condition clears — it was a repair, not a state.
   await transition({ name: 'connected' })
   expect(screen.getByTestId('condition')).toHaveTextContent('none')
+})
+
+// The shipped spec's SHALL: a persistent server-side fault degrades to a calm bounded retry.
+// A server that answers every replacement with `ClientStateNotFound` must not drive a
+// construct → dial → die remount loop paced only by the connect round trip.
+test('a persistently unknown client degrades to bounded backoff, not a remount hot loop', async () => {
+  await mount()
+  const mountsBefore = mocks.zeroProviderMounts
+  const die = async () => {
+    const handler = mocks.zeroProviderProps?.onClientStateNotFound as () => void
+    await act(async () => {
+      handler()
+    })
+  }
+
+  // Each replacement dies on arrival; each next one waits out a growing window (1s, 2s, 4s —
+  // the jitter roll is pinned to the ceiling).
+  await die()
+  await advance(1_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 1)
+
+  await die()
+  await advance(1_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 1)
+  await advance(1_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 2)
+
+  await die()
+  await advance(2_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 2)
+  await advance(2_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 3)
+
+  // A handler repeating while a replacement is already scheduled joins it, it does not stack.
+  await die()
+  await die()
+  await die()
+  await advance(8_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 4)
+
+  // A replacement that actually connects resets the schedule: the next genuine reset is
+  // near-immediate again, and the condition has cleared in between.
+  await transition({ name: 'connected' })
+  expect(screen.getByTestId('condition')).toHaveTextContent('none')
+  await die()
+  await advance(1_000)
+  expect(mocks.zeroProviderMounts).toBe(mountsBefore + 5)
 })
 
 test('a version mismatch surfaces to the user and never reloads — not even with a write in flight', async () => {

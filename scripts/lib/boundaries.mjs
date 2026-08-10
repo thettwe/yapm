@@ -113,6 +113,15 @@ const CHROME_OWNER_PREFIX = 'apps/web/src/frame/'
 const CHROME_EXEMPT = ['apps/web/src/routes/showcase.tsx']
 const STICKY_HEADER = /<header[^>]*className=(?:"|\{`|')[^"`']*\bsticky\s+top-0\b/
 
+// Rule 7, the E2E lifecycle rule (`openspec/changes/e2e-determinism` D3/5.3). A spec that calls
+// `browser.newContext()` directly has to close it in a hand-rolled `finally`, which races
+// Playwright's own teardown when the test times out and reports `Target.disposeBrowserContext`
+// over the real failure — the misreporting that produced two wrong diagnoses in a row. Every
+// second context comes from the `newContext` fixture in `apps/web/e2e/fixtures.ts`, whose
+// teardown Playwright owns.
+const E2E_SPEC_PATTERN = /^apps\/web\/e2e\/.*\.spec\.ts$/
+const DIRECT_NEW_CONTEXT = /\bbrowser\s*\.\s*newContext\s*\(/
+
 /**
  * @param rel POSIX-separated repo-relative path of the file.
  * @param source Its full text.
@@ -120,6 +129,12 @@ const STICKY_HEADER = /<header[^>]*className=(?:"|\{`|')[^"`']*\bsticky\s+top-0\
  */
 export function findViolations(rel, source) {
   const violations = []
+
+  if (E2E_SPEC_PATTERN.test(rel) && DIRECT_NEW_CONTEXT.test(source)) {
+    violations.push(
+      `${rel}: calls browser.newContext() directly — use the newContext fixture from apps/web/e2e/fixtures.ts, whose teardown Playwright owns; a hand-rolled finally races teardown and reports Target.disposeBrowserContext over the real failure`,
+    )
+  }
 
   if (inSchema(rel)) {
     for (const rule of SINGLE_DEFINITION_RULES) {

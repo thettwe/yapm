@@ -180,3 +180,39 @@ test('rule 6: a sticky page-top header outside the frame is a violation', () => 
   const ruler = 'return <div className="sticky top-0 z-10 flex border-b" />\n'
   assert.deepEqual(messages('apps/web/src/projects/roadmap-view.tsx', ruler), [])
 })
+
+// Rule 7 — the E2E lifecycle rule. A direct `browser.newContext()` in a spec body needs a
+// hand-rolled `finally`, which races Playwright's teardown on a timeout and reports
+// `Target.disposeBrowserContext` over the real failure — the misreporting two changes were
+// scoped against. Every second context comes from the `newContext` fixture.
+test('rule 7: a direct browser.newContext() in a spec body is a violation', () => {
+  const spec = [
+    "import { expect, test } from './fixtures'",
+    "test('two clients', async ({ browser }) => {",
+    '  const context = await browser.newContext()',
+    '})',
+    '',
+  ].join('\n')
+
+  const found = messages('apps/web/e2e/sync.spec.ts', spec)
+  assert.equal(found.length, 1)
+  assert.match(found[0], /newContext fixture/)
+})
+
+test('rule 7: the fixture path is green — in a spec using it, and in the fixture itself', () => {
+  const spec = [
+    "import { expect, test } from './fixtures'",
+    "test('two clients', async ({ newContext }) => {",
+    '  const context = await newContext()',
+    '})',
+    '',
+  ].join('\n')
+  assert.deepEqual(messages('apps/web/e2e/sync.spec.ts', spec), [])
+
+  // The fixture is the ONE owner of the direct call; the rule must not eat its own implementation.
+  const fixture = 'const context = await browser.newContext(options)\n'
+  assert.deepEqual(messages('apps/web/e2e/fixtures.ts', fixture), [])
+
+  // Outside the e2e suite the rule does not apply at all.
+  assert.deepEqual(messages('apps/web/src/frame/deck.tsx', fixture), [])
+})

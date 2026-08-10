@@ -1,6 +1,7 @@
-import { expect, type Locator, type Page, test } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import type { Database } from '@yapm/schema/db'
 import { findIssue, findUserId, openDb, seedComment, setIssueDescription } from './db'
+import { expect, test } from './fixtures'
 import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
@@ -300,7 +301,7 @@ test.describe('search', () => {
   // issue and other teams' issues do not sync at all.
   test('a comment on another team is found through the index, and only by someone who may read it', async ({
     page,
-    browser,
+    newContext,
   }) => {
     test.slow()
     await enterApp(page)
@@ -337,28 +338,24 @@ test.describe('search', () => {
     await expect(hit.locator('mark').first()).toContainText(found)
     await expect(hit).toContainText('stalls on its second attempt')
 
-    const teammate = await browser.newContext()
-    try {
-      const other = await teammate.newPage()
-      await other.goto(inviteLink)
-      await other.getByRole('button', { name: 'Create one' }).click()
-      await other.getByLabel('Name').fill('Team A Only')
-      await other.getByLabel('Email').fill(uniqueEmail('teamaonly'))
-      await other.getByLabel('Password', { exact: true }).fill('teammate-password-1234')
-      await other.getByTestId('login-submit').click()
-      await expect(other.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+    const teammate = await newContext()
+    const other = await teammate.newPage()
+    await other.goto(inviteLink)
+    await other.getByRole('button', { name: 'Create one' }).click()
+    await other.getByLabel('Name').fill('Team A Only')
+    await other.getByLabel('Email').fill(uniqueEmail('teamaonly'))
+    await other.getByLabel('Password', { exact: true }).fill('teammate-password-1234')
+    await other.getByTestId('login-submit').click()
+    await expect(other.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
 
-      await other.goto(`/search?q=${found}`)
-      // The same bytes a token that exists nowhere produces. Not "0 results you may not see" —
-      // nothing at all, which is what keeps search from being an oracle over the other team.
-      await expect(other.getByTestId('search-empty')).toBeVisible({ timeout: 30_000 })
-      await expect(other.getByRole('option')).toHaveCount(0)
-      await expect(other.getByTestId('search-announcement')).toHaveText(
-        '0 results on this device, 0 results from the server.',
-      )
-    } finally {
-      await teammate.close()
-    }
+    await other.goto(`/search?q=${found}`)
+    // The same bytes a token that exists nowhere produces. Not "0 results you may not see" —
+    // nothing at all, which is what keeps search from being an oracle over the other team.
+    await expect(other.getByTestId('search-empty')).toBeVisible({ timeout: 30_000 })
+    await expect(other.getByRole('option')).toHaveCount(0)
+    await expect(other.getByTestId('search-announcement')).toHaveText(
+      '0 results on this device, 0 results from the server.',
+    )
   })
 
   // 11.3 — cursor stability against a REAL asynchronous arrival. The component tier settles a

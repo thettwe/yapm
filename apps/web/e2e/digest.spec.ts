@@ -1,5 +1,6 @@
-import { expect, type Page, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { findCycle, findIssue, openDb, seedCycleDigest, seedLinkedPr } from './db'
+import { expect, test } from './fixtures'
 import { ADMIN, ensureAccount, stop } from './support'
 
 const STATUS = '[data-testid="connection-status"]'

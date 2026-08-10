@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page, test } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import {
   findIssue,
   openDb,
@@ -6,6 +6,7 @@ import {
   readRetroAiDraft,
   seedRetroAiDraft,
 } from './db'
+import { expect, test } from './fixtures'
 import { readReplica } from './replica'
 import { ADMIN, ensureAccount, stop } from './support'
 
@@ -576,49 +577,41 @@ test('every ratification command is reachable from the palette, and an agreed im
 // make this a test of the invite flow, and the claim here is about sync, not about tallying — the
 // multi-member hand-count lives in `retro-ratification.pg.test.ts` where the count can be checked
 // against real rows.
-test('a verdict stamped by another client arrives without a reload', async ({ browser }) => {
+test('a verdict stamped by another client arrives without a reload', async ({ newContext }) => {
   test.slow()
-  const first = await browser.newContext()
-  const second = await browser.newContext()
+  const first = await newContext()
+  const second = await newContext()
 
-  try {
-    const reader = await first.newPage()
-    const facilitator = await second.newPage()
-    await enterApp(reader)
-    const { url: retroUrl } = await draftedRetro(reader)
+  const reader = await first.newPage()
+  const facilitator = await second.newPage()
+  await enterApp(reader)
+  const { url: retroUrl } = await draftedRetro(reader)
 
-    // The reader records a reaction and then does nothing else for the rest of the test.
-    await reader.getByTestId('retro-ai-agree').first().focus()
-    await reader.keyboard.press('Enter')
-    await expect(reader.getByTestId('retro-ai-agree').first()).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    await expect(reader.getByTestId('retro-ai-verdict')).toHaveCount(0)
+  // The reader records a reaction and then does nothing else for the rest of the test.
+  await reader.getByTestId('retro-ai-agree').first().focus()
+  await reader.keyboard.press('Enter')
+  await expect(reader.getByTestId('retro-ai-agree').first()).toHaveAttribute('aria-pressed', 'true')
+  await expect(reader.getByTestId('retro-ai-verdict')).toHaveCount(0)
 
-    // The other client walks the retro out of `vote`, which is the moment the verdict is computed.
-    await enterApp(facilitator)
-    await facilitator.goto(retroUrl)
-    await expect(facilitator.locator(PANEL)).toBeVisible({ timeout: 30_000 })
-    await facilitator.keyboard.press(']')
-    await expect(phaseStep(facilitator, 'vote')).toHaveAttribute('aria-current', 'step', {
-      timeout: 20_000,
-    })
-    await facilitator.keyboard.press(']')
-    await expect(phaseStep(facilitator, 'discuss')).toHaveAttribute('aria-current', 'step', {
-      timeout: 20_000,
-    })
+  // The other client walks the retro out of `vote`, which is the moment the verdict is computed.
+  await enterApp(facilitator)
+  await facilitator.goto(retroUrl)
+  await expect(facilitator.locator(PANEL)).toBeVisible({ timeout: 30_000 })
+  await facilitator.keyboard.press(']')
+  await expect(phaseStep(facilitator, 'vote')).toHaveAttribute('aria-current', 'step', {
+    timeout: 20_000,
+  })
+  await facilitator.keyboard.press(']')
+  await expect(phaseStep(facilitator, 'discuss')).toHaveAttribute('aria-current', 'step', {
+    timeout: 20_000,
+  })
 
-    // NO RELOAD ANYWHERE ON THE READER. The stamp arrives over the sync connection, the reaction
-    // toggles stand down because the window is shut, and the count is the one the reader cast.
-    await expect(reader.getByTestId('retro-ai-verdict').first()).toBeVisible({ timeout: 30_000 })
-    await expect(reader.getByTestId('retro-ai-verdict-counts').first()).toHaveText(
-      '1 agreed, 0 disagreed',
-    )
-    await expect(reader.getByTestId('retro-ai-reactions')).toHaveCount(0)
-    await expect(reader.getByTestId('retro-ai-unratified')).toHaveCount(0)
-  } finally {
-    await first.close()
-    await second.close()
-  }
+  // NO RELOAD ANYWHERE ON THE READER. The stamp arrives over the sync connection, the reaction
+  // toggles stand down because the window is shut, and the count is the one the reader cast.
+  await expect(reader.getByTestId('retro-ai-verdict').first()).toBeVisible({ timeout: 30_000 })
+  await expect(reader.getByTestId('retro-ai-verdict-counts').first()).toHaveText(
+    '1 agreed, 0 disagreed',
+  )
+  await expect(reader.getByTestId('retro-ai-reactions')).toHaveCount(0)
+  await expect(reader.getByTestId('retro-ai-unratified')).toHaveCount(0)
 })

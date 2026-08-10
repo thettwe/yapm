@@ -1,5 +1,6 @@
-import { expect, type Locator, type Page, test } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { findIssue, openDb, seedLinkedPr } from './db'
+import { expect, test } from './fixtures'
 import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
@@ -283,7 +284,10 @@ test('the reality track renders in all three presets, light and dark', async ({ 
   }
 })
 
-test('an admin sees the connector settings surface; a viewer cannot', async ({ page, browser }) => {
+test('an admin sees the connector settings surface; a viewer cannot', async ({
+  page,
+  newContext,
+}) => {
   await enterApp(page)
 
   // The GitHub App env is absent in e2e, so the connector is disabled and the surface shows a
@@ -307,24 +311,20 @@ test('an admin sees the connector settings surface; a viewer cannot', async ({ p
     password: 'viewer-password-1234',
     name: `Connector Viewer ${Date.now().toString(36)}`,
   }
-  const context = await browser.newContext()
-  try {
-    const vp = await context.newPage()
-    await vp.goto(inviteLink)
-    await expect(vp.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
-    await vp.getByRole('button', { name: 'Create one' }).click()
-    await vp.getByLabel('Name').fill(viewer.name)
-    await vp.getByLabel('Email').fill(viewer.email)
-    await vp.getByLabel('Password', { exact: true }).fill(viewer.password)
-    await vp.getByTestId('login-submit').click()
-    await expect(vp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  const context = await newContext()
+  const vp = await context.newPage()
+  await vp.goto(inviteLink)
+  await expect(vp.getByRole('heading', { name: /sign in to yapm/i })).toBeVisible()
+  await vp.getByRole('button', { name: 'Create one' }).click()
+  await vp.getByLabel('Name').fill(viewer.name)
+  await vp.getByLabel('Email').fill(viewer.email)
+  await vp.getByLabel('Password', { exact: true }).fill(viewer.password)
+  await vp.getByTestId('login-submit').click()
+  await expect(vp.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
 
-    await vp.goto('/settings/connectors')
-    await expect(vp.getByText(/available to workspace admins only/)).toBeVisible({
-      timeout: 20_000,
-    })
-    await expect(vp.getByTestId('not-configured')).toHaveCount(0)
-  } finally {
-    await context.close()
-  }
+  await vp.goto('/settings/connectors')
+  await expect(vp.getByText(/available to workspace admins only/)).toBeVisible({
+    timeout: 20_000,
+  })
+  await expect(vp.getByTestId('not-configured')).toHaveCount(0)
 })

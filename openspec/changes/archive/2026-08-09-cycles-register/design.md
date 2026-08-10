@@ -474,3 +474,40 @@ ledger section had the matching gap: `asCommittedCarryOut` normalises a carried-
 so the set a cycle handed forward is always counted open against the cycle it left, however far it
 has travelled since — the "a filled block per issue that reached Done" bullet now says so, and the
 band header's origin rule is documented beside the per-row one.
+
+### DI-R1 — The carry chain was rendered and kept (task 7.6, settled 2026-08-09)
+
+D7 deferred this decision to "with the render in front of us", and the render happened: a team
+carrying six cycles, with three issues carried 3×, 2× and 1× out of Cycles 1 and 4, at 1440×900 in
+the **warm preset with the shipped default accent**.
+
+The chain the mock's self-critique feared would read as three near-identical dashes does not: hop
+count varies the drawn length visibly, and the dotted lead-in reads as "the record starts here"
+rather than as decoration.
+
+```
+CARRIED IN  3                                                     how ·
+◐ EFSS-1  Mover      ┈┈┈○───○───●───●   carried 3× · out of Cycle 1
+○ EFSS-2  Filler 0      ┈┈┈○───●───●    carried 2× · out of Cycle 4
+◐ EFSS-3  Filler 1           ●───●      carried 1× · out of Cycle 4
+```
+
+**The maintainer kept the graphic.** The fallback D7 recorded in advance — drop to the mono column,
+keep `carried N×` and the origin phrase — is not taken, and stays on the record as the answer if a
+later reading disagrees.
+
+Two things the render settled that were *not* defects, recorded because each was reported as one
+before being checked:
+
+- **The active register row's wash is correct.** It first rendered pink, which reads as an alert
+  rather than as "this is now". That was the **editorial preset with a custom accent**, both written
+  into the admin's `user_preference` by `theme.spec.ts` during an e2e run — not a token defect. On
+  `theme='warm'` with the default accent it is the amber D7 specifies.
+- **`THE REGISTER 0` over "No cycles yet" is not the absence rule failing.** The rule at
+  `specs/cycles/spec.md` — "the band SHALL be absent entirely rather than drawing a zero or an empty
+  frame" — governs the **carried-in band**, not the register. A team with no cycles drawing its
+  register header and an empty-state line is correct.
+
+The lesson worth keeping: a render judged against a workspace an e2e suite has been writing to is
+judged against that suite's leftovers, including its theme preferences. **Reset the preset and the
+accent before looking, or the first three things you find will be the test suite's.**

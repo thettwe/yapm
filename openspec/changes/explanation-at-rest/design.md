@@ -525,3 +525,19 @@ Rendered at 1440×900 over the dev stack's seeded Engineering team, light and da
 - **Delivery, unchanged**: the metrics promise, the burndown refusal, `CYCLE FLOW` and
   `REVIEW RHYTHM` all still render at rest. This is the render that proves the boundary held.
 
+### The e2e suite and the compose smoke test were run in CI, not on this machine
+
+**Ambiguous:** tasks 11.2 and 11.3 ask for the full Playwright suite and the compose smoke test.
+Both were attempted locally against the shared dev stack and both are unrunnable there, for reasons
+that have nothing to do with this change: the suite's harness boots its own server on `:3210` and
+expects a **fresh** database (`docker/docker-compose.dev.yml up` with new volumes in CI), while the
+dev stack's Postgres holds an older run's `jwks` row and its zero-cache is bound to the dev server —
+so every spec signed in and then sat on *Loading workspace…* because sync never established. The
+smoke test wants port 3000 and a `--build` of the production image; 3000 is held by an unrelated
+project's container on this machine.
+
+**Chosen:** run both on the canonical harness — GitHub Actions, PR #59 — rather than tear down or
+reconfigure a stack another build may be using. Both are green on `89bc8b8`: **Playwright e2e 11m7s
+with no spec edited**, and **Compose smoke test 2m57s**. That is the same evidence CI would demand
+at merge, produced by the job that owns it. Recorded rather than quietly skipped, because "ran the
+suite" and "the suite ran" are different claims.

@@ -219,7 +219,6 @@ function ProjectsIndex({ teamId }: { teamId: string }) {
         </section>
 
         <div className="flex items-baseline gap-3.5 px-10 pt-4 pb-6 font-mono text-[10.5px] text-text-2">
-          <span>workspace-scoped · counted over the issues in your teams</span>
           <How
             label="the counting rule"
             constraint="isMember on the project · teamScoped on its issues"

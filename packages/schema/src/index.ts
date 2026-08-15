@@ -853,7 +853,8 @@ export {
   formatHomeAge,
   REVIEW_OUTCOME_LABEL,
   TRIAGE_DOT_CAP,
-  YOURS_FOOTNOTE,
+  YOURS_DERIVATION,
+  YOURS_DERIVATION_PROSE,
 } from './zero/team-home.js'
 export type { IssueRef, WorkGraphContext, WorkGraphMutation } from './zero/work-graph.js'
 export {

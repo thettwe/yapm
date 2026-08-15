@@ -32,9 +32,10 @@ local data the issue list reads, so it renders instantly and is correct offline.
    The badge is the same exact merge-commit join the issue row's reality track uses — never
    inferred from status alone.
 
-The page ends with a mono **footline** that names the composition rules actually applied to
-*this* render — never a rule the code does not execute — and an onward footer (Issues ·
-Board · Delivery · Retro · Roadmap, with the ⌘K hint).
+The page ends with a **composition record** — the rules actually applied to *this* render, never
+a rule the code does not execute — carried behind one quiet `how ·` rather than printed, and an
+onward footer (Issues · Board · Delivery · Retro · Roadmap, with the ⌘K hint). The doorways are
+labels and stay visible; the record is a derivation and folds.
 
 ## Empty bands fold away
 
@@ -105,10 +106,13 @@ Two honesty rules are structural here:
   to the team's issues awaits review at all. yapm has no reviewer↔user identity mapping, so
   a per-person "you owe X a review" claim cannot be verified — and a line that cannot be
   verified is not rendered.
-- The band never contains another person's work, name, or per-person count, and closes with
-  a mono derivation footnote ending **"your work only — never compared"**. This is the same
-  boundary the [Delivery view](/features/delivery/) keeps: personal surfaces show you your
-  own work; team surfaces show the team; nothing ranks people.
+- The band never contains another person's work, name, or per-person count. Its **lens
+  definition** — assignee you, status before done, ordered by last movement, ending **"your work
+  only — never compared"** — sits behind a `how ·` on the band's own header rather than being
+  printed under the rows. The guarantee is structural either way: the band holds no other
+  person's identity whether the affordance is open or shut. This is the same boundary the
+  [Delivery view](/features/delivery/) keeps: personal surfaces show you your own work; team
+  surfaces show the team; nothing ranks people.
 
 ## The narrative is never filler
 
@@ -131,10 +135,14 @@ Every doorway on the digest — exception rows, cards, issue rows, ready rows, c
 links — is focusable in document order, shows a visible focus state, and activates with
 Enter. Nothing on the page waits on the network.
 
+Both `how ·` affordances — the YOURS lens and the page's composition record — are real controls you
+open with `Enter` and close with `Escape`, which returns focus to the affordance. They are the only
+route to those two derivations, because neither is drawn at rest.
+
 ## What deliberately isn't here yet
 
 A **Decided this cycle** band, Crit/Verify handoff lanes in *Ready for you*, and last-seen
 anchoring for *Since yesterday* all wait on entities yapm does not have (a decision record,
 handoff states, a per-user last-seen fact). Per the folding rules they are absent rather
-than mocked — and the footline never mentions them, because the footline only states rules
-the code executed.
+than mocked — and the composition record never mentions them, because it only states rules the
+code executed.

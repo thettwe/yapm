@@ -13,12 +13,13 @@ import { beforeEach, expect, test, vi } from 'vitest'
 const harness = vi.hoisted(() => ({
   rows: {} as Record<string, unknown>,
   canWrite: true,
+  resultType: 'complete' as 'complete' | 'unknown',
 }))
 
 vi.mock('@rocicorp/zero/react', () => ({
   useQuery: (request: unknown) => {
     const name = (request as { query: { queryName: string } }).query.queryName
-    return [name in harness.rows ? harness.rows[name] : [], { type: 'complete' }]
+    return [name in harness.rows ? harness.rows[name] : [], { type: harness.resultType }]
   },
   useZero: () => ({ mutate: () => ({ client: Promise.resolve({}), server: Promise.resolve({}) }) }),
 }))
@@ -63,18 +64,22 @@ function cycle(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function index(options: { retros?: readonly unknown[]; cycles?: readonly unknown[] } = {}) {
+function index(
+  options: { retros?: readonly unknown[]; cycles?: readonly unknown[]; complete?: boolean } = {},
+) {
   harness.rows = {
     [TEAMS_ALL_QUERY_NAME]: [TEAM],
     [RETROS_BY_TEAM_QUERY_NAME]: options.retros ?? [],
     [CYCLES_BY_TEAM_QUERY_NAME]: options.cycles ?? [],
   }
+  harness.resultType = options.complete === false ? 'unknown' : 'complete'
   return render(<RetrosView teamId="team-1" />)
 }
 
 beforeEach(() => {
   harness.rows = {}
   harness.canWrite = true
+  harness.resultType = 'complete'
 })
 
 test('the masthead reads Retros with a mono count, and never the team name', () => {
@@ -105,6 +110,40 @@ test('a team that has never run one gets the quiet line, no create control, no e
   expect(screen.getByTestId('retros-quiet').textContent).toBe('A retro opens when a cycle closes.')
   expect(screen.queryByTestId('retro-open-for-cycle')).toBeNull()
   expect(screen.queryByRole('region', { name: 'Cycles without a retrospective' })).toBeNull()
+})
+
+test('an index that is already listing retros explains nothing about what a retro is', () => {
+  // The quiet line is the EMPTY STATE. Drawn over rows it told a team with retros what a retro is,
+  // every morning — which is what `retrospective/spec.md` scopes it against.
+  index({
+    retros: [RETRO],
+    cycles: [
+      cycle(),
+      cycle({
+        id: 'cycle-2',
+        number: 2,
+        name: 'Cycle 2',
+        status: 'active',
+        startDate: Date.now() - 9 * DAY,
+        endDate: Date.now() + 5 * DAY,
+      }),
+    ],
+  })
+  expect(screen.queryByTestId('retros-quiet')).toBeNull()
+  expect(screen.queryByText(/A retro opens when a cycle closes/)).toBeNull()
+  expect(screen.getByTestId('retro-link')).toBeInTheDocument()
+})
+
+test('an index whose retros have not hydrated yet states nothing about what a retro is', () => {
+  // Empty is not the same fact as known-empty. The first navigation to a team WITH retros arrives
+  // here, and the line is announced through `role="status"` — so an ungated empty state reads a
+  // team its own empty-state copy out loud before its rows land.
+  index({ complete: false })
+  expect(screen.queryByTestId('retros-quiet')).toBeNull()
+  expect(screen.queryByText(/A retro opens when a cycle closes/)).toBeNull()
+  // Silence is not the answer either: the live region is mounted before its text ever changes, and
+  // while the rows are still coming it says so rather than showing an empty page.
+  expect(screen.getByRole('status').textContent).toBe('Loading…')
 })
 
 test('the next close is stated only where a running cycle exists to state it', () => {

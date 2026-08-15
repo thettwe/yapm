@@ -84,7 +84,8 @@ The team's page is a morning read, not a members roster.
   board, checks failing, waiting on review over a day, new in triage — that agrees with itself
   everywhere it appears.
 - What went live in the last 24 hours, with provenance.
-- **Your own in-flight work and only yours.** The band ends "your work only — never compared".
+- **Your own in-flight work and only yours.** Its lens definition — ending "your work only —
+  never compared" — unfolds from the band's own quiet `how ·` rather than printing under the rows.
 - The unassigned ready-to-start runway, and a weekly ship-cadence chart.
 - What shipped this cycle, each line carrying a Live or Built-not-live badge read off the deploy
   fact.

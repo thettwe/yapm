@@ -173,6 +173,30 @@ test('the row’s `how ·` opens its derivation instead of navigating away', () 
   expect((late as HTMLElement).querySelector('[data-slot="how-panel"]')).not.toBeNull()
 })
 
+test('the counting rule is folded at the foot, not printed beside its own affordance', () => {
+  seed([project({ id: 'p-a', name: 'Alpha', status: 'active' })])
+  render(<ProjectsView teamId={TEAM.id} />)
+
+  expect(screen.queryByText(/counted over the issues in your teams/)).toBeNull()
+  expect(screen.queryByText(/workspace-scoped/)).toBeNull()
+
+  // The foot's trigger sits in no row, so there is nothing here for a key to be swallowed by — the
+  // assertion the row test above needs. Native activation is the click a real <button> raises from
+  // Enter and Space, proven on the component in `packages/ui/src/components/how.test.tsx`.
+  const trigger = screen.getByRole('button', { name: 'How the counting rule is derived' })
+  trigger.focus()
+  fireEvent.click(trigger)
+  expect(harness.navigate).not.toHaveBeenCalled()
+
+  const panel = screen.getByRole('dialog')
+  expect(panel.textContent).toContain('Every project in this workspace is listed')
+  expect(panel.textContent).toContain('issues from other teams never sync')
+
+  fireEvent.keyDown(panel, { key: 'Escape' })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(document.activeElement).toBe(trigger)
+})
+
 test('the roving-focus keyboard model moves across groups, opens and survives a shrinking set', () => {
   const fixture = [
     project({ id: 'p-a', name: 'Alpha', status: 'active', targetDate: NOW + DAY }),

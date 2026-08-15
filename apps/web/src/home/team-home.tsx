@@ -23,6 +23,7 @@ import {
 } from '@yapm/schema'
 import { CadenceChart } from '@yapm/ui/components/cadence-chart'
 import { DayBand, ScopeBand, TickBar, TriageDots } from '@yapm/ui/components/drawn'
+import { How } from '@yapm/ui/components/how'
 import { PriorityMark } from '@yapm/ui/components/priority-mark'
 import {
   buildRealityShape,
@@ -733,16 +734,22 @@ function YoursBand({
         title="YOURS"
         count={yours.count}
         onward={
-          empty && runway !== null ? (
-            <a href="#ready-for-you" className={cn('rounded-control px-2 py-1', DOORWAY)}>
-              <span className="text-[12.5px] font-semibold text-text-2">
-                Runway
-                <span aria-hidden="true" className="ml-[3px] font-normal text-text-3">
-                  →
+          empty ? (
+            runway !== null ? (
+              <a href="#ready-for-you" className={cn('rounded-control px-2 py-1', DOORWAY)}>
+                <span className="text-[12.5px] font-semibold text-text-2">
+                  Runway
+                  <span aria-hidden="true" className="ml-[3px] font-normal text-text-3">
+                    →
+                  </span>
                 </span>
-              </span>
-            </a>
-          ) : undefined
+              </a>
+            ) : undefined
+          ) : (
+            <How label="yours" align="end" constraint={yours.derivation}>
+              {yours.derivationProse}
+            </How>
+          )
         }
       />
       <div className="mt-[18px]">
@@ -768,7 +775,7 @@ function YoursBand({
                 to="/teams/$teamId/issues/$issueKey"
                 params={{ teamId, issueKey: row.issueKey }}
                 className={cn(
-                  'flex h-[52px] items-center gap-3 border-t border-row-hairline px-3 text-[13.5px] text-text-1',
+                  'flex h-[52px] items-center gap-3 border-t border-row-hairline px-3 text-[13.5px] text-text-1 last:border-b',
                   DOORWAY,
                 )}
               >
@@ -830,10 +837,6 @@ function YoursBand({
                 <span>No reviews owed — nobody is waiting on you</span>
               </div>
             ) : null}
-            <div className="border-t border-row-hairline" />
-            <div className="mt-3 px-3 font-mono text-[10.5px] leading-[1.6] text-text-3">
-              <span className="text-text-2">yours =</span> {yours.footnote.replace(/^yours = /, '')}
-            </div>
           </>
         )}
       </div>
@@ -966,9 +969,12 @@ function ShippedBand({ shipped }: { shipped: TeamHomeShipped }) {
 // ---------------------------------------------------------------------------
 
 function Footline({ model }: { model: TeamHomeModel }) {
+  if (model.footline.length === 0) return null
   return (
-    <div className="mt-12 font-mono text-[10.5px] leading-[1.6] text-text-3">
-      <span className="text-text-2">composed =</span> {model.footline.join(' · ')}
+    <div className="mt-12">
+      <How label="this page" constraint={model.footline.join(' · ')}>
+        This page was composed by the rules it actually applied: {model.footline.join(', ')}.
+      </How>
     </div>
   )
 }

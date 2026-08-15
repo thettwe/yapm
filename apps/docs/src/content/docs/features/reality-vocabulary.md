@@ -170,10 +170,51 @@ by click or by Enter, never by hover, because a derivation is read rather than g
 tells you exactly how the number was computed and within what constraints. Close it, and the surface
 returns to quiet. Facts stay; footnotes fold.
 
-Escape closes it and returns focus to the affordance, and tabbing away closes it too.
+Escape closes it and returns focus to the affordance, and tabbing away closes it too. The panel is
+not merely hidden while it is closed — it does not exist in the page at all, so the derivation is
+absent for a screen-reader user exactly as it is for a sighted one. The trigger says which
+derivation it holds ("How the counting rule is derived"), so the fold is discoverable without sight
+and without a pointer.
+
+The rule binds **every** surface, not just the page it was first written for: wherever an
+explanation of a derived fact exists, it lives behind exactly one `how ·` and nowhere else at rest.
+The obligation runs one way only — a surface is not required to attach a `how ·` to every number it
+draws. A count nobody explains needs no affordance; adding one to every mono figure would be chrome,
+not relief. And a derivation is never drawn *beside* the affordance built to hold it.
+
+### What folds, and what never does
+
+`how ·` explains **derivations**. It is not a drawer for everything a page says.
+
+**A query definition folds** — a statement of the rows a surface counted, the scope it counted them
+over, or the clauses of the lens it applied. Projects' `counted over the issues in your teams`,
+Home's YOURS lens, Home's composition record: each is identically true of every render, and a reader
+who has read it once does not need it printed again every morning.
+
+**Five kinds of sentence stay at rest**, because the fold removes text from the page for every
+reader — which is right for a scoping clause and wrong for these:
+
+- **A refusal.** *"a cycle keeps no status history, so nothing here burns down."* A refusal is not
+  the derivation of anything drawn; it is the reason something is **absent**. A reader who never
+  opened the fold would conclude the absence was an oversight rather than a choice — the exact
+  inversion of the honesty a refusal exists to serve. A refusal may carry its own `how ·` for the
+  derivation it refused, which is the correct division.
+- **A binding product promise another capability mandates at rest** — the Delivery view's
+  *team-level only — never a per-person number*, which appears once in the whole application.
+  Folding it would contradict that requirement rather than amend it.
+- **A derived section standfirst** — one sentence saying what the data says, evidenced by the
+  drawing beneath it. A standfirst states the *reading*; the *method* belongs in that section's
+  `how ·`.
+- **A live-session instruction** — a line telling a participant the rule of the action they are
+  taking right now, on a surface whose phase changes what is permitted. Someone who must open a fold
+  to learn their cards stay private until the room moves on learns it after they have typed.
+- **An empty state's single quiet line.** There is no drawn fact to hang an affordance on, and the
+  line is the surface's only content. That line does not render once the surface has rows.
 
 The [Delivery view](/features/delivery/) is where this pattern earns its keep: every derived number
-on that page carries a `how ·` and nothing else on it explains itself at rest.
+on that page carries a `how ·`, and the prose it keeps at rest is only what this rule exempts — the
+promise it is required to make, the refusal it is right to state, and each section's derived
+standfirst.
 
 ## The provenance mark
 

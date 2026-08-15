@@ -615,8 +615,14 @@ fixes the case D6 draws and leaves a second one: before the retros query hydrate
 on a team that has nine, so the first navigation to the index renders *"A retro opens when a cycle
 closes."* over a team with rows — and announces it, because the line carries `role="status"`.
 
-**Chosen:** `retros.length === 0 && retrosResult.type === 'complete'`, the idiom
-`projects-view.tsx:169-172` and `triage-view.tsx:426-431` already use, with a test mounting an
-unhydrated result. **Why:** the spec sentence the fix serves is *"A team with no retros SHALL be met
-by…"*, and an unhydrated query is not a team with no retros. Empty and known-empty are different
-facts, and this surface speaks the second one out loud.
+**Chosen:** the whole idiom `projects-view.tsx:168-173` and `triage-view.tsx:410-418` use, not half
+of it — one `<p role="status">` mounted whenever `retros.length === 0`, whose *contents* swap on
+`retrosResult.type === 'complete'`: the quiet sentence and its mono next-close fact when the rows are
+known, the label `Loading…` while they are not. `data-testid="retros-quiet"` rides the complete
+branch, so every existing empty-state assertion — and the new one that the index with rows renders no
+such node — addresses exactly the node it always did. **Why:** the spec sentence the fix serves is
+*"A team with no retros SHALL be met by…"*, and an unhydrated query is not a team with no retros.
+Empty and known-empty are different facts, and this surface speaks the second one out loud. Gating
+the node's *existence* rather than its text would trade the wrong announcement for a blank page and
+for an unreliable one: a `role="status"` inserted with its message already inside it is not reliably
+spoken, which is the reason `triage-view.tsx` keeps its live region persistent across the same swap.

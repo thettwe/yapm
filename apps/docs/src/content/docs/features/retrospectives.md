@@ -263,7 +263,9 @@ is drawn only when it has rows rather than as an empty heading. A team with no r
 one line — *A retro opens when a cycle closes.* — plus the quiet fact of when the next cycle closes,
 where a cycle exists to state it and nothing where none does. That line is the surface's **empty
 state**: an index that already has rows explains nothing about what a retro is, and draws neither
-the sentence nor the next-close fact. There is no create-a-retro control: a
+the sentence nor the next-close fact. Nor does an index whose rows have not arrived yet — until the
+team's retros are known, that same place reads *Loading…*, because no retros seen so far is not the
+same fact as no retros. There is no create-a-retro control: a
 retro is opened **for a completed cycle**, from that cycle.
 
 ## Keyboard

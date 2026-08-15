@@ -141,6 +141,9 @@ test('an index whose retros have not hydrated yet states nothing about what a re
   index({ complete: false })
   expect(screen.queryByTestId('retros-quiet')).toBeNull()
   expect(screen.queryByText(/A retro opens when a cycle closes/)).toBeNull()
+  // Silence is not the answer either: the live region is mounted before its text ever changes, and
+  // while the rows are still coming it says so rather than showing an empty page.
+  expect(screen.getByRole('status').textContent).toBe('Loading…')
 })
 
 test('the next close is stated only where a running cycle exists to state it', () => {

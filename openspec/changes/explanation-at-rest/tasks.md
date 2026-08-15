@@ -42,6 +42,7 @@
 - [x] 6.2 `nextClose` (`:92-99`) is unchanged, and the mono fact stays **beside** the sentence in the empty state rather than moving behind an affordance (design D6 — the obligation does not generalise)
 - [x] 6.3 `data-testid="retros-quiet"` and `role="status"` survive on the block, so the existing empty-state assertions keep addressing the same node
 - [x] 6.4 Nothing else on this surface is touched — not the card rows, not the pill badge, not the outlined buttons. `SCOPE-legibility.md:146` gives those to A1 `register-seam`, and this change is confined to `:185-190`
+- [x] 6.5 Empty is gated on completeness, not on emptiness alone, and the whole `projects-view.tsx:168-173` idiom is adopted rather than half of it: one `role="status"` paragraph stays mounted whenever `retros.length === 0` and its *contents* swap — the quiet sentence when `retrosResult.type === 'complete'`, the label `Loading…` while it is not. A test mounts an unhydrated result and asserts both halves
 
 ## 7. Tests — what moves
 

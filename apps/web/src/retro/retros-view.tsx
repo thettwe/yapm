@@ -184,14 +184,28 @@ export function RetrosView({ teamId }: { teamId: string }) {
             An index that is already listing retros explains nothing: the rows stand alone. There
             is no create control: a retro is opened FOR a completed cycle, from that cycle's row.
 
-            Empty AND complete, never empty alone: an unhydrated query is not a team with no retros,
-            and this line is announced through `role="status"` — so the unguarded form told a team
-            with nine retros what a retro is, out loud, on every first navigation. */}
-        {retros.length === 0 && retrosResult.type === 'complete' ? (
-          <p className="text-[12.5px] text-text-2" role="status" data-testid="retros-quiet">
-            A retro opens when a cycle closes.
-            {nextClose === null ? null : (
-              <span className="mt-1.5 block font-mono text-[10.5px] text-text-2">{nextClose}</span>
+            Empty is not the same fact as not-yet-known, so the two states say different things and
+            the sentence waits for completeness — an unhydrated query is not a team with no retros.
+            The node itself stays mounted across that swap: a `role="status"` inserted with its
+            message already inside it is not reliably spoken, and this is precisely the transition
+            (still syncing, then known-empty) that needs announcing. */}
+        {retros.length === 0 ? (
+          <p
+            className="text-[12.5px] text-text-2"
+            role="status"
+            {...(retrosResult.type === 'complete' ? { 'data-testid': 'retros-quiet' } : {})}
+          >
+            {retrosResult.type === 'complete' ? (
+              <>
+                A retro opens when a cycle closes.
+                {nextClose === null ? null : (
+                  <span className="mt-1.5 block font-mono text-[10.5px] text-text-2">
+                    {nextClose}
+                  </span>
+                )}
+              </>
+            ) : (
+              'Loading…'
             )}
           </p>
         ) : null}

@@ -8,7 +8,7 @@ Each row SHALL carry the drawn retro mark, the retro's title, its current phase,
 
 The index SHALL also list a team's completed cycles that have no retrospective, offering to open one, and SHALL render that group only when it has rows — never as an empty heading.
 
-A team with no retros SHALL be met by a short honest statement that a retro opens when a cycle closes, together with the mono fact of when the next cycle closes where a cycle exists to state it, and nothing where none does. That statement is the surface's **empty state** and SHALL NOT render on an index that is already listing retros: a page with rows explains nothing about what a retro is, and the mono next-close fact belongs to the line it qualifies. The index SHALL NOT offer to create a retro detached from a cycle.
+A team with no retros SHALL be met by a short honest statement that a retro opens when a cycle closes, together with the mono fact of when the next cycle closes where a cycle exists to state it, and nothing where none does. That statement is the surface's **empty state** and SHALL NOT render on an index that is already listing retros: a page with rows explains nothing about what a retro is, and the mono next-close fact belongs to the line it qualifies. Nor SHALL it render before the team's retros are known: until then the same place SHALL state that the page is loading, so that no-retros-seen-yet is never announced as no-retros. The index SHALL NOT offer to create a retro detached from a cycle.
 
 Work-graph placement: a destination over the team's existing retros and cycles; no new entity and no new query. Permission story: unchanged — the retro rows are the team-scoped rows a member already syncs, and the open-a-retro control renders only for a writer.
 
@@ -26,6 +26,11 @@ Work-graph placement: a destination over the team's existing retros and cycles; 
 
 - **WHEN** a member opens the retros destination for a team that already has at least one retro
 - **THEN** no statement of what a retro is and no next-close fact is drawn on the page, and the rows stand alone
+
+#### Scenario: An index whose retros have not arrived says so
+
+- **WHEN** a member opens the retros destination and the team's retros have not finished syncing
+- **THEN** no statement of what a retro is and no next-close fact is drawn, and the page states that it is loading instead
 
 #### Scenario: A completed cycle owed a retro is offered one
 

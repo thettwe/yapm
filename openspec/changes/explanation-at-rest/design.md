@@ -462,3 +462,66 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 
 <!-- Build-time decisions are appended below this line, each with what was ambiguous, what was
      chosen, and why. -->
+
+### The YOURS row block lost its closing rule with the footnote's divider, and got it back a
+### different way
+
+**Ambiguous:** task 3.1 deletes the hairline at `team-home.tsx:833` "which exists only to divide
+that footnote from the rows". It did more than that. The YOURS row `<Link>` (`:779`) was the one
+row drawing in this file **without** `last:border-b` — lines 406, 871 and 938 all carry it — because
+the hairline was always the last child and closed the block for it. Deleting it left the band's rows
+ending on open air whenever neither the waiting line nor the "No reviews owed" line rendered.
+
+**Chosen:** add `last:border-b` to the YOURS row, which is the grammar the other three row lists in
+the file already use. **Why:** the alternative is keeping a hairline whose only remaining job is to
+close a block that every other band closes with a modifier — one seam instead of two. The fold was
+supposed to remove ink, not remove structure.
+
+### The composition record reads as a sentence over schema clauses, not as a relocated mono line
+
+**Ambiguous:** task 4.1 says the panel body "lists `model.footline`'s clauses". A `<ul>` in a 280px
+panel, a mono line moved verbatim, and a sentence were all defensible.
+
+**Chosen:** one sentence — *"This page was composed by the rules it actually applied: attention
+first, your lens — your work only, empty bands fold away."* — with the mono clause line kept in the
+`constraint` slot, which is what that slot is for. **Why:** D8 requires the clauses to come from
+`packages/schema`, and they still do — the render joins them, it does not author them. The mono form
+survives verbatim one line below, so a reader who preferred the old drawing still gets it. Moving
+the mono line into the panel unchanged would have folded a drawing rather than a derivation.
+
+### The empty-record guard is unreachable on this build, and was written anyway
+
+Task 4.2's guard (`footline.length === 0 → null`) cannot fire today: `team-home.ts:548` pushes
+`empty bands fold away` unconditionally. It is written because the requirement binds the *record*,
+not today's assembly — the day a clause becomes conditional, the foot must not strand an affordance
+over nothing. Noted so a later reader does not delete it as dead code.
+
+### Escape inside the panel does not leave the project page, and the test now says so
+
+`project-page.test.tsx`'s scope test drives Escape twice for two different jobs. `how.tsx:33-38`
+calls `stopPropagation`, so Escape inside an open panel folds the panel and returns focus to the
+trigger **without** taking the page's Escape route back to the deck. That was true before this
+change and untested; the rewritten test asserts both halves, because a fold that also navigated
+would be a real regression and nothing else would have caught it.
+
+### Looked at, and what looking found (task 10)
+
+Rendered at 1440×900 over the dev stack's seeded Engineering team, light and dark:
+
+- **Home at rest** draws no mono clause line anywhere — `composed =`, `yours =` and
+  `never compared` are all absent from `main`'s text. Two triggers exist, named
+  `How yours is derived` and `How this page is derived`.
+- **The YOURS panel** hangs from the trigger's right edge (`align="end"`), so it stays inside the
+  content column rather than running off it — the reason that prop exists.
+- **The page foot's affordance** (D7's accepted risk): it does **not** read as orphaned punctuation.
+  `how ·` is a word at 10px, and the panel overlaps the onward footer only while it is open, which
+  is what an elevated panel is for. Recorded as looked-at rather than reasoned-about.
+- **Projects index**: `workspace-scoped` and `counted over` are both gone; the masthead's
+  `yapm workspace` chip still carries the scope as a label, so the surface is not silent about scope
+  with the fold shut. Same on one project's page (`workspace project` absent, chip present).
+- **Retros**: the defect is fixed live — the Engineering index lists two retros and renders **no**
+  `retros-quiet` node. The empty state itself could not be rendered on this stack (no team in the
+  synced set has zero retros), so it stays proven by `retros-view.test.tsx` rather than by eye.
+- **Delivery, unchanged**: the metrics promise, the burndown refusal, `CYCLE FLOW` and
+  `REVIEW RHYTHM` all still render at rest. This is the render that proves the boundary held.
+

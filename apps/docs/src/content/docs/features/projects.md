@@ -23,8 +23,10 @@ project can hold issues from several teams, and every workspace member — inclu
 
 - a dashed, workspace-marked **scope chip** beside the page title;
 - a **team split** on each index row (`ENG 11 · DES 2`), from the issues' own teams;
-- a mono footline, once per surface: `workspace-scoped · counted over the issues in your teams`,
-  with a `how ·` stating the predicate.
+- one `how ·` per surface at the foot, which states the counting rule when it is opened: every
+  project in the workspace is listed, and its teams, meter and count are taken over the project's
+  issues in teams you belong to. The rule is a query definition, so it is read on request rather
+  than printed every visit.
 
 Issues from teams you are not in **never sync to your client**, so they cannot be counted and the
 page never claims otherwise. Two people in different teams legitimately read the same project with

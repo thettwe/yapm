@@ -541,3 +541,25 @@ reconfigure a stack another build may be using. Both are green on `89bc8b8`: **P
 with no spec edited**, and **Compose smoke test 2m57s**. That is the same evidence CI would demand
 at merge, produced by the job that owns it. Recorded rather than quietly skipped, because "ran the
 suite" and "the suite ran" are different claims.
+
+### Task 9.5's premise was wrong about README, and README was stale
+
+**Ambiguous:** task 9.5 asks to *confirm* the root docs are untouched by this change "and therefore
+not stale". The confirmation and the conclusion are two different claims, and for `README.md` they
+came apart: the file is untouched, and it was stale anyway. `README.md:87` read *"The band ends
+'your work only — never compared'."* — a sentence about where the text is **drawn**, which this
+change is precisely the deletion of. Nothing in the task list would have caught it, because the task
+was written as a confirmation of the file's git status rather than of its content.
+
+**Chosen:** rewrite the bullet around the affordance, matching the idiom `README.md:166` already
+uses for Delivery (*"carrying a quiet `how ·` that unfolds its own derivation"*). The guarantee the
+bullet exists to make — your own work only, never compared — is unchanged and still stated; only the
+claim about where it is printed moved. PROCESS.md §2 names README first among the docs a change must
+not leave stale, so this is the rule working, not an extension of scope.
+
+**The general lesson, worth more than the fix:** a fold makes stale every doc that quoted the folded
+string as rendered prose. The grep that finds them is over the *deleted strings*, not over the
+changed files — `grep -rn "<deleted string>" --include="*.md"` across `apps/docs/` and the root docs.
+Run it after the fold, not before. The other two hits it returns (`team-home.md:111`,
+`reality-vocabulary.md:190`) are correct as written: both describe the string as living behind the
+affordance, which is the new truth.

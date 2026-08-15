@@ -135,6 +135,10 @@ Every doorway on the digest — exception rows, cards, issue rows, ready rows, c
 links — is focusable in document order, shows a visible focus state, and activates with
 Enter. Nothing on the page waits on the network.
 
+Both `how ·` affordances — the YOURS lens and the page's composition record — are real controls you
+open with `Enter` and close with `Escape`, which returns focus to the affordance. They are the only
+route to those two derivations, because neither is drawn at rest.
+
 ## What deliberately isn't here yet
 
 A **Decided this cycle** band, Crit/Verify handoff lanes in *Ready for you*, and last-seen

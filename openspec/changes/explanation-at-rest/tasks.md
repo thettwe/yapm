@@ -54,7 +54,7 @@
 - [x] 7.7 `apps/web/src/projects/projects-view.test.tsx` asserts **nothing** about its own footnote today — the deletion would have passed this file unedited. Close the gap: a test that the counting sentence is absent at rest and that the foot's `how ·` reveals it. Model it on the existing row-level test at `:149-174`, which already drives a `How` trigger by `keyDown`, asserts no navigation (`:172`) and asserts the panel is revealed (`:173`)
 - [x] 7.8 `apps/web/src/retro/retros-view.test.tsx:101-105` and `:123` both mount teams with **no** retros, so both stay green unchanged — which is exactly why the defect survived. Add the missing case: an index mounted with at least one retro renders no `retros-quiet` node at all
 - [x] 7.9 Every fold assertion checks **absence from the document**, not a class or an attribute. `how.tsx:66` makes `queryByText(...)` a real proof of absence; anything weaker would pass over a visually-hidden regression
-- [x] 7.10 Every reveal assertion is driven by keyboard, and asserts Escape folds it and returns focus to the trigger — the behaviour `how.tsx:33-38` implements and `reality-vocabulary` requires
+- [x] 7.10 Every reveal is operable from the keyboard alone, and every reveal assertion asserts Escape folds it and returns focus to the trigger — the behaviour `how.tsx:33-38` implements and `reality-vocabulary` requires. The open half is the click a native `<button>` raises from Enter and Space; jsdom does not synthesize that translation, so the surface suites focus the trigger and fire the click it would raise, and `packages/ui/src/components/how.test.tsx` owns the proof that the trigger is a native button. A bare `keyDown(' ')` in a surface suite asserts jsdom's gap, not the control
 
 ## 8. Tests — what must NOT move
 

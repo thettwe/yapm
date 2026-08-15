@@ -212,8 +212,9 @@ reader — which is right for a scoping clause and wrong for these:
   line is the surface's only content. That line does not render once the surface has rows.
 
 The [Delivery view](/features/delivery/) is where this pattern earns its keep: every derived number
-on that page carries a `how ·`, and the only prose it keeps at rest is the promise it is required to
-make and the refusal it is right to state.
+on that page carries a `how ·`, and the prose it keeps at rest is only what this rule exempts — the
+promise it is required to make, the refusal it is right to state, and each section's derived
+standfirst.
 
 ## The provenance mark
 

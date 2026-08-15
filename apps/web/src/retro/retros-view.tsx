@@ -182,8 +182,12 @@ export function RetrosView({ teamId }: { teamId: string }) {
         {/* The empty state, and the mono fact ONLY where a cycle exists to state one. A team with
             no cycle at all gets the sentence and nothing else — there is no next close to name.
             An index that is already listing retros explains nothing: the rows stand alone. There
-            is no create control: a retro is opened FOR a completed cycle, from that cycle's row. */}
-        {retros.length === 0 ? (
+            is no create control: a retro is opened FOR a completed cycle, from that cycle's row.
+
+            Empty AND complete, never empty alone: an unhydrated query is not a team with no retros,
+            and this line is announced through `role="status"` — so the unguarded form told a team
+            with nine retros what a retro is, out loud, on every first navigation. */}
+        {retros.length === 0 && retrosResult.type === 'complete' ? (
           <p className="text-[12.5px] text-text-2" role="status" data-testid="retros-quiet">
             A retro opens when a cycle closes.
             {nextClose === null ? null : (

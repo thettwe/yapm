@@ -284,7 +284,11 @@ export interface TeamHomeYours {
   // True ONLY under the team-level predicate: no open PR linked to this team's issues is awaiting
   // review at all (design §D5). Never a per-person claim — that mapping does not exist.
   readonly noReviewsOwed: boolean
+  // The lens in the two registers a `how ·` draws — the mono clause line, and the sentence that
+  // says the same thing in prose. Both come from here, so a render cannot paraphrase one of them
+  // into disagreeing with the other.
   readonly derivation: string
+  readonly derivationProse: string
 }
 
 export interface TeamHomeRunwayRow {
@@ -360,8 +364,15 @@ export const REVIEW_OUTCOME_LABEL: Record<ReviewState, string> = {
   dismissed: 'Dismissed',
 }
 
+// The YOURS lens, said twice: the mono clause line the `how ·` panel carries as its constraint, and
+// the same clauses as prose in the panel's body. `DeliveryPageHow` pairs a `body` with a
+// `constraint` for exactly this reason — the two registers of one derivation are declared together,
+// where a change to either has to face the other.
 export const YOURS_DERIVATION =
   'assignee you · status < done · ordered by last movement · your work only — never compared'
+
+export const YOURS_DERIVATION_PROSE =
+  "These are your own in-flight issues in this team — assigned to you, not yet done, not in triage — ordered by whatever moved most recently. Nobody else's work is counted here, and nothing is compared against anybody."
 
 // The same rule as the web `issueKey` helper: pending server number renders as pending.
 function issueKeyOf(teamKey: string, issue: { readonly number?: number | null }): string {
@@ -904,6 +915,7 @@ function buildYours(
       waitingAges.length === 0 ? null : { count: waitingAges.length, agesMs: waitingAges },
     noReviewsOwed: !anyAwaitingReview,
     derivation: YOURS_DERIVATION,
+    derivationProse: YOURS_DERIVATION_PROSE,
   }
 }
 

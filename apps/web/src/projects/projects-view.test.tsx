@@ -180,8 +180,11 @@ test('the counting rule is folded at the foot, not printed beside its own afford
   expect(screen.queryByText(/counted over the issues in your teams/)).toBeNull()
   expect(screen.queryByText(/workspace-scoped/)).toBeNull()
 
+  // The foot's trigger sits in no row, so there is nothing here for a key to be swallowed by — the
+  // assertion the row test above needs. Native activation is the click a real <button> raises from
+  // Enter and Space, proven on the component in `packages/ui/src/components/how.test.tsx`.
   const trigger = screen.getByRole('button', { name: 'How the counting rule is derived' })
-  fireEvent.keyDown(trigger, { key: ' ' })
+  trigger.focus()
   fireEvent.click(trigger)
   expect(harness.navigate).not.toHaveBeenCalled()
 

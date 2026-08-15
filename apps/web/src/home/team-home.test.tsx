@@ -397,8 +397,14 @@ test('YOURS carries the bifact rows, the collapsed waiting line and a folded len
   expect(screen.queryByText(/your work only — never compared/)).toBeNull()
   expect(screen.queryByText(/^yours =/)).toBeNull()
 
+  // Reached and activated from the keyboard alone. The trigger is a native <button>, so Enter and
+  // Space raise the click this fires — jsdom does not synthesize that translation, and asserting a
+  // bare `keyDown(' ')` here would assert jsdom's gap rather than the control's behaviour. The
+  // native half is proven once, on the component:
+  // `packages/ui/src/components/how.test.tsx` — "the trigger is a real button, so Enter and Space
+  // open it natively".
   const trigger = screen.getByRole('button', { name: 'How yours is derived' })
-  fireEvent.keyDown(trigger, { key: ' ' })
+  trigger.focus()
   fireEvent.click(trigger)
   const panel = screen.getByRole('dialog')
   expect(panel.textContent).toContain('assigned to you')
@@ -486,8 +492,10 @@ test('a quiet morning folds attention, since-yesterday and ready away and warms 
   expect(screen.queryByText(/composed =/)).toBeNull()
   expect(screen.queryByText(/empty bands fold away/)).toBeNull()
 
+  // Native activation, as above: the click is what Enter and Space raise on a real <button>, and
+  // `how.test.tsx` owns the proof that this trigger is one.
   const foot = screen.getByRole('button', { name: 'How this page is derived' })
-  fireEvent.keyDown(foot, { key: ' ' })
+  foot.focus()
   fireEvent.click(foot)
   const panel = screen.getByRole('dialog')
   expect(panel.textContent).toContain('empty bands fold away')

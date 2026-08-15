@@ -343,8 +343,12 @@ test('the page is leaveable from the keyboard, and says what it is scoped to', (
   // The counting rule is a query definition: it folds. The chip beside it is a label and stays.
   expect(screen.queryByText(/counted over the issues in your teams/)).toBeNull()
 
+  // Native activation: on a real <button> Enter and Space raise this click, and jsdom does not
+  // translate the key for us — `packages/ui/src/components/how.test.tsx` holds that proof. What is
+  // this page's own is the Escape below, which must fold the panel WITHOUT taking the page's
+  // Escape route back to the deck.
   const how = screen.getByRole('button', { name: 'How the counting rule is derived' })
-  fireEvent.keyDown(how, { key: ' ' })
+  how.focus()
   fireEvent.click(how)
   const panel = screen.getByRole('dialog')
   expect(panel.textContent).toContain('A project belongs to the workspace')

@@ -747,9 +747,7 @@ function YoursBand({
             ) : undefined
           ) : (
             <How label="yours" align="end" constraint={yours.derivation}>
-              These are your own in-flight issues in this team — assigned to you, not yet done, not
-              in triage — ordered by whatever moved most recently. Nobody else's work is counted
-              here, and nothing is compared against anybody.
+              {yours.derivationProse}
             </How>
           )
         }

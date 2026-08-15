@@ -563,3 +563,60 @@ changed files — `grep -rn "<deleted string>" --include="*.md"` across `apps/do
 Run it after the fold, not before. The other two hits it returns (`team-home.md:111`,
 `reality-vocabulary.md:190`) are correct as written: both describe the string as living behind the
 affordance, which is the new truth.
+
+### The YOURS panel's prose is authored in `packages/schema`, beside the clauses it paraphrases
+
+**Ambiguous:** D8 puts the *derivation text* in `packages/schema` and names `YOURS_DERIVATION` as
+the thing it moves. The panel body is a second statement of the same lens — prose where the constant
+is clauses — and the first build authored it inline in `team-home.tsx`, on the reading that only the
+mono line was "the derivation". That left the band's lens written twice, in two packages, each
+independently editable: change the ordering clause in the schema and the sentence in the render goes
+on saying "ordered by whatever moved most recently" whether or not it is still true.
+
+**Chosen:** `YOURS_DERIVATION_PROSE` beside `YOURS_DERIVATION`, and `TeamHomeYours` grows a
+`derivationProse` field the render reads. `DeliveryPageHow` is the precedent — it pairs a `body`
+with a `constraint` on one object for exactly this reason, and `stat-tile.tsx:110-116` renders both
+without authoring either. **Why:** `delivery-metrics/spec.md:274-275` asks for the derivation to be
+produced by the layer that produces the number, and a paraphrase of a derivation is a derivation. It
+also makes the drift testable, which it was not: `team-home.test.ts` now asserts the prose carries
+the assignee, status, ordering and never-compared clauses, in the same block that asserts the mono
+line does.
+
+`Footline`'s sentence is deliberately not given this treatment. It joins `model.footline`'s
+schema-authored clauses into a sentence rather than restating them, so there is nothing there for a
+second author to drift — the same distinction §D8's own note about the `constraint` slot draws.
+
+### Keyboard reveal: the surface suites fire the click a native button raises, and say why
+
+**Ambiguous:** task 7.10 asks every reveal to be "driven by keyboard". The shipped idiom at
+`projects-view.test.tsx:168` drives a `How` trigger with `fireEvent.keyDown(trigger, { key: ' ' })`,
+and copying it into the four new tests looked like compliance. It is not: `how.tsx` binds no Space
+handler — Space works because the trigger is a native `<button>` and the browser raises a click —
+and jsdom does not perform that translation. In the four new tests the line was inert, and the
+`fireEvent.click` on the next line did all the work. The pre-existing line at `:168` is load-bearing
+for a different reason: it proves the *row* does not swallow the key, and that assertion is real
+whether or not the panel opens.
+
+**Chosen:** drop the inert `keyDown` from the four new reveals, focus the trigger and fire the click
+Enter and Space raise, with a comment at each site naming
+`packages/ui/src/components/how.test.tsx`'s *"the trigger is a real button, so Enter and Space open
+it natively"* as where the native half is proven. Task 7.10 is rewritten to state the split.
+**Why:** the alternative offered — assert between the keydown and the click that nothing opened —
+would enshrine jsdom's gap as expected behaviour, asserting the opposite of what a real browser
+does. Adding `user-event` to make the line real is a new dependency for one assertion, which the
+catalog rule (CLAUDE.md §5) makes the wrong trade. Escape remains fully proven at every site: it
+folds the panel and returns focus to the trigger, both asserted.
+
+### The Retros empty state is gated on completeness, not emptiness
+
+**Ambiguous:** D6 frames the Retros defect as one of *placement* — the block sat outside the
+`retros.length > 0` branch — and the fix as moving it inside. Gating on `retros.length === 0` alone
+fixes the case D6 draws and leaves a second one: before the retros query hydrates, `retros` is empty
+on a team that has nine, so the first navigation to the index renders *"A retro opens when a cycle
+closes."* over a team with rows — and announces it, because the line carries `role="status"`.
+
+**Chosen:** `retros.length === 0 && retrosResult.type === 'complete'`, the idiom
+`projects-view.tsx:169-172` and `triage-view.tsx:426-431` already use, with a test mounting an
+unhydrated result. **Why:** the spec sentence the fix serves is *"A team with no retros SHALL be met
+by…"*, and an unhydrated query is not a team with no retros. Empty and known-empty are different
+facts, and this surface speaks the second one out loud.

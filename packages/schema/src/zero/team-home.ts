@@ -284,7 +284,7 @@ export interface TeamHomeYours {
   // True ONLY under the team-level predicate: no open PR linked to this team's issues is awaiting
   // review at all (design §D5). Never a per-person claim — that mapping does not exist.
   readonly noReviewsOwed: boolean
-  readonly footnote: string
+  readonly derivation: string
 }
 
 export interface TeamHomeRunwayRow {
@@ -360,8 +360,8 @@ export const REVIEW_OUTCOME_LABEL: Record<ReviewState, string> = {
   dismissed: 'Dismissed',
 }
 
-export const YOURS_FOOTNOTE =
-  'yours = assignee you · status < done · ordered by last movement · your work only — never compared'
+export const YOURS_DERIVATION =
+  'assignee you · status < done · ordered by last movement · your work only — never compared'
 
 // The same rule as the web `issueKey` helper: pending server number renders as pending.
 function issueKeyOf(teamKey: string, issue: { readonly number?: number | null }): string {
@@ -903,7 +903,7 @@ function buildYours(
     waitingOnOthers:
       waitingAges.length === 0 ? null : { count: waitingAges.length, agesMs: waitingAges },
     noReviewsOwed: !anyAwaitingReview,
-    footnote: YOURS_FOOTNOTE,
+    derivation: YOURS_DERIVATION,
   }
 }
 

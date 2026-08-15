@@ -107,6 +107,28 @@ test('a team that has never run one gets the quiet line, no create control, no e
   expect(screen.queryByRole('region', { name: 'Cycles without a retrospective' })).toBeNull()
 })
 
+test('an index that is already listing retros explains nothing about what a retro is', () => {
+  // The quiet line is the EMPTY STATE. Drawn over rows it told a team with retros what a retro is,
+  // every morning — which is what `retrospective/spec.md` scopes it against.
+  index({
+    retros: [RETRO],
+    cycles: [
+      cycle(),
+      cycle({
+        id: 'cycle-2',
+        number: 2,
+        name: 'Cycle 2',
+        status: 'active',
+        startDate: Date.now() - 9 * DAY,
+        endDate: Date.now() + 5 * DAY,
+      }),
+    ],
+  })
+  expect(screen.queryByTestId('retros-quiet')).toBeNull()
+  expect(screen.queryByText(/A retro opens when a cycle closes/)).toBeNull()
+  expect(screen.getByTestId('retro-link')).toBeInTheDocument()
+})
+
 test('the next close is stated only where a running cycle exists to state it', () => {
   index({
     cycles: [

@@ -173,6 +173,27 @@ test('the row’s `how ·` opens its derivation instead of navigating away', () 
   expect((late as HTMLElement).querySelector('[data-slot="how-panel"]')).not.toBeNull()
 })
 
+test('the counting rule is folded at the foot, not printed beside its own affordance', () => {
+  seed([project({ id: 'p-a', name: 'Alpha', status: 'active' })])
+  render(<ProjectsView teamId={TEAM.id} />)
+
+  expect(screen.queryByText(/counted over the issues in your teams/)).toBeNull()
+  expect(screen.queryByText(/workspace-scoped/)).toBeNull()
+
+  const trigger = screen.getByRole('button', { name: 'How the counting rule is derived' })
+  fireEvent.keyDown(trigger, { key: ' ' })
+  fireEvent.click(trigger)
+  expect(harness.navigate).not.toHaveBeenCalled()
+
+  const panel = screen.getByRole('dialog')
+  expect(panel.textContent).toContain('Every project in this workspace is listed')
+  expect(panel.textContent).toContain('issues from other teams never sync')
+
+  fireEvent.keyDown(panel, { key: 'Escape' })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(document.activeElement).toBe(trigger)
+})
+
 test('the roving-focus keyboard model moves across groups, opens and survives a shrinking set', () => {
   const fixture = [
     project({ id: 'p-a', name: 'Alpha', status: 'active', targetDate: NOW + DAY }),

@@ -340,7 +340,20 @@ test('the page is leaveable from the keyboard, and says what it is scoped to', (
   mount()
 
   expect(screen.getByTestId('project-scope').textContent).toContain('Acme workspace')
-  expect(screen.getByText('workspace project · counted over the issues in your teams')).toBeTruthy()
+  // The counting rule is a query definition: it folds. The chip beside it is a label and stays.
+  expect(screen.queryByText(/counted over the issues in your teams/)).toBeNull()
+
+  const how = screen.getByRole('button', { name: 'How the counting rule is derived' })
+  fireEvent.keyDown(how, { key: ' ' })
+  fireEvent.click(how)
+  const panel = screen.getByRole('dialog')
+  expect(panel.textContent).toContain('A project belongs to the workspace')
+  expect(panel.textContent).toContain('only the ones in teams you belong to')
+
+  fireEvent.keyDown(panel, { key: 'Escape' })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(document.activeElement).toBe(how)
+  expect(harness.navigate).not.toHaveBeenCalled()
 
   fireEvent.keyDown(document, { key: 'Escape' })
   expect(harness.navigate).toHaveBeenCalledWith(

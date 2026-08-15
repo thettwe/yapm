@@ -179,15 +179,18 @@ export function RetrosView({ teamId }: { teamId: string }) {
           </ul>
         ) : null}
 
-        {/* The quiet line, and the mono fact ONLY where a cycle exists to state one. A team with no
-            cycle at all gets the sentence and nothing else — there is no next close to name. There
+        {/* The empty state, and the mono fact ONLY where a cycle exists to state one. A team with
+            no cycle at all gets the sentence and nothing else — there is no next close to name.
+            An index that is already listing retros explains nothing: the rows stand alone. There
             is no create control: a retro is opened FOR a completed cycle, from that cycle's row. */}
-        <p className="text-[12.5px] text-text-2" role="status" data-testid="retros-quiet">
-          A retro opens when a cycle closes.
-          {nextClose === null ? null : (
-            <span className="mt-1.5 block font-mono text-[10.5px] text-text-2">{nextClose}</span>
-          )}
-        </p>
+        {retros.length === 0 ? (
+          <p className="text-[12.5px] text-text-2" role="status" data-testid="retros-quiet">
+            A retro opens when a cycle closes.
+            {nextClose === null ? null : (
+              <span className="mt-1.5 block font-mono text-[10.5px] text-text-2">{nextClose}</span>
+            )}
+          </p>
+        ) : null}
 
         {/* A cycle owed a retro is a team fact, so a viewer reads the group like everyone else; only
             the control that opens one is a writer's. Hiding the group from a viewer would hide the

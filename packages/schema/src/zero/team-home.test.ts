@@ -9,7 +9,7 @@ import {
   type TeamHomeInput,
   type TeamHomeIssueRow,
   type TeamHomePullRequestRow,
-  YOURS_FOOTNOTE,
+  YOURS_DERIVATION,
 } from './team-home.js'
 import { collectKeys, FORBIDDEN_IDENTITY_KEYS } from './testing/blameless.js'
 
@@ -454,7 +454,14 @@ describe('buildTeamHome yours (§D5)', () => {
     ])
     expect(model.yours.rows[0]?.git).toBe('checks green · approved 9h')
     expect(model.yours.rows[1]?.git).toBe('')
-    expect(model.yours.footnote).toBe(YOURS_FOOTNOTE)
+    // Not `toBe(YOURS_DERIVATION)`: that stays green through any rewrite of the constant. The
+    // band's lens definition is what the requirement binds, clause by clause.
+    expect(model.yours.derivation).toBe(YOURS_DERIVATION)
+    expect(model.yours.derivation).toContain('assignee you')
+    expect(model.yours.derivation).toContain('status < done')
+    expect(model.yours.derivation).toContain('ordered by last movement')
+    expect(model.yours.derivation.endsWith('your work only — never compared')).toBe(true)
+    expect(model.yours.derivation.startsWith('yours = ')).toBe(false)
   })
 
   it('collapses rows whose PR awaits review into the waiting-on-others line', () => {

@@ -5,7 +5,7 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 // The page is a pure render over `buildTeamHome` (the model has its own unit suite in
@@ -379,7 +379,7 @@ test('every attention class row is a doorway with its evidence', async () => {
   expect(triage).toHaveAttribute('href', '/teams/team-1/triage')
 })
 
-test('YOURS carries the bifact rows, the collapsed waiting line and the never-compared footnote', async () => {
+test('YOURS carries the bifact rows, the collapsed waiting line and a folded lens definition', async () => {
   fullMorning()
   await mount()
 
@@ -392,7 +392,36 @@ test('YOURS carries the bifact rows, the collapsed waiting line and the never-co
   expect(screen.getByText(/review 16h/)).toBeInTheDocument()
   // Two of the team's PRs still await review, so the reciprocal line must NOT render.
   expect(screen.queryByText(/No reviews owed/)).toBeNull()
-  expect(screen.getByText(/your work only — never compared/, { exact: false })).toBeInTheDocument()
+  // The lens definition is a derivation: absent from the DOM at rest, one keystroke away. The
+  // guarantee it states is structural and holds whether the panel is open or shut.
+  expect(screen.queryByText(/your work only — never compared/)).toBeNull()
+  expect(screen.queryByText(/^yours =/)).toBeNull()
+
+  const trigger = screen.getByRole('button', { name: 'How yours is derived' })
+  fireEvent.keyDown(trigger, { key: ' ' })
+  fireEvent.click(trigger)
+  const panel = screen.getByRole('dialog')
+  expect(panel.textContent).toContain('assigned to you')
+  expect(panel.textContent).toContain('your work only — never compared')
+
+  fireEvent.keyDown(panel, { key: 'Escape' })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(screen.queryByText(/your work only — never compared/)).toBeNull()
+  expect(document.activeElement).toBe(trigger)
+})
+
+test('the YOURS header slot holds the doorway or the lens affordance, never both', async () => {
+  // One slot, two candidates: the Runway doorway renders only while YOURS is empty, and the lens
+  // affordance only while it has rows. Asserted rather than reasoned about.
+  fullMorning()
+  zero.issues = (zero.issues as { id: string }[]).filter(
+    (row) => !row.id.startsWith('i-mine'),
+  ) as unknown[]
+  await mount()
+
+  const runway = screen.getByRole('link', { name: /Runway/ })
+  expect(runway).toHaveAttribute('href', '#ready-for-you')
+  expect(screen.queryByRole('button', { name: 'How yours is derived' })).toBeNull()
 })
 
 test('SINCE YESTERDAY cards carry provenance lines and doorways', async () => {
@@ -449,8 +478,24 @@ test('a quiet morning folds attention, since-yesterday and ready away and warms 
   expect(screen.queryByTestId('attention-count')).toBeNull()
 
   expect(screen.getByText(/Nothing held, nothing owed/)).toBeInTheDocument()
-  expect(screen.getByText(/composed =/)).toBeInTheDocument()
-  expect(screen.getByText(/empty bands fold away/)).toBeInTheDocument()
+  // Empty YOURS and no READY band: the slot holds neither the doorway nor the lens affordance.
+  expect(screen.queryByRole('button', { name: 'How yours is derived' })).toBeNull()
+
+  // The composition record is read, not printed — and on a fully folded day it must still name the
+  // folding, and name nothing the render did not do.
+  expect(screen.queryByText(/composed =/)).toBeNull()
+  expect(screen.queryByText(/empty bands fold away/)).toBeNull()
+
+  const foot = screen.getByRole('button', { name: 'How this page is derived' })
+  fireEvent.keyDown(foot, { key: ' ' })
+  fireEvent.click(foot)
+  const panel = screen.getByRole('dialog')
+  expect(panel.textContent).toContain('empty bands fold away')
+  expect(panel.textContent).not.toContain('attention first')
+
+  fireEvent.keyDown(panel, { key: 'Escape' })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(document.activeElement).toBe(foot)
 })
 
 test('the empty-YOURS warmth line drops the "nothing owed" claim while a review is owed', async () => {

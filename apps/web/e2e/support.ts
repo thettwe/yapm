@@ -49,19 +49,33 @@ export async function ensureAccount(page: Page, credentials: Credentials): Promi
   // (in sign-up mode) and shows a "user already exists" alert. Settle on whichever happens — the
   // URL changing, or the alert appearing — rather than guessing from the mode-dependent label.
   //
-  // The URL, not the submit button's visibility: the button is a rendered node and the sign-in
-  // surface is re-entered by every state `/login` treats as unsettled, so probing for it reads a
-  // transient render as "still signed out" and submits the form a second time. The URL only
-  // changes when the decision has actually been taken.
+  // The URL, not the submit button's visibility, is the SETTLE signal: the button is a rendered
+  // node and the sign-in surface is re-entered by every state `/login` treats as unsettled, so
+  // waiting on it reads a transient render as "still signed out". The URL only changes when the
+  // decision has actually been taken. Both bounds are the 20s `openWorkspaceOverview` allows, so a
+  // landing that is merely slow is not mistaken for a duplicate account.
+  //
+  // The retry, though, is gated on its OWN precondition — `signIn` needs the form mounted, and the
+  // form is absent on every branch except a settled `logged-out`. Probing the button is safe here
+  // because the race above has already settled; it is the unconditional probe, before settling,
+  // that was flaky. Anything else the wait ended on (a decision still in flight, the shared retry
+  // surface) is left for the caller's own wait rather than routed into a sign-in that cannot run.
   await Promise.race([
-    page.waitForURL((url) => url.pathname !== '/login', { timeout: 15_000 }).catch(() => {}),
+    page.waitForURL((url) => url.pathname !== '/login', { timeout: 20_000 }).catch(() => {}),
     page
       .getByRole('alert')
-      .waitFor({ state: 'visible', timeout: 15_000 })
+      .waitFor({ state: 'visible', timeout: 20_000 })
       .catch(() => {}),
   ])
   if (new URL(page.url()).pathname === '/login') {
-    await signIn(page, credentials)
+    if (
+      await page
+        .getByTestId('login-submit')
+        .isVisible()
+        .catch(() => false)
+    ) {
+      await signIn(page, credentials)
+    }
   }
 }
 

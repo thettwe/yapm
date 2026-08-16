@@ -62,8 +62,10 @@ invitation, which names no team, lands wherever the ordinary rule sends you.
 
 While the decision is being made — your role and your team list are both synced values — the sign-in
 page holds its loading state rather than guessing. It never holds it indefinitely: if the sync
-credential cannot be obtained, you get the same retry surface the rest of the product shows when the
-server is unreachable, and if the session turns out to be over you get the sign-in form back.
+credential cannot be obtained, **or if the sync connection itself does not come back**, you get the
+same retry surface the rest of the product shows when the server is unreachable — and it clears
+itself the moment the connection holds. If the session turns out to be over you get the sign-in form
+back.
 
 ## One attention number
 

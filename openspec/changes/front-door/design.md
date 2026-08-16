@@ -704,6 +704,33 @@ trigger is clickable before the menu can respond, which is precisely why `goToMo
 exist in `support.ts` in the `aria-expanded`-keyed form they do. The Status axis is opened the same
 way: idempotent open, item reached only while the menu is known open.
 
+### `ensureAccount`'s settle signal and its retry guard are two different questions
+
+**Ambiguous:** moving `ensureAccount` off the submit button and onto the URL fixed the double
+submit, but left one guard doing two jobs. `if (pathname === '/login') signIn(...)` reads "the URL
+did not move" as "this is a duplicate account", when the same state is also what a landing decision
+that simply took longer than the wait looks like — and `signIn` needs the form *mounted*, which on
+every branch except a settled `logged-out` it is not. A slow-but-successful sign-up therefore routed
+into a fallback that could never complete: `fillCredentials` would time out on a field that is not
+on the page.
+
+**Chosen:** the URL stays the settle signal, and the retry is gated on its own precondition —
+`page.getByTestId('login-submit').isVisible()` — before `signIn` runs. Both bounds in the race move
+from 15s to the 20s `openWorkspaceOverview` already allows. **Why:** probing the button is exactly
+what was flaky *before* the race settled and is exactly what is correct after it, because the
+transient renders the old probe caught are gone by then. Anything else the wait can end on — a
+decision still in flight, or the bounded retry surface D3 now renders — is left to the caller's own
+wait rather than turned into a sign-in attempt against a surface with no form. The 20s brings the
+helper into line with the only other place in `support.ts` that waits on the same decision.
+
+### The docs and the spec delta name both bounds, not only the credential
+
+The bound widened when `LandingDecision` and `AcceptInvite` picked up the recovery clock, but
+`app-frame.md` and this change's `app-frame` delta still described the credential request as the
+only way the wait ends. Both now name the second cause — a connection that does not come back — and
+say that the surface clears itself once it holds, which is the property that makes the retry surface
+an answer rather than a dead end.
+
 ### What the gates prove, and what is still owed to CI
 
 `typecheck`, `lint`, the full Vitest run (66 files, 797 tests) and `check-boundaries.mjs` are green

@@ -290,6 +290,30 @@ test('the issue rows speak the shared reality vocabulary, inkless where there is
   expect(quietTrack?.getAttribute('role')).toBeNull()
 })
 
+// One issue may not say more here than it says on the team's list: this page speaks the same
+// register, so a classification the track already draws is quiet in both places — and its words
+// live in the track's name on both.
+test('a row the track already speaks for is quiet here too, with its words in the track’s name', () => {
+  seed({
+    issues: [
+      issue({
+        id: 'i3',
+        title: 'Coupon stacking on the cart',
+        status: 'in_review',
+        pr: { state: 'approved', openedAt: NOW - 3 * HOUR, ciChecks: [{ conclusion: 'success' }] },
+      }),
+    ],
+  })
+  mount()
+
+  const row = rowFor('Coupon stacking on the cart')
+  expect(row.querySelector('[data-slot="rest-phrase"]')).toBeNull()
+  const track = row.querySelector('[data-slot="reality-track"]')
+  expect(track?.getAttribute('role')).toBe('img')
+  expect((track?.getAttribute('aria-label') ?? '').startsWith('Approved')).toBe(true)
+  expect(track?.getAttribute('aria-label')).toContain('PR approved')
+})
+
 test('done issues sit behind a fold that states the true remaining count', () => {
   seed({
     issues: [

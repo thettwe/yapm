@@ -42,9 +42,12 @@ export interface TrackShape {
 // checks station: a board that claims done past a red check breaks there, not before it.
 const CI_SEGMENT_INDEX = 1
 
+// `done` at the change station means the change LANDED. An approved pull request has not landed,
+// so it draws `open` — reality is standing at this station. `reviewNode` still reads `done` for it,
+// and that pair of stations is what tells an approved change from a merged one without a phrase.
 function prNode(strip: DeliveryStrip | null): TrackNodeKind {
-  if (strip?.pr === 'merged' || strip?.pr === 'approved') return 'done'
-  if (strip?.pr === 'open') return 'open'
+  if (strip?.pr === 'merged') return 'done'
+  if (strip?.pr === 'open' || strip?.pr === 'approved') return 'open'
   if (strip?.pr === 'draft') return 'rev-wait'
   return 'empty'
 }
@@ -195,9 +198,17 @@ function reviewAgePhrase(strip: DeliveryStrip): string | null {
 // are drawn, plus the divergence sentence when the break is drawn. A track that draws no ink
 // announces nothing (see `isQuietTrack`), but the fact-free phrase stays available to surfaces
 // that state the absence in words rather than drawing it.
+//
+// `quietPhrase` is the words the surface's register holds for this row and DID NOT draw. They LEAD
+// the label, so the first thing a screen reader hears is the sentence a sighted reader no longer
+// sees, in exactly the text the register would have drawn. The contract runs the other way too and
+// it belongs to the caller: words the register DREW are never passed here, or a reader hears them
+// twice. The divergence sentence is a different sentence about a different aspect and keeps its
+// place under either rule.
 export function realityTrackLabel(
   strip: DeliveryStrip | null,
   divergenceSentence?: string | null,
+  quietPhrase?: string | null,
 ): string {
   const parts = [
     strip?.pr ? PR_PHRASE[strip.pr] : null,
@@ -206,7 +217,11 @@ export function realityTrackLabel(
     strip === null ? null : reviewAgePhrase(strip),
     divergenceSentence ?? null,
   ].filter((part): part is string => part != null && part !== '')
-  return parts.length > 0 ? parts.join(', ') : 'No delivery signal yet'
+  const said = quietPhrase == null || quietPhrase === '' ? null : quietPhrase
+  if (parts.length === 0) return said ?? 'No delivery signal yet'
+  // A full stop, not a comma: the register's sentence and the track's facts are two statements,
+  // and a screen reader pauses at the boundary rather than running them together.
+  return said === null ? parts.join(', ') : `${said}. ${parts.join(', ')}`
 }
 
 // A track carrying NO fact and NO break has nothing to scaffold, so in a dense row it draws
@@ -226,13 +241,68 @@ export function isQuietTrack(shape: TrackShape): boolean {
   )
 }
 
+// The three NON-COLOUR channels a station's node is drawn in. Declared as a value, and the drawn
+// classes below are composed FROM it, so "no two kinds are told apart by hue alone"
+// (`DESIGN.md:12`, WCAG 1.4.1) is a property asserted over this vocabulary rather than over
+// rendered pixels. A reader who cannot separate the status hues still reads six kinds here.
+export type TrackNodeFill = 'filled' | 'half' | 'outline'
+export type TrackNodeForm = 'disc' | 'square'
+export type TrackNodeStroke = 'none' | 'ring' | 'dashed'
+
+export interface TrackNodeDrawing {
+  readonly fill: TrackNodeFill
+  readonly form: TrackNodeForm
+  readonly stroke: TrackNodeStroke
+}
+
+// `empty-urgent` borrows `fail`'s square deliberately: they are the only two kinds that mean
+// something is WRONG here, and an outline square after a `//` break reads as the stop it is.
+// `empty`'s dashed ring is the dotted segment's own grammar, at a node's scale.
+export const TRACK_NODE_DRAWING: Record<TrackNodeKind, TrackNodeDrawing> = {
+  done: { fill: 'filled', form: 'disc', stroke: 'none' },
+  open: { fill: 'half', form: 'disc', stroke: 'ring' },
+  'rev-wait': { fill: 'outline', form: 'disc', stroke: 'ring' },
+  fail: { fill: 'filled', form: 'square', stroke: 'none' },
+  empty: { fill: 'outline', form: 'disc', stroke: 'dashed' },
+  'empty-urgent': { fill: 'outline', form: 'square', stroke: 'ring' },
+}
+
+const FORM_CLASS: Record<TrackNodeForm, string> = {
+  disc: 'rounded-full',
+  square: 'rounded-[1.5px]',
+}
+
+const STROKE_CLASS: Record<TrackNodeStroke, string> = {
+  none: '',
+  ring: 'border-solid',
+  dashed: 'border-dashed',
+}
+
+// The hue and the measure — the only per-kind values the form table does not decide. `open`'s
+// background is a hard-edged half fill under a full ring of the same token: the silhouette stays a
+// 7px circle, its leading half is inked, and it is neither `done`'s solid disc nor `rev-wait`'s
+// hollow ring at any hue.
+const NODE_INK: Record<TrackNodeKind, string> = {
+  done: 'size-[7px] bg-status-done',
+  open: 'size-[7px] border-[1.25px] border-status-in-review bg-[linear-gradient(90deg,var(--status-in-review)_0_50%,transparent_50%_100%)]',
+  'rev-wait': 'size-2 border-[1.6px] border-status-in-review bg-transparent',
+  fail: 'size-[7px] bg-status-urgent',
+  empty: 'size-[7px] border-[1.4px] border-border-strong bg-transparent',
+  'empty-urgent': 'size-[7px] border-[1.6px] border-status-urgent bg-transparent',
+}
+
+function nodeClass(kind: TrackNodeKind): string {
+  const drawing = TRACK_NODE_DRAWING[kind]
+  return cn(NODE_INK[kind], FORM_CLASS[drawing.form], STROKE_CLASS[drawing.stroke])
+}
+
 const NODE_CLASS: Record<TrackNodeKind, string> = {
-  done: 'size-[7px] rounded-full bg-status-done',
-  open: 'size-[7px] rounded-full bg-status-in-review',
-  'rev-wait': 'size-2 rounded-full border-[1.6px] border-status-in-review bg-transparent',
-  fail: 'size-[7px] rounded-[1.5px] bg-status-urgent',
-  empty: 'size-[7px] rounded-full border-[1.4px] border-border-strong bg-transparent',
-  'empty-urgent': 'size-[7px] rounded-full border-[1.6px] border-status-urgent bg-transparent',
+  done: nodeClass('done'),
+  open: nodeClass('open'),
+  'rev-wait': nodeClass('rev-wait'),
+  fail: nodeClass('fail'),
+  empty: nodeClass('empty'),
+  'empty-urgent': nodeClass('empty-urgent'),
 }
 
 const SEGMENT_CLASS: Record<Exclude<TrackSegmentKind, 'broken'>, string> = {
@@ -330,6 +400,13 @@ export const REALITY_TRACK_WIDTH = 118
 // The mock's `.t-age`: a right-aligned mono column beside the stations, inside the same reserved
 // measure, so the fourth fact is drawn and not only announced.
 const AGE_COLUMN_WIDTH = 26
+// The gutter between the stations and that column. It is drawn by the static `ml-[6px]` below —
+// Tailwind reads class strings, not constants — so the two must be changed together.
+const AGE_COLUMN_GUTTER = 6
+
+// What a surface adds to its stations' measure to reserve the age column too. Exported because a
+// surface that draws the column has to widen for it rather than squeeze the stations.
+export const AGE_COLUMN_MEASURE = AGE_COLUMN_WIDTH + AGE_COLUMN_GUTTER
 
 export interface RealityTrackProps {
   shape: TrackShape

@@ -42,6 +42,7 @@ import {
 } from '@yapm/ui/components/command-palette'
 import {
   buildRealityShape,
+  formatReviewAge,
   RealityTrack,
   realityTrackLabel,
 } from '@yapm/ui/components/reality-track'
@@ -75,6 +76,7 @@ import {
   deliveryView,
   type LinkedIssueRow,
   linkedEntitiesFor,
+  quietWords,
 } from '@/issues/delivery'
 import {
   type CycleOption,
@@ -747,21 +749,26 @@ function assigneeProps(card: BoardCardData): { assignee?: { name: string; src?: 
 // `spoken` exists because the card is a `role="button"` carrying an EXPLICIT `aria-label`, and an
 // explicit name suppresses everything inside it — the phrase and the track's own `role="img"`
 // label included. The list row has no such label and is read whole; here the register has to be
-// composed back into the name, from this same derivation and the same dictionaries.
+// composed back into the name, from this same derivation and the same dictionaries. It composes
+// from `spoken` rather than `text`, so the card's name carries the register's words whether they
+// were drawn on the card or quieted by it.
 function deliveryRender(card: BoardCardData): {
   props: { phrase?: ReactNode; realityTrack: ReactNode }
   spoken: string
 } {
-  const view = deliveryView(card, card.linked ?? {})
+  const view = deliveryView(card, card.linked ?? {}, 'news')
   const divergence = view.divergence ? DIVERGENCE_LABEL[view.divergence] : null
   const track = (
     <RealityTrack
       shape={buildRealityShape(view.strip, { divergence: view.divergence })}
       width={CARD_TRACK_WIDTH}
-      label={realityTrackLabel(view.strip, divergence)}
+      // The card's one surviving channel for the review age is the drawing: an age living only in
+      // a phrase would leave the card with a fact the list row draws and it does not.
+      age={view.strip?.reviewAgeMs == null ? null : formatReviewAge(view.strip.reviewAgeMs)}
+      label={realityTrackLabel(view.strip, divergence, quietWords(view.phrase))}
     />
   )
-  const spoken = [view.phrase.text, divergence].filter((part) => part !== null).join(', ')
+  const spoken = [view.phrase.spoken, divergence].filter((part) => part !== null).join(', ')
   return {
     props:
       view.phrase.text === null

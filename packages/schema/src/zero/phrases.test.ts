@@ -12,7 +12,7 @@ import {
   sayRestPhrase,
 } from './phrases.js'
 
-const REGISTERS: readonly PhraseRegister[] = ['neutral', 'personal']
+const REGISTERS: readonly PhraseRegister[] = ['neutral', 'personal', 'news']
 
 const HOUR = 60 * 60 * 1000
 
@@ -39,14 +39,16 @@ describe('the registers are total over the key set', () => {
     }
   })
 
-  it('neither register holds a key the other lacks', () => {
-    // Reaching the tables through the only public door: a key one register knew and the other did
+  it('no register holds a key another lacks', () => {
+    // Reaching the tables through the only public door: a key one register knew and another did
     // not would throw or resolve `undefined` here rather than silently falling back.
     const resolved = REGISTERS.map(
       (register) =>
         new Set(REST_PHRASE_KEYS.filter((key) => restPhrase(key, register).text !== undefined)),
     )
-    expect([...(resolved[0] ?? [])].sort()).toEqual([...(resolved[1] ?? [])].sort())
+    for (const set of resolved) {
+      expect([...set].sort()).toEqual([...(resolved[0] ?? [])].sort())
+    }
     expect(new Set(REST_PHRASE_KEYS).size).toBe(REST_PHRASE_KEYS.length)
   })
 
@@ -55,6 +57,69 @@ describe('the registers are total over the key set', () => {
     expect(silent.sort()).toEqual(
       ['deployed', 'in_backlog', 'in_progress', 'in_review', 'not_started'].sort(),
     )
+  })
+
+  // The sibling of the assertion above, over the register that has three answers rather than two.
+  // Pinned as three SETS, not as one "not drawn" list: a key drifting from quiet to silent loses
+  // its words entirely, and that has to fail rather than pass as "still not drawn".
+  it('the news register draws the exceptions, quiets what the track draws, and stays silent where neutral is', () => {
+    const voicing = (key: RestPhraseKey) => {
+      const phrase = restPhrase(key, 'news', { reviewAgeMs: 16 * HOUR })
+      if (phrase.text !== null) return 'drawn'
+      return phrase.spoken === null ? 'silent' : 'quiet'
+    }
+    const keysWhere = (state: string) => REST_PHRASE_KEYS.filter((key) => voicing(key) === state)
+
+    expect(keysWhere('drawn').sort()).toEqual(
+      [
+        'diverged_behind_merge',
+        'diverged_ahead_of_pr',
+        'diverged_done_ci_failing',
+        'checks_failing',
+        // The one key admitted on the second ground: the track draws `rev-wait` for every open PR
+        // and the age column names no clock, so nothing drawn says whether anybody has looked.
+        'review_returned',
+      ].sort(),
+    )
+    expect(keysWhere('quiet').sort()).toEqual(
+      ['merged_not_deployed', 'pr_approved', 'pr_draft', 'review_unreviewed'].sort(),
+    )
+    expect(keysWhere('silent').sort()).toEqual(
+      ['deployed', 'in_backlog', 'in_progress', 'in_review', 'not_started'].sort(),
+    )
+  })
+
+  // The invariant `RestPhrase` states about itself, over every register and every key.
+  it('a drawn entry speaks what it draws, a quiet one keeps its words, a silent one has none', () => {
+    for (const register of REGISTERS) {
+      for (const key of REST_PHRASE_KEYS) {
+        const phrase = restPhrase(key, register, { reviewAgeMs: 16 * HOUR })
+        if (phrase.text === null) expect(phrase.spoken !== '').toBe(true)
+        else expect(phrase.spoken).toBe(phrase.text)
+      }
+    }
+  })
+
+  // `news` is a POLICY over `neutral`, not a second voice: it adds, rewrites and deletes no string.
+  // The one-file guard below runs on the same eight strings for exactly this reason.
+  it('news speaks neutral’s words and none of its own', () => {
+    for (const key of REST_PHRASE_KEYS) {
+      expect(restPhrase(key, 'news', { reviewAgeMs: 16 * HOUR }).spoken).toBe(
+        restPhrase(key, 'neutral', { reviewAgeMs: 16 * HOUR }).text,
+      )
+    }
+  })
+
+  // A mark follows the text it sourced. `merged_not_deployed` is one of the three sourced keys, so
+  // going quiet takes its GitHub mark off the list with it — no text for a mark to follow, and a
+  // mark standing alone would be a provenance claim about nothing.
+  it('a quiet phrase carries no provenance mark', () => {
+    const quiet = restPhrase('merged_not_deployed', 'news')
+    expect(quiet.text).toBeNull()
+    expect(quiet.spoken).toBe('Built — not live yet')
+    expect(quiet.source).toBeNull()
+    // The same key still marks the register that draws it.
+    expect(restPhrase('merged_not_deployed', 'neutral').source).toBe('github')
   })
 })
 

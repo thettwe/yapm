@@ -640,11 +640,13 @@ function DoneMeter({ done, total }: { done: number; total: number }) {
 }
 
 // Two different kinds of nothing, and they must read differently: a project with no issues has not
-// been broken down, while one whose issues sit in no cycle has work nobody has scheduled.
+// been broken down, while one whose issues sit in no cycle has work nobody has scheduled. Both are
+// news about the project. A project whose work IS scheduled, in cycles this window does not cover,
+// gets no note: that was a reading of the drawing rather than news, it fired on every such row, and
+// a note every row carries distinguishes none of them. The row's own name says it instead.
 function emptyNote(row: RoadmapRowModel): { text: string; quiet: boolean } | null {
   if (row.total === 0) return { text: 'No issues yet', quiet: true }
   if (row.scheduledCount === 0) return { text: 'Nothing scheduled', quiet: false }
-  if (row.marks.length === 0) return { text: 'Scheduled outside this window', quiet: true }
   return null
 }
 
@@ -652,9 +654,11 @@ function issueCountPhrase(row: RoadmapRowModel): string {
   return row.total === 0 ? 'no issues yet' : `${row.done} of ${row.total} issues done`
 }
 
-// Where the drawing's issue marks actually sit, in words. A row with issues and no mark says so
-// rather than staying silent about a schedule nobody has made; a row with no issues at all adds
-// nothing, because `issueCountPhrase` has already said there is nothing to schedule.
+// Where the drawing's issue marks actually sit, in words — and the one channel left to a row whose
+// work is scheduled off the axis, since the drawing is `aria-hidden` and the note is gone. Three
+// answers, not two: the marks the axis drew; a schedule this window does not reach; or no schedule
+// at all. Announcing the third for the second would deny a schedule the project has, which is the
+// same offence as inventing one.
 function schedulePhrase(row: RoadmapRowModel): string | null {
   const perCycle: { name: string; count: number }[] = []
   for (const mark of row.marks) {
@@ -665,6 +669,7 @@ function schedulePhrase(row: RoadmapRowModel): string | null {
   if (perCycle.length > 0) {
     return `scheduled ${perCycle.map((entry) => `${entry.count} in ${entry.name}`).join(', ')}`
   }
+  if (row.scheduledCount > 0) return 'scheduled beyond the drawn window'
   return row.total > 0 ? 'no issues scheduled in a cycle' : null
 }
 

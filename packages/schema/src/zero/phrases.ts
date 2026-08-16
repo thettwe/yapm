@@ -47,15 +47,26 @@ export const REST_PHRASE_KEYS: readonly RestPhraseKey[] = [
   'in_backlog',
 ]
 
-// `neutral` is the issue list's voice — a fact stated about the work. `personal` is the team
-// home's YOURS voice, where the reader is the assignee and the phrase may say whose move it is.
-export type PhraseRegister = 'neutral' | 'personal'
+// A register is a voice AND a policy about when that voice speaks.
+//
+// `neutral` is the surface-of-record voice — a fact stated about the work, drawn wherever it has
+// one. `personal` is the team home's YOURS voice, where the reader is the assignee and the phrase
+// may say whose move it is. `news` is `neutral`'s words under a stricter policy: it draws a phrase
+// only where the row is an exception or the reality track beside it cannot carry the fact, and
+// hands the rest to that track's accessible name.
+export type PhraseRegister = 'neutral' | 'personal' | 'news'
 
 export interface RestPhrase {
   readonly key: RestPhraseKey
-  // `null` means this register has nothing true to add on this surface: the row renders an empty
-  // slot rather than filler.
+  // `null` means this register does not DRAW words here: either it has nothing true to add, or the
+  // drawing beside the phrase already carries the fact. Either way the row renders an empty slot
+  // rather than filler.
   readonly text: string | null
+  // The words this register holds for the key, drawn or not. The invariant, asserted in
+  // `phrases.test.ts`: drawn is `spoken === text`; quiet is `text === null` with `spoken` non-null,
+  // and those words are owed to the accessible name of the drawing that replaced them; silent is
+  // both `null`, because there is nothing true to say in any channel.
+  readonly spoken: string | null
   readonly urgent: boolean
   // The provider whose fact this phrase states, or null when yapm derived it. A property of the
   // ENTRY, so two surfaces cannot disagree about whether a phrase is sourced.
@@ -137,7 +148,42 @@ const PERSONAL: Register = {
   in_backlog: 'In the backlog',
 }
 
-const REGISTERS: Record<PhraseRegister, Register> = { neutral: NEUTRAL, personal: PERSONAL }
+// How a register resolves one key: it draws the words, it holds them for the drawing beside it to
+// speak, or it has nothing true to say at all.
+type Voicing = 'drawn' | 'quiet' | 'silent'
+
+// `news` speaks NEUTRAL's words — one source, not a copy, so no string is added, rewritten or
+// deleted by this register existing. What it adds is the policy below, total over the key set:
+//
+//   drawn  — the key is an EXCEPTION (the four in `URGENT`), or the track beside it cannot carry
+//            the fact. `review_returned` is the second case and the only one: `reviewNode` draws
+//            `rev-wait` for every open pull request and the age column names no clock, so nothing
+//            drawn says whether anybody has looked at the change.
+//   quiet  — the track draws the same fact, station for station. The words survive in its
+//            accessible name; only the ink goes.
+//   silent — NEUTRAL has nothing to say for this key either.
+const NEWS: Record<RestPhraseKey, Voicing> = {
+  diverged_behind_merge: 'drawn',
+  diverged_ahead_of_pr: 'drawn',
+  diverged_done_ci_failing: 'drawn',
+  checks_failing: 'drawn',
+  merged_not_deployed: 'quiet',
+  deployed: 'silent',
+  pr_approved: 'quiet',
+  pr_draft: 'quiet',
+  review_unreviewed: 'quiet',
+  review_returned: 'drawn',
+  in_review: 'silent',
+  in_progress: 'silent',
+  not_started: 'silent',
+  in_backlog: 'silent',
+}
+
+const REGISTERS: Record<PhraseRegister, Register> = {
+  neutral: NEUTRAL,
+  personal: PERSONAL,
+  news: NEUTRAL,
+}
 
 // Precedence, and the reason for each step's place:
 //   1. divergence first, EXCEPT `status_ahead_of_pr`, which sits below the draft branch — a draft
@@ -185,11 +231,18 @@ export function restPhrase(
   context: RestPhraseContext = {},
 ): RestPhrase {
   const entry = REGISTERS[register][key]
-  const text = typeof entry === 'function' ? entry(context) : entry
+  const spoken = typeof entry === 'function' ? entry(context) : entry
+  // A register with no words for a key is silent whatever its policy says: there is nothing to
+  // quiet. `news` decides the other two states; the other registers draw whatever they hold.
+  const voicing: Voicing = spoken === null ? 'silent' : register === 'news' ? NEWS[key] : 'drawn'
+  const text = voicing === 'drawn' ? spoken : null
   return {
     key,
     text,
+    spoken,
     urgent: URGENT.has(key),
+    // A mark follows the text it sourced, so a quiet phrase carries none — no new branch, and no
+    // provenance claim about a drawing that was never made.
     source: text === null ? null : SOURCED.has(key) ? 'github' : null,
   }
 }

@@ -741,3 +741,44 @@ container, so the compose smoke test cannot run here, and CI owns both it and th
 team-bound acceptance and the keyboard clear of the Status axis — are only observable in the
 Playwright tier and rest on that run. 10.5 and 10.6 are hand checks against a live stack and remain
 open.
+
+### Task 10.6's hand check: the wait ends, but a sighted caller watches nothing for ~100s
+
+**Taken 2026-08-16 against the merged build (`e4a6964`) on a live stack.** The API server was
+**suspended** with `SIGSTOP` rather than killed — deliberately, because that produces *hung*
+requests rather than fast failures, and a hang is the harder case: `authentication/spec.md:81`
+says a network failure or timeout "SHALL preserve the caller's existing session state and be
+retried on backoff", so the sync status stays `pending` rather than settling `logged-out`, and
+D3's third branch is keyed on the settled values. Then `/login` was loaded holding a live session.
+
+**What happens, in order:**
+
+| elapsed | screen | accessibility tree |
+|---|---|---|
+| ~25s | **entirely blank** | `status: "Loading…"` |
+| ~100s | the retry surface | the same content, announced |
+
+The surface it reaches is a good one: *"yapm can't reach its own configuration."* / "`/api/config`
+is not answering, so the sync origin is unknown and no data can load. Still retrying." / `signal
+timed out` / a **Retry now** button.
+
+**Verdict: 10.6 passes in substance, with a finding.** The wait genuinely ends and the retry is
+actionable, which is what D3's branch had to guarantee. Two things are worth carrying forward
+anyway, and neither is a reason to change this change:
+
+1. **~100 seconds is a long time to look at nothing.** A real caller reloads or leaves first, and
+   a reload restarts the same wait. The threshold is not this change's to set — the timeout lives
+   on the `/api/config` fetch, which this change does not own — but whoever does own it should know
+   that the landing gate now sits behind it, so the front door inherits its worst case.
+2. **The `Loading…` is in the accessibility tree and not on the screen.** A screen-reader user is
+   told the page is loading; a sighted user sees an empty cream page. That is the exact inverse of
+   the principle `explanation-at-rest` established one change earlier — there, visual silence must
+   not become accessibility silence. Here the screen is the silent one.
+
+**Not a regression from this change.** `/api/config` and its retry surface predate it; the landing
+decision renders behind them. Recorded here because 10.6 asked the question and this is the answer,
+and because the second point belongs to whoever next touches that surface.
+
+**Task 10.5 remains open and is not agent-takeable:** signing in as a member of no team in a
+workspace that has teams. The seeded `foreign-seed@example.test` has zero memberships and is the
+right subject, but its password is not in the repo.

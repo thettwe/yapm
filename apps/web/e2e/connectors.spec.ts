@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test'
 import { findIssue, openDb, seedLinkedPr } from './db'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -26,7 +26,7 @@ function row(page: Page, title: string): Locator {
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })

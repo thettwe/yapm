@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount, stop } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview, stop } from './support'
 
 // ONE spec, for the two things no other tier can see.
 //
@@ -52,7 +52,7 @@ function randomKey(): string {
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
 }
 
 async function openTeamIssues(page: Page): Promise<void> {

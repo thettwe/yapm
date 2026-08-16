@@ -63,6 +63,21 @@ export async function ensureAccount(page: Page, credentials: Credentials): Promi
   }
 }
 
+// Signing in lands on a team's Home where the caller has one, so a spec that needs the workspace
+// administration surface asks for it by name rather than assuming the door opens onto it. Four
+// helpers already did exactly this; this is the one copy of it.
+//
+// The wait for the entry surface to resolve comes FIRST and is not decoration: `signIn` returns as
+// soon as it has clicked submit, and a `goto` fired while the sign-in — or an invitation
+// acceptance — is still in flight aborts the request that grants what the spec is about to assert.
+export async function openWorkspaceOverview(page: Page): Promise<void> {
+  await page.waitForURL((url) => url.pathname !== '/login' && url.pathname !== '/invite', {
+    timeout: 20_000,
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+}
+
 // The deck's six destinations (app-frame band 1). Scoped to the nav landmark, because a page may
 // legitimately hold its own doorway with the same label — Home's onward footer links to Issues too,
 // and an unscoped lookup would match both.

@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview } from './support'
 
 const NAME = '[data-testid="workspace-name"]'
 const INPUT = '[data-testid="workspace-name-input"]'
@@ -34,7 +34,7 @@ function unique(prefix: string): string {
 
 async function openWorkspace(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator(NAME)).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected')
 }
 

@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test'
 import type { Database } from '@yapm/schema/db'
 import { findIssue, findUserId, openDb, seedComment, setIssueDescription } from './db'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ISSUE_ROW = '[data-testid="issue-row"]'
@@ -54,7 +54,7 @@ function randomKey(): string {
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })
@@ -346,7 +346,7 @@ test.describe('search', () => {
     await other.getByLabel('Email').fill(uniqueEmail('teamaonly'))
     await other.getByLabel('Password', { exact: true }).fill('teammate-password-1234')
     await other.getByTestId('login-submit').click()
-    await expect(other.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+    await openWorkspaceOverview(other)
 
     await other.goto(`/search?q=${found}`)
     // The same bytes a token that exists nowhere produces. Not "0 results you may not see" —

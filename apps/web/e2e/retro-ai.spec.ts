@@ -8,7 +8,7 @@ import {
 } from './db'
 import { expect, test } from './fixtures'
 import { readReplica } from './replica'
-import { ADMIN, ensureAccount, stop } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview, stop } from './support'
 
 // The first two cases need no provider key, which is why they are e2e rather than mocks: the two
 // states an operator actually ships with are "no team opted in" and "opted in, nothing configured",
@@ -44,7 +44,7 @@ function isoDate(offsetDays: number): string {
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })

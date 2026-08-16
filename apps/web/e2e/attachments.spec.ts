@@ -2,7 +2,7 @@ import type { APIResponse, Page } from '@playwright/test'
 import type { Database } from '@yapm/schema/db'
 import { findTeamId, openDb } from './db'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview, uniqueEmail } from './support'
 
 // ONE spec, deliberately, and it exists for the things a vitest process cannot reach.
 //
@@ -101,7 +101,7 @@ test.describe('attachments', () => {
     test.slow()
 
     await ensureAccount(page, ADMIN)
-    await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+    await openWorkspaceOverview(page)
 
     const ownTeam = unique('Files Own')
     const otherTeam = unique('Files Other')
@@ -133,9 +133,7 @@ test.describe('attachments', () => {
     await teammate.getByLabel('Email').fill(uniqueEmail('files-teammate'))
     await teammate.getByLabel('Password', { exact: true }).fill('teammate-password-1234')
     await teammate.getByTestId('login-submit').click()
-    await expect(teammate.locator('[data-testid="workspace-name"]')).toBeVisible({
-      timeout: 20_000,
-    })
+    await openWorkspaceOverview(teammate)
 
     // 1. A plain member uploads through the real multipart pipe.
     const response = await upload(teammate, ownTeamId, 'pasted.png')

@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -24,7 +24,7 @@ function row(page: Page, title: string): Locator {
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })
@@ -109,6 +109,45 @@ test('keyboard navigation changes an issue status and it persists', async ({ pag
       .getByRole('region', { name: 'In Progress', exact: true })
       .locator(ROW)
       .filter({ hasText: title }),
+  ).toBeVisible({ timeout: 20_000 })
+})
+
+// The list opens on live work, and the archive is one stated interaction away. Proven without a
+// pointer, because the list's keyboard model is a requirement rather than a convenience — and
+// proven end to end, because the axis's count and its menu are what make the absence honest.
+test('the list opens without the archive, and the Status axis brings it back from the keyboard', async ({
+  page,
+}) => {
+  await enterApp(page)
+  await openTeamIssues(page)
+
+  const title = unique('Shipped and filed')
+  await createIssue(page, title)
+
+  // Put it beyond the default lens by the ordinary route: the status palette on the focused row.
+  await row(page, title).focus()
+  await page.keyboard.press('s')
+  await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeVisible()
+  const search = page.getByPlaceholder(/Set status of/)
+  await search.fill('Done')
+  await expect(page.getByRole('option', { name: /Set status: Done/ })).toBeVisible()
+  await search.press('Enter')
+
+  // Gone from the page — and the axis states why, rather than leaving an unexplained gap.
+  await expect(row(page, title)).toHaveCount(0, { timeout: 20_000 })
+  const statusAxis = page.getByRole('button', { name: 'Filter by Status' })
+  await expect(statusAxis).toHaveText(/Status\s*4/)
+
+  await statusAxis.focus()
+  await page.keyboard.press('Enter')
+  const done = page.getByRole('menuitem', { name: /Done$/ })
+  await expect(done).toBeVisible({ timeout: 20_000 })
+  await done.focus()
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Escape')
+
+  await expect(
+    page.getByRole('region', { name: 'Done', exact: true }).locator(ROW).filter({ hasText: title }),
   ).toBeVisible({ timeout: 20_000 })
 })
 

@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { deleteSsoProvider, findUserId, openDb, seedSsoProvider } from './db'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview, uniqueEmail } from './support'
 
 // The SSO settings surface end to end: reachable by keyboard from the user menu, operable by
 // keyboard once there, absent for everyone who is not a workspace admin, and legible in all three
@@ -23,7 +23,7 @@ const UPSELL = /upgrade to|seat cap|licen[cs]e key|per user\/month|start (a )?tr
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
 }
 
 async function mintInvite(page: Page, role: 'member' | 'viewer'): Promise<string> {

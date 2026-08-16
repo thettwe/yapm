@@ -1,11 +1,11 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview } from './support'
 
 const CACHE_KEY = 'yapm:pref'
 
 async function expectInApp(page: Page): Promise<void> {
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
 }
 
 // Appearance lives in the account menu now (app-frame §D8). Reached with no pointer: focus the

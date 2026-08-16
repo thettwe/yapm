@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { expect, type NewContext, test } from './fixtures'
 import { readReplica, replicaHolds } from './replica'
-import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const BADGE = '[data-testid="inbox-badge"]'
@@ -21,7 +21,7 @@ function randomKey(): string {
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })
@@ -96,7 +96,7 @@ async function acceptInvite(newContext: NewContext, inviteLink: string) {
   await page.getByLabel('Email').fill(credentials.email)
   await page.getByLabel('Password', { exact: true }).fill(credentials.password)
   await page.getByTestId('login-submit').click()
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })

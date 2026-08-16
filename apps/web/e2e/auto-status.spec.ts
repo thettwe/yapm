@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const TOGGLE = '[data-testid="status-automation-toggle"]'
@@ -18,7 +18,7 @@ function randomKey(): string {
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })

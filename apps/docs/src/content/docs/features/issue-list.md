@@ -100,6 +100,22 @@ See [the board](/features/board/).
 options with the selected count shown beside the axis. Multiple values within an axis are OR'd;
 different axes are AND'd.
 
+**The Status axis starts with four values already selected** — Backlog, Todo, In Progress, In
+Review — so the list opens on work in flight rather than on an archive. It reads `Status 4`, and
+opening the menu names exactly which four and shows Done and Canceled offered but unticked. That is
+the whole mechanism: there is no hidden rule behind the bar, and the masthead count is the filtered
+count as it is for any other filter.
+
+To see terminal work, tick Done (or Canceled), or clear the axis the same way you clear any other —
+toggle its values off and it admits everything again. Under the default lens the Done and Canceled
+groups simply do not render, exactly as an empty group does for any filter; the six-category order
+is unchanged. The set is derived by excluding the terminal statuses rather than by listing the live
+ones, so a status added to yapm later joins the default instead of quietly disappearing from it.
+
+The **Board** lens starts unfiltered, as the per-lens rule above already promises: its columns *are*
+the status axis, and a card dragged into a filtered-out column would vanish under the cursor. So
+switching to Board is the second way to see everything.
+
 **Delivery** is the reality-derived axis, and its three predicates evaluate over real linked data:
 
 - **Blocked on review** — an open pull request awaiting a review

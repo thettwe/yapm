@@ -41,6 +41,28 @@ Everything else in the product is reached as a **lens**, a **doorway** or a **se
 | Search | the ⌘K pill — a real link, so `/search` is reachable with no pointer |
 | Appearance, connectors, AI, single sign-on | the account menu — they are settings, not places |
 
+## Where signing in lands
+
+Signing in puts you on **a team's Home**, not on the workspace administration page. The team is the
+one you last visited, or failing that the first team you belong to. If you belong to no team — a
+brand-new workspace, or an account that has just accepted a workspace-wide invitation — you land on
+the workspace overview instead, which is the page whose contents are actually yours. Nothing moved:
+the overview is still `/`, still reachable from the workspace switcher and from `⌘K`
+("Go to workspace overview"), and every link that reached it before still does.
+
+The decision is taken in **one** place. Creating an account, signing in with email and password, and
+returning from GitHub or your SSO provider all arrive by the same route — a provider sends you back
+to the sign-in page precisely so that the one decision is the one that runs.
+
+**Accepting an invitation goes through the same decision.** An invitation bound to a named team
+lands you on that team's Home, because accepting it is what put you on the team. A workspace-wide
+invitation, which names no team, lands wherever the ordinary rule sends you.
+
+While the decision is being made — your role and your team list are both synced values — the sign-in
+page holds its loading state rather than guessing. It never holds it indefinitely: if the sync
+credential cannot be obtained, you get the same retry surface the rest of the product shows when the
+server is unreachable, and if the session turns out to be over you get the sign-in form back.
+
 ## One attention number
 
 The count in the deck's badge, the `N need attention` segment in the statusline and the **NEEDS
@@ -83,6 +105,19 @@ search, settings — belong to no team. There the frame degrades honestly:
 
 The rule underneath: **the deck may point at a team; the statusline may only report one.** Navigation
 is an offer and can be wrong without lying. A statusline fact is an assertion about your team.
+
+The same rule is why the **anchor team** and the **landing team** are two different things, even
+though they usually agree:
+
+| | what it is | how it is chosen |
+| --- | --- | --- |
+| the anchor | where the deck's six stops point when you are off a team | the last team you visited, or the first team you can *see* |
+| the landing | where signing in puts you | the last team you visited, or the first team you can *read* — and never one you cannot |
+
+Everyone in a workspace can see the name of every team; being able to name a team is not being able
+to open it. The deck may offer a stop pointing at a team whose issues would come back empty for you,
+because an offer you decline costs nothing. Being *put* there is a different act, so the landing
+applies the stricter test and falls through to the workspace overview when no team passes it.
 
 ## The keyboard
 

@@ -588,3 +588,74 @@ caller is never a member of one.
 paths read one body. The failure branch's `reasonText` call and copy are unchanged; the success
 branch takes `teamId` only when it is a string, so a workspace-level acceptance (a null `team_id`)
 falls to `resolveLandingTeam` exactly as D10 requires.
+
+### `/invite`'s body moved to `components/auth/invite-page.tsx`, for the reason `/login`'s did
+
+**Ambiguous:** task 6.5 asks for component coverage of `/invite`, and `InvitePage` lived inside the
+route file. It cannot be reached from a test there: `vite.config.ts:23` sets `autoCodeSplitting:
+true`, so the router plugin rewrites `component: InvitePage` into `lazyRouteComponent(() =>
+import('…?tsr-split=component'))` — the failure is a runtime `No "lazyRouteComponent" export is
+defined on the "@tanstack/react-router" mock`, three frames from anything that names the cause.
+
+**Chosen:** `routes/invite.tsx` keeps `validateSearch` and reads the token; the page moved beside
+`login-page.tsx` and takes `token` as a prop. **Why:** it is the same constraint and the same
+answer as the login-page move logged above, and doing it once more makes the pattern the rule
+rather than the exception. Nothing about the page's behaviour, copy or state machine changed —
+the file is a move plus a prop.
+
+### The shared e2e step waits for the door to resolve *before* it navigates
+
+**Ambiguous:** task 7.1 asks for one "…and open the workspace overview" step. The obvious body is
+`page.goto('/')` and the `workspace-name` assertion, which is what four helpers already inline.
+
+**Chosen:** the step first waits for the URL to leave `/login` and `/invite`, and only then
+navigates. **Why:** `signIn` (`support.ts:37-41`) returns the moment it has clicked submit, and the
+old `workspace-name` assertion was doing the waiting by accident. A bare `goto` fired in its place
+aborts whatever request is in flight — the sign-in POST, or on the invitation path the
+`POST /api/invites/accept` that grants the membership the spec is about to assert. That is a
+same-day flake with a cause three files away, so the wait is the step's first line rather than each
+caller's problem.
+
+### Five team-bound invitation acceptances break too, and eight role-only ones do not
+
+`tasks.md` §7.4 names three inline sites. Opening the acceptance sites showed the split D10 makes:
+an acceptance whose invite named a team now lands on that team, so its `workspace-name` assertion
+moves — `attachments.spec.ts:112-116`, `mentions.spec.ts:62-65`, `notifications.spec.ts:65-68`,
+`retro.spec.ts:530-533` and `search.spec.ts:313-316` are the five that select **Team (optional)**.
+The other eight acceptances set a **Role only**, so `invite.team_id` is null, the acceptor belongs
+to no team, and the ordinary resolution still returns `/` — exactly the reason `auth.spec.ts:80-81`
+survives verbatim (§7.5). All thirteen were read rather than pattern-matched; the five that move
+take the same shared step as the helpers.
+
+### The Status axis left the seven-axis sweep instead of being rewritten inside it
+
+**Ambiguous:** task 6.8 says rewrite the sweep's Status case to prove the same property through the
+seeded default. The sweep's shape is "click one option → exactly one row survives", and under a
+seeded axis a click *removes* a value. Keeping the row in the table would have made the table's own
+title ("narrows to the row its predicate matches") false for one of its seven entries.
+
+**Chosen:** the six untouched axes stay in `test.each`; Status becomes its own test that states the
+seeded premise, asserts both rows are admitted first, then toggles `In Progress` **off** and proves
+exactly one row survives. **Why:** the property under test is unchanged — this axis and no other
+decides which row stands — and the case now reads as what it does rather than as an exception the
+reader has to reconcile with the title above it.
+
+### The `callbackURL` findings went into `reference/server-stack.md`, not only into this file
+
+The reference's §4.4 documented `signIn.email({ email, password })` and `signIn.social({ provider
+})` and said nothing about `callbackURL`. That silence is what made D1's bug plausible in the first
+place. §4.4 now carries the four verified files, the asymmetry between `sign-in/email` (returns
+`redirect`/`url`) and `sign-up/email` (returns neither), the default-enabled `redirectPlugin`, and
+why `isSafeUrlScheme('/')` is true — checked against the installed 1.6.24 tarball rather than
+recalled.
+
+### What the gates prove, and what is still owed to CI
+
+`typecheck`, `lint`, the full Vitest run (66 files, 790 tests) and `check-boundaries.mjs` are green
+locally, as is `pnpm --filter @yapm/docs build`. Tasks 10.1's `build`, 10.2's compose smoke test and
+10.3's Playwright suite are **not** ticked: port 3000 is held on this machine by an unrelated
+container, so the compose smoke test cannot run here, and CI owns both it and the e2e suite. Task
+10.4's scenario walk was done by reading; three of its scenarios — the sign-in landing, the
+team-bound acceptance and the keyboard clear of the Status axis — are only observable in the
+Playwright tier and rest on that run. 10.5 and 10.6 are hand checks against a live stack and remain
+open.

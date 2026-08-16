@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import { readReplica, replicaHolds } from './replica'
-import { ADMIN, ensureAccount, goToMore, stop, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, goToMore, openWorkspaceOverview, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const DRAFT = '[data-testid="retro-draft"]'
@@ -26,7 +26,7 @@ function isoDate(offsetDays: number): string {
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })
@@ -546,7 +546,7 @@ test('two clients: brainstorm stays private and advancing reveals a card with no
   await second.getByLabel('Email').fill(participant.email)
   await second.getByLabel('Password', { exact: true }).fill(participant.password)
   await second.getByTestId('login-submit').click()
-  await expect(second.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(second)
   await expect(second.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })

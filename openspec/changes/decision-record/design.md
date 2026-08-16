@@ -13,8 +13,9 @@ there is no column that could say otherwise.
 
 Every change in this design series so far has been a redraw: `retros-room`, `cycles-register` and
 `projects-roadmap-daylight` each opened with "no new tables, no migration, no new named query".
-This one is the exception, deliberately. `more▾`'s Decisions item is folded away *because no
-entity backs it*, and no amount of redrawing produces one.
+This one is the exception, deliberately. `home-digest-2.html`'s DECIDED THIS CYCLE band is folded
+away *because no entity backs it*, and no amount of redrawing produces one. (The `more▾` item PR #33
+folded away is a separate matter and stays folded — D10.)
 
 What lands on the schema side, and nothing beyond it:
 
@@ -227,37 +228,136 @@ matches `/(author|owner|user|member|decided_by|created_by)/`, and that the Zero 
 An absence that nothing checks is an absence that survives exactly until the first plausible pull
 request. This makes "the team's call, no owner" a CI gate rather than a comment.
 
-## D10 — `g d` comes back, and Delivery moves to `g s`
+## D10 — The Record is a doorway, and this change reverses its own earlier plan
 
-PR #33 wrote, in `go-to.ts`: *"Decisions is folded away, so `g d` is Delivery's."* The condition
-has expired. `g d` → Decisions, as `ia.html` draws it.
+**Superseded: the first draft of this section argued "`g d` comes back, and Delivery moves to
+`g s`".** It read PR #33's `go-to.ts` comment — *"Decisions is folded away, so `g d` is
+Delivery's"* — as a condition that expires the moment the entity ships, and planned to take the
+`more▾` item back, take `g d` back, and move Delivery to `g s` ("shipped", that page's whole
+vocabulary, and the only free letter). That plan was written in good faith against a deck whose
+written budget said "exactly six stops" while eight destinations shipped under it. It is now wrong
+in every one of its three parts, and the reversal is recorded rather than quietly rewritten,
+because the argument it lost to is the interesting part.
 
-Delivery keeps its bar seat and takes **`g s`** — "shipped", which is that page's entire
-vocabulary. `s` is free (`h i t c d r p m` are taken and `⌘K` owns search). The alternative of
-leaving Delivery with no shortcut was rejected: its menu row is the only route to it below the `lg`
-breakpoint, and a destination reachable only by pointer at narrow widths fails keyboard-first.
+`destination-budget` removed the "Six destinations…" requirement by name and replaced it with a
+ceiling of **eight destinations counted across both tiers**. Three of its clauses decide this
+change:
 
-Both the deck's `Kbd` hints, `go-to.ts`, the `app-frame` spec and the docs keyboard table move
-together; the app-frame spec's scenario "A destination with no entity behind it does not render"
-is MODIFIED rather than deleted — the rule survives, it just needs a destination that is still
-unbuilt to point at, and `ia.html`'s Runway is one.
+1. **The deck is already at the ceiling.** `destination-budget/specs/app-frame/spec.md:30-32`:
+   *"Today the deck stands exactly at its ceiling: Home, Issues, Cycles and Delivery on the bar, and
+   Triage, Retros, Projects and Roadmap in the menu's permanent list."*
+2. **The menu is not the cheap door.** `:168-170`: *"Growth by menu is growth. A change adding to
+   the menu's permanent list spends exactly the same budget as one adding to the bar."* The original
+   plan's whole shape — a menu item, not a bar stop — was an attempt to spend a budget that does not
+   distinguish the two.
+3. **At the ceiling, a new destination must name a casualty.** `:162-166` requires a change adding
+   one to *name the destination it displaces and show it failing one of the three admission tests*,
+   and says a change that can name none *"SHALL land its surface as a lens, an interior, a doorway or
+   a section of a destination that already exists, and SHALL say so in its own spec"*.
+
+This change can name no casualty it would be honest about. Each of the eight is a place a team
+works; the Record is a place a team *reads*, a few times a cycle, when someone asks why. So the
+third branch applies, and `destination-budget/proposal.md:107` had already written the *where*: a
+doorway at `/teams/{teamId}/decisions`. The obligation to "say so in its own spec" is met in the
+`decisions` capability rather than in a comment — the record-page requirement now states the
+placement and carries two scenarios for it.
+
+**`g d` stays Delivery's.** Not as a concession but as the only reading the binding rule allows:
+`destination-budget/specs/app-frame/spec.md:262-264` — *"Only a destination SHALL hold a `g`
+binding. A lens, a doorway, an artifact and a transient SHALL NOT."* With no Decisions destination
+there is no key to reclaim, so there is no swap, and the *behaviour* of
+`apps/web/src/frame/go-to.ts:35-71` and `deck.tsx` is untouched by this change. That is worth more
+than the keystroke: the swap would have
+made `openspec/specs/delivery-metrics/spec.md:226` ("or by its `g d` shortcut") stale in a
+capability this proposal never listed as modified — the exact defect
+`destination-budget/design.md:423-429` cites as the reason the rule exists. The plan that lost was
+also the plan that would have broken a shipped requirement without noticing.
+
+**What the reversal still owes: three comments.** Behaviour holding still is not the same as prose
+holding still. `apps/web/src/frame/deck.tsx:23-24`, `apps/web/src/frame/go-to.ts:8` and
+`apps/web/src/frame/app-frame.test.tsx:499-500` each explain the folded-away Decisions item with
+*"no entity backs it"*. That was true when PR #33 wrote it and is false the moment this change
+merges. Leaving it would ship three source comments asserting something the same commit disproves,
+and the first reader to notice would reasonably conclude the fold is now a bug. So each is reworded
+to the reason that actually holds after this change — the deck stands at its eight-destination
+ceiling and the Record is a doorway (this section) — while the assertions, the `DeckStop` union, the
+`g` cases and every `shortcut:` string stay exactly as they are. The budget's gate is therefore
+written over **substance rather than file identity** (tasks 7.1 and 11.6): a gate phrased as "these
+files do not appear in the diff" would forbid the correction and make honesty a budget violation.
+
+One constraint on the rewording: `destination-budget/design.md:214` quotes `deck.tsx:22-24` as the
+evidence for its first admission test — *"a disabled row is chrome promising what the product cannot
+keep"*. That sentence is about disabled rows in general, not about Decisions, and it survives the
+change intact; the reworded comment keeps it verbatim so the citation still lands on the sentence it
+names.
+
+**How the page is reached, and why the palette row is not optional.** Three doorways: the pinned
+chip on the issue, the DECIDED THIS CYCLE band's header on Home, and a command-palette row on every
+team surface. The first two are drawn from rows, so a team that has recorded nothing has neither —
+and this change specs an empty Record page (D12.1) which would then be reachable only by typing a
+URL. `openspec/specs/app-frame/spec.md:259-267` forbids exactly that: every authenticated route is
+reachable from the frame without prior knowledge of its URL, and losing a route's reachability "SHALL
+be treated as a regression". The palette row is what makes the placement legal.
+
+Its shape is copied, not invented: `apps/web/src/frame/app-frame.tsx:93-117` registers `Go to inbox`,
+`Search everything`, `Go to workspace overview` and `Appearance` **with no `shortcut:` field at all**
+— the same registrations `destination-budget/design.md:431-435` cites as evidence that doorways hold
+no keys.
+
+There is no doorway *sub-group* to join: the frame builds exactly **one** group, `Go to`
+(`:120-183`). It lists the eight destination rows, each with its `g` binding (`:124-179`), and then
+splices `...commands` at the tail (`:180`) — those four shortcut-less rows. The Record's row joins
+that tail, exactly as the inbox and search rows sit there, and carries no `shortcut:`. So this change
+adds no keyed row and no destination row, and needs no `command-palette` delta.
+
+That conclusion does not rest on
+`destination-budget/specs/command-palette/spec.md:37-42`'s set-identity clause holding cleanly over
+this single group — it already has the four pre-existing doorway rows inside it, and reconciling the
+clause's wording against them is **`destination-budget`'s** obligation, not this change's. This
+change's obligation is narrower and it meets it: it adds one row, at the tail, with no key.
+
+**The frame prop.** The route renders inside the shared frame with **no** `current`, the shape
+`apps/web/src/routes/teams.$teamId.members.tsx:16` already uses for a team-scoped page that owns no
+destination. `DeckStop` gains no `'decisions'` member.
+
+**The app-frame delta shrinks to one scenario.** The rule "A destination for which no entity exists
+SHALL NOT be rendered at all" survives untouched, but `destination-budget` carries it with a
+scenario whose WHEN is *"in a build where no decision entity exists"*
+(`destination-budget/specs/app-frame/spec.md:106-109`). This change ships that entity, so the WHEN
+can never be satisfied again and the rule loses its case. The first draft's answer was to re-point
+it at `ia.html`'s Runway; that is wrong, because `ia.html:368` files Runway as a doorway too — *"the
+Record and Runway are pages without bar seats"* — and a doorway cannot stand as the example of a
+*destination* with no entity behind it. After this change no drawn-but-unbuilt destination remains
+at all, so the scenario is generalised instead: a destination the interaction model draws with no
+entity storing its rows. The requirement is restated in full around that one edit.
+
+The generalised scenario's THEN carries the assertion and nothing else. An earlier draft appended
+*"the decision entity this change ships is not the example, because the Decisions record is a
+doorway and holds no place in either tier of the deck"* — true, and the right thing to say, but not
+in a scenario: archived into `openspec/specs/app-frame/spec.md` the phrase "this change" has no
+referent and the clause is not falsifiable by any test. It is a note about why the scenario was
+re-pointed, so it belongs here, in the paragraph above, and it stays here.
 
 ## D11 — Home's DECIDED THIS CYCLE band
 
-Position: after SHIPPED THIS CYCLE, before the composed footline, which is where
-`home-digest-2.html` draws it. Content: the active cycle's decisions, newest first, as chips —
-sentence, then a mono line `<area> · <ISSUE-KEY> · from a thread of N · <date>` and the revisit
-pill where set. Each chip is a doorway to its issue. The band folds entirely when the active cycle
-holds no decision, and with no active cycle it does not render at all, like every other
-cycle-dependent band.
+Position: after SHIPPED THIS CYCLE, before the page's composition record and its onward footer,
+which is where `home-digest-2.html` draws it — the mock's "composed footline" is the mono line
+`explanation-at-rest` replaced with a quiet `how ·`, so the band's neighbour changed while its seat
+did not. Content: the active cycle's decisions, newest first, as chips — sentence, then a mono line
+`<area> · <ISSUE-KEY> · from a thread of N · <date>` and the revisit pill where set. Each chip is a
+doorway to its issue, and the band's own header is a doorway to the Record (D10). The band folds
+entirely when the active cycle holds no decision, and with no active cycle it does not render at
+all, like every other cycle-dependent band.
 
 `home-digest-2.html` also draws a **DECIDED card inside SINCE YESTERDAY**. Not built, deliberately:
 the two would state the same fact twice on one page for most teams (a decision made yesterday is
 also a decision made this cycle), and the band is the one the brief names. Recorded here so the
 omission is visible rather than forgotten.
 
-The footline's composition clause gains the band only when the band actually rendered — the
-`team-home` rule that the footline never names a rule the render did not execute.
+The composition record behind the page's `how ·` gains the band's clause only when the band actually
+rendered — the `team-home` rule that the record never names a rule the render did not execute. That
+rule is unchanged by `explanation-at-rest` moving the record off the page and behind the affordance;
+only where it is read changed.
 
 ## D12 — Render the degenerate states and LOOK at them
 
@@ -265,8 +365,10 @@ Triage shipped a panel that reserved its full measure over an issue with no desc
 empty box that passed every test. The lesson is that tests do not see reserved emptiness. Five
 states get rendered at 1440×900 and screenshotted, and each screenshot is looked at:
 
-1. **A team with no decisions at all** — the record page. Must be a quiet line, not a framed
-   empty state, and must not draw a search box, a scope row or a group header over nothing.
+1. **A team with no decisions at all** — the record page, reached the only way it can be in that
+   state: the palette row, since neither a chip nor the Home band exists to lead there (D10). Must
+   be a quiet line, not a framed empty state, and must not draw a search box, a scope row or a group
+   header over nothing.
 2. **Exactly one decision** — the record page and the issue detail. One group, one row; the page
    must not look broken for want of a second.
 3. **A decision whose thread was later deleted** — `first_comment_id`/`last_comment_id` null. The
@@ -309,7 +411,42 @@ and signature UI — four of four. All three tiers, and e2e is not reflexive her
   provenance matches the thread; `ON DELETE SET NULL` leaves the decision standing when its
   comments go.
 - **E2E**: deciding a thread from the composer with the keyboard and seeing the chip pin; opening
-  the record with `g d` and finding the sentence by search.
+  the record from the palette row with the keyboard and finding the sentence by search. There is no
+  `g d` case to test, and the deck test that *would* have changed is the one this change must leave
+  alone: `apps/web/src/frame/app-frame.test.tsx`'s destination list stays as
+  `destination-budget` left it, and `routes.test.tsx`'s `ROUTE_HOMES` gains one `'doorway'` row.
+
+## D15 — Archive order, and the one thing `openspec validate` cannot see
+
+This change's two re-authored deltas each restate a requirement another in-flight change also
+restates. A `## MODIFIED` block replaces a requirement wholesale, so the live text is whichever
+change archived **last** — not a merge. The order is therefore part of this change's correctness:
+
+> **`explanation-at-rest` → `destination-budget` → `decision-record`.**
+
+What breaks in each wrong order:
+
+- **`decision-record` before `destination-budget`.** Its `app-frame` delta modifies "A bounded deck:
+  eight destinations…", which does not exist until `destination-budget` archives — the earlier
+  requirement is "Six destinations, and everything else is a doorway, a lens or a transient", which
+  `destination-budget` removes by name. The delta either fails to apply or invents a second
+  requirement, and when `destination-budget` then archives, its own copy of that requirement
+  overwrites this change's scenario repair — leaving a shipped `decision` entity described by a
+  scenario that says no decision entity exists. On `team-home` the same order loses the DECIDED
+  THIS CYCLE clause from the band-order sentence and both scenarios' decision clauses.
+- **`destination-budget` before `explanation-at-rest`.** `destination-budget`'s `team-home` delta is
+  authored as the union of B1's text and its own rationing; archiving B1 afterwards reverts the
+  rationing (`destination-budget/tasks.md:99` already gates this pair).
+- **`explanation-at-rest` last, in any arrangement.** It reverts both the footer rationing and this
+  change's band at once.
+
+`openspec validate --all` passes with every one of these changes on disk, in any order, because it
+validates each change in isolation — it never compares two deltas against each other. PROCESS.md §1
+"Delta hazards" (`PROCESS.md:11`) states it directly: *"All three are silent, and `openspec validate
+--all` catches none of them — it validates each change in isolation, so a set of changes that destroy
+each other passes."* `PROCESS.md:19` says what to do instead, and this change does both halves of
+it: *"If another change claims it, write the **union** and record the required archive order as an
+explicit pre-archive task."* The ordering gate is therefore a task (§12), not a tool.
 
 ## Decisions made during implementation
 
@@ -333,10 +470,17 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 - **Not built, filed as SKETCH by the play**: the triangle rail's DESIGN section, and quiet-thread
   by opacity (replaced by a true collapse, D7).
 - **`ROADMAP.md` is not edited** — parallel builds; the maintainer adds the row at archive time.
+- **The Record is a doorway, not a destination** (D10) — the reversal of this change's own earlier
+  plan, forced by `destination-budget`'s ceiling. No `more▾` item, no `g` binding, no `DeckStop`
+  member; `g d` stays Delivery's, and the only edit `deck.tsx`, `go-to.ts` and
+  `app-frame.test.tsx` take is the comment correction the shipped entity forces.
+- **Archive order is part of correctness** (D15): `explanation-at-rest` → `destination-budget` →
+  `decision-record`, enforced by §12 because no tool can enforce it.
 - **Shared code touched**: `packages/ui/src/components/drawn.tsx` (additive: one mark) and
-  `packages/ui/src/styles/contrast.test.ts` (appended block at the END). `apps/web/src/frame/`
-  is touched for the `g d` / `g s` swap, which is unavoidable and is the change's one edit to a
-  file every other surface depends on.
+  `packages/ui/src/styles/contrast.test.ts` (appended block at the END). `apps/web/src/frame/` takes
+  one behavioural edit — one shortcut-less palette row in `app-frame.tsx`'s frame source — plus the
+  three-comment correction. The deck's own membership, tiers and bindings do not move, which is what
+  the budget bought.
 
 <!-- Build-time decisions are appended below this line, each with what was ambiguous, what was
      chosen, and why. -->

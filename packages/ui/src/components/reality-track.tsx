@@ -278,22 +278,38 @@ const STROKE_CLASS: Record<TrackNodeStroke, string> = {
   dashed: 'border-dashed',
 }
 
-// The hue and the measure — the only per-kind values the form table does not decide. `open`'s
-// background is a hard-edged half fill under a full ring of the same token: the silhouette stays a
-// 7px circle, its leading half is inked, and it is neither `done`'s solid disc nor `rev-wait`'s
-// hollow ring at any hue.
-const NODE_INK: Record<TrackNodeKind, string> = {
-  done: 'size-[7px] bg-status-done',
-  open: 'size-[7px] border-[1.25px] border-status-in-review bg-[linear-gradient(90deg,var(--status-in-review)_0_50%,transparent_50%_100%)]',
-  'rev-wait': 'size-2 border-[1.6px] border-status-in-review bg-transparent',
-  fail: 'size-[7px] bg-status-urgent',
-  empty: 'size-[7px] border-[1.4px] border-border-strong bg-transparent',
-  'empty-urgent': 'size-[7px] border-[1.6px] border-status-urgent bg-transparent',
+// `half` is a hard-edged 50% gradient rather than a second element: the silhouette stays one node,
+// its leading half is inked, and it is neither a solid disc nor a hollow ring at any hue. The
+// gradient names the in-review token because `open` is the one kind that means "reality is standing
+// here", and that is the hue the whole vocabulary gives that state; `filled` contributes nothing
+// because the hue table below already carries the fill's paint.
+const FILL_CLASS: Record<TrackNodeFill, string> = {
+  filled: '',
+  half: 'bg-[linear-gradient(90deg,var(--status-in-review)_0_50%,transparent_50%_100%)]',
+  outline: 'bg-transparent',
 }
 
+// The hue and the measure — the only per-kind values the three channel tables do not decide.
+const NODE_INK: Record<TrackNodeKind, string> = {
+  done: 'size-[7px] bg-status-done',
+  open: 'size-[7px] border-[1.25px] border-status-in-review',
+  'rev-wait': 'size-2 border-[1.6px] border-status-in-review',
+  fail: 'size-[7px] bg-status-urgent',
+  empty: 'size-[7px] border-[1.4px] border-border-strong',
+  'empty-urgent': 'size-[7px] border-[1.6px] border-status-urgent',
+}
+
+// All three declared channels are composed into the drawn class, `fill` included — a channel the
+// drawing did not read would make the separability guard above an assertion about a table nothing
+// obeys, and `fill` is the ONLY channel separating `open` from `rev-wait`.
 function nodeClass(kind: TrackNodeKind): string {
   const drawing = TRACK_NODE_DRAWING[kind]
-  return cn(NODE_INK[kind], FORM_CLASS[drawing.form], STROKE_CLASS[drawing.stroke])
+  return cn(
+    NODE_INK[kind],
+    FILL_CLASS[drawing.fill],
+    FORM_CLASS[drawing.form],
+    STROKE_CLASS[drawing.stroke],
+  )
 }
 
 const NODE_CLASS: Record<TrackNodeKind, string> = {

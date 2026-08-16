@@ -24,6 +24,7 @@ import {
   realityTrackLabel,
   TRACK_NODE_DRAWING,
   type TrackNodeKind,
+  TrackNodeMark,
 } from './reality-track'
 
 const MERGED_NOT_LIVE: DeliveryStrip = {
@@ -150,6 +151,33 @@ test('the drawn node classes are composed from the declared forms', () => {
   const done = classes.find((value) => value.includes('bg-status-done') && value.includes('size-'))
   expect(done).toContain('rounded-full')
   expect(done).not.toContain('border-')
+})
+
+// The guard above holds over the two kinds one diverged track happens to draw. This one holds over
+// ALL SIX, and over all three declared channels rather than only `form` — `fill` is the only channel
+// separating `open` from `rev-wait`, so a `fill` the drawing never read would make the separability
+// property an assertion about a table nothing obeys.
+test('every declared channel is drawn, for all six node kinds', () => {
+  const kinds = Object.keys(TRACK_NODE_DRAWING) as TrackNodeKind[]
+
+  for (const kind of kinds) {
+    const { container } = render(<TrackNodeMark kind={kind} label={kind} />)
+    const drawn = container.querySelector('[role="img"]')?.className ?? ''
+    const { fill, form, stroke } = TRACK_NODE_DRAWING[kind]
+
+    if (fill === 'outline') expect(drawn, kind).toContain('bg-transparent')
+    if (fill === 'half') expect(drawn, kind).toContain('linear-gradient(90deg')
+    if (fill === 'filled') {
+      expect(drawn, kind).toContain('bg-status-')
+      expect(drawn, kind).not.toContain('border-')
+    }
+
+    expect(drawn, kind).toContain(form === 'disc' ? 'rounded-full' : 'rounded-[1.5px]')
+
+    if (stroke === 'dashed') expect(drawn, kind).toContain('border-dashed')
+    if (stroke === 'ring') expect(drawn, kind).toContain('border-solid')
+    if (stroke === 'none') expect(drawn, kind).not.toMatch(/border-(?:solid|dashed)/)
+  }
 })
 
 test('a diverged row draws the // break and not one lucide glyph', () => {

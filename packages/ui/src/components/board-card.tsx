@@ -119,22 +119,25 @@ function BoardCard({
         )}
 
         <div className="flex items-center gap-2">
+          {/* The labels are what yields, as the title yields on a list row: the reserved track
+              measure and the assignee are the card's fixed furniture, and a label long enough to
+              want more room than the card has shortens instead of shoving them off the card. */}
           {labels.length > 0 ? (
-            <span className="flex flex-wrap items-center gap-1.5">
+            <span className="flex min-w-0 flex-wrap items-center gap-1.5 overflow-hidden">
               {labels.map((label) => (
                 <span
                   key={label.name}
-                  className="flex items-center gap-1 font-ui text-[11.5px] text-text-2"
+                  className="flex min-w-0 items-center gap-1 font-ui text-[11.5px] text-text-2"
                 >
                   {label.color ? (
                     <span
-                      className="size-2 rounded-full"
+                      className="size-2 shrink-0 rounded-full"
                       style={{ backgroundColor: label.color }}
                     />
                   ) : (
-                    <span className="size-2 rounded-full bg-current text-text-3" />
+                    <span className="size-2 shrink-0 rounded-full bg-current text-text-3" />
                   )}
-                  {label.name}
+                  <span className="truncate">{label.name}</span>
                 </span>
               ))}
             </span>

@@ -24,18 +24,23 @@ Delivery is drawn as a **track**: four stations, joined by segments, read left t
 | **Review** | Whether the change has been reviewed |
 | **Live** | Whether a deployment carrying this change's merge commit succeeded |
 
-Each station is a node, and the **reached / in-flight / failed / absent** distinctions are carried by
-its shape, not by hue:
+Each station is a node, and **every** distinction it carries is carried by the node's form, not by
+hue:
 
-- a **filled disc** — the station has been passed, or is being passed right now,
-- a **hollow ring** — the station is in flight (a draft PR, checks still running, review waiting),
-- a **square** — CI is failing,
-- a **faint open ring** — nothing here yet.
+- a **filled disc** — the station has been reached,
+- a **half-filled disc** — reality is standing here right now,
+- an **outline ring** — waiting here (a draft PR, checks still running, a review not back),
+- a **filled square** — it broke here,
+- a **dashed outline ring** — not reached yet,
+- an **outline square** — not reached, and something is wrong: the station just past a `//` break.
 
-Within the filled discs, hue separates *passed* from *in progress*: a merged or approved change is
-the done hue, an open one the in-review hue. That single distinction is the one the drawing makes by
-colour, and it is why the track always states its facts in words too — the accessible label reads
-"PR open, CI passing" or "PR merged, CI passing", so nothing the hue says is only said by the hue.
+So a change that is **approved but not merged** draws the half-filled disc at Change and the filled
+disc at Review, where a merged one fills both — the pair of stations tells them apart with no phrase
+and no hue. The six forms are tabulated with what each is drawn from under
+[Accessibility](#accessibility); colour reinforces every one of them and carries none of them alone.
+
+The track states its facts in words as well as marks, so nothing it says is said only by the drawing:
+the accessible label reads "PR open, CI passing" or "PR merged, CI passing".
 
 The segments between the stations carry the same reading: solid where the work has run through,
 dotted where it has not.

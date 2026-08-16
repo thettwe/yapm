@@ -722,3 +722,29 @@ and a card's content box is `223 − 24 (px-3) ≈ 199px`. The labels row's trai
 overflows, against ≈ 77px before this change. One short chip fits; two do not. That is a computed
 bound, not a look at the running application — the labels span has no `min-w-0`, so what a long
 label actually does is still 10.6's question, and it stays unticked.
+
+### The board card's labels are the element that yields, and `fill` is now drawn
+
+Two things the arithmetic above left open are closed in code rather than left to the eyeball.
+
+**The labels yield.** The bound of ≈45px was computed against a labels span with no `min-w-0`, which
+is the whole reason the question was open: a flex item at its default `min-width: auto` cannot shrink
+below its content, so a label wider than the room left would have pushed the reserved track measure
+and the avatar out of the card and into the column's scroll container — the widened
+`CARD_TRACK_WIDTH` displacing the very thing it exists to reserve. The list row already settled which
+element yields in that situation (`issue-row.tsx`: the title carries `min-w-0 flex-1 truncate`), so
+the card follows it: the labels span is `min-w-0 … overflow-hidden`, each label's name truncates, and
+each label's dot is `shrink-0`. A long label now shortens; the track's measure and the assignee do
+not move. The arithmetic is unchanged and so is task 10.6 — the number of chips that fit is still a
+question for the running board — but the failure mode it was bounding no longer depends on the
+answer.
+
+**`fill` is derived, not merely declared.** `TRACK_NODE_DRAWING` declares three non-colour channels
+and D4's separability guard reads all three, but only `form` and `stroke` had a class table; `fill`
+was carried inside the per-kind hue string. Since `fill` is the ONLY channel separating `open` from
+`rev-wait`, that made the guard, for exactly the pair the change introduced, an assertion about a
+table the drawing did not read. `FILL_CLASS` now supplies the three fills (`bg-transparent`, the
+90° half gradient, and nothing for `filled`, whose paint is the hue), `NODE_INK` is reduced to hue
+and measure, and `nodeClass` composes all three channels. A second test walks all six kinds through
+`TrackNodeMark` and asserts each declared channel appears in the drawn class — the first one only
+ever saw the two kinds a diverged track happens to draw.

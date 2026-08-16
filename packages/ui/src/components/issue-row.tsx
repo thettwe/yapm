@@ -45,9 +45,14 @@ function EmptyRealityTrack() {
   return <RealityTrack shape={buildRealityShape(null)} age={null} label="No delivery signal yet" />
 }
 
-// The mock's phrase column, wide enough for the longest entry in the shared dictionary's neutral
-// register at 12.5px. Reserved whether or not it is filled, so a row whose checks go red does not
-// shove its neighbours' tracks left.
+// The mock's phrase column at 12.5px. Its measure answers to the longest string a caller's register
+// can still DRAW into it: the dictionary's `diverged_behind_merge` entry and the longest clause of
+// `review_returned`, 29 characters each. (The strings themselves stay in `phrases.ts` — a second
+// production file quoting one is exactly what `phrases.test.ts` fails on, comment or not.) Both
+// production callers speak `news`, which draws only the exceptions and that one review clause; a
+// caller arriving in a wordier register re-measures this number rather than sizing the slot per
+// surface. Reserved whether or not it is filled, so a row whose checks go red does not shove its
+// neighbours' tracks left.
 export const PHRASE_SLOT_WIDTH = 178
 
 export interface IssueRowProps extends Omit<ComponentProps<'div'>, 'children'> {
@@ -68,8 +73,10 @@ export interface IssueRowProps extends Omit<ComponentProps<'div'>, 'children'> {
   // The row's one reality slot: the drawn track, at `REALITY_TRACK_WIDTH`. Divergence rides on
   // the track's `//` break, so there is no second flag slot to keep in step with it.
   realityTrack?: ReactNode
-  // The phrase at rest, from the shared dictionary's neutral register. Omitted or null means this
-  // row has nothing true to say and its slot renders genuinely blank — never a dash, never filler.
+  // The phrase at rest, in whatever register the CALLER resolved from the shared dictionary — the
+  // list and a project's page both speak `news`, which draws a row's words only where the row is an
+  // exception. Omitted or null means that register drew nothing here and the slot renders genuinely
+  // blank — never a dash, never filler. The slot itself is reserved on every row either way.
   phrase?: ReactNode
 }
 

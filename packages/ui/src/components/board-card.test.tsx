@@ -97,6 +97,39 @@ test('a title that runs long wraps and takes every other fact with it', () => {
   expect(card(container).className).not.toMatch(/(?:^|\s)h-\d/)
 })
 
+// The labels row shares one line with the reserved track measure and the assignee, and the track
+// is the widest thing on it. jsdom measures nothing, so what is asserted is WHICH element was made
+// to yield: the labels, the way a list row makes its title yield.
+test('a label that runs long is the element that yields, not the track or the assignee', () => {
+  const { container } = render(
+    <BoardCard
+      {...REST}
+      labels={[{ name: 'checkout-and-payments-platform-migration' }]}
+      assignee={{ name: 'Ada Lovelace' }}
+      realityTrack={
+        <RealityTrack
+          width={CARD_TRACK_WIDTH}
+          shape={buildRealityShape(DIVERGED, { divergence: 'status_behind_merge' })}
+          label={realityTrackLabel(DIVERGED, 'PR merged but this issue is not marked done')}
+        />
+      }
+    />,
+  )
+
+  const name = screen.getByText('checkout-and-payments-platform-migration')
+  expect(name.className).toContain('truncate')
+  const labels = name.closest('span.flex-wrap')
+  expect(labels?.className).toContain('min-w-0')
+  expect(labels?.className).toContain('overflow-hidden')
+  // And the furniture the labels yield to keeps every bit of its measure.
+  const track = slot(card(container), 'board-card-track')
+  expect(track?.style.width).toBe(`${CARD_TRACK_WIDTH}px`)
+  expect(track?.className).toContain('flex-none')
+  expect(
+    screen.getByLabelText('Ada Lovelace').closest('[data-slot="avatar"]')?.className,
+  ).toContain('shrink-0')
+})
+
 test('the hole a picked-up card leaves is the same box, emptied', () => {
   const resting = render(<BoardCard {...REST} />)
   const held = render(<BoardCard {...REST} dragging />)

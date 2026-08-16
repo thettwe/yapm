@@ -6,6 +6,7 @@ import { useSession } from '@/auth/client'
 import { LoginForm } from '@/components/auth/login-form'
 import { SyncUnavailable } from '@/components/authenticated'
 import { type LandingTeam, readAnchorTeam, resolveLandingTeam } from '@/frame/team-context'
+import { useSyncClientReady } from '@/zero/identity'
 import { useSyncSession } from '@/zero/provider'
 import { useSyncRecovery } from '@/zero/recovery'
 
@@ -33,6 +34,7 @@ export function LoginPage() {
 
 function LandingDecision() {
   const { status, role, userID, unavailable } = useSyncSession()
+  const clientReady = useSyncClientReady()
   const recovery = useSyncRecovery()
   const [teams, teamsResult] = useQuery(queries.teams.all())
   const [remembered] = useState<string | null>(() => readAnchorTeam())
@@ -50,10 +52,13 @@ function LandingDecision() {
     return <SignIn />
   }
 
-  // Both conditions are required. Before the credential settles there is no auth context, so
-  // `queries.teams.all()` resolves through `denyAll` and reports complete-and-EMPTY — a roster that
-  // would send a member of five teams to workspace administration.
-  if (status !== 'ready' || teamsResult.type !== 'complete') {
+  // Both conditions are required, and the first is about the ROSTER'S OWN identity rather than the
+  // credential's. Before the credential settles there is no auth context, so `queries.teams.all()`
+  // resolves through `denyAll` and reports complete-and-EMPTY — a roster that would send a member of
+  // five teams to workspace administration. `status === 'ready'` cannot see that: the credential
+  // lands a full commit before the Zero client rebuilt around it does, and this navigation is taken
+  // in that gap. `useSyncClientReady` asks the client whose answer this is who it belongs to.
+  if (!clientReady || teamsResult.type !== 'complete') {
     // …and this wait is bounded too. `unavailable` above only covers a failed `/api/zero/token`
     // call; a credential that mints fine against a zero-cache that is down leaves the roster at
     // `unknown` forever, which would hold the sign-in surface on a spinner with nothing to press.

@@ -24,6 +24,13 @@ SHALL hold — showing the loading state it already shows — rather than guess.
 roster can report itself complete while empty, so a complete roster SHALL NOT on its own release the
 decision.
 
+Nor SHALL a settled credential release it on its own. The roster the decision reads SHALL be one the
+caller's OWN identity produced: a resolved credential and a synchronised replica are two facts, and
+on sign-in they arrive one render apart, so a roster answered before the caller was identified is
+complete, empty and wrong. The decision SHALL therefore be taken only where the identity that
+resolved the roster is the identity the credential names — including the role it names, since a role
+that has just changed reads a different roster than the one on screen.
+
 That wait SHALL have an end, on both of the things it waits for. Where the caller holds a session but
 the credential the sync layer needs cannot be obtained — the request never landing, or the endpoint
 rejecting it — and equally where the credential mints but the sync connection itself does not come
@@ -90,6 +97,14 @@ rests on a membership row that exists before the navigation is taken.
   it is empty because nobody has been identified rather than because they belong to no team
 - **THEN** no navigation is taken, and the decision is retaken once identity settles and the roster
   is re-read
+
+#### Scenario: The credential settling is not the replica settling
+
+- **WHEN** a caller submits the sign-in form, the credential resolves and names them a member of
+  teams, but the roster on screen is still the one answered before they were identified — complete
+  and empty
+- **THEN** no navigation is taken on that roster, and the caller arrives on their team once the
+  roster being read is the one their own identity resolved
 
 #### Scenario: A sync session that never becomes ready does not hang the door
 

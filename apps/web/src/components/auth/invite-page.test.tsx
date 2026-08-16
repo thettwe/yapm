@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import type { AuthContext } from '@yapm/schema'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { SyncSessionState } from '@/zero/provider'
@@ -10,6 +11,9 @@ import type { SyncSessionState } from '@/zero/provider'
 
 const harness = vi.hoisted(() => ({
   sync: {} as SyncSessionState,
+  // What the Zero client in context was CONSTRUCTED with, which after `refresh()` still names the
+  // role the caller held BEFORE the acceptance until the replacement client lands.
+  zeroContext: undefined as AuthContext | undefined,
   teams: [] as unknown[],
   result: { type: 'complete' } as { type: 'complete' | 'unknown' | 'error' },
   retryOffered: false,
@@ -19,6 +23,7 @@ const harness = vi.hoisted(() => ({
 
 vi.mock('@rocicorp/zero/react', () => ({
   useQuery: () => [harness.teams, harness.result],
+  useZero: () => ({ context: harness.zeroContext }),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -66,6 +71,8 @@ const READY: SyncSessionState = {
   unavailable: false,
 }
 
+const SETTLED_CLIENT: AuthContext = { userID: 'viewer-1', role: 'member', pmAudienceTeamIds: [] }
+
 const team = (id: string, memberIds: readonly string[]) => ({
   id,
   name: id,
@@ -87,6 +94,7 @@ beforeEach(() => {
     setItem: (key: string, value: string) => void store.set(key, value),
   })
   harness.sync = READY
+  harness.zeroContext = SETTLED_CLIENT
   harness.teams = []
   harness.result = { type: 'complete' }
   harness.retryOffered = false
@@ -133,6 +141,32 @@ test('a workspace-level acceptance with no readable team lands on the workspace 
   render(<InvitePage token="invite-token" />)
 
   await waitFor(() => expect(harness.navigate).toHaveBeenCalledWith({ to: '/' }))
+})
+
+// The gap `/login` was caught by, on this door's own axis. `refresh()` re-mints the credential with
+// the role the acceptance just granted, and the Zero client is rebuilt around it a commit later — so
+// there is a moment where the credential says `member` while the roster on screen is the one a
+// non-member could read: `denyAll`, complete, empty. Landing on `/` there strands the caller who has
+// just joined on administration.
+test('a workspace-level acceptance does not decide on the roster its old role could read', async () => {
+  accepts({})
+  harness.zeroContext = { ...SETTLED_CLIENT, role: null }
+  harness.teams = []
+  const view = render(<InvitePage token="invite-token" />)
+
+  await waitFor(() => expect(harness.refresh).toHaveBeenCalled())
+  expect(harness.navigate).not.toHaveBeenCalled()
+
+  harness.zeroContext = SETTLED_CLIENT
+  harness.teams = [team('team-own', ['viewer-1'])]
+  view.rerender(<InvitePage token="invite-token" />)
+
+  await waitFor(() =>
+    expect(harness.navigate).toHaveBeenCalledWith({
+      to: '/teams/$teamId',
+      params: { teamId: 'team-own' },
+    }),
+  )
 })
 
 // The same gate `/login` holds: a roster that has not settled decides nothing, so a brand-new

@@ -79,6 +79,11 @@ Work through `openspec/changes/<name>/tasks.md` in order — tasks are sequenced
 runs after each one. Check boxes off as you complete them. The specs in that change
 directory are the acceptance criteria; every scenario should be true when you're done.
 
+**Before you author a spec delta, read [PROCESS.md](PROCESS.md) §1 "Delta hazards".** A
+`## MODIFIED` block replaces a requirement wholesale, so two changes touching one requirement
+silently destroy each other — and `openspec validate --all` passes anyway, because it validates
+each change alone. Grep the other changes for your requirement names first.
+
 **When you hit something the specs didn't anticipate** — ambiguous product decision, a
 library that doesn't behave as documented, a missing requirement:
 

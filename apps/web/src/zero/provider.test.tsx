@@ -13,7 +13,12 @@ import type { SyncCredentialResult } from './session'
 const mocks = vi.hoisted(() => {
   let state: ConnectionState = { name: 'connecting' }
   const listeners = new Set<() => void>()
-  let authData: { user: { id: string } } | null = { user: { id: 'user-1' } }
+  // The session, not only the user: `ZeroRoot` keys its re-mint on the better-auth SESSION
+  // identity, because re-authenticating as the same person is an identity change too.
+  let authData: { user: { id: string }; session: { id: string } } | null = {
+    user: { id: 'user-1' },
+    session: { id: 'session-1' },
+  }
   const authListeners = new Set<() => void>()
   return {
     connect: vi.fn(() => Promise.resolve()),
@@ -36,14 +41,15 @@ const mocks = vi.hoisted(() => {
       authListeners.add(listener)
       return () => authListeners.delete(listener)
     },
-    setAuthUser(id: string | null) {
-      authData = id === null ? null : { user: { id } }
+    setAuthUser(id: string | null, sessionId?: string) {
+      authData =
+        id === null ? null : { user: { id }, session: { id: sessionId ?? `session-${id}` } }
       for (const listener of authListeners) listener()
     },
     reset() {
       state = { name: 'connecting' }
       listeners.clear()
-      authData = { user: { id: 'user-1' } }
+      authData = { user: { id: 'user-1' }, session: { id: 'session-1' } }
       authListeners.clear()
       this.zeroProviderProps = null
       this.zeroProviderMounts = 0
@@ -645,6 +651,31 @@ test('an identity change mid-flight discards the stale answer and applies the fr
   await act(async () => {
     releases[1]?.(SESSION)
   })
+  expect(screen.getByTestId('status')).toHaveTextContent('ready')
+  expect(screen.getByTestId('role')).toHaveTextContent('member')
+})
+
+// The state `/login`'s `logged-out` branch renders a sign-in form into: better-auth still holds a
+// session, the sync credential says otherwise, and the caller's only move is to sign in again. If
+// the re-mint is keyed on the user id alone, re-authenticating as the same person changes nothing
+// the client can observe — the form succeeds, the surface does not move, and only a reload escapes.
+test('re-authenticating as the same user re-mints, so the sign-in form can actually recover', async () => {
+  mocks.fetchSyncCredential.mockResolvedValue({ kind: 'no-session' })
+  await mount()
+  expect(screen.getByTestId('status')).toHaveTextContent('logged-out')
+
+  // A settled refusal does not poll, so nothing else is going to ask again on its own.
+  const baseline = remintCount()
+  await advance(BACKOFF_CAP_MS * 4)
+  expect(remintCount()).toBe(baseline)
+
+  // Signing in again: the same person, a NEW better-auth session.
+  mocks.fetchSyncCredential.mockResolvedValue(SESSION)
+  await act(async () => {
+    mocks.setAuthUser('user-1', 'session-2')
+  })
+
+  expect(remintCount()).toBe(baseline + 1)
   expect(screen.getByTestId('status')).toHaveTextContent('ready')
   expect(screen.getByTestId('role')).toHaveTextContent('member')
 })

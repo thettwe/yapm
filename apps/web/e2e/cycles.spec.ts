@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount, stop } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview, stop } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -27,7 +27,7 @@ function isoDate(offsetDays: number): string {
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })
@@ -222,7 +222,7 @@ test('cycle grouping and filtering in the list are keyboard-operable', async ({ 
   const filterButton = page.getByRole('button', { name: 'Filter by Cycle' })
   await filterButton.focus()
   await page.keyboard.press('Enter')
-  await page.getByRole('menuitem', { name: new RegExp(cycleA) }).press('Enter')
+  await page.getByRole('menuitemcheckbox', { name: new RegExp(cycleA) }).press('Enter')
   await page.keyboard.press('Escape')
   await expect(page.locator(ROW).filter({ hasText: inCycle })).toBeVisible({ timeout: 20_000 })
   await expect(page.locator(ROW).filter({ hasText: noCycle })).toHaveCount(0)

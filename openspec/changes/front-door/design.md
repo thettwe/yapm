@@ -532,3 +532,212 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 
 <!-- Build-time decisions are appended below this line, each with what was ambiguous, what was
      chosen, and why. -->
+
+### `DEFAULT_ISSUE_STATUS_FILTER` is an `IssueFilter`, not a bare array of statuses
+
+**Ambiguous:** D5's snippet types it `readonly IssueStatus[]`, while its consumer
+(`issue-list.tsx:210`) holds a `useState<IssueFilter>` and every other reader of the value — a saved
+view, the axis count, the evaluator — speaks in filters.
+
+**Chosen:** `export const DEFAULT_ISSUE_STATUS_FILTER: IssueFilter = { status: ISSUE_STATUSES.filter(…) }`,
+with `TERMINAL_ISSUE_STATUSES` beside it exactly as D5 specifies. **Why:** the name says *filter*, the
+seed site takes a filter, and an array would have made the seed read
+`{ status: DEFAULT_ISSUE_STATUS_FILTER }` — a value whose name promises a filter being spliced into
+one. The derivation D5 actually cares about is unchanged and is what `filter.test.ts` asserts: the
+status list is `ISSUE_STATUSES` minus the terminal ones, computed, never listed. A third case asserts
+the object constrains **only** the status axis, so the seed can never quietly acquire a second
+predicate.
+
+### The landing decision lives in `components/auth/login-page.tsx`, mounted by `routes/login.tsx`
+
+**Ambiguous:** tasks 3.1–3.3 place the decision in `routes/login.tsx`. A route file cannot export a
+second symbol without the TanStack plugin refusing to code-split it (it says so, by name, at build
+time), and a decision this load-bearing needs a component test that renders it directly.
+
+**Chosen:** `routes/login.tsx` is now four lines — `createFileRoute('/login')({ component: LoginPage })`
+— and `LoginPage` lives beside `LoginForm`, which is the house pattern every other route already
+follows (`routes/inbox.tsx` → `InboxView`, `routes/teams.$teamId.index.tsx` → `TeamHome`). The
+decision is still taken in exactly one place; that place is now importable. `ROUTE_HOMES` and
+`routes.test.tsx` are untouched, per task 6.6.
+
+### The roster query is issued by a child, so a signed-out visitor issues none
+
+**Ambiguous:** hooks cannot be conditional, so the naive shape calls `useQuery` above the
+`isPending` / no-session branches — for a visitor who has not signed in and whose roster resolves
+through `denyAll` regardless.
+
+**Chosen:** `LoginPage` reads only the better-auth session; when one exists it renders
+`<LandingDecision />`, which is where `useSyncSession` and `useQuery` live. **Why:** a sign-in page
+should not subscribe to a workspace roster on behalf of someone who has no workspace. It also keeps
+`routes.test.tsx`'s four route-registration cases green **without edits** — they render `/login`
+outside any `ZeroProvider`, and `useZero` throws there. A change that had queried unconditionally
+would have forced an edit to the file task 6.6 names as the guard.
+
+### `resolveLandingTeam`'s viewer is `{ userID, role }` — the two fields `SyncSessionState` already carries
+
+D2 writes the readability test as `viewer.role === 'admin' || team.members.some(m => m.userId ===
+viewer.userID)` without fixing the parameter's shape. It is typed as exactly those two nullable
+fields, so both call sites (`login-page.tsx`, `invite.tsx`) pass what `useSyncSession()` already
+hands them and nothing has to be assembled. A `userID` of `null` reads no team: an unidentified
+caller is never a member of one.
+
+### `/invite` now reads the accept response on the success path, not only on failure
+
+`invite.tsx:87-89` parsed the body only when the request failed. The team-bound landing needs
+`teamId`, which is on the success body, so the parse moved above the `response.ok` branch and both
+paths read one body. The failure branch's `reasonText` call and copy are unchanged; the success
+branch takes `teamId` only when it is a string, so a workspace-level acceptance (a null `team_id`)
+falls to `resolveLandingTeam` exactly as D10 requires.
+
+### `/invite`'s body moved to `components/auth/invite-page.tsx`, for the reason `/login`'s did
+
+**Ambiguous:** task 6.5 asks for component coverage of `/invite`, and `InvitePage` lived inside the
+route file. It cannot be reached from a test there: `vite.config.ts:23` sets `autoCodeSplitting:
+true`, so the router plugin rewrites `component: InvitePage` into `lazyRouteComponent(() =>
+import('…?tsr-split=component'))` — the failure is a runtime `No "lazyRouteComponent" export is
+defined on the "@tanstack/react-router" mock`, three frames from anything that names the cause.
+
+**Chosen:** `routes/invite.tsx` keeps `validateSearch` and reads the token; the page moved beside
+`login-page.tsx` and takes `token` as a prop. **Why:** it is the same constraint and the same
+answer as the login-page move logged above, and doing it once more makes the pattern the rule
+rather than the exception. Nothing about the page's behaviour, copy or state machine changed —
+the file is a move plus a prop.
+
+### The shared e2e step waits for the door to resolve *before* it navigates
+
+**Ambiguous:** task 7.1 asks for one "…and open the workspace overview" step. The obvious body is
+`page.goto('/')` and the `workspace-name` assertion, which is what four helpers already inline.
+
+**Chosen:** the step first waits for the URL to leave `/login` and `/invite`, and only then
+navigates. **Why:** `signIn` (`support.ts:37-41`) returns the moment it has clicked submit, and the
+old `workspace-name` assertion was doing the waiting by accident. A bare `goto` fired in its place
+aborts whatever request is in flight — the sign-in POST, or on the invitation path the
+`POST /api/invites/accept` that grants the membership the spec is about to assert. That is a
+same-day flake with a cause three files away, so the wait is the step's first line rather than each
+caller's problem.
+
+### Five team-bound invitation acceptances break too, and eight role-only ones do not
+
+`tasks.md` §7.4 names three inline sites. Opening the acceptance sites showed the split D10 makes:
+an acceptance whose invite named a team now lands on that team, so its `workspace-name` assertion
+moves — `attachments.spec.ts:112-116`, `mentions.spec.ts:62-65`, `notifications.spec.ts:65-68`,
+`retro.spec.ts:530-533` and `search.spec.ts:313-316` are the five that select **Team (optional)**.
+The other eight acceptances set a **Role only**, so `invite.team_id` is null, the acceptor belongs
+to no team, and the ordinary resolution still returns `/` — exactly the reason `auth.spec.ts:80-81`
+survives verbatim (§7.5). All thirteen were read rather than pattern-matched; the five that move
+take the same shared step as the helpers.
+
+### The Status axis left the seven-axis sweep instead of being rewritten inside it
+
+**Ambiguous:** task 6.8 says rewrite the sweep's Status case to prove the same property through the
+seeded default. The sweep's shape is "click one option → exactly one row survives", and under a
+seeded axis a click *removes* a value. Keeping the row in the table would have made the table's own
+title ("narrows to the row its predicate matches") false for one of its seven entries.
+
+**Chosen:** the six untouched axes stay in `test.each`; Status becomes its own test that states the
+seeded premise, asserts both rows are admitted first, then toggles `In Progress` **off** and proves
+exactly one row survives. **Why:** the property under test is unchanged — this axis and no other
+decides which row stands — and the case now reads as what it does rather than as an exception the
+reader has to reconcile with the title above it.
+
+### The `callbackURL` findings went into `reference/server-stack.md`, not only into this file
+
+The reference's §4.4 documented `signIn.email({ email, password })` and `signIn.social({ provider
+})` and said nothing about `callbackURL`. That silence is what made D1's bug plausible in the first
+place. §4.4 now carries the four verified files, the asymmetry between `sign-in/email` (returns
+`redirect`/`url`) and `sign-up/email` (returns neither), the default-enabled `redirectPlugin`, and
+why `isSafeUrlScheme('/')` is true — checked against the installed 1.6.24 tarball rather than
+recalled.
+
+### The re-mint is keyed on the better-auth SESSION, and the reset is a layout effect
+
+**Ambiguous:** D3's `logged-out` branch renders a sign-in form to a caller better-auth still
+considers signed in. Nothing said what a *successful* re-authentication from that form does.
+
+**Chosen:** `ZeroRoot`'s identity key is now `session.id:user.id` rather than `user.id`
+(`provider.tsx:399-406`), and the effect that resets to `pending` and re-mints is a
+`useLayoutEffect`. **Why:** re-authenticating as the same person mints a new better-auth session
+over the stale credential, and a key of `user.id` alone observes no change at all — the form
+succeeds, the surface does not move, and only a page reload escapes. `session.id` moves on every
+sign-in, so the credential is re-minted and the caller lands. The layout phase is the second half
+of the same fix: a passive effect runs a commit late, so the render that first sees the new session
+still reads the previous identity's `logged-out` and re-renders the sign-in form for one commit —
+a flicker, and a window in which `ensureAccount` reads a transient render as "still signed out" and
+submits twice. Resetting in the layout phase puts `pending` in the same commit. `ensureAccount`
+takes the belt-and-braces half: it settles on the URL leaving `/login` rather than on the submit
+button's visibility, because the button is a rendered node and the URL is the decision.
+
+### Both roster waits are bounded by the recovery clock, not only by `unavailable`
+
+**Ambiguous:** D3 bounds the wait with `unavailable`, which is set only by a failed
+`/api/zero/token` call. A credential that mints fine against a zero-cache that is **down** leaves
+`teamsResult.type` at `unknown` indefinitely — a spinner on the sign-in surface with nothing to
+press, and the same hold on `/invite` for a caller who has just joined and has nothing else on
+screen.
+
+**Chosen:** `LandingDecision` and `AcceptInvite` both read `useSyncRecovery()` and render the shared
+`SyncUnavailable` once `retryOffered` is true (`RETRY_OFFER_AFTER_MS`, the same bound the statusline
+offers its manual retry on) or the roster reports `type === 'error'`. **Why:** it reuses the clock
+and the surface that already exist rather than inventing a second timer, and it is self-healing —
+`SyncRecovery` clears `retryOffered` when a connection holds, so the landing decision resumes on its
+own. A team-bound acceptance is deliberately outside the bound: it never consults the roster. The
+accepting copy also carries `BackHome` now, so the wait always has an exit.
+
+### The filter axes' options are checkbox items
+
+**Ambiguous:** D5 makes the seeded Status value the whole explanation of why 3 of 57 issues render,
+and stated it only in pixels — a count glyph beside the trigger and a tick beside each option.
+
+**Chosen:** every `FilterMenu` option carries `role="menuitemcheckbox"` and `aria-checked`, and each
+trigger carries an `aria-describedby` pointing at a visually-hidden `"4 of 6 selected"` (or
+`"No filter applied"`). **Why:** a toggle set whose state is a drawn tick is invisible to anything
+but an eye, and the seeded lens is exactly the state a reader most needs stated. The accessible
+**name** is untouched — four e2e specs drive it — so the description carries the count. The role
+change moves nine option lookups from `menuitem` to `menuitemcheckbox` across
+`issue-list.test.tsx`, `board.test.tsx` and four e2e specs; the menus that are not toggle sets
+(`SortMenu`, the deck's `more▾`, the account menu, the status and cycle pickers) are unchanged.
+
+### `triage.spec.ts` opens the Status axis through the retry shape the suite already has
+
+The new interaction clicked a menu item without first asserting the menu was open. A Base UI menu's
+trigger is clickable before the menu can respond, which is precisely why `goToMore` and `signOut`
+exist in `support.ts` in the `aria-expanded`-keyed form they do. The Status axis is opened the same
+way: idempotent open, item reached only while the menu is known open.
+
+### `ensureAccount`'s settle signal and its retry guard are two different questions
+
+**Ambiguous:** moving `ensureAccount` off the submit button and onto the URL fixed the double
+submit, but left one guard doing two jobs. `if (pathname === '/login') signIn(...)` reads "the URL
+did not move" as "this is a duplicate account", when the same state is also what a landing decision
+that simply took longer than the wait looks like — and `signIn` needs the form *mounted*, which on
+every branch except a settled `logged-out` it is not. A slow-but-successful sign-up therefore routed
+into a fallback that could never complete: `fillCredentials` would time out on a field that is not
+on the page.
+
+**Chosen:** the URL stays the settle signal, and the retry is gated on its own precondition —
+`page.getByTestId('login-submit').isVisible()` — before `signIn` runs. Both bounds in the race move
+from 15s to the 20s `openWorkspaceOverview` already allows. **Why:** probing the button is exactly
+what was flaky *before* the race settled and is exactly what is correct after it, because the
+transient renders the old probe caught are gone by then. Anything else the wait can end on — a
+decision still in flight, or the bounded retry surface D3 now renders — is left to the caller's own
+wait rather than turned into a sign-in attempt against a surface with no form. The 20s brings the
+helper into line with the only other place in `support.ts` that waits on the same decision.
+
+### The docs and the spec delta name both bounds, not only the credential
+
+The bound widened when `LandingDecision` and `AcceptInvite` picked up the recovery clock, but
+`app-frame.md` and this change's `app-frame` delta still described the credential request as the
+only way the wait ends. Both now name the second cause — a connection that does not come back — and
+say that the surface clears itself once it holds, which is the property that makes the retry surface
+an answer rather than a dead end.
+
+### What the gates prove, and what is still owed to CI
+
+`typecheck`, `lint`, the full Vitest run (66 files, 797 tests) and `check-boundaries.mjs` are green
+locally, as is `pnpm --filter @yapm/docs build`. Tasks 10.1's `build`, 10.2's compose smoke test and
+10.3's Playwright suite are **not** ticked: port 3000 is held on this machine by an unrelated
+container, so the compose smoke test cannot run here, and CI owns both it and the e2e suite. Task
+10.4's scenario walk was done by reading; three of its scenarios — the sign-in landing, the
+team-bound acceptance and the keyboard clear of the Status axis — are only observable in the
+Playwright tier and rest on that run. 10.5 and 10.6 are hand checks against a live stack and remain
+open.

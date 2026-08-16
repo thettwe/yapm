@@ -931,6 +931,29 @@ export const auth = betterAuth({
 
 Client: `authClient.signIn.email({ email, password })`, `authClient.signIn.social({ provider: "github" })`.
 
+**`callbackURL` on the client is not a hint — on `signIn.email` it performs a full page load.**
+Verified in the installed 1.6.24 tarball, not recalled:
+
+| file | what it does |
+| --- | --- |
+| `dist/api/routes/sign-in.mjs` (`sign-in/email`) | returns `{ redirect: !!ctx.body.callbackURL, url: ctx.body.callbackURL, token, user }` |
+| `dist/api/routes/sign-up.mjs` (`sign-up/email`) | returns `{ token, user }` — **no `redirect`, no `url`** |
+| `dist/client/fetch-plugins.mjs` | `redirectPlugin`: `onSuccess` does `window.location.href = context.data.url` when `data.url && data.redirect && isSafeUrlScheme(data.url)` |
+| `dist/client/config.mjs` | that plugin is in the default plugin list unless `disableDefaultFetchPlugins` is set |
+
+Consequences, all of which yapm relies on:
+
+- Passing `callbackURL` to **`signIn.email`** hands navigation to the auth layer: a real
+  `window.location.href` assignment, which throws away the Zero client and its replica and rebuilds
+  both. Omit it and the client-side router keeps the decision (and the warm replica).
+- **`signUp.email` ignores it** for this purpose — the response carries no `redirect` field, so the
+  plugin never fires. The same option therefore behaves differently on the two email calls, which is
+  exactly the kind of asymmetry that produces "works when I create an account, not when I sign in".
+- `isSafeUrlScheme('/')` is `true` — `new URL('/')` throws, and a relative path is treated as safe —
+  so a bare path is enough to trigger it.
+- The **provider** calls (`signIn.social`, `signIn.sso`) genuinely need `callbackURL`: the browser
+  leaves the origin, and the value is where the IdP returns it.
+
 GitHub gotchas from the doc, relevant because yapm uses a **GitHub App** (not an OAuth App):
 - Redirect URL: `http://localhost:3000/api/auth/callback/github`.
 - "For Github apps, you DO have to … go to *Permissions and Events* > *Account Permissions* > *Email Addresses* and select 'Read-Only'", otherwise you get `email_not_found`.

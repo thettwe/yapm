@@ -1,12 +1,12 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount, goToMore, stop } from './support'
+import { ADMIN, ensureAccount, goToMore, openWorkspaceOverview, stop } from './support'
 
 // The deck — and the `more▾` transient behind it — is drawn once a team is in context, so the
 // goToMore probes build their own team, exactly as the rule "a spec passes alone" demands.
 async function enterTeam(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   const teamName = `Harness Team ${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
   await page.getByTestId('create-team').click()
   const dialog = page.getByRole('dialog')

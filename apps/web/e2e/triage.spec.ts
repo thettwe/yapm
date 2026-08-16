@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount, goToMore, stop, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, goToMore, openWorkspaceOverview, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -22,7 +22,7 @@ function randomKey(): string {
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })
@@ -137,8 +137,23 @@ test('decline a triage issue cancels it and clears the inbox', async ({ page }) 
     timeout: 20_000,
   })
 
-  // The declined issue reappears in the list as Canceled.
+  // The declined issue reappears in the list as Canceled. The list opens on live work now, so the
+  // lens states itself: Canceled is asked for through the axis the page already draws, and the
+  // assertion below is the one it always was — declining sets the status, and the issue is there.
   await stop(page, 'Issues').click()
+  // The same aria-expanded-keyed retry `goToMore` and `signOut` use: a Base UI menu's trigger is
+  // clickable before the menu can respond, so the open is idempotent and the option is reached
+  // only while the menu is known open.
+  const statusAxis = page.getByRole('button', { name: 'Filter by Status' })
+  const canceledOption = page.getByRole('menuitemcheckbox', { name: /Canceled$/ })
+  await expect(async () => {
+    if ((await statusAxis.getAttribute('aria-expanded')) !== 'true') {
+      await statusAxis.click()
+    }
+    await expect(canceledOption).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 20_000 })
+  await canceledOption.click()
+  await page.keyboard.press('Escape')
   const canceled = page.getByRole('region', { name: 'Canceled', exact: true })
   await expect(canceled.locator(ROW).filter({ hasText: title })).toBeVisible({ timeout: 20_000 })
 })

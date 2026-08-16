@@ -4,7 +4,9 @@ description: The team page is a morning digest — an adaptive composition of th
 ---
 
 **Team Home** is what `/teams/<teamId>` shows: not a settings screen, not a members roster,
-but the page a teammate reads first thing in the morning. It answers *"where is the cycle,
+but the page a teammate reads first thing in the morning — and the page **signing in opens**,
+rather than one you click through to. Which team, and what happens when you belong to none, is
+[the app frame's landing rule](/features/app-frame/#where-signing-in-lands). It answers *"where is the cycle,
 what needs a human, what happened while I was away, and what is mine?"* — and it answers
 from **rows your browser has already synced**. The page adds no query, no endpoint and no
 table; every number and phrase on it is a pure function (in `packages/schema`) over the same

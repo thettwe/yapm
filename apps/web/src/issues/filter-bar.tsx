@@ -23,7 +23,7 @@ import { Select } from '@yapm/ui/components/select'
 import { StatusGlyph } from '@yapm/ui/components/status-glyph'
 import { cn } from '@yapm/ui/lib/utils'
 import { CheckIcon, PlusIcon } from 'lucide-react'
-import { type ReactNode, useCallback, useState } from 'react'
+import { type ReactNode, useCallback, useId, useState } from 'react'
 import { useMembership } from '@/auth/use-membership'
 import { cycleKey } from '@/cycles/model'
 import { Masthead } from '@/frame/masthead'
@@ -419,6 +419,14 @@ function FilterMenu({
   onToggle: (value: string) => void
 }) {
   const selectedSet = new Set(selected)
+  const descriptionId = useId()
+  // The count beside the trigger is the whole explanation of why a seeded axis renders 3 of 57
+  // issues, and drawn alone it is visible only to people who can see it. The accessible NAME stays
+  // verbatim — four e2e specs drive it — so the state rides a description instead.
+  const description =
+    selectedSet.size === 0
+      ? 'No filter applied'
+      : `${selectedSet.size} of ${options.length} selected`
   return (
     <Menu>
       {/* Plain text, as the mock draws it — the accessible name is what four e2e specs drive, and
@@ -428,6 +436,7 @@ function FilterMenu({
           <button
             type="button"
             aria-label={`Filter by ${label}`}
+            aria-describedby={descriptionId}
             className={cn(
               'rounded-control px-0.5 whitespace-nowrap transition-colors hover:text-text-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
               selectedSet.size > 0 ? 'text-text-1' : 'text-text-2',
@@ -442,10 +451,17 @@ function FilterMenu({
           </button>
         }
       />
+      <span id={descriptionId} className="sr-only">
+        {description}
+      </span>
       <MenuContent className="max-h-72 overflow-y-auto">
         {options.map((option) => (
+          // A toggle set, so each option is a checkbox item: the tick beside it is a drawn glyph,
+          // and a drawn glyph is not a state anything but an eye can read.
           <MenuItem
             key={option.value}
+            role="menuitemcheckbox"
+            aria-checked={selectedSet.has(option.value)}
             closeOnClick={false}
             onClick={() => onToggle(option.value)}
             className="justify-between"

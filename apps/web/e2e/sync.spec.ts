@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview } from './support'
 
 const NAME = '[data-testid="workspace-name"]'
 const INPUT = '[data-testid="workspace-name-input"]'
@@ -15,8 +15,8 @@ function unique(prefix: string): string {
 // bootstrap admin (pinned by YAPM_BOOTSTRAP_ADMIN_EMAIL in the Playwright env) provides it.
 async function openWorkspace(page: Page): Promise<Locator> {
   await ensureAccount(page, ADMIN)
+  await openWorkspaceOverview(page)
   const name = page.locator(NAME)
-  await expect(name).toBeVisible({ timeout: 20_000 })
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected')
   return name
 }

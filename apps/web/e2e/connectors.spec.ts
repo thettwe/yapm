@@ -1,7 +1,7 @@
 import type { Locator, Page } from '@playwright/test'
 import { findIssue, openDb, seedLinkedPr } from './db'
 import { expect, test } from './fixtures'
-import { ADMIN, ensureAccount, stop, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview, stop, uniqueEmail } from './support'
 
 const STATUS = '[data-testid="connection-status"]'
 const ROW = '[data-testid="issue-row"]'
@@ -26,7 +26,7 @@ function row(page: Page, title: string): Locator {
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })
@@ -228,7 +228,7 @@ test('a deployment carrying the merge commit lights the deploy glyph, and Delive
   // survives the filter that shipped empty until this change.
   await page.getByRole('button', { name: 'Filter by Delivery' }).focus()
   await page.keyboard.press('Enter')
-  await page.getByRole('menuitem', { name: 'Merged, not deployed' }).press('Enter')
+  await page.getByRole('menuitemcheckbox', { name: 'Merged, not deployed' }).press('Enter')
   await page.keyboard.press('Escape')
   await expect(row(page, waiting)).toBeVisible({ timeout: 20_000 })
   await expect(row(page, shipped)).toHaveCount(0)

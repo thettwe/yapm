@@ -75,7 +75,11 @@ Three switchable themes (Warm, Focused, Editorial) with a custom accent color.
 
 ### Team Home — the morning digest
 
-The team's page is a morning read, not a members roster.
+The team's page is a morning read, not a members roster — and it is **what you land on when you
+sign in**, not something you click through to. The team is the one you last visited, or the first
+one whose work you can read — your own teams as a member or viewer, every team as a workspace
+admin. When no team passes that test you land on the workspace overview instead, which is the page
+whose contents are actually yours.
 
 - The active cycle's vitals: day band, committed / landed / added scope, days left.
 - A narrative that is the stored cycle digest when one exists and a deterministic two-sentence

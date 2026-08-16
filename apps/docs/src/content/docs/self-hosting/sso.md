@@ -114,7 +114,9 @@ takes the SSO button off the login form until you repeat this step, so publish t
 
 Once one provider is verified, `GET /api/auth-methods` reports SSO available and the login form
 renders **Continue with SSO**. A person types their work email, yapm matches the domain to your
-provider, and the browser goes to your IdP.
+provider, and the browser goes to your IdP. Your IdP returns them to yapm's sign-in page, which is
+where yapm decides where they land — the same decision every other way in takes, so an SSO sign-in
+opens on [a team's work](/features/app-frame/#where-signing-in-lands) like any other.
 
 With no verified provider, that button does not exist. That is the whole point of the honesty half
 of this feature: yapm advertises a sign-in method only when the method works.

@@ -1,5 +1,5 @@
 import { countWorkspaceRows, expect, type GrowthCounts, test } from './fixtures'
-import { ADMIN, ensureAccount } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview } from './support'
 
 // Carried from PR #41 and adapted to the isolation model this change ends with — and the reason
 // for the `zz` prefix survives the adaptation: Playwright orders spec files lexicographically and
@@ -44,7 +44,7 @@ test('the run ends inside its measured population budget, and the app is live on
   // The product still stands on everything the run accumulated: a signed-in admin gets a live,
   // connected client, not a workspace wedged by its own suite.
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator('[data-testid="connection-status"]')).toHaveAttribute(
     'data-connection',
     'connected',

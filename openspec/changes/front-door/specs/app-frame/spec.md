@@ -24,12 +24,14 @@ SHALL hold — showing the loading state it already shows — rather than guess.
 roster can report itself complete while empty, so a complete roster SHALL NOT on its own release the
 decision.
 
-That wait SHALL have an end. Where the caller holds a session but the credential the sync layer needs
-cannot be obtained — the request never landing, or the endpoint rejecting it — the sign-in surface
-SHALL resolve to a surface the caller can act on: the retry surface the application already uses when
-the server is unreachable, or the sign-in form where the rejection is clean and settled. It SHALL NOT
-hold a loading state indefinitely, and it SHALL NOT navigate into a surface that navigates back to
-it.
+That wait SHALL have an end, on both of the things it waits for. Where the caller holds a session but
+the credential the sync layer needs cannot be obtained — the request never landing, or the endpoint
+rejecting it — and equally where the credential mints but the sync connection itself does not come
+back, so the roster never settles, the sign-in surface SHALL resolve to a surface the caller can act
+on: the retry surface the application already uses when the server is unreachable, or the sign-in
+form where the rejection is clean and settled. The bound on the connection SHALL be the one the
+statusline already applies, so the surface clears itself once the connection holds. It SHALL NOT hold
+a loading state indefinitely, and it SHALL NOT navigate into a surface that navigates back to it.
 
 The landing decision SHALL be taken in exactly one place. No second mechanism — an authentication
 callback URL, a route guard, or a redirect issued by a dependency — SHALL also choose where a
@@ -92,10 +94,12 @@ rests on a membership row that exists before the navigation is taken.
 #### Scenario: A sync session that never becomes ready does not hang the door
 
 - **WHEN** the caller holds a session but the sync credential cannot be obtained — the server is
-  unreachable, or it rejects the credential outright
+  unreachable, or it rejects the credential outright — or the credential mints and the sync
+  connection stays down long enough that the statusline would offer its retry
 - **THEN** the sign-in surface shows the retry surface the product already uses for an unreachable
   server, or the sign-in form for a clean settled rejection, and never an indefinite loading state,
-  and no pair of routes navigates at each other
+  and no pair of routes navigates at each other; and the retry surface gives way to the landing
+  decision once the connection holds
 
 #### Scenario: One landing decision, not two
 

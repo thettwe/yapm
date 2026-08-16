@@ -7,6 +7,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -397,7 +398,14 @@ interface ZeroRootProps {
 export function ZeroRoot({ cacheUrl, children }: ZeroRootProps) {
   const [session, setSession] = useState<SyncSessionRecord>(PENDING)
   const { data: authSession } = useSession()
-  const authUserId = authSession?.user.id ?? null
+  // The SESSION, not just the user. Re-authenticating as the same person mints a new better-auth
+  // session over an old sync credential, and a key of `user.id` alone observes no change — so the
+  // sign-in form on `/login`'s `logged-out` branch would succeed and change nothing on screen,
+  // leaving a reload as the only way back into the app. `session.id` moves on every sign-in.
+  const authIdentity =
+    authSession === null || authSession === undefined
+      ? null
+      : `${authSession.session.id}:${authSession.user.id}`
 
   const inFlight = useRef<Promise<SyncCredentialResult> | null>(null)
   const flightId = useRef(0)
@@ -474,14 +482,22 @@ export function ZeroRoot({ cacheUrl, children }: ZeroRootProps) {
   // it — the same semantics `refresh()` uses, for the same reason: the caller changed what the
   // server bakes into the credential. The mount itself (including StrictMode's dev re-run of the
   // effect) observes no change, so it still joins an open flight rather than queueing a second.
-  const observedAuthUserId = useRef<string | null | undefined>(undefined)
-  useEffect(() => {
+  //
+  // A LAYOUT effect, not a passive one, and that is the third guard rather than a style choice: a
+  // passive effect runs a commit late, so the render that first sees the new better-auth session
+  // still reads the previous identity's sync answer. On `/login` that answer is `logged-out` and
+  // its branch renders the sign-in form — one commit of the form the caller just submitted, and a
+  // window in which an e2e helper probing for that form re-submits it. Resetting in the layout
+  // phase puts `pending` in the same commit, so no state that is about a previous identity ever
+  // reaches paint.
+  const observedAuthIdentity = useRef<string | null | undefined>(undefined)
+  useLayoutEffect(() => {
     const changed =
-      observedAuthUserId.current !== undefined && observedAuthUserId.current !== authUserId
-    observedAuthUserId.current = authUserId
+      observedAuthIdentity.current !== undefined && observedAuthIdentity.current !== authIdentity
+    observedAuthIdentity.current = authIdentity
     setSession((previous) => ({ ...PENDING, revision: previous.revision + 1 }))
     void remint({ fresh: changed })
-  }, [remint, authUserId])
+  }, [remint, authIdentity])
 
   useProactiveRefresh(session, remint)
   useUnavailableRetry(session, retry)

@@ -71,10 +71,16 @@ test('with SSO available the button renders and starts the provider flow', async
   fireEvent.click(screen.getByTestId('login-sso'))
 
   await waitFor(() => expect(mocks.signInSso).toHaveBeenCalledTimes(1))
-  expect(mocks.signInSso).toHaveBeenCalledWith({ email: 'staff@acme.example', callbackURL: '/' })
+  expect(mocks.signInSso).toHaveBeenCalledWith({
+    email: 'staff@acme.example',
+    callbackURL: '/login',
+  })
 })
 
-test('submitting the form signs in with the entered credentials', async () => {
+// The email paths carry NO callback at all (design §D1). better-auth returns `redirect` as
+// `!!ctx.body.callbackURL`, and its default-enabled redirect plugin turns a truthy one into
+// `window.location.href = …` — a second answer to where signing in lands, racing the route's.
+test('submitting the form signs in with the entered credentials and no callback', async () => {
   render(<LoginForm />)
 
   typeInto(/email/i, 'ada@example.com')
@@ -85,8 +91,8 @@ test('submitting the form signs in with the entered credentials', async () => {
   expect(mocks.signInEmail).toHaveBeenCalledWith({
     email: 'ada@example.com',
     password: 'correct horse',
-    callbackURL: '/',
   })
+  expect(mocks.signInEmail.mock.calls[0]?.[0]).not.toHaveProperty('callbackURL')
 })
 
 test('SSO requires an email and then starts the provider flow', async () => {
@@ -99,10 +105,13 @@ test('SSO requires an email and then starts the provider flow', async () => {
   typeInto(/email/i, 'staff@corp.example')
   fireEvent.click(screen.getByTestId('login-sso'))
   await waitFor(() => expect(mocks.signInSso).toHaveBeenCalledTimes(1))
-  expect(mocks.signInSso).toHaveBeenCalledWith({ email: 'staff@corp.example', callbackURL: '/' })
+  expect(mocks.signInSso).toHaveBeenCalledWith({
+    email: 'staff@corp.example',
+    callbackURL: '/login',
+  })
 })
 
-test('toggling to sign-up creates an account', async () => {
+test('toggling to sign-up creates an account, and carries no callback either', async () => {
   render(<LoginForm />)
 
   fireEvent.click(screen.getByRole('button', { name: /create one/i }))
@@ -111,4 +120,17 @@ test('toggling to sign-up creates an account', async () => {
   fireEvent.submit(screen.getByTestId('login-submit').closest('form') as HTMLFormElement)
 
   await waitFor(() => expect(mocks.signUpEmail).toHaveBeenCalledTimes(1))
+  // The absence is the assertion: a callback here would be the second landing mechanism the
+  // requirement forbids, and `/login` — still mounted, holding a fresh session — is the first.
+  expect(mocks.signUpEmail.mock.calls[0]?.[0]).not.toHaveProperty('callbackURL')
+})
+
+// The provider paths keep a callback because a third-party redirect structurally needs a URL, and
+// it points at the ONE place the decision is taken rather than at a destination of its own.
+test('the provider paths return the browser to the decision point, not to a destination', async () => {
+  render(<LoginForm />)
+
+  fireEvent.click(screen.getByTestId('login-github'))
+  await waitFor(() => expect(mocks.signInSocial).toHaveBeenCalledTimes(1))
+  expect(mocks.signInSocial).toHaveBeenCalledWith({ provider: 'github', callbackURL: '/login' })
 })

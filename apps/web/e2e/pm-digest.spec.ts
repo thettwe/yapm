@@ -11,7 +11,7 @@ import {
 } from './db'
 import { expect, test } from './fixtures'
 import { readReplica } from './replica'
-import { ADMIN, ensureAccount, signIn, stop, uniqueEmail } from './support'
+import { ADMIN, ensureAccount, openWorkspaceOverview, signIn, stop, uniqueEmail } from './support'
 
 // THE DISCLOSURE BOUNDARY IN A REAL BROWSER, and the two properties here are properties of the
 // ASSEMBLED stack rather than of any one module, which is why they are e2e at all:
@@ -83,7 +83,7 @@ function isoDate(offsetDays: number): string {
 
 async function enterApp(page: Page): Promise<void> {
   await ensureAccount(page, ADMIN)
-  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
+  await openWorkspaceOverview(page)
   await expect(page.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })
@@ -641,9 +641,7 @@ test('a named reader reads only what a human released, keyboard-only, and loses 
   const afterContext = await newContext()
   const afterPage = await afterContext.newPage()
   await signIn(afterPage, reader)
-  await expect(afterPage.locator('[data-testid="workspace-name"]')).toBeVisible({
-    timeout: 20_000,
-  })
+  await openWorkspaceOverview(afterPage)
   await expect(afterPage.locator(STATUS)).toHaveAttribute('data-connection', 'connected', {
     timeout: 30_000,
   })

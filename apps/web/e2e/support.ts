@@ -45,22 +45,53 @@ export async function signIn(page: Page, credentials: Credentials): Promise<void
 // sign-in when sign-up reports the address is taken).
 export async function ensureAccount(page: Page, credentials: Credentials): Promise<void> {
   await signUp(page, credentials)
-  // A fresh sign-up navigates into the app and unmounts the form; a duplicate keeps the
-  // form mounted (staying in sign-up mode) and shows a "user already exists" alert. Settle
-  // on whichever happens — the submit button leaving the DOM, or the alert appearing —
-  // rather than guessing from the mode-dependent toggle label.
-  const submit = page.getByTestId('login-submit')
+  // A fresh sign-up leaves `/login` once the landing decision resolves; a duplicate stays on it
+  // (in sign-up mode) and shows a "user already exists" alert. Settle on whichever happens — the
+  // URL changing, or the alert appearing — rather than guessing from the mode-dependent label.
+  //
+  // The URL, not the submit button's visibility, is the SETTLE signal: the button is a rendered
+  // node and the sign-in surface is re-entered by every state `/login` treats as unsettled, so
+  // waiting on it reads a transient render as "still signed out". The URL only changes when the
+  // decision has actually been taken. Both bounds are the 20s `openWorkspaceOverview` allows, so a
+  // landing that is merely slow is not mistaken for a duplicate account.
+  //
+  // The retry, though, is gated on its OWN precondition — `signIn` needs the form mounted, and the
+  // form is absent on every branch except a settled `logged-out`. Probing the button is safe here
+  // because the race above has already settled; it is the unconditional probe, before settling,
+  // that was flaky. Anything else the wait ended on (a decision still in flight, the shared retry
+  // surface) is left for the caller's own wait rather than routed into a sign-in that cannot run.
   await Promise.race([
-    submit.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {}),
+    page.waitForURL((url) => url.pathname !== '/login', { timeout: 20_000 }).catch(() => {}),
     page
       .getByRole('alert')
-      .waitFor({ state: 'visible', timeout: 15_000 })
+      .waitFor({ state: 'visible', timeout: 20_000 })
       .catch(() => {}),
   ])
-  const stillOnLogin = await submit.isVisible().catch(() => false)
-  if (stillOnLogin) {
-    await signIn(page, credentials)
+  if (new URL(page.url()).pathname === '/login') {
+    if (
+      await page
+        .getByTestId('login-submit')
+        .isVisible()
+        .catch(() => false)
+    ) {
+      await signIn(page, credentials)
+    }
   }
+}
+
+// Signing in lands on a team's Home where the caller has one, so a spec that needs the workspace
+// administration surface asks for it by name rather than assuming the door opens onto it. Four
+// helpers already did exactly this; this is the one copy of it.
+//
+// The wait for the entry surface to resolve comes FIRST and is not decoration: `signIn` returns as
+// soon as it has clicked submit, and a `goto` fired while the sign-in — or an invitation
+// acceptance — is still in flight aborts the request that grants what the spec is about to assert.
+export async function openWorkspaceOverview(page: Page): Promise<void> {
+  await page.waitForURL((url) => url.pathname !== '/login' && url.pathname !== '/invite', {
+    timeout: 20_000,
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
 }
 
 // The deck's six destinations (app-frame band 1). Scoped to the nav landmark, because a page may

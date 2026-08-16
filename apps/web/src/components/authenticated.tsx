@@ -49,7 +49,7 @@ function SyncPending() {
 
 // `retry`, not `refresh`: pressing this during an outage should join the request already in
 // flight and take its answer, not discard it and queue a forced one behind it.
-function SyncUnavailable() {
+export function SyncUnavailable() {
   const { retry } = useSyncControl()
 
   return (

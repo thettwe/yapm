@@ -1,4 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  DEFAULT_ISSUE_STATUS_FILTER,
+  ISSUE_STATUSES,
+  type IssueStatus,
+  TERMINAL_ISSUE_STATUSES,
+} from '@yapm/schema'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 // The daylight list's rendering contract. The phrase dictionary has its own unit suite in
@@ -57,6 +63,7 @@ vi.mock('@/issues/command', () => ({
 }))
 
 import { IssueList } from './issue-list'
+import { STATUS_LABEL } from './model'
 
 const HOUR = 60 * 60 * 1000
 const NOW = Date.now()
@@ -123,6 +130,23 @@ function phraseOf(title: string): HTMLElement | null {
   return rowFor(title).querySelector<HTMLElement>('[data-slot="rest-phrase"]')
 }
 
+function statusOption(status: IssueStatus): HTMLElement {
+  // The option's drawn mark carries a `role="img"` label that joins its accessible name ahead of
+  // the text ("TodoTodo"), so the anchor is trailing rather than a whole-string match.
+  return screen.getByRole('menuitemcheckbox', { name: new RegExp(`${STATUS_LABEL[status]}$`) })
+}
+
+// The list opens on the live statuses now (design §D5), so a test whose fixture holds terminal work
+// states the lens it is reading through. Clearing is the axis's own interaction — toggle each
+// seeded value off and the axis falls back to admitting every status — never a back door around it.
+function clearStatusAxis(): void {
+  fireEvent.click(screen.getByRole('button', { name: 'Filter by Status' }))
+  for (const status of DEFAULT_ISSUE_STATUS_FILTER.status ?? []) {
+    fireEvent.click(statusOption(status))
+  }
+  fireEvent.keyDown(document.body, { key: 'Escape' })
+}
+
 beforeEach(() => {
   harness.rows = { 'teams.all': [TEAM] }
   harness.navigate.mockClear()
@@ -178,6 +202,9 @@ const MOCK_CASES = [
 test('each row states the dictionary phrase its facts support', () => {
   harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
   mount()
+  // `Persist cart across sessions` is Done, and the only `merged_not_deployed` phrase fixture in
+  // the file — so the phrase dictionary is exercised across every case with the axis cleared.
+  clearStatusAxis()
 
   expect(phraseOf('Address autocomplete on shipping step')).toHaveTextContent('Checks failing')
   expect(phraseOf('Apple Pay in the payment sheet')).toHaveTextContent(
@@ -203,6 +230,8 @@ test('a quiet row renders no phrase at all', () => {
 test('the GitHub mark suffixes exactly the check and deploy phrases', () => {
   harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
   mount()
+  // The deploy phrase belongs to a Done row, so the archive is asked for rather than assumed.
+  clearStatusAxis()
 
   // The provider is named in the selector: a mark rendered for some other source would be the
   // wrong claim about where the fact came from, and a bare `provenance-mark` check could not see it.
@@ -228,6 +257,82 @@ test('the divergent row shows its phrase and its // break together', () => {
   const row = rowFor('Apple Pay in the payment sheet')
   expect(within(row).getByText('Done in git, not on the board')).toBeInTheDocument()
   expect(row.querySelector('[data-slot="reality-track-break"]')).not.toBeNull()
+})
+
+// ---------------------------------------------------------------------------
+// The default lens: live work on the first screen, stated on the surface that narrows it.
+// ---------------------------------------------------------------------------
+
+test('the list opens on live work, not on the archive', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
+  mount()
+
+  expect(screen.queryByText('Persist cart across sessions')).toBeNull()
+  expect(screen.queryByRole('region', { name: 'Done' })).toBeNull()
+  // Everything else is still there: the lens excludes the terminal statuses, not the work.
+  expect(rows()).toHaveLength(MOCK_CASES.length - 1)
+  expect(Number(screen.getByTestId('masthead-count').textContent)).toBe(MOCK_CASES.length - 1)
+})
+
+test('the Status axis states how many statuses it admits, and names them', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
+  mount()
+
+  const trigger = screen.getByRole('button', { name: 'Filter by Status' })
+  // The count is read off the derivation, so a status added to the product moves both together.
+  expect(trigger).toHaveTextContent(String(DEFAULT_ISSUE_STATUS_FILTER.status?.length))
+
+  fireEvent.click(trigger)
+  for (const status of DEFAULT_ISSUE_STATUS_FILTER.status ?? []) {
+    expect(statusOption(status)).toBeInTheDocument()
+  }
+  // The terminal statuses are offered, not withheld: the absence of Done is a stated filter with
+  // its own control, never a rule behind the bar.
+  for (const status of TERMINAL_ISSUE_STATUSES) {
+    expect(statusOption(status)).toBeInTheDocument()
+  }
+})
+
+// The count beside the trigger and the tick beside each option are both drawn marks, and a drawn
+// mark is not a state a screen reader can read. The seeded lens is the reason 3 of 57 issues
+// render, so that reason has to be in the a11y tree as well as on the glass.
+test('the seeded Status axis states its selection to assistive technology', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
+  mount()
+
+  const trigger = screen.getByRole('button', { name: 'Filter by Status' })
+  expect(trigger).toHaveAccessibleDescription(
+    `${DEFAULT_ISSUE_STATUS_FILTER.status?.length} of ${ISSUE_STATUSES.length} selected`,
+  )
+
+  fireEvent.click(trigger)
+  for (const status of DEFAULT_ISSUE_STATUS_FILTER.status ?? []) {
+    expect(statusOption(status)).toHaveAttribute('aria-checked', 'true')
+  }
+  // The terminal statuses are offered and stated as unticked, not silently missing.
+  for (const status of TERMINAL_ISSUE_STATUSES) {
+    expect(statusOption(status)).toHaveAttribute('aria-checked', 'false')
+  }
+})
+
+test('an axis with nothing selected says so rather than counting to zero', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
+  mount()
+
+  expect(screen.getByRole('button', { name: 'Filter by Priority' })).toHaveAccessibleDescription(
+    'No filter applied',
+  )
+})
+
+test('clearing the Status axis returns the archive', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
+  mount()
+  clearStatusAxis()
+
+  expect(screen.getByText('Persist cart across sessions')).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Done' })).toBeInTheDocument()
+  expect(Number(screen.getByTestId('masthead-count').textContent)).toBe(MOCK_CASES.length)
+  expect(screen.getByRole('button', { name: 'Filter by Status' })).not.toHaveTextContent(/\d/)
 })
 
 // ---------------------------------------------------------------------------
@@ -423,7 +528,6 @@ function survivors(): string[] {
 // option's accessible name ahead of the text ("TodoTodo") — hence the trailing anchor on those two
 // rather than a whole-string match.
 test.each([
-  ['Status', /Todo$/, 'Alpha row'],
   ['Priority', /Urgent$/, 'Alpha row'],
   ['Assignee', /^Ada$/, 'Alpha row'],
   ['Delivery', /^Failing CI$/, 'Alpha row'],
@@ -438,18 +542,36 @@ test.each([
     const trigger = screen.getByRole('button', { name: `Filter by ${axis}` })
     expect(trigger).toBeInTheDocument()
     fireEvent.click(trigger)
-    fireEvent.click(screen.getByRole('menuitem', { name: option }))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: option }))
 
     expect(rows()).toHaveLength(1)
     expect(survivors()).toEqual([survivor])
   },
 )
 
+// The seventh axis, which the sweep above cannot carry because its premise moved. The Status menu
+// opens with four values already ticked (design §D5), so clicking `Todo` removes Todo rather than
+// narrowing to it — the same toggle set, read against a seeded default instead of an empty one.
+// The property under test is unchanged: this axis, and no other, decides which row survives.
+test('the Status axis is named, and its seeded values decide which row survives', () => {
+  mountFiltering()
+
+  expect(screen.getByRole('button', { name: 'Filter by Status' })).toBeInTheDocument()
+  // Both rows are live work, so the seeded lens admits both and the axis has something to decide.
+  expect(survivors()).toEqual(['Alpha row', 'Beta row'])
+
+  fireEvent.click(screen.getByRole('button', { name: 'Filter by Status' }))
+  fireEvent.click(statusOption('in_progress'))
+
+  expect(rows()).toHaveLength(1)
+  expect(survivors()).toEqual(['Alpha row'])
+})
+
 test('the three delivery predicates are all offered', () => {
   mountFiltering()
   fireEvent.click(screen.getByRole('button', { name: 'Filter by Delivery' }))
   for (const label of ['Blocked on review', 'Failing CI', 'Merged, not deployed']) {
-    expect(screen.getByRole('menuitem', { name: label })).toBeInTheDocument()
+    expect(screen.getByRole('menuitemcheckbox', { name: label })).toBeInTheDocument()
   }
 })
 

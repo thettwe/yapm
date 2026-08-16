@@ -11,7 +11,8 @@ doorway to its issue.
 **No chip, line or label in the band SHALL name a person**, and the band SHALL NOT be derived from
 any per-person count. The band SHALL fold entirely when the active cycle holds no decision, and
 SHALL not render at all when the team has no active cycle, like every other cycle-dependent band.
-The band SHALL sit after SHIPPED THIS CYCLE and before the composed footline.
+The band SHALL sit after SHIPPED THIS CYCLE and before the page's composition record and its
+onward footer.
 
 #### Scenario: The cycle's settlements are on the morning page
 
@@ -36,12 +37,27 @@ The band SHALL sit after SHIPPED THIS CYCLE and before the composed footline.
 
 `/teams/{teamId}` SHALL render the team Home digest: an ordered composition of bands —
 hero, NEEDS ATTENTION, SINCE YESTERDAY, YOURS, READY FOR YOU, SHIP CADENCE, SHIPPED THIS
-CYCLE, DECIDED THIS CYCLE, then a composed mono footline and an onward footer (Issues · Delivery ·
-Retro · Roadmap, with a ⌘K hint). Every fact on the page SHALL be derived from rows the client has
-already synced through team-scoped or self-scoped queries; the page SHALL make no network request
-to render. Beyond the team-scoped decisions query the record page also uses, the page SHALL add no
-synced table and no named query of its own. All derivations SHALL be pure functions in
-`packages/schema`, computed client-side.
+CYCLE, DECIDED THIS CYCLE, then the page's composition record behind one quiet `how ·`, and an
+onward footer (the board, with a ⌘K hint). Every fact on the page SHALL be
+derived from rows the client has already synced through existing team-scoped or self-scoped
+queries; beyond the `decision` rows and the one team-scoped decisions query the Decisions record
+page also uses, the page SHALL add no new synced table and no new named query of its own, and
+SHALL make no network request to render. All derivations SHALL be pure functions in `packages/schema`,
+computed client-side.
+
+The digest SHALL carry no explanatory prose at rest. The composition record and the YOURS
+lens definition are derivations and SHALL be reachable only through a `how ·`; the onward
+footer's doorways are labels rather than derivations, and SHALL remain visible at rest —
+however few of them the deck leaves the footer to carry.
+
+Which doorways it carries is decided by the deck. The onward footer SHALL carry only the surfaces
+the deck does not itself offer as destinations — today the board, which is a lens and holds no seat
+of its own — together with the `⌘K` hint. It SHALL NOT repeat a deck destination: Issues, Delivery,
+Retros and Roadmap are one keystroke and one glance away on every page of the product, and offering
+them again at the foot of the one page that already opens on work teaches a second navigation for a
+thing the reader must already know. Where a band already links onward to a destination as part of
+the fact it is stating — the cadence band to Delivery, an artifact chip to a closed retro — that
+doorway is the band's and SHALL be unaffected.
 
 Every band SHALL render only when it has content: an empty band folds away entirely — no
 header, no empty-state apology. The digest SHALL remain a complete, honest page when *every*
@@ -65,8 +81,29 @@ optional band folds.
   only while the READY FOR YOU band renders, and here it has folded — and the hero degrades
   to its quiet form
 
+#### Scenario: The foot of the page does not rebuild the deck
+
+- **WHEN** a member reaches the end of the digest
+- **THEN** the onward footer offers the board and the `⌘K` hint, and offers no link to Issues,
+  Delivery, Retros or Roadmap, each of which the deck already carries
+
+#### Scenario: A band's own doorway survives the rationing
+
+- **WHEN** the SHIP CADENCE band renders and the hero has a closed retro to point at
+- **THEN** the cadence band still links onward to the Delivery view and the artifact chip still
+  opens the retro, because each is part of the fact its band is stating rather than a second
+  navigation
+
 #### Scenario: Composition is local-first
 
 - **WHEN** the digest renders for a team whose rows are already synced
 - **THEN** every number and phrase on the page is computed from local Zero query results by
   pure functions exported from `packages/schema`
+
+#### Scenario: The page states no derivation at rest
+
+- **WHEN** a member opens the digest in any state
+- **THEN** no mono clause line naming the composition rules and no mono clause line defining
+  the YOURS lens is drawn anywhere on the page; the composition record is reachable through the
+  page's `how ·`, and the YOURS lens through the band's own `how ·` wherever the band has rows to
+  apply it to

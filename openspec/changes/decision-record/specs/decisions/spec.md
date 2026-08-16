@@ -111,6 +111,29 @@ source thread where that thread still exists — without leaving the page.
 The page SHALL be fully keyboard-operable: the search field reachable by keyboard, rows focusable
 in document order, unfolding and folding by keyboard, and every doorway activated by Enter.
 
+The page SHALL be placed as a **doorway and not as a destination**: it SHALL hold no seat on the
+deck's bar, no item in the `more` menu's permanent list and no `g` binding, and the frame's
+reachability inventory SHALL record its route's home as a doorway. It SHALL be reached from the
+decision chip pinned on an issue, from the team Home's DECIDED THIS CYCLE band, and from a
+command-palette row offered on every team surface. That palette row SHALL be offered whether or not
+the team has recorded a decision and SHALL carry no keyboard shortcut, because the other two
+doorways are drawn from rows and are both absent on a team that has recorded none — and a page no
+member can reach without typing its URL is not reachable.
+
+#### Scenario: The Record holds no seat and no key
+
+- **WHEN** the deck is read at every width, its `more` menu opened, and the go-to grammar exercised
+  across every key it binds
+- **THEN** no Decisions destination is offered in either tier, no `g` binding opens the record, and
+  the number of destinations the deck offers is exactly what it was before this change
+
+#### Scenario: A team with no decisions can still open the Record
+
+- **WHEN** a member of a team that has recorded no decision — so no chip is pinned anywhere and the
+  DECIDED THIS CYCLE band has folded — opens the command palette on any of that team's surfaces
+- **THEN** a row leading to the Decisions record is offered, stating no keyboard shortcut, and
+  activating it opens the page that names in one line what will appear there
+
 #### Scenario: The record answers why without a navigation
 
 - **WHEN** a member unfolds a row on the Decisions page

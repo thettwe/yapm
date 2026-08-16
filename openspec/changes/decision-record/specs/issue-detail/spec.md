@@ -44,7 +44,8 @@ Where the source thread no longer exists, the chip SHALL keep its stated provena
 offer a doorway to the missing thread.
 
 The chip SHALL be readable and its controls operable by keyboard, and no fact on it SHALL be
-conveyed by colour alone.
+conveyed by colour alone. It SHALL offer a doorway to the team's Decisions record, which holds no
+seat in the deck and is reached this way.
 
 #### Scenario: The chip states team ownership as fact
 

@@ -77,7 +77,7 @@ Not preference — arithmetic. Three families are queued against the same eight-
 |---|---|---|
 | this one | fewer destinations, one register | scoped here |
 | `SCOPE-planning-surfaces.md` | a timeline destination, board swimlanes, a workload view | scoped, 9 changes |
-| `decision-record` | a **Decisions** stop in `more▾` and the `g d` hint back | proposed, 0/64, parked |
+| `decision-record` | ~~a **Decisions** stop in `more▾` and the `g d` hint back~~ — **rationed 2026-08-16**: the Record is a doorway, no seat and no key | proposed, 0/70, re-authored against D1 |
 
 `app-frame/spec.md:47` fixes the deck at **"exactly six stops"** — Home, Issues, Triage, Cycles,
 Delivery, `more▾` — with `more▾` already holding three items. Both queued families add destinations
@@ -193,8 +193,15 @@ must stop moving first.
    is better taken once by whoever integrates.
 4. **Re-verify the un-rebuilt destination list by walking each surface**, rather than inheriting
    ROADMAP's list — it is already partly stale.
-5. Ask before assuming: whether `decision-record` stays parked until D1 publishes the budget —
-   it is proposed at 0/64 and wants a stop this family has not yet costed. **Still unanswered.**
+5. ~~Ask whether `decision-record` stays parked until D1 publishes the budget.~~ **Answered
+   2026-08-16: unparked, and re-authored against D1 rather than left to rot.** It is the first
+   change the budget said no to. Its `app-frame` delta MODIFIED a requirement D1 removes by name,
+   and its `team-home` delta carried pre-legibility text that would have reverted both B1 (built
+   and merged, PR #59) and D1's footer rationing — the delta hazard now written up in
+   [PROCESS.md](../PROCESS.md) §1, found in the wild rather than in theory. Both are rebuilt as
+   unions; the **Decisions** stop and the `g d` reclaim are withdrawn and the Record becomes a
+   doorway. Archive order is now load-bearing: **`explanation-at-rest` → `destination-budget` →
+   `decision-record`**, and `openspec validate --all` passes in any order, so the gate is human.
 
 ## Found while walking, not otherwise tracked
 

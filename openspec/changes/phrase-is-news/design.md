@@ -636,6 +636,21 @@ are in the block, and they are. No value export was added — `Voicing` and `NEW
 because the three states are reachable through `text` and `spoken` and a surface that read the
 policy table directly would be re-deciding the register for itself.
 
+### The e2e suite, the build and the smoke test ran in CI, which is the harness of record
+
+Tasks 6.8, 9.1 and 9.3 want the full build, the compose smoke test and the Playwright suite. None is
+runnable on this machine for reasons unrelated to this change: port 3000 is held by an unrelated
+container, so the smoke test cannot bind, and the dev stack another build may be using is not the
+fresh database the suite's harness expects. All three ran on GitHub Actions against `818575b`:
+**Lint, typecheck, test, build 2m41s · Compose smoke test 2m41s · Playwright e2e 12m30s**, plus
+Package boundaries, Catalog guard and Commit hygiene — six green.
+
+`apps/web/e2e/connectors.spec.ts` is unedited and its `DIVERGENCE_PHRASE` assertions still pass,
+which is what task 6.8 asked to be confirmed rather than assumed: the issue detail's divergence pill
+is a `neutral` surface stating an exception key, so nothing this change did could quiet it — and the
+suite is the proof rather than the argument. PROCESS.md §4 makes CI the harness of record, so this is
+the same evidence a merge would demand, produced by the job that owns it.
+
 ### Looked at, and what looking could and could not reach
 
 The dev stack on this machine runs the API and Vite but the eyeball tasks in §10 want a signed-in

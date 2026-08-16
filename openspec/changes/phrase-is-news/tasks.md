@@ -158,7 +158,7 @@ only then does group 4 take the words away.
       `apps/web/src/issues/timeline-view.test.ts:167-198` (reads `deliveryView`'s default register
       and pins `/^In review — waiting /` at `:177`);
       `packages/schema/src/zero/team-home.test.ts:453` and `:502` (the personal register's strings).
-- [ ] 6.8 **No e2e spec is edited.** `apps/web/e2e/connectors.spec.ts:10` pins
+- [x] 6.8 **No e2e spec is edited.** `apps/web/e2e/connectors.spec.ts:10` pins
       `Done in git, not on the board` and asserts it at `:104` and `:155` on the issue detail's
       `divergence-pill` — a `neutral` surface and an exception key. Run the suite and confirm rather
       than assume.
@@ -214,10 +214,10 @@ only then does group 4 take the words away.
 
 ## 9. Verification
 
-- [ ] 9.1 `pnpm turbo lint typecheck test build`.
+- [x] 9.1 `pnpm turbo lint typecheck test build`.
 - [x] 9.2 `pnpm turbo check-boundaries` — `packages/schema` gains no UI dependency; the register is
       a dictionary property, not a component one.
-- [ ] 9.3 Run the Playwright e2e suite with **no spec edited** (task 6.8) and report where it ran.
+- [x] 9.3 Run the Playwright e2e suite with **no spec edited** (task 6.8) and report where it ran.
       CI is the harness of record (PROCESS.md §4).
 - [x] 9.4 Report every gate with its actual output. A gate not run is reported as not run.
 - [x] 9.5 `npx -y @fission-ai/openspec@latest validate --all` — green, item count grown by one.

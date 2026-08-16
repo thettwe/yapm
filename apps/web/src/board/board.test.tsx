@@ -383,7 +383,7 @@ test('a filter narrows the columns and the count together', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Filter by Priority' }))
   // The option carries its own drawn mark, whose `role="img"` label joins the accessible name
   // ahead of the text — hence the trailing anchor rather than a whole-string match.
-  fireEvent.click(screen.getByRole('menuitem', { name: /Urgent$/ }))
+  fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Urgent$/ }))
 
   expect(cards()).toHaveLength(1)
   expect(screen.getByText('Alpha card')).toBeInTheDocument()
@@ -464,7 +464,7 @@ test('a move that leaves the filter hands focus to the destination column and sa
   const view = mount()
 
   fireEvent.click(screen.getByRole('button', { name: 'Filter by Status' }))
-  fireEvent.click(screen.getByRole('menuitem', { name: /Todo$/ }))
+  fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Todo$/ }))
   expect(cards()).toHaveLength(2)
 
   const region = screen.getByTestId('board-announcement')

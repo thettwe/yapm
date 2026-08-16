@@ -222,7 +222,7 @@ test('cycle grouping and filtering in the list are keyboard-operable', async ({ 
   const filterButton = page.getByRole('button', { name: 'Filter by Cycle' })
   await filterButton.focus()
   await page.keyboard.press('Enter')
-  await page.getByRole('menuitem', { name: new RegExp(cycleA) }).press('Enter')
+  await page.getByRole('menuitemcheckbox', { name: new RegExp(cycleA) }).press('Enter')
   await page.keyboard.press('Escape')
   await expect(page.locator(ROW).filter({ hasText: inCycle })).toBeVisible({ timeout: 20_000 })
   await expect(page.locator(ROW).filter({ hasText: noCycle })).toHaveCount(0)

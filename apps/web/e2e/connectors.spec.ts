@@ -228,7 +228,7 @@ test('a deployment carrying the merge commit lights the deploy glyph, and Delive
   // survives the filter that shipped empty until this change.
   await page.getByRole('button', { name: 'Filter by Delivery' }).focus()
   await page.keyboard.press('Enter')
-  await page.getByRole('menuitem', { name: 'Merged, not deployed' }).press('Enter')
+  await page.getByRole('menuitemcheckbox', { name: 'Merged, not deployed' }).press('Enter')
   await page.keyboard.press('Escape')
   await expect(row(page, waiting)).toBeVisible({ timeout: 20_000 })
   await expect(row(page, shipped)).toHaveCount(0)

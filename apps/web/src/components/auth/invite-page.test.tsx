@@ -11,7 +11,8 @@ import type { SyncSessionState } from '@/zero/provider'
 const harness = vi.hoisted(() => ({
   sync: {} as SyncSessionState,
   teams: [] as unknown[],
-  result: { type: 'complete' } as { type: 'complete' | 'unknown' },
+  result: { type: 'complete' } as { type: 'complete' | 'unknown' | 'error' },
+  retryOffered: false,
   navigate: vi.fn(),
   refresh: vi.fn(),
 }))
@@ -23,12 +24,32 @@ vi.mock('@rocicorp/zero/react', () => ({
 vi.mock('@tanstack/react-router', () => ({
   // `to` is the router's prop, not the DOM's; dropping it keeps jsdom from warning about it.
   Link: ({ children }: { to: string; children: ReactNode }) => <a href="/">{children}</a>,
+  // Reached through `@/components/authenticated`, which owns the shared retry surface.
+  Navigate: ({ to }: { to: string }) => <div data-testid="navigate">{to}</div>,
   useNavigate: () => harness.navigate,
+}))
+
+vi.mock('@/auth/client', () => ({
+  authClient: {},
+  signIn: { email: vi.fn(), social: vi.fn(), sso: vi.fn() },
+  signUp: { email: vi.fn() },
+  signOut: vi.fn(),
+  useSession: () => ({ data: null, isPending: false }),
 }))
 
 vi.mock('@/zero/provider', () => ({
   useSyncSession: () => harness.sync,
   useSyncControl: () => ({ refresh: harness.refresh, retry: vi.fn() }),
+}))
+
+vi.mock('@/zero/recovery', () => ({
+  useSyncRecovery: () => ({
+    phase: 'idle',
+    attempt: 0,
+    delayMs: 0,
+    retryOffered: harness.retryOffered,
+    retryNow: vi.fn(),
+  }),
 }))
 
 vi.mock('@/components/auth/login-form', () => ({
@@ -68,6 +89,7 @@ beforeEach(() => {
   harness.sync = READY
   harness.teams = []
   harness.result = { type: 'complete' }
+  harness.retryOffered = false
   harness.navigate.mockReset()
   harness.refresh.mockReset()
   accepts({})
@@ -124,6 +146,36 @@ test('a workspace-level acceptance waits for the roster rather than guessing', a
   await waitFor(() => expect(harness.refresh).toHaveBeenCalled())
   expect(harness.navigate).not.toHaveBeenCalled()
   expect(screen.getByRole('status')).toHaveTextContent('Accepting your invitation…')
+  // The membership is granted either way, so the wait always carries a way out of it.
+  expect(screen.getByRole('link', { name: 'Go to the app' })).toBeInTheDocument()
+})
+
+// …and the wait ends. The acceptor of a workspace-level invitation has nothing else on screen, so a
+// roster that never settles would strand exactly the caller who has just joined.
+test('a roster that never settles ends the wait on the shared retry surface', async () => {
+  accepts({})
+  harness.result = { type: 'unknown' }
+  harness.retryOffered = true
+  render(<InvitePage token="invite-token" />)
+
+  expect(await screen.findByTestId('sync-unavailable')).toBeInTheDocument()
+  expect(screen.getByTestId('sync-unavailable-retry')).toBeInTheDocument()
+  expect(harness.navigate).not.toHaveBeenCalled()
+})
+
+// A team-bound acceptance never waits on the roster at all, so the bound must not steal its landing.
+test('a team-bound acceptance lands even while the roster is unreachable', async () => {
+  accepts({ teamId: 'team-bound' })
+  harness.result = { type: 'unknown' }
+  harness.retryOffered = true
+  render(<InvitePage token="invite-token" />)
+
+  await waitFor(() =>
+    expect(harness.navigate).toHaveBeenCalledWith({
+      to: '/teams/$teamId',
+      params: { teamId: 'team-bound' },
+    }),
+  )
 })
 
 test('a spent invitation states why and navigates nowhere', async () => {

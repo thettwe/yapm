@@ -7,6 +7,7 @@ import { LoginForm } from '@/components/auth/login-form'
 import { SyncUnavailable } from '@/components/authenticated'
 import { type LandingTeam, readAnchorTeam, resolveLandingTeam } from '@/frame/team-context'
 import { useSyncSession } from '@/zero/provider'
+import { useSyncRecovery } from '@/zero/recovery'
 
 // Where signing in lands, decided in ONE place. The sign-in form carries no `callbackURL` on its
 // email paths precisely so better-auth's redirect plugin cannot take a second decision here.
@@ -32,6 +33,7 @@ export function LoginPage() {
 
 function LandingDecision() {
   const { status, role, userID, unavailable } = useSyncSession()
+  const recovery = useSyncRecovery()
   const [teams, teamsResult] = useQuery(queries.teams.all())
   const [remembered] = useState<string | null>(() => readAnchorTeam())
 
@@ -52,6 +54,15 @@ function LandingDecision() {
   // `queries.teams.all()` resolves through `denyAll` and reports complete-and-EMPTY — a roster that
   // would send a member of five teams to workspace administration.
   if (status !== 'ready' || teamsResult.type !== 'complete') {
+    // …and this wait is bounded too. `unavailable` above only covers a failed `/api/zero/token`
+    // call; a credential that mints fine against a zero-cache that is down leaves the roster at
+    // `unknown` forever, which would hold the sign-in surface on a spinner with nothing to press.
+    // The bound is the one the statusline already uses — `SyncRecovery` offers the manual retry
+    // once waiting stops feeling like a hiccup (`RETRY_OFFER_AFTER_MS`) and clears it again when
+    // the connection holds — so the surface is self-healing rather than a dead end.
+    if (recovery.retryOffered || teamsResult.type === 'error') {
+      return <SyncUnavailable />
+    }
     return <Loading />
   }
 

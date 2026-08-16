@@ -649,9 +649,64 @@ place. §4.4 now carries the four verified files, the asymmetry between `sign-in
 why `isSafeUrlScheme('/')` is true — checked against the installed 1.6.24 tarball rather than
 recalled.
 
+### The re-mint is keyed on the better-auth SESSION, and the reset is a layout effect
+
+**Ambiguous:** D3's `logged-out` branch renders a sign-in form to a caller better-auth still
+considers signed in. Nothing said what a *successful* re-authentication from that form does.
+
+**Chosen:** `ZeroRoot`'s identity key is now `session.id:user.id` rather than `user.id`
+(`provider.tsx:399-406`), and the effect that resets to `pending` and re-mints is a
+`useLayoutEffect`. **Why:** re-authenticating as the same person mints a new better-auth session
+over the stale credential, and a key of `user.id` alone observes no change at all — the form
+succeeds, the surface does not move, and only a page reload escapes. `session.id` moves on every
+sign-in, so the credential is re-minted and the caller lands. The layout phase is the second half
+of the same fix: a passive effect runs a commit late, so the render that first sees the new session
+still reads the previous identity's `logged-out` and re-renders the sign-in form for one commit —
+a flicker, and a window in which `ensureAccount` reads a transient render as "still signed out" and
+submits twice. Resetting in the layout phase puts `pending` in the same commit. `ensureAccount`
+takes the belt-and-braces half: it settles on the URL leaving `/login` rather than on the submit
+button's visibility, because the button is a rendered node and the URL is the decision.
+
+### Both roster waits are bounded by the recovery clock, not only by `unavailable`
+
+**Ambiguous:** D3 bounds the wait with `unavailable`, which is set only by a failed
+`/api/zero/token` call. A credential that mints fine against a zero-cache that is **down** leaves
+`teamsResult.type` at `unknown` indefinitely — a spinner on the sign-in surface with nothing to
+press, and the same hold on `/invite` for a caller who has just joined and has nothing else on
+screen.
+
+**Chosen:** `LandingDecision` and `AcceptInvite` both read `useSyncRecovery()` and render the shared
+`SyncUnavailable` once `retryOffered` is true (`RETRY_OFFER_AFTER_MS`, the same bound the statusline
+offers its manual retry on) or the roster reports `type === 'error'`. **Why:** it reuses the clock
+and the surface that already exist rather than inventing a second timer, and it is self-healing —
+`SyncRecovery` clears `retryOffered` when a connection holds, so the landing decision resumes on its
+own. A team-bound acceptance is deliberately outside the bound: it never consults the roster. The
+accepting copy also carries `BackHome` now, so the wait always has an exit.
+
+### The filter axes' options are checkbox items
+
+**Ambiguous:** D5 makes the seeded Status value the whole explanation of why 3 of 57 issues render,
+and stated it only in pixels — a count glyph beside the trigger and a tick beside each option.
+
+**Chosen:** every `FilterMenu` option carries `role="menuitemcheckbox"` and `aria-checked`, and each
+trigger carries an `aria-describedby` pointing at a visually-hidden `"4 of 6 selected"` (or
+`"No filter applied"`). **Why:** a toggle set whose state is a drawn tick is invisible to anything
+but an eye, and the seeded lens is exactly the state a reader most needs stated. The accessible
+**name** is untouched — four e2e specs drive it — so the description carries the count. The role
+change moves nine option lookups from `menuitem` to `menuitemcheckbox` across
+`issue-list.test.tsx`, `board.test.tsx` and four e2e specs; the menus that are not toggle sets
+(`SortMenu`, the deck's `more▾`, the account menu, the status and cycle pickers) are unchanged.
+
+### `triage.spec.ts` opens the Status axis through the retry shape the suite already has
+
+The new interaction clicked a menu item without first asserting the menu was open. A Base UI menu's
+trigger is clickable before the menu can respond, which is precisely why `goToMore` and `signOut`
+exist in `support.ts` in the `aria-expanded`-keyed form they do. The Status axis is opened the same
+way: idempotent open, item reached only while the menu is known open.
+
 ### What the gates prove, and what is still owed to CI
 
-`typecheck`, `lint`, the full Vitest run (66 files, 790 tests) and `check-boundaries.mjs` are green
+`typecheck`, `lint`, the full Vitest run (66 files, 797 tests) and `check-boundaries.mjs` are green
 locally, as is `pnpm --filter @yapm/docs build`. Tasks 10.1's `build`, 10.2's compose smoke test and
 10.3's Playwright suite are **not** ticked: port 3000 is held on this machine by an unrelated
 container, so the compose smoke test cannot run here, and CI owns both it and the e2e suite. Task

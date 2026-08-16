@@ -141,8 +141,18 @@ test('decline a triage issue cancels it and clears the inbox', async ({ page }) 
   // lens states itself: Canceled is asked for through the axis the page already draws, and the
   // assertion below is the one it always was — declining sets the status, and the issue is there.
   await stop(page, 'Issues').click()
-  await page.getByRole('button', { name: 'Filter by Status' }).click()
-  await page.getByRole('menuitem', { name: /Canceled$/ }).click()
+  // The same aria-expanded-keyed retry `goToMore` and `signOut` use: a Base UI menu's trigger is
+  // clickable before the menu can respond, so the open is idempotent and the option is reached
+  // only while the menu is known open.
+  const statusAxis = page.getByRole('button', { name: 'Filter by Status' })
+  const canceledOption = page.getByRole('menuitemcheckbox', { name: /Canceled$/ })
+  await expect(async () => {
+    if ((await statusAxis.getAttribute('aria-expanded')) !== 'true') {
+      await statusAxis.click()
+    }
+    await expect(canceledOption).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 20_000 })
+  await canceledOption.click()
   await page.keyboard.press('Escape')
   const canceled = page.getByRole('region', { name: 'Canceled', exact: true })
   await expect(canceled.locator(ROW).filter({ hasText: title })).toBeVisible({ timeout: 20_000 })

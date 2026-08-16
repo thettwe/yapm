@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import {
   DEFAULT_ISSUE_STATUS_FILTER,
+  ISSUE_STATUSES,
   type IssueStatus,
   TERMINAL_ISSUE_STATUSES,
 } from '@yapm/schema'
@@ -132,7 +133,7 @@ function phraseOf(title: string): HTMLElement | null {
 function statusOption(status: IssueStatus): HTMLElement {
   // The option's drawn mark carries a `role="img"` label that joins its accessible name ahead of
   // the text ("TodoTodo"), so the anchor is trailing rather than a whole-string match.
-  return screen.getByRole('menuitem', { name: new RegExp(`${STATUS_LABEL[status]}$`) })
+  return screen.getByRole('menuitemcheckbox', { name: new RegExp(`${STATUS_LABEL[status]}$`) })
 }
 
 // The list opens on the live statuses now (design §D5), so a test whose fixture holds terminal work
@@ -290,6 +291,37 @@ test('the Status axis states how many statuses it admits, and names them', () =>
   for (const status of TERMINAL_ISSUE_STATUSES) {
     expect(statusOption(status)).toBeInTheDocument()
   }
+})
+
+// The count beside the trigger and the tick beside each option are both drawn marks, and a drawn
+// mark is not a state a screen reader can read. The seeded lens is the reason 3 of 57 issues
+// render, so that reason has to be in the a11y tree as well as on the glass.
+test('the seeded Status axis states its selection to assistive technology', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
+  mount()
+
+  const trigger = screen.getByRole('button', { name: 'Filter by Status' })
+  expect(trigger).toHaveAccessibleDescription(
+    `${DEFAULT_ISSUE_STATUS_FILTER.status?.length} of ${ISSUE_STATUSES.length} selected`,
+  )
+
+  fireEvent.click(trigger)
+  for (const status of DEFAULT_ISSUE_STATUS_FILTER.status ?? []) {
+    expect(statusOption(status)).toHaveAttribute('aria-checked', 'true')
+  }
+  // The terminal statuses are offered and stated as unticked, not silently missing.
+  for (const status of TERMINAL_ISSUE_STATUSES) {
+    expect(statusOption(status)).toHaveAttribute('aria-checked', 'false')
+  }
+})
+
+test('an axis with nothing selected says so rather than counting to zero', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
+  mount()
+
+  expect(screen.getByRole('button', { name: 'Filter by Priority' })).toHaveAccessibleDescription(
+    'No filter applied',
+  )
 })
 
 test('clearing the Status axis returns the archive', () => {
@@ -510,7 +542,7 @@ test.each([
     const trigger = screen.getByRole('button', { name: `Filter by ${axis}` })
     expect(trigger).toBeInTheDocument()
     fireEvent.click(trigger)
-    fireEvent.click(screen.getByRole('menuitem', { name: option }))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: option }))
 
     expect(rows()).toHaveLength(1)
     expect(survivors()).toEqual([survivor])
@@ -539,7 +571,7 @@ test('the three delivery predicates are all offered', () => {
   mountFiltering()
   fireEvent.click(screen.getByRole('button', { name: 'Filter by Delivery' }))
   for (const label of ['Blocked on review', 'Failing CI', 'Merged, not deployed']) {
-    expect(screen.getByRole('menuitem', { name: label })).toBeInTheDocument()
+    expect(screen.getByRole('menuitemcheckbox', { name: label })).toBeInTheDocument()
   }
 })
 

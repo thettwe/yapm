@@ -45,20 +45,22 @@ export async function signIn(page: Page, credentials: Credentials): Promise<void
 // sign-in when sign-up reports the address is taken).
 export async function ensureAccount(page: Page, credentials: Credentials): Promise<void> {
   await signUp(page, credentials)
-  // A fresh sign-up navigates into the app and unmounts the form; a duplicate keeps the
-  // form mounted (staying in sign-up mode) and shows a "user already exists" alert. Settle
-  // on whichever happens — the submit button leaving the DOM, or the alert appearing —
-  // rather than guessing from the mode-dependent toggle label.
-  const submit = page.getByTestId('login-submit')
+  // A fresh sign-up leaves `/login` once the landing decision resolves; a duplicate stays on it
+  // (in sign-up mode) and shows a "user already exists" alert. Settle on whichever happens — the
+  // URL changing, or the alert appearing — rather than guessing from the mode-dependent label.
+  //
+  // The URL, not the submit button's visibility: the button is a rendered node and the sign-in
+  // surface is re-entered by every state `/login` treats as unsettled, so probing for it reads a
+  // transient render as "still signed out" and submits the form a second time. The URL only
+  // changes when the decision has actually been taken.
   await Promise.race([
-    submit.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {}),
+    page.waitForURL((url) => url.pathname !== '/login', { timeout: 15_000 }).catch(() => {}),
     page
       .getByRole('alert')
       .waitFor({ state: 'visible', timeout: 15_000 })
       .catch(() => {}),
   ])
-  const stillOnLogin = await submit.isVisible().catch(() => false)
-  if (stillOnLogin) {
+  if (new URL(page.url()).pathname === '/login') {
     await signIn(page, credentials)
   }
 }

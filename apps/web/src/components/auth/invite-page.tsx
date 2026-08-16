@@ -4,8 +4,10 @@ import { queries } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { useEffect, useRef, useState } from 'react'
 import { LoginForm } from '@/components/auth/login-form'
+import { SyncUnavailable } from '@/components/authenticated'
 import { type LandingTeam, readAnchorTeam, resolveLandingTeam } from '@/frame/team-context'
 import { useSyncControl, useSyncSession } from '@/zero/provider'
+import { useSyncRecovery } from '@/zero/recovery'
 
 // The fourth door into the product, and until this change the third answer to where a signed-in
 // caller arrives. It now takes the same landing decision `/login` takes.
@@ -64,6 +66,7 @@ export function InvitePage({ token }: { token?: string }) {
 function AcceptInvite({ token }: { token: string }) {
   const { refresh } = useSyncControl()
   const { status, role, userID } = useSyncSession()
+  const recovery = useSyncRecovery()
   const navigate = useNavigate()
   const [teams, teamsResult] = useQuery(queries.teams.all())
   const [remembered] = useState<string | null>(() => readAnchorTeam())
@@ -131,11 +134,21 @@ function AcceptInvite({ token }: { token: string }) {
     )
   }
 
+  // The membership is granted; only the roster is late. Holding the accepting copy on a roster that
+  // never settles strands the one caller who has just joined and has nothing else on screen — so
+  // the wait carries the same bound `/login` gives its own: the recovery surface the rest of the
+  // product shows when the server is unreachable, cleared again the moment the connection holds.
+  const waitingOnRoster = state === 'done' && acceptedTeamId === null
+  if (waitingOnRoster && (recovery.retryOffered || teamsResult.type === 'error')) {
+    return <SyncUnavailable />
+  }
+
   return (
     <Shell>
       <p className="text-muted-foreground text-sm" role="status">
         Accepting your invitation…
       </p>
+      <BackHome />
     </Shell>
   )
 }

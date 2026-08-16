@@ -44,10 +44,12 @@ Everything else in the product is reached as a **lens**, a **doorway** or a **se
 ## Where signing in lands
 
 Signing in puts you on **a team's Home**, not on the workspace administration page. The team is the
-one you last visited, or failing that the first team you belong to. If you belong to no team — a
-brand-new workspace, or an account that has just accepted a workspace-wide invitation — you land on
-the workspace overview instead, which is the page whose contents are actually yours. Nothing moved:
-the overview is still `/`, still reachable from the workspace switcher and from `⌘K`
+one you last visited, or failing that the first team whose work you can read — which is a team you
+belong to if you are a member or a viewer, and any team at all if you are a workspace admin, since
+an admin reads every team. If no team passes that test — a brand-new workspace with no teams, or a
+member who belongs to none because they have just accepted a workspace-wide invitation — you land
+on the workspace overview instead, which is the page whose contents are actually yours. Nothing
+moved: the overview is still `/`, still reachable from the workspace switcher and from `⌘K`
 ("Go to workspace overview"), and every link that reached it before still does.
 
 The decision is taken in **one** place. Creating an account, signing in with email and password, and
@@ -112,7 +114,7 @@ though they usually agree:
 | | what it is | how it is chosen |
 | --- | --- | --- |
 | the anchor | where the deck's six stops point when you are off a team | the last team you visited, or the first team you can *see* |
-| the landing | where signing in puts you | the last team you visited, or the first team you can *read* — and never one you cannot |
+| the landing | where signing in puts you | the last team you visited, or the first team you can *read* — your own teams as a member or viewer, every team as a workspace admin — and never one you cannot |
 
 Everyone in a workspace can see the name of every team; being able to name a team is not being able
 to open it. The deck may offer a stop pointing at a team whose issues would come back empty for you,

@@ -140,7 +140,7 @@ test('the list opens without the archive, and the Status axis brings it back fro
 
   await statusAxis.focus()
   await page.keyboard.press('Enter')
-  const done = page.getByRole('menuitem', { name: /Done$/ })
+  const done = page.getByRole('menuitemcheckbox', { name: /Done$/ })
   await expect(done).toBeVisible({ timeout: 20_000 })
   await done.focus()
   await page.keyboard.press('Enter')

@@ -11,7 +11,8 @@ const harness = vi.hoisted(() => ({
   isPending: false,
   sync: {} as SyncSessionState,
   teams: [] as unknown[],
-  result: { type: 'complete' } as { type: 'complete' | 'unknown' },
+  result: { type: 'complete' } as { type: 'complete' | 'unknown' | 'error' },
+  retryOffered: false,
 }))
 
 vi.mock('@rocicorp/zero/react', () => ({
@@ -31,6 +32,16 @@ vi.mock('@/auth/client', () => ({
 vi.mock('@/zero/provider', () => ({
   useSyncSession: () => harness.sync,
   useSyncControl: () => ({ refresh: vi.fn(), retry: vi.fn() }),
+}))
+
+vi.mock('@/zero/recovery', () => ({
+  useSyncRecovery: () => ({
+    phase: 'idle',
+    attempt: 0,
+    delayMs: 0,
+    retryOffered: harness.retryOffered,
+    retryNow: vi.fn(),
+  }),
 }))
 
 vi.mock('@/components/auth/login-form', () => ({
@@ -75,6 +86,7 @@ beforeEach(() => {
   harness.sync = READY
   harness.teams = []
   harness.result = { type: 'complete' }
+  harness.retryOffered = false
 })
 
 test('a member with a team of their own lands on that team, not on administration', () => {
@@ -120,6 +132,26 @@ test('a complete-and-empty roster on an unsettled sync session waits rather than
 
   expect(screen.queryByTestId('navigate')).not.toBeInTheDocument()
   expect(screen.getByRole('status')).toHaveTextContent('Loading…')
+})
+
+// `unavailable` only ever describes the CREDENTIAL request. A credential that mints fine against a
+// zero-cache that is down leaves the roster at `unknown` with nothing to press — so the roster wait
+// is bounded by the same recovery clock the statusline reads.
+test('a roster that never settles reaches the retry surface rather than spinning forever', () => {
+  harness.result = { type: 'unknown' }
+  harness.retryOffered = true
+  render(<LoginPage />)
+
+  expect(screen.getByTestId('sync-unavailable')).toBeInTheDocument()
+  expect(screen.getByTestId('sync-unavailable-retry')).toBeInTheDocument()
+  expect(screen.queryByTestId('navigate')).not.toBeInTheDocument()
+})
+
+test('a roster that reports an error is a surface, not a wait', () => {
+  harness.result = { type: 'error' }
+  render(<LoginPage />)
+
+  expect(screen.getByTestId('sync-unavailable')).toBeInTheDocument()
 })
 
 test('an unreachable sync server is a retry surface, in either settled status', () => {

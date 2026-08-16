@@ -48,12 +48,22 @@ count, so `Canceled, 0 issues` is what a screen reader hears.
 ## The card
 
 A card carries the **same facts as a list row, in a different shape**. Top row: the status glyph,
-the mono issue key, and the priority mark. Then the title. Then, when there is something true to
-say, the delivery phrase — the same sentence the list row states, from the same dictionary. Last
-row: the labels, the reserved [reality track](/features/reality-vocabulary/), and the assignee.
+the mono issue key, and the priority mark. Then the title. Then, when the register draws one, the
+delivery phrase — the same sentence the list row states, from the same dictionary **in the same
+register**, so a card and a row describing one issue can never disagree about what is worth saying.
+Last row: the labels, the reserved [reality track](/features/reality-vocabulary/) with its mono age
+column, and the assignee.
 
 The track carries the `//` break when your board and git disagree — a pull request merged while
 the issue is still In Progress breaks there, and the phrase says so in words.
+
+A card is a single control with an explicit accessible name, and an explicit name suppresses
+everything drawn inside it — the phrase and the track's own label alike. So the card's name carries
+the delivery register itself: the phrase when the register drew one, the register's words for the
+key when it went quiet, and the divergence in words when your board and git disagree. Because that
+name is the only channel that survives the suppression, the card's track reserves the same **age
+column** a list row's does, so a review age is drawn on the card rather than living only in a phrase
+the register may quiet. The column is reserved whether or not there is an age to put in it.
 
 An issue with **no linked change** is quiet: the track slot keeps its measure and draws nothing at
 all, announces nothing to assistive technology, and no phrase line is drawn. A quiet card is

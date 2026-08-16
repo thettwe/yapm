@@ -139,15 +139,21 @@ Each row draws its status glyph, name, lead, a **Done meter** of one tick per re
 for done) and `done/total` — then, on the axis: the cycle gridlines, the now line, a **target mark**
 at the target's date shaped and inked by status, and a mark per cycled issue. In words, over the
 drawing: `Target passed` where the date has gone by, `Nothing scheduled` where a project has issues
-but none in any cycle, `Scheduled outside this window` where its work sits in a cycle the axis does
-not reach, and `No issues yet` where there are none. Undated projects sit under one **No target
-date** header and keep their meter and their marks.
+but none in any cycle, and `No issues yet` where there are none. Undated projects sit under one
+**No target date** header and keep their meter and their marks.
+
+A note beside a row is **news about the project** — nobody broke it down, nobody scheduled its work.
+A project whose work *is* scheduled, in cycles the drawn window does not cover, gets no note at all:
+the empty stretch of axis beside a populated meter already says it, and a note firing on every such
+row distinguishes none of them. So the **absence** of a note means the work is scheduled, just not
+here.
 
 Each row is one control with **one** spoken name, and that name carries everything the drawing beside
 it draws: the project, its status, the target and how it stands against today, the done-over-total,
-and which cycles its marks sit in. The drawing itself is hidden from screen readers rather than
-labelled separately — a row is a button, and a button's children are presentational, so a second
-label inside it would never be announced at all.
+and which cycles its marks sit in — or, for the row above, that its work is scheduled beyond the
+drawn window. It never announces that a project has nothing in any cycle when it has. The drawing
+itself is hidden from screen readers rather than labelled separately — a row is a button, and a
+button's children are presentational, so a second label inside it would never be announced at all.
 
 ### What this page won't guess
 

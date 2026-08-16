@@ -8,6 +8,7 @@ import {
   type IssueLinkRow,
   type IssueStatus,
   type LinkedEntities,
+  type PhraseRegister,
   type RestPhrase,
   sayRestPhrase,
   type TeamDeploymentRow,
@@ -22,8 +23,10 @@ export interface DeliveryView {
   // "not linked" state). `pr`/`ci` are the seam's own string unions, passed straight through.
   readonly strip: DeliveryStrip | null
   readonly divergence: DivergenceKind | null
-  // What the row says at rest, from the shared dictionary's neutral register. Derived from the
-  // SAME signal the track is drawn from — one `computeDeliverySignal` per row, never two.
+  // What the row says at rest, from the shared dictionary in the register the caller asked for.
+  // Derived from the SAME signal the track is drawn from — one `computeDeliverySignal` per row,
+  // never two. A register may resolve the key to quiet, in which case `phrase.text` is null and
+  // `phrase.spoken` holds the words the track's accessible name owes the reader.
   readonly phrase: RestPhrase
   // WHICH linked change the phrase and the strip above describe. Passed through so a surface that
   // draws a second register over the same issue narrows to that change instead of picking its own.
@@ -50,15 +53,27 @@ export function linkedEntitiesFor(
   return assembleLinkedEntities(links ?? [], deployments)
 }
 
+// The words a surface owes the track's accessible name: the register's own, and ONLY where the
+// register did not draw them. Stated once so three surfaces cannot each decide it — passing a
+// phrase the row drew would have a screen reader hear it twice, which is the rule
+// `reality-vocabulary/spec.md` states and the defect it was written against.
+export function quietWords(phrase: RestPhrase): string | null {
+  return phrase.text === null ? phrase.spoken : null
+}
+
 // Compute the reality strip + divergence for one issue over its assembled linked entities.
 // Pure: routes through the unchanged `computeDeliverySignal`/`computeDivergence` seam.
+//
+// The register defaults to `neutral`, so a surface this change does not name speaks exactly what it
+// spoke before — unchanged by construction rather than by review.
 export function deliveryView(
   issue: { readonly status: IssueStatus },
   linked: LinkedEntities,
+  register: PhraseRegister = 'neutral',
 ): DeliveryView {
   const signal = computeDeliverySignal(issue, linked)
   const divergence = computeDivergence(issue.status, signal)
-  const phrase = sayRestPhrase(issue.status, signal, divergence, 'neutral')
+  const phrase = sayRestPhrase(issue.status, signal, divergence, register)
   if (signal === null) return { strip: null, divergence, phrase, pullRequestId: null }
   return {
     phrase,

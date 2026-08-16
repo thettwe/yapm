@@ -36,6 +36,7 @@ import { StatRow } from '@/delivery/stat-tile'
 import { useCommandSource } from '@/frame/command-registry'
 import { Masthead } from '@/frame/masthead'
 import { useMinuteNow } from '@/frame/team-context'
+import { DIVERGENCE_LABEL } from '@/issues/delivery'
 import { STATUS_TO_KIND } from '@/issues/model'
 
 // The Delivery page as `northstar/delivery.html` draws it: a journalism cut, where each section
@@ -281,7 +282,13 @@ function DivergedChip({ peek, teamId }: { peek: DeliveryPeekSubject; teamId: str
             {peek.cycleName === null ? null : <span>{peek.cycleName}</span>}
           </div>
           <div className="mt-2.5">
-            <RealityTrack shape={strip} label={realityTrackLabel(peek.strip, peek.phrase)} />
+            {/* The divergence sentence, never `peek.phrase`: `PeekFact` draws that phrase in
+                visible text one line below, and a name that repeated it would have a screen
+                reader hear the register's words twice in one panel. */}
+            <RealityTrack
+              shape={strip}
+              label={realityTrackLabel(peek.strip, DIVERGENCE_LABEL.status_behind_merge)}
+            />
           </div>
           <PeekFact phrase={peek.phrase} detail={peek.classLabel} />
         </PeekPanel>

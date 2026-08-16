@@ -130,6 +130,14 @@ function phraseOf(title: string): HTMLElement | null {
   return rowFor(title).querySelector<HTMLElement>('[data-slot="rest-phrase"]')
 }
 
+// What the row's track ANNOUNCES. The row carries other `role="img"` marks — the status arc, the
+// priority tick — so the track is addressed by its own slot rather than by role alone.
+function trackNameOf(title: string): string | null {
+  return rowFor(title)
+    .querySelector<HTMLElement>('[data-slot="reality-track"][role="img"]')
+    ?.getAttribute('aria-label') as string | null
+}
+
 function statusOption(status: IssueStatus): HTMLElement {
   // The option's drawn mark carries a `role="img"` label that joins its accessible name ahead of
   // the text ("TodoTodo"), so the anchor is trailing rather than a whole-string match.
@@ -199,7 +207,9 @@ const MOCK_CASES = [
   issue({ id: 'i-1', number: 1, title: 'Focus lost after closing the palette', pr: null }),
 ]
 
-test('each row states the dictionary phrase its facts support', () => {
+// The row's register speaks only when its reality is NEWS: an exception keeps its words, and a
+// classification the track beside it already draws keeps none.
+test('an exception row states the dictionary phrase its facts support', () => {
   harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
   mount()
   // `Persist cart across sessions` is Done, and the only `merged_not_deployed` phrase fixture in
@@ -210,8 +220,80 @@ test('each row states the dictionary phrase its facts support', () => {
   expect(phraseOf('Apple Pay in the payment sheet')).toHaveTextContent(
     'Done in git, not on the board',
   )
-  expect(phraseOf('Persist cart across sessions')).toHaveTextContent('Built — not live yet')
-  expect(phraseOf('Refund flow for partial orders')).toHaveTextContent('In review — waiting 16h')
+})
+
+// BOTH HALVES IN ONE TEST, because either alone is the failure mode: a row that stopped drawing its
+// phrase and did not hand the words to its track has lost them, and a row that draws the phrase and
+// announces it too says it twice.
+test('the words a quiet row stopped drawing are spoken by its track instead', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
+  mount()
+  clearStatusAxis()
+
+  expect(within(rowFor('Persist cart across sessions')).queryByText('Built — not live yet')).toBe(
+    null,
+  )
+  expect(phraseOf('Persist cart across sessions')).toBeNull()
+  expect(trackNameOf('Persist cart across sessions')?.startsWith('Built — not live yet')).toBe(true)
+
+  expect(
+    within(rowFor('Refund flow for partial orders')).queryByText('In review — waiting 16h'),
+  ).toBe(null)
+  expect(trackNameOf('Refund flow for partial orders')?.startsWith('In review — waiting 16h')).toBe(
+    true,
+  )
+  // The facts the track draws still follow the words it now leads with.
+  expect(trackNameOf('Refund flow for partial orders')).toContain('PR open')
+})
+
+// The other half of the same rule. The exception rows draw their words, so nobody hears them twice.
+test('a row that draws its phrase is not also heard saying it', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': MOCK_CASES }
+  mount()
+  clearStatusAxis()
+
+  const diverged = trackNameOf('Apple Pay in the payment sheet') ?? ''
+  expect(diverged).not.toContain('Done in git, not on the board')
+  // The break's own sentence is a different statement about a different aspect and stays.
+  expect(diverged).toContain('PR merged but this issue is not marked done')
+  expect(trackNameOf('Address autocomplete on shipping step')).not.toContain('Checks failing')
+})
+
+// The surface form of the precondition: quieting two rows is only honest if their drawings still
+// tell them apart. Before the change station stopped drawing an approved PR as landed, these two
+// drew an identical track — and quieting both would have erased the difference, not the repetition.
+test('an approved row and a merged-not-deployed row are both quiet and draw different tracks', () => {
+  harness.rows = {
+    'teams.all': [TEAM],
+    'issues.byTeam': [
+      issue({
+        id: 'i-137',
+        number: 137,
+        title: 'Coupon stacking on the cart',
+        status: 'in_review',
+        pr: { state: 'approved', openedAt: NOW - 3 * HOUR, ciChecks: [{ conclusion: 'success' }] },
+      }),
+      ...MOCK_CASES,
+    ],
+  }
+  mount()
+  clearStatusAxis()
+
+  expect(phraseOf('Coupon stacking on the cart')).toBeNull()
+  expect(phraseOf('Persist cart across sessions')).toBeNull()
+
+  // The drawn stations themselves, not a summary of them: two rows saying nothing must not draw
+  // the same thing.
+  const drawingOf = (title: string) =>
+    rowFor(title).querySelector('[data-slot="reality-track"] > span')?.innerHTML ?? ''
+
+  expect(drawingOf('Coupon stacking on the cart')).not.toBe('')
+  expect(drawingOf('Coupon stacking on the cart')).not.toBe(
+    drawingOf('Persist cart across sessions'),
+  )
+  // And each still says, to a reader who cannot see either, which one it is.
+  expect(trackNameOf('Coupon stacking on the cart')?.startsWith('Approved')).toBe(true)
+  expect(trackNameOf('Persist cart across sessions')?.startsWith('Built — not live yet')).toBe(true)
 })
 
 test('a quiet row renders no phrase at all', () => {
@@ -239,8 +321,10 @@ test('the GitHub mark suffixes exactly the check and deploy phrases', () => {
     phraseOf(title)?.querySelector('[data-slot="provenance-mark"][data-provider="github"]') != null
 
   expect(marked('Address autocomplete on shipping step')).toBe(true)
-  expect(marked('Persist cart across sessions')).toBe(true)
-  // Divergence and review age are yapm's own derivations.
+  // A mark follows the text it sourced. This row's deploy phrase is quiet, so there is no text for
+  // one to follow — and a mark standing alone would be a provenance claim about nothing drawn.
+  expect(marked('Persist cart across sessions')).toBe(false)
+  // Divergence and review age are yapm's own derivations. The second is quiet as well.
   expect(marked('Apple Pay in the payment sheet')).toBe(false)
   expect(marked('Refund flow for partial orders')).toBe(false)
 

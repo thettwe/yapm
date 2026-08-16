@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { CARD_TRACK_WIDTH } from '@yapm/ui/components/board-card'
 import { beforeEach, expect, test, vi } from 'vitest'
 
 // THE FALSIFIABLE CHECK for the Board lens. On main every card is handed `buildRealityShape(null)`
@@ -211,6 +212,16 @@ const QUIET = issue({
   pr: null,
 })
 
+// A card whose classification the track already draws: the register holds words for it and does not
+// draw them here either, so the card's own name is the only place they can go.
+const UNREVIEWED = issue({
+  id: 'i-unreviewed',
+  number: 113,
+  title: 'Refund flow for partial orders',
+  status: 'in_progress',
+  pr: { state: 'open', openedAt: NOW - 16 * HOUR, ciChecks: [{ conclusion: 'success' }] },
+})
+
 function trackSlot(card: HTMLElement): HTMLElement {
   const slot = card.querySelector<HTMLElement>('[data-slot="board-card-track"]')
   if (slot === null) throw new Error('no track slot')
@@ -235,10 +246,28 @@ test('a quiet card draws no reality ink, announces nothing, and states no phrase
   expect(trackSlot(quiet).querySelector('[data-quiet="true"]')).not.toBeNull()
   expect(quiet.querySelector('[data-slot="board-card-phrase"]')).toBeNull()
 
-  // The measure is reserved either way, so a fact arriving later shifts nothing on the card.
+  // The measure is reserved either way, so a fact arriving later shifts nothing on the card — and
+  // it now includes the age column, which is the only channel the card has left for a review age
+  // the register no longer states in words.
   const diverged = cardFor('Apple Pay in the payment sheet')
   expect(trackSlot(quiet).style.width).toBe(trackSlot(diverged).style.width)
-  expect(trackSlot(quiet).style.width).toBe('86px')
+  expect(trackSlot(quiet).style.width).toBe(`${CARD_TRACK_WIDTH}px`)
+  expect(trackSlot(quiet).querySelector('[data-slot="reality-track-age"]')).not.toBeNull()
+})
+
+// A card and a row describing one issue cannot disagree about what is worth saying: both speak the
+// news register, so neither draws the phrase — and here the card's OWN name has to carry the words,
+// because an explicit name suppresses the track's `role="img"` label along with everything else.
+test('a quiet card draws no phrase, keeps the words in its name, and still draws the review age', () => {
+  harness.rows = { 'teams.all': [TEAM], 'issues.byTeam': [DIVERGED, UNREVIEWED] }
+  mount()
+
+  const card = cardFor('Refund flow for partial orders')
+  expect(card.querySelector('[data-slot="board-card-phrase"]')).toBeNull()
+  expect(within(card).queryByText('In review — waiting 16h')).toBeNull()
+  expect(card.getAttribute('aria-label') ?? '').toContain('In review — waiting 16h')
+  // The age the phrase used to carry is drawn instead of lost.
+  expect(trackSlot(card).querySelector('[data-slot="reality-track-age"]')?.textContent).toBe('16h')
 })
 
 // The card is a role=button carrying an explicit aria-label, and an explicit name SUPPRESSES

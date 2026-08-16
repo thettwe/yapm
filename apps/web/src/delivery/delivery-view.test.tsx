@@ -398,7 +398,16 @@ test('the one peek opens on focus alone, carries the phrase and the reality draw
   expect(peek).toHaveAttribute('role', 'dialog')
   // The dictionary's own words, and the shared drawing — no sentence written by this page.
   expect(peek).toHaveTextContent('Apple Pay in the payment sheet')
-  expect(within(peek).getByRole('img', { name: /PR merged/ })).toBeInTheDocument()
+  const track = within(peek).getByRole('img', { name: /PR merged/ })
+  expect(track).toBeInTheDocument()
+  // The panel draws the register's phrase in visible text one line below this track, so the
+  // track's name states the facts and the break's own sentence — and NOT that phrase. Anything
+  // else has a screen-reader user hear the same words twice in one panel.
+  expect(peek).toHaveTextContent('Done in git, not on the board')
+  expect(track.getAttribute('aria-label') ?? '').not.toContain('Done in git, not on the board')
+  expect(track.getAttribute('aria-label') ?? '').toContain(
+    'PR merged but this issue is not marked done',
+  )
   expect(within(peek).getByText('⏎')).toBeInTheDocument()
   // At most one peek is ever open (`ia.html`), and this page draws exactly the one.
   expect(screen.getAllByRole('dialog')).toHaveLength(1)

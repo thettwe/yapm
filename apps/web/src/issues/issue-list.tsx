@@ -34,6 +34,7 @@ import {
   deliveryView,
   type LinkedIssueRow,
   linkedEntitiesFor,
+  quietWords,
 } from '@/issues/delivery'
 import {
   type CycleOption,
@@ -589,7 +590,7 @@ function IssueGroupSection({
       {issues.map((issue, offset) => {
         const index = startIndex + offset
         const pending = isPendingNumber(issue)
-        const view = deliveryView(issue, issue.linked ?? {})
+        const view = deliveryView(issue, issue.linked ?? {}, 'news')
         return (
           <IssueRow
             key={issue.id}
@@ -618,6 +619,7 @@ function IssueGroupSection({
                 label={realityTrackLabel(
                   view.strip,
                   view.divergence ? DIVERGENCE_LABEL[view.divergence] : null,
+                  quietWords(view.phrase),
                 )}
               />
             }

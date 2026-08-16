@@ -14,9 +14,11 @@ runs as three containers you own.
   work. Every empty band folds away rather than apologising, and the whole page is computed on your
   device from rows already synced.
 - [The issue list](/features/issue-list/) — where a team's work lives, at `/teams/<teamId>/issues`.
-  Every row with a linked change **states** what git says about it in words as well as drawing it,
-  and a row with none stays genuinely blank. A quiet filter bar, group headers, a fold that states
-  the true remaining count, and a complete keyboard model.
+  Every row with a linked change **draws** what git says about it, and **states** it in words where
+  that reality is news — an exception you have to act on. An ordinary row's words move into the
+  drawing's accessible name rather than disappearing, and a row with no linked change stays
+  genuinely blank. A quiet filter bar, group headers, a fold that states the true remaining count,
+  and a complete keyboard model.
 - [The issue detail](/features/issue-detail/) — at `/teams/<teamId>/issues/ENG-116`, the one page
   that states a fact twice on purpose: a plain line a product manager reads directly above a mono
   line an engineer reads, a vertical delivery rail, and — when the board and git disagree — a

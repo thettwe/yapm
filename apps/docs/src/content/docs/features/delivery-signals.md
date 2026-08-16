@@ -127,7 +127,9 @@ Every signal on this page is also **stated**, not only drawn. The words come fro
 dictionary — see [phrases at rest](/features/reality-vocabulary/#phrases-at-rest) for the
 vocabulary and [the issue list](/features/issue-list/) for where each phrase lands on a row.
 
-| Signal | The row says |
+These are the **neutral** register's words — the dictionary's full vocabulary for each signal:
+
+| Signal | The words |
 | --- | --- |
 | Merged PR under an unfinished issue | Done in git, not on the board |
 | CI failing | Checks failing |
@@ -136,8 +138,14 @@ vocabulary and [the issue list](/features/issue-list/) for where each phrase lan
 | Open PR, a review came back without approving | In review — reviewed *N* ago |
 | Deployed | *(nothing — the track's Live station already says it)* |
 
+Whether a given screen **draws** those words is its register's decision, not the signal's: the issue
+list, a project's page and the board speak a stricter register that draws a phrase only where the
+row is an exception, and hands the rest to the track's accessible name. See
+[the issue list](/features/issue-list/) for what a row actually draws.
+
 The check and deploy phrases carry GitHub's mark, because those facts came from GitHub. The
-divergence and review-age phrases carry none: yapm derived them.
+divergence and review-age phrases carry none: yapm derived them. A mark follows the text it sourced,
+so a phrase a screen's register went quiet about draws no mark either.
 
 ## Issue detail
 

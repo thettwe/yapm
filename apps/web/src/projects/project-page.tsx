@@ -28,6 +28,7 @@ import {
   deliveryView,
   type LinkedIssueRow,
   linkedEntitiesFor,
+  quietWords,
 } from '@/issues/delivery'
 import {
   formatRelative,
@@ -584,7 +585,7 @@ function ProjectIssueList({ issues, teamId }: { issues: readonly PageIssue[]; te
             <span className="font-mono text-[11.5px] text-text-2">{group.issues.length}</span>
           </div>
           {group.issues.map((issue) => {
-            const view = deliveryView(issue, issue.linked ?? {})
+            const view = deliveryView(issue, issue.linked ?? {}, 'news')
             return (
               <IssueRow
                 key={issue.id}
@@ -611,6 +612,7 @@ function ProjectIssueList({ issues, teamId }: { issues: readonly PageIssue[]; te
                     label={realityTrackLabel(
                       view.strip,
                       view.divergence ? DIVERGENCE_LABEL[view.divergence] : null,
+                      quietWords(view.phrase),
                     )}
                   />
                 }

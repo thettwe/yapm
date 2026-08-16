@@ -22,6 +22,9 @@ import {
   type PrState,
   RealityTrack,
   realityTrackLabel,
+  TRACK_NODE_DRAWING,
+  type TrackNodeKind,
+  TrackNodeMark,
 } from './reality-track'
 
 const MERGED_NOT_LIVE: DeliveryStrip = {
@@ -80,6 +83,101 @@ test('the four facts map to the documented node kinds, and no fifth station is d
     'empty',
   ])
   expect(shape.segments).toHaveLength(shape.stations.length - 1)
+})
+
+// `done` at the change station means the change LANDED, and an approved pull request has not. The
+// two used to draw an identical track, which is why no phrase could be taken off either of them:
+// quieting both would have erased the distinction rather than removed a repetition.
+test('an approved change is not drawn as a landed one', () => {
+  const approved = buildRealityShape({
+    pr: 'approved',
+    ci: 'passing',
+    reviewAgeMs: 3 * 3_600_000,
+    deployedAt: null,
+  })
+  const merged = buildRealityShape(MERGED_NOT_LIVE)
+
+  expect(approved.stations.map((station) => station.node)).toEqual([
+    'open',
+    'done',
+    'done',
+    'empty',
+  ])
+  // The review station still reads `done` for an approved PR — that is what separates the two
+  // tracks, and it is why only the change station moved.
+  expect(merged.stations.map((station) => station.node)).toEqual(['done', 'done', 'done', 'empty'])
+  expect(approved.stations.map((station) => station.node)).not.toEqual(
+    merged.stations.map((station) => station.node),
+  )
+})
+
+// Contrast is not separability. A reader who cannot separate indigo from green must still read six
+// kinds, so every pair differs in fill, form or stroke — asserted over the exported vocabulary
+// rather than over rendered pixels, because pixels are what a jsdom test cannot see.
+test('no two node kinds are told apart by colour alone', () => {
+  const kinds = Object.keys(TRACK_NODE_DRAWING) as TrackNodeKind[]
+  expect(kinds).toHaveLength(6)
+
+  const colliding: string[] = []
+  for (const [index, kind] of kinds.entries()) {
+    for (const other of kinds.slice(index + 1)) {
+      const a = TRACK_NODE_DRAWING[kind]
+      const b = TRACK_NODE_DRAWING[other]
+      if (a.fill === b.fill && a.form === b.form && a.stroke === b.stroke) {
+        colliding.push(`${kind} / ${other}`)
+      }
+    }
+  }
+  expect(colliding).toEqual([])
+})
+
+// The declared form is what the node is actually drawn in — otherwise the property above is a
+// statement about a table nothing reads. The `//` break's own station is the sharpest case: it is
+// the one kind whose form changed away from the rest of the empties.
+test('the drawn node classes are composed from the declared forms', () => {
+  const { container } = render(
+    <RealityTrack
+      shape={buildRealityShape(MERGED_NOT_LIVE, { divergence: 'status_behind_merge' })}
+      label={realityTrackLabel(MERGED_NOT_LIVE, 'PR merged but this issue is not marked done')}
+    />,
+  )
+  const classes = [...container.querySelectorAll('span[class]')].map((node) => node.className)
+
+  // `empty-urgent`: an outline SQUARE, in `fail`'s family, not a ring one hue away from `empty`.
+  const urgent = classes.find((value) => value.includes('border-status-urgent'))
+  expect(urgent).toContain('rounded-[1.5px]')
+  expect(urgent).not.toContain('rounded-full')
+  // `done`: a filled disc with no stroke at all.
+  const done = classes.find((value) => value.includes('bg-status-done') && value.includes('size-'))
+  expect(done).toContain('rounded-full')
+  expect(done).not.toContain('border-')
+})
+
+// The guard above holds over the two kinds one diverged track happens to draw. This one holds over
+// ALL SIX, and over all three declared channels rather than only `form` — `fill` is the only channel
+// separating `open` from `rev-wait`, so a `fill` the drawing never read would make the separability
+// property an assertion about a table nothing obeys.
+test('every declared channel is drawn, for all six node kinds', () => {
+  const kinds = Object.keys(TRACK_NODE_DRAWING) as TrackNodeKind[]
+
+  for (const kind of kinds) {
+    const { container } = render(<TrackNodeMark kind={kind} label={kind} />)
+    const drawn = container.querySelector('[role="img"]')?.className ?? ''
+    const { fill, form, stroke } = TRACK_NODE_DRAWING[kind]
+
+    if (fill === 'outline') expect(drawn, kind).toContain('bg-transparent')
+    if (fill === 'half') expect(drawn, kind).toContain('linear-gradient(90deg')
+    if (fill === 'filled') {
+      expect(drawn, kind).toContain('bg-status-')
+      expect(drawn, kind).not.toContain('border-')
+    }
+
+    expect(drawn, kind).toContain(form === 'disc' ? 'rounded-full' : 'rounded-[1.5px]')
+
+    if (stroke === 'dashed') expect(drawn, kind).toContain('border-dashed')
+    if (stroke === 'ring') expect(drawn, kind).toContain('border-solid')
+    if (stroke === 'none') expect(drawn, kind).not.toMatch(/border-(?:solid|dashed)/)
+  }
 })
 
 test('a diverged row draws the // break and not one lucide glyph', () => {
@@ -303,6 +401,35 @@ test('the label states the facts drawn, the divergence sentence included', () =>
   expect(label).not.toContain('Deployed')
   // There is no review-requested event, so no drawn label may name a waiting reviewer.
   expect(label).not.toContain('waiting')
+})
+
+// The words a row stopped drawing are not lost, they moved: the register's own text, unchanged,
+// leading the label so it is the first thing a screen reader hears.
+test('a quiet phrase leads the label, before the facts the track draws', () => {
+  render(
+    <RealityTrack
+      shape={buildRealityShape(MERGED_NOT_LIVE)}
+      label={realityTrackLabel(MERGED_NOT_LIVE, null, 'Built — not live yet')}
+    />,
+  )
+  const label = screen.getByRole('img').getAttribute('aria-label') ?? ''
+
+  expect(label.startsWith('Built — not live yet')).toBe(true)
+  expect(label).toContain('PR merged')
+  expect(label).toContain('CI passing')
+})
+
+// The other half of the same rule, and the one a surface breaks by being generous: a phrase drawn
+// in visible text beside the track is heard ONCE. A caller passes the register's words only where
+// the register quieted them, so a drawn phrase reaches this function as nothing at all.
+test('a drawn phrase appears nowhere in the label', () => {
+  const label = realityTrackLabel(MERGED_NOT_LIVE, 'PR merged but this issue is not marked done')
+
+  expect(label).not.toContain('Done in git, not on the board')
+  expect(label).not.toContain('Built — not live yet')
+  // The break's own sentence is a different statement about a different aspect and stays.
+  expect(label).toContain('PR merged but this issue is not marked done')
+  expect(label.startsWith('PR merged')).toBe(true)
 })
 
 // The same number, two different facts. A PR nobody has reviewed has an age measured from the

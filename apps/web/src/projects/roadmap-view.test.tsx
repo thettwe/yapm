@@ -180,6 +180,49 @@ test('no issues and no schedule are different kinds of nothing', () => {
   expect(within(row('Notifications overhaul')).queryByText('0/0')).toBeNull()
 })
 
+// A cycle that ran long before the drawn window opens. Its issues are scheduled — they simply sit
+// off the left edge of the axis.
+const CYCLE_OLD = {
+  id: 'c0',
+  name: 'Cycle 0',
+  startDate: Date.UTC(2026, 0, 5),
+  endDate: Date.UTC(2026, 0, 18),
+}
+
+// A note beside a row is NEWS about the project — nobody broke it down, nobody scheduled it. That
+// the axis does not reach the cycles its work sits in is a reading of the drawing, it fired on
+// every such row, and a note every row carries distinguishes none of them.
+test('work scheduled off the axis draws no note, and the row’s name says so instead', () => {
+  seed(
+    [
+      project({
+        id: 'p-off',
+        name: 'Checkout rebuild',
+        targetDate: Date.UTC(2026, 7, 20),
+        issues: [
+          issue({ id: 'o1', status: 'done', cycleId: CYCLE_OLD.id, cycle: CYCLE_OLD }),
+          issue({ id: 'o2', status: 'todo', cycleId: CYCLE_OLD.id, cycle: CYCLE_OLD }),
+        ],
+      }),
+    ],
+    [CYCLE_OLD, CYCLE_2, CYCLE_3],
+  )
+  render(<RoadmapView teamId={TEAM.id} />)
+
+  const off = row('Checkout rebuild')
+  expect(within(off).queryByText('Scheduled outside this window')).toBeNull()
+  expect(within(off).queryByText('Nothing scheduled')).toBeNull()
+  expect(within(off).queryByText('No issues yet')).toBeNull()
+  // The meter still counts the work, so the absence of a note is not the absence of the project.
+  expect(within(off).getByText('1/2')).toBeTruthy()
+
+  // The drawing is `aria-hidden`, so this label is the only other channel — and it used to deny a
+  // schedule the project has, to exactly the reader who could not see the axis.
+  const label = off.getAttribute('aria-label') ?? ''
+  expect(label).toContain('scheduled beyond the drawn window')
+  expect(label).not.toContain('no issues scheduled in a cycle')
+})
+
 test('the row speaks with one voice: the drawing’s facts ride the button’s own name', () => {
   seed([
     project({ id: 'p-blank', name: 'Data retention', issues: [] }),

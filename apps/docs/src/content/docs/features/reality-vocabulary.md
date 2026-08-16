@@ -67,7 +67,9 @@ there is no room for words, so it sits beside the stations in a mono column rese
 there is anything to put in it — "3d", "2h", "now" — and a row with nothing to say still holds
 exactly the space a row with an age takes. The team digest's rows state the age in words beside the
 track instead, and the issue page states it in its own two registers ("In review — waiting 16h");
-neither draws an age column. The board card draws no age at all.
+neither draws an age column. The board card draws the column exactly as a list row does: a card's
+accessible name suppresses everything inside it, so an age living only in a phrase would reach
+nobody who is looking at the card.
 
 ### The same track, on its side
 
@@ -242,24 +244,38 @@ The dictionary is keyed by a classifier over **real predicates only**: the deliv
 divergence computation. There is no phrase a stored fact cannot support, and a classification with
 nothing behind it resolves to silence rather than to an invented sentence.
 
-One key can be spoken in more than one **register**, so a personal digest and a neutral list can
-say the same fact in their own voice:
+One key can be spoken in more than one **register**. A register is a voice *and* a policy about when
+that voice speaks:
 
-| The facts | Neutral (the issue list) | Personal ([Team Home](/features/team-home/)'s YOURS) |
-| --- | --- | --- |
-| A merged PR under an issue that is not done | Done in git, not on the board | Done in git — update the board |
-| Linked checks are failing | Checks failing | Checks failing — the fix is yours |
-| Merged, nothing deployed the commit | Built — not live yet | Merged — not live yet |
-| A PR approved and waiting | Approved | Approved — merge when ready |
-| Nothing has happened yet | *(silence)* | In progress |
+| The facts | Neutral (issue detail, Cycles, Delivery's peek) | News (the list, a project's page, the board) | Personal ([Team Home](/features/team-home/)'s YOURS) |
+| --- | --- | --- | --- |
+| A merged PR under an issue that is not done | Done in git, not on the board | Done in git, not on the board | Done in git — update the board |
+| Linked checks are failing | Checks failing | Checks failing | Checks failing — the fix is yours |
+| Merged, nothing deployed the commit | Built — not live yet | *quiet* — Built — not live yet | Merged — not live yet |
+| A PR approved and waiting | Approved | *quiet* — Approved | Approved — merge when ready |
+| Nothing has happened yet | *(silence)* | *(silence)* | In progress |
 
-Every register is **total** over the key set: a key that exists in one exists in every one, and a
-register may resolve a key to *silence* — in which case that screen renders nothing there rather
-than filler. A screen with nothing true to say says nothing.
+Every register is **total** over the key set — a key that exists in one exists in every one — and it
+resolves each key to exactly one of three states:
 
-A phrase is always real text, never an icon standing in for one, so it is readable by assistive
-technology and by a reader who cannot tell the drawing's hues apart. Where each phrase appears in
-context is documented on [The issue list](/features/issue-list/).
+- **drawn** — the register has words and the screen renders them.
+- **quiet** — the register has words and the screen does *not* render them, because the drawing
+  beside them already carries the same fact. The words still exist, and the **accessible name of
+  that drawing states them**, in exactly the text the register would have drawn. Quiet is a
+  redistribution, never a deletion.
+- **silent** — the register has nothing true to add. Nothing is drawn and nothing is spoken, because
+  there is nothing to say.
+
+A register may only resolve a key to quiet where the drawing beside it tells that key apart from
+every other key it quiets or silences. Where the drawing cannot — a review that came back looks
+exactly like one nobody has read — the register draws the words instead. Which state a key takes is
+a property of the dictionary **entry**, never a decision a screen makes, so two screens speaking one
+register cannot disagree about whether a fact is worth saying.
+
+A phrase is always real text — drawn, or spoken by the drawing that replaced it — never an icon
+standing in for one, so it is readable by assistive technology and by a reader who cannot tell the
+drawing's hues apart. Where each phrase appears in context is documented on
+[The issue list](/features/issue-list/).
 
 ## Accessibility
 
@@ -271,3 +287,25 @@ selected row and the digest's divergence row alike.
 State is never carried by color alone: the track's nodes differ by shape, the status glyphs by how
 much of the loop is drawn, and priority by how many ticks stand. The peek and the how are both fully
 operable from the keyboard and both announce their open state; neither traps focus.
+
+The horizontal track's six node kinds are told apart **without colour**, and the six forms are
+declared as values the drawing is composed from rather than left to six hand-written rules:
+
+| Node | Form |
+| --- | --- |
+| Reached | a filled disc |
+| Reality is here now | a half-filled disc |
+| Waiting here | an outline ring |
+| It broke here | a filled square |
+| Not reached | a dashed outline ring — the dotted segment's grammar, at a node's scale |
+| Not reached, and something is wrong | an outline square, in the broken station's family |
+
+For any two kinds at least one non-colour channel differs — fill, form or stroke style — so a reader
+who cannot separate the hues can still name every station. Colour reinforces those distinctions; it
+never carries one alone. The **vertical rail is excluded**: each of its stations carries a label line
+and a mono fact line in text, so nobody tells its nodes apart by eye.
+
+A track that draws at least one fact is one labelled image whose name states the facts it draws, the
+divergence sentence when the break is present, and — where the screen's register went quiet — that
+register's words, first. A track that draws no ink is not exposed as an image at all. And a phrase
+drawn in visible text beside a track is never repeated in that track's name: it is announced once.

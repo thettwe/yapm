@@ -45,18 +45,28 @@ A row says something only when there is something true to say. A row with no lin
 or one whose delivery state adds nothing the track has not already drawn, stays **genuinely
 blank** — no placeholder, no dash, no filler.
 
-| What the facts say | The row says |
-| --- | --- |
-| A merged PR under an issue that is not done | **Done in git, not on the board** |
-| Linked checks are failing | **Checks failing** |
-| Merged, and no successful deployment carried the merge commit | **Built — not live yet** |
-| An open PR nobody has reviewed yet | **In review — waiting 16h** |
-| An open PR whose review came back without approving | **In review — reviewed 3h ago** |
-| A done issue whose checks are red | **Done — checks failing** |
-| A PR approved and waiting to merge | **Approved** |
-| A draft PR | **Draft open** |
-| Deployed | *(nothing — the track already says it)* |
-| Nothing has happened yet — including an issue marked in review with no PR behind it | *(nothing — and the track draws nothing either)* |
+The list's register speaks when a row's reality is **news** — an exception you have to act on. Every
+other phrase is still there; it has simply moved into the reality track's accessible name, so a
+screen-reader user hears the sentence a sighted reader no longer needs. Nothing is ever lost in both
+channels at once.
+
+| What the facts say | Drawn on the row | Spoken by the track |
+| --- | --- | --- |
+| A merged PR under an issue that is not done | **Done in git, not on the board** | *(not repeated — you can already read it)* |
+| Linked checks are failing | **Checks failing** | *(not repeated)* |
+| A done issue whose checks are red | **Done — checks failing** | *(not repeated)* |
+| An open PR whose review came back without approving | **In review — reviewed 3h ago** | *(not repeated)* |
+| Merged, and no successful deployment carried the merge commit | *(nothing)* | **Built — not live yet** |
+| A PR approved and waiting to merge | *(nothing)* | **Approved** |
+| A draft PR | *(nothing)* | **Draft open** |
+| An open PR nobody has reviewed yet | *(nothing)* | **In review — waiting 16h** |
+| Deployed | *(nothing)* | *(nothing — the track already says it)* |
+| Nothing has happened yet — including an issue marked in review with no PR behind it | *(nothing)* | *(nothing — and the track draws nothing either)* |
+
+The four quiet rows are the ones whose track draws the same fact station for station, so the words
+would be the drawing read aloud. **A review that came back keeps its words** even though it is not
+an exception: the track draws the same three stations for an open PR whether or not anybody has
+looked at it, so there the drawing genuinely cannot carry the fact.
 
 Two of those deserve their own note.
 
@@ -67,16 +77,25 @@ review has actually come back, the phrase changes to *reviewed N ago* — becaus
 there would invert the fact.
 
 **These are the same words Home speaks.** The phrases live in one shared dictionary next to the
-delivery-signal derivation, not inside any one screen. [Team Home](/features/team-home/)'s YOURS
-band renders that dictionary in a **personal** register — *Checks failing — the fix is yours* — and
-the list renders it in a **neutral** one. Same classifier, same facts, two voices. A screen cannot
-invent a phrase of its own for a fact another screen already names.
+delivery-signal derivation, not inside any one screen, and it holds three registers rather than two.
+[Team Home](/features/team-home/)'s YOURS band speaks the **personal** register — *Checks failing —
+the fix is yours*, addressed to you. The issue detail, the Cycles carried-in band and Delivery's
+divergence peek speak the **neutral** one, which draws every phrase it has. The issue list, a
+project's page and the board speak **news** — the same neutral words under a stricter rule about
+when they are drawn. Same classifier, same facts. A screen cannot invent a phrase of its own for a
+fact another screen already names, and it cannot decide for itself which phrases are worth drawing:
+that is a property of the dictionary entry.
 
 ## Where the source's mark appears
 
 A phrase carries the GitHub mark when — and only when — the fact it states came **from GitHub**:
 the check facts and the deployment fact. A divergence between your board and git, a review age, a
 status position: those are yapm's own derivations, and they carry no mark.
+
+A mark follows the text it sourced, so a row whose phrase went quiet draws no mark either — the
+deployment fact is one of the sourced three, and on this list it is a phrase the track carries. The
+mark still appears wherever a check fact is stated, which is where you most need to know whose fact
+it is.
 
 The mark is monochrome, sits after the text it sourced, and is never larger than that text. It
 never replaces a status arc or a track node — see

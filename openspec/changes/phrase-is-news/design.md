@@ -550,3 +550,104 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 
 <!-- Build-time decisions are appended below this line, each with what was ambiguous, what was
      chosen, and why. -->
+
+### The six forms, chosen at 7px rather than at the table
+
+**Ambiguous:** D4 offers an assignment and says the measure at 7px on a dense row decides it. Two of
+its six were not obviously safe at that size — a *half-filled* disc has roughly 3.5px of ink to
+carry the distinction, and a *dashed* ring at 7px with a 1.4px stroke resolves to about three
+dashes.
+
+**Chosen:** D4's assignment as written, after rendering the six at their real measure with the Warm
+light tokens and again at 14×. Both survived, and the reason each does is worth recording:
+
+- The **half-filled disc** keeps a full ring in the same token, so the silhouette is still a 7px
+  circle and the leading half is solid. That is a strong read — the background is clipped to the
+  border box, so `open` draws as a solid semicircle joined to a thin arc, and it is neither `done`'s
+  filled disc nor `rev-wait`'s hollow ring at any hue.
+- The **dashed ring** has house precedent at almost this scale: `status-glyph.tsx`'s backlog ring is
+  a dashed circle of radius 4.9 CSS px at a 14px glyph, and it reads. The dashes are also the dotted
+  segment's own grammar, so the node and the connector leaving it say the same thing.
+
+**Why it matters that the descriptor is a value.** `NODE_CLASS` is now *composed from*
+`TRACK_NODE_DRAWING` — the form decides `rounded-full` versus `rounded-[1.5px]`, the stroke decides
+`border-solid` versus `border-dashed` — with only the hue and the measure left per kind. So the
+separability test is not a statement about a table nothing reads: a kind whose drawn form drifted
+from its declared one would have to drift in the hue map, and `the drawn node classes are composed
+from the declared forms` asserts the two sharpest cases against the rendered DOM.
+
+**What was NOT verified:** the six at 7px in dark, in Focused and Editorial, and under a colour
+filter — tasks 10.3 and 10.4. What was rendered was the Warm light token set in a standalone page,
+not the running application. It is a proxy for the eyeball, not the eyeball.
+
+### The two gates live in `packages/ui`, not in `phrases.test.ts`
+
+**Ambiguous:** tasks 2.7 and 2.8 put both gates in `packages/schema/src/zero/phrases.test.ts`. They
+cannot go there. Both are assertions *about the drawing* — `isQuietTrack` and the station sequence —
+and `packages/schema` may not import `packages/ui` (CLAUDE.md constraint 3, enforced by
+`scripts/check-boundaries.mjs`, which scans test files too).
+
+**Chosen:** a new file, `packages/ui/src/components/quiet-register.test.ts`, importing the
+dictionary from `@yapm/schema` — the direction the boundary allows. It carries one representative
+row per key as *real predicates*, and asserts `classifyRestPhrase` over that table first, so a
+fixture that stopped producing its key fails loudly rather than quietly testing a different row.
+**Why:** the property is a seam between two packages, and it belongs in the one that can see both.
+Restating `isQuietTrack` inside `packages/schema` to keep the file location would have created a
+second copy of the predicate the design spends a paragraph insisting there is only one of.
+
+Both were confirmed to fail without task 1.1: reverting `prNode` to main's mapping and re-running
+gives `AssertionError: expected 'merged_not_deployed vs pr_approved: t…' to be '… f…'`. That is the
+precondition doing its job rather than being asserted about itself.
+
+### `quietWords` states rule 3.2 once, so three surfaces cannot each get it wrong
+
+**Ambiguous:** D3's rule 2 — pass the register's words only where the register quieted them — is a
+contract on the *caller*, and three call sites now have to honour it. Written inline it is
+`view.phrase.text === null ? view.phrase.spoken : null` three times, and the shipped violation this
+change fixes (`delivery-view.tsx:284`) is exactly what a caller getting it wrong looks like.
+
+**Chosen:** `quietWords(phrase)` in `apps/web/src/issues/delivery.ts`, beside `deliveryView` and
+`DIVERGENCE_LABEL`. **Why:** the rule is one sentence and it now has one implementation. A fourth
+surface adopting `news` gets it right by calling it rather than by reading D3.
+
+### The quiet phrase leads with a full stop, not a comma
+
+`realityTrackLabel` joins its facts with `, `. Leading the register's sentence into that list with
+the same separator would run *Built — not live yet* into *PR merged* as one clause. The label is
+`${phrase}. ${facts}` instead: two statements, and a screen reader pauses at the boundary. The
+spec's requirement is that the words *lead*, and the assertions are written as `startsWith`, so the
+separator is a build decision rather than a spec one.
+
+### `AGE_COLUMN_MEASURE` is exported, and the gutter is a constant the class cannot read
+
+Task 4.5 says `CARD_TRACK_WIDTH` grows by `AGE_COLUMN_WIDTH + 6`. Writing `118` would have been a
+magic number in a second package; importing the width alone would have left the `+ 6` unexplained.
+`reality-track.tsx` now exports `AGE_COLUMN_MEASURE = AGE_COLUMN_WIDTH + AGE_COLUMN_GUTTER`, and
+`board-card.tsx` reads `86 + AGE_COLUMN_MEASURE`. The gutter is still drawn by a static `ml-[6px]` —
+Tailwind reads class strings, not constants — so the file carries a comment saying the two move
+together. That is a constraint the code cannot express, which is the one kind of comment the working
+agreement allows.
+
+### `packages/schema/src/index.ts` needed no edit, and task 2.10 is ticked as verified
+
+`PhraseRegister` and `RestPhrase` are re-exported by name (`:684-685`); widening the union and the
+interface at the source widens what those names mean. The task is a check that the two widened names
+are in the block, and they are. No value export was added — `Voicing` and `NEWS` are internal,
+because the three states are reachable through `text` and `spoken` and a surface that read the
+policy table directly would be re-deciding the register for itself.
+
+### Looked at, and what looking could and could not reach
+
+The dev stack on this machine runs the API and Vite but the eyeball tasks in §10 want a signed-in
+session against seeded data at 1440×900 in three presets, light and dark, plus a screen reader and a
+colour filter. What was actually done, and nothing more:
+
+- **10.3, partly.** The six node kinds rendered at their real 7px and at 14×, in the Warm **light**
+  token set, on `--bg`, in a standalone page. Six forms, six silhouettes. The five quiet and silent
+  tracks were drawn beside each other at 7px and `pr_approved` reads as a different track from
+  `merged_not_deployed` at a glance. Dark, Focused, Editorial: **not done**.
+- **10.1, 10.2, 10.4, 10.5, 10.6, 10.7: not done.** Whether a phrase column drawn on two rows of
+  seven reads as calm or as broken is the judgement the whole family is measured on, and it needs
+  the running application. So does the board's six-column measure after the card's track grew by
+  32px, and so does the roadmap with the note gone from ten of ten rows. They are left for the
+  integrator's pass rather than ticked.

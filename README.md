@@ -99,8 +99,10 @@ rather than apologizing. Members management is intact behind a Members doorway.
 
 ### Tracking work
 
-- A **keyboard-first issue list** whose every row states what git says about it in words as well
-  as in a drawing, with a quiet filter bar, a command palette and filtering.
+- A **keyboard-first issue list** whose every row **draws** what git says about it, and **says** it
+  in words where the row is an exception you have to act on. The words for an ordinary row are not
+  lost — they ride the drawing's accessible name, so the row is never quieter to a screen reader
+  than it is to an eye. A quiet filter bar, a command palette and filtering.
 - An **issue detail that states one reality in two registers** — a plain sentence for a PM
   directly above the mono git facts for an engineer — beside a vertical delivery rail carrying a
   station per moment a real timestamp supports. Rich-text descriptions, files and comments intact.

@@ -94,9 +94,29 @@ describe('the registers are total over the key set', () => {
     for (const register of REGISTERS) {
       for (const key of REST_PHRASE_KEYS) {
         const phrase = restPhrase(key, register, { reviewAgeMs: 16 * HOUR })
-        if (phrase.text === null) expect(phrase.spoken !== '').toBe(true)
-        else expect(phrase.spoken).toBe(phrase.text)
+        if (phrase.text !== null) {
+          expect(`${register}/${key}: ${phrase.spoken}`).toBe(`${register}/${key}: ${phrase.text}`)
+          expect(phrase.text).not.toBe('')
+        } else {
+          // Quiet and silent are told apart by `spoken` ALONE, so the empty string cannot be one of
+          // them: every caller tests for null, and `''` would read as words that say nothing.
+          expect(phrase.spoken).not.toBe('')
+        }
       }
+    }
+  })
+
+  // The other half of task 2.5, and the one nothing else asserts: quiet belongs to `news`. A key
+  // going quiet in `neutral` or `personal` would take its words off the issue detail, the Cycles
+  // carried-in band, Delivery's peek and Home's YOURS — four surfaces that draw no reality track
+  // beside the phrase, so there is no accessible name for the words to move into.
+  it('quiet is the news register’s alone: neutral and personal draw their words or hold none', () => {
+    for (const register of ['neutral', 'personal'] as const) {
+      const quiet = REST_PHRASE_KEYS.filter((key) => {
+        const phrase = restPhrase(key, register, { reviewAgeMs: 16 * HOUR })
+        return phrase.text === null && phrase.spoken !== null
+      })
+      expect(`${register} quiets: ${quiet.join(', ')}`).toBe(`${register} quiets: `)
     }
   })
 

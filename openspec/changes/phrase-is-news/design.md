@@ -666,3 +666,59 @@ colour filter. What was actually done, and nothing more:
   the running application. So does the board's six-column measure after the card's track grew by
   32px, and so does the roadmap with the note gone from ten of ten rows. They are left for the
   integrator's pass rather than ticked.
+
+### The stale-docs sweep needed the RULE, not the strings — and the strings missed two files
+
+**Ambiguous:** task 7.8 says to grep the **quieted strings** across `*.md`, on B1's recorded lesson
+that a phrase which stops being drawn makes stale every doc that quoted it as rendered prose. That
+grep was run and it was clean outside this change's own files. It was also the wrong instrument for
+the two sentences that were actually stale, because neither quotes a phrase:
+
+- `README.md:102` — *"whose every row states what git says about it in words as well as in a
+  drawing"*. After this change an ordinary row states it in the drawing alone.
+- `apps/docs/src/content/docs/index.md:17` — *"Every row with a linked change **states** what git
+  says about it in words as well as drawing it"*, the docs site's own front-page claim.
+
+**Chosen:** both rewritten to the rule this change actually ships — the row **draws** always and
+**says** it where the reality is news, with the words riding the drawing's accessible name
+otherwise — and the sweep re-run over the *claim* (`in words`, `says it`, `two registers`,
+`register`) rather than over the vocabulary. That pass found nothing else: `DESIGN.md:28` was
+already amended, `features/team-home.md:33` is the `personal` register and unmoved,
+`reality-vocabulary.md:69`'s "two registers" is the issue page's bifact and not a phrase register,
+and `TECHSTACK.md`, `VISION.md`, `.env.example` and `reference/` make no claim about when a row
+speaks. **Why it is worth recording:** a doc that paraphrases a rule ages exactly as badly as one
+that quotes a string, and only the second is greppable from the change's own vocabulary. The next
+change in this family should grep both.
+
+### `quiet is news's alone` was the one guarantee nothing asserted
+
+**Ambiguous:** task 2.5 promises `neutral` and `personal` gain no quiet entries, and task 2.6's
+sibling test pins `news`'s three sets. Between them nothing asserted the *other two* registers hold
+no quiet entry — the existing `neutral` silence test reads `text === null`, which is true of quiet
+and silent alike, so a key going quiet in `neutral` would have passed every gate in the file while
+taking its words off the issue detail, the Cycles carried-in band, Delivery's peek and Home's YOURS
+— four surfaces with no reality track beside the phrase for the words to move into.
+
+**Chosen:** one more assertion in `phrases.test.ts`, and the `RestPhrase` invariant test's weak
+branch (`expect(phrase.spoken !== '').toBe(true)`, which held for every value but one) replaced by
+the real three-way one. Both were confirmed falsifiable rather than assumed: routing `neutral`
+through the `NEWS` policy gives `expected 'neutral quiets: merged_not_deployed, pr_approved,
+pr_draft, review_unreviewed' to be 'neutral quiets: '`, and returning `''` for a quiet entry's
+`spoken` fails the invariant test on `expected '' not to be ''`. Both mutations were reverted.
+
+### What arithmetic could answer about task 10.6, and what it could not
+
+The board's six-column promise at 1440 is measured in CI, not by eye:
+`apps/web/e2e/board.spec.ts:100-119` mounts a real card and asserts `scrollWidth === clientWidth` on
+the board region at 1440 **and** 1280 — unedited, and green on this branch. That covers the first
+half of task 10.6.
+
+It does **not** cover the second half — the card's labels row shoved off its own card — because the
+column's card list computes `overflow-x: auto` from its `overflow-y-auto`, so a card whose inner row
+overflows scrolls inside the column instead of widening the board. The measure, from the constants:
+the board is `gap-3 px-5` over six `flex-1` columns, so a column is `(1440 − 40 − 60) / 6 ≈ 223px`
+and a card's content box is `223 − 24 (px-3) ≈ 199px`. The labels row's trailing group is
+`CARD_TRACK_WIDTH 118 + gap-2 8 + avatar 20 = 146px`, leaving **≈ 45px** for labels before the row
+overflows, against ≈ 77px before this change. One short chip fits; two do not. That is a computed
+bound, not a look at the running application — the labels span has no `min-w-0`, so what a long
+label actually does is still 10.6's question, and it stays unticked.

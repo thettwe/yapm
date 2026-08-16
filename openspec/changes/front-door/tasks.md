@@ -1,11 +1,11 @@
 ## 1. Read the rulebook first
 
-- [ ] 1.1 Read `openspec/SCOPE-legibility.md` in full — the complaint, the four maintainer answers, and §"Track C — the front door". This change is C1 and only C1
-- [ ] 1.2 Read `openspec/specs/app-frame/spec.md` §"Honest degradation where no team is in context" (:179-212) and §"No route is unreachable from the frame" (:259-286). Neither is modified by this change; confirm for yourself that neither is contradicted either
-- [ ] 1.3 Read `openspec/specs/issue-list/spec.md` §"Status-grouped keyboard-first issue list" (:6-25) and §"Filtering, sorting, and saved views" (:111-190) — the first is deltaed, the second deliberately is not
-- [ ] 1.4 Read `apps/web/src/frame/team-context.ts` in full, especially the header comment at :13-19 (why the deck may point where the reader is not) and `resolveAnchorTeam` at :49-59
-- [ ] 1.5 Read `apps/web/src/components/authenticated.tsx:22-30` — the two-routes-Navigating-at-each-other starvation this change must not build (design D4)
-- [ ] 1.6 Read `reference/*.md` for better-auth before touching `login-form.tsx`; where it does not cover the redirect plugin, read the installed package — `node_modules/.pnpm/better-auth@1.6.24_*/node_modules/better-auth/dist/api/routes/sign-in.mjs:335-341`, `dist/api/routes/sign-up.mjs:262-265`, `dist/client/fetch-plugins.mjs:3-15`, `dist/client/config.mjs:50`. **Do not write these APIs from memory** (design D1)
+- [x] 1.1 Read `openspec/SCOPE-legibility.md` in full — the complaint, the four maintainer answers, and §"Track C — the front door". This change is C1 and only C1
+- [x] 1.2 Read `openspec/specs/app-frame/spec.md` §"Honest degradation where no team is in context" (:179-212) and §"No route is unreachable from the frame" (:259-286). Neither is modified by this change; confirm for yourself that neither is contradicted either
+- [x] 1.3 Read `openspec/specs/issue-list/spec.md` §"Status-grouped keyboard-first issue list" (:6-25) and §"Filtering, sorting, and saved views" (:111-190) — the first is deltaed, the second deliberately is not
+- [x] 1.4 Read `apps/web/src/frame/team-context.ts` in full, especially the header comment at :13-19 (why the deck may point where the reader is not) and `resolveAnchorTeam` at :49-59
+- [x] 1.5 Read `apps/web/src/components/authenticated.tsx:22-30` — the two-routes-Navigating-at-each-other starvation this change must not build (design D4)
+- [x] 1.6 Read `reference/*.md` for better-auth before touching `login-form.tsx`; where it does not cover the redirect plugin, read the installed package — `node_modules/.pnpm/better-auth@1.6.24_*/node_modules/better-auth/dist/api/routes/sign-in.mjs:335-341`, `dist/api/routes/sign-up.mjs:262-265`, `dist/client/fetch-plugins.mjs:3-15`, `dist/client/config.mjs:50`. **Do not write these APIs from memory** (design D1)
 
 ## 2. The landing team (`packages/schema` is not involved — this is frame state)
 

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { LoginForm } from '@/components/auth/login-form'
 import { SyncUnavailable } from '@/components/authenticated'
 import { type LandingTeam, readAnchorTeam, resolveLandingTeam } from '@/frame/team-context'
+import { useSyncClientReady } from '@/zero/identity'
 import { useSyncControl, useSyncSession } from '@/zero/provider'
 import { useSyncRecovery } from '@/zero/recovery'
 
@@ -65,7 +66,8 @@ export function InvitePage({ token }: { token?: string }) {
 
 function AcceptInvite({ token }: { token: string }) {
   const { refresh } = useSyncControl()
-  const { status, role, userID } = useSyncSession()
+  const { role, userID } = useSyncSession()
+  const clientReady = useSyncClientReady()
   const recovery = useSyncRecovery()
   const navigate = useNavigate()
   const [teams, teamsResult] = useQuery(queries.teams.all())
@@ -113,7 +115,11 @@ function AcceptInvite({ token }: { token: string }) {
       void navigate({ to: '/teams/$teamId', params: { teamId: acceptedTeamId } })
       return
     }
-    if (status !== 'ready' || teamsResult.type !== 'complete') return
+    // The roster must belong to the role the acceptance just granted. `refresh()` above re-mints the
+    // credential, which rebuilds the Zero client around the new role — and until that lands, the
+    // roster on screen is the one the OLD role could read, which for a caller who was not yet a
+    // member is `denyAll`: complete, empty, and one commit from being wrong.
+    if (!clientReady || teamsResult.type !== 'complete') return
     const landing = resolveLandingTeam(teams as readonly LandingTeam[], remembered, {
       userID,
       role,
@@ -121,7 +127,7 @@ function AcceptInvite({ token }: { token: string }) {
     void navigate(
       landing === null ? { to: '/' } : { to: '/teams/$teamId', params: { teamId: landing.id } },
     )
-  }, [state, acceptedTeamId, navigate, status, teams, teamsResult, remembered, userID, role])
+  }, [state, acceptedTeamId, navigate, clientReady, teams, teamsResult, remembered, userID, role])
 
   if (state === 'error') {
     return (

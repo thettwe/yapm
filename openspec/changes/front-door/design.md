@@ -826,3 +826,96 @@ Ten minutes spent: **it is not a product defect.** The board does not reproduce 
 `grep` for `type="file"` across `apps/web/src` returns nothing at all, and the only file-picker
 machinery in the app is `apps/web/src/issues/attachments/`, mounted by the issue detail's FILES
 section and never by the board. A board-originated chooser has no code path. Driver artifact.
+
+### The headline behaviour did not work for the sign-in it was built for: `ready` is not `ready`
+
+**Found by hand, twice, against a running stack** — and by nothing else, which is the part worth
+recording. `admin@example.test` is a workspace admin and a member of Engineering. Loading `/login`
+with an already-live session landed on `/teams/<id>`, correctly. **Submitting the sign-in form landed
+on `/`.** Every automated tier was green throughout.
+
+**Why every tier was green.** `login-page.test.tsx` modelled `status` and the roster's result type as
+the only two facts in play, and asserted them in *settled* combinations — which is exactly the shape
+the defect hides in, because the defect is one commit of transition between two facts the suite
+treated as one. `auth.spec.ts:121` does sign in on a fresh context and does assert `/teams/...`, so
+it looks like the guard; it passes because Playwright fills the form in a few hundred milliseconds,
+and in that window the anonymous Zero client has usually not finished connecting. A human takes
+seconds to type a password. The suite was fast enough to miss it.
+
+**The mechanism, in order.** `applyCredential` sets `status`, `userID`, `token` and `role` in one
+`setSession`, so a single render of `ZeroRoot` produces both the `ready` session state and the new
+`options` object. `ZeroProvider` constructs the replacement Zero client from a **passive** effect
+whose dependency list is every prop except `auth`, so during that commit `ZeroContext` still holds
+the ANONYMOUS client — `userID: null`, `context: undefined`. `LandingDecision` renders in that
+commit. Its `useQuery` reads the anonymous client's view, in which `queries.teams.all()` was
+evaluated against `ctx: undefined` and fell through `denyAll` — a constant-FALSE predicate, not an
+error. `teams.all` is a NAMED query, so the server was asked for it by name and args and answered an
+anonymous socket with `ctx: undefined` rather than refusing it (`CREDENTIAL_ABSENT` is deliberately
+not `rejected`); zero-cache ran it, returned no rows, and sent `got`. The view is therefore
+`[[], {type: 'complete'}]` — genuinely, terminally complete, because a client query only ever reaches
+`complete` through server confirmation. Both halves of the D3 gate passed. `resolveLandingTeam([], …)`
+correctly returned `null`, and `<Navigate to="/">` fired from a **layout** effect, which flushes
+during the commit — strictly before the passive effect that would have built the authenticated
+client. It is not a race the code sometimes lost; it is an ordering it always lost.
+
+**The comment at the gate named the hazard and then guarded it with the one signal that cannot see
+it.** `complete` is a statement about the server having answered. It says nothing about *whose*
+question was answered.
+
+**What was rejected.** Keying the `useQuery`'s subtree on the userID is a no-op: `ViewStore` is a
+module-global keyed on `queryHash + format + zero.clientID`, and in the stale commit the client has
+not changed, so a remounted child computes the same key and is handed the same cached snapshot back
+— and even a genuinely fresh view would be re-completed synchronously, because the query manager
+replays the server's earlier `got` for a `queryId` that is `hashOfNameAndArgs(name, args)` and does
+not vary with auth context. Keying `ZeroProvider` itself does suppress the symptom, but only by
+unmounting the entire application subtree on every sign-in — paying a full client teardown and query
+rehydration to fix a redirect. A timer or a "wait one more frame" was rejected on sight: it makes
+correctness a function of how fast the machine is, which is the property that hid this bug.
+
+**The fix** is `apps/web/src/zero/identity.ts` — `useSyncClientReady()`, which asks the client in
+context who it belongs to. Zero exposes `zero.context` verbatim as constructed (`undefined` before
+sign-in), and `packages/schema` already augments `DefaultTypes` so it is typed `AuthContext |
+undefined` with no cast. The hook compares it to `useSyncSession()`'s `userID` and `role`, and the
+landing decision's first condition becomes `!clientReady` in place of `status !== 'ready'`. Nothing
+about the decision moved: `/login` still takes it in one place, and `/invite` still defers to that
+same resolution. It is synchronous, timer-free, and cannot be true a commit early, because the value
+it reads *is* the identity the roster was resolved under.
+
+**Values, not object identity, and both fields.** Comparing `zero.context === context` would also
+wait out a pm-audience change, which reconstructs the client without changing which rows the caller
+may read — a wait for nothing. `role` is compared as well as `userID` because that is `/invite`'s
+version of the same gap: acceptance changes the role and not the identity, and the pre-acceptance
+role reads the roster through `denyAll` too.
+
+**A team-less member still reaches `/` immediately.** The new condition is about *whose* roster it
+is, never about how full it is: once the client in context is the caller's own, an empty roster is a
+correct answer and lands on administration in the same commit it always did. The suite asserts this
+directly rather than by implication.
+
+**Lives in its own module rather than in `provider.tsx`** for one concrete reason: `useSyncSession`
+may be read anywhere, while this hook MUST run under `ZeroProvider`, and the two suites that exercise
+it mock `@/zero/provider` wholesale. A hook exported from the mocked module would have been mocked
+away by the very tests meant to prove it, leaving the regression unguarded.
+
+### Whether an e2e could have caught this, and why the guard stays at the unit tier
+
+**It could, but not reliably, and not without a product-side hook.** The defect needs the anonymous
+Zero client to have finished connecting and completed `teams.all` *before* the form is submitted —
+which is why a human reproduces it every time and `auth.spec.ts:121` never does. Making a spec
+reproduce it means dwelling on `/login` until that has happened, and `/login` exposes nothing that
+says it has: the statusline is behind the app frame, and the anonymous roster's completion has no
+DOM consequence at all. The only levers are a fixed sleep — long enough today, mysteriously not
+tomorrow, and silently green either way, which is precisely the instrument-distrust failure the
+e2e-determinism change was written about — or a new test-only attribute on the sign-in surface
+naming the identity its roster was resolved under, which is a product change made solely to observe
+a race.
+
+**So the guard is the unit tier, and it models the transition rather than a state.**
+`login-page.test.tsx` now carries `zeroContext` beside `sync` as two separate facts, and asserts
+across a re-render: with the credential `ready` and the client still anonymous, a complete-and-empty
+roster navigates NOWHERE and holds `Loading…`; when the rebuilt client and its roster arrive, the
+same component lands on the team. It fails on the old gate, in both directions of the gap
+(`userID`, and `role` for the invitation path), and `invite-page.test.tsx` carries the same shape for
+the fourth door. What remains genuinely e2e-only — that the browser physically traverses better-auth's
+redirect path and ends up looking at a team's Home — is already asserted by `auth.spec.ts:121` and is
+unchanged.

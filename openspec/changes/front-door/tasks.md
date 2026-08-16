@@ -88,3 +88,23 @@ Every one of these asserts `[data-testid="workspace-name"]` (rendered only by `a
 - [x] 10.4 Walk every scenario in `openspec/changes/front-door/specs/**` and confirm each is true of the built surface
 - [ ] 10.5 Sign in as a member of no team in a workspace that has teams, and look at what they get. It is administration by design (proposal non-goals; E2 `first-run` owns the better answer) — confirm it is not a team page belonging to strangers
 - [ ] 10.6 By hand, with the server stopped after sign-in: load `/login` holding a session and confirm it reaches the retry surface rather than sitting on `Loading…`, and that pressing retry recovers into the landing decision rather than into `/` (design D3). This is the branch no unit test observes end to end and the one a spinner hides
+
+## 11. The sign-in landing defect (found by hand after §10.4, fixed here)
+
+Signing in landed on `/` instead of the anchor team's Home — deterministically, for a workspace admin
+who is a member of a team. Loading `/login` with a live session was correct; submitting the form was
+not. The gate at `login-page.tsx` asked `status === 'ready'` (React state from the sync-token fetch)
+and `teamsResult.type === 'complete'` (a view owned by whichever Zero client is in context) and
+assumed they described the same moment; on sign-in they are one commit apart, and `Navigate` fires
+from a layout effect while the replacement client is built from a passive one. See design.md,
+"The headline behaviour did not work for the sign-in it was built for".
+
+- [x] 11.1 `apps/web/src/zero/identity.ts` (new): `useSyncClientReady()` — `status === 'ready'` **and** the Zero client in context was constructed for that identity, read from `zero.context` (`useZero()`), compared on `userID` and `role`. Its own module rather than `provider.tsx`: it must run under `ZeroProvider`, and both page suites mock `@/zero/provider` wholesale, so a hook exported from there would be mocked away by the tests meant to prove it
+- [x] 11.2 `apps/web/src/components/auth/login-page.tsx`: the gate's first condition becomes `!clientReady`, replacing `status !== 'ready'`. `status` is still read for the `logged-out` branch; `unavailable`, the recovery bound and the `resolveLandingTeam` call are untouched, and the decision stays in this one place
+- [x] 11.3 `apps/web/src/components/auth/invite-page.tsx`: the same replacement in the acceptance effect (`clientReady` joins its dependency list, `status` leaves both). This door has the same gap on the role axis — `refresh()` re-mints with the role acceptance just granted, and until the client is rebuilt the roster on screen is the one a non-member could read
+- [x] 11.4 `apps/web/src/components/auth/login-page.test.tsx`: model the transition, not a settled state. `zeroContext` becomes a harness fact beside `sync`; new cases assert that a complete-and-empty roster from a client that is still anonymous navigates nowhere and holds `Loading…`, that the rebuilt client's roster then lands on the team, that a roster resolved under the previous role decides nothing either, and that an empty roster from the caller's OWN client still lands on `/` at once
+- [x] 11.5 `apps/web/src/components/auth/invite-page.test.tsx`: the same shape for the fourth door — a workspace-level acceptance whose client still carries the pre-acceptance role navigates nowhere, then lands on the team once the rebuilt client's roster arrives
+- [x] 11.6 Confirm the new cases fail on the old gate before the fix and pass after: three failures across the two suites (two on `login-page`, one on `invite-page`), all of them the wrong `/`
+- [x] 11.7 `openspec/changes/front-door/specs/app-frame/spec.md`: the "Signing in lands on work" requirement gains the condition it was missing — a settled credential does not release the decision on its own; the roster read SHALL be one the caller's own identity produced, role included — plus the scenario that states it ("The credential settling is not the replica settling")
+- [x] 11.8 Record in design.md what the defect was, how it was found, why every automated tier was green, the mechanism in order, what was rejected (keying the subtree; keying `ZeroProvider`; any timer), and whether an e2e could catch it
+- [ ] 11.9 The integrator's re-check by hand: sign in with the form (not a reload) as a member of a team and confirm the landing is that team's Home. This is the check that found it and the only one that observes the real ordering

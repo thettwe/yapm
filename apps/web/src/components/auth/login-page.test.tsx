@@ -1,15 +1,21 @@
 import { render, screen } from '@testing-library/react'
+import type { AuthContext } from '@yapm/schema'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { SyncSessionState } from '@/zero/provider'
 
 // What only a rendered `/login` can prove: that the landing decision is taken here, once, and that
 // every state which is settled but not `ready` has an end — a surface, never an endless spinner,
 // and never a `Navigate` that `Authenticated` would answer with one of its own.
+//
+// `zeroContext` is modelled separately from `sync` on purpose: they are the same fact read from two
+// places that are one commit apart on sign-in, and the gap between them is the whole bug.
 
 const harness = vi.hoisted(() => ({
   session: null as { user: { id: string; email: string } } | null,
   isPending: false,
   sync: {} as SyncSessionState,
+  // What the Zero client in context was CONSTRUCTED with — `undefined` for the anonymous client.
+  zeroContext: undefined as AuthContext | undefined,
   teams: [] as unknown[],
   result: { type: 'complete' } as { type: 'complete' | 'unknown' | 'error' },
   retryOffered: false,
@@ -17,6 +23,7 @@ const harness = vi.hoisted(() => ({
 
 vi.mock('@rocicorp/zero/react', () => ({
   useQuery: () => [harness.teams, harness.result],
+  useZero: () => ({ context: harness.zeroContext }),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -58,6 +65,9 @@ const READY: SyncSessionState = {
   unavailable: false,
 }
 
+// The client Zero rebuilds around a settled credential — the one whose roster may be trusted.
+const SETTLED_CLIENT: AuthContext = { userID: 'viewer-1', role: 'member', pmAudienceTeamIds: [] }
+
 const team = (id: string, memberIds: readonly string[]) => ({
   id,
   name: id,
@@ -84,6 +94,7 @@ beforeEach(() => {
   harness.session = { user: { id: 'viewer-1', email: 'ada@example.com' } }
   harness.isPending = false
   harness.sync = READY
+  harness.zeroContext = SETTLED_CLIENT
   harness.teams = []
   harness.result = { type: 'complete' }
   harness.retryOffered = false
@@ -193,8 +204,55 @@ test('a remembered team the viewer can read wins over the first one', () => {
 
 test('a workspace admin lands on the anchor without a membership row', () => {
   harness.sync = { ...READY, role: 'admin' }
+  harness.zeroContext = { ...SETTLED_CLIENT, role: 'admin' }
   harness.teams = [team('team-1', [])]
   render(<LoginPage />)
 
   expect(screen.getByTestId('navigate')).toHaveTextContent('/teams/team-1')
+})
+
+// The defect this suite could not see until it modelled the two facts separately, and the reason it
+// could not: every earlier case described a SETTLED moment, and the bug lives in one commit of
+// transition. Signing in mints the credential and rebuilds the Zero client around it, but the client
+// arrives a commit later — so `status` says `ready` while the roster on screen is still the
+// anonymous one, which `denyAll` answered complete-and-EMPTY. Deciding there sent a workspace admin
+// with teams to `/`, every time, because the redirect fires from a layout effect and the replacement
+// client from a passive one.
+test('a roster resolved before the client was rebuilt decides nothing, and the rebuilt one decides', () => {
+  harness.sync = { ...READY, role: 'admin' }
+  harness.zeroContext = undefined
+  harness.teams = []
+  harness.result = { type: 'complete' }
+  const view = render(<LoginPage />)
+
+  expect(screen.queryByTestId('navigate')).not.toBeInTheDocument()
+  expect(screen.getByRole('status')).toHaveTextContent('Loading…')
+
+  harness.zeroContext = { ...SETTLED_CLIENT, role: 'admin' }
+  harness.teams = [team('team-1', [])]
+  view.rerender(<LoginPage />)
+
+  expect(screen.getByTestId('navigate')).toHaveTextContent('/teams/team-1')
+})
+
+// The same gap on the other axis: the identity never changes, only the role does — which is exactly
+// what accepting an invitation does, and a `null` role reads the roster through `denyAll` too.
+test('a roster resolved under the previous role decides nothing either', () => {
+  harness.sync = READY
+  harness.zeroContext = { ...SETTLED_CLIENT, role: null }
+  harness.teams = []
+  render(<LoginPage />)
+
+  expect(screen.queryByTestId('navigate')).not.toBeInTheDocument()
+  expect(screen.getByRole('status')).toHaveTextContent('Loading…')
+})
+
+// …and the wait this introduces still ends where it should. A roster that is empty because the
+// workspace holds no team is a correct answer once the client asking is the caller's own, and it
+// lands on administration rather than waiting for teams that will never arrive.
+test('an empty roster from the caller’s own client still lands on the workspace surface', () => {
+  harness.teams = []
+  render(<LoginPage />)
+
+  expect(screen.getByTestId('navigate')).toHaveTextContent('/')
 })

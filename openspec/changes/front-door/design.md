@@ -782,3 +782,47 @@ and because the second point belongs to whoever next touches that surface.
 **Task 10.5 remains open and is not agent-takeable:** signing in as a member of no team in a
 workspace that has teams. The seeded `foreign-seed@example.test` has zero memberships and is the
 right subject, but its password is not in the repo.
+
+### Task 10.5's hand check: the redirect gets it right, the deck still offers a stranger's team
+
+**Taken 2026-08-16 against `e4a6964` on a live stack.** 10.5 asks what a member of no team sees in
+a workspace that has teams. The seeded accounts were the wrong subject — neither
+`foreign-seed@example.test` nor a fresh sign-up holds a `workspace_member` row, so both meet the
+non-member gate (*"You need an invitation … Ask an admin for an invite link"*), which is a different
+and correct answer to a different question. The real subject was constructed: a workspace `member`
+with zero team memberships.
+
+**The redirect is right.** They land on `/`, not on a team they do not belong to. That is
+`resolveLandingTeam`'s stricter membership test doing precisely the job D2 built it for, and the
+landing is *actionable* rather than a dead end — the Teams list offers **Join** against every team.
+
+**The deck is the part that is wrong, and D2 predicted it.** D2 kept `resolveAnchorTeam` untouched
+on the argument that *"the deck is an offer and may be wrong; a redirect is not an offer"*. This is
+what wrong looks like: the stops resolve through `queries.teams.all()`, which returns every
+workspace team to any member, so clicking **Home** opens **Engineering's** page for someone who is
+not in Engineering. It renders titled `Engineering`, invites them to start a cycle, and says
+*"Nothing held, nothing owed."*
+
+**No data leaks** — every band is empty because the team-scoped queries return nothing, so the
+permission model holds exactly as designed. The failure is one of *address*, not access: the page
+reads as an honest empty morning for a team that is theirs, when the true fact is that the team is
+not theirs. `app-frame/spec.md:202-206` covers the neighbouring case (*a workspace with no teams
+drops the stops*) and not this one, where the workspace has teams and the caller has none.
+
+**Not this change's to fix, and deliberately so** — front-door left the deck alone by written
+decision, and the redirect it does own behaves correctly. Recorded for `first-run` (E2), which owns
+the no-team experience, and for whoever revisits the anchor: the cheapest honest fix is probably
+that a stop pointing at a team the caller is not in should say so, rather than drawing that team's
+empty morning.
+
+**Reproducing it:** `noteam-105@example.test` / `noteam-password-1234` exists in the dev database as
+a workspace member with no team.
+
+### The board's five file-choosers: dismissed, with evidence
+
+An earlier session saw navigation to the board open five stacked file-choosers under Playwright,
+blocking the page, and it was recorded as *"worth ten minutes before it is believed or dismissed"*.
+Ten minutes spent: **it is not a product defect.** The board does not reproduce it, and it cannot —
+`grep` for `type="file"` across `apps/web/src` returns nothing at all, and the only file-picker
+machinery in the app is `apps/web/src/issues/attachments/`, mounted by the issue detail's FILES
+section and never by the board. A board-originated chooser has no code path. Driver artifact.

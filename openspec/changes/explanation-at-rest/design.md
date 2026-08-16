@@ -626,3 +626,32 @@ Empty and known-empty are different facts, and this surface speaks the second on
 the node's *existence* rather than its text would trade the wrong announcement for a blank page and
 for an unreliable one: a `role="status"` inserted with its message already inside it is not reliably
 spoken, which is the reason `triage-view.tsx` keeps its live region persistent across the same swap.
+
+### The bare `how ·` reads differently at a band header than at a page foot
+
+**Task 10.4's eyeball, taken 2026-08-15 against the merged build on the running app at 1440×900,
+Warm light, no custom accent.** D7 accepted an aesthetic risk: four folded sites leave a `how ·`
+with no visible text naming its subject. The task said that if it reads as orphaned punctuation
+rather than a quiet affordance, that is the finding and it belongs here before anyone works around
+it. It reads **both ways, and the split is positional rather than aesthetic.**
+
+**Anchored, and it works.** Team Home's YOURS affordance sits right-aligned on the band header
+beside `YOURS 2`. The header is its subject, the eye already rests there, and the mono dot reads as
+belonging to the band. Projects' row-level affordances (`Past target — 1 open  how ·`) read better
+still, because they sit against the very phrase they explain.
+
+**Unanchored, and it does not.** The page-foot affordances stand alone. On Projects the effect is
+strongest: after the last row the page runs to roughly 200px of empty ground and the `how ·` sits
+at the bottom-left of it, touching nothing. Home's is milder only because a divider and the onward
+footer follow closely. In both cases the dot has no subject within reach, and the thing D7 worried
+about is what happens — it reads as a mark left behind rather than a control offered.
+
+**Not worked around, per the task.** The distinction worth carrying forward is that the affordance
+needs a subject *within reach*, not a label of its own: adding visible text would re-introduce the
+prose this change removed, which D7 already rejected for good reason. What the page foot lacks is
+not a word but an anchor. Whoever next owns these surfaces — most likely E1 `notation-legend`,
+which has to find a home for teaching anyway — should decide whether a page-scope derivation
+belongs at the foot at all, or against the masthead where the page's own subject is already named.
+
+**Still owed, and not takeable by an agent:** tasks 10.2 (do the folded panels speak in the page's
+register, or are they the mono line relocated?) and 10.7 (the dark pass across all four sites).

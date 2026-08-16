@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ISSUE_STATUSES, type IssueStatus } from './context.js'
 import {
   assembleLinkedEntities,
   computeDeliverySignal,
@@ -6,7 +7,13 @@ import {
   type IssueLinkRow,
   type LinkedEntities,
 } from './delivery.js'
-import { evaluateFilter, type IssueView, matchesFilter } from './filter.js'
+import {
+  DEFAULT_ISSUE_STATUS_FILTER,
+  evaluateFilter,
+  type IssueView,
+  matchesFilter,
+  TERMINAL_ISSUE_STATUSES,
+} from './filter.js'
 
 const issue = (over: Partial<IssueView> = {}): IssueView => ({
   status: 'todo',
@@ -202,5 +209,26 @@ describe('merged-not-deployed, with the reserved slot filled', () => {
         },
       ),
     ).toBe(false)
+  })
+})
+
+describe('DEFAULT_ISSUE_STATUS_FILTER', () => {
+  it('is every status minus the terminal ones, derived rather than listed', () => {
+    const expected = ISSUE_STATUSES.filter(
+      (status) => !(TERMINAL_ISSUE_STATUSES as readonly IssueStatus[]).includes(status),
+    )
+    expect(DEFAULT_ISSUE_STATUS_FILTER.status).toEqual(expected)
+  })
+
+  it('hides the terminal statuses and keeps every live one', () => {
+    for (const status of ISSUE_STATUSES) {
+      const terminal = (TERMINAL_ISSUE_STATUSES as readonly IssueStatus[]).includes(status)
+      expect(matchesFilter(issue({ status }), DEFAULT_ISSUE_STATUS_FILTER)).toBe(!terminal)
+    }
+  })
+
+  it('constrains nothing but the status axis, so clearing it restores the archive', () => {
+    expect(Object.keys(DEFAULT_ISSUE_STATUS_FILTER)).toEqual(['status'])
+    expect(matchesFilter(issue({ status: 'done' }), {})).toBe(true)
   })
 })

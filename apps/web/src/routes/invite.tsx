@@ -1,7 +1,10 @@
+import { useQuery } from '@rocicorp/zero/react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { queries } from '@yapm/schema'
 import { Button } from '@yapm/ui/components/button'
 import { useEffect, useRef, useState } from 'react'
 import { LoginForm } from '@/components/auth/login-form'
+import { type LandingTeam, readAnchorTeam, resolveLandingTeam } from '@/frame/team-context'
 import { useSyncControl, useSyncSession } from '@/zero/provider'
 
 interface InviteSearch {
@@ -64,9 +67,13 @@ function InvitePage() {
 
 function AcceptInvite({ token }: { token: string }) {
   const { refresh } = useSyncControl()
+  const { status, role, userID } = useSyncSession()
   const navigate = useNavigate()
+  const [teams, teamsResult] = useQuery(queries.teams.all())
+  const [remembered] = useState<string | null>(() => readAnchorTeam())
   const [state, setState] = useState<AcceptState>('accepting')
   const [reason, setReason] = useState<string | undefined>(undefined)
+  const [acceptedTeamId, setAcceptedTeamId] = useState<string | null>(null)
   const started = useRef(false)
 
   useEffect(() => {
@@ -79,12 +86,16 @@ function AcceptInvite({ token }: { token: string }) {
       body: JSON.stringify({ token }),
     })
       .then(async (response) => {
+        const body = (await response.json().catch(() => ({}))) as {
+          error?: unknown
+          teamId?: unknown
+        }
         if (response.ok) {
+          if (typeof body.teamId === 'string') setAcceptedTeamId(body.teamId)
           refresh()
           setState('done')
           return
         }
-        const body = (await response.json().catch(() => ({}))) as { error?: unknown }
         setReason(reasonText(body.error, response.status))
         setState('error')
       })
@@ -94,9 +105,24 @@ function AcceptInvite({ token }: { token: string }) {
       })
   }, [token, refresh])
 
+  // The same landing decision `/login` takes, so acceptance is not a second answer to where a
+  // signed-in caller arrives. A team-bound invitation skips the roster entirely: the server has
+  // just written the membership row, which is stronger evidence than any test of a synced roster.
   useEffect(() => {
-    if (state === 'done') void navigate({ to: '/' })
-  }, [state, navigate])
+    if (state !== 'done') return
+    if (acceptedTeamId !== null) {
+      void navigate({ to: '/teams/$teamId', params: { teamId: acceptedTeamId } })
+      return
+    }
+    if (status !== 'ready' || teamsResult.type !== 'complete') return
+    const landing = resolveLandingTeam(teams as readonly LandingTeam[], remembered, {
+      userID,
+      role,
+    })
+    void navigate(
+      landing === null ? { to: '/' } : { to: '/teams/$teamId', params: { teamId: landing.id } },
+    )
+  }, [state, acceptedTeamId, navigate, status, teams, teamsResult, remembered, userID, role])
 
   if (state === 'error') {
     return (

@@ -7,6 +7,7 @@ import {
   type TeamHomeDeploymentRow,
   type TeamHomeIssueRow,
   type TeamHomeTriageRow,
+  type WorkspaceRole,
 } from '@yapm/schema'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 
@@ -56,6 +57,43 @@ export function resolveAnchorTeam(
   const fromMemory = remembered === null ? undefined : teams.find((t) => t.id === remembered)
   if (fromMemory !== undefined) return fromMemory
   return teams[0] ?? null
+}
+
+// The team a caller is SENT to after signing in, which is a stricter test than the anchor above.
+//
+// `queries.teams.all()` returns every non-archived team in the workspace to any member, so
+// `resolveAnchorTeam`'s `teams[0]` may name a team the caller has no membership in — and
+// `teamScoped` grants row access only to workspace admins and to members of the team, so that
+// team's Home would render an empty digest of strangers' work. The deck may point there: an offer
+// can be wrong without lying, and the header comment above argues that case. A redirect cannot —
+// it is the product choosing on the reader's behalf. Hence two resolvers, and hence this one does
+// not touch the other.
+//
+// `members` rides on the row the deck already syncs, so this costs no new query.
+export interface LandingTeam extends FrameTeam {
+  readonly members?: readonly { readonly userId: string }[]
+}
+
+export interface LandingViewer {
+  readonly userID: string | null
+  readonly role: WorkspaceRole | null
+}
+
+function canRead(team: LandingTeam, viewer: LandingViewer): boolean {
+  // Mirrors `teamScoped`'s own bypass: a workspace admin reads every team's rows.
+  if (viewer.role === 'admin') return true
+  if (viewer.userID === null) return false
+  return (team.members ?? []).some((member) => member.userId === viewer.userID)
+}
+
+export function resolveLandingTeam(
+  teams: readonly LandingTeam[],
+  remembered: string | null,
+  viewer: LandingViewer,
+): LandingTeam | null {
+  const fromMemory = remembered === null ? undefined : teams.find((t) => t.id === remembered)
+  if (fromMemory !== undefined && canRead(fromMemory, viewer)) return fromMemory
+  return teams.find((team) => canRead(team, viewer)) ?? null
 }
 
 export function useAnchorTeam(routeTeamId: string | undefined): FrameTeam | null {

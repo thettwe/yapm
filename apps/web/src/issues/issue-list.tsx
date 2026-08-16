@@ -2,6 +2,7 @@ import { useQuery } from '@rocicorp/zero/react'
 import { useNavigate } from '@tanstack/react-router'
 import {
   buildDeploymentIndex,
+  DEFAULT_ISSUE_STATUS_FILTER,
   type IssueFilter,
   type IssueGrouping,
   type IssueSort,
@@ -207,7 +208,7 @@ function IssueListBody({
   const command = useCommand()
   const [savedViews] = useQuery(queries.savedViews.byTeam({ teamId }))
 
-  const [filter, setFilter] = useState<IssueFilter>({})
+  const [filter, setFilter] = useState<IssueFilter>(DEFAULT_ISSUE_STATUS_FILTER)
   const [grouping, setGrouping] = useState<ListGrouping>(DEFAULT_GROUPING)
   const [cycleFilter, setCycleFilter] = useState<readonly (string | null)[] | undefined>(undefined)
   const [projectFilter, setProjectFilter] = useState<readonly (string | null)[] | undefined>(

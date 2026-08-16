@@ -37,6 +37,24 @@ export interface IssueFilter {
   readonly delivery?: readonly DeliveryPredicate[]
 }
 
+// The statuses that mean the work is over.
+export const TERMINAL_ISSUE_STATUSES = [
+  'done',
+  'canceled',
+] as const satisfies readonly IssueStatus[]
+
+// The lens the issue list opens on: a real value of the Status axis, seeded — not a hidden rule
+// behind it. The member sees `Status 4`, can open it to read which four, and clears it with the
+// control that is already there.
+//
+// DERIVED by exclusion and never listed, so a status added to `ISSUE_STATUSES` joins the default
+// instead of being silently hidden by an include-list that fell behind.
+export const DEFAULT_ISSUE_STATUS_FILTER: IssueFilter = {
+  status: ISSUE_STATUSES.filter(
+    (status) => !(TERMINAL_ISSUE_STATUSES as readonly IssueStatus[]).includes(status),
+  ),
+}
+
 export interface IssueSort {
   readonly key: IssueSortKey
   readonly direction: SortDirection

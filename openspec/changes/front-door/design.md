@@ -532,3 +532,59 @@ Pre-seeded scoping decisions (settled at proposal time; revise only with evidenc
 
 <!-- Build-time decisions are appended below this line, each with what was ambiguous, what was
      chosen, and why. -->
+
+### `DEFAULT_ISSUE_STATUS_FILTER` is an `IssueFilter`, not a bare array of statuses
+
+**Ambiguous:** D5's snippet types it `readonly IssueStatus[]`, while its consumer
+(`issue-list.tsx:210`) holds a `useState<IssueFilter>` and every other reader of the value — a saved
+view, the axis count, the evaluator — speaks in filters.
+
+**Chosen:** `export const DEFAULT_ISSUE_STATUS_FILTER: IssueFilter = { status: ISSUE_STATUSES.filter(…) }`,
+with `TERMINAL_ISSUE_STATUSES` beside it exactly as D5 specifies. **Why:** the name says *filter*, the
+seed site takes a filter, and an array would have made the seed read
+`{ status: DEFAULT_ISSUE_STATUS_FILTER }` — a value whose name promises a filter being spliced into
+one. The derivation D5 actually cares about is unchanged and is what `filter.test.ts` asserts: the
+status list is `ISSUE_STATUSES` minus the terminal ones, computed, never listed. A third case asserts
+the object constrains **only** the status axis, so the seed can never quietly acquire a second
+predicate.
+
+### The landing decision lives in `components/auth/login-page.tsx`, mounted by `routes/login.tsx`
+
+**Ambiguous:** tasks 3.1–3.3 place the decision in `routes/login.tsx`. A route file cannot export a
+second symbol without the TanStack plugin refusing to code-split it (it says so, by name, at build
+time), and a decision this load-bearing needs a component test that renders it directly.
+
+**Chosen:** `routes/login.tsx` is now four lines — `createFileRoute('/login')({ component: LoginPage })`
+— and `LoginPage` lives beside `LoginForm`, which is the house pattern every other route already
+follows (`routes/inbox.tsx` → `InboxView`, `routes/teams.$teamId.index.tsx` → `TeamHome`). The
+decision is still taken in exactly one place; that place is now importable. `ROUTE_HOMES` and
+`routes.test.tsx` are untouched, per task 6.6.
+
+### The roster query is issued by a child, so a signed-out visitor issues none
+
+**Ambiguous:** hooks cannot be conditional, so the naive shape calls `useQuery` above the
+`isPending` / no-session branches — for a visitor who has not signed in and whose roster resolves
+through `denyAll` regardless.
+
+**Chosen:** `LoginPage` reads only the better-auth session; when one exists it renders
+`<LandingDecision />`, which is where `useSyncSession` and `useQuery` live. **Why:** a sign-in page
+should not subscribe to a workspace roster on behalf of someone who has no workspace. It also keeps
+`routes.test.tsx`'s four route-registration cases green **without edits** — they render `/login`
+outside any `ZeroProvider`, and `useZero` throws there. A change that had queried unconditionally
+would have forced an edit to the file task 6.6 names as the guard.
+
+### `resolveLandingTeam`'s viewer is `{ userID, role }` — the two fields `SyncSessionState` already carries
+
+D2 writes the readability test as `viewer.role === 'admin' || team.members.some(m => m.userId ===
+viewer.userID)` without fixing the parameter's shape. It is typed as exactly those two nullable
+fields, so both call sites (`login-page.tsx`, `invite.tsx`) pass what `useSyncSession()` already
+hands them and nothing has to be assembled. A `userID` of `null` reads no team: an unidentified
+caller is never a member of one.
+
+### `/invite` now reads the accept response on the success path, not only on failure
+
+`invite.tsx:87-89` parsed the body only when the request failed. The team-bound landing needs
+`teamId`, which is on the success body, so the parse moved above the `response.ok` branch and both
+paths read one body. The failure branch's `reasonText` call and copy are unchanged; the success
+branch takes `teamId` only when it is a string, so a workspace-level acceptance (a null `team_id`)
+falls to `resolveLandingTeam` exactly as D10 requires.

@@ -302,12 +302,14 @@ export type {
   IssueView,
 } from './zero/filter.js'
 export {
+  DEFAULT_ISSUE_STATUS_FILTER,
   DELIVERY_PREDICATES,
   evaluateFilter,
   issueFilterSchema,
   issueGroupingSchema,
   issueSortSchema,
   matchesFilter,
+  TERMINAL_ISSUE_STATUSES,
 } from './zero/filter.js'
 export type {
   IssueChangeOpenedMoment,

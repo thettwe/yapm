@@ -266,6 +266,10 @@ function BoardBody({
   const { canWrite } = useMembership()
   const [savedViews] = useQuery(queries.savedViews.byTeam({ teamId }))
 
+  // Unfiltered, unlike the list, and deliberately: `board/model.ts` maps `STATUS_ORDER`
+  // unconditionally, so all six columns render whatever the filter says. Seeding the list's default
+  // here would draw a Done column whose data is excluded — and a card dragged into it would vanish
+  // under the cursor. The board's columns ARE the status axis.
   const [filter, setFilter] = useState<IssueFilter>({})
   const [cycleFilter, setCycleFilter] = useState<readonly (string | null)[] | undefined>(undefined)
   const [projectFilter, setProjectFilter] = useState<readonly (string | null)[] | undefined>(

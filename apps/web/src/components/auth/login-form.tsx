@@ -16,7 +16,11 @@ function GithubMark() {
 
 type Mode = 'signin' | 'signup'
 
-const CALLBACK_URL = '/'
+// Providers only. A third-party redirect structurally needs a URL, and `/login` is the one place
+// the landing decision is taken — the email calls below pass none at all, so better-auth answers
+// `redirect: false` and its redirect plugin cannot fire a `window.location.href` that competes with
+// the route (and throws away the Zero client and its replica on the way).
+const CALLBACK_URL = '/login'
 
 interface AuthResult {
   error?: { message?: string } | null
@@ -51,12 +55,11 @@ export function LoginForm() {
     try {
       const result =
         mode === 'signin'
-          ? await signIn.email({ email, password, callbackURL: CALLBACK_URL })
+          ? await signIn.email({ email, password })
           : await signUp.email({
               email,
               password,
               name: name.trim() || email,
-              callbackURL: CALLBACK_URL,
             })
       const failure = messageFor(result, 'Could not sign in. Check your credentials and try again.')
       if (failure !== undefined) {

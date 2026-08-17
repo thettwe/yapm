@@ -97,15 +97,16 @@
 ## 11. Gates
 
 - [x] 11.1 `pnpm turbo lint typecheck test build` green
-- [ ] 11.2 The full Playwright suite green: `pnpm --filter @yapm/web e2e`, the invocation CI uses. Run it twice — §7 changes a helper two specs share, and helper breakage is order-dependent
-  > **Not run — cannot be run against the dev stack on this machine, and not claimed.** The
-  > suite boots its own app server on a second port; zero-cache calls back into the DEV server,
-  > which verifies the sync JWT against its own issuer, so every spec times out at sign-in before
-  > reaching an assertion. Root cause isolated by hand; see `design.md`. CI owns this gate.
+- [x] 11.2 The full Playwright suite green: `pnpm --filter @yapm/web e2e`, the invocation CI uses. Run it twice — §7 changes a helper two specs share, and helper breakage is order-dependent
+  > **Green in CI (12m25s), once — not twice, and not locally.** It cannot be run against the
+  > dev stack on this machine: the suite boots its own app server on a second port, zero-cache
+  > calls back into the DEV server, and that server verifies the sync JWT against its own issuer,
+  > so every spec times out at sign-in before reaching an assertion. Root cause isolated by hand;
+  > see `design.md`. The second run §7 asks for has not happened.
 - [x] 11.3 `npx -y @fission-ai/openspec@latest validate --all` green
-- [ ] 11.4 The compose smoke test green
-  > **Not run.** Port 3000 is held by an unrelated container on this machine, which is why the
-  > compose smoke test cannot run locally. CI owns it.
+- [x] 11.4 The compose smoke test green
+  > **Green in CI (2m18s).** Not run locally: port 3000 is held by an unrelated container on
+  > this machine.
 - [x] 11.5 `ROADMAP.md` is deliberately **not** edited on this branch (`SCOPE-legibility.md:191-193` — siblings are authored in parallel and that file is the guaranteed conflict). Confirm the integrator's row describes what you built, and flip only its status column at archive time
 - [x] 11.6 **Merge order, before archiving** (design D14): confirm B1 `explanation-at-rest` has archived and its text is live in `openspec/specs/team-home/spec.md` — the band-order sentence naming the composition record behind a `how ·`, and the "no explanatory prose at rest" paragraph. This change's `team-home` delta is the union of B1's text and this change's rationing, so syncing it over the pre-B1 text loses B1's clauses. If B1 has **not** archived, stop and say so rather than archiving out of order: the repair is to re-author one of the two deltas, not to land both. The same requirement has a **third** claimant — `decision-record/specs/team-home/spec.md:33-40`, still holding the pre-B1, pre-D1 text — which is parked and must not archive after this change without being re-authored as the union first (design D8, D14). Nothing here edits it; note it in the hand-off so the next person does not archive a revert
 - [x] 11.7 Record every decision taken during the build in `design.md` under "## Decisions made during implementation"

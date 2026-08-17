@@ -722,8 +722,11 @@ assertion of this change's. Sign-in itself was verified working against both ser
 the cause to the issuer binding rather than to anything on this branch.
 
 Running it would have meant stopping a server this build did not start. The e2e tier is instead
-covered by CI, and every navigation claim that could be checked without it was checked by hand in a
-real browser against the running dev app — see the §10 record below.
+covered by CI, where the full suite is **green (12m25s)** on this branch — including the two new
+specs and the reach path `openTriage` now takes through `goToMore`. CI runs it once; the second run
+`tasks.md` §11.2 asks for, against helper breakage being order-dependent, has not happened. Every
+navigation claim that could be checked without the suite was checked by hand in a real browser
+against the running dev app — see the §10 record below.
 
 ### §10, performed and recorded — including what was not performed
 

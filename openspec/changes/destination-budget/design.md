@@ -665,4 +665,91 @@ third collides twice, on both of the requirements this change touches:
 
 ## Decisions made during implementation
 
-<!-- Fill during the build: what was ambiguous, what was chosen, and why. -->
+### The deck enforcement test renders the deck directly, with three neighbours stubbed
+
+`tasks.md` §5.1 asks that every `'stop'` in `ROUTE_HOMES` be checked against a *rendered* bar link
+and every `'more'` against a *rendered* menu item. `routes.test.tsx` renders the real router with no
+session, so no deck is drawn on any route it visits, and building one there would have meant mocking
+Zero for the whole file. Chosen instead: mount `<Deck>` as the component of a scratch route tree —
+the house pattern `header-menus.test.tsx`, `team-home.test.tsx` and `delivery-view.test.tsx` all
+use — with `Switcher`, `UserMenu` and `InboxBadge` stubbed to `null`. Each of those three reads Zero
+and none is what the assertion is about. The comparison is by `href` with the query string stripped,
+because `Delivery`'s link carries `?window=6` and the route id does not.
+
+The `'more'` assertion is scoped to the permanent group (`getByRole('group', { name: 'More' })`)
+rather than to the popup. jsdom applies no stylesheet, so the folding `Team` group is visible to a
+test at every width; an unscoped assertion would pass with Triage back in the `lg:hidden` group,
+which is the exact regression §5 exists to catch.
+
+### Comments naming the old count that `tasks.md` located in a different file
+
+Two of the comments 6.6 names (`"would otherwise leave six stops pointing at"`, `"A workspace with
+no teams drops the six stops"`) are in `apps/web/src/frame/app-frame.test.tsx:376` and `:500`, not in
+`team-home.test.tsx` — the line numbers had moved under `explanation-at-rest`. They are reworded
+where they actually live. One more the task list does not name,
+`apps/web/src/pm-digest/digests-entry.tsx:26` ("not one of the six destinations"), is reworded for
+the same reason: it is a sentence this change makes false.
+
+### `ia.html` needed a Triage glyph that did not exist
+
+9.3 asks for a `g t` row in the drawn-open `more▾` menu, and every row in that menu carries an inline
+glyph. There was no `#g-triage` symbol in the file, so one was added in the same hand as its
+neighbours (1.6 stroke, 20×20 box): a tray with an inbound path. Reusing `#g-decision` or
+`#g-projects` would have drawn a lie in a file whose whole job is to be read literally.
+
+### `home-digest-2-quiet.html`'s deck already diverged from the `gbar` md5 invariant
+
+9.5 asks that the md5 at `NORTHSTAR.md:40-41` be re-verified and re-stated. Recomputing it the way
+the recorded value was computed (normalized whitespace, `active` class stripped) reproduces
+`571eee83506c` exactly on the pre-change files — for seven of the eight. `home-digest-2-quiet.html`
+hashed to `afb1d4d23e93` **before this change touched anything**: a quiet morning draws no attention
+badge and one unread rather than three, which is the file's whole point. The invariant's own sentence
+scopes itself to "all five files", so nothing was wrong; the annotation now says which files hash
+alike and why the eighth does not, so the next reader does not spend the same twenty minutes.
+The new value across the seven is `5635e13a1609`.
+
+### The e2e suite could not be run locally, and why — not a claim that it passes
+
+`apps/web/playwright.config.ts` boots its own app server (`reuseExistingServer: false`, deliberately)
+on `E2E_SERVER_PORT`. The dev stack running on this machine pins zero-cache's `ZERO_QUERY_URL` and
+`ZERO_MUTATE_URL` to the **dev** server's host port, and `apps/server/src/auth.ts:172` verifies the
+sync JWT with `issuer`/`audience` equal to that server's own `BETTER_AUTH_URL`. So a token minted by
+a second app server on any other port is rejected by the server zero-cache calls back into, every
+sync query fails, and the sign-in page holds its loading state — which is exactly the failure the
+suite reported: seven of seven specs timing out in `openWorkspaceOverview`, before reaching a single
+assertion of this change's. Sign-in itself was verified working against both servers by hand
+(`POST /api/auth/sign-in/email` → 200, `GET /api/zero/token` → 200 on each), which is what isolates
+the cause to the issuer binding rather than to anything on this branch.
+
+Running it would have meant stopping a server this build did not start. The e2e tier is instead
+covered by CI, and every navigation claim that could be checked without it was checked by hand in a
+real browser against the running dev app — see the §10 record below.
+
+### §10, performed and recorded — including what was not performed
+
+Done in a real browser (Chromium via Playwright, against the running dev app), at 1440 / 900 / 600:
+
+| width | bar | menu | total | duplicates |
+|---|---|---|---|---|
+| 1440 | Home · Issues · Cycles · Delivery | Triage `g t` · Retros `g r` · Projects `g p` · Roadmap `g m` | 8 | none |
+| 900 | Home · Issues · Cycles | Delivery `g d` \| Triage · Retros · Projects · Roadmap | 8 | none |
+| 600 | Home · Issues | Cycles `g c` · Delivery `g d` \| Triage · Retros · Projects · Roadmap | 8 | none |
+
+The narrow menu holds six items, which is D2's derivation observed rather than asserted. Triage's
+`g t` hint is drawn at all three widths, which is D9's claim that the advertisement improved.
+
+Also confirmed by hand: on `/teams/{id}/triage` the menu's Triage carries `aria-current="page"` and
+the `more▾` trigger carries none; `g t` from a team surface opens Triage with no deck seat involved
+(the first attempt appeared to fail and did not — two `press_key` round-trips exceeded
+`PREFIX_WINDOW_MS`, which is the guard working); `g d` still opens Delivery, the canary for D9 and
+for `delivery-metrics/spec.md:226`; Home's foot carries `Board ›` and the `⌘K` hint and nothing else,
+while SHIP CADENCE keeps its own `Delivery ›`; a cleared triage queue still offers
+`Issues · Cycles · Projects` and an empty inbox still offers `Issues · Home`, both untouched (D13);
+and off a team (`/inbox`) the deck still offers its destinations with none marked current.
+
+**Not performed:** 10.3 in full. The team available on the running stack has an empty triage inbox
+(confirmed: `Nothing waiting.`) but does have retros and projects, so "a team with an empty triage
+inbox, an empty retros list *and* no projects" was checked only in its first third. Nothing in the
+change makes a destination conditional on a count — that is the whole of D4, and the deck's JSX has
+no data dependency to make it so — but the observation is not the same as the argument, and this one
+was not made. It is left for the integrator's pass.

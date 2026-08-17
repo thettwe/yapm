@@ -3,6 +3,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  Outlet,
   RouterProvider,
 } from '@tanstack/react-router'
 import { fireEvent, render, screen } from '@testing-library/react'
@@ -36,10 +37,20 @@ vi.mock('@rocicorp/zero/react', () => ({
 import { Switcher } from './switcher'
 import { UserMenu } from './user-menu'
 
-function mount(component: () => React.ReactNode) {
-  const rootRoute = createRootRoute()
+function mount(component: () => React.ReactNode, at = '/') {
+  // Both menus live in the app header, so they are mounted on the ROOT route: a test that needs to
+  // stand on a particular URL is asking what the header draws from there, and a header registered on
+  // one path could only ever be asked from that path.
+  const rootRoute = createRootRoute({
+    component: () => (
+      <>
+        {component()}
+        <Outlet />
+      </>
+    ),
+  })
   const routeTree = rootRoute.addChildren([
-    createRoute({ getParentRoute: () => rootRoute, path: '/', component }),
+    createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => null }),
     createRoute({ getParentRoute: () => rootRoute, path: '/login', component: () => null }),
     createRoute({ getParentRoute: () => rootRoute, path: '/teams/$teamId', component: () => null }),
     createRoute({ getParentRoute: () => rootRoute, path: '/settings/ai', component: () => null }),
@@ -59,7 +70,7 @@ function mount(component: () => React.ReactNode) {
   ])
   const router = createRouter({
     routeTree,
-    history: createMemoryHistory({ initialEntries: ['/'] }),
+    history: createMemoryHistory({ initialEntries: [at] }),
   })
   render(<RouterProvider router={router} />)
 }
@@ -106,4 +117,34 @@ test('the workspace switcher opens with all three of its labelled groups', async
   expect(screen.getByText('Workspace')).toBeInTheDocument()
   expect(screen.getByText('Teams')).toBeInTheDocument()
   expect(screen.getByText('This team')).toBeInTheDocument()
+})
+
+// `MenuLinkItem` DRAWS the page it marks now, and it is shared, so every non-exact link inside one
+// became a row that weights and rules itself on routes it does not name. `/teams/$teamId` is a
+// prefix of every team page, so on Members the switcher claimed to be the current page while
+// activating it would have navigated to team Home — a marker for a place the reader is not.
+test('the switcher marks a team only on the page that team row actually opens', async () => {
+  mount(() => <Switcher teamName="Engineering" teamId="team-1" />, '/teams/team-1/members')
+
+  fireEvent.click(await screen.findByRole('button', { name: /switch workspace or team/i }))
+
+  expect(await screen.findByRole('menuitem', { name: 'Engineering' })).not.toHaveAttribute(
+    'aria-current',
+  )
+  // Nor does the workspace row, whose `/` is a prefix of everything in the product.
+  expect(screen.getByRole('menuitem', { name: 'Acme' })).not.toHaveAttribute('aria-current')
+  // The one row that DOES name this page keeps its marking: the rule is exactness, not silence.
+  expect(screen.getByRole('menuitem', { name: 'Members' })).toHaveAttribute('aria-current', 'page')
+})
+
+test('the switcher marks the team row on team Home, which is where it leads', async () => {
+  mount(() => <Switcher teamName="Engineering" teamId="team-1" />, '/teams/team-1')
+
+  fireEvent.click(await screen.findByRole('button', { name: /switch workspace or team/i }))
+
+  expect(await screen.findByRole('menuitem', { name: 'Engineering' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  expect(screen.getByRole('menuitem', { name: 'Design' })).not.toHaveAttribute('aria-current')
 })

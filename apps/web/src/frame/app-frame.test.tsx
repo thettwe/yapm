@@ -338,6 +338,12 @@ test('a menu destination is marked current, and the transient that holds it is n
   // reader gets. `packages/ui/src/styles/contrast.test.ts` holds the pair it draws in.
   expect(triage).toHaveClass('aria-[current=page]:font-semibold')
   expect(triage).toHaveClass('aria-[current=page]:before:bg-accent')
+  // On the row's other ground — hovered, or arrowed onto, where the fill IS the accent — both the
+  // ink and the rule step to `--on-accent`, because an accent rule on an accent fill is a marking
+  // that disappears at the moment the reader is pointing at it. jsdom applies no stylesheet, so
+  // this pins the variant's presence and `contrast.test.ts` pins the pair it resolves to.
+  expect(triage).toHaveClass('data-highlighted:aria-[current=page]:before:bg-accent-foreground')
+  expect(triage).toHaveClass('data-highlighted:aria-[current=page]:text-accent-foreground')
   const currents = [
     ...within(nav).getAllByRole('link'),
     ...within(permanent).getAllByRole('menuitem'),

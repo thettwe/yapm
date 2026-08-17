@@ -849,3 +849,31 @@ the deck claimed nowhere. Both folding items now take the marking from the frame
 from the router's href match — the router marks a link only where the URL agrees with it, so on
 `/delivery?window=12` there was nothing to inherit. Two nodes now carry the attribute per route while
 only one is drawn, which is why the counting assertions stay scoped to a group.
+
+### The menu's marking has two grounds, and the shared item had only been drawn on one
+
+A menu row is painted on `--bg-elevated` at rest and on `--accent` when it is hovered or arrowed
+onto. The marking above was written against the first only: an accent rule on an accent fill
+measures 1:1, so the 2px rule the spec SHALLs disappeared at exactly the moment the reader was
+pointing at the row, and `--text-1` on that fill measures 2.53–4.08 across the six presets, which
+left weight carrying the state alone. Both step to `--on-accent` on the highlighted ground, in one
+compound `data-highlighted:aria-[current=page]:` variant so the cascade resolves it by specificity
+rather than by whichever utility Tailwind happened to emit last. `contrast.test.ts` now measures the
+pair on both grounds, and records the `--text-1` bound that made the plain marking lose on the
+second — DESIGN.md's "every ground" clause, applied to a surface that had been measured on one.
+
+### The switcher's team row is exact, because the shared item now draws what it marks
+
+`MenuLinkItem` is used by the deck, the account menu, the digests entry and the workspace/team
+switcher, so giving it a current-page drawing gave one to all four. Three were already truthful;
+the switcher's team row was not, because `/teams/$teamId` is a prefix of every team page and its
+link is non-exact — on Members, on Issues, on Retros it drew itself as the current page while
+activating it would have navigated to team Home. It takes `activeOptions={{ exact: true }}`, the
+same flag and the same reason as the deck's Home stop.
+
+Scoping the drawing to the deck instead — passing it down as a `className` — was the alternative,
+and it was rejected because the defect it fixes is narrower than the one it hides: a shared menu row
+SHOULD draw the page it is on, and three of the four call sites want exactly that. The bug was a
+link claiming a page it does not open, and that is fixed where the claim is made. The switcher's
+`<Link to="/">` needed nothing: TanStack's prefix test requires the next segment to be `/`, so the
+workspace row is active on `/` alone. Both are pinned in `header-menus.test.tsx`.

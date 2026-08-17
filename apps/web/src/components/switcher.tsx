@@ -60,13 +60,20 @@ export function Switcher({ teamName, teamId }: { teamName?: string; teamId?: str
         {teams.length > 0 ? (
           <>
             <MenuSeparator />
+            {/* `exact`, on the deck's precedent: `/teams/$teamId` is a prefix of every team page,
+                so without it the router marks this row current — and `MenuLinkItem` now DRAWS what
+                it marks — on every sub-route, while activating it goes to team Home. */}
             <MenuGroup>
               <MenuGroupLabel>Teams</MenuGroupLabel>
               {teams.map((team) => (
                 <MenuLinkItem
                   key={team.id}
                   render={
-                    <Link to="/teams/$teamId" params={{ teamId: team.id }}>
+                    <Link
+                      to="/teams/$teamId"
+                      params={{ teamId: team.id }}
+                      activeOptions={{ exact: true }}
+                    >
                       {team.name}
                     </Link>
                   }

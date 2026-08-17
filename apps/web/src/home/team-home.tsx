@@ -979,50 +979,15 @@ function Footline({ model }: { model: TeamHomeModel }) {
   )
 }
 
+// A page that has shown its own work may not re-offer the deck's destinations beneath it as a
+// second navigation. Board is a lens with no seat of its own, so it is the one surface this foot
+// carries; the rest of the old row was one keystroke away on every page in the product.
 function OnwardFooter({ teamId }: { teamId: string }) {
-  const divider = (
-    <span aria-hidden="true" className="mx-2.5 font-normal text-border-strong">
-      ·
-    </span>
-  )
   const link = cn('rounded-control', DOORWAY)
   return (
     <div className="mt-4 flex items-center border-t border-border pt-[22px] text-[12.5px] font-semibold text-text-2">
-      <Link to="/teams/$teamId/issues" params={{ teamId }} className={link}>
-        Issues
-        <span aria-hidden="true" className="ml-0.5 font-normal text-text-3">
-          ›
-        </span>
-      </Link>
-      {divider}
       <Link to="/teams/$teamId/board" params={{ teamId }} className={link}>
         Board
-        <span aria-hidden="true" className="ml-0.5 font-normal text-text-3">
-          ›
-        </span>
-      </Link>
-      {divider}
-      <Link
-        to="/teams/$teamId/delivery"
-        params={{ teamId }}
-        search={{ window: 6 }}
-        className={link}
-      >
-        Delivery in full
-        <span aria-hidden="true" className="ml-0.5 font-normal text-text-3">
-          ›
-        </span>
-      </Link>
-      {divider}
-      <Link to="/teams/$teamId/retros" params={{ teamId }} className={link}>
-        Retro
-        <span aria-hidden="true" className="ml-0.5 font-normal text-text-3">
-          ›
-        </span>
-      </Link>
-      {divider}
-      <Link to="/teams/$teamId/roadmap" params={{ teamId }} className={link}>
-        Roadmap
         <span aria-hidden="true" className="ml-0.5 font-normal text-text-3">
           ›
         </span>

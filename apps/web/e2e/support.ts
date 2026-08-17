@@ -94,14 +94,16 @@ export async function openWorkspaceOverview(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="workspace-name"]')).toBeVisible({ timeout: 20_000 })
 }
 
-// The deck's six destinations (app-frame band 1). Scoped to the nav landmark, because a page may
-// legitimately hold its own doorway with the same label — Home's onward footer links to Issues too,
+// The deck's BAR destinations (app-frame band 1) — Home, Issues, Cycles, Delivery. The other four
+// are in `more▾`; reach those with `goToMore`. Scoped to the nav landmark, because a page may
+// legitimately hold its own doorway with the same label — Home's onward footer links to the board,
 // and an unscoped lookup would match both.
 export function stop(page: Page, name: string): Locator {
   return page.getByRole('navigation', { name: 'Destinations' }).getByRole('link', { name })
 }
 
-// Retros, Projects and Roadmap live behind `more▾`, which is a transient: it has to be opened.
+// Triage, Retros, Projects and Roadmap live behind `more▾`, which is a transient: it has to be
+// opened.
 // The deck is drawn on every route, so its button is clickable the instant a route change starts
 // — before the transient behind it can respond. A click that lands in that window opens nothing,
 // and the menu item never enters the DOM. Opening is therefore retried until an item is actually

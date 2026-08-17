@@ -8,7 +8,7 @@ import {
   writeAnchorTeam,
 } from '@/frame/team-context'
 
-// Which team the deck's six stops point at when the route names none (design §D3). The deck is an
+// Which team the deck's destinations point at when the route names none (design §D3). The deck is an
 // offer, so it may point somewhere the reader is not — but it may never point at a team the reader
 // cannot open, which is the whole reason the remembered id is re-validated against the synced list
 // on every read rather than trusted because it was written once.

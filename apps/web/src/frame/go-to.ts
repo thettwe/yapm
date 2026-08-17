@@ -2,8 +2,10 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
 import { ownsKeyboard } from '@/lib/keyboard'
 
-// The `g`-prefix go-to grammar the deck advertises in `more▾`: `g h` Home, `g i` Issues, `g t`
-// Triage, `g c` Cycles, `g d` Delivery, `g r` Retros, `g p` Projects, `g m` Roadmap.
+// The `g`-prefix go-to grammar, one key per destination wherever the deck draws it: `g h` Home,
+// `g i` Issues, `g c` Cycles and `g d` Delivery on the bar; `g t` Triage, `g r` Retros, `g p`
+// Projects and `g m` Roadmap in the menu's permanent list. A binding belongs to its destination and
+// not to its seat, so a destination changing tier never changes its key.
 //
 // Decisions is folded away, so `g d` is Delivery's, as `ia.html`'s bar order implies. The prefix
 // expires so a stray `g` cannot silently arm a jump minutes later, and the whole grammar is

@@ -23,7 +23,7 @@ export function PmDigestsMenuEntry() {
 
 // A link rather than a button, on the inbox badge's precedent: it is in the tab order, so the
 // surface is reachable with no pointer and without a second global keybinding. It sits in the
-// account menu because it is a doorway for a named reader, not one of the six destinations.
+// account menu because it is a doorway for a named reader, not one of the deck's destinations.
 function PmDigestsMenuLink() {
   const [rows] = useQuery(queries.pmDigests.inbox())
   // Memoized because this sits in the frame and runs on every navigation: each row's blob is parsed

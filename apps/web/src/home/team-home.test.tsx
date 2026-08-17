@@ -541,22 +541,13 @@ test('the onward footer keeps the e2e contract and every doorway has an accessib
   fullMorning()
   await mount()
 
-  expect(screen.getByRole('link', { name: 'Issues' })).toHaveAttribute(
-    'href',
-    '/teams/team-1/issues',
-  )
+  // Board is the one surface the deck does not itself offer, so it is the one the foot keeps.
   expect(screen.getByRole('link', { name: 'Board' })).toHaveAttribute('href', '/teams/team-1/board')
+  // Members is the digest's OWN doorway, not the footer's, which is why it survives a change to
+  // the footer.
   expect(screen.getByRole('link', { name: 'Members' })).toHaveAttribute(
     'href',
     '/teams/team-1/members',
-  )
-  expect(screen.getByRole('link', { name: 'Retro' })).toHaveAttribute(
-    'href',
-    '/teams/team-1/retros',
-  )
-  expect(screen.getByRole('link', { name: 'Roadmap' })).toHaveAttribute(
-    'href',
-    '/teams/team-1/roadmap',
   )
 
   for (const link of screen.getAllByRole('link')) {

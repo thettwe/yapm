@@ -118,12 +118,20 @@ function BoardCard({
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        <div data-slot="board-card-meta" className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
           {/* The labels are what yields, as the title yields on a list row: the reserved track
               measure and the assignee are the card's fixed furniture, and a label long enough to
-              want more room than the card has shortens instead of shoving them off the card. */}
+              want more room than the card has shortens instead of shoving them off the card.
+              But yielding has a floor. At six columns the card's content measure is ~179px and the
+              furniture takes 146 of it, which left the labels 25px — less than the 32px the word
+              `bug` wants, so a three-character label truncated. So the row WRAPS: the labels keep
+              their own line when they cannot have a share of this one, and only then — at the
+              card's full measure — does a genuinely long label shorten. */}
           {labels.length > 0 ? (
-            <span className="flex min-w-0 flex-wrap items-center gap-1.5 overflow-hidden">
+            <span
+              data-slot="board-card-labels"
+              className="flex min-w-0 flex-wrap items-center gap-1.5 overflow-hidden"
+            >
               {labels.map((label) => (
                 <span
                   key={label.name}

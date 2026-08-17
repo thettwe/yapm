@@ -130,6 +130,40 @@ test('a label that runs long is the element that yields, not the track or the as
   ).toContain('shrink-0')
 })
 
+// Yielding has a floor, and this is it. At six columns on a 1440 board the card's content measure
+// is ~179px and the fixed furniture — the 118px track, its 8px gutter and the 20px avatar — takes
+// 146 of it. That left the labels 25px, and `bug` wants 32 (measured live: scrollWidth 20 against
+// clientWidth 13 on the name), so a THREE-character label clipped to `b…`. jsdom measures nothing,
+// so what is asserted is the contract that makes room instead: the row wraps, which is the only way
+// a label can be given a line the furniture is not already standing on.
+test('a label too small to shorten takes its own line rather than clipping beside the track', () => {
+  const { container } = render(
+    <BoardCard
+      {...REST}
+      labels={[{ name: 'bug' }]}
+      assignee={{ name: 'Ada Lovelace' }}
+      realityTrack={
+        <RealityTrack
+          width={CARD_TRACK_WIDTH}
+          shape={buildRealityShape(DIVERGED, { divergence: 'status_behind_merge' })}
+          label={realityTrackLabel(DIVERGED, 'PR merged but this issue is not marked done')}
+        />
+      }
+    />,
+  )
+
+  // Reached through the label rather than by name, so the assertion that fails when the contract
+  // is gone is the contract itself and not a missing hook.
+  const row = screen.getByText('bug').closest('span.flex-wrap')?.parentElement
+  expect(row?.className).toContain('flex-wrap')
+  expect(row).toBe(slot(card(container), 'board-card-meta'))
+  // And wrapping is what buys the room — nothing was taken from the furniture to pay for it.
+  const track = slot(card(container), 'board-card-track')
+  expect(track?.style.width).toBe(`${CARD_TRACK_WIDTH}px`)
+  expect(track?.className).toContain('flex-none')
+  expect(screen.getByText('bug').className).toContain('truncate')
+})
+
 test('the hole a picked-up card leaves is the same box, emptied', () => {
   const resting = render(<BoardCard {...REST} />)
   const held = render(<BoardCard {...REST} dragging />)

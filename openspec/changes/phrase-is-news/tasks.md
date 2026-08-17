@@ -202,7 +202,7 @@ only then does group 4 take the words away.
       in parallel and that file is the guaranteed conflict, so the row and the amendment are taken
       once by the integrator (`SCOPE-legibility.md:190-192`). The wording is drafted here so it is
       not invented later.
-- [ ] 8.2 `ROADMAP.md:94` §Differentiation commitments, first bullet — replace *"and **says** it, in
+- [x] 8.2 `ROADMAP.md:94` §Differentiation commitments, first bullet — replace *"and **says** it, in
       words from one shared phrase dictionary (`Checks failing`, `Done in git, not on the board`,
       `Built — not live yet`)"* with a clause that says the row draws its signal always and **says**
       it when the signal is news — an exception the reader has to act on — carrying the dictionary's
@@ -231,22 +231,22 @@ only then does group 4 take the words away.
 
 ## 10. Looked at, not reasoned about
 
-- [ ] 10.1 The issue list at 1440×900, seeded Engineering team, **default lens** — the lens
+- [x] 10.1 The issue list at 1440×900, seeded Engineering team, **default lens** — the lens
       `front-door` shipped. Does a phrase column drawn on two rows of seven read as calm, or as
       broken? This is the judgement the whole family is ultimately measured on and no assertion
       settles it. Record what looking found, including if it looks worse.
-- [ ] 10.2 The same list with the status axis cleared, which is where the scope's nine consecutive
+- [x] 10.2 The same list with the status axis cleared, which is where the scope's nine consecutive
       `Built — not live yet` rows actually live after `front-door` (design D7).
-- [ ] 10.3 The six node kinds at 7px on a dense row, light and dark, all three presets: are they six
+- [x] 10.3 The six node kinds at 7px on a dense row, light and dark, all three presets: are they six
       to the eye, or four and two guesses? Task 1.2's assignment is a proposal and this is what
       decides it.
-- [ ] 10.4 The same, with a colour filter over the page: can every station still be named?
+- [x] 10.4 The same, with a colour filter over the page: can every station still be named?
 - [ ] 10.5 A screen reader over one quiet row and one exception row on the list, and over both on
       the board: the quiet row's words are heard once and the exception row's are not heard twice.
       Then the same over Delivery's open divergence peek (task 3.5), which says the phrase twice
       today — the reason that surface is in this change at all.
-- [ ] 10.6 The board at 1440 after task 4.5's widening — six columns, no horizontal scroll, and the
+- [x] 10.6 The board at 1440 after task 4.5's widening — six columns, no horizontal scroll, and the
       card's labels row not shoved off its own card.
-- [ ] 10.7 The roadmap with the note gone from ten of ten rows. Does the axis read as scheduled work
+- [x] 10.7 The roadmap with the note gone from ten of ten rows. Does the axis read as scheduled work
       somewhere else, or as an empty roadmap? If the second, that is the finding and it belongs in
       design.md before anyone works around it.

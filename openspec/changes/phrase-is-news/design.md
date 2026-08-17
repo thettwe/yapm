@@ -748,3 +748,91 @@ table the drawing did not read. `FILL_CLASS` now supplies the three fills (`bg-t
 and measure, and `nodeClass` composes all three channels. A second test walks all six kinds through
 `TrackNodeMark` and asserts each declared channel appears in the drawn class — the first one only
 ever saw the two kinds a diverged track happens to draw.
+
+### Task 10.6's second half, answered by looking: the labels row wraps
+
+The eyeball the two entries above deferred to found the defect they were bounding, and the bound was
+wrong by the width of a word. On the running board at 1440, card ENG-323's label chip `bug` rendered
+as `b…`: measured in the live DOM the name's `scrollWidth` was **20px** against a `clientWidth` of
+**13px**. A three-character label was being clipped.
+
+The ≈45px of headroom computed above is ≈27px in fact. The arithmetic stopped at the column and
+never entered it: a column is `border` + `px-2` around its card list, so the card is `223 − 2 − 16 =
+205px` and its content box is `205 − 24 (px-3) = 181px`, not 199. Against the trailing group's 146px
+plus the row's 8px gap that leaves **27px** — and `bug`, at 8px dot + 4px gap + 20px of text, wants
+32. So the honest reading of "one short chip fits" was never true after the widening: **no** chip
+fits, and the `min-w-0` added to make a long label yield gracefully is what turned the overflow into
+a silent clip. The two halves of the previous entry were each right and together wrong.
+
+Neither `CARD_TRACK_WIDTH` nor the avatar can pay for it — the track is `flex-none` at its own
+measure and `board.test.tsx:254` asserts the slot against the exported constant, and `min-w-0` on the
+trailing group would not help either: its children are `flex-none`/`shrink-0`, so its min-content is
+146px whatever its `min-width` says, and shrinking it only slides the track under the avatar.
+
+So the row wraps. `board-card-meta` is `flex-wrap` with `gap-x-2 gap-y-1.5`, and because wrapping is
+decided on an item's hypothetical main size (content size, which `min-width: 0` floors but does not
+lower), the labels span takes its own line exactly when its full text cannot sit beside the
+furniture. At six columns that is always, and `bug` renders whole on a card ~22px taller. At three
+columns 32 + 8 + 146 fits and the row is one line, as it is today. A genuinely long label still lands
+alone on a line, shrinks to the card's full 181px measure, and truncates there — yielding at a
+legible measure instead of at 27px. Card heights are measured, not assumed
+(`virtual-column.tsx` uses `virtualizer.measureElement`), so nothing downstream is holding a stale
+number.
+
+Task 10.6 is ticked. Its first half the integrator verified live at 1440 — the board region's
+`scrollWidth` 1440 against a viewport of 1440, no horizontal scroll across six columns — and its
+second half is now a defect found, measured and closed rather than an open question. The regression
+lives in `packages/ui/src/components/board-card.test.tsx` rather than `board.test.tsx`, because the
+row's layout contract is the card primitive's and the sibling test that settled *which* element
+yields already lives there; it asserts the wrap contract reached through the rendered label, so what
+fails when the contract is removed is the contract and not a missing test hook. Verified failing
+against the pre-fix component: `expected 'flex items-center gap-2' to contain 'flex-wrap'`.
+
+### The integrator's §10 pass, 2026-08-17
+
+Taken against merged `main` (`83d4475`) on the running stack at 1440×900, seeded Engineering team.
+
+**10.1 / 10.2 — the list. Pass, and it is the change's point made visible.** On the default lens the
+only two rows are exceptions and both keep their words, which is D7's honesty in miniature: there is
+almost nothing left there to quiet. With the status axis cleared the difference is stark — where the
+scope counted nine consecutive `Built — not live yet`, the Done rows now carry no phrase at all and
+exactly five speak: two `Done in git, not on the board`, three `Done — checks failing`. It reads
+calm rather than broken. The reserved slot does its job: the track sits in the same place whether or
+not a phrase is drawn, so nothing shifts down the column.
+
+**10.3 / 10.4 — the six node kinds. Pass, and answered more strongly than by looking.** Looking was
+done (warm light, all six side by side at native 7px and at 9×: the pair most at risk, `open`'s
+half-filled disc against `rev-wait`'s hollow ring, is unmistakable). But the general answer is
+structural rather than visual, and better for it:
+
+- **The forms cannot vary by preset.** `FORM_CLASS`, `STROKE_CLASS` and `FILL_CLASS` are hardcoded
+  geometry — `rounded-full`, `rounded-[1.5px]`, `border-solid`, `border-dashed`, and a gradient. No
+  theme token appears in any of them; only `NODE_INK` uses tokens. A preset cannot turn a disc into
+  a square or a dashed ring into a solid one, so the six-way separation is identical in all six
+  theme blocks by construction.
+- **All fifteen pairs differ by a non-colour property**, checked exhaustively against
+  `TRACK_NODE_DRAWING`. That is 10.4's answer without needing the filter: if no pair is separated by
+  hue alone, no station becomes unnameable when hue is removed.
+- **The ink half already has a CI guard.** `packages/ui/src/styles/contrast.test.ts` asserts every
+  fact-carrying node at ≥3:1 on all five track surfaces across all six blocks — 384 assertions,
+  green. Its own comment records why it exists: focused light's original `--status-in-review`
+  measured 2.88 over its soft-accent wash, "a failure visible in exactly one preset, on exactly one
+  row state".
+
+**10.6 — the board. Failed, and fixed.** See the entry above: `bug` clipped to `b…`. Re-verified
+live after the fix at 1440 — the label measures 20px wanted, 20px given, and the page still does not
+scroll horizontally.
+
+**10.7 — the roadmap. Pass.** `Scheduled outside this window` is gone from all ten rows while
+`Target passed` survives on the two where it is news. The axis reads as a timeline with target marks
+at their dates, not as an empty roadmap — helped by the refusal line, correctly kept, that says no
+bar is drawn because no start is stored.
+
+**10.5 — NOT DONE, and deliberately left unticked.** The accessible names were read from the
+accessibility tree and are correct: a quiet row's track announces `Built — not live yet. PR merged,
+CI passing, reviewed 13w ago` — the words the eye no longer gets — and an exception row announces
+the divergence sentence without repeating the phrase drawn beside it. That verifies the STRINGS.
+It does not verify the VOICING: announcement order, focus behaviour, and whether the composed label
+is heard as one utterance are exactly what a screen reader would settle and a DOM read cannot. This
+change's whole justification is the accessible-name contract, so the check deserves the real
+instrument rather than a proxy that agrees with itself.

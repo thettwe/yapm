@@ -919,3 +919,23 @@ same component lands on the team. It fails on the old gate, in both directions o
 the fourth door. What remains genuinely e2e-only — that the browser physically traverses better-auth's
 redirect path and ends up looking at a team's Home — is already asserted by `auth.spec.ts:121` and is
 unchanged.
+
+### Task 10.6's second half, finished 2026-08-16
+
+The first pass observed the retry surface appearing and stopped there — the task also asks that
+**pressing** retry recovers into the landing decision rather than into `/`, and that half was left
+undone. Finished now, against merged `main` (`3159ef8`), and deliberately as **admin** rather than
+as the team-less account: for a member of no team `/` is the *correct* landing, so that session
+cannot distinguish "recovered into the decision" from "fell back". Only a caller who should land on
+a team can.
+
+Sequence: sign in as admin (landed on `/teams/…`, the fixed behaviour) → `SIGSTOP` the server →
+reload `/login` → wait for the retry surface → `SIGCONT` → press **Retry now**.
+
+**Result: `/teams/5ed5c2e7-…`.** The retry recovers into the landing decision, not into `/`. D3
+holds end to end.
+
+One behaviour worth recording, seen on the first attempt: with the server restored the surface
+**recovers on its own** before any press, because the `Still retrying` backoff succeeds. The button
+is therefore an accelerator rather than the only way out, which is the better of the two designs and
+is not something the task assumed.

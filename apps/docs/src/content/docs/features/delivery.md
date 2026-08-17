@@ -5,7 +5,7 @@ description: The team's delivery story over a rolling window of completed cycles
 
 The **Delivery view** answers *"did we ship faster and safer lately, and what is blocking review?"*
 for a team, over a rolling window rather than inside a single retrospective. It lives at
-`/teams/<teamId>/delivery` and is one of the six stops in [the deck](/features/app-frame/) — `g d`.
+`/teams/<teamId>/delivery` and is one of [the deck](/features/app-frame/)'s destinations — `g d`.
 
 The page is a **journalism cut**: each section leads with a sentence stating what the data says, and
 then draws the evidence under it. Nothing on it explains itself at rest — a derived number carries a

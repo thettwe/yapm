@@ -1,6 +1,6 @@
 ---
 title: The app frame
-description: The three bands every page sits in — the deck, the page's masthead, the statusline — plus the six destinations, the one-attention-number rule, and the keyboard grammar.
+description: The three bands every page sits in — the deck, the page's masthead, the statusline — plus the eight destinations and the budget that bounds them, the one-attention-number rule, and the keyboard grammar.
 ---
 
 Every authenticated page in yapm sits in the same chrome: **three horizontal bands**. Two of them
@@ -8,26 +8,30 @@ belong to the app and are identical everywhere; the middle one belongs to the pa
 
 | Band | Height | Owner | What it carries |
 | --- | --- | --- | --- |
-| 1 — the deck | 48px | the app | workspace · team · the six destinations · ⌘K · attention · Inbox · you |
+| 1 — the deck | 48px | the app | workspace · team · the destinations · ⌘K · attention · Inbox · you |
 | 2 — the masthead | the page's | the page | the surface's title, count, lens, filters and actions |
 | 3 — the statusline | 32px | the app | the team's day in one line, and the sync state |
 
 The deck and the statusline never adapt to the page. The only thing about the deck that changes as
 you move is **which stop is current**.
 
-## The six destinations
+## The eight destinations
 
-The bar carries six stops, and nothing else is a destination:
+The deck offers **eight destinations, in two tiers**. The count is over destinations, wherever the
+deck draws them — a menu seat is a seat.
 
-**Home · Issues · Triage · Cycles · Delivery · more▾**
+**On the bar: Home · Issues · Cycles · Delivery**, then `more▾`.
 
-`more▾` is a transient, not a seat. It holds Retros, Projects and Roadmap, each with its keyboard
-shortcut.
+`more▾` is a transient, not a destination. Its permanent list holds **Triage, Retros, Projects and
+Roadmap**, each with its keyboard shortcut, drawn at every width.
 
-Below the deck's comfortable width the stops **fold into `more▾` from the right** — Delivery first,
-then Cycles, then Triage — where they reappear under a **Team** group with the same shortcuts. Home
-and Issues never fold, and the band never wraps to a second row: its 48px height is a rule, so at a
-narrow measure the bar carries fewer than six stops and the menu carries up to six items.
+Below the deck's comfortable width the bar's destinations **fold into `more▾` from the right** —
+Delivery first, then Cycles — where they reappear under a **Team** group with the same shortcuts.
+Home and Issues never fold, and the band never wraps to a second row: its 48px height is a rule, so
+at a narrow measure the bar carries two destinations and the menu carries six items.
+
+That narrowest width is where the budget comes from: **at most eight destinations, at most four on
+the bar, at most six items in the menu at any width.**
 
 Everything else in the product is reached as a **lens**, a **doorway** or a **setting**:
 
@@ -40,6 +44,17 @@ Everything else in the product is reached as a **lens**, a **doorway** or a **se
 | Inbox | the deck's right cluster, with its unread count |
 | Search | the ⌘K pill — a real link, so `/search` is reachable with no pointer |
 | Appearance, connectors, AI, single sign-on | the account menu — they are settings, not places |
+
+**What earns a seat.** Three tests, all of which a destination has to pass: it has an entity of its
+own (a surface with no entity is not drawn at all, never as a dead link); it is not one collection
+re-cut, which is a lens, and not a higher-resolution answer to a question a destination already
+answers, which is that destination's interior; and work arrives at it in the ordinary course of
+work, which is what decides the bar against the menu. How often a surface is used is deliberately
+not a test — yapm keeps no read log, and it is not going to grow one to rank navigation.
+
+**What a new destination costs.** The deck is full. A ninth has to name the one it displaces and
+show that one failing a test — and growth by menu is still growth, because the count is over
+destinations and not over bar seats.
 
 ## Where signing in lands
 
@@ -99,12 +114,13 @@ control appears.
 yapm is one workspace of many teams, and several surfaces — the workspace overview, the inbox,
 search, settings — belong to no team. There the frame degrades honestly:
 
-- the six stops stay, pointing at your **anchor team**: the last team you visited, or the first one
-  you can see. No stop is marked current, because you are not on one of them.
+- the deck's destinations stay, in whichever tier each sits, pointing at your **anchor team**: the
+  last team you visited, or the first one you can see. None is marked current, because you are not
+  on one of them.
 - the statusline says **nothing about a team**. No cycle, no shipped count, no deploys, no attention
   badge — only the workspace's name and the sync state, which are the two things that are true
   there.
-- a workspace with no teams at all drops the six stops entirely rather than offering doors onto
+- a workspace with no teams at all drops the destinations entirely rather than offering doors onto
   nothing.
 
 The rule underneath: **the deck may point at a team; the statusline may only report one.** Navigation
@@ -115,7 +131,7 @@ though they usually agree:
 
 | | what it is | how it is chosen |
 | --- | --- | --- |
-| the anchor | where the deck's six stops point when you are off a team | the last team you visited, or the first team you can *see* |
+| the anchor | where the deck's destinations point when you are off a team | the last team you visited, or the first team you can *see* |
 | the landing | where signing in puts you | the last team you visited, or the first team you can *read* — your own teams as a member or viewer, every team as a workspace admin — and never one you cannot |
 
 Everyone in a workspace can see the name of every team; being able to name a team is not being able
@@ -139,12 +155,16 @@ The frame is fully operable without a pointer.
 | `g p` | Projects |
 | `g m` | Roadmap |
 
+**A shortcut belongs to its destination, not to its seat.** Triage sits in `more▾` rather than on
+the bar, and `g t` is unchanged — a destination changing tier never changes its key. Only
+destinations hold `g` bindings: lenses, doorways and settings do not.
+
 The `g` prefix expires after a moment, and the whole grammar is suppressed while a text field, a
 rich-text editor or an open dialog holds the keyboard — so `g` in the middle of a word stays a `g`.
 
 `⌘K` opens whichever palette the surface you are on offers. On a surface with its own — the issue
 list, the board, a retro — that is the palette with that surface's actions in it. Everywhere else it
-is the frame's own: the six destinations, the inbox, search everything, appearance, and — while sync
+is the frame's own: all eight destinations, the inbox, search everything, appearance, and — while sync
 is recovering — `Retry sync now`, so the one control that gets you writing again is never a long
 page's worth of `Tab` away. A surface palette that is about something you have not selected (the
 board's is about the focused card) hands the binding back rather than swallowing it, so `⌘K` always

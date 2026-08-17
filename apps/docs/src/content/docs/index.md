@@ -38,7 +38,7 @@ runs as three containers you own.
   stored cycle boundaries — and no bar, because a project stores no start date. At
   `/teams/<teamId>/projects` and `/teams/<teamId>/roadmap`.
 - [The app frame](/features/app-frame/) — every page sits in the same three bands: a 48px deck
-  identical everywhere, the page's own masthead, and a 32px statusline. Six destinations, one
+  identical everywhere, the page's own masthead, and a 32px statusline. Eight destinations, one
   command palette, and one attention number the deck badge, the statusline and Team Home all read.
 - [The reality vocabulary](/features/reality-vocabulary/) — one language for PR, CI, review and
   deploy reality wherever it is drawn: four stations joined by segments, a `//` break where the

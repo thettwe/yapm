@@ -49,6 +49,12 @@ The active destination SHALL be marked with accent text, a 2px accent underline 
 destination sits in the menu rather than on the bar, **its menu item SHALL carry the current-page
 marking** and the trigger SHALL NOT, because the trigger is the transient and not the place.
 
+A menu item's marking SHALL be drawn as well as announced — weight and a 2px accent rule on its
+leading edge, in the popup's own ink — so that a member who opens the menu sees which of its
+destinations they are on rather than only hearing it. A destination the bar has SHED SHALL carry
+that same marking on its menu item, because at the width that shed it the bar link holding the
+marking is not drawn at all, and a member would otherwise be on a page the deck claims nowhere.
+
 The board SHALL NOT be a deck stop; it SHALL be a lens offered in the Issues masthead, and while
 it is open the Issues stop SHALL remain the current destination. A destination for which no entity
 exists SHALL NOT be rendered at all — never as a disabled or dead link.
@@ -118,8 +124,15 @@ one between tiers moves no row.
 #### Scenario: A destination in the menu is still the current page
 
 - **WHEN** a member opens a destination that lives in the menu's permanent list
-- **THEN** that destination's menu item carries `aria-current="page"`, the `more` trigger carries
-  no current marking, and exactly one element in the navigation landmark claims the current page
+- **THEN** that destination's menu item carries `aria-current="page"` and is drawn with the menu's
+  current-page marking rather than announced only, the `more` trigger carries no current marking,
+  and exactly one element in the navigation landmark claims the current page
+
+#### Scenario: A shed destination is still marked where it landed
+
+- **WHEN** the viewport narrows until the destination the member is on folds off the bar, and they
+  open the menu
+- **THEN** its item in the menu carries the current-page marking, and no other item does
 
 #### Scenario: A shed destination is not offered twice
 

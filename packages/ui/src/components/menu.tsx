@@ -34,11 +34,18 @@ function MenuItem({ className, ...props }: MenuPrimitive.Item.Props) {
   )
 }
 
+// The current page, when it is reached from a menu rather than from a bar: weight plus a 2px accent
+// rule down the leading edge, the same pair the deck's active stop uses. The INK stays `--text-1`
+// (which the popup already carries) for the reason `deck.tsx` records — `--accent-strong` on this
+// surface misses AA in one preset — so the accent is only ever the non-text rule, which answers to
+// 3:1 and is measured in `styles/contrast.test.ts`. Marking it for assistive tech alone would draw
+// the current destination exactly like the three it sits beside.
 function MenuLinkItem({ className, ...props }: MenuPrimitive.LinkItem.Props) {
   return (
     <MenuPrimitive.LinkItem
       className={cn(
-        'data-highlighted:bg-accent data-highlighted:text-accent-foreground flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm no-underline outline-none select-none',
+        'data-highlighted:bg-accent data-highlighted:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm no-underline outline-none select-none',
+        'aria-[current=page]:font-semibold aria-[current=page]:text-text-1 aria-[current=page]:before:absolute aria-[current=page]:before:inset-y-1 aria-[current=page]:before:left-0 aria-[current=page]:before:w-0.5 aria-[current=page]:before:rounded-full aria-[current=page]:before:bg-accent',
         className,
       )}
       {...props}

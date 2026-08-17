@@ -27,6 +27,9 @@ Roadmap**, each with its keyboard shortcut, drawn at every width.
 
 Below the deck's comfortable width the bar's destinations **fold into `more▾` from the right** —
 Delivery first, then Cycles — where they reappear under a **Team** group with the same shortcuts.
+Wherever the page you are on is drawn, that is where it is marked: on the bar by an accent underline,
+in the menu by a weighted row with an accent rule down its edge — including a destination the bar has
+folded away, so a narrow window never leaves you somewhere the deck does not name.
 Home and Issues never fold, and the band never wraps to a second row: its 48px height is a rule, so
 at a narrow measure the bar carries two destinations and the menu carries six items.
 
@@ -148,9 +151,9 @@ The frame is fully operable without a pointer.
 | `⌘K` / `Ctrl-K` | the command palette, on every page — one binding, owned in one place |
 | `g h` | Home |
 | `g i` | Issues |
-| `g t` | Triage |
 | `g c` | Cycles |
 | `g d` | Delivery |
+| `g t` | Triage |
 | `g r` | Retros |
 | `g p` | Projects |
 | `g m` | Roadmap |

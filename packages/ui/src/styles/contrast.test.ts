@@ -480,6 +480,19 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
       contrastRatio(hex(t, '--status-urgent-ink'), badge),
       'attention badge',
     ).toBeGreaterThanOrEqual(AA_NORMAL)
+
+    // The same marking one tier down: half the deck's destinations live in `more▾`, so the current
+    // page is drawn on the POPUP (`--bg-elevated`) rather than on the band. Ink is `--text-1` for
+    // the reason above — the accent could not carry text in editorial light — and the accent draws
+    // only the 2px leading rule, a non-text indicator at 3:1. Measured on its own surface because a
+    // marker legible on the band and not in the menu is a marker half the deck does not have.
+    const popup = hex(t, '--bg-elevated')
+    expect(contrastRatio(hex(t, '--text-1'), popup), 'menu current ink').toBeGreaterThanOrEqual(
+      AA_NORMAL,
+    )
+    expect(contrastRatio(hex(t, '--accent'), popup), 'menu current rule').toBeGreaterThanOrEqual(
+      AA_LARGE,
+    )
   })
 
   // The issue row's phrase at rest, on all three grounds a row is drawn on: the plain surface, the

@@ -6,6 +6,7 @@ import { type ReactNode, useCallback, useMemo, useState } from 'react'
 import { AppearanceDialog } from '@/frame/appearance-dialog'
 import { useCommandSource } from '@/frame/command-registry'
 import { Deck, type DeckStop } from '@/frame/deck'
+import { DESTINATIONS, type DestinationId } from '@/frame/destinations'
 import { useGoTo } from '@/frame/go-to'
 import { Statusline } from '@/frame/statusline'
 import { type FrameTeam, useAnchorTeam, useTeamFrame } from '@/frame/team-context'
@@ -117,66 +118,38 @@ function useFrameCommands(anchor: FrameTeam | null, openAppearance: () => void):
     ]
     if (teamId === null) return [{ id: 'frame', heading: 'Go to', commands }]
 
+    // A `Record` keyed by the destination id rather than a second list: adding a destination to
+    // `DESTINATIONS` fails to compile until it has somewhere to go, and retiring one leaves no
+    // orphan row behind. The labels and the `g` keys come from the table, so the palette cannot
+    // advertise a key the deck does not draw.
+    const open: Record<DestinationId, () => void> = {
+      home: () => void navigate({ to: '/teams/$teamId', params: { teamId } }),
+      issues: () => void navigate({ to: '/teams/$teamId/issues', params: { teamId }, search: {} }),
+      cycles: () => void navigate({ to: '/teams/$teamId/cycles', params: { teamId } }),
+      delivery: () =>
+        void navigate({
+          to: '/teams/$teamId/delivery',
+          params: { teamId },
+          search: { window: 6 },
+        }),
+      triage: () => void navigate({ to: '/teams/$teamId/triage', params: { teamId } }),
+      retros: () => void navigate({ to: '/teams/$teamId/retros', params: { teamId } }),
+      projects: () =>
+        void navigate({ to: '/teams/$teamId/projects', params: { teamId }, search: {} }),
+      roadmap: () => void navigate({ to: '/teams/$teamId/roadmap', params: { teamId } }),
+    }
+
     return [
       {
         id: 'frame',
         heading: 'Go to',
         commands: [
-          {
-            id: 'frame:home',
-            label: 'Home',
-            shortcut: 'g h',
-            onSelect: () => void navigate({ to: '/teams/$teamId', params: { teamId } }),
-          },
-          {
-            id: 'frame:issues',
-            label: 'Issues',
-            shortcut: 'g i',
-            onSelect: () =>
-              void navigate({ to: '/teams/$teamId/issues', params: { teamId }, search: {} }),
-          },
-          {
-            id: 'frame:triage',
-            label: 'Triage',
-            shortcut: 'g t',
-            onSelect: () => void navigate({ to: '/teams/$teamId/triage', params: { teamId } }),
-          },
-          {
-            id: 'frame:cycles',
-            label: 'Cycles',
-            shortcut: 'g c',
-            onSelect: () => void navigate({ to: '/teams/$teamId/cycles', params: { teamId } }),
-          },
-          {
-            id: 'frame:delivery',
-            label: 'Delivery',
-            shortcut: 'g d',
-            onSelect: () =>
-              void navigate({
-                to: '/teams/$teamId/delivery',
-                params: { teamId },
-                search: { window: 6 },
-              }),
-          },
-          {
-            id: 'frame:retros',
-            label: 'Retros',
-            shortcut: 'g r',
-            onSelect: () => void navigate({ to: '/teams/$teamId/retros', params: { teamId } }),
-          },
-          {
-            id: 'frame:projects',
-            label: 'Projects',
-            shortcut: 'g p',
-            onSelect: () =>
-              void navigate({ to: '/teams/$teamId/projects', params: { teamId }, search: {} }),
-          },
-          {
-            id: 'frame:roadmap',
-            label: 'Roadmap',
-            shortcut: 'g m',
-            onSelect: () => void navigate({ to: '/teams/$teamId/roadmap', params: { teamId } }),
-          },
+          ...DESTINATIONS.map((destination) => ({
+            id: `frame:${destination.id}`,
+            label: destination.label,
+            shortcut: destination.shortcut,
+            onSelect: open[destination.id],
+          })),
           ...commands,
         ],
       },

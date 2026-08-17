@@ -10,6 +10,7 @@ import {
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
 import { Deck } from '@/frame/deck'
+import { DESTINATIONS, destinationsIn } from '@/frame/destinations'
 import { routeTree } from './routeTree.gen'
 
 vi.mock('@/auth/client', () => ({
@@ -291,6 +292,13 @@ test('every route the table calls a stop is a bar link, and every `more` is in t
       .map((link) => link.getAttribute('href')?.split('?')[0])
       .sort(),
   ).toEqual(idsHomed('stop').map(deckHref).sort())
+  // …and in the table's own order, under the table's own labels: the palette builds its `Go to`
+  // group from that table, so a label or an order that drifts here drifts in two surfaces.
+  expect(
+    within(nav)
+      .getAllByRole('link')
+      .map((link) => link.textContent),
+  ).toEqual(destinationsIn('bar').map((destination) => destination.label))
 
   fireEvent.click(within(nav).getByRole('button', { name: /more/i }))
 
@@ -303,6 +311,35 @@ test('every route the table calls a stop is a bar link, and every `more` is in t
       .map((item) => item.getAttribute('href')?.split('?')[0])
       .sort(),
   ).toEqual(idsHomed('more').map(deckHref).sort())
+  // Label AND hint, because the hint is the one advertisement of a menu destination's key that a
+  // reader meets without opening the palette, and the palette states the same string from the same
+  // row. An advertisement that disagrees with the implementation is the defect, not the excuse.
+  expect(
+    within(permanent)
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent),
+  ).toEqual(destinationsIn('menu').map((d) => `${d.label}${d.shortcut}`))
+})
+
+// The third copy of the same list, and the reason `destinations.ts` exists: the deck draws it, the
+// palette's `Go to` group is built from it (`app-frame.tsx`), and this table says where a reader
+// finds each route. Two of the three used to be hand-kept, so the palette could offer a destination
+// the deck had retired — or advertise a key the menu no longer drew — and nothing would go red.
+test('the destination table and the route inventory agree on every destination and its tier', () => {
+  expect(
+    destinationsIn('bar')
+      .map((destination) => destination.routeId)
+      .sort(),
+  ).toEqual(idsHomed('stop').sort())
+  expect(
+    destinationsIn('menu')
+      .map((destination) => destination.routeId)
+      .sort(),
+  ).toEqual(idsHomed('more').sort())
+  // One key per destination, and no key spent twice.
+  expect(new Set(DESTINATIONS.map((destination) => destination.shortcut)).size).toBe(
+    DESTINATIONS.length,
+  )
 })
 
 // The ceiling, as an assertion rather than a comment. Derived from the narrowest supported width,

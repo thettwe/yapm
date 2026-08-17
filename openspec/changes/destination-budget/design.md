@@ -809,3 +809,43 @@ This does not close 10.3. The hand check on a team that is empty in all three re
 unmade, and the new test is not a substitute for it: it proves the deck does not vary with the data
 the frame reads, not that each destination opens onto its own empty state. That second half is still
 the integrator's.
+
+### The palette stopped keeping its own copy of the eight
+
+Review found the one place the budget was still enforced by hand: `app-frame.tsx` wrote out eight
+`Go to` rows beside `deck.tsx`'s eight `<Link>`s, and the §5 guard held `ROUTE_HOMES` against the
+deck only. Two lists of the same thing, one of them unchecked — which is how a palette ends up
+offering a destination the deck retired, or advertising a key the menu no longer draws.
+
+The eight now live once, in `apps/web/src/frame/destinations.ts`: id, label, `g` key, tier and route
+id. The palette maps that table (its navigation targets are a `Record` keyed by destination id, so a
+row added to the table does not compile until it has somewhere to go), `DeckStop` is the table's own
+id union, and `routes.test.tsx` holds the table against `ROUTE_HOMES` and against the rendered deck —
+labels, order and hints. The deck's JSX stays hand-written: each `<Link>` carries its own search
+params and its own fold class, and generating that from data would trade a checked duplication for
+an unreadable one.
+
+One visible consequence: the palette's `Go to` group now reads in the DECK's order — the bar's four,
+then the menu's four — rather than the router's. Triage moves from third row to fifth, which is where
+a member now finds it in the deck.
+
+Falsified: trimming the mapped list to seven turns the new palette assertion red; putting `triage`
+back to `tier: 'bar'` turns the table/inventory agreement and the deck cross-check red; changing the
+menu's `g t` hint to `g x` turns the cross-check red on the advertisement alone.
+
+### The menu draws the current page, and a shed destination keeps its marking
+
+Two gaps in D5's marking, both found in review, both in the same clause.
+
+`MenuLinkItem` had no `aria-current` styling, so a member on Triage who opened `more▾` saw it drawn
+exactly like Retros, Projects and Roadmap — marked for a screen reader and for nobody else. It now
+takes weight and a 2px accent rule down its leading edge: the same pair the bar's active stop uses,
+with the ink left on `--text-1` for the reason DI-2 already recorded, so the accent is only ever the
+non-text rule. Both pairs are measured on the popup surface in `contrast.test.ts`.
+
+And the `Team` group's two items carried no `aria-current` at all. Below the width that folds one,
+the bar link holding the marking is `display:none`, so a member on Delivery at 900px was on a page
+the deck claimed nowhere. Both folding items now take the marking from the frame's `stop` rather than
+from the router's href match — the router marks a link only where the URL agrees with it, so on
+`/delivery?window=12` there was nothing to inherit. Two nodes now carry the attribute per route while
+only one is drawn, which is why the counting assertions stay scoped to a group.

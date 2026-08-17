@@ -12,6 +12,7 @@ import { cn } from '@yapm/ui/lib/utils'
 import { useSession } from '@/auth/client'
 import { Switcher } from '@/components/switcher'
 import { UserMenu } from '@/components/user-menu'
+import type { DestinationId } from '@/frame/destinations'
 import type { FrameTeam } from '@/frame/team-context'
 import { InboxBadge } from '@/notifications/inbox-badge'
 
@@ -29,15 +30,10 @@ import { InboxBadge } from '@/notifications/inbox-badge'
 // leads to marks the item inside it instead. Decisions (`g d` in the mock's open menu) folds away
 // entirely: no entity backs it, and a disabled row is chrome promising what the product cannot keep.
 
-export type DeckStop =
-  | 'home'
-  | 'issues'
-  | 'triage'
-  | 'cycles'
-  | 'delivery'
-  | 'retros'
-  | 'projects'
-  | 'roadmap'
+// The eight are enumerated once, in `destinations.ts`, which the palette offers and the route
+// inventory is held against. A stop this file could name and that table could not would be a
+// destination advertised in one place and unreachable from the other.
+export type DeckStop = DestinationId
 
 const STOP_CLASS =
   'relative flex h-12 items-center px-[11px] font-ui text-[13px] text-text-2 outline-none hover:text-text-1 focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset'
@@ -152,6 +148,14 @@ function Destinations({ teamId, stop }: { teamId: string; stop: DeckStop | undef
 // Delivery first, then Cycles — and the band never wraps to a second row. Its 48px height is a rule.
 // The `Team` group holds only the folded ones, so it is drawn only where something has folded; the
 // `More` group is permanent, which is why a destination in it advertises its key at every width.
+//
+// A folded destination carries the current-page marking too, because at the width that folded it
+// the bar link holding that marking is `display:none` and the reader would be on a page the deck
+// claims nowhere. The marking is the FRAME's call rather than the router's — the router adds
+// `aria-current` only where the href matches the URL, so on `/delivery?window=12` the menu item
+// would go unmarked without this. It does mean two nodes carry the attribute per route while only
+// one is displayed, so an assertion counting current pages must scope itself to what a given width
+// actually draws.
 function MoreMenu({ teamId, stop }: { teamId: string; stop: DeckStop | undefined }) {
   return (
     <Menu>
@@ -171,7 +175,11 @@ function MoreMenu({ teamId, stop }: { teamId: string; stop: DeckStop | undefined
           <MenuLinkItem
             className="md:hidden"
             render={
-              <Link to="/teams/$teamId/cycles" params={{ teamId }}>
+              <Link
+                to="/teams/$teamId/cycles"
+                params={{ teamId }}
+                aria-current={current(stop === 'cycles')}
+              >
                 Cycles
                 <Kbd>g c</Kbd>
               </Link>
@@ -183,6 +191,7 @@ function MoreMenu({ teamId, stop }: { teamId: string; stop: DeckStop | undefined
                 to="/teams/$teamId/delivery"
                 params={{ teamId }}
                 search={{ window: 6 as const }}
+                aria-current={current(stop === 'delivery')}
               >
                 Delivery
                 <Kbd>g d</Kbd>

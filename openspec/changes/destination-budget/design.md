@@ -681,6 +681,25 @@ rather than to the popup. jsdom applies no stylesheet, so the folding `Team` gro
 test at every width; an unscoped assertion would pass with Triage back in the `lg:hidden` group,
 which is the exact regression §5 exists to catch.
 
+### The §5 guard was falsified rather than assumed green
+
+A test that has never been seen to fail is a test nobody has checked the direction of, and §5's whole
+claim is that a ninth destination trips over it. So both halves were made to go red on purpose and
+then reverted, against the built branch:
+
+- **A scratch ninth row** (`'/teams/$teamId/decisions': 'more'`) turns **four** tests red — the
+  ceiling (`stop` + `more` ≤ 8), the deck cross-check, and the two pre-existing key tests that
+  compare the table against the router. The ceiling fires on the count alone, which is the one that
+  has to work when the ninth destination *is* registered and the other three would pass.
+- **A stale tier** (`'/teams/$teamId/triage'` put back to `'stop'`) turns **two** red: the
+  cross-check, because the table claims a bar link the deck no longer draws, and — unplanned but
+  correct — the ceiling's second bound, because five bar destinations exceed four. The hole D14's
+  last risk names ("a demoted destination could keep a stale `'stop'` label and nothing would
+  fail") is closed in two independent places rather than one.
+
+`apps/web/src/routes.test.tsx` is byte-identical to its committed form afterwards; the file was
+restored from a copy, not re-edited, and `git diff` was confirmed empty before the suite was re-run.
+
 ### Comments naming the old count that `tasks.md` located in a different file
 
 Two of the comments 6.6 names (`"would otherwise leave six stops pointing at"`, `"A workspace with

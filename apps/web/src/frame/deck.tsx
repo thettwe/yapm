@@ -16,8 +16,14 @@ import type { FrameTeam } from '@/frame/team-context'
 import { InboxBadge } from '@/notifications/inbox-badge'
 
 // Band 1 — the deck. 48px, identical on every page, pixel for pixel: nothing in it adapts to the
-// page except which stop is current. Workspace mark · org / team · chevron, then the six stops,
-// then the ⌘K pill, the attention badge, Inbox and the user chip.
+// page except which destination is marked current. Workspace mark · org / team · chevron, then the
+// destinations, then the ⌘K pill, the attention badge, Inbox and the user chip.
+//
+// EIGHT destinations, at most four of them on the bar: Home, Issues, Cycles and Delivery there,
+// Triage, Retros, Projects and Roadmap in the menu's permanent list. Triage sits in the menu because
+// nothing fills its inbox in the ordinary course of work — no ingest, no connector, one palette row
+// that forwards — and a place work does not arrive at is a place you visit, not one you are shown.
+// Its `g t` did not move with it: a binding belongs to its destination, not to its seat.
 //
 // `more▾` is a TRANSIENT, never a destination — so it never carries `aria-current`, and the page it
 // leads to marks the item inside it instead. Decisions (`g d` in the mock's open menu) folds away
@@ -57,7 +63,7 @@ export function Deck({
   onOpenAppearance,
   current: stop,
 }: {
-  // Where the six stops point: the route's team, else the remembered one, else the first.
+  // Where the deck's destinations point: the route's team, else the remembered one, else the first.
   anchor: FrameTeam | null
   // The team the reader is actually on, or null on a workspace page. Only this names the deck's
   // team half and only this may carry a badge.
@@ -78,8 +84,8 @@ export function Deck({
       <Switcher
         {...(routeTeam === null ? {} : { teamName: routeTeam.name, teamId: routeTeam.id })}
       />
-      {/* A workspace with no teams at all drops the six stops rather than disabling them: an offer
-          that leads nowhere is worse than no offer. */}
+      {/* A workspace with no teams at all drops the destinations rather than disabling them: an
+          offer that leads nowhere is worse than no offer. */}
       {anchor === null ? null : <Destinations teamId={anchor.id} stop={stop} />}
       <div className="ml-auto flex shrink-0 items-center gap-4 pl-4">
         <SearchEntry />
@@ -121,14 +127,6 @@ function Destinations({ teamId, stop }: { teamId: string; stop: DeckStop | undef
         Issues
       </Link>
       <Link
-        to="/teams/$teamId/triage"
-        params={{ teamId }}
-        aria-current={current(stop === 'triage')}
-        className={cn(stopClass(stop === 'triage'), 'hidden sm:flex')}
-      >
-        Triage
-      </Link>
-      <Link
         to="/teams/$teamId/cycles"
         params={{ teamId }}
         aria-current={current(stop === 'cycles')}
@@ -150,8 +148,10 @@ function Destinations({ teamId, stop }: { teamId: string; stop: DeckStop | undef
   )
 }
 
-// Below the deck's comfortable width the stops fold into this menu from the RIGHT — Delivery first,
-// then Cycles, then Triage — and the band never wraps to a second row. Its 48px height is a rule.
+// Below the deck's comfortable width the bar's destinations fold into this menu from the RIGHT —
+// Delivery first, then Cycles — and the band never wraps to a second row. Its 48px height is a rule.
+// The `Team` group holds only the folded ones, so it is drawn only where something has folded; the
+// `More` group is permanent, which is why a destination in it advertises its key at every width.
 function MoreMenu({ teamId, stop }: { teamId: string; stop: DeckStop | undefined }) {
   return (
     <Menu>
@@ -168,15 +168,6 @@ function MoreMenu({ teamId, stop }: { teamId: string; stop: DeckStop | undefined
       <MenuContent>
         <MenuGroup className="lg:hidden">
           <MenuGroupLabel>Team</MenuGroupLabel>
-          <MenuLinkItem
-            className="sm:hidden"
-            render={
-              <Link to="/teams/$teamId/triage" params={{ teamId }}>
-                Triage
-                <Kbd>g t</Kbd>
-              </Link>
-            }
-          />
           <MenuLinkItem
             className="md:hidden"
             render={
@@ -201,6 +192,18 @@ function MoreMenu({ teamId, stop }: { teamId: string; stop: DeckStop | undefined
         </MenuGroup>
         <MenuGroup>
           <MenuGroupLabel>More</MenuGroupLabel>
+          <MenuLinkItem
+            render={
+              <Link
+                to="/teams/$teamId/triage"
+                params={{ teamId }}
+                aria-current={current(stop === 'triage')}
+              >
+                Triage
+                <Kbd>g t</Kbd>
+              </Link>
+            }
+          />
           <MenuLinkItem
             render={
               <Link

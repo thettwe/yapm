@@ -331,6 +331,42 @@ test('a menu destination is marked current, and the transient that holds it is n
   expect(currents).toHaveLength(1)
 })
 
+// Design §D4, and the one part of "Two mornings read the same" that needs no browser: the same
+// team, rendered over two data shapes. The badge's "zero is absence" rule stops at the badge — a
+// count is a claim about a quantity and a destination is an offer of a place — so a morning with
+// nothing waiting must offer what a morning with work waiting offers, in the same order. The badge
+// is asserted in the same breath deliberately: it is what proves the two renders genuinely differ,
+// without which the comparison below would hold for a reason that has nothing to do with D4.
+async function destinationsOffered(): Promise<{ bar: (string | null)[]; menu: (string | null)[] }> {
+  const nav = await screen.findByRole('navigation', { name: 'Destinations' })
+  const bar = within(nav)
+    .getAllByRole('link')
+    .map((link) => link.textContent)
+  fireEvent.click(within(nav).getByRole('button', { name: /more/i }))
+  const permanent = await screen.findByRole('group', { name: 'More' })
+  const menu = within(permanent)
+    .getAllByRole('menuitem')
+    .map((item) => item.textContent)
+  return { bar, menu }
+}
+
+test('a morning with nothing waiting offers the destinations a busy one does, in the same order', async () => {
+  zero.teams = [TEAM]
+  renderAt('/teams/team-1/issues')
+  expect(await screen.findByTestId('deck')).toBeInTheDocument()
+  expect(screen.queryByTestId('attention-badge')).toBeNull()
+  const quiet = await destinationsOffered()
+
+  cleanup()
+  fourExceptions()
+  renderAt('/teams/team-1/issues')
+  expect(await screen.findByTestId('attention-badge')).toBeInTheDocument()
+  const busy = await destinationsOffered()
+
+  expect(quiet).toEqual(busy)
+  expect(quiet.menu).toContain('Triageg t')
+})
+
 // The right cluster's three doorways — the ones the nine hand-rolled headers silently dropped, so
 // that search, digests and the inbox were invisible on exactly the surfaces being overhauled.
 test('the deck’s right cluster carries search, the attention badge and the inbox on every page', async () => {

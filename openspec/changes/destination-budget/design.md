@@ -775,3 +775,37 @@ inbox, an empty retros list *and* no projects" was checked only in its first thi
 change makes a destination conditional on a count — that is the whole of D4, and the deck's JSX has
 no data dependency to make it so — but the observation is not the same as the argument, and this one
 was not made. It is left for the integrator's pass.
+
+### D4 had no automated coverage at all, and now has the half that needs no browser
+
+The tests-and-docs pass found one genuine gap in an otherwise complete build: **nothing in the
+suite proved D4** — that a zero count does not fold a destination. `app-frame.test.tsx`'s
+*"at zero the badge and the attention segment are absent, not zeroed"* asserts the badge's absence
+and says nothing about the deck's membership, which is precisely the coupling D4 forbids; and
+§10.1 had routed the whole of *"Two mornings read the same"* to a browser, alongside the two
+scenarios that genuinely need one.
+
+Only part of that scenario needs a browser. The width half does; the **morning half does not** —
+it is one team rendered over two data shapes, which is exactly what jsdom is for. Added as
+`app-frame.test.tsx` *"a morning with nothing waiting offers the destinations a busy one does, in
+the same order"*: it reads the bar and the permanent list on the empty fixture, then again on
+`fourExceptions()`, and compares. The badge is asserted on both renders in the same breath, because
+without it the comparison could hold for a reason that has nothing to do with D4 — the two renders
+have to be shown to genuinely differ before their agreeing about destinations means anything.
+
+**Falsified in both directions**, since a test nobody has seen fail is a comment:
+
+- Gating Triage's permanent item on `attention !== null` (fold when quiet) turns **three** tests
+  red — the new one and the two that render the quiet fixture.
+- Gating it on `attention === null` (fold when busy) turns **exactly one** red: the new one. Every
+  other test in the file, and the whole of `routes.test.tsx`, stays green.
+
+The second is the one that justifies the test existing. A data-dependent deck that happens to agree
+with each fixed fixture is invisible to a suite of single-render assertions, however many there are;
+only a test that renders the same route twice over different data can see it. `deck.tsx` was
+restored from a copy and `git diff` on it confirmed empty before the suite was re-run.
+
+This does not close 10.3. The hand check on a team that is empty in all three respects is still
+unmade, and the new test is not a substitute for it: it proves the deck does not vary with the data
+the frame reads, not that each destination opens onto its own empty state. That second half is still
+the integrator's.

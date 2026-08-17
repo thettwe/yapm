@@ -34,11 +34,26 @@ function MenuItem({ className, ...props }: MenuPrimitive.Item.Props) {
   )
 }
 
+// The current page, when it is reached from a menu rather than from a bar: weight plus a 2px accent
+// rule down the leading edge, the same pair the deck's active stop uses. The INK stays `--text-1`
+// (which the popup already carries) for the reason `deck.tsx` records — `--accent-strong` on this
+// surface misses AA in one preset — so the accent is only ever the non-text rule, which answers to
+// 3:1 and is measured in `styles/contrast.test.ts`. Marking it for assistive tech alone would draw
+// the current destination exactly like the three it sits beside.
+//
+// A row has TWO grounds, and the marking is drawn on both. Highlighted — hovered or arrowed onto —
+// the row's fill IS `--accent`, so an accent rule on it measures 1:1 and the marking disappears at
+// exactly the moment the reader is pointing at it, while `--text-1` on that fill measures 2.53–4.08
+// and the weight is all that is left. Both step to `--on-accent` there, in a compound variant so the
+// cascade decides by specificity rather than by which utility Tailwind happened to emit last. Both
+// grounds are measured in `styles/contrast.test.ts`.
 function MenuLinkItem({ className, ...props }: MenuPrimitive.LinkItem.Props) {
   return (
     <MenuPrimitive.LinkItem
       className={cn(
-        'data-highlighted:bg-accent data-highlighted:text-accent-foreground flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm no-underline outline-none select-none',
+        'data-highlighted:bg-accent data-highlighted:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm no-underline outline-none select-none',
+        'aria-[current=page]:font-semibold aria-[current=page]:text-text-1 aria-[current=page]:before:absolute aria-[current=page]:before:inset-y-1 aria-[current=page]:before:left-0 aria-[current=page]:before:w-0.5 aria-[current=page]:before:rounded-full aria-[current=page]:before:bg-accent',
+        'data-highlighted:aria-[current=page]:text-accent-foreground data-highlighted:aria-[current=page]:before:bg-accent-foreground',
         className,
       )}
       {...props}

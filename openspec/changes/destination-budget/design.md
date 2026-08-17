@@ -665,4 +665,215 @@ third collides twice, on both of the requirements this change touches:
 
 ## Decisions made during implementation
 
-<!-- Fill during the build: what was ambiguous, what was chosen, and why. -->
+### The deck enforcement test renders the deck directly, with three neighbours stubbed
+
+`tasks.md` §5.1 asks that every `'stop'` in `ROUTE_HOMES` be checked against a *rendered* bar link
+and every `'more'` against a *rendered* menu item. `routes.test.tsx` renders the real router with no
+session, so no deck is drawn on any route it visits, and building one there would have meant mocking
+Zero for the whole file. Chosen instead: mount `<Deck>` as the component of a scratch route tree —
+the house pattern `header-menus.test.tsx`, `team-home.test.tsx` and `delivery-view.test.tsx` all
+use — with `Switcher`, `UserMenu` and `InboxBadge` stubbed to `null`. Each of those three reads Zero
+and none is what the assertion is about. The comparison is by `href` with the query string stripped,
+because `Delivery`'s link carries `?window=6` and the route id does not.
+
+The `'more'` assertion is scoped to the permanent group (`getByRole('group', { name: 'More' })`)
+rather than to the popup. jsdom applies no stylesheet, so the folding `Team` group is visible to a
+test at every width; an unscoped assertion would pass with Triage back in the `lg:hidden` group,
+which is the exact regression §5 exists to catch.
+
+### The §5 guard was falsified rather than assumed green
+
+A test that has never been seen to fail is a test nobody has checked the direction of, and §5's whole
+claim is that a ninth destination trips over it. So both halves were made to go red on purpose and
+then reverted, against the built branch:
+
+- **A scratch ninth row** (`'/teams/$teamId/decisions': 'more'`) turns **four** tests red — the
+  ceiling (`stop` + `more` ≤ 8), the deck cross-check, and the two pre-existing key tests that
+  compare the table against the router. The ceiling fires on the count alone, which is the one that
+  has to work when the ninth destination *is* registered and the other three would pass.
+- **A stale tier** (`'/teams/$teamId/triage'` put back to `'stop'`) turns **two** red: the
+  cross-check, because the table claims a bar link the deck no longer draws, and — unplanned but
+  correct — the ceiling's second bound, because five bar destinations exceed four. The hole D14's
+  last risk names ("a demoted destination could keep a stale `'stop'` label and nothing would
+  fail") is closed in two independent places rather than one.
+
+`apps/web/src/routes.test.tsx` is byte-identical to its committed form afterwards; the file was
+restored from a copy, not re-edited, and `git diff` was confirmed empty before the suite was re-run.
+
+### Comments naming the old count that `tasks.md` located in a different file
+
+Two of the comments 6.6 names (`"would otherwise leave six stops pointing at"`, `"A workspace with
+no teams drops the six stops"`) are in `apps/web/src/frame/app-frame.test.tsx:376` and `:500`, not in
+`team-home.test.tsx` — the line numbers had moved under `explanation-at-rest`. They are reworded
+where they actually live. One more the task list does not name,
+`apps/web/src/pm-digest/digests-entry.tsx:26` ("not one of the six destinations"), is reworded for
+the same reason: it is a sentence this change makes false.
+
+### `ia.html` needed a Triage glyph that did not exist
+
+9.3 asks for a `g t` row in the drawn-open `more▾` menu, and every row in that menu carries an inline
+glyph. There was no `#g-triage` symbol in the file, so one was added in the same hand as its
+neighbours (1.6 stroke, 20×20 box): a tray with an inbound path. Reusing `#g-decision` or
+`#g-projects` would have drawn a lie in a file whose whole job is to be read literally.
+
+### `home-digest-2-quiet.html`'s deck already diverged from the `gbar` md5 invariant
+
+9.5 asks that the md5 at `NORTHSTAR.md:40-41` be re-verified and re-stated. Recomputing it the way
+the recorded value was computed (normalized whitespace, `active` class stripped) reproduces
+`571eee83506c` exactly on the pre-change files — for seven of the eight. `home-digest-2-quiet.html`
+hashed to `afb1d4d23e93` **before this change touched anything**: a quiet morning draws no attention
+badge and one unread rather than three, which is the file's whole point. The invariant's own sentence
+scopes itself to "all five files", so nothing was wrong; the annotation now says which files hash
+alike and why the eighth does not, so the next reader does not spend the same twenty minutes.
+The new value across the seven is `5635e13a1609`.
+
+### The e2e suite could not be run locally, and why — not a claim that it passes
+
+`apps/web/playwright.config.ts` boots its own app server (`reuseExistingServer: false`, deliberately)
+on `E2E_SERVER_PORT`. The dev stack running on this machine pins zero-cache's `ZERO_QUERY_URL` and
+`ZERO_MUTATE_URL` to the **dev** server's host port, and `apps/server/src/auth.ts:172` verifies the
+sync JWT with `issuer`/`audience` equal to that server's own `BETTER_AUTH_URL`. So a token minted by
+a second app server on any other port is rejected by the server zero-cache calls back into, every
+sync query fails, and the sign-in page holds its loading state — which is exactly the failure the
+suite reported: seven of seven specs timing out in `openWorkspaceOverview`, before reaching a single
+assertion of this change's. Sign-in itself was verified working against both servers by hand
+(`POST /api/auth/sign-in/email` → 200, `GET /api/zero/token` → 200 on each), which is what isolates
+the cause to the issuer binding rather than to anything on this branch.
+
+Running it would have meant stopping a server this build did not start. The e2e tier is instead
+covered by CI, where the full suite is **green (12m25s)** on this branch — including the two new
+specs and the reach path `openTriage` now takes through `goToMore`. CI runs it once; the second run
+`tasks.md` §11.2 asks for, against helper breakage being order-dependent, has not happened. Every
+navigation claim that could be checked without the suite was checked by hand in a real browser
+against the running dev app — see the §10 record below.
+
+### §10, performed and recorded — including what was not performed
+
+Done in a real browser (Chromium via Playwright, against the running dev app), at 1440 / 900 / 600:
+
+| width | bar | menu | total | duplicates |
+|---|---|---|---|---|
+| 1440 | Home · Issues · Cycles · Delivery | Triage `g t` · Retros `g r` · Projects `g p` · Roadmap `g m` | 8 | none |
+| 900 | Home · Issues · Cycles | Delivery `g d` \| Triage · Retros · Projects · Roadmap | 8 | none |
+| 600 | Home · Issues | Cycles `g c` · Delivery `g d` \| Triage · Retros · Projects · Roadmap | 8 | none |
+
+The narrow menu holds six items, which is D2's derivation observed rather than asserted. Triage's
+`g t` hint is drawn at all three widths, which is D9's claim that the advertisement improved.
+
+Also confirmed by hand: on `/teams/{id}/triage` the menu's Triage carries `aria-current="page"` and
+the `more▾` trigger carries none; `g t` from a team surface opens Triage with no deck seat involved
+(the first attempt appeared to fail and did not — two `press_key` round-trips exceeded
+`PREFIX_WINDOW_MS`, which is the guard working); `g d` still opens Delivery, the canary for D9 and
+for `delivery-metrics/spec.md:226`; Home's foot carries `Board ›` and the `⌘K` hint and nothing else,
+while SHIP CADENCE keeps its own `Delivery ›`; a cleared triage queue still offers
+`Issues · Cycles · Projects` and an empty inbox still offers `Issues · Home`, both untouched (D13);
+and off a team (`/inbox`) the deck still offers its destinations with none marked current.
+
+**Not performed:** 10.3 in full. The team available on the running stack has an empty triage inbox
+(confirmed: `Nothing waiting.`) but does have retros and projects, so "a team with an empty triage
+inbox, an empty retros list *and* no projects" was checked only in its first third. Nothing in the
+change makes a destination conditional on a count — that is the whole of D4, and the deck's JSX has
+no data dependency to make it so — but the observation is not the same as the argument, and this one
+was not made. It is left for the integrator's pass.
+
+### D4 had no automated coverage at all, and now has the half that needs no browser
+
+The tests-and-docs pass found one genuine gap in an otherwise complete build: **nothing in the
+suite proved D4** — that a zero count does not fold a destination. `app-frame.test.tsx`'s
+*"at zero the badge and the attention segment are absent, not zeroed"* asserts the badge's absence
+and says nothing about the deck's membership, which is precisely the coupling D4 forbids; and
+§10.1 had routed the whole of *"Two mornings read the same"* to a browser, alongside the two
+scenarios that genuinely need one.
+
+Only part of that scenario needs a browser. The width half does; the **morning half does not** —
+it is one team rendered over two data shapes, which is exactly what jsdom is for. Added as
+`app-frame.test.tsx` *"a morning with nothing waiting offers the destinations a busy one does, in
+the same order"*: it reads the bar and the permanent list on the empty fixture, then again on
+`fourExceptions()`, and compares. The badge is asserted on both renders in the same breath, because
+without it the comparison could hold for a reason that has nothing to do with D4 — the two renders
+have to be shown to genuinely differ before their agreeing about destinations means anything.
+
+**Falsified in both directions**, since a test nobody has seen fail is a comment:
+
+- Gating Triage's permanent item on `attention !== null` (fold when quiet) turns **three** tests
+  red — the new one and the two that render the quiet fixture.
+- Gating it on `attention === null` (fold when busy) turns **exactly one** red: the new one. Every
+  other test in the file, and the whole of `routes.test.tsx`, stays green.
+
+The second is the one that justifies the test existing. A data-dependent deck that happens to agree
+with each fixed fixture is invisible to a suite of single-render assertions, however many there are;
+only a test that renders the same route twice over different data can see it. `deck.tsx` was
+restored from a copy and `git diff` on it confirmed empty before the suite was re-run.
+
+This does not close 10.3. The hand check on a team that is empty in all three respects is still
+unmade, and the new test is not a substitute for it: it proves the deck does not vary with the data
+the frame reads, not that each destination opens onto its own empty state. That second half is still
+the integrator's.
+
+### The palette stopped keeping its own copy of the eight
+
+Review found the one place the budget was still enforced by hand: `app-frame.tsx` wrote out eight
+`Go to` rows beside `deck.tsx`'s eight `<Link>`s, and the §5 guard held `ROUTE_HOMES` against the
+deck only. Two lists of the same thing, one of them unchecked — which is how a palette ends up
+offering a destination the deck retired, or advertising a key the menu no longer draws.
+
+The eight now live once, in `apps/web/src/frame/destinations.ts`: id, label, `g` key, tier and route
+id. The palette maps that table (its navigation targets are a `Record` keyed by destination id, so a
+row added to the table does not compile until it has somewhere to go), `DeckStop` is the table's own
+id union, and `routes.test.tsx` holds the table against `ROUTE_HOMES` and against the rendered deck —
+labels, order and hints. The deck's JSX stays hand-written: each `<Link>` carries its own search
+params and its own fold class, and generating that from data would trade a checked duplication for
+an unreadable one.
+
+One visible consequence: the palette's `Go to` group now reads in the DECK's order — the bar's four,
+then the menu's four — rather than the router's. Triage moves from third row to fifth, which is where
+a member now finds it in the deck.
+
+Falsified: trimming the mapped list to seven turns the new palette assertion red; putting `triage`
+back to `tier: 'bar'` turns the table/inventory agreement and the deck cross-check red; changing the
+menu's `g t` hint to `g x` turns the cross-check red on the advertisement alone.
+
+### The menu draws the current page, and a shed destination keeps its marking
+
+Two gaps in D5's marking, both found in review, both in the same clause.
+
+`MenuLinkItem` had no `aria-current` styling, so a member on Triage who opened `more▾` saw it drawn
+exactly like Retros, Projects and Roadmap — marked for a screen reader and for nobody else. It now
+takes weight and a 2px accent rule down its leading edge: the same pair the bar's active stop uses,
+with the ink left on `--text-1` for the reason DI-2 already recorded, so the accent is only ever the
+non-text rule. Both pairs are measured on the popup surface in `contrast.test.ts`.
+
+And the `Team` group's two items carried no `aria-current` at all. Below the width that folds one,
+the bar link holding the marking is `display:none`, so a member on Delivery at 900px was on a page
+the deck claimed nowhere. Both folding items now take the marking from the frame's `stop` rather than
+from the router's href match — the router marks a link only where the URL agrees with it, so on
+`/delivery?window=12` there was nothing to inherit. Two nodes now carry the attribute per route while
+only one is drawn, which is why the counting assertions stay scoped to a group.
+
+### The menu's marking has two grounds, and the shared item had only been drawn on one
+
+A menu row is painted on `--bg-elevated` at rest and on `--accent` when it is hovered or arrowed
+onto. The marking above was written against the first only: an accent rule on an accent fill
+measures 1:1, so the 2px rule the spec SHALLs disappeared at exactly the moment the reader was
+pointing at the row, and `--text-1` on that fill measures 2.53–4.08 across the six presets, which
+left weight carrying the state alone. Both step to `--on-accent` on the highlighted ground, in one
+compound `data-highlighted:aria-[current=page]:` variant so the cascade resolves it by specificity
+rather than by whichever utility Tailwind happened to emit last. `contrast.test.ts` now measures the
+pair on both grounds, and records the `--text-1` bound that made the plain marking lose on the
+second — DESIGN.md's "every ground" clause, applied to a surface that had been measured on one.
+
+### The switcher's team row is exact, because the shared item now draws what it marks
+
+`MenuLinkItem` is used by the deck, the account menu, the digests entry and the workspace/team
+switcher, so giving it a current-page drawing gave one to all four. Three were already truthful;
+the switcher's team row was not, because `/teams/$teamId` is a prefix of every team page and its
+link is non-exact — on Members, on Issues, on Retros it drew itself as the current page while
+activating it would have navigated to team Home. It takes `activeOptions={{ exact: true }}`, the
+same flag and the same reason as the deck's Home stop.
+
+Scoping the drawing to the deck instead — passing it down as a `className` — was the alternative,
+and it was rejected because the defect it fixes is narrower than the one it hides: a shared menu row
+SHOULD draw the page it is on, and three of the four call sites want exactly that. The bug was a
+link claiming a page it does not open, and that is fixed where the claim is made. The switcher's
+`<Link to="/">` needed nothing: TanStack's prefix test requires the next segment to be `/`, so the
+workspace row is active on `/` alone. Both are pinned in `header-menus.test.tsx`.

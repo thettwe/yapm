@@ -73,10 +73,10 @@ async function sendToTriage(page: Page, title: string): Promise<void> {
   await expect(page.locator(ROW).filter({ hasText: title })).toHaveCount(0, { timeout: 20_000 })
 }
 
-// Band 2 states the page's own name and nothing else: the team it belongs to is two stops to the
-// left in the deck, so the heading is `Triage`, exactly, and not `<team> · Triage`.
+// Band 2 states the page's own name and nothing else: the deck already names the team, so the
+// heading is `Triage`, exactly, and not `<team> · Triage`.
 async function openTriage(page: Page): Promise<void> {
-  await stop(page, 'Triage').click()
+  await goToMore(page, 'Triage')
   await expect(page.getByRole('heading', { name: 'Triage', exact: true })).toBeVisible({
     timeout: 20_000,
   })
@@ -274,14 +274,12 @@ test('a viewer sees a read-only triage inbox', async ({ page, newContext }) => {
     timeout: 30_000,
   })
 
-  // The viewer joins the team for read scope, then opens its triage inbox. The Triage link
-  // lives on the issue-views switch, so reach it via Issues (the team overview only links to
-  // Issues and Board).
+  // The viewer joins the team for read scope, then opens its triage inbox from the deck's `more▾`
+  // list, which is where Triage is drawn at every width.
   const teamCard = vp.getByRole('listitem').filter({ hasText: teamName })
   await teamCard.getByRole('button', { name: 'Join this team' }).click()
   await vp.getByRole('link', { name: new RegExp(teamName) }).click()
-  await stop(vp, 'Issues').click()
-  await stop(vp, 'Triage').click()
+  await goToMore(vp, 'Triage')
   await expect(vp.getByRole('heading', { name: 'Triage', exact: true })).toBeVisible({
     timeout: 20_000,
   })
@@ -300,4 +298,40 @@ test('a viewer sees a read-only triage inbox', async ({ page, newContext }) => {
   await vp.keyboard.press('r')
   await expect(vp.getByRole('dialog', { name: /^Route [A-Z]+-/ })).toHaveCount(0)
   await expect(vp.locator(TRIAGE_ROW).filter({ hasText: title })).toBeVisible()
+})
+
+// The demotion took nobody anything: `g t` is the destination's, not the seat's, so a member who
+// learned the old deck reaches Triage exactly as before — without the bar and without the menu.
+test('`g t` opens Triage from a team surface, with no deck seat involved', async ({ page }) => {
+  await enterApp(page)
+  await openTeam(page)
+
+  // The bar no longer offers it, which is the other half of what this proves.
+  await expect(
+    page.getByRole('navigation', { name: 'Destinations' }).getByRole('link', { name: 'Triage' }),
+  ).toHaveCount(0)
+
+  await page.keyboard.press('g')
+  await page.keyboard.press('t')
+  await expect(page.getByRole('heading', { name: 'Triage', exact: true })).toBeVisible({
+    timeout: 20_000,
+  })
+})
+
+// The advertisement genuinely improved. At the default 1280px viewport the folding `Team` group is
+// `lg:hidden`, so before this change Triage's `g t` hint was drawn nowhere in the deck; in the
+// permanent list it is drawn at every width.
+test('the more▾ menu advertises Triage and its key at the comfortable width', async ({ page }) => {
+  await enterApp(page)
+  await openTeam(page)
+
+  const opener = page.getByRole('navigation', { name: 'Destinations' }).getByRole('button')
+  await expect(async () => {
+    if ((await opener.getAttribute('aria-expanded')) !== 'true') {
+      await opener.click()
+    }
+    await expect(page.getByRole('menuitem', { name: /^Triage/u })).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 20_000 })
+
+  await expect(page.getByRole('menuitem', { name: /^Triage/u })).toContainText('g t')
 })

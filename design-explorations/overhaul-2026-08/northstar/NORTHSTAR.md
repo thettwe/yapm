@@ -38,7 +38,11 @@ honesty behind "more ·", "opens:" lists behind door affordances.
 ## Consistency check (verified, not eyeballed)
 
 - Global bar: `md5` of the normalized `<header class="gbar">` markup is identical across
-  all five files modulo the active-tab class (`571eee83506c`).
+  all five files modulo the active-tab class (`5635e13a1609`, re-verified after the
+  destination-budget redraw; it was `571eee83506c` while Triage held a bar seat). The three
+  digest candidates draw the same bar: `home-digest` and `home-digest-2` hash identically to the
+  five, and `home-digest-2-quiet` differs by design and by design only — a quiet morning has no
+  attention badge to draw and one unread rather than three.
 - Statusline: byte-identical markup on all five — "Cycle 2, day 9 of 14 · 8 shipped ·
   3 deploys this week · **4 need attention** · Synced".
 - One attention number: bar badge •4 = statusline 4 = Home's NEEDS ATTENTION 4 = ia's
@@ -53,9 +57,9 @@ honesty behind "more ·", "opens:" lists behind door affordances.
 
 ### What the build kept, and the three places it had to diverge (PR #33, PR #38)
 
-The frame shipped from these files: 48px deck, 32px statusline on `--statusline-bg`, the six
-stops with `more▾` as a transient, and the one attention number enforced by a single
-`buildTeamFrame` derivation the Home digest consumes rather than recomputes. Three divergences,
+The frame shipped from these files: 48px deck, 32px statusline on `--statusline-bg`, the deck's
+destinations with `more▾` as a transient, and the one attention number enforced by a single
+`buildTeamFrame` derivation the Home digest consumes rather than recomputes. Four divergences,
 each forced by a fact the mock did not have to hold:
 
 - **The active stop's ink is `--text-1`, not the accent.** `--accent-strong` on `--bg` measures
@@ -81,6 +85,26 @@ each forced by a fact the mock did not have to hold:
   mock's. Everything else PR #38 changed moved the product *toward* these files — quiet rows going
   truly blank as `issues.png` draws them, the check returning to the `done` disc, and band 3's
   healthy label reading `Synced` as all five files draw it.
+
+- **The bar carries four destinations, not six stops, and Triage sits in `more▾` (PR #70).** These
+  files are redrawn to match: the `Triage` `gb-tab` is gone from all eight, `ia.html`'s destination
+  tree hangs Triage under the `more ▾` node, its headline counts destinations rather than bar seats,
+  and its open menu draws `Triage · g t` above Retros. The product's argument, recorded in
+  `openspec/changes/destination-budget/design.md` §D5: nothing fills the triage inbox in the
+  ordinary course of work — no ingest, no connector, one palette row that forwards — so it is a
+  place you visit, not a place you are shown. The demotion is reversible by a change that names what
+  it displaces, and `g t` did not move with it. The published budget is **at most eight
+  destinations, at most four on the bar, at most six menu items at any width**, derived from the
+  narrowest supported width rather than chosen. Two consequences drawn here rather than argued
+  again: the three digest onward footers now carry only `Board ›` and the `⌘K` hint, because a page
+  that has shown its own work may not re-offer the deck's destinations beneath it and the board is
+  the one surface with no seat of its own; and `ia.html`'s **Decisions** row stays drawn, in the open
+  menu and in the destination tree, still a divergence rather than a deletion, for the same reason
+  the first fold above is recorded rather than erased.
+  Out of scope, deliberately: `design-explorations/overhaul-2026-08/destinations/`, `plays/` and
+  `horizon/` draw this deck too — a repo-wide grep for `gb-nav` finds 38 HTML files — but
+  `destinations/DESTINATIONS.md:9` calls those candidates rather than canonical, and only the
+  canonical set is what shipped screens are judged against. They are left as they were drawn.
 
 One thing the mock could not decide, and the build had to: `ia.html` assumes team context
 ("Acme / Engineering"), while yapm is one workspace of many teams and six routes are

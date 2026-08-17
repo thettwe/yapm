@@ -1,8 +1,16 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router'
-import { render, screen } from '@testing-library/react'
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { expect, test, vi } from 'vitest'
+import { Deck } from '@/frame/deck'
+import { DESTINATIONS, destinationsIn } from '@/frame/destinations'
 import { routeTree } from './routeTree.gen'
 
 vi.mock('@/auth/client', () => ({
@@ -12,6 +20,12 @@ vi.mock('@/auth/client', () => ({
   signOut: vi.fn(),
   useSession: () => ({ data: null, isPending: false }),
 }))
+
+// The deck's three neighbours in the right cluster and the switcher: each reads Zero, and none of
+// them is what the two deck tests below are about.
+vi.mock('@/components/switcher', () => ({ Switcher: () => null }))
+vi.mock('@/components/user-menu', () => ({ UserMenu: () => null }))
+vi.mock('@/notifications/inbox-badge', () => ({ InboxBadge: () => null }))
 
 vi.mock('@/auth/use-auth-methods', () => ({
   useAuthMethods: () => ({ emailPassword: true, github: false, sso: true }),
@@ -121,8 +135,8 @@ test('the delivery route is registered, narrows its window and is gated behind a
 // the ONE place in the frame a reader reaches it from; a new route with no home fails this test,
 // which is the only moment anyone is guaranteed to be thinking about where it belongs.
 //
-//   stop        one of the deck's six bar stops
-//   more        the `more▾` transient
+//   stop        one of the deck's bar destinations
+//   more        a destination in the `more▾` menu's permanent list
 //   switcher    the workspace/team chevron's menu
 //   user-menu   the user chip's menu
 //   deck-right  the deck's right cluster (⌘K, the attention badge, Inbox)
@@ -142,7 +156,7 @@ const ROUTE_HOMES = {
   '/settings/sso': 'user-menu',
   '/teams/$teamId/': 'stop',
   '/teams/$teamId/issues/': 'stop',
-  '/teams/$teamId/triage': 'stop',
+  '/teams/$teamId/triage': 'more',
   '/teams/$teamId/cycles': 'stop',
   '/teams/$teamId/delivery': 'stop',
   '/teams/$teamId/retros/': 'more',
@@ -204,4 +218,135 @@ test('every route with a home in the frame renders inside it, and the frame-free
     .map(([id]) => id)
 
   expect(framed.sort()).toEqual(expected.sort())
+})
+
+// The table above is the only enumeration of the deck's membership outside `deck.tsx`'s JSX, and
+// until now only its KEYS were checked — a route could carry a stale `'stop'` for years. These two
+// tests read the rendered deck, so the label has to be true, and the budget has a place to fail.
+function deckHref(id: keyof typeof ROUTE_HOMES): string {
+  return id.replace('$teamId', 'team-1').replace(/\/$/u, '')
+}
+
+function idsHomed(home: 'stop' | 'more'): (keyof typeof ROUTE_HOMES)[] {
+  return (Object.entries(ROUTE_HOMES) as [keyof typeof ROUTE_HOMES, string][])
+    .filter(([, value]) => value === home)
+    .map(([id]) => id)
+}
+
+function mountDeck() {
+  const rootRoute = createRootRoute()
+  const paths = [
+    '/teams/$teamId',
+    '/teams/$teamId/issues',
+    '/teams/$teamId/triage',
+    '/teams/$teamId/cycles',
+    '/teams/$teamId/delivery',
+    '/teams/$teamId/retros',
+    '/teams/$teamId/projects',
+    '/teams/$teamId/roadmap',
+    '/search',
+    '/inbox',
+    '/login',
+    '/digests',
+    '/showcase',
+    '/settings/ai',
+    '/settings/connectors',
+    '/settings/sso',
+    '/teams/$teamId/members',
+  ]
+  const tree = rootRoute.addChildren([
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/',
+      component: () => (
+        <Deck
+          anchor={{ id: 'team-1', key: 'ENG', name: 'Engineering' }}
+          routeTeam={{ id: 'team-1', key: 'ENG', name: 'Engineering' }}
+          attention={null}
+          onOpenAppearance={() => {}}
+        />
+      ),
+    }),
+    ...paths.map((path) =>
+      createRoute({ getParentRoute: () => rootRoute, path, component: () => null }),
+    ),
+  ])
+  render(
+    <RouterProvider
+      router={createRouter({
+        routeTree: tree,
+        history: createMemoryHistory({ initialEntries: ['/'] }),
+      })}
+    />,
+  )
+}
+
+test('every route the table calls a stop is a bar link, and every `more` is in the permanent list', async () => {
+  mountDeck()
+
+  const nav = await screen.findByRole('navigation', { name: 'Destinations' })
+  // The popup builds nothing until it opens, so the nav's own links are exactly the bar.
+  expect(
+    within(nav)
+      .getAllByRole('link')
+      .map((link) => link.getAttribute('href')?.split('?')[0])
+      .sort(),
+  ).toEqual(idsHomed('stop').map(deckHref).sort())
+  // …and in the table's own order, under the table's own labels: the palette builds its `Go to`
+  // group from that table, so a label or an order that drifts here drifts in two surfaces.
+  expect(
+    within(nav)
+      .getAllByRole('link')
+      .map((link) => link.textContent),
+  ).toEqual(destinationsIn('bar').map((destination) => destination.label))
+
+  fireEvent.click(within(nav).getByRole('button', { name: /more/i }))
+
+  // Scoped to the PERMANENT group: the `Team` group holds only what folded at a narrow measure,
+  // and jsdom applies no stylesheet, so an item there would otherwise pass for a permanent one.
+  const permanent = await screen.findByRole('group', { name: 'More' })
+  expect(
+    within(permanent)
+      .getAllByRole('menuitem')
+      .map((item) => item.getAttribute('href')?.split('?')[0])
+      .sort(),
+  ).toEqual(idsHomed('more').map(deckHref).sort())
+  // Label AND hint, because the hint is the one advertisement of a menu destination's key that a
+  // reader meets without opening the palette, and the palette states the same string from the same
+  // row. An advertisement that disagrees with the implementation is the defect, not the excuse.
+  expect(
+    within(permanent)
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent),
+  ).toEqual(destinationsIn('menu').map((d) => `${d.label}${d.shortcut}`))
+})
+
+// The third copy of the same list, and the reason `destinations.ts` exists: the deck draws it, the
+// palette's `Go to` group is built from it (`app-frame.tsx`), and this table says where a reader
+// finds each route. Two of the three used to be hand-kept, so the palette could offer a destination
+// the deck had retired — or advertise a key the menu no longer drew — and nothing would go red.
+test('the destination table and the route inventory agree on every destination and its tier', () => {
+  expect(
+    destinationsIn('bar')
+      .map((destination) => destination.routeId)
+      .sort(),
+  ).toEqual(idsHomed('stop').sort())
+  expect(
+    destinationsIn('menu')
+      .map((destination) => destination.routeId)
+      .sort(),
+  ).toEqual(idsHomed('more').sort())
+  // One key per destination, and no key spent twice.
+  expect(new Set(DESTINATIONS.map((destination) => destination.shortcut)).size).toBe(
+    DESTINATIONS.length,
+  )
+})
+
+// The ceiling, as an assertion rather than a comment. Derived from the narrowest supported width,
+// where the bar keeps Home, Issues and the trigger and the menu already carries six items on the
+// viewport with the least room for one, on a band that may not wrap. A ninth destination trips
+// over this line, which is the whole of what the budget buys.
+test('the deck offers at most eight destinations, at most four of them on the bar', () => {
+  expect(idsHomed('stop').length + idsHomed('more').length).toBeLessThanOrEqual(8)
+  expect(idsHomed('stop').length).toBeLessThanOrEqual(4)
 })

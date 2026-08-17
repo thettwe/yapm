@@ -16,7 +16,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 // The northstar assumes one team ("Acme / Engineering"); yapm is one workspace of many teams, and
 // six routes are workspace-level. The rule this file encodes (design §D3): the deck MAY point at a
 // team — navigation is an offer, and an offer can be wrong without lying — but the statusline may
-// only report the team the reader is actually on. So the anchor drives the six stops everywhere,
+// only report the team the reader is actually on. So the anchor drives every destination everywhere,
 // while the frame model is built only from a team in the route.
 
 export const ANCHOR_STORAGE_KEY = 'yapm.frame.team'

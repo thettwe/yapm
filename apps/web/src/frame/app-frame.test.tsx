@@ -1,6 +1,7 @@
 import { createMemoryHistory, createRouter, RouterProvider } from '@tanstack/react-router'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeAll, beforeEach, expect, test, vi } from 'vitest'
+import { DESTINATIONS } from '@/frame/destinations'
 import { RECOVERY_IDLE, SyncRecoveryContext, type SyncRecoveryValue } from '@/zero/recovery'
 
 // THE FALSIFIABLE CHECK for the app frame. It renders the REAL `/teams/$teamId/issues` route — one
@@ -79,8 +80,14 @@ vi.mock('@/zero/connection', () => ({
 }))
 
 // The work surface, stubbed: this file is about the chrome around it.
+vi.mock('@/triage/triage-view', () => ({
+  TriageView: () => <div data-testid="triage-view" />,
+}))
 vi.mock('@/issues/issue-list', () => ({
   IssueList: () => <div data-testid="issue-list" />,
+}))
+vi.mock('@/delivery/delivery-view', () => ({
+  DeliveryView: () => <div data-testid="delivery-view" />,
 }))
 vi.mock('@/issues/issue-detail', () => ({
   IssueDetail: () => null,
@@ -226,7 +233,12 @@ function stubBrowserGlobals(): void {
 beforeAll(async () => {
   stubBrowserGlobals()
   zero.teams = [TEAM]
-  for (const path of ['/teams/team-1/issues', '/teams/team-1/board', '/inbox']) {
+  for (const path of [
+    '/teams/team-1/issues',
+    '/teams/team-1/board',
+    '/teams/team-1/delivery?window=12',
+    '/inbox',
+  ]) {
     renderAt(path)
     await screen.findByTestId('deck', undefined, { timeout: 20_000 })
     cleanup()
@@ -266,10 +278,11 @@ test('every authenticated route renders one deck, one statusline, and one attent
   expect(currents).toHaveLength(1)
 })
 
-// The six destinations of §"Destinations", in the northstar's order. Below the deck's comfortable
-// width the last three fold into `more▾` by CSS alone — jsdom applies no stylesheet, so what this
-// asserts is the full set the band offers, which is the thing a new route would quietly change.
-test('the deck offers the six destinations and nothing else', async () => {
+// The four bar destinations, in the northstar's order. Below the deck's comfortable width the last
+// two fold into `more▾` by CSS alone — jsdom applies no stylesheet, so what this asserts is the set
+// the BAR offers, which is the thing a new route would quietly change. The other four destinations
+// live in the menu's permanent list, and the test below opens it.
+test('the deck’s bar carries four destinations and the transient, and nothing else', async () => {
   zero.teams = [TEAM]
   renderAt('/teams/team-1/issues')
 
@@ -278,11 +291,155 @@ test('the deck offers the six destinations and nothing else', async () => {
     within(nav)
       .getAllByRole('link')
       .map((link) => link.textContent),
-  ).toEqual(['Home', 'Issues', 'Triage', 'Cycles', 'Delivery'])
-  // The sixth is `more▾`: a transient, so a button rather than a link, and never current.
+  ).toEqual(['Home', 'Issues', 'Cycles', 'Delivery'])
+  // `more▾` is a transient, so a button rather than a link, and never current.
   const more = within(nav).getByRole('button')
   expect(more).toHaveTextContent('more')
   expect(more).not.toHaveAttribute('aria-current')
+})
+
+// The permanent list, at the test's default width. Triage is in it because nothing fills its inbox
+// in the ordinary course of work — and it is in the PERMANENT group rather than the folding `Team`
+// one so that `g t` is advertised at every width, which is the thing this test is really guarding.
+test('the menu’s permanent list offers four destinations, each with its key', async () => {
+  zero.teams = [TEAM]
+  renderAt('/teams/team-1/issues')
+
+  const nav = await screen.findByRole('navigation', { name: 'Destinations' })
+  fireEvent.click(within(nav).getByRole('button', { name: /more/i }))
+
+  const permanent = await screen.findByRole('group', { name: 'More' })
+  expect(
+    within(permanent)
+      .getAllByRole('menuitem')
+      .map((item) => item.textContent),
+  ).toEqual(['Triageg t', 'Retrosg r', 'Projectsg p', 'Roadmapg m'])
+})
+
+// Nothing asserted this for any menu destination before this change: a page reached from the menu
+// marks the ITEM inside it, and the transient that opened it stays unmarked.
+test('a menu destination is marked current, and the transient that holds it is not', async () => {
+  zero.teams = [TEAM]
+  renderAt('/teams/team-1/triage')
+
+  const nav = await screen.findByRole('navigation', { name: 'Destinations' })
+  const more = within(nav).getByRole('button', { name: /more/i })
+  expect(more).not.toHaveAttribute('aria-current')
+
+  fireEvent.click(more)
+
+  const permanent = await screen.findByRole('group', { name: 'More' })
+  const triage = within(permanent).getByRole('menuitem', { name: /triage/i })
+  expect(triage).toHaveAttribute('aria-current', 'page')
+  // And DRAWN current, not only announced: `MenuLinkItem` carries the variant that weights the row
+  // and rules its leading edge in the accent. jsdom applies no stylesheet, so what this pins is
+  // that the item is styled by its own `aria-current` — without it a member on Triage would see it
+  // drawn exactly like the three destinations it sits beside, which is a marking only a screen
+  // reader gets. `packages/ui/src/styles/contrast.test.ts` holds the pair it draws in.
+  expect(triage).toHaveClass('aria-[current=page]:font-semibold')
+  expect(triage).toHaveClass('aria-[current=page]:before:bg-accent')
+  // On the row's other ground — hovered, or arrowed onto, where the fill IS the accent — both the
+  // ink and the rule step to `--on-accent`, because an accent rule on an accent fill is a marking
+  // that disappears at the moment the reader is pointing at it. jsdom applies no stylesheet, so
+  // this pins the variant's presence and `contrast.test.ts` pins the pair it resolves to.
+  expect(triage).toHaveClass('data-highlighted:aria-[current=page]:before:bg-accent-foreground')
+  expect(triage).toHaveClass('data-highlighted:aria-[current=page]:text-accent-foreground')
+  const currents = [
+    ...within(nav).getAllByRole('link'),
+    ...within(permanent).getAllByRole('menuitem'),
+  ].filter((element) => element.getAttribute('aria-current') === 'page')
+  expect(currents).toHaveLength(1)
+})
+
+// The other half of the same rule, for the destinations the bar SHEDS. Below 1024px Delivery's bar
+// link is `display:none`, so a reader there would be on a page the deck marks nowhere unless the
+// folded item carries the marking too. The route is opened at `?window=12` deliberately: the
+// router marks a link current only where its href matches the URL, so at any window but the
+// default that automatic marking is absent and only the frame's own decision — which stop the
+// route says it is — can put it there. jsdom draws both groups, so the width at which the folded
+// item is the ONLY one drawn is the browser's to check (§10.1).
+test('a destination the bar sheds is marked current in the menu as well', async () => {
+  zero.teams = [TEAM]
+  renderAt('/teams/team-1/delivery?window=12')
+
+  const nav = await screen.findByRole('navigation', { name: 'Destinations' })
+  expect(within(nav).getByRole('link', { name: 'Delivery' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  fireEvent.click(within(nav).getByRole('button', { name: /more/i }))
+
+  const folded = await screen.findByRole('group', { name: 'Team' })
+  expect(within(folded).getByRole('menuitem', { name: /^Delivery/u })).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  // And only that one: the group's other member is a destination the reader is not on.
+  expect(within(folded).getByRole('menuitem', { name: /^Cycles/u })).not.toHaveAttribute(
+    'aria-current',
+  )
+})
+
+// The palette's `Go to` group and the deck are ONE list — `frame/destinations.ts` — rather than two
+// copies of it, which is what they were: eight rows hand-written in `app-frame.tsx` beside eight
+// `<Link>`s in `deck.tsx`, with nothing holding them together. This asserts the rendered end of
+// that: every destination the deck offers is in the palette, in the deck's own order, each stating
+// the key the menu advertises. `routes.test.tsx` holds the same table against the route inventory.
+test('the palette’s Go to group is the deck’s destinations, with the keys the deck advertises', async () => {
+  zero.teams = [TEAM]
+  renderAt('/teams/team-1/issues')
+  await screen.findByTestId('deck')
+
+  await act(async () => {
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+  })
+
+  const palette = await screen.findByTestId('frame-palette')
+  const goTo = within(palette).getByRole('group', { name: 'Go to' })
+  const rows = within(goTo)
+    .getAllByRole('option')
+    .map((row) => row.textContent)
+  // The destinations lead the group; the workspace doorways and appearance follow them.
+  expect(rows.slice(0, DESTINATIONS.length)).toEqual(
+    DESTINATIONS.map((destination) => `${destination.label}${destination.shortcut}`),
+  )
+  expect(rows.slice(DESTINATIONS.length)).not.toHaveLength(0)
+})
+
+// Design §D4, and the one part of "Two mornings read the same" that needs no browser: the same
+// team, rendered over two data shapes. The badge's "zero is absence" rule stops at the badge — a
+// count is a claim about a quantity and a destination is an offer of a place — so a morning with
+// nothing waiting must offer what a morning with work waiting offers, in the same order. The badge
+// is asserted in the same breath deliberately: it is what proves the two renders genuinely differ,
+// without which the comparison below would hold for a reason that has nothing to do with D4.
+async function destinationsOffered(): Promise<{ bar: (string | null)[]; menu: (string | null)[] }> {
+  const nav = await screen.findByRole('navigation', { name: 'Destinations' })
+  const bar = within(nav)
+    .getAllByRole('link')
+    .map((link) => link.textContent)
+  fireEvent.click(within(nav).getByRole('button', { name: /more/i }))
+  const permanent = await screen.findByRole('group', { name: 'More' })
+  const menu = within(permanent)
+    .getAllByRole('menuitem')
+    .map((item) => item.textContent)
+  return { bar, menu }
+}
+
+test('a morning with nothing waiting offers the destinations a busy one does, in the same order', async () => {
+  zero.teams = [TEAM]
+  renderAt('/teams/team-1/issues')
+  expect(await screen.findByTestId('deck')).toBeInTheDocument()
+  expect(screen.queryByTestId('attention-badge')).toBeNull()
+  const quiet = await destinationsOffered()
+
+  cleanup()
+  fourExceptions()
+  renderAt('/teams/team-1/issues')
+  expect(await screen.findByTestId('attention-badge')).toBeInTheDocument()
+  const busy = await destinationsOffered()
+
+  expect(quiet).toEqual(busy)
+  expect(quiet.menu).toContain('Triageg t')
 })
 
 // The right cluster's three doorways — the ones the nine hand-rolled headers silently dropped, so
@@ -327,8 +484,8 @@ test('on Board the Issues stop stays current and the lens says which one is on',
   )
 })
 
-// A remembered team the caller has since lost access to would otherwise leave six stops pointing at
-// a 404. The anchor is re-validated against the synced list on every read, not trusted once.
+// A remembered team the caller has since lost access to would otherwise leave every destination
+// pointing at a 404. The anchor is re-validated against the synced list on every read, not trusted once.
 test('a stale remembered team is dropped and the stops fall back to one that exists', async () => {
   zero.teams = [TEAM]
   vi.stubGlobal('localStorage', {
@@ -451,7 +608,7 @@ test('while sync offers a retry the palette carries it, and selecting it retries
   expect(retryNow).toHaveBeenCalledTimes(1)
 })
 
-// A workspace with no teams drops the six stops rather than offering doors onto nothing.
+// A workspace with no teams drops the destinations rather than offering doors onto nothing.
 test('a workspace with no teams drops the stops entirely', async () => {
   renderAt('/inbox')
 

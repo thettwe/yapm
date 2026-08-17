@@ -8,10 +8,10 @@ deliberately **not a seventh status**: yapm's six statuses (Backlog, Todo, In Pr
 Review, Done, Canceled) are fixed and non-configurable. Instead, triage is an **orthogonal
 flag** on an issue — an issue awaiting triage still has a normal status; it is just held out
 of the list and board until someone sorts it. Open the inbox at `/teams/<teamId>/triage`, or
-take the **Triage** stop in [the deck](/features/app-frame/) — `g t`.
+take **Triage** from `more▾` in [the deck](/features/app-frame/) — `g t`.
 
 The masthead states the page, a mono count of what is waiting, and the ordering — **oldest
-first**. It does not repeat the team name: the deck already carries it two stops to the left.
+first**. It does not repeat the team name: the deck already carries it.
 That count is the same number the deck's attention badge, the statusline and
 [Team Home](/features/team-home/) state, from one derivation, so they cannot disagree.
 

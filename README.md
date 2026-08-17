@@ -60,9 +60,9 @@ part of engineering metrics disappears.
 
 One frame, three bands, around every page:
 
-- A **48px deck that never adapts to the page** — workspace · team · six destinations (Home,
-  Issues, Triage, Cycles, Delivery, `more▾`) plus the `⌘K` pill, the attention badge, your inbox
-  and you.
+- A **48px deck that never adapts to the page** — workspace · team · eight destinations (Home,
+  Issues, Cycles, Delivery on the bar; Triage, Retros, Projects, Roadmap behind `more▾`) plus the
+  `⌘K` pill, the attention badge, your inbox and you.
 - The page's own masthead.
 - A 32px statusline stating the team's day and the sync state.
 

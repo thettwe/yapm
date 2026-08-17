@@ -480,6 +480,40 @@ describe.each(Object.entries(presets))('%s tokens meet WCAG AA', (_name, t) => {
       contrastRatio(hex(t, '--status-urgent-ink'), badge),
       'attention badge',
     ).toBeGreaterThanOrEqual(AA_NORMAL)
+
+    // The same marking one tier down: half the deck's destinations live in `more▾`, so the current
+    // page is drawn on the POPUP (`--bg-elevated`) rather than on the band. Ink is `--text-1` for
+    // the reason above — the accent could not carry text in editorial light — and the accent draws
+    // only the 2px leading rule, a non-text indicator at 3:1. Measured on its own surface because a
+    // marker legible on the band and not in the menu is a marker half the deck does not have.
+    const popup = hex(t, '--bg-elevated')
+    expect(contrastRatio(hex(t, '--text-1'), popup), 'menu current ink').toBeGreaterThanOrEqual(
+      AA_NORMAL,
+    )
+    expect(contrastRatio(hex(t, '--accent'), popup), 'menu current rule').toBeGreaterThanOrEqual(
+      AA_LARGE,
+    )
+
+    // And on the row's OTHER ground, which the assertion above could not see: a menu row that is
+    // hovered or arrowed onto is filled with `--accent` itself. Measured there, the popup's pair is
+    // an accent rule on an accent fill — 1:1, a marking that vanishes at exactly the moment the
+    // reader is pointing at it — and `--text-1` misses AA. Both step to `--on-accent` on that fill,
+    // which is why `menu.tsx` carries a highlighted variant of the marking at all.
+    const highlighted = hex(t, '--accent')
+    expect(
+      contrastRatio(hex(t, '--on-accent'), highlighted),
+      'menu current ink, highlighted',
+    ).toBeGreaterThanOrEqual(AA_NORMAL)
+    expect(
+      contrastRatio(hex(t, '--on-accent'), highlighted),
+      'menu current rule, highlighted',
+    ).toBeGreaterThanOrEqual(AA_LARGE)
+    // The bound that made the plain pair lose on this ground, recorded rather than left implied, so
+    // a token retune that lifts it is visible and the highlighted variant can be argued about again.
+    expect(
+      contrastRatio(hex(t, '--text-1'), highlighted),
+      'menu current ink, were it left at text-1',
+    ).toBeLessThan(AA_NORMAL)
   })
 
   // The issue row's phrase at rest, on all three grounds a row is drawn on: the plain surface, the

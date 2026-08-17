@@ -217,6 +217,10 @@
       <circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/>
       <circle cx="10" cy="10" r="2.8" fill="currentColor"/>
     </symbol>
+    <symbol id="g-triage" viewBox="0 0 20 20">
+      <path d="M3.4 11.4 H7 L8.4 13.6 H11.6 L13 11.4 H16.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5 5 H15 L16.6 11.4 V15 H3.4 V11.4 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+    </symbol>
     <symbol id="g-retro" viewBox="0 0 20 20">
       <path d="M14.5 4.7 A7 7 0 1 0 16.9 8.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
       <path d="M15.4 10.4 L16.9 8.6 L18.6 10.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -254,7 +258,6 @@
     <nav class="gb-nav">
       <span class="gb-tab">Home</span>
       <span class="gb-tab">Issues</span>
-      <span class="gb-tab">Triage</span>
       <span class="gb-tab">Cycles</span>
       <span class="gb-tab">Delivery</span>
       <span class="gb-tab">more<span class="chev">▾</span></span>
@@ -280,7 +283,7 @@
       <div class="minif">
         <div class="b1">
           <span class="lg"></span><span>Acme / <b>Engineering</b></span>
-          <span class="t">Home</span><span class="t on">Issues</span><span class="t">Triage</span>
+          <span class="t">Home</span><span class="t on">Issues</span>
           <span class="t">Cycles</span><span class="t">Delivery</span><span class="t">more ▾</span>
           <span class="r"><span class="kbd">⌘K</span><span class="bdg">● 4</span><span>Inbox 3</span></span>
         </div>
@@ -317,7 +320,7 @@
   <!-- ================= destinations ================= -->
   <div class="content section rule-top">
     <div class="sec-kicker"><span class="k">DESTINATIONS</span></div>
-    <h2 class="headline">Six stops on the bar. Everything else is a doorway, a lens, or an artifact.</h2>
+    <h2 class="headline">Eight destinations, four of them on the bar. Everything else is a doorway, a lens, or an artifact.</h2>
     <div class="cols">
       <div class="tree" style="flex:1">
         <div class="trow">
@@ -340,10 +343,6 @@
           </span>
         </div>
         <div class="trow">
-          <span class="troot"><span class="tnode">Triage</span></span>
-          <span class="tkids"><span class="tk"><span class="arm"></span>the intake queue <span class="m">4 new today</span></span></span>
-        </div>
-        <div class="trow">
           <span class="troot"><span class="tnode">Cycles</span></span>
           <span class="tkids">
             <span class="tk"><span class="arm"></span>cycle page</span>
@@ -358,7 +357,8 @@
         <div class="trow">
           <span class="troot"><span class="tnode dim">more ▾</span></span>
           <span class="tkids">
-            <span class="tk"><span class="arm"></span>Retros</span>
+            <span class="tk"><span class="arm"></span>Triage <span class="m">the intake queue — 4 new today</span></span>
+            <span class="tk">Retros</span>
             <span class="tk">Projects</span>
             <span class="tk">Roadmap</span>
             <span class="tk">Decisions <span class="m">→ the Record — also reached from any decision chip</span></span>
@@ -369,6 +369,7 @@
       </div>
       <!-- the more menu, drawn open once -->
       <div class="menu" style="flex:none">
+        <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-triage"/></svg></span>Triage<span class="kbd">g t</span></div>
         <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-retro"/></svg></span>Retros<span class="kbd">g r</span></div>
         <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-projects"/></svg></span>Projects<span class="kbd">g p</span></div>
         <div class="mi"><span class="g"><svg width="14" height="14" viewBox="0 0 20 20"><use href="#g-roadmap"/></svg></span>Roadmap<span class="kbd">g m</span></div>

@@ -36,8 +36,9 @@ local data the issue list reads, so it renders instantly and is correct offline.
 
 The page ends with a **composition record** — the rules actually applied to *this* render, never
 a rule the code does not execute — carried behind one quiet `how ·` rather than printed, and an
-onward footer (Issues · Board · Delivery · Retro · Roadmap, with the ⌘K hint). The doorways are
-labels and stay visible; the record is a derivation and folds.
+onward footer carrying only what the deck does not itself offer as a destination — today the
+**Board**, with the ⌘K hint. The doorways are labels and stay visible; the record is a derivation
+and folds.
 
 ## Empty bands fold away
 

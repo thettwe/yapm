@@ -69,4 +69,6 @@ optional band folds.
 
 - **WHEN** a member opens the digest in any state
 - **THEN** no mono clause line naming the composition rules and no mono clause line defining
-  the YOURS lens is drawn anywhere on the page, and each is reachable through its own `how ·`
+  the YOURS lens is drawn anywhere on the page; the composition record is reachable through the
+  page's `how ·`, and the YOURS lens through the band's own `how ·` wherever the band has rows to
+  apply it to

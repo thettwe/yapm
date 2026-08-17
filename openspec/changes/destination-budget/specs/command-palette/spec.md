@@ -13,9 +13,10 @@ and theme selection).
 The always-present set SHALL name the deck's destinations by the deck's own membership rather than
 by a number written here, so that a destination moving between the bar and the `more` menu changes
 nothing in this capability, and a destination added or retired is a single edit in the capability
-that owns the deck. Each destination's row SHALL state the `g` binding the frame actually
-implements, because for a destination on the bar the palette is the only place in the product that
-advertises it.
+that owns the deck. The palette SHALL take that membership from the same declaration the deck is
+drawn from rather than keeping a second copy of it, so the two cannot disagree about which places
+exist. Each destination's row SHALL state the `g` binding the frame actually implements, because
+for a destination on the bar the palette is the only place in the product that advertises it.
 
 Surfaces that contribute commands SHALL **register** a command source with the global owner
 while they are mounted and SHALL unregister it when they unmount, so the palette offers the

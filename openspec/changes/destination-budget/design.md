@@ -877,3 +877,53 @@ SHOULD draw the page it is on, and three of the four call sites want exactly tha
 link claiming a page it does not open, and that is fixed where the claim is made. The switcher's
 `<Link to="/">` needed nothing: TanStack's prefix test requires the next segment to be `/`, so the
 workspace row is active on `/` alone. Both are pinned in `header-menus.test.tsx`.
+
+### The integrator's §10 pass, 2026-08-18
+
+Taken against merged `main` (`b12f945`) on the running stack.
+
+**The fold, measured at three widths.** The bar sheds from the right exactly as specified and the
+band never wraps:
+
+| viewport | bar | menu's permanent list + shed |
+|---|---|---|
+| 1440 | Home, Issues, Cycles, Delivery | 4 |
+| 900 | Home, Issues, Cycles | 5 |
+| 600 | Home, Issues | **6 — the cap** |
+
+`deckWraps: false` and `horizontalScroll: false` at every width, and Home and Issues never leave the
+bar. **This is the ceiling derivation confirmed in a browser rather than on paper**: at 600px the
+menu already holds six, so a ninth destination would put seven items in a menu on the viewport with
+the least room. The arithmetic D2 argued is real.
+
+**Triage's demotion carries its key.** The `more▾` permanent list reads Triage · Retros · Projects ·
+Roadmap, and Triage's `g t` hint is now *drawn* at desktop width — before this change the responsive
+`Team` group was `lg:hidden`, so that binding was advertised nowhere on a 1440 screen. `g t`
+navigates to `/teams/{id}/triage`. The demotion made the shortcut more discoverable, not less.
+
+**A finding: Home's onward footer now reads as an orphan.** D10's rationing leaves the foot holding
+one link — `Board ›` at the far left, the `⌘K goes anywhere` hint pushed right by `ml-auto`, and a
+full-width rule above them. Under a whole page of digest that rule is doing more structural work
+than its contents justify: it reads as a section break introducing nothing. With five items it was a
+row; with one it is a horizontal line with a word under it.
+
+The change is right that the *contents* should be rationed — four of the five were deck
+destinations and repeating them was the second-navigation problem D13 names. What is now in question
+is whether the **container** should survive its own rationing. Two shapes worth weighing, neither
+taken here because it is a design call rather than a defect:
+
+- Drop the rule and let `Board ›` and the ⌘K hint sit as a quiet line, so the foot stops announcing
+  itself as a section.
+- Drop the foot entirely. Board is a **lens**, reachable from the Issues masthead
+  (`app-frame/spec.md` — "the board SHALL NOT be a deck stop; it SHALL be a lens offered in the
+  Issues masthead"), so it is not actually stranded without this link — which would make the foot's
+  last remaining job redundant rather than rationed.
+
+Recorded rather than worked around, per the family's habit. It is the change's own predicted
+pushback and the prediction was correct.
+
+**Not done, and not ticked:** task 10.3's hand check against a team empty in triage, retros and
+projects at once — the seeded workspace has content in all three. Task 11.2's second Playwright run
+also remains unmade; the suite cannot run against the shared dev stack because zero-cache calls back
+into the dev server, which verifies the sync JWT against its own issuer, so every spec times out at
+sign-in. CI ran it once, green.
